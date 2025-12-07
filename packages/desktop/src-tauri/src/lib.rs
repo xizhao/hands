@@ -771,10 +771,29 @@ async fn restart_server(
     let env_vars = get_api_keys_from_store(&app);
     let model = get_model_from_store(&app);
 
-    // Get bundled opencode config dir
+    // Get bundled opencode config dir (same logic as setup)
     let config_dir = app.path().resource_dir()
         .ok()
-        .map(|p| p.join("opencode").to_string_lossy().to_string());
+        .map(|p| p.join("opencode"))
+        .filter(|p| p.exists())
+        .or_else(|| {
+            std::env::current_exe().ok().and_then(|exe| {
+                let dev_path = exe.parent()?.join("resources/opencode");
+                if dev_path.exists() {
+                    return Some(dev_path);
+                }
+                let mut path = exe;
+                for _ in 0..5 {
+                    path = path.parent()?.to_path_buf();
+                    let resources = path.join("src-tauri/resources/opencode");
+                    if resources.exists() {
+                        return Some(resources);
+                    }
+                }
+                None
+            })
+        })
+        .map(|p| p.to_string_lossy().to_string());
 
     // Start new server with env vars and model
     match start_opencode_server(4096, model, env_vars, config_dir).await {
@@ -1215,9 +1234,32 @@ pub fn run() {
             let model = get_model_from_store(&app_handle);
 
             // Get bundled opencode config dir (contains agents, tools, plugins)
+            // In dev mode, resource_dir() points to target/debug where build.rs copies the resources
+            // In production, resources are bundled by Tauri based on tauri.conf.json
             let config_dir = app_handle.path().resource_dir()
                 .ok()
-                .map(|p| p.join("opencode").to_string_lossy().to_string());
+                .map(|p| p.join("opencode"))
+                .filter(|p| p.exists())
+                .or_else(|| {
+                    // Fallback: check relative to exe for non-standard setups
+                    std::env::current_exe().ok().and_then(|exe| {
+                        let dev_path = exe.parent()?.join("resources/opencode");
+                        if dev_path.exists() {
+                            return Some(dev_path);
+                        }
+                        // Also try walking up to find src-tauri/resources
+                        let mut path = exe;
+                        for _ in 0..5 {
+                            path = path.parent()?.to_path_buf();
+                            let resources = path.join("src-tauri/resources/opencode");
+                            if resources.exists() {
+                                return Some(resources);
+                            }
+                        }
+                        None
+                    })
+                })
+                .map(|p| p.to_string_lossy().to_string());
 
             // Initialize postgres and server in background
             tauri::async_runtime::spawn(async move {

@@ -32,6 +32,7 @@ import {
   PenLine,
   ListTodo,
   Glasses,
+  File,
   type LucideIcon,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -413,6 +414,74 @@ const ReasoningContent = memo(({ part }: { part: ReasoningPart }) => {
 
 ReasoningContent.displayName = "ReasoningContent";
 
+// File chip for displaying file paths in user messages
+const FileChip = memo(({ path }: { path: string }) => {
+  const filename = getFilename(path);
+
+  return (
+    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-zinc-200 text-zinc-700 text-xs font-mono">
+      <File className="h-3 w-3 shrink-0" />
+      <span className="truncate max-w-[200px]" title={path}>{filename}</span>
+    </span>
+  );
+});
+
+FileChip.displayName = "FileChip";
+
+// Parse text and render file paths as chips
+// Matches absolute paths like /Users/foo/bar.txt or relative paths starting with ./
+const FILE_PATH_REGEX = /((?:\/[\w.-]+)+(?:\.\w+)?|\.\/[\w./-]+)/g;
+
+const UserTextContent = memo(({ text }: { text: string }) => {
+  const parts = useMemo(() => {
+    const result: Array<{ type: "text" | "file"; content: string }> = [];
+    let lastIndex = 0;
+    let match;
+
+    // Reset regex state
+    FILE_PATH_REGEX.lastIndex = 0;
+
+    while ((match = FILE_PATH_REGEX.exec(text)) !== null) {
+      const path = match[0];
+
+      // Add text before the match
+      if (match.index > lastIndex) {
+        result.push({ type: "text", content: text.slice(lastIndex, match.index) });
+      }
+
+      // Add the file path
+      result.push({ type: "file", content: path });
+      lastIndex = match.index + path.length;
+    }
+
+    // Add remaining text
+    if (lastIndex < text.length) {
+      result.push({ type: "text", content: text.slice(lastIndex) });
+    }
+
+    return result;
+  }, [text]);
+
+  // If no file paths found, just render text normally
+  if (parts.length === 1 && parts[0].type === "text") {
+    return <span>{text}</span>;
+  }
+
+  return (
+    <span className="inline">
+      {parts.map((part, idx) =>
+        part.type === "file" ? (
+          <FileChip key={idx} path={part.content} />
+        ) : (
+          <span key={idx}>{part.content}</span>
+        )
+      )}
+    </span>
+  );
+});
+
+UserTextContent.displayName = "UserTextContent";
+
 // Metadata tooltip for assistant messages
 const MetadataTooltip = memo(({ info }: { info: AssistantMessage }) => {
   const tokens = info.tokens;
@@ -566,11 +635,11 @@ export const ChatMessage = memo(({ message, isStreaming = false }: ChatMessagePr
       {/* User message - on right, corner angled up, white with zinc text */}
       {isUser && (
         <div className="max-w-[85%] px-3.5 py-2 rounded-2xl rounded-tr-md bg-white text-zinc-800 shadow-lg">
-          <div className="text-sm">
+          <div className="text-sm leading-relaxed">
             {groupedContent.map((group, idx) => {
               if (group.type === "text") {
                 const textPart = group.items[0] as TextPart;
-                return <TextContent key={idx} text={textPart.text} darkText />;
+                return <UserTextContent key={idx} text={textPart.text} />;
               }
               return null;
             })}

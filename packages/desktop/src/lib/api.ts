@@ -108,6 +108,42 @@ export interface OpenCodeConfig {
   [key: string]: unknown;
 }
 
+export interface Agent {
+  name: string;
+  description?: string;
+  mode: "primary" | "subagent" | "all";
+  model?: string;
+  prompt?: string;
+  tools?: Record<string, boolean>;
+  permission?: Record<string, unknown>;
+  builtIn?: boolean;
+}
+
+export interface Model {
+  id: string;
+  providerID: string;
+  name: string;
+  status: string;
+  cost: { input: number; output: number; cache: { read: number; write: number } };
+  limit: { context: number; output: number };
+  capabilities: {
+    temperature: boolean;
+    reasoning: boolean;
+    attachment: boolean;
+    toolcall: boolean;
+    input: { text: boolean; audio: boolean; image: boolean; video: boolean; pdf: boolean };
+    output: { text: boolean; audio: boolean; image: boolean; video: boolean; pdf: boolean };
+  };
+}
+
+export interface Provider {
+  id: string;
+  name: string;
+  source: string;
+  env: string[];
+  models: Record<string, Model>;
+}
+
 // Create client instances per directory (workbook)
 const clients = new Map<string, OpencodeClient>();
 
@@ -125,40 +161,12 @@ function getClient(directory?: string | null): OpencodeClient {
   return clients.get(key)!;
 }
 
-// Fallback fetch for endpoints not in SDK
-const baseUrl = `http://localhost:${DEFAULT_PORT}`;
-
-function buildUrl(path: string, directory?: string | null): string {
-  if (directory) {
-    const separator = path.includes("?") ? "&" : "?";
-    return `${baseUrl}${path}${separator}directory=${encodeURIComponent(directory)}`;
-  }
-  return `${baseUrl}${path}`;
-}
-
-async function fetchJson<T>(path: string, options?: RequestInit & { directory?: string | null }): Promise<T> {
-  const { directory, ...fetchOptions } = options ?? {};
-  const url = buildUrl(path, directory);
-
-  const response = await fetch(url, {
-    ...fetchOptions,
-    headers: {
-      "Content-Type": "application/json",
-      ...fetchOptions?.headers,
-    },
-  });
-  if (!response.ok) {
-    const text = await response.text();
-    throw new Error(`API error: ${response.status} ${response.statusText} - ${text}`);
-  }
-  return response.json();
-}
-
-// API functions using SDK where possible, raw fetch otherwise
+// API functions - always use SDK client
 export const api = {
   health: async () => {
-    const sessions = await fetchJson<Session[]>("/session");
-    return { status: "ok", sessions: sessions.length };
+    const client = getClient();
+    const result = await client.session.list();
+    return { status: "ok", sessions: (result.data as Session[]).length };
   },
 
   sessions: {
@@ -190,8 +198,11 @@ export const api = {
       const result = await client.session.messages({ path: { id: sessionId } });
       return result.data as MessageWithParts[];
     },
-    get: (sessionId: string, messageId: string, directory?: string | null) =>
-      fetchJson<MessageWithParts>(`/session/${sessionId}/message/${messageId}`, { directory }),
+    get: async (sessionId: string, messageId: string, directory?: string | null): Promise<MessageWithParts> => {
+      const client = getClient(directory);
+      const result = await client.session.message({ path: { id: sessionId, messageId } });
+      return result.data as MessageWithParts;
+    },
   },
 
   todos: {
@@ -210,33 +221,67 @@ export const api = {
     },
   },
 
-  prompt: (
+  prompt: async (
     sessionId: string,
     content: string,
     options?: { model?: { providerID: string; modelID: string }; directory?: string | null }
-  ) =>
-    fetchJson<MessageWithParts>(`/session/${sessionId}/message`, {
-      method: "POST",
-      body: JSON.stringify({
+  ): Promise<MessageWithParts> => {
+    const client = getClient(options?.directory);
+    const result = await client.session.prompt({
+      path: { id: sessionId },
+      body: {
         parts: [{ type: "text", text: content }],
         model: options?.model,
-      } satisfies PromptRequest),
-      directory: options?.directory,
-    }),
+      },
+    });
+    return result.data as MessageWithParts;
+  },
 
-  promptAsync: (
+  promptAsync: async (
     sessionId: string,
     content: string,
     options?: { model?: { providerID: string; modelID: string }; directory?: string | null }
   ) => {
-    const url = buildUrl(`/session/${sessionId}/prompt_async`, options?.directory);
-    return fetch(url, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
+    const client = getClient(options?.directory);
+    return client.session.promptAsync({
+      path: { id: sessionId },
+      body: {
         parts: [{ type: "text", text: content }],
         model: options?.model,
-      } satisfies PromptRequest),
+      },
+    });
+  },
+
+  // Send a message with file attachments
+  promptWithFiles: async (
+    sessionId: string,
+    text: string,
+    filePaths: string[],
+    options?: { directory?: string | null }
+  ) => {
+    const client = getClient(options?.directory);
+    const parts: PromptRequest["parts"] = [];
+
+    // Add file parts for each path
+    for (const filePath of filePaths) {
+      const filename = filePath.split("/").pop() || filePath;
+      // Use file:// URL for local files
+      parts.push({
+        type: "file",
+        url: `file://${filePath}`,
+        filename,
+        mediaType: "application/octet-stream", // Let server detect actual type
+      });
+    }
+
+    // Add text part
+    if (text) {
+      parts.push({ type: "text", text });
+    }
+
+    return client.session.promptAsync({
+      path: { id: sessionId },
+      body: { parts },
     });
   },
 
@@ -246,41 +291,66 @@ export const api = {
     return true;
   },
 
-  respondToPermission: (
+  respondToPermission: async (
     sessionId: string,
     permissionId: string,
     response: PermissionResponse,
     directory?: string | null
-  ) =>
-    fetchJson<boolean>(`/session/${sessionId}/permissions/${permissionId}`, {
-      method: "POST",
-      body: JSON.stringify({ response }),
-      directory,
-    }),
+  ): Promise<boolean> => {
+    const client = getClient(directory);
+    await client.postSessionIdPermissionsPermissionId({
+      path: { id: sessionId, permissionId },
+      body: { response },
+    });
+    return true;
+  },
 
-  providers: () =>
-    fetchJson<{
-      all: Array<{
-        id: string;
-        name: string;
-        models: Record<string, { id: string; name: string }>;
-      }>;
-      default: Record<string, string>;
-      connected: string[];
-    }>("/provider"),
+  providers: async () => {
+    const client = getClient();
+    const result = await client.provider.list();
+    return result.data;
+  },
 
   config: {
-    get: () => fetchJson<OpenCodeConfig>("/config"),
-    update: (config: Partial<OpenCodeConfig>) =>
-      fetchJson<OpenCodeConfig>("/config", {
-        method: "PATCH",
-        body: JSON.stringify(config),
-      }),
-    setModel: (provider: string, model: string) =>
-      fetchJson<OpenCodeConfig>("/config", {
-        method: "PATCH",
-        body: JSON.stringify({ model: `${provider}/${model}` }),
-      }),
+    get: async (): Promise<OpenCodeConfig> => {
+      const client = getClient();
+      const result = await client.config.get();
+      return result.data as OpenCodeConfig;
+    },
+    update: async (config: Partial<OpenCodeConfig>): Promise<OpenCodeConfig> => {
+      const client = getClient();
+      const result = await client.config.update({ body: config });
+      return result.data as OpenCodeConfig;
+    },
+    setModel: async (provider: string, model: string): Promise<OpenCodeConfig> => {
+      const client = getClient();
+      const result = await client.config.update({ body: { model: `${provider}/${model}` } });
+      return result.data as OpenCodeConfig;
+    },
+  },
+
+  agents: {
+    list: async (): Promise<Agent[]> => {
+      const client = getClient();
+      const result = await client.app.agents();
+      return result.data as Agent[];
+    },
+  },
+
+  tools: {
+    ids: async (): Promise<string[]> => {
+      const client = getClient();
+      const result = await client.tool.ids();
+      return result.data as string[];
+    },
+  },
+
+  mcp: {
+    status: async () => {
+      const client = getClient();
+      const result = await client.mcp.status();
+      return result.data;
+    },
   },
 };
 

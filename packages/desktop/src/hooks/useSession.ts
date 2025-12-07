@@ -221,8 +221,6 @@ export function useEventSubscription() {
           const { info } = event.properties;
           const sessionID = info.sessionID;
 
-          console.log("Processing message.updated:", { sessionID, msgId: info.id, role: info.role });
-
           // Find all matching query caches and update them
           const queries = queryClient.getQueriesData<MessageWithParts[]>({
             queryKey: ["messages"],
@@ -231,6 +229,7 @@ export function useEventSubscription() {
           // Update each matching query that has this sessionID
           queries.forEach(([queryKey, oldData]) => {
             if (queryKey[1] === sessionID && oldData) {
+              // Check if message already exists (by real ID)
               const existingIdx = oldData.findIndex((m) => m.info.id === info.id);
 
               let newData: MessageWithParts[];
@@ -240,24 +239,25 @@ export function useEventSubscription() {
                   idx === existingIdx ? { ...m, info } : m
                 );
               } else if (info.role === "user") {
-                // For user messages, find and replace any temp optimistic message
-                // Remove ALL temp user messages and add the real one
-                const withoutTemp = oldData.filter(
-                  (m) => !(m.info.id.startsWith("temp-") && m.info.role === "user")
+                // For user messages, replace any temp optimistic message
+                const tempIdx = oldData.findIndex(
+                  (m) => m.info.id.startsWith("temp-") && m.info.role === "user"
                 );
-                // Check if already added (shouldn't happen but be safe)
-                if (!withoutTemp.some((m) => m.info.id === info.id)) {
-                  newData = [...withoutTemp, { info, parts: [] }];
+
+                if (tempIdx >= 0) {
+                  // Replace temp message with real one, preserving parts
+                  newData = oldData.map((m, idx) =>
+                    idx === tempIdx ? { info, parts: m.parts } : m
+                  );
                 } else {
-                  newData = withoutTemp;
+                  // No temp message found, add new (shouldn't happen normally)
+                  newData = [...oldData, { info, parts: [] }];
                 }
-                console.log("Processed user message, removed temp messages");
               } else {
-                // Assistant message - add new with empty parts (parts come via message.part.updated)
+                // Assistant message - add new with empty parts
                 newData = [...oldData, { info, parts: [] }];
               }
 
-              console.log("Updating query:", queryKey, "messages count:", newData.length);
               queryClient.setQueryData(queryKey, newData);
             }
           });
@@ -285,29 +285,38 @@ export function useEventSubscription() {
         case "message.part.updated": {
           // Type: EventMessagePartUpdated
           // Properties: { part: Part, delta?: string }
-          // Part already includes sessionID and messageID as defined in SDK types
           const { part } = event.properties;
           const sessionID = part.sessionID;
           const messageID = part.messageID;
 
-          console.log("Part updated:", { sessionID, messageID, partId: part.id, partType: part.type });
-
           const queries = queryClient.getQueriesData<MessageWithParts[]>({
             queryKey: ["messages"],
           });
+
           queries.forEach(([queryKey, oldData]) => {
             if (queryKey[1] === sessionID && oldData) {
-              const newData = oldData.map((m) => {
-                if (m.info.id !== messageID) return m;
-                const partExists = m.parts.some((p) => p.id === part.id);
+              // Find message by ID or temp message for user parts
+              const messageIdx = oldData.findIndex(
+                (m) => m.info.id === messageID ||
+                  (m.info.id.startsWith("temp-") && m.info.role === "user")
+              );
+
+              if (messageIdx < 0) {
+                // Message doesn't exist yet, skip
+                return;
+              }
+
+              const newData = oldData.map((m, idx) => {
+                if (idx !== messageIdx) return m;
+                const partIdx = m.parts.findIndex((p) => p.id === part.id);
                 return {
                   ...m,
-                  parts: partExists
-                    ? m.parts.map((p) => (p.id === part.id ? part : p))
+                  parts: partIdx >= 0
+                    ? m.parts.map((p, i) => (i === partIdx ? part : p))
                     : [...m.parts, part],
                 };
               });
-              console.log("Updated parts for message:", messageID, "total parts:", newData.find(m => m.info.id === messageID)?.parts.length);
+
               queryClient.setQueryData(queryKey, newData);
             }
           });

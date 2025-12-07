@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect, useCallback } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { useSendMessage, useAbortSession, useSessionStatuses, useSessions, useCreateSession, useDeleteSession } from "@/hooks/useSession";
 import { useUIStore } from "@/stores/ui";
 import { Button } from "@/components/ui/button";
@@ -12,7 +13,7 @@ import {
   DropdownMenuSubTrigger,
   DropdownMenuSubContent,
 } from "@/components/ui/dropdown-menu";
-import { ArrowUp, Square, Loader2, GripVertical, Hand, Settings, Plus, Database, Clock, MessageSquare, X, Check } from "lucide-react";
+import { ArrowUp, Square, Loader2, GripVertical, Hand, Settings, Plus, Database, Clock, MessageSquare, X, Check, Trash2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { listen } from "@tauri-apps/api/event";
 import { useWorkbook, useWorkbooks } from "@/hooks/useWorkbook";
@@ -21,15 +22,17 @@ interface ToolbarProps {
   expanded: boolean;
   onExpandChange: (expanded: boolean) => void;
   hasData: boolean;
+  onOpenSettings: () => void;
 }
 
-export function Toolbar({ expanded, onExpandChange, hasData }: ToolbarProps) {
+export function Toolbar({ expanded, onExpandChange, hasData, onOpenSettings }: ToolbarProps) {
   const [input, setInput] = useState("");
   const [isDragging, setIsDragging] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
   const dropRef = useRef<HTMLDivElement>(null);
   const hasHandledDrop = useRef(false); // Prevent duplicate drops
+  const queryClient = useQueryClient();
   const { activeSessionId, activeWorkbookId, setActiveWorkbook, setActiveSession } = useUIStore();
   const { data: sessionStatuses = {} } = useSessionStatuses();
   const sendMessage = useSendMessage(activeSessionId);
@@ -72,35 +75,8 @@ export function Toolbar({ expanded, onExpandChange, hasData }: ToolbarProps) {
         // Expand the panel to show the conversation
         onExpandChange(true);
 
-        // Get just the file names for display
-        const fileNames = filePaths.map((p) => p.split("/").pop() || p);
-        const fileList = fileNames.join(", ");
-
-        // Build a persistent ingest prompt for the agent with safety constraints
-        const tmpDir = "/tmp/hands-ingest";
-        const ingestPrompt = `I just dropped ${filePaths.length === 1 ? "a file" : `${filePaths.length} files`} for you to ingest:
-
-Files: ${fileList}
-Full paths: ${filePaths.join(", ")}
-
-Please help me load this data into my PostgreSQL database. Be VERY persistent and thorough:
-
-1. First, read and examine the file(s) to understand the format and structure (CSV, JSON, etc.)
-2. Infer an appropriate table schema from the data - choose good column names and types
-3. Create the table(s) in PostgreSQL using the hands_sql tool
-4. Load ALL the data into the table(s) - process every single row, don't stop until complete
-5. Verify the data was loaded correctly by querying the table and counting rows
-
-CRITICAL FILE SAFETY RULES:
-- NEVER modify, edit, or delete the source files (${filePaths.join(", ")})
-- If you need to write any code or scripts, ONLY write to: ${tmpDir}
-- If you need to copy files for processing, copy them to: ${tmpDir}
-- You may READ source files but NEVER WRITE to them
-- Create ${tmpDir} if it doesn't exist before writing anything
-
-If you encounter ANY errors, debug and retry. Do NOT give up until every row of data is successfully loaded into the database. If a batch fails, try smaller batches. If there are encoding issues, handle them. Be relentless.
-
-When you are completely done loading the data, ask me if I want to clean up the temporary files in ${tmpDir}.`;
+        // Build a simple prompt that invokes the import subagent
+        const ingestPrompt = `@import ${filePaths.join(" ")}`;
 
         sendMessage.mutate(ingestPrompt);
       });
@@ -154,7 +130,7 @@ When you are completely done loading the data, ask me if I want to clean up the 
   }, []);
 
   const handleSubmit = async () => {
-    if (!input.trim() || isBusy || !activeSessionId) return;
+    if (!input.trim() || isBusy) return;
 
     const message = input.trim();
     setInput("");
@@ -162,6 +138,18 @@ When you are completely done loading the data, ask me if I want to clean up the 
     // Expand the panel when user sends a message
     if (!expanded) {
       onExpandChange(true);
+    }
+
+    // If no session exists, create one first then send message
+    if (!activeSessionId) {
+      createSession.mutate({}, {
+        onSuccess: (newSession) => {
+          setActiveSession(newSession.id);
+          // Send message to the new session
+          sendMessage.mutate(message);
+        }
+      });
+      return;
     }
 
     sendMessage.mutate(message);
@@ -213,6 +201,23 @@ When you are completely done loading the data, ask me if I want to clean up the 
     });
   };
 
+  const handleClearAllData = async () => {
+    // Clear active session first to stop showing messages
+    setActiveSession(null);
+    setMenuOpen(false);
+
+    // Clear all caches immediately
+    queryClient.removeQueries({ queryKey: ["messages"] });
+    queryClient.removeQueries({ queryKey: ["todos"] });
+    queryClient.removeQueries({ queryKey: ["sessionStatuses"] });
+
+    // Delete all sessions on the server
+    await Promise.all(sessions.map((session) => deleteSession.mutateAsync(session.id)));
+
+    // Clear sessions cache after deletions complete
+    queryClient.removeQueries({ queryKey: ["sessions"] });
+  };
+
   const placeholder = hasData
     ? "Ask anything about your data..."
     : "Tell me about your data source...";
@@ -234,7 +239,7 @@ When you are completely done loading the data, ask me if I want to clean up the 
       {/* Drag handle */}
       <div
         data-tauri-drag-region
-        className="h-full flex items-center px-1 cursor-grab active:cursor-grabbing text-muted-foreground/40 hover:text-muted-foreground/60"
+        className="h-full flex items-center pl-1 cursor-grab active:cursor-grabbing text-muted-foreground/40 hover:text-muted-foreground/60"
       >
         <GripVertical className="h-4 w-4 pointer-events-none" />
       </div>
@@ -342,10 +347,23 @@ When you are completely done loading the data, ask me if I want to clean up the 
 
           <DropdownMenuSeparator />
 
-          <DropdownMenuItem>
+          <DropdownMenuItem onClick={() => { setMenuOpen(false); onOpenSettings(); }}>
             <Settings className="h-4 w-4 mr-2" />
             Settings
           </DropdownMenuItem>
+
+          {sessions.length > 0 && (
+            <>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem
+                onClick={handleClearAllData}
+                className="text-destructive focus:text-destructive"
+              >
+                <Trash2 className="h-4 w-4 mr-2" />
+                Clear All Data
+              </DropdownMenuItem>
+            </>
+          )}
         </DropdownMenuContent>
       </DropdownMenu>
 
@@ -361,7 +379,6 @@ When you are completely done loading the data, ask me if I want to clean up the 
             if (!expanded) onExpandChange(true);
           }}
           placeholder={placeholder}
-          disabled={!activeSessionId}
           className={cn(
             "flex-1 bg-transparent py-2 text-sm",
             "placeholder:text-muted-foreground/60 focus:outline-none"
@@ -385,10 +402,10 @@ When you are completely done loading the data, ask me if I want to clean up the 
               "h-8 w-8 shrink-0 rounded-lg transition-colors",
               input.trim() && "bg-primary text-primary-foreground hover:bg-primary/90"
             )}
-            disabled={!input.trim() || !activeSessionId || sendMessage.isPending}
+            disabled={!input.trim() || sendMessage.isPending || createSession.isPending}
             onClick={handleSubmit}
           >
-            {sendMessage.isPending ? (
+            {sendMessage.isPending || createSession.isPending ? (
               <Loader2 className="h-4 w-4 animate-spin" />
             ) : (
               <ArrowUp className="h-4 w-4" />
