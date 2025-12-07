@@ -111,10 +111,7 @@ interface RenderOptions {
   initialData?: Record<string, unknown>;
 }
 
-export function renderPage(
-  component: React.ReactElement,
-  options: RenderOptions = {}
-): string {
+export function renderPage(component: React.ReactElement, options: RenderOptions = {}): string {
   const html = renderToString(component);
   const { title = "Dashboard", initialData } = options;
 

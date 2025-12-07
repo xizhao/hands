@@ -1,6 +1,4 @@
-# {{name}}
-
-{{description}}
+# Hands Workbook
 
 A Cloudflare Worker app with SSR React dashboards and shadcn/ui components.
 

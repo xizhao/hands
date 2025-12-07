@@ -187,10 +187,7 @@ export function PieChart({
               label
             >
               {data.map((_, index) => (
-                <Cell
-                  key={`cell-${index}`}
-                  fill={CHART_COLORS[index % CHART_COLORS.length]}
-                />
+                <Cell key={`cell-${index}`} fill={CHART_COLORS[index % CHART_COLORS.length]} />
               ))}
             </Pie>
             <Tooltip
@@ -216,13 +213,7 @@ interface TableChartProps {
   className?: string;
 }
 
-export function TableChart({
-  title,
-  description,
-  data,
-  columns,
-  className,
-}: TableChartProps) {
+export function TableChart({ title, description, data, columns, className }: TableChartProps) {
   const cols = columns || (data[0] ? Object.keys(data[0]) : []);
 
   return (
@@ -237,10 +228,7 @@ export function TableChart({
             <thead>
               <tr className="border-b">
                 {cols.map((col) => (
-                  <th
-                    key={col}
-                    className="px-4 py-2 text-left font-medium text-muted-foreground"
-                  >
+                  <th key={col} className="px-4 py-2 text-left font-medium text-muted-foreground">
                     {col}
                   </th>
                 ))}

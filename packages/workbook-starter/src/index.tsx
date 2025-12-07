@@ -18,7 +18,7 @@ app.use("/*", cors());
 
 // Health check
 app.get("/health", (c) => {
-  return c.json({ status: "ok", name: "{{name}}" });
+  return c.json({ status: "ok", name: "workbook-starter" });
 });
 
 // SSR Dashboard - renders charts with data
@@ -36,10 +36,10 @@ app.get("/", async (c) => {
     }
   }
 
-  const html = renderPage(
-    <Dashboard charts={charts} chartData={chartData} />,
-    { title: "{{name}} - Dashboard", initialData: { charts, chartData } }
-  );
+  const html = renderPage(<Dashboard charts={charts} chartData={chartData} />, {
+    title: "Dashboard",
+    initialData: { charts, chartData },
+  });
 
   return c.html(html);
 });
@@ -61,10 +61,9 @@ app.get("/charts/:id", async (c) => {
     console.error(`Error fetching data for chart ${chart.id}:`, error);
   }
 
-  const html = renderPage(
-    <Dashboard charts={[chart]} chartData={{ [chart.id]: data }} />,
-    { title: `${chart.title} - {{name}}` }
-  );
+  const html = renderPage(<Dashboard charts={[chart]} chartData={{ [chart.id]: data }} />, {
+    title: chart.title,
+  });
 
   return c.html(html);
 });
@@ -105,11 +104,7 @@ export default {
   fetch: app.fetch,
 
   // Scheduled handler - uncomment crons in wrangler.toml to enable
-  async scheduled(
-    controller: ScheduledController,
-    env: Bindings,
-    ctx: ExecutionContext
-  ) {
+  async scheduled(controller: ScheduledController, env: Bindings, ctx: ExecutionContext) {
     console.log(`Cron triggered: ${controller.cron} at ${new Date().toISOString()}`);
     // Add your scheduled task logic here
   },
