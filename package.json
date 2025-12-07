@@ -8,9 +8,9 @@
   "scripts": {
     "dev": "bun run --cwd packages/cli src/index.ts",
     "dev:node": "npx tsx packages/cli/src/index.ts",
-    "dev:desktop": "bun run --cwd packages/desktop tauri dev",
+    "dev:desktop": "bun run --cwd packages/desktop tauri:dev",
     "build": "turbo build",
-    "build:desktop": "bun run --cwd packages/desktop tauri build",
+    "build:desktop": "bun run --cwd packages/desktop tauri:build",
     "typecheck": "turbo typecheck"
   },
   "workspaces": ["packages/*"],

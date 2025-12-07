@@ -1,0 +1,34 @@
+---
+title: Welcome to Hands
+description: Build data-driven applications with natural language
+template: splash
+hero:
+  tagline: The modern platform for building dashboards, data pipelines, and AI-powered apps
+  actions:
+    - text: Get Started
+      link: /introduction/
+      icon: right-arrow
+      variant: primary
+    - text: View on GitHub
+      link: https://github.com/hands-app/hands
+      icon: external
+---
+
+import { Card, CardGrid } from '@astrojs/starlight/components';
+
+## Features
+
+<CardGrid stagger>
+  <Card title="Query with SQL" icon="magnifier">
+    Write SQL queries against your embedded PostgreSQL database. Natural joins, aggregations, and window functions all work.
+  </Card>
+  <Card title="Build Dashboards" icon="puzzle">
+    Create interactive dashboards with charts, tables, and real-time data. Choose from line, bar, pie, area, and table visualizations.
+  </Card>
+  <Card title="Deploy to Cloudflare" icon="rocket">
+    One-click deployment to Cloudflare Workers. Your apps run at the edge with global low-latency access.
+  </Card>
+  <Card title="AI-Powered" icon="star">
+    Chat with your data using natural language. The AI understands your schema and writes queries for you.
+  </Card>
+</CardGrid>

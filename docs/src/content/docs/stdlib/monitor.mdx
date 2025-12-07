@@ -1,0 +1,374 @@
+---
+title: Monitor
+description: Run background checks and send alerts
+---
+
+Monitors run queries on a schedule and trigger alerts when conditions are met.
+
+## Basic usage
+
+```typescript
+import { monitor } from '@hands/stdlib';
+
+export default monitor({
+  name: 'low-stock-alert',
+  query: 'SELECT * FROM products WHERE stock < 10',
+  schedule: '0 * * * *',  // Every hour
+  alert: {
+    when: (rows) => rows.length > 0,
+    message: (rows) => `${rows.length} products are low on stock`
+  }
+});
+```
+
+## Configuration
+
+### name
+
+Unique identifier for the monitor:
+
+```typescript
+{
+  name: 'sales-anomaly-detector'
+}
+```
+
+### query
+
+SQL query to run on each check:
+
+```typescript
+{
+  query: `
+    SELECT product_id, stock
+    FROM inventory
+    WHERE stock < reorder_point
+  `
+}
+```
+
+### schedule
+
+When to run the monitor (cron syntax):
+
+```typescript
+{
+  schedule: '*/5 * * * *'  // Every 5 minutes
+}
+```
+
+Common schedules:
+- `* * * * *` - Every minute
+- `*/5 * * * *` - Every 5 minutes
+- `0 * * * *` - Every hour
+- `0 9 * * *` - Daily at 9 AM
+- `0 9 * * 1` - Weekly on Monday at 9 AM
+
+### alert
+
+Define when and how to alert:
+
+```typescript
+{
+  alert: {
+    when: (rows) => rows.length > 0,
+    message: (rows) => `Found ${rows.length} issues`,
+    channels: ['slack', 'email']
+  }
+}
+```
+
+## Alert conditions
+
+### Simple threshold
+
+```typescript
+{
+  alert: {
+    when: (rows) => rows.length > 10,
+    message: 'More than 10 errors detected'
+  }
+}
+```
+
+### Value-based
+
+```typescript
+{
+  query: 'SELECT COUNT(*) as error_count FROM errors WHERE timestamp > NOW() - INTERVAL \'1 hour\'',
+  alert: {
+    when: (rows) => rows[0].error_count > 100,
+    message: (rows) => `Error rate: ${rows[0].error_count}/hour`
+  }
+}
+```
+
+### Percentage change
+
+```typescript
+{
+  query: `
+    WITH current AS (
+      SELECT SUM(revenue) as value FROM sales WHERE date = CURRENT_DATE
+    ),
+    previous AS (
+      SELECT SUM(revenue) as value FROM sales WHERE date = CURRENT_DATE - 7
+    )
+    SELECT
+      current.value,
+      previous.value as prev_value,
+      (current.value - previous.value) / previous.value * 100 as pct_change
+    FROM current, previous
+  `,
+  alert: {
+    when: (rows) => Math.abs(rows[0].pct_change) > 30,
+    message: (rows) => `Revenue changed by ${rows[0].pct_change.toFixed(1)}%`
+  }
+}
+```
+
+## Alert channels
+
+### Slack
+
+```typescript
+{
+  alert: {
+    channels: [{
+      type: 'slack',
+      webhook: process.env.SLACK_WEBHOOK_URL
+    }]
+  }
+}
+```
+
+### Email
+
+```typescript
+{
+  alert: {
+    channels: [{
+      type: 'email',
+      to: ['team@example.com'],
+      from: 'alerts@example.com'
+    }]
+  }
+}
+```
+
+### Custom webhook
+
+```typescript
+{
+  alert: {
+    channels: [{
+      type: 'webhook',
+      url: 'https://api.example.com/alerts',
+      headers: {
+        'Authorization': `Bearer ${process.env.ALERT_API_KEY}`
+      }
+    }]
+  }
+}
+```
+
+### Custom handler
+
+```typescript
+{
+  alert: {
+    handler: async (rows, metadata) => {
+      // Custom alert logic
+      await fetch('https://api.pagerduty.com/events', {
+        method: 'POST',
+        body: JSON.stringify({
+          routing_key: process.env.PAGERDUTY_KEY,
+          event_action: 'trigger',
+          payload: {
+            summary: `Monitor ${metadata.name} triggered`,
+            source: 'hands',
+            severity: 'error',
+            custom_details: { rows }
+          }
+        })
+      });
+    }
+  }
+}
+```
+
+## Multiple monitors
+
+Create multiple monitors in one file:
+
+```typescript
+import { monitor } from '@hands/stdlib';
+
+export const lowStock = monitor({
+  name: 'low-stock',
+  query: 'SELECT * FROM products WHERE stock < 10',
+  schedule: '0 * * * *',
+  alert: {
+    when: (rows) => rows.length > 0,
+    message: (rows) => `${rows.length} products low on stock`
+  }
+});
+
+export const highErrors = monitor({
+  name: 'high-errors',
+  query: 'SELECT COUNT(*) as cnt FROM errors WHERE timestamp > NOW() - INTERVAL \'5 minutes\'',
+  schedule: '*/5 * * * *',
+  alert: {
+    when: (rows) => rows[0].cnt > 50,
+    message: (rows) => `Error spike: ${rows[0].cnt} errors in 5 minutes`
+  }
+});
+```
+
+## Monitor state
+
+Track monitor state over time:
+
+```typescript
+{
+  name: 'recovery-tracker',
+  query: 'SELECT status FROM services WHERE name = \'api\'',
+  schedule: '* * * * *',
+  alert: {
+    // Only alert on state changes
+    when: (rows, prev) => rows[0].status !== prev?.[0]?.status,
+    message: (rows, prev) =>
+      `API status changed from ${prev?.[0]?.status || 'unknown'} to ${rows[0].status}`
+  }
+}
+```
+
+## Snoozing alerts
+
+Prevent alert fatigue:
+
+```typescript
+{
+  alert: {
+    snooze: '1 hour',  // Don't re-alert for 1 hour after triggering
+    when: (rows) => rows.length > 0,
+    message: 'Issue detected'
+  }
+}
+```
+
+## Examples
+
+### Uptime monitor
+
+```typescript
+monitor({
+  name: 'api-uptime',
+  query: `
+    SELECT
+      endpoint,
+      success_rate,
+      avg_latency_ms
+    FROM (
+      SELECT
+        endpoint,
+        COUNT(*) FILTER (WHERE status = 200) * 100.0 / COUNT(*) as success_rate,
+        AVG(latency_ms) as avg_latency_ms
+      FROM api_logs
+      WHERE timestamp > NOW() - INTERVAL '5 minutes'
+      GROUP BY endpoint
+    ) t
+    WHERE success_rate < 99 OR avg_latency_ms > 500
+  `,
+  schedule: '*/5 * * * *',
+  alert: {
+    when: (rows) => rows.length > 0,
+    message: (rows) => rows.map(r =>
+      `${r.endpoint}: ${r.success_rate.toFixed(1)}% success, ${r.avg_latency_ms.toFixed(0)}ms avg`
+    ).join('\n')
+  }
+});
+```
+
+### Data freshness
+
+```typescript
+monitor({
+  name: 'stale-data-check',
+  query: `
+    SELECT
+      table_name,
+      last_updated,
+      EXTRACT(EPOCH FROM (NOW() - last_updated)) / 60 as minutes_ago
+    FROM data_freshness
+    WHERE last_updated < NOW() - INTERVAL '1 hour'
+  `,
+  schedule: '0 * * * *',
+  alert: {
+    when: (rows) => rows.length > 0,
+    message: (rows) => `Stale data in: ${rows.map(r => r.table_name).join(', ')}`
+  }
+});
+```
+
+### Revenue anomaly
+
+```typescript
+monitor({
+  name: 'revenue-anomaly',
+  query: `
+    WITH hourly AS (
+      SELECT
+        DATE_TRUNC('hour', created_at) as hour,
+        SUM(total) as revenue
+      FROM orders
+      WHERE created_at > NOW() - INTERVAL '24 hours'
+      GROUP BY 1
+    ),
+    stats AS (
+      SELECT
+        AVG(revenue) as avg_revenue,
+        STDDEV(revenue) as stddev_revenue
+      FROM hourly
+      WHERE hour < NOW() - INTERVAL '1 hour'
+    )
+    SELECT
+      h.hour,
+      h.revenue,
+      s.avg_revenue,
+      (h.revenue - s.avg_revenue) / NULLIF(s.stddev_revenue, 0) as z_score
+    FROM hourly h, stats s
+    WHERE h.hour = DATE_TRUNC('hour', NOW() - INTERVAL '1 hour')
+      AND ABS((h.revenue - s.avg_revenue) / NULLIF(s.stddev_revenue, 0)) > 2
+  `,
+  schedule: '5 * * * *',  // 5 minutes past each hour
+  alert: {
+    when: (rows) => rows.length > 0,
+    message: (rows) => {
+      const r = rows[0];
+      return `Revenue anomaly: $${r.revenue} (expected ~$${r.avg_revenue}, z-score: ${r.z_score.toFixed(1)})`;
+    }
+  }
+});
+```
+
+## Reference
+
+### monitor(config)
+
+Create a monitor configuration.
+
+```typescript
+monitor({
+  name: string,           // Unique identifier
+  query: string,          // SQL query to run
+  schedule: string,       // Cron expression
+  alert: {
+    when: (rows, prev?) => boolean,  // Alert condition
+    message: string | ((rows, prev?) => string),  // Alert message
+    channels?: AlertChannel[],       // Where to send
+    handler?: (rows, metadata) => Promise<void>,  // Custom handler
+    snooze?: string       // Cooldown period
+  }
+})
+```

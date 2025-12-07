@@ -1,0 +1,275 @@
+---
+title: SQL Client
+description: Query your database with the sql template tag
+---
+
+The `sql` template tag provides a safe, typed interface for database queries.
+
+## Basic usage
+
+```typescript
+import { sql } from '@hands/stdlib';
+
+// Simple query
+const users = await sql`SELECT * FROM users`;
+
+// With parameters
+const userId = 123;
+const user = await sql`SELECT * FROM users WHERE id = ${userId}`;
+```
+
+## Parameters
+
+Template interpolation safely escapes values:
+
+```typescript
+// Safe from SQL injection
+const email = "user@example.com'; DROP TABLE users;--";
+const user = await sql`SELECT * FROM users WHERE email = ${email}`;
+// Executes: SELECT * FROM users WHERE email = $1
+// With params: ["user@example.com'; DROP TABLE users;--"]
+```
+
+### Multiple parameters
+
+```typescript
+const users = await sql`
+  SELECT * FROM users
+  WHERE status = ${status}
+    AND created_at > ${startDate}
+    AND role IN (${roles})
+`;
+```
+
+### Array parameters
+
+Arrays are expanded correctly:
+
+```typescript
+const ids = [1, 2, 3];
+const users = await sql`SELECT * FROM users WHERE id IN (${ids})`;
+// Executes: SELECT * FROM users WHERE id IN ($1, $2, $3)
+```
+
+## Return types
+
+Queries return arrays of row objects:
+
+```typescript
+const users = await sql`SELECT id, name FROM users`;
+// users: { id: number; name: string }[]
+
+const count = await sql`SELECT COUNT(*) as total FROM users`;
+// count: { total: string }[] (COUNT returns string)
+console.log(parseInt(count[0].total));
+```
+
+### Type assertions
+
+For better type safety:
+
+```typescript
+interface User {
+  id: number;
+  name: string;
+  email: string;
+}
+
+const users = await sql<User[]>`SELECT * FROM users`;
+```
+
+## Raw SQL
+
+For dynamic SQL (use carefully):
+
+```typescript
+const column = 'name';
+const direction = 'DESC';
+
+const users = await sql`
+  SELECT * FROM users
+  ORDER BY ${sql.raw(column)} ${sql.raw(direction)}
+`;
+```
+
+:::caution
+`sql.raw()` does not escape values. Only use with trusted input.
+:::
+
+## Transactions
+
+```typescript
+import { sql } from '@hands/stdlib';
+
+await sql.transaction(async (tx) => {
+  await tx`UPDATE accounts SET balance = balance - 100 WHERE id = ${fromId}`;
+  await tx`UPDATE accounts SET balance = balance + 100 WHERE id = ${toId}`;
+});
+```
+
+Transactions automatically rollback on error:
+
+```typescript
+try {
+  await sql.transaction(async (tx) => {
+    await tx`INSERT INTO orders (user_id, total) VALUES (${userId}, ${total})`;
+    throw new Error('Something went wrong');
+    // Transaction is rolled back
+  });
+} catch (err) {
+  console.log('Order not created');
+}
+```
+
+## Batch operations
+
+### Insert multiple rows
+
+```typescript
+const users = [
+  { name: 'Alice', email: 'alice@example.com' },
+  { name: 'Bob', email: 'bob@example.com' }
+];
+
+await sql`
+  INSERT INTO users (name, email)
+  VALUES ${sql.values(users.map(u => [u.name, u.email]))}
+`;
+```
+
+### Bulk updates
+
+```typescript
+await sql`
+  UPDATE users SET status = 'inactive'
+  WHERE last_login < NOW() - INTERVAL '90 days'
+`;
+```
+
+## Query building
+
+### Conditional clauses
+
+```typescript
+function searchUsers(filters: { name?: string; status?: string }) {
+  const conditions: string[] = [];
+  const params: any[] = [];
+
+  if (filters.name) {
+    conditions.push(`name ILIKE $${params.length + 1}`);
+    params.push(`%${filters.name}%`);
+  }
+
+  if (filters.status) {
+    conditions.push(`status = $${params.length + 1}`);
+    params.push(filters.status);
+  }
+
+  const where = conditions.length > 0
+    ? `WHERE ${conditions.join(' AND ')}`
+    : '';
+
+  return sql`SELECT * FROM users ${sql.raw(where)}`;
+}
+```
+
+### Dynamic columns
+
+```typescript
+const columns = ['id', 'name', 'email'];
+const users = await sql`
+  SELECT ${sql.raw(columns.join(', '))}
+  FROM users
+`;
+```
+
+## Prepared statements
+
+For frequently-run queries:
+
+```typescript
+const findUser = sql.prepare<[number], User>`
+  SELECT * FROM users WHERE id = $1
+`;
+
+const user1 = await findUser.run(1);
+const user2 = await findUser.run(2);
+```
+
+## Error handling
+
+```typescript
+try {
+  await sql`INSERT INTO users (email) VALUES (${email})`;
+} catch (err) {
+  if (err.message.includes('unique constraint')) {
+    console.log('Email already exists');
+  } else if (err.message.includes('not-null constraint')) {
+    console.log('Required field missing');
+  } else {
+    throw err;
+  }
+}
+```
+
+## Performance
+
+### EXPLAIN queries
+
+```typescript
+const plan = await sql`EXPLAIN ANALYZE SELECT * FROM users`;
+console.log(plan);
+```
+
+### Query timing
+
+```typescript
+const start = performance.now();
+const users = await sql`SELECT * FROM users`;
+console.log(`Query took ${performance.now() - start}ms`);
+```
+
+## Reference
+
+### sql\`...\`
+
+Execute a SQL query with parameters.
+
+```typescript
+sql`SELECT * FROM table WHERE col = ${value}`
+```
+
+### sql.raw(string)
+
+Insert raw SQL without escaping.
+
+```typescript
+sql`ORDER BY ${sql.raw('created_at DESC')}`
+```
+
+### sql.values(array)
+
+Format values for INSERT.
+
+```typescript
+sql`INSERT INTO t (a, b) VALUES ${sql.values([[1, 2], [3, 4]])}`
+```
+
+### sql.transaction(fn)
+
+Execute queries in a transaction.
+
+```typescript
+await sql.transaction(async (tx) => {
+  await tx`...`;
+});
+```
+
+### sql.prepare\`...\`
+
+Create a prepared statement.
+
+```typescript
+const stmt = sql.prepare`SELECT * FROM users WHERE id = $1`;
+await stmt.run(123);
+```

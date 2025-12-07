@@ -1,0 +1,304 @@
+---
+title: "Guide: Your First Dashboard"
+description: Build a complete dashboard from scratch
+---
+
+import { Steps } from '@astrojs/starlight/components';
+
+This guide walks you through building a sales dashboard with multiple charts, filters, and real-time updates.
+
+## What we'll build
+
+A sales dashboard showing:
+- Revenue trend over time
+- Top products by sales
+- Sales by region breakdown
+- Recent orders table
+
+## Prerequisites
+
+- A Hands workbook with some sales data
+- Basic familiarity with SQL
+
+## Step 1: Prepare the data
+
+First, let's make sure we have the right data structure. If you don't have data yet, create sample tables:
+
+```sql
+-- Products table
+CREATE TABLE products (
+  id SERIAL PRIMARY KEY,
+  name TEXT NOT NULL,
+  category TEXT,
+  price NUMERIC(10,2)
+);
+
+-- Orders table
+CREATE TABLE orders (
+  id SERIAL PRIMARY KEY,
+  product_id INTEGER REFERENCES products(id),
+  quantity INTEGER,
+  total NUMERIC(10,2),
+  region TEXT,
+  created_at TIMESTAMP DEFAULT NOW()
+);
+
+-- Insert sample data
+INSERT INTO products (name, category, price) VALUES
+  ('Widget A', 'Widgets', 29.99),
+  ('Widget B', 'Widgets', 49.99),
+  ('Gadget X', 'Gadgets', 99.99),
+  ('Gadget Y', 'Gadgets', 149.99);
+
+INSERT INTO orders (product_id, quantity, total, region, created_at)
+SELECT
+  (random() * 3 + 1)::int,
+  (random() * 5 + 1)::int,
+  random() * 500,
+  (ARRAY['North', 'South', 'East', 'West'])[floor(random() * 4 + 1)],
+  NOW() - (random() * 30 || ' days')::interval
+FROM generate_series(1, 100);
+```
+
+## Step 2: Create the dashboard file
+
+Create a new file at `src/dashboards/sales.ts`:
+
+```typescript
+import { dashboard } from '@hands/stdlib';
+
+export default dashboard({
+  title: 'Sales Dashboard',
+  description: 'Overview of sales performance',
+  refreshInterval: 60,  // Auto-refresh every minute
+
+  charts: []  // We'll add these next
+});
+```
+
+## Step 3: Add the revenue chart
+
+Add a line chart showing revenue over time:
+
+```typescript
+charts: [
+  {
+    title: 'Daily Revenue',
+    type: 'area',
+    width: 'full',
+    query: `
+      SELECT
+        DATE(created_at) as date,
+        SUM(total) as value
+      FROM orders
+      WHERE created_at > CURRENT_DATE - 30
+      GROUP BY DATE(created_at)
+      ORDER BY date
+    `
+  }
+]
+```
+
+## Step 4: Add product rankings
+
+Add a bar chart for top products:
+
+```typescript
+{
+  title: 'Top Products',
+  type: 'bar',
+  width: 'half',
+  query: `
+    SELECT
+      p.name,
+      SUM(o.total) as value
+    FROM orders o
+    JOIN products p ON o.product_id = p.id
+    GROUP BY p.name
+    ORDER BY value DESC
+    LIMIT 10
+  `
+}
+```
+
+## Step 5: Add regional breakdown
+
+Add a pie chart for sales by region:
+
+```typescript
+{
+  title: 'Sales by Region',
+  type: 'pie',
+  width: 'half',
+  query: `
+    SELECT
+      region as name,
+      SUM(total) as value
+    FROM orders
+    GROUP BY region
+  `
+}
+```
+
+## Step 6: Add recent orders table
+
+Add a table showing recent orders:
+
+```typescript
+{
+  title: 'Recent Orders',
+  type: 'table',
+  width: 'full',
+  query: `
+    SELECT
+      o.id,
+      p.name as product,
+      o.quantity,
+      o.total,
+      o.region,
+      o.created_at
+    FROM orders o
+    JOIN products p ON o.product_id = p.id
+    ORDER BY o.created_at DESC
+    LIMIT 20
+  `
+}
+```
+
+## Complete dashboard
+
+Here's the full file:
+
+```typescript
+// src/dashboards/sales.ts
+import { dashboard } from '@hands/stdlib';
+
+export default dashboard({
+  title: 'Sales Dashboard',
+  description: 'Overview of sales performance',
+  refreshInterval: 60,
+
+  charts: [
+    {
+      title: 'Daily Revenue',
+      type: 'area',
+      width: 'full',
+      query: `
+        SELECT
+          DATE(created_at) as date,
+          SUM(total) as value
+        FROM orders
+        WHERE created_at > CURRENT_DATE - 30
+        GROUP BY DATE(created_at)
+        ORDER BY date
+      `
+    },
+    {
+      title: 'Top Products',
+      type: 'bar',
+      width: 'half',
+      query: `
+        SELECT
+          p.name,
+          SUM(o.total) as value
+        FROM orders o
+        JOIN products p ON o.product_id = p.id
+        GROUP BY p.name
+        ORDER BY value DESC
+        LIMIT 10
+      `
+    },
+    {
+      title: 'Sales by Region',
+      type: 'pie',
+      width: 'half',
+      query: `
+        SELECT
+          region as name,
+          SUM(total) as value
+        FROM orders
+        GROUP BY region
+      `
+    },
+    {
+      title: 'Recent Orders',
+      type: 'table',
+      width: 'full',
+      query: `
+        SELECT
+          o.id,
+          p.name as product,
+          o.quantity,
+          o.total,
+          o.region,
+          o.created_at
+        FROM orders o
+        JOIN products p ON o.product_id = p.id
+        ORDER BY o.created_at DESC
+        LIMIT 20
+      `
+    }
+  ]
+});
+```
+
+## Step 7: Preview
+
+Click **Run** or press `Cmd+Enter` to see your dashboard in the preview panel.
+
+## Step 8: Add filters (optional)
+
+Make your dashboard interactive with filters:
+
+```typescript
+export default dashboard({
+  title: 'Sales Dashboard',
+
+  filters: [
+    {
+      name: 'dateRange',
+      type: 'daterange',
+      default: 'last30days'
+    },
+    {
+      name: 'region',
+      type: 'select',
+      query: 'SELECT DISTINCT region FROM orders ORDER BY region'
+    }
+  ],
+
+  charts: [
+    {
+      title: 'Daily Revenue',
+      type: 'area',
+      query: `
+        SELECT DATE(created_at) as date, SUM(total) as value
+        FROM orders
+        WHERE created_at BETWEEN :dateRange_start AND :dateRange_end
+          AND (:region IS NULL OR region = :region)
+        GROUP BY 1 ORDER BY 1
+      `
+    },
+    // ... other charts with filter conditions
+  ]
+});
+```
+
+## Step 9: Deploy
+
+When you're happy with your dashboard:
+
+<Steps>
+1. Click **Deploy** in the toolbar
+2. Authorize with Cloudflare (first time)
+3. Wait for build to complete
+4. Get your public URL
+</Steps>
+
+Your dashboard is now live and accessible to anyone with the URL.
+
+## Next steps
+
+- Add more [Chart types](/apps/charts/)
+- Create [API routes](/apps/api-routes/) for the same data
+- Set up [Scheduled jobs](/apps/scheduled-jobs/) to refresh data

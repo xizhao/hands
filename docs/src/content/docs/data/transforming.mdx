@@ -1,0 +1,222 @@
+---
+title: Transforming Data
+description: Clean, reshape, and enrich your data with SQL
+---
+
+Transform your data using SQL to prepare it for analysis and visualization.
+
+## Creating derived tables
+
+Create new tables from query results:
+
+```sql
+CREATE TABLE monthly_revenue AS
+SELECT
+  DATE_TRUNC('month', order_date) as month,
+  SUM(amount) as revenue,
+  COUNT(*) as order_count
+FROM orders
+GROUP BY 1;
+```
+
+## Common transformations
+
+### Cleaning data
+
+```sql
+-- Remove duplicates
+CREATE TABLE users_clean AS
+SELECT DISTINCT ON (email) *
+FROM users
+ORDER BY email, created_at DESC;
+
+-- Handle nulls
+UPDATE products SET
+  description = COALESCE(description, 'No description'),
+  price = COALESCE(price, 0);
+
+-- Trim whitespace
+UPDATE customers SET
+  name = TRIM(name),
+  email = LOWER(TRIM(email));
+```
+
+### Type conversions
+
+```sql
+-- Parse dates
+UPDATE events SET
+  event_date = TO_DATE(date_string, 'YYYY-MM-DD');
+
+-- Parse numbers
+UPDATE sales SET
+  amount = REPLACE(amount_text, '$', '')::NUMERIC;
+
+-- Extract components
+SELECT
+  EXTRACT(YEAR FROM created_at) as year,
+  EXTRACT(MONTH FROM created_at) as month
+FROM orders;
+```
+
+### String operations
+
+```sql
+-- Split columns
+SELECT
+  SPLIT_PART(full_name, ' ', 1) as first_name,
+  SPLIT_PART(full_name, ' ', 2) as last_name
+FROM contacts;
+
+-- Pattern matching
+SELECT * FROM logs
+WHERE message ~ 'error|warning|critical';
+
+-- Regular expression extraction
+SELECT
+  REGEXP_MATCHES(url, '/products/(\d+)') as product_id
+FROM page_views;
+```
+
+## Pivoting data
+
+### Long to wide
+
+```sql
+SELECT
+  user_id,
+  SUM(CASE WHEN category = 'food' THEN amount END) as food,
+  SUM(CASE WHEN category = 'transport' THEN amount END) as transport,
+  SUM(CASE WHEN category = 'entertainment' THEN amount END) as entertainment
+FROM expenses
+GROUP BY user_id;
+```
+
+### Wide to long
+
+```sql
+SELECT user_id, 'q1' as quarter, q1_sales as sales FROM quarterly
+UNION ALL
+SELECT user_id, 'q2' as quarter, q2_sales as sales FROM quarterly
+UNION ALL
+SELECT user_id, 'q3' as quarter, q3_sales as sales FROM quarterly
+UNION ALL
+SELECT user_id, 'q4' as quarter, q4_sales as sales FROM quarterly;
+```
+
+## Enrichment
+
+### Join with reference data
+
+```sql
+CREATE TABLE orders_enriched AS
+SELECT
+  o.*,
+  c.name as customer_name,
+  c.segment as customer_segment,
+  p.category as product_category
+FROM orders o
+JOIN customers c ON o.customer_id = c.id
+JOIN products p ON o.product_id = p.id;
+```
+
+### Computed columns
+
+```sql
+CREATE TABLE sales_metrics AS
+SELECT
+  *,
+  revenue - cost as profit,
+  (revenue - cost) / revenue as margin,
+  CASE
+    WHEN revenue > 10000 THEN 'high'
+    WHEN revenue > 1000 THEN 'medium'
+    ELSE 'low'
+  END as tier
+FROM sales;
+```
+
+## Aggregation patterns
+
+### Running totals
+
+```sql
+SELECT
+  date,
+  revenue,
+  SUM(revenue) OVER (ORDER BY date) as cumulative_revenue
+FROM daily_sales;
+```
+
+### Moving averages
+
+```sql
+SELECT
+  date,
+  revenue,
+  AVG(revenue) OVER (
+    ORDER BY date
+    ROWS BETWEEN 6 PRECEDING AND CURRENT ROW
+  ) as revenue_7d_avg
+FROM daily_sales;
+```
+
+### Year-over-year comparison
+
+```sql
+SELECT
+  date,
+  revenue,
+  LAG(revenue, 365) OVER (ORDER BY date) as revenue_last_year,
+  revenue - LAG(revenue, 365) OVER (ORDER BY date) as yoy_change
+FROM daily_sales;
+```
+
+## Materialized views
+
+For frequently-used transformations, create materialized views:
+
+```sql
+CREATE MATERIALIZED VIEW dashboard_stats AS
+SELECT
+  DATE_TRUNC('day', created_at) as date,
+  COUNT(*) as orders,
+  SUM(total) as revenue,
+  COUNT(DISTINCT user_id) as unique_customers
+FROM orders
+GROUP BY 1;
+
+-- Refresh when data changes
+REFRESH MATERIALIZED VIEW dashboard_stats;
+```
+
+## Scheduled transformations
+
+Use scheduled jobs to keep derived tables updated:
+
+```typescript
+// hands.config.ts
+export default defineConfig({
+  triggers: {
+    scheduled: [
+      {
+        cron: '0 * * * *',  // Every hour
+        handler: './src/jobs/refresh-stats.ts'
+      }
+    ]
+  }
+});
+
+// src/jobs/refresh-stats.ts
+import { sql } from '@hands/stdlib';
+
+export default async function() {
+  await sql`REFRESH MATERIALIZED VIEW dashboard_stats`;
+  await sql`REFRESH MATERIALIZED VIEW user_segments`;
+}
+```
+
+## Next steps
+
+- Visualize your transformed data with [Charts](/apps/charts/)
+- Build [Dashboards](/apps/dashboards/) for monitoring

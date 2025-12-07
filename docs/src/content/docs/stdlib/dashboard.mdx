@@ -1,0 +1,443 @@
+---
+title: Dashboard
+description: Create data visualizations with the dashboard function
+---
+
+The `dashboard` function creates interactive data dashboards with charts and tables.
+
+## Basic usage
+
+```typescript
+import { dashboard } from '@hands/stdlib';
+
+export default dashboard({
+  title: 'Sales Dashboard',
+  charts: [
+    {
+      title: 'Revenue by Day',
+      type: 'line',
+      query: 'SELECT date, SUM(amount) as value FROM sales GROUP BY date ORDER BY date'
+    }
+  ]
+});
+```
+
+## Dashboard options
+
+### title
+
+Dashboard title displayed at the top:
+
+```typescript
+{
+  title: 'My Dashboard'
+}
+```
+
+### description
+
+Optional description:
+
+```typescript
+{
+  description: 'Key metrics and KPIs'
+}
+```
+
+### refreshInterval
+
+Auto-refresh interval in seconds:
+
+```typescript
+{
+  refreshInterval: 60  // Refresh every minute
+}
+```
+
+### charts
+
+Array of chart configurations:
+
+```typescript
+{
+  charts: [
+    { title: 'Chart 1', type: 'line', query: '...' },
+    { title: 'Chart 2', type: 'bar', query: '...' }
+  ]
+}
+```
+
+### filters
+
+Interactive filters:
+
+```typescript
+{
+  filters: [
+    { name: 'dateRange', type: 'daterange' },
+    { name: 'region', type: 'select', query: 'SELECT DISTINCT region FROM sales' }
+  ]
+}
+```
+
+## Chart configuration
+
+### Required properties
+
+```typescript
+{
+  title: 'Chart Title',
+  type: 'line',  // line, bar, pie, area, table
+  query: 'SELECT date, value FROM data'
+}
+```
+
+### Optional properties
+
+```typescript
+{
+  title: 'Chart Title',
+  type: 'line',
+  query: '...',
+
+  // Layout
+  width: 'full',     // 'full', 'half', 'third'
+  height: 300,       // Height in pixels
+
+  // Labels
+  description: 'What this chart shows',
+  xLabel: 'Date',
+  yLabel: 'Revenue',
+
+  // Display
+  showLegend: true,
+  showGrid: true
+}
+```
+
+## Chart types
+
+### Line chart
+
+For time series data:
+
+```typescript
+{
+  title: 'Daily Users',
+  type: 'line',
+  query: `
+    SELECT date, COUNT(*) as value
+    FROM users
+    GROUP BY date
+    ORDER BY date
+  `
+}
+```
+
+Required columns: `date`, `value`
+
+### Area chart
+
+For cumulative data:
+
+```typescript
+{
+  title: 'Cumulative Revenue',
+  type: 'area',
+  query: `
+    SELECT date, SUM(amount) as value
+    FROM orders
+    GROUP BY date
+    ORDER BY date
+  `
+}
+```
+
+Required columns: `date`, `value`
+
+### Bar chart
+
+For comparisons:
+
+```typescript
+{
+  title: 'Top Categories',
+  type: 'bar',
+  query: `
+    SELECT category as name, SUM(sales) as value
+    FROM products
+    GROUP BY category
+    ORDER BY value DESC
+  `
+}
+```
+
+Required columns: `name`, `value`
+
+### Pie chart
+
+For distributions:
+
+```typescript
+{
+  title: 'Users by Plan',
+  type: 'pie',
+  query: `
+    SELECT plan as name, COUNT(*) as value
+    FROM users
+    GROUP BY plan
+  `
+}
+```
+
+Required columns: `name`, `value`
+
+### Table
+
+For detailed data:
+
+```typescript
+{
+  title: 'Recent Orders',
+  type: 'table',
+  query: `
+    SELECT id, customer, total, status, created_at
+    FROM orders
+    ORDER BY created_at DESC
+    LIMIT 50
+  `
+}
+```
+
+Any columns work for tables.
+
+## Multi-series charts
+
+Add a `series` column for multiple lines/areas:
+
+```typescript
+{
+  title: 'Revenue by Category',
+  type: 'line',
+  query: `
+    SELECT
+      date,
+      category as series,
+      SUM(amount) as value
+    FROM sales
+    GROUP BY date, category
+    ORDER BY date
+  `
+}
+```
+
+## Filters
+
+### Date range filter
+
+```typescript
+{
+  filters: [
+    {
+      name: 'dateRange',
+      type: 'daterange',
+      default: 'last30days'  // or 'last7days', 'thisMonth', 'lastMonth'
+    }
+  ]
+}
+```
+
+Use in queries:
+```sql
+WHERE date BETWEEN :dateRange_start AND :dateRange_end
+```
+
+### Select filter
+
+```typescript
+{
+  filters: [
+    {
+      name: 'region',
+      type: 'select',
+      query: 'SELECT DISTINCT region FROM sales ORDER BY region'
+    }
+  ]
+}
+```
+
+Use in queries:
+```sql
+WHERE (:region IS NULL OR region = :region)
+```
+
+### Multiple filters
+
+```typescript
+{
+  filters: [
+    { name: 'dateRange', type: 'daterange' },
+    { name: 'region', type: 'select', query: '...' },
+    { name: 'category', type: 'select', query: '...' }
+  ],
+  charts: [
+    {
+      title: 'Filtered Sales',
+      type: 'line',
+      query: `
+        SELECT date, SUM(amount) as value
+        FROM sales
+        WHERE date BETWEEN :dateRange_start AND :dateRange_end
+          AND (:region IS NULL OR region = :region)
+          AND (:category IS NULL OR category = :category)
+        GROUP BY date
+        ORDER BY date
+      `
+    }
+  ]
+}
+```
+
+## Layout
+
+Charts flow in a responsive grid. Control size with `width`:
+
+```typescript
+{
+  charts: [
+    { title: 'Full Width', type: 'line', query: '...', width: 'full' },
+    { title: 'Half 1', type: 'bar', query: '...', width: 'half' },
+    { title: 'Half 2', type: 'pie', query: '...', width: 'half' },
+    { title: 'Third 1', type: 'bar', query: '...', width: 'third' },
+    { title: 'Third 2', type: 'bar', query: '...', width: 'third' },
+    { title: 'Third 3', type: 'bar', query: '...', width: 'third' }
+  ]
+}
+```
+
+## Complete example
+
+```typescript
+import { dashboard } from '@hands/stdlib';
+
+export default dashboard({
+  title: 'E-commerce Analytics',
+  description: 'Sales and customer insights',
+  refreshInterval: 300,
+
+  filters: [
+    {
+      name: 'dateRange',
+      type: 'daterange',
+      default: 'last30days'
+    },
+    {
+      name: 'category',
+      type: 'select',
+      query: 'SELECT DISTINCT category FROM products ORDER BY category'
+    }
+  ],
+
+  charts: [
+    {
+      title: 'Revenue Trend',
+      type: 'area',
+      width: 'full',
+      query: `
+        SELECT date, SUM(total) as value
+        FROM orders o
+        JOIN products p ON o.product_id = p.id
+        WHERE date BETWEEN :dateRange_start AND :dateRange_end
+          AND (:category IS NULL OR p.category = :category)
+        GROUP BY date
+        ORDER BY date
+      `
+    },
+    {
+      title: 'Top Products',
+      type: 'bar',
+      width: 'half',
+      query: `
+        SELECT p.name, SUM(o.quantity) as value
+        FROM orders o
+        JOIN products p ON o.product_id = p.id
+        WHERE o.date BETWEEN :dateRange_start AND :dateRange_end
+          AND (:category IS NULL OR p.category = :category)
+        GROUP BY p.name
+        ORDER BY value DESC
+        LIMIT 10
+      `
+    },
+    {
+      title: 'Sales by Category',
+      type: 'pie',
+      width: 'half',
+      query: `
+        SELECT p.category as name, SUM(o.total) as value
+        FROM orders o
+        JOIN products p ON o.product_id = p.id
+        WHERE o.date BETWEEN :dateRange_start AND :dateRange_end
+        GROUP BY p.category
+      `
+    },
+    {
+      title: 'Recent Orders',
+      type: 'table',
+      width: 'full',
+      query: `
+        SELECT o.id, p.name as product, o.quantity, o.total, o.created_at
+        FROM orders o
+        JOIN products p ON o.product_id = p.id
+        WHERE o.date BETWEEN :dateRange_start AND :dateRange_end
+          AND (:category IS NULL OR p.category = :category)
+        ORDER BY o.created_at DESC
+        LIMIT 20
+      `
+    }
+  ]
+});
+```
+
+## Reference
+
+### dashboard(config)
+
+Create a dashboard configuration.
+
+```typescript
+dashboard({
+  title: string,                // Dashboard title
+  description?: string,         // Optional description
+  refreshInterval?: number,     // Auto-refresh seconds
+  filters?: Filter[],           // Interactive filters
+  charts: Chart[]               // Chart definitions
+})
+```
+
+### Chart
+
+```typescript
+{
+  title: string,
+  type: 'line' | 'bar' | 'pie' | 'area' | 'table',
+  query: string,
+  width?: 'full' | 'half' | 'third',
+  height?: number,
+  description?: string,
+  xLabel?: string,
+  yLabel?: string,
+  showLegend?: boolean,
+  showGrid?: boolean
+}
+```
+
+### Filter
+
+```typescript
+{
+  name: string,
+  type: 'daterange' | 'select',
+  query?: string,      // For select: query to get options
+  default?: string     // Default value
+}
+```

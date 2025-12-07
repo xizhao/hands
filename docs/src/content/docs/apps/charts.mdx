@@ -1,0 +1,274 @@
+---
+title: Charts
+description: Visualize your data with different chart types
+---
+
+import { Tabs, TabItem } from '@astrojs/starlight/components';
+
+Hands supports five chart types: line, bar, pie, area, and table. Each type expects specific columns in your query results.
+
+## Chart types
+
+### Line chart
+
+Best for: Time series, trends over time
+
+Required columns:
+- `date` - X-axis (timestamp or date)
+- `value` - Y-axis (numeric)
+
+```typescript
+{
+  title: 'Daily Active Users',
+  type: 'line',
+  query: `
+    SELECT date, COUNT(DISTINCT user_id) as value
+    FROM sessions
+    GROUP BY date
+    ORDER BY date
+  `
+}
+```
+
+### Area chart
+
+Best for: Cumulative values, stacked comparisons
+
+Required columns:
+- `date` - X-axis
+- `value` - Y-axis
+
+```typescript
+{
+  title: 'Revenue Over Time',
+  type: 'area',
+  query: `
+    SELECT date, SUM(amount) as value
+    FROM orders
+    GROUP BY date
+    ORDER BY date
+  `
+}
+```
+
+### Bar chart
+
+Best for: Comparisons, rankings, categorical data
+
+Required columns:
+- `name` - X-axis (category)
+- `value` - Y-axis (numeric)
+
+```typescript
+{
+  title: 'Sales by Region',
+  type: 'bar',
+  query: `
+    SELECT region as name, SUM(amount) as value
+    FROM sales
+    GROUP BY region
+    ORDER BY value DESC
+  `
+}
+```
+
+### Pie chart
+
+Best for: Parts of a whole, distributions
+
+Required columns:
+- `name` - Category label
+- `value` - Numeric value
+
+```typescript
+{
+  title: 'Users by Plan',
+  type: 'pie',
+  query: `
+    SELECT plan as name, COUNT(*) as value
+    FROM users
+    GROUP BY plan
+  `
+}
+```
+
+### Table
+
+Best for: Detailed data, multiple columns
+
+Any columns work - they're displayed as-is:
+
+```typescript
+{
+  title: 'Recent Orders',
+  type: 'table',
+  query: `
+    SELECT
+      id,
+      customer_name,
+      total,
+      status,
+      created_at
+    FROM orders
+    ORDER BY created_at DESC
+    LIMIT 50
+  `
+}
+```
+
+## Column requirements
+
+<Tabs>
+  <TabItem label="Line / Area">
+    | Column | Type | Description |
+    |--------|------|-------------|
+    | `date` | DATE/TIMESTAMP | X-axis values |
+    | `value` | NUMERIC | Y-axis values |
+  </TabItem>
+  <TabItem label="Bar / Pie">
+    | Column | Type | Description |
+    |--------|------|-------------|
+    | `name` | TEXT | Category labels |
+    | `value` | NUMERIC | Values |
+  </TabItem>
+  <TabItem label="Table">
+    Any columns - displayed as-is
+  </TabItem>
+</Tabs>
+
+## Multi-series charts
+
+For line and area charts, add a `series` column:
+
+```typescript
+{
+  title: 'Revenue by Category',
+  type: 'line',
+  query: `
+    SELECT
+      date,
+      category as series,
+      SUM(amount) as value
+    FROM sales
+    GROUP BY date, category
+    ORDER BY date
+  `
+}
+```
+
+This creates multiple lines, one per category.
+
+## Formatting
+
+### Number formatting
+
+Values are automatically formatted based on magnitude:
+- Small: `1,234`
+- Large: `1.2M`
+- Currency: `$1,234.56` (when column named `revenue`, `price`, etc.)
+
+### Date formatting
+
+Dates are formatted based on range:
+- Single day: `10:30 AM`
+- Week: `Mon`, `Tue`
+- Month: `Jan 15`
+- Year: `Jan 2024`
+
+## Chart options
+
+```typescript
+{
+  title: 'My Chart',
+  type: 'line',
+  query: '...',
+
+  // Sizing
+  height: 400,        // Height in pixels
+  width: 'full',      // 'full', 'half', or 'third'
+
+  // Labels
+  description: 'Shows trend over time',
+  xLabel: 'Date',
+  yLabel: 'Count',
+
+  // Appearance
+  showLegend: true,   // Show/hide legend
+  showGrid: true,     // Show/hide grid lines
+}
+```
+
+## Examples
+
+### Sales dashboard
+
+```typescript
+import { dashboard } from '@hands/stdlib';
+
+export default dashboard({
+  title: 'Sales Analytics',
+  charts: [
+    {
+      title: 'Daily Revenue',
+      type: 'area',
+      width: 'full',
+      query: `
+        SELECT date, SUM(total) as value
+        FROM orders
+        WHERE date > CURRENT_DATE - 30
+        GROUP BY date
+        ORDER BY date
+      `
+    },
+    {
+      title: 'Top Products',
+      type: 'bar',
+      width: 'half',
+      query: `
+        SELECT
+          p.name,
+          SUM(oi.quantity * oi.price) as value
+        FROM order_items oi
+        JOIN products p ON oi.product_id = p.id
+        GROUP BY p.name
+        ORDER BY value DESC
+        LIMIT 10
+      `
+    },
+    {
+      title: 'Revenue by Channel',
+      type: 'pie',
+      width: 'half',
+      query: `
+        SELECT channel as name, SUM(total) as value
+        FROM orders
+        GROUP BY channel
+      `
+    }
+  ]
+});
+```
+
+### Multi-series comparison
+
+```typescript
+{
+  title: 'Traffic by Source',
+  type: 'line',
+  query: `
+    SELECT
+      DATE(timestamp) as date,
+      source as series,
+      COUNT(*) as value
+    FROM page_views
+    WHERE timestamp > NOW() - INTERVAL '7 days'
+    GROUP BY 1, 2
+    ORDER BY 1
+  `
+}
+```
+
+## Next steps
+
+- Build complete [Dashboards](/apps/dashboards/)
+- Add [API Routes](/apps/api-routes/) for data access

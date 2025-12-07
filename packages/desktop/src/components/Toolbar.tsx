@@ -1,6 +1,5 @@
 import { useState, useRef, useEffect, useCallback } from "react";
-import { useQueryClient } from "@tanstack/react-query";
-import { useSendMessage, useAbortSession, useSessionStatuses, useSessions, useCreateSession, useDeleteSession } from "@/hooks/useSession";
+import { useSendMessage, useAbortSession, useSessionStatuses, useSessions, useCreateSession, useDeleteSession } from "@/store/hooks";
 import { api } from "@/lib/api";
 import { useUIStore } from "@/stores/ui";
 import { useBackgroundStore } from "@/stores/background";
@@ -15,7 +14,7 @@ import {
   DropdownMenuSubTrigger,
   DropdownMenuSubContent,
 } from "@/components/ui/dropdown-menu";
-import { ArrowUp, Square, Loader2, GripVertical, Hand, Settings, Plus, Database, FolderOpen, Check, Trash2, Radio, Clock, Route, BarChart3, ExternalLink, Pencil, AlertCircle, AlertTriangle, FileCode, Sparkles } from "lucide-react";
+import { ArrowUp, Square, Loader2, GripVertical, Hand, Settings, Plus, Database, FolderOpen, Check, Trash2, Radio, Clock, Route, BarChart3, ExternalLink, Pencil, AlertCircle, AlertTriangle, FileCode, Sparkles, BookOpen } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { listen } from "@tauri-apps/api/event";
 import { invoke } from "@tauri-apps/api/core";
@@ -36,7 +35,6 @@ export function Toolbar({ expanded, onExpandChange, hasData, onOpenSettings }: T
   const inputRef = useRef<HTMLInputElement>(null);
   const dropRef = useRef<HTMLDivElement>(null);
   const hasHandledDrop = useRef(false); // Prevent duplicate drops
-  const queryClient = useQueryClient();
   const { activeSessionId, activeWorkbookId, setActiveWorkbook, setActiveSession } = useUIStore();
   const { addTask } = useBackgroundStore();
   const { data: sessionStatuses = {} } = useSessionStatuses();
@@ -246,12 +244,8 @@ export function Toolbar({ expanded, onExpandChange, hasData, onOpenSettings }: T
       stopDevServer.mutate(activeWorkbookId);
     }
 
-    // Clear session-related caches for clean slate
-    queryClient.removeQueries({ queryKey: ["messages"] });
-    queryClient.removeQueries({ queryKey: ["todos"] });
-    queryClient.removeQueries({ queryKey: ["sessions"] });
-
     // Switch to new workbook (this also clears activeSessionId)
+    // TanStack DB collections will be refreshed on next sync
     setActiveWorkbook(workbookId, directory);
     setMenuOpen(false);
   };
@@ -306,16 +300,9 @@ export function Toolbar({ expanded, onExpandChange, hasData, onOpenSettings }: T
       api.abort(session.id).catch(() => {})
     ));
 
-    // Clear all caches immediately
-    queryClient.removeQueries({ queryKey: ["messages"] });
-    queryClient.removeQueries({ queryKey: ["todos"] });
-    queryClient.removeQueries({ queryKey: ["sessionStatuses"] });
-
     // Delete all sessions on the server
+    // TanStack DB collections will be updated via SSE events
     await Promise.all(sessions.map((session) => deleteSession.mutateAsync(session.id)));
-
-    // Clear sessions cache after deletions complete
-    queryClient.removeQueries({ queryKey: ["sessions"] });
   };
 
   // Open a URL in a webview window
@@ -433,6 +420,15 @@ export function Toolbar({ expanded, onExpandChange, hasData, onOpenSettings }: T
           </DropdownMenuSub>
 
           <DropdownMenuSeparator />
+
+          <DropdownMenuItem onClick={async () => {
+            setMenuOpen(false);
+            const { open } = await import("@tauri-apps/plugin-shell");
+            await open("https://hands.dev/docs");
+          }}>
+            <BookOpen className="h-4 w-4 mr-2" />
+            Documentation
+          </DropdownMenuItem>
 
           <DropdownMenuItem onClick={() => { setMenuOpen(false); onOpenSettings(); }}>
             <Settings className="h-4 w-4 mr-2" />

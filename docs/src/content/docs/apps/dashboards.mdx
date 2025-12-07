@@ -1,0 +1,244 @@
+---
+title: Dashboards
+description: Create interactive data dashboards
+---
+
+Dashboards display your data through charts, tables, and metrics. Build them with the `dashboard` function from the stdlib.
+
+## Basic dashboard
+
+```typescript
+import { dashboard } from '@hands/stdlib';
+
+export default dashboard({
+  title: 'My Dashboard',
+  description: 'Key business metrics',
+  charts: [
+    {
+      title: 'Daily Revenue',
+      type: 'line',
+      query: `
+        SELECT date, SUM(amount) as value
+        FROM orders
+        GROUP BY date
+        ORDER BY date
+      `
+    }
+  ]
+});
+```
+
+## Dashboard options
+
+```typescript
+dashboard({
+  // Required
+  title: 'Dashboard Title',
+
+  // Optional
+  description: 'What this dashboard shows',
+  refreshInterval: 60,  // Auto-refresh every 60 seconds
+  charts: [...]
+});
+```
+
+## Chart configuration
+
+Each chart needs a type, title, and query:
+
+```typescript
+{
+  title: 'Chart Title',
+  type: 'line',  // line, bar, pie, area, or table
+  query: 'SELECT ...',
+
+  // Optional
+  description: 'What this chart shows',
+  height: 300,  // Height in pixels
+}
+```
+
+## Layout
+
+Charts are arranged in a responsive grid. By default, they flow top-to-bottom, left-to-right.
+
+### Single column
+
+```typescript
+dashboard({
+  title: 'Vertical Layout',
+  charts: [
+    { title: 'Chart 1', type: 'line', query: '...' },
+    { title: 'Chart 2', type: 'bar', query: '...' },
+    { title: 'Chart 3', type: 'pie', query: '...' }
+  ]
+});
+```
+
+### Mixed sizes
+
+Use the width property to control chart size:
+
+```typescript
+dashboard({
+  title: 'Mixed Layout',
+  charts: [
+    { title: 'Full Width', type: 'line', query: '...', width: 'full' },
+    { title: 'Half', type: 'bar', query: '...', width: 'half' },
+    { title: 'Half', type: 'pie', query: '...', width: 'half' }
+  ]
+});
+```
+
+## Multiple dashboards
+
+Create multiple dashboard files:
+
+```typescript
+// src/dashboards/sales.ts
+export default dashboard({
+  title: 'Sales',
+  charts: [...]
+});
+
+// src/dashboards/users.ts
+export default dashboard({
+  title: 'Users',
+  charts: [...]
+});
+```
+
+Navigate between dashboards using the sidebar.
+
+## Real-time updates
+
+Set `refreshInterval` to auto-refresh:
+
+```typescript
+dashboard({
+  title: 'Live Metrics',
+  refreshInterval: 5,  // Refresh every 5 seconds
+  charts: [
+    {
+      title: 'Active Users',
+      type: 'line',
+      query: `
+        SELECT NOW() as date, COUNT(*) as value
+        FROM sessions
+        WHERE last_active > NOW() - INTERVAL '5 minutes'
+      `
+    }
+  ]
+});
+```
+
+## Filters
+
+Add interactive filters:
+
+```typescript
+dashboard({
+  title: 'Filtered Dashboard',
+  filters: [
+    {
+      name: 'dateRange',
+      type: 'daterange',
+      default: 'last7days'
+    },
+    {
+      name: 'region',
+      type: 'select',
+      query: 'SELECT DISTINCT region FROM sales'
+    }
+  ],
+  charts: [
+    {
+      title: 'Sales by Region',
+      type: 'bar',
+      query: `
+        SELECT region as name, SUM(amount) as value
+        FROM sales
+        WHERE date BETWEEN :dateRange_start AND :dateRange_end
+          AND (:region IS NULL OR region = :region)
+        GROUP BY region
+      `
+    }
+  ]
+});
+```
+
+## Theming
+
+Dashboards inherit your workbook's theme. The theme is set in the Hands desktop app and automatically applied to deployed dashboards.
+
+## Example: Complete dashboard
+
+```typescript
+import { dashboard } from '@hands/stdlib';
+
+export default dashboard({
+  title: 'E-commerce Analytics',
+  description: 'Sales and customer metrics',
+  refreshInterval: 60,
+
+  charts: [
+    {
+      title: 'Revenue Trend',
+      type: 'area',
+      width: 'full',
+      query: `
+        SELECT date, SUM(total) as value
+        FROM orders
+        WHERE date > CURRENT_DATE - 30
+        GROUP BY date
+        ORDER BY date
+      `
+    },
+    {
+      title: 'Top Products',
+      type: 'bar',
+      width: 'half',
+      query: `
+        SELECT p.name, SUM(oi.quantity) as value
+        FROM order_items oi
+        JOIN products p ON oi.product_id = p.id
+        GROUP BY p.name
+        ORDER BY value DESC
+        LIMIT 10
+      `
+    },
+    {
+      title: 'Sales by Category',
+      type: 'pie',
+      width: 'half',
+      query: `
+        SELECT category as name, SUM(total) as value
+        FROM orders o
+        JOIN products p ON o.product_id = p.id
+        GROUP BY category
+      `
+    },
+    {
+      title: 'Recent Orders',
+      type: 'table',
+      width: 'full',
+      query: `
+        SELECT
+          id,
+          customer_name,
+          total,
+          status,
+          created_at
+        FROM orders
+        ORDER BY created_at DESC
+        LIMIT 20
+      `
+    }
+  ]
+});
+```
+
+## Next steps
+
+- Learn about [Chart types](/apps/charts/)
+- Add [API Routes](/apps/api-routes/) for programmatic access

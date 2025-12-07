@@ -1,7 +1,6 @@
 import { useEffect, useRef, useMemo, useCallback, useState } from "react";
-import { useQueryClient } from "@tanstack/react-query";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { useMessages, useSessions, useDeleteSession, useSessionStatuses } from "@/hooks/useSession";
+import { useMessages, useSessions, useDeleteSession, useSessionStatuses } from "@/store/hooks";
 import { api } from "@/lib/api";
 import { useUIStore } from "@/stores/ui";
 import { useBackgroundStore } from "@/stores/background";
@@ -19,7 +18,6 @@ interface ThreadProps {
 }
 
 export function Thread({ expanded, hasData, onCollapse, onExpand }: ThreadProps) {
-  const queryClient = useQueryClient();
   const { activeSessionId, setActiveSession } = useUIStore();
   const { tasks: backgroundTasks, removeTask } = useBackgroundStore();
   const { data: messages = [] } = useMessages(activeSessionId);
@@ -136,11 +134,7 @@ export function Thread({ expanded, hasData, onCollapse, onExpand }: ThreadProps)
       setActiveSession(nextSession?.id ?? null);
     }
 
-    // Clear caches for this session immediately
-    queryClient.removeQueries({ queryKey: ["messages", sessionId] });
-    queryClient.removeQueries({ queryKey: ["todos", sessionId] });
-
-    // Delete on server
+    // Delete on server - TanStack DB collections will be updated via SSE events
     deleteSession.mutate(sessionId);
   };
 

@@ -1,0 +1,281 @@
+---
+title: Deployment Configuration
+description: Configure your Hands deployment settings
+---
+
+Control how your app is built and deployed with configuration options.
+
+## hands.config.ts
+
+The main configuration file:
+
+```typescript
+import { defineConfig } from '@hands/stdlib';
+
+export default defineConfig({
+  name: 'my-workbook',
+
+  // Database configuration
+  database: {
+    type: 'embedded',  // or 'd1', 'postgres'
+  },
+
+  // Environment variables
+  vars: {
+    API_URL: 'https://api.example.com',
+    DEBUG: 'false'
+  },
+
+  // Scheduled jobs
+  triggers: {
+    scheduled: [
+      { cron: '0 9 * * *', handler: './src/jobs/daily.ts' }
+    ]
+  },
+
+  // Deployment settings
+  deploy: {
+    name: 'my-app',
+    routes: ['myapp.com/*'],
+    compatibilityDate: '2024-01-01'
+  }
+});
+```
+
+## Configuration options
+
+### name
+
+Your project name (used for Worker name if not overridden):
+
+```typescript
+{
+  name: 'sales-dashboard'
+}
+```
+
+### database
+
+Database configuration:
+
+```typescript
+// Embedded (local development)
+{
+  database: {
+    type: 'embedded'
+  }
+}
+
+// Cloudflare D1 (production)
+{
+  database: {
+    type: 'd1',
+    name: 'my-database',
+    id: 'xxx-xxx-xxx'  // From Cloudflare dashboard
+  }
+}
+
+// External PostgreSQL
+{
+  database: {
+    type: 'postgres',
+    connectionString: process.env.DATABASE_URL
+  }
+}
+```
+
+### vars
+
+Environment variables (non-sensitive):
+
+```typescript
+{
+  vars: {
+    API_URL: 'https://api.example.com',
+    FEATURE_FLAG: 'true',
+    MAX_ITEMS: '100'
+  }
+}
+```
+
+Access in code:
+```typescript
+const apiUrl = process.env.API_URL;
+```
+
+### triggers
+
+Scheduled job configuration:
+
+```typescript
+{
+  triggers: {
+    scheduled: [
+      // Cron expression
+      { cron: '0 9 * * *', handler: './src/jobs/morning.ts' },
+
+      // Rate expression
+      { rate: '5 minutes', handler: './src/jobs/sync.ts' }
+    ]
+  }
+}
+```
+
+### deploy
+
+Deployment-specific settings:
+
+```typescript
+{
+  deploy: {
+    // Worker name (defaults to project name)
+    name: 'my-production-app',
+
+    // Custom routes
+    routes: [
+      'example.com/*',
+      'api.example.com/*'
+    ],
+
+    // Compatibility date for Workers runtime
+    compatibilityDate: '2024-01-01',
+
+    // Build output directory
+    outDir: 'dist'
+  }
+}
+```
+
+## Environment-specific config
+
+Use environment variables for different environments:
+
+```typescript
+import { defineConfig } from '@hands/stdlib';
+
+const isDev = process.env.NODE_ENV === 'development';
+
+export default defineConfig({
+  name: isDev ? 'my-app-dev' : 'my-app',
+
+  database: isDev ? {
+    type: 'embedded'
+  } : {
+    type: 'd1',
+    name: 'production-db'
+  },
+
+  vars: {
+    API_URL: isDev
+      ? 'http://localhost:3000'
+      : 'https://api.example.com'
+  }
+});
+```
+
+## Secrets
+
+Sensitive values should not go in `hands.config.ts`. Use Cloudflare secrets:
+
+```bash
+# Set via Wrangler CLI
+wrangler secret put DATABASE_URL
+wrangler secret put API_KEY
+wrangler secret put JWT_SECRET
+```
+
+Or set in Cloudflare Dashboard:
+1. Go to Workers > your Worker
+2. Settings > Variables
+3. Add encrypted variables
+
+Access in code the same as vars:
+```typescript
+const apiKey = process.env.API_KEY;
+```
+
+## wrangler.toml
+
+Hands generates `wrangler.toml` from your config. You can also edit it directly:
+
+```toml
+name = "my-app"
+main = "dist/worker.js"
+compatibility_date = "2024-01-01"
+
+# Routes
+routes = [
+  { pattern = "example.com/*", zone_name = "example.com" }
+]
+
+# Environment variables
+[vars]
+API_URL = "https://api.example.com"
+
+# D1 Database binding
+[[d1_databases]]
+binding = "DB"
+database_name = "my-database"
+database_id = "xxx-xxx-xxx"
+
+# Cron triggers
+[triggers]
+crons = ["0 9 * * *", "0 * * * *"]
+
+# KV namespace binding
+[[kv_namespaces]]
+binding = "KV"
+id = "xxx-xxx-xxx"
+```
+
+## Build configuration
+
+### TypeScript
+
+Configure TypeScript in `tsconfig.json`:
+
+```json
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "strict": true,
+    "skipLibCheck": true
+  },
+  "include": ["src/**/*"],
+  "exclude": ["node_modules"]
+}
+```
+
+### Dependencies
+
+Dependencies are bundled into the Worker. To exclude (use from CDN or Workers runtime):
+
+```typescript
+// hands.config.ts
+{
+  build: {
+    external: ['some-large-package']
+  }
+}
+```
+
+## Validation
+
+Validate your config before deploying:
+
+```bash
+bun run config:check
+```
+
+This checks:
+- Required fields are present
+- Database configuration is valid
+- Cron expressions are valid
+- Referenced files exist
+
+## Next steps
+
+- [Deploy to Cloudflare](/deploy/cloudflare/)
+- Set up [Scheduled jobs](/apps/scheduled-jobs/)

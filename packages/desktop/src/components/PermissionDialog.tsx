@@ -1,6 +1,6 @@
 import { memo } from "react";
 import type { Permission } from "@/lib/api";
-import { useRespondToPermission } from "@/hooks/useSession";
+import { useRespondToPermission } from "@/store/hooks";
 import { Button } from "@/components/ui/button";
 import { Shield, Terminal, FileCode, Globe, Database, Check, X, CheckCheck } from "lucide-react";
 import { cn } from "@/lib/utils";

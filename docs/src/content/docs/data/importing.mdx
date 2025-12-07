@@ -1,0 +1,162 @@
+---
+title: Importing Data
+description: Load data into your Hands workbook from various sources
+---
+
+import { Tabs, TabItem } from '@astrojs/starlight/components';
+
+Hands supports importing data from multiple sources into your embedded PostgreSQL database.
+
+## Supported formats
+
+- **CSV** - Comma-separated values
+- **JSON** - JSON arrays or newline-delimited JSON
+- **Parquet** - Columnar format for large datasets
+- **Excel** - `.xlsx` files
+
+## Import methods
+
+### Using AI chat
+
+The easiest way to import data is through natural language:
+
+```
+Import sales.csv as the sales table
+```
+
+The AI will:
+1. Analyze your file structure
+2. Infer column types
+3. Create the table schema
+4. Load all rows
+
+### Using SQL
+
+For more control, use SQL directly:
+
+<Tabs>
+  <TabItem label="CSV">
+```sql
+CREATE TABLE sales AS
+SELECT * FROM read_csv('data/sales.csv');
+```
+  </TabItem>
+  <TabItem label="JSON">
+```sql
+CREATE TABLE events AS
+SELECT * FROM read_json('data/events.json');
+```
+  </TabItem>
+  <TabItem label="Parquet">
+```sql
+CREATE TABLE logs AS
+SELECT * FROM read_parquet('data/logs.parquet');
+```
+  </TabItem>
+</Tabs>
+
+### With schema definition
+
+Explicitly define your schema:
+
+```sql
+CREATE TABLE users (
+  id INTEGER PRIMARY KEY,
+  name TEXT NOT NULL,
+  email TEXT UNIQUE,
+  created_at TIMESTAMP DEFAULT NOW()
+);
+
+COPY users FROM 'data/users.csv'
+WITH (FORMAT CSV, HEADER true);
+```
+
+## Type inference
+
+Hands automatically infers types from your data:
+
+| Data Pattern | Inferred Type |
+|--------------|---------------|
+| `123`, `-45` | INTEGER |
+| `3.14`, `0.5` | NUMERIC |
+| `true`, `false` | BOOLEAN |
+| `2024-01-15` | DATE |
+| `2024-01-15T10:30:00` | TIMESTAMP |
+| Everything else | TEXT |
+
+### Override inference
+
+If automatic inference isn't correct, specify types:
+
+```sql
+CREATE TABLE transactions AS
+SELECT
+  id::INTEGER,
+  amount::NUMERIC(10,2),
+  created_at::TIMESTAMP
+FROM read_csv('data/transactions.csv');
+```
+
+## Handling large files
+
+For files over 100MB:
+
+1. **Use Parquet** - More efficient than CSV for large datasets
+2. **Import in batches** - Split into smaller files
+3. **Stream import** - Use COPY for memory efficiency
+
+```sql
+-- Efficient for large files
+COPY large_table FROM 'data/huge.csv'
+WITH (FORMAT CSV, HEADER true);
+```
+
+## External databases
+
+Connect to external databases and import data:
+
+```typescript
+import { sql, integration } from '@hands/stdlib';
+
+// Define external connection
+const external = integration({
+  type: 'postgres',
+  connectionString: process.env.EXTERNAL_DB_URL
+});
+
+// Import data
+const data = await external.query('SELECT * FROM users');
+await sql`INSERT INTO users SELECT * FROM ${data}`;
+```
+
+## Updating data
+
+### Replace all data
+
+```sql
+TRUNCATE TABLE sales;
+COPY sales FROM 'data/sales-new.csv'
+WITH (FORMAT CSV, HEADER true);
+```
+
+### Upsert new records
+
+```sql
+INSERT INTO users (id, name, email)
+SELECT id, name, email FROM read_csv('data/users-update.csv')
+ON CONFLICT (id) DO UPDATE SET
+  name = EXCLUDED.name,
+  email = EXCLUDED.email;
+```
+
+## Best practices
+
+1. **Keep source files** - Store original data in `data/` folder
+2. **Document schemas** - Add comments to table definitions
+3. **Use transactions** - Wrap bulk imports in transactions
+4. **Validate data** - Check for nulls and duplicates after import
+
+## Next steps
+
+- Learn to [Query your data](/data/querying/)
+- [Transform data](/data/transforming/) with SQL

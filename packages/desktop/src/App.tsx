@@ -1,6 +1,5 @@
 import { useEffect, useState } from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { useSessions, useEventSubscription } from "@/hooks/useSession";
 import { useWorkbooks, useCreateWorkbook, useOpenWorkbook } from "@/hooks/useWorkbook";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { Toolbar } from "@/components/Toolbar";
@@ -8,7 +7,10 @@ import { Thread } from "@/components/Thread";
 import { SettingsPanel } from "@/components/SettingsPanel";
 import { useUIStore } from "@/stores/ui";
 import { useThemeStore } from "@/stores/theme";
+import { startSync } from "@/store";
+import { useSessions } from "@/store/hooks";
 
+// React Query client - only used for workbook hooks now
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
@@ -19,7 +21,12 @@ const queryClient = new QueryClient({
 });
 
 function FloatingApp() {
-  useEventSubscription();
+  // Start TanStack DB sync on mount
+  useEffect(() => {
+    const cleanup = startSync();
+    return cleanup;
+  }, []);
+
   const [expanded, setExpanded] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
   const [hasData] = useState(false); // TODO: Check if DB has tables

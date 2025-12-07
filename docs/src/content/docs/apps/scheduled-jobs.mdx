@@ -1,0 +1,263 @@
+---
+title: Scheduled Jobs
+description: Automate tasks with cron schedules
+---
+
+Scheduled jobs run automatically on a defined schedule. Use them for data sync, report generation, cleanup tasks, and more.
+
+## Defining schedules
+
+Configure schedules in `hands.config.ts`:
+
+```typescript
+import { defineConfig } from '@hands/stdlib';
+
+export default defineConfig({
+  triggers: {
+    scheduled: [
+      {
+        cron: '0 9 * * *',           // Daily at 9 AM UTC
+        handler: './src/jobs/daily-report.ts'
+      },
+      {
+        cron: '*/15 * * * *',        // Every 15 minutes
+        handler: './src/jobs/sync.ts'
+      },
+      {
+        cron: '0 0 * * 0',           // Weekly on Sunday
+        handler: './src/jobs/weekly-cleanup.ts'
+      }
+    ]
+  }
+});
+```
+
+## Cron syntax
+
+```
+┌───────────── minute (0 - 59)
+│ ┌───────────── hour (0 - 23)
+│ │ ┌───────────── day of month (1 - 31)
+│ │ │ ┌───────────── month (1 - 12)
+│ │ │ │ ┌───────────── day of week (0 - 6, Sunday = 0)
+│ │ │ │ │
+* * * * *
+```
+
+### Common patterns
+
+| Schedule | Cron Expression |
+|----------|----------------|
+| Every minute | `* * * * *` |
+| Every 5 minutes | `*/5 * * * *` |
+| Every hour | `0 * * * *` |
+| Daily at midnight | `0 0 * * *` |
+| Daily at 9 AM | `0 9 * * *` |
+| Weekly on Monday | `0 0 * * 1` |
+| Monthly on the 1st | `0 0 1 * *` |
+| Weekdays at 6 PM | `0 18 * * 1-5` |
+
+## Writing job handlers
+
+Job handlers are async functions that export as default:
+
+```typescript
+// src/jobs/daily-report.ts
+import { sql } from '@hands/stdlib';
+
+export default async function() {
+  // Get yesterday's stats
+  const stats = await sql`
+    SELECT
+      COUNT(*) as orders,
+      SUM(total) as revenue,
+      AVG(total) as avg_order
+    FROM orders
+    WHERE date = CURRENT_DATE - 1
+  `;
+
+  console.log('Daily Report:', stats[0]);
+
+  // Store in summary table
+  await sql`
+    INSERT INTO daily_summaries (date, orders, revenue, avg_order)
+    VALUES (CURRENT_DATE - 1, ${stats[0].orders}, ${stats[0].revenue}, ${stats[0].avg_order})
+  `;
+}
+```
+
+## Common patterns
+
+### Data synchronization
+
+```typescript
+// src/jobs/sync-external.ts
+import { sql, integration } from '@hands/stdlib';
+
+export default async function() {
+  const external = integration({
+    type: 'postgres',
+    connectionString: process.env.EXTERNAL_DB
+  });
+
+  // Get latest records
+  const lastSync = await sql`
+    SELECT MAX(external_updated_at) as last
+    FROM customers
+  `;
+
+  const newRecords = await external.query(`
+    SELECT * FROM customers
+    WHERE updated_at > $1
+  `, [lastSync[0].last || '1970-01-01']);
+
+  // Upsert into local database
+  for (const record of newRecords) {
+    await sql`
+      INSERT INTO customers (id, name, email, external_updated_at)
+      VALUES (${record.id}, ${record.name}, ${record.email}, ${record.updated_at})
+      ON CONFLICT (id) DO UPDATE SET
+        name = EXCLUDED.name,
+        email = EXCLUDED.email,
+        external_updated_at = EXCLUDED.external_updated_at
+    `;
+  }
+
+  console.log(`Synced ${newRecords.length} records`);
+}
+```
+
+### Cleanup old data
+
+```typescript
+// src/jobs/cleanup.ts
+import { sql } from '@hands/stdlib';
+
+export default async function() {
+  // Delete old logs
+  const deleted = await sql`
+    DELETE FROM logs
+    WHERE created_at < NOW() - INTERVAL '30 days'
+    RETURNING id
+  `;
+
+  console.log(`Deleted ${deleted.length} old log entries`);
+
+  // Vacuum to reclaim space
+  await sql`VACUUM logs`;
+}
+```
+
+### Aggregate statistics
+
+```typescript
+// src/jobs/aggregate-stats.ts
+import { sql } from '@hands/stdlib';
+
+export default async function() {
+  // Refresh materialized views
+  await sql`REFRESH MATERIALIZED VIEW daily_metrics`;
+  await sql`REFRESH MATERIALIZED VIEW user_segments`;
+
+  // Calculate rolling averages
+  await sql`
+    INSERT INTO rolling_stats (date, metric, value)
+    SELECT
+      CURRENT_DATE,
+      'revenue_7d_avg',
+      AVG(revenue)
+    FROM daily_metrics
+    WHERE date > CURRENT_DATE - 7
+  `;
+}
+```
+
+### Send notifications
+
+```typescript
+// src/jobs/alerts.ts
+import { sql } from '@hands/stdlib';
+
+export default async function() {
+  // Check for anomalies
+  const anomalies = await sql`
+    SELECT *
+    FROM (
+      SELECT
+        date,
+        revenue,
+        AVG(revenue) OVER (ORDER BY date ROWS 7 PRECEDING) as avg_7d
+      FROM daily_metrics
+    ) t
+    WHERE revenue < avg_7d * 0.5
+      AND date = CURRENT_DATE - 1
+  `;
+
+  if (anomalies.length > 0) {
+    // Send alert (integrate with your notification service)
+    await fetch(process.env.SLACK_WEBHOOK, {
+      method: 'POST',
+      body: JSON.stringify({
+        text: `Alert: Revenue dropped ${anomalies[0].revenue} vs ${anomalies[0].avg_7d} avg`
+      })
+    });
+  }
+}
+```
+
+## Error handling
+
+Jobs should handle errors gracefully:
+
+```typescript
+export default async function() {
+  try {
+    await doWork();
+  } catch (error) {
+    console.error('Job failed:', error);
+
+    // Log to database
+    await sql`
+      INSERT INTO job_errors (job_name, error, created_at)
+      VALUES ('daily-report', ${error.message}, NOW())
+    `;
+
+    // Re-throw to mark job as failed
+    throw error;
+  }
+}
+```
+
+## Monitoring
+
+View job execution in the Hands desktop app:
+
+- **Jobs tab** - See scheduled jobs and their status
+- **Logs** - View console output from job runs
+- **History** - Track success/failure over time
+
+## Rate expressions (alternative)
+
+In addition to cron, you can use rate expressions:
+
+```typescript
+{
+  rate: '5 minutes',      // Every 5 minutes
+  handler: './src/jobs/quick-sync.ts'
+}
+
+{
+  rate: '1 hour',         // Every hour
+  handler: './src/jobs/hourly.ts'
+}
+
+{
+  rate: '1 day',          // Every 24 hours
+  handler: './src/jobs/daily.ts'
+}
+```
+
+## Next steps
+
+- Deploy your jobs to [Cloudflare](/deploy/cloudflare/)
+- Build [API Routes](/apps/api-routes/) to trigger jobs manually

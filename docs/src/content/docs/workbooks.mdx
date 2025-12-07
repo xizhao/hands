@@ -1,0 +1,174 @@
+---
+title: Workbooks
+description: Understanding Hands workbooks and project structure
+---
+
+A workbook is the fundamental unit of organization in Hands. It's a self-contained project that includes your data, code, and configuration.
+
+## Workbook structure
+
+Every workbook follows this structure:
+
+```
+my-workbook/
+├── hands.config.ts    # Main configuration
+├── wrangler.toml      # Cloudflare Workers config
+├── src/
+│   ├── index.ts       # Entry point
+│   ├── dashboards/    # Dashboard definitions
+│   └── api/           # API routes
+├── data/              # Local data files
+└── .hands/            # Internal state (git-ignored)
+```
+
+## Configuration
+
+The `hands.config.ts` file defines your workbook settings:
+
+```typescript
+import { defineConfig } from '@hands/stdlib';
+
+export default defineConfig({
+  name: 'my-workbook',
+
+  // Database settings
+  database: {
+    // Uses embedded PostgreSQL by default
+  },
+
+  // Scheduled jobs
+  triggers: {
+    scheduled: [
+      {
+        cron: '0 * * * *',  // Every hour
+        handler: './src/jobs/sync.ts'
+      }
+    ]
+  },
+
+  // Environment variables
+  vars: {
+    API_KEY: process.env.API_KEY
+  }
+});
+```
+
+## The embedded database
+
+Each workbook has its own embedded PostgreSQL database. This means:
+
+- No external database setup required
+- Data persists locally in the workbook folder
+- Full PostgreSQL compatibility (joins, window functions, etc.)
+- Automatic schema inference when importing data
+
+### Accessing the database
+
+Use the `sql` template tag:
+
+```typescript
+import { sql } from '@hands/stdlib';
+
+// Simple query
+const users = await sql`SELECT * FROM users`;
+
+// With parameters (safe from SQL injection)
+const user = await sql`
+  SELECT * FROM users
+  WHERE id = ${userId}
+`;
+
+// Complex queries
+const stats = await sql`
+  WITH monthly AS (
+    SELECT
+      date_trunc('month', created_at) as month,
+      COUNT(*) as count
+    FROM orders
+    GROUP BY 1
+  )
+  SELECT * FROM monthly ORDER BY month
+`;
+```
+
+## File organization
+
+### Dashboards
+
+Put dashboard definitions in `src/dashboards/`:
+
+```typescript
+// src/dashboards/analytics.ts
+import { dashboard } from '@hands/stdlib';
+
+export default dashboard({
+  title: 'Analytics',
+  charts: [...]
+});
+```
+
+### API routes
+
+API routes go in `src/api/`:
+
+```typescript
+// src/api/users.ts
+import { Hono } from 'hono';
+import { sql } from '@hands/stdlib';
+
+const app = new Hono();
+
+app.get('/users', async (c) => {
+  const users = await sql`SELECT * FROM users`;
+  return c.json(users);
+});
+
+export default app;
+```
+
+### Scheduled jobs
+
+Job handlers can be anywhere, referenced from config:
+
+```typescript
+// src/jobs/daily-report.ts
+import { sql } from '@hands/stdlib';
+
+export default async function() {
+  const stats = await sql`
+    SELECT COUNT(*) as total FROM orders
+    WHERE created_at > NOW() - INTERVAL '1 day'
+  `;
+
+  // Send report, update metrics, etc.
+  console.log(`Daily orders: ${stats[0].total}`);
+}
+```
+
+## Working with multiple workbooks
+
+You can have multiple workbooks open in tabs. Each workbook is completely isolated with its own:
+
+- Database
+- Configuration
+- File system
+- Deployment target
+
+## Version control
+
+Workbooks are designed to work with Git:
+
+```bash
+cd my-workbook
+git init
+git add .
+git commit -m "Initial commit"
+```
+
+The `.hands/` folder is automatically git-ignored since it contains local database state.
+
+## Next steps
+
+- Learn about [Importing data](/data/importing/)
+- Build your first [Dashboard](/apps/dashboards/)
+- Set up [API routes](/apps/api-routes/)
