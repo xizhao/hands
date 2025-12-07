@@ -1,0 +1,4 @@
+#!/bin/bash
+SCRIPT_DIR="$(cd "$(dirname "$(readlink -f "$0" 2>/dev/null || echo "$0")")" && pwd)"
+cd "$SCRIPT_DIR/.."
+exec bun run ./bin/hands.ts "$@"

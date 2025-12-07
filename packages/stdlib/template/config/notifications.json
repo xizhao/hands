@@ -1,0 +1,13 @@
+{
+  "channels": {
+    "slack": {
+      "enabled": false,
+      "webhook_url": ""
+    },
+    "email": {
+      "enabled": false,
+      "recipients": []
+    }
+  },
+  "alerts": []
+}

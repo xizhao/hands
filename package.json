@@ -1,0 +1,30 @@
+{
+  "$schema": "https://json.schemastore.org/package.json",
+  "name": "hands",
+  "description": "AI-powered data app builder with SST",
+  "private": true,
+  "type": "module",
+  "packageManager": "bun@1.3.3",
+  "scripts": {
+    "dev": "bun run --cwd packages/cli src/index.ts",
+    "dev:node": "npx tsx packages/cli/src/index.ts",
+    "dev:desktop": "bun run --cwd packages/desktop tauri dev",
+    "build": "turbo build",
+    "build:desktop": "bun run --cwd packages/desktop tauri build",
+    "typecheck": "turbo typecheck"
+  },
+  "workspaces": ["packages/*"],
+  "devDependencies": {
+    "@tsconfig/bun": "1.0.9",
+    "@types/bun": "1.3.3",
+    "opencode-ai": "^1.0.134",
+    "turbo": "2.5.6",
+    "typescript": "5.8.2"
+  },
+  "trustedDependencies": [
+    "esbuild",
+    "tree-sitter",
+    "tree-sitter-bash",
+    "web-tree-sitter"
+  ]
+}

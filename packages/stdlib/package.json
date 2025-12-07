@@ -1,0 +1,26 @@
+{
+  "name": "@hands/stdlib",
+  "version": "0.0.1",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./*": "./src/*.ts"
+  },
+  "files": [
+    "src",
+    "template"
+  ],
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "zod": "^3.23.8"
+  },
+  "peerDependencies": {
+    "sst": ">=3.0.0"
+  },
+  "devDependencies": {
+    "sst": "3.17.23",
+    "typescript": "5.8.2"
+  }
+}

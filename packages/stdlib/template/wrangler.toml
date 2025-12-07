@@ -1,0 +1,20 @@
+name = "{{name}}"
+main = "src/index.ts"
+compatibility_date = "2024-01-01"
+
+[vars]
+ENVIRONMENT = "development"
+
+# Local D1 database for development
+[[d1_databases]]
+binding = "DB"
+database_name = "hands-db"
+database_id = "local"
+
+# Scheduled monitors (cron triggers)
+[triggers]
+crons = ["*/5 * * * *"]  # Run monitors every 5 minutes
+
+[dev]
+port = 8787
+local_protocol = "http"
