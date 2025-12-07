@@ -7,12 +7,59 @@ interface CreateWorkbookRequest {
   description?: string;
 }
 
-interface DevServerStatus {
+// Runtime status from the runtime server
+export interface RuntimeStatus {
   running: boolean;
   workbook_id: string;
   directory: string;
-  port: number;
+  runtime_port: number;
+  postgres_port: number;
+  wrangler_port: number;
   message: string;
+}
+
+// Eval result from the runtime server
+export interface EvalResult {
+  timestamp: number;
+  duration: number;
+  wrangler: {
+    name: string;
+    routes: { method: string; path: string }[];
+    crons: { schedule: string; handler?: string }[];
+    vars: Record<string, string>;
+  } | null;
+  typescript: {
+    errors: Diagnostic[];
+    warnings: Diagnostic[];
+  };
+  format: {
+    fixed: string[];
+    errors: string[];
+  };
+  unused: {
+    exports: string[];
+    files: string[];
+  };
+  services: {
+    postgres: ServiceStatus;
+    wrangler: ServiceStatus;
+  };
+}
+
+export interface Diagnostic {
+  file: string;
+  line: number;
+  column: number;
+  message: string;
+  code?: string;
+  severity: "error" | "warning";
+}
+
+export interface ServiceStatus {
+  up: boolean;
+  port: number;
+  pid?: number;
+  error?: string;
 }
 
 // Fetch all workbooks
@@ -57,11 +104,9 @@ export function useUpdateWorkbook() {
     mutationFn: (workbook: Workbook) =>
       invoke<Workbook>("update_workbook", { workbook }),
     onSuccess: (updated) => {
-      // Update in list
       queryClient.setQueryData<Workbook[]>(["workbooks"], (old) =>
         old?.map((w) => (w.id === updated.id ? updated : w))
       );
-      // Update individual
       queryClient.setQueryData(["workbook", updated.id], updated);
     },
   });
@@ -78,11 +123,12 @@ export function useDeleteWorkbook() {
         old?.filter((w) => w.id !== deletedId)
       );
       queryClient.removeQueries({ queryKey: ["workbook", deletedId] });
+      queryClient.removeQueries({ queryKey: ["runtime-status", deletedId] });
     },
   });
 }
 
-// Mark workbook as opened (updates last_opened_at) and start dev server
+// Mark workbook as opened (updates last_opened_at) and start runtime
 export function useOpenWorkbook() {
   const updateWorkbook = useUpdateWorkbook();
   const queryClient = useQueryClient();
@@ -97,17 +143,20 @@ export function useOpenWorkbook() {
       };
       await updateWorkbook.mutateAsync(updated);
 
-      // Start dev server for this workbook
+      // Start runtime for this workbook
       try {
-        const status = await invoke<DevServerStatus>("start_dev_server", {
+        const status = await invoke<RuntimeStatus>("start_runtime", {
           workbookId: workbook.id,
           directory: workbook.directory,
         });
-        console.log("Dev server:", status.message);
-        // Update status cache
-        queryClient.setQueryData(["dev-server-status", workbook.id], status);
+        console.log("Runtime:", status.message);
+        queryClient.setQueryData(["runtime-status", workbook.id], status);
+
+        // Set this as the active workbook and restart OpenCode server with database URL
+        await invoke("set_active_workbook", { workbookId: workbook.id });
+        console.log("Set active workbook:", workbook.id);
       } catch (err) {
-        console.error("Failed to start dev server:", err);
+        console.error("Failed to start runtime:", err);
       }
 
       return updated;
@@ -115,19 +164,19 @@ export function useOpenWorkbook() {
   });
 }
 
-// Get dev server status for a workbook
-export function useDevServerStatus(workbookId: string | null) {
+// Get runtime status for a workbook
+export function useRuntimeStatus(workbookId: string | null) {
   return useQuery({
-    queryKey: ["dev-server-status", workbookId],
+    queryKey: ["runtime-status", workbookId],
     queryFn: () =>
-      invoke<DevServerStatus>("get_dev_server_status", { workbookId: workbookId! }),
+      invoke<RuntimeStatus>("get_runtime_status", { workbookId: workbookId! }),
     enabled: !!workbookId,
-    refetchInterval: 5000, // Poll every 5 seconds
+    refetchInterval: 5000,
   });
 }
 
-// Start dev server
-export function useStartDevServer() {
+// Start runtime
+export function useStartRuntime() {
   const queryClient = useQueryClient();
 
   return useMutation({
@@ -137,27 +186,67 @@ export function useStartDevServer() {
     }: {
       workbookId: string;
       directory: string;
-    }) => invoke<DevServerStatus>("start_dev_server", { workbookId, directory }),
+    }) => invoke<RuntimeStatus>("start_runtime", { workbookId, directory }),
     onSuccess: (status) => {
-      queryClient.setQueryData(["dev-server-status", status.workbook_id], status);
+      queryClient.setQueryData(["runtime-status", status.workbook_id], status);
     },
   });
 }
 
-// Stop dev server
-export function useStopDevServer() {
+// Stop runtime
+export function useStopRuntime() {
   const queryClient = useQueryClient();
 
   return useMutation({
     mutationFn: (workbookId: string) =>
-      invoke<DevServerStatus>("stop_dev_server", { workbookId }),
+      invoke<RuntimeStatus>("stop_runtime", { workbookId }),
     onSuccess: (status) => {
-      queryClient.setQueryData(["dev-server-status", status.workbook_id], status);
+      queryClient.setQueryData(["runtime-status", status.workbook_id], status);
     },
   });
 }
 
-// Dev server routes and introspection
+// Execute SQL query through runtime
+export function useRuntimeQuery() {
+  return useMutation({
+    mutationFn: ({ workbookId, query }: { workbookId: string; query: string }) =>
+      invoke<{ rows: unknown[]; rowCount: number; command: string }>("runtime_query", {
+        workbookId,
+        query,
+      }),
+  });
+}
+
+// Trigger eval on runtime
+export function useRuntimeEval() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (workbookId: string) =>
+      invoke<EvalResult>("runtime_eval", { workbookId }),
+    onSuccess: (result, workbookId) => {
+      queryClient.setQueryData(["runtime-eval", workbookId], result);
+    },
+  });
+}
+
+// Get cached eval result
+export function useEvalResult(workbookId: string | null) {
+  return useQuery({
+    queryKey: ["runtime-eval", workbookId],
+    queryFn: () => invoke<EvalResult>("runtime_eval", { workbookId: workbookId! }),
+    enabled: !!workbookId,
+    refetchInterval: 10000, // Poll every 10 seconds
+    staleTime: 5000,
+  });
+}
+
+// Legacy aliases for backwards compatibility
+export const useDevServerStatus = useRuntimeStatus;
+export const useStartDevServer = useStartRuntime;
+export const useStopDevServer = useStopRuntime;
+
+// Dev server routes from eval result
 export interface DevRoute {
   path: string;
   method: string;
@@ -183,17 +272,46 @@ export interface DevServerOutputs {
   crons: CronTrigger[];
 }
 
-// Get dev server routes for a workbook
+// Get dev server routes from runtime eval
 export function useDevServerRoutes(workbookId: string | null) {
+  const evalResult = useEvalResult(workbookId);
+  const runtimeStatus = useRuntimeStatus(workbookId);
+
   return useQuery({
     queryKey: ["dev-server-routes", workbookId],
-    queryFn: () => invoke<DevServerOutputs>("get_dev_server_routes", { workbookId: workbookId! }),
-    enabled: !!workbookId,
-    refetchInterval: 3000, // Poll every 3 seconds
+    queryFn: async (): Promise<DevServerOutputs> => {
+      if (!evalResult.data?.wrangler) {
+        return {
+          available: false,
+          url: "",
+          routes: [],
+          charts: [],
+          crons: [],
+        };
+      }
+
+      const wrangler = evalResult.data.wrangler;
+      const wranglerPort = runtimeStatus.data?.wrangler_port ?? 8787;
+
+      return {
+        available: evalResult.data.services.wrangler.up,
+        url: `http://localhost:${wranglerPort}`,
+        routes: wrangler.routes.map((r) => ({
+          method: r.method,
+          path: r.path,
+        })),
+        charts: [], // Charts would come from source parsing
+        crons: wrangler.crons.map((c) => ({
+          cron: c.schedule,
+          description: c.handler,
+        })),
+      };
+    },
+    enabled: !!workbookId && !!evalResult.data,
   });
 }
 
-// Workbook database info
+// Workbook database info - now derived from runtime status
 export interface WorkbookDatabaseInfo {
   workbook_id: string;
   database_name: string;
@@ -203,21 +321,36 @@ export interface WorkbookDatabaseInfo {
   user: string;
 }
 
-// Get database connection info for a workbook
+// Get database connection info for a workbook (from runtime)
 export function useWorkbookDatabase(workbookId: string | null) {
+  const runtimeStatus = useRuntimeStatus(workbookId);
+
   return useQuery({
     queryKey: ["workbook-database", workbookId],
-    queryFn: () => invoke<WorkbookDatabaseInfo>("get_workbook_database", { workbookId: workbookId! }),
-    enabled: !!workbookId,
-    staleTime: Infinity, // Database info doesn't change
+    queryFn: async (): Promise<WorkbookDatabaseInfo | null> => {
+      if (!runtimeStatus.data?.running) {
+        return null;
+      }
+
+      const port = runtimeStatus.data.postgres_port;
+      const dbName = `hands_${workbookId?.replace(/-/g, "_")}`;
+
+      return {
+        workbook_id: workbookId!,
+        database_name: dbName,
+        connection_string: `postgres://hands:hands@localhost:${port}/${dbName}`,
+        host: "localhost",
+        port,
+        user: "hands",
+      };
+    },
+    enabled: !!workbookId && !!runtimeStatus.data?.running,
   });
 }
 
-// Legacy aliases for backwards compatibility
-export const useSstStatus = useDevServerStatus;
+// Legacy aliases
+export const useSstStatus = useRuntimeStatus;
 export const useSstOutputs = (directory: string | null) => {
-  // This is a shim - the new API uses workbookId instead of directory
-  // For now, return empty data
   return useQuery({
     queryKey: ["sst-outputs", directory],
     queryFn: () => Promise.resolve({ available: false, outputs: {}, routes: [] }),

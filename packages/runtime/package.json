@@ -1,0 +1,23 @@
+{
+  "name": "@hands/runtime",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "bin": {
+    "hands-runtime": "./src/index.ts"
+  },
+  "scripts": {
+    "dev": "bun run src/index.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "postgres": "^3.4.7",
+    "@biomejs/biome": "^1.9.0",
+    "toml": "^3.0.0",
+    "knip": "^5.0.0",
+    "typescript": "^5.8.0"
+  },
+  "devDependencies": {
+    "@types/bun": "^1.1.0"
+  }
+}

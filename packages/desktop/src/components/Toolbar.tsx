@@ -15,11 +15,11 @@ import {
   DropdownMenuSubTrigger,
   DropdownMenuSubContent,
 } from "@/components/ui/dropdown-menu";
-import { ArrowUp, Square, Loader2, GripVertical, Hand, Settings, Plus, Database, FolderOpen, Check, Trash2, Radio, Clock, Route, BarChart3, ExternalLink, Pencil } from "lucide-react";
+import { ArrowUp, Square, Loader2, GripVertical, Hand, Settings, Plus, Database, FolderOpen, Check, Trash2, Radio, Clock, Route, BarChart3, ExternalLink, Pencil, AlertCircle, AlertTriangle, FileCode, Sparkles } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { listen } from "@tauri-apps/api/event";
 import { invoke } from "@tauri-apps/api/core";
-import { useWorkbook, useWorkbooks, useCreateWorkbook, useUpdateWorkbook, useDeleteWorkbook, useStartDevServer, useStopDevServer, useDevServerStatus, useDevServerRoutes, useWorkbookDatabase } from "@/hooks/useWorkbook";
+import { useWorkbook, useWorkbooks, useCreateWorkbook, useUpdateWorkbook, useDeleteWorkbook, useStartDevServer, useStopDevServer, useDevServerStatus, useDevServerRoutes, useWorkbookDatabase, useEvalResult } from "@/hooks/useWorkbook";
 import { getAllWebviewWindows } from "@tauri-apps/api/webviewWindow";
 
 interface ToolbarProps {
@@ -40,7 +40,7 @@ export function Toolbar({ expanded, onExpandChange, hasData, onOpenSettings }: T
   const { activeSessionId, activeWorkbookId, setActiveWorkbook, setActiveSession } = useUIStore();
   const { addTask } = useBackgroundStore();
   const { data: sessionStatuses = {} } = useSessionStatuses();
-  const sendMessage = useSendMessage(activeSessionId);
+  const sendMessage = useSendMessage();
   const abortSession = useAbortSession(activeSessionId);
 
   // Session/thread management
@@ -65,6 +65,14 @@ export function Toolbar({ expanded, onExpandChange, hasData, onOpenSettings }: T
   const { data: devServerStatus } = useDevServerStatus(activeWorkbookId);
   const { data: devServerRoutes } = useDevServerRoutes(activeWorkbookId);
   const { data: workbookDatabase } = useWorkbookDatabase(activeWorkbookId);
+  const { data: evalResult } = useEvalResult(activeWorkbookId);
+
+  // Compute diagnostics counts
+  const tsErrors = evalResult?.typescript?.errors?.length ?? 0;
+  const tsWarnings = evalResult?.typescript?.warnings?.length ?? 0;
+  const formatErrors = evalResult?.format?.errors?.length ?? 0;
+  const unusedCount = (evalResult?.unused?.exports?.length ?? 0) + (evalResult?.unused?.files?.length ?? 0);
+  const hasIssues = tsErrors > 0 || tsWarnings > 0 || formatErrors > 0 || unusedCount > 0;
 
   // Auto-start dev server when workbook changes
   useEffect(() => {
@@ -192,14 +200,14 @@ export function Toolbar({ expanded, onExpandChange, hasData, onOpenSettings }: T
       createSession.mutate({}, {
         onSuccess: (newSession) => {
           setActiveSession(newSession.id);
-          // Send message to the new session
-          sendMessage.mutate(message);
+          // Send message to the new session with its ID
+          sendMessage.mutate({ sessionId: newSession.id, content: message });
         }
       });
       return;
     }
 
-    sendMessage.mutate(message);
+    sendMessage.mutate({ sessionId: activeSessionId, content: message });
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
@@ -557,6 +565,8 @@ export function Toolbar({ expanded, onExpandChange, hasData, onOpenSettings }: T
               <div className="flex h-5 w-5 items-center justify-center cursor-pointer group">
                 <span className={cn(
                   "inline-flex rounded-full h-2 w-2 transition-transform group-hover:scale-125",
+                  tsErrors > 0 ? "bg-red-500" :
+                  (tsWarnings > 0 || unusedCount > 0) ? "bg-yellow-500" :
                   devServerStatus?.running ? "bg-green-500" : "bg-zinc-500"
                 )} />
               </div>
@@ -645,6 +655,95 @@ export function Toolbar({ expanded, onExpandChange, hasData, onOpenSettings }: T
                         ))}
                       </DropdownMenuSubContent>
                     </DropdownMenuSub>
+                  </>
+                )}
+
+                {/* Diagnostics section */}
+                {hasIssues && (
+                  <>
+                    <DropdownMenuSeparator />
+                    <div className="px-2 py-1.5">
+                      <div className="text-xs font-medium text-muted-foreground mb-1.5">Code Quality</div>
+
+                      {/* TypeScript Errors */}
+                      {tsErrors > 0 && (
+                        <DropdownMenuSub>
+                          <DropdownMenuSubTrigger className="flex items-center gap-2 text-red-400">
+                            <AlertCircle className="h-3.5 w-3.5" />
+                            <span className="text-sm">{tsErrors} error{tsErrors !== 1 ? 's' : ''}</span>
+                          </DropdownMenuSubTrigger>
+                          <DropdownMenuSubContent className="w-80 max-h-64 overflow-y-auto">
+                            {evalResult?.typescript?.errors?.map((diag, i) => (
+                              <div key={i} className="px-2 py-1.5 text-xs border-b border-border/50 last:border-0">
+                                <div className="font-mono text-muted-foreground truncate">
+                                  {diag.file}:{diag.line}:{diag.column}
+                                </div>
+                                <div className="text-red-400 mt-0.5">{diag.message}</div>
+                                {diag.code && (
+                                  <div className="text-muted-foreground/60 mt-0.5">{diag.code}</div>
+                                )}
+                              </div>
+                            ))}
+                          </DropdownMenuSubContent>
+                        </DropdownMenuSub>
+                      )}
+
+                      {/* TypeScript Warnings */}
+                      {tsWarnings > 0 && (
+                        <DropdownMenuSub>
+                          <DropdownMenuSubTrigger className="flex items-center gap-2 text-yellow-400">
+                            <AlertTriangle className="h-3.5 w-3.5" />
+                            <span className="text-sm">{tsWarnings} warning{tsWarnings !== 1 ? 's' : ''}</span>
+                          </DropdownMenuSubTrigger>
+                          <DropdownMenuSubContent className="w-80 max-h-64 overflow-y-auto">
+                            {evalResult?.typescript?.warnings?.map((diag, i) => (
+                              <div key={i} className="px-2 py-1.5 text-xs border-b border-border/50 last:border-0">
+                                <div className="font-mono text-muted-foreground truncate">
+                                  {diag.file}:{diag.line}:{diag.column}
+                                </div>
+                                <div className="text-yellow-400 mt-0.5">{diag.message}</div>
+                                {diag.code && (
+                                  <div className="text-muted-foreground/60 mt-0.5">{diag.code}</div>
+                                )}
+                              </div>
+                            ))}
+                          </DropdownMenuSubContent>
+                        </DropdownMenuSub>
+                      )}
+
+                      {/* Unused Code */}
+                      {unusedCount > 0 && (
+                        <DropdownMenuSub>
+                          <DropdownMenuSubTrigger className="flex items-center gap-2 text-muted-foreground">
+                            <FileCode className="h-3.5 w-3.5" />
+                            <span className="text-sm">{unusedCount} unused</span>
+                          </DropdownMenuSubTrigger>
+                          <DropdownMenuSubContent className="w-64 max-h-64 overflow-y-auto">
+                            {evalResult?.unused?.files?.map((file, i) => (
+                              <div key={`file-${i}`} className="px-2 py-1 text-xs font-mono text-muted-foreground">
+                                <span className="text-yellow-400/60">file:</span> {file}
+                              </div>
+                            ))}
+                            {evalResult?.unused?.exports?.map((exp, i) => (
+                              <div key={`exp-${i}`} className="px-2 py-1 text-xs font-mono text-muted-foreground">
+                                <span className="text-blue-400/60">export:</span> {exp}
+                              </div>
+                            ))}
+                          </DropdownMenuSubContent>
+                        </DropdownMenuSub>
+                      )}
+                    </div>
+                  </>
+                )}
+
+                {/* All clear indicator */}
+                {!hasIssues && evalResult && (
+                  <>
+                    <DropdownMenuSeparator />
+                    <div className="px-2 py-2 flex items-center gap-2 text-green-400">
+                      <Sparkles className="h-4 w-4" />
+                      <span className="text-sm">No issues</span>
+                    </div>
                   </>
                 )}
 

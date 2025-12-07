@@ -88,26 +88,27 @@ export function useSessionStatuses() {
   });
 }
 
-export function useSendMessage(sessionId: string | null) {
+export function useSendMessage() {
   const queryClient = useQueryClient();
   const directory = useWorkbookDirectory();
 
   return useMutation({
-    mutationFn: async (content: string) => {
+    mutationFn: async ({ sessionId, content }: { sessionId: string; content: string }) => {
       // Use prompt_async - it returns immediately and streams via SSE
-      const result = await api.promptAsync(sessionId!, content, { directory });
+      const result = await api.promptAsync(sessionId, content, { directory });
       if (result.error) {
         throw new Error(`Failed to send message: ${result.error}`);
       }
+      return { sessionId };
     },
-    onMutate: async (content) => {
+    onMutate: async ({ sessionId, content }) => {
       // Optimistically add user message
       const tempId = `temp-${Date.now()}`;
       const tempPartId = `temp-part-${Date.now()}`;
       const tempUserMsg: MessageWithParts = {
         info: {
           id: tempId,
-          sessionID: sessionId!,
+          sessionID: sessionId,
           role: "user",
           time: { created: Date.now() },
           agent: "user",
@@ -115,7 +116,7 @@ export function useSendMessage(sessionId: string | null) {
         },
         parts: [{
           id: tempPartId,
-          sessionID: sessionId!,
+          sessionID: sessionId,
           messageID: tempId,
           type: "text",
           text: content,
@@ -126,11 +127,15 @@ export function useSendMessage(sessionId: string | null) {
         ["messages", sessionId, directory],
         (old) => (old ? [...old, tempUserMsg] : [tempUserMsg])
       );
+
+      return { sessionId };
     },
     // SSE events will update the messages - no need for onSuccess invalidation
-    onError: () => {
+    onError: (_error, _variables, context) => {
       // Remove optimistic update on error
-      queryClient.invalidateQueries({ queryKey: ["messages", sessionId, directory] });
+      if (context?.sessionId) {
+        queryClient.invalidateQueries({ queryKey: ["messages", context.sessionId, directory] });
+      }
     },
   });
 }

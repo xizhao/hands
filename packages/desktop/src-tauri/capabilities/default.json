@@ -2,7 +2,7 @@
   "$schema": "https://schema.tauri.app/config/2/capability",
   "identifier": "default",
   "description": "Default capabilities for the app",
-  "windows": ["main"],
+  "windows": ["main", "webview_*"],
   "permissions": [
     "core:default",
     "core:window:allow-start-dragging",

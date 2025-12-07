@@ -32,6 +32,7 @@ const toolExports: Record<string, string> = {
   "deploy.ts": "deployTool",
   "monitor.ts": "monitorTool",
   "describe.ts": "describeTool",
+  "eval.ts": "evalTool",
 }
 
 async function ensureDir(dir: string) {

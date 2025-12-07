@@ -3,6 +3,16 @@ import { getCurrentWindow } from "@tauri-apps/api/window";
 import { X, Minus, Maximize2, Minimize2, ExternalLink, RotateCw } from "lucide-react";
 import { cn } from "@/lib/utils";
 
+// Handle window dragging via Tauri API
+const startDrag = async () => {
+  try {
+    const win = getCurrentWindow();
+    await win.startDragging();
+  } catch (err) {
+    console.error("Failed to start dragging:", err);
+  }
+};
+
 // Preview window - wraps external URLs with custom window controls
 export function PreviewWindow() {
   const [url, setUrl] = useState<string | null>(null);
@@ -85,7 +95,7 @@ export function PreviewWindow() {
       <div className="h-10 flex items-center justify-between bg-zinc-800/80 backdrop-blur-sm border-b border-zinc-700/50 shrink-0">
         {/* Drag region - takes up all space not used by buttons */}
         <div
-          data-tauri-drag-region
+          onMouseDown={startDrag}
           className="flex-1 h-full flex items-center px-3 cursor-grab active:cursor-grabbing select-none"
         >
           <span className="text-sm text-zinc-300 truncate pointer-events-none">

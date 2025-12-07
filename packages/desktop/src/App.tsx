@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { useSessions, useEventSubscription } from "@/hooks/useSession";
-import { useWorkbooks, useCreateWorkbook } from "@/hooks/useWorkbook";
+import { useWorkbooks, useCreateWorkbook, useOpenWorkbook } from "@/hooks/useWorkbook";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { Toolbar } from "@/components/Toolbar";
 import { Thread } from "@/components/Thread";
@@ -28,27 +28,35 @@ function FloatingApp() {
   const { data: sessions, isLoading: sessionsLoading } = useSessions();
   const { data: workbooks, isLoading: workbooksLoading } = useWorkbooks();
   const createWorkbook = useCreateWorkbook();
+  const openWorkbook = useOpenWorkbook();
 
   // Auto-select or create a workbook on startup
   useEffect(() => {
-    if (workbooksLoading || activeWorkbookId) return;
+    // Wait for workbooks query to complete
+    if (workbooksLoading || workbooks === undefined) return;
+    // Skip if already have an active workbook
+    if (activeWorkbookId) return;
+    // Skip if mutation is in progress
+    if (createWorkbook.isPending || openWorkbook.isPending) return;
 
-    if (workbooks && workbooks.length > 0) {
-      // Select the most recently opened workbook
+    if (workbooks.length > 0) {
+      // Open the most recently used workbook (starts runtime)
       const mostRecent = workbooks[0];
       setActiveWorkbook(mostRecent.id, mostRecent.directory);
-    } else if (!createWorkbook.isPending) {
+      openWorkbook.mutate(mostRecent);
+    } else {
       // No workbooks exist, create a default one
       createWorkbook.mutate(
-        { name: "Default Workbook", description: "Auto-created workspace" },
+        { name: "My Workbook" },
         {
           onSuccess: (workbook) => {
             setActiveWorkbook(workbook.id, workbook.directory);
+            openWorkbook.mutate(workbook);
           },
         }
       );
     }
-  }, [workbooks, workbooksLoading, activeWorkbookId, setActiveWorkbook, createWorkbook]);
+  }, [workbooks, workbooksLoading, activeWorkbookId, setActiveWorkbook, createWorkbook, openWorkbook]);
 
   // If sessions exist but none is active, select the first one
   useEffect(() => {

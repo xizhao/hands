@@ -1,9 +1,4 @@
-use pg_embed::pg_enums::PgAuthMethod;
-use pg_embed::pg_fetch::{PgFetchSettings, PG_V15};
-use pg_embed::postgres::{PgEmbed, PgSettings};
 use serde::{Deserialize, Serialize};
-use sqlx::postgres::PgPoolOptions;
-use sqlx::PgPool;
 use std::collections::HashMap;
 use std::fs;
 use std::path::PathBuf;
@@ -12,15 +7,24 @@ use std::sync::Arc;
 use std::time::Duration;
 use tauri::Manager;
 use tauri_plugin_store::StoreExt;
+use tokio::io::{AsyncBufReadExt, BufReader};
 use tokio::process::{Child, Command};
 use tokio::sync::Mutex;
 
-// App state to hold the database and server process
+// Runtime process info for a workbook
+#[derive(Debug)]
+pub struct RuntimeProcess {
+    pub child: Child,
+    pub runtime_port: u16,
+    pub postgres_port: u16,
+    pub wrangler_port: u16,
+}
+
+// App state - now just tracks runtime processes and opencode server
 pub struct AppState {
-    pub db: Option<PgPool>,
-    pub pg: Option<PgEmbed>,
     pub server: Option<Child>,
-    pub sst_servers: HashMap<String, Child>, // workbook_id -> sst dev process
+    pub runtimes: HashMap<String, RuntimeProcess>, // workbook_id -> runtime process
+    pub active_workbook_id: Option<String>,        // currently active workbook
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -35,15 +39,6 @@ pub struct DatabaseStatus {
     pub message: String,
     pub port: u16,
     pub database: String,
-    pub stats: Option<DatabaseStats>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct DatabaseStats {
-    pub size_bytes: i64,
-    pub size_formatted: String,
-    pub table_count: i64,
-    pub connection_count: i32,
 }
 
 // Workbook - a discrete project environment
@@ -67,7 +62,6 @@ pub struct CreateWorkbookRequest {
 fn get_hands_dir() -> Result<PathBuf, String> {
     let home = dirs::home_dir().ok_or("Could not find home directory")?;
     let hands_dir = home.join(".hands");
-    // Ensure .hands directory exists
     if !hands_dir.exists() {
         fs::create_dir_all(&hands_dir).map_err(|e| format!("Failed to create .hands directory: {}", e))?;
     }
@@ -82,7 +76,6 @@ fn get_workbook_dir(id: &str) -> Result<PathBuf, String> {
     Ok(get_hands_dir()?.join(id))
 }
 
-// Read the global workbooks index
 fn read_workbooks_index() -> Result<HashMap<String, Workbook>, String> {
     let index_path = get_workbooks_index_path()?;
     if !index_path.exists() {
@@ -94,7 +87,6 @@ fn read_workbooks_index() -> Result<HashMap<String, Workbook>, String> {
         .map_err(|e| format!("Failed to parse workbooks index: {}", e))
 }
 
-// Write the global workbooks index
 fn write_workbooks_index(index: &HashMap<String, Workbook>) -> Result<(), String> {
     let index_path = get_workbooks_index_path()?;
     let content = serde_json::to_string_pretty(index)
@@ -103,12 +95,10 @@ fn write_workbooks_index(index: &HashMap<String, Workbook>) -> Result<(), String
         .map_err(|e| format!("Failed to write workbooks index: {}", e))
 }
 
-// Save workbook metadata to package.json under "hands" field
 fn save_workbook_config(workbook: &Workbook) -> Result<(), String> {
     let workbook_dir = PathBuf::from(&workbook.directory);
     let package_path = workbook_dir.join("package.json");
 
-    // Read existing package.json or create new one
     let mut package: serde_json::Value = if package_path.exists() {
         let content = fs::read_to_string(&package_path)
             .map_err(|e| format!("Failed to read package.json: {}", e))?;
@@ -122,7 +112,6 @@ fn save_workbook_config(workbook: &Workbook) -> Result<(), String> {
         })
     };
 
-    // Add/update hands metadata
     package["hands"] = serde_json::json!({
         "id": workbook.id,
         "name": workbook.name,
@@ -138,7 +127,6 @@ fn save_workbook_config(workbook: &Workbook) -> Result<(), String> {
         .map_err(|e| format!("Failed to write package.json: {}", e))
 }
 
-// Read workbook config from package.json "hands" field
 fn read_workbook_config(workbook_dir: &PathBuf) -> Option<Workbook> {
     let package_path = workbook_dir.join("package.json");
     if !package_path.exists() {
@@ -147,8 +135,6 @@ fn read_workbook_config(workbook_dir: &PathBuf) -> Option<Workbook> {
 
     let content = fs::read_to_string(&package_path).ok()?;
     let package: serde_json::Value = serde_json::from_str(&content).ok()?;
-
-    // Check for hands metadata
     let hands = package.get("hands")?;
 
     Some(Workbook {
@@ -162,123 +148,34 @@ fn read_workbook_config(workbook_dir: &PathBuf) -> Option<Workbook> {
     })
 }
 
-#[tauri::command]
-async fn create_workbook(
-    state: tauri::State<'_, Arc<Mutex<AppState>>>,
-    request: CreateWorkbookRequest,
-) -> Result<Workbook, String> {
-    // Generate ID from slugified name
-    let slug = request.name.to_lowercase()
-        .chars()
-        .map(|c| if c.is_alphanumeric() { c } else { '-' })
-        .collect::<String>();
-    let timestamp = std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .map_err(|e| e.to_string())?
-        .as_millis();
-    let id = format!("{}-{:x}", slug, timestamp % 0xFFFF);
-
-    // Create directory
-    let workbook_dir = get_workbook_dir(&id)?;
-    fs::create_dir_all(&workbook_dir).map_err(|e| format!("Failed to create workbook directory: {}", e))?;
-
-    // Initialize git repo
-    let output = std::process::Command::new("git")
-        .args(["init"])
-        .current_dir(&workbook_dir)
-        .output()
-        .map_err(|e| format!("Failed to initialize git: {}", e))?;
-
-    if !output.status.success() {
-        return Err(format!("Git init failed: {}", String::from_utf8_lossy(&output.stderr)));
-    }
-
-    // Create SST project structure
-    init_sst_project(&workbook_dir, &request.name, request.description.as_deref())?;
-
-    // Create a database for this workbook
-    let db_name = workbook_id_to_db_name(&id);
-    {
-        let state = state.lock().await;
-        if let Some(ref pool) = state.db {
-            // Create database for this workbook (ignore if exists)
-            let create_query = format!("CREATE DATABASE \"{}\"", db_name);
-            if let Err(e) = sqlx::query(&create_query).execute(pool).await {
-                let err_str = format!("{:?}", e);
-                if !err_str.contains("42P04") && !err_str.contains("already exists") {
-                    println!("Warning: Failed to create database {}: {}", db_name, e);
-                }
-            } else {
-                println!("Created database '{}' for workbook '{}'", db_name, id);
-            }
-        }
-    }
-
-    let now = timestamp as u64;
-    let workbook = Workbook {
-        id: id.clone(),
-        name: request.name,
-        description: request.description,
-        directory: workbook_dir.to_string_lossy().to_string(),
-        created_at: now,
-        updated_at: now,
-        last_opened_at: now,
-    };
-
-    // Save workbook config to its directory
-    save_workbook_config(&workbook)?;
-
-    // Update global index
-    let mut index = read_workbooks_index()?;
-    index.insert(id, workbook.clone());
-    write_workbooks_index(&index)?;
-
-    Ok(workbook)
-}
-
-// Convert workbook ID to a valid PostgreSQL database name
-fn workbook_id_to_db_name(id: &str) -> String {
-    // PostgreSQL identifiers: lowercase, replace invalid chars with underscore
-    let name: String = id.to_lowercase()
-        .chars()
-        .map(|c| if c.is_alphanumeric() || c == '_' { c } else { '_' })
-        .collect();
-    format!("hands_{}", name)
-}
-
 fn get_template_dir() -> Result<PathBuf, String> {
-    // Find the template directory in the monorepo
-    // In dev: relative to the project root
-    // In production: bundled with the app
-
-    // Try to find it relative to the current exe (for dev)
+    // Try relative to executable (production build)
     if let Ok(exe_path) = std::env::current_exe() {
-        // Go up from target/debug/hands-desktop to packages/stdlib/template
         let mut path = exe_path;
         for _ in 0..5 {
             path = path.parent().unwrap_or(&path).to_path_buf();
         }
-        let template_path = path.join("packages/stdlib/template");
+        let template_path = path.join("packages/workbook-starter");
         if template_path.exists() {
             return Ok(template_path);
         }
     }
 
-    // Try relative to current dir (for dev)
-    let cwd_template = PathBuf::from("../../stdlib/template");
+    // Try relative to current working directory (dev mode)
+    let cwd_template = PathBuf::from("../../workbook-starter");
     if cwd_template.exists() {
         return Ok(cwd_template);
     }
 
-    // Try from home directory where hands-proto might be cloned
+    // Try from home directory (fallback)
     if let Some(home) = dirs::home_dir() {
-        let home_template = home.join("hands-proto/packages/stdlib/template");
+        let home_template = home.join("hands-proto/packages/workbook-starter");
         if home_template.exists() {
             return Ok(home_template);
         }
     }
 
-    Err("Could not find template directory".to_string())
+    Err("Could not find workbook-starter template directory".to_string())
 }
 
 fn copy_dir_recursive(src: &PathBuf, dst: &PathBuf) -> Result<(), String> {
@@ -301,17 +198,11 @@ fn copy_dir_recursive(src: &PathBuf, dst: &PathBuf) -> Result<(), String> {
 }
 
 fn init_sst_project(workbook_dir: &PathBuf, name: &str, description: Option<&str>) -> Result<(), String> {
-    // Get template directory
     let template_dir = get_template_dir()?;
-
-    // Copy template to workbook directory
     copy_dir_recursive(&template_dir, workbook_dir)?;
 
-    // Replace placeholders in files
     let slug = name.to_lowercase().replace(" ", "-");
     let desc = description.unwrap_or("");
-    let db_name = workbook_id_to_db_name(&slug);
-    let database_url = format!("postgres://hands:hands@localhost:5433/{}", db_name);
 
     // Update package.json
     let package_path = workbook_dir.join("package.json");
@@ -321,13 +212,13 @@ fn init_sst_project(workbook_dir: &PathBuf, name: &str, description: Option<&str
         fs::write(&package_path, content).map_err(|e| e.to_string())?;
     }
 
-    // Update wrangler.toml
+    // Update wrangler.toml - runtime will set DATABASE_URL dynamically
     let wrangler_path = workbook_dir.join("wrangler.toml");
     if wrangler_path.exists() {
         let content = fs::read_to_string(&wrangler_path).map_err(|e| e.to_string())?;
-        let content = content
-            .replace("{{name}}", &slug)
-            .replace("{{database_url}}", &database_url);
+        let content = content.replace("{{name}}", &slug);
+        // Remove database_url placeholder - runtime manages this
+        let content = content.replace("{{database_url}}", "");
         fs::write(&wrangler_path, content).map_err(|e| e.to_string())?;
     }
 
@@ -351,14 +242,62 @@ fn init_sst_project(workbook_dir: &PathBuf, name: &str, description: Option<&str
 }
 
 #[tauri::command]
+async fn create_workbook(
+    request: CreateWorkbookRequest,
+) -> Result<Workbook, String> {
+    let slug = request.name.to_lowercase()
+        .chars()
+        .map(|c| if c.is_alphanumeric() { c } else { '-' })
+        .collect::<String>();
+    let timestamp = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map_err(|e| e.to_string())?
+        .as_millis();
+    let id = format!("{}-{:x}", slug, timestamp % 0xFFFF);
+
+    let workbook_dir = get_workbook_dir(&id)?;
+    fs::create_dir_all(&workbook_dir).map_err(|e| format!("Failed to create workbook directory: {}", e))?;
+
+    // Initialize git repo
+    let output = std::process::Command::new("git")
+        .args(["init"])
+        .current_dir(&workbook_dir)
+        .output()
+        .map_err(|e| format!("Failed to initialize git: {}", e))?;
+
+    if !output.status.success() {
+        return Err(format!("Git init failed: {}", String::from_utf8_lossy(&output.stderr)));
+    }
+
+    // Create project structure from template
+    init_sst_project(&workbook_dir, &request.name, request.description.as_deref())?;
+
+    let now = timestamp as u64;
+    let workbook = Workbook {
+        id: id.clone(),
+        name: request.name,
+        description: request.description,
+        directory: workbook_dir.to_string_lossy().to_string(),
+        created_at: now,
+        updated_at: now,
+        last_opened_at: now,
+    };
+
+    save_workbook_config(&workbook)?;
+
+    let mut index = read_workbooks_index()?;
+    index.insert(id, workbook.clone());
+    write_workbooks_index(&index)?;
+
+    Ok(workbook)
+}
+
+#[tauri::command]
 async fn list_workbooks() -> Result<Vec<Workbook>, String> {
     let hands_dir = get_hands_dir()?;
-
-    // Read existing index
     let mut index = read_workbooks_index().unwrap_or_default();
     let mut changed = false;
 
-    // Scan filesystem for workbook directories
     let entries = fs::read_dir(&hands_dir)
         .map_err(|e| format!("Failed to read hands directory: {}", e))?;
 
@@ -368,7 +307,6 @@ async fn list_workbooks() -> Result<Vec<Workbook>, String> {
         let entry = entry.map_err(|e| e.to_string())?;
         let path = entry.path();
 
-        // Skip files (like workbooks.json) and hidden directories
         if !path.is_dir() {
             continue;
         }
@@ -378,22 +316,17 @@ async fn list_workbooks() -> Result<Vec<Workbook>, String> {
             .unwrap_or("")
             .to_string();
 
-        // Skip hidden directories and the index file
         if dir_name.starts_with('.') {
             continue;
         }
 
-        // Check if this directory has a workbook.json (is a valid workbook)
         if let Some(workbook_config) = read_workbook_config(&path) {
             found_ids.push(workbook_config.id.clone());
-
-            // Update index if not present or out of sync
             if !index.contains_key(&workbook_config.id) {
                 index.insert(workbook_config.id.clone(), workbook_config);
                 changed = true;
             }
         } else {
-            // Directory exists but no workbook.json - create one from filesystem
             let metadata = fs::metadata(&path).ok();
             let created = metadata.as_ref()
                 .and_then(|m| m.created().ok())
@@ -411,16 +344,13 @@ async fn list_workbooks() -> Result<Vec<Workbook>, String> {
                 last_opened_at: created,
             };
 
-            // Save config to the workbook directory
             let _ = save_workbook_config(&workbook);
-
             found_ids.push(dir_name.clone());
             index.insert(dir_name, workbook);
             changed = true;
         }
     }
 
-    // Remove entries from index that no longer exist on filesystem
     let stale_ids: Vec<String> = index.keys()
         .filter(|id| !found_ids.contains(id))
         .cloned()
@@ -431,12 +361,10 @@ async fn list_workbooks() -> Result<Vec<Workbook>, String> {
         changed = true;
     }
 
-    // Persist changes to index
     if changed {
         let _ = write_workbooks_index(&index);
     }
 
-    // Convert to vec and sort by last opened
     let mut workbooks: Vec<Workbook> = index.into_values().collect();
     workbooks.sort_by(|a, b| b.last_opened_at.cmp(&a.last_opened_at));
 
@@ -451,12 +379,10 @@ async fn get_workbook(id: String) -> Result<Workbook, String> {
         return Err(format!("Workbook {} not found", id));
     }
 
-    // Read from workbook.json in the workbook directory
     if let Some(workbook) = read_workbook_config(&workbook_dir) {
         return Ok(workbook);
     }
 
-    // Fallback: create config from filesystem
     let metadata = fs::metadata(&workbook_dir).ok();
     let created = metadata.as_ref()
         .and_then(|m| m.created().ok())
@@ -474,9 +400,7 @@ async fn get_workbook(id: String) -> Result<Workbook, String> {
         last_opened_at: created,
     };
 
-    // Save the config for next time
     let _ = save_workbook_config(&workbook);
-
     Ok(workbook)
 }
 
@@ -488,10 +412,8 @@ async fn update_workbook(workbook: Workbook) -> Result<Workbook, String> {
         return Err(format!("Workbook {} not found", workbook.id));
     }
 
-    // Save config to workbook directory
     save_workbook_config(&workbook)?;
 
-    // Update global index
     let mut index = read_workbooks_index().unwrap_or_default();
     index.insert(workbook.id.clone(), workbook.clone());
     write_workbooks_index(&index)?;
@@ -504,37 +426,28 @@ async fn delete_workbook(
     state: tauri::State<'_, Arc<Mutex<AppState>>>,
     id: String,
 ) -> Result<bool, String> {
-    let workbook_dir = get_workbook_dir(&id)?;
-
-    // Drop the workbook's database
-    let db_name = workbook_id_to_db_name(&id);
+    // Stop runtime if running
     {
-        let state = state.lock().await;
-        if let Some(ref pool) = state.db {
-            // Terminate connections to the database first
-            let terminate_query = format!(
-                "SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = '{}'",
-                db_name
-            );
-            let _ = sqlx::query(&terminate_query).execute(pool).await;
-
-            // Drop the database
-            let drop_query = format!("DROP DATABASE IF EXISTS \"{}\"", db_name);
-            if let Err(e) = sqlx::query(&drop_query).execute(pool).await {
-                println!("Warning: Failed to drop database {}: {}", db_name, e);
-            } else {
-                println!("Dropped database '{}' for workbook '{}'", db_name, id);
-            }
+        let mut state = state.lock().await;
+        if let Some(mut runtime) = state.runtimes.remove(&id) {
+            // Call /stop endpoint first for graceful shutdown
+            let stop_url = format!("http://localhost:{}/stop", runtime.runtime_port);
+            let _ = reqwest::Client::new()
+                .post(&stop_url)
+                .send()
+                .await;
+            // Then kill the process
+            let _ = runtime.child.kill().await;
         }
     }
 
-    // Remove from filesystem
+    let workbook_dir = get_workbook_dir(&id)?;
+
     if workbook_dir.exists() {
         fs::remove_dir_all(&workbook_dir)
             .map_err(|e| format!("Failed to delete workbook: {}", e))?;
     }
 
-    // Remove from index
     let mut index = read_workbooks_index().unwrap_or_default();
     index.remove(&id);
     let _ = write_workbooks_index(&index);
@@ -542,40 +455,311 @@ async fn delete_workbook(
     Ok(true)
 }
 
-// Get the database connection info for a workbook
+// Runtime status from the runtime server
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct WorkbookDatabaseInfo {
+pub struct RuntimeStatus {
+    #[serde(rename = "workbookId")]
     pub workbook_id: String,
-    pub database_name: String,
-    pub connection_string: String,
-    pub host: String,
-    pub port: u16,
-    pub user: String,
+    #[serde(rename = "workbookDir")]
+    pub workbook_dir: String,
+    #[serde(rename = "runtimePort")]
+    pub runtime_port: u16,
+    #[serde(rename = "startedAt")]
+    pub started_at: u64,
+    pub services: RuntimeServices,
 }
 
-#[tauri::command]
-async fn get_workbook_database(workbook_id: String) -> Result<WorkbookDatabaseInfo, String> {
-    let db_name = workbook_id_to_db_name(&workbook_id);
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RuntimeServices {
+    pub postgres: ServiceStatus,
+    pub wrangler: ServiceStatus,
+}
 
-    Ok(WorkbookDatabaseInfo {
-        workbook_id: workbook_id.clone(),
-        database_name: db_name.clone(),
-        connection_string: format!("postgres://hands:hands@localhost:5433/{}", db_name),
-        host: "localhost".to_string(),
-        port: 5433,
-        user: "hands".to_string(),
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ServiceStatus {
+    pub up: bool,
+    pub port: u16,
+    pub pid: Option<u32>,
+    pub error: Option<String>,
+}
+
+// Runtime ready message from stdout
+#[derive(Debug, Clone, Deserialize)]
+struct RuntimeReady {
+    #[serde(rename = "type")]
+    msg_type: String,
+    #[serde(rename = "runtimePort")]
+    runtime_port: u16,
+    #[serde(rename = "postgresPort")]
+    postgres_port: u16,
+    #[serde(rename = "wranglerPort")]
+    wrangler_port: u16,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DevServerStatus {
+    pub running: bool,
+    pub workbook_id: String,
+    pub directory: String,
+    pub runtime_port: u16,
+    pub postgres_port: u16,
+    pub wrangler_port: u16,
+    pub message: String,
+}
+
+/// Start the hands-runtime for a workbook
+#[tauri::command]
+async fn start_runtime(
+    state: tauri::State<'_, Arc<Mutex<AppState>>>,
+    workbook_id: String,
+    directory: String,
+) -> Result<DevServerStatus, String> {
+    let mut state_guard = state.lock().await;
+
+    // Check if already running
+    if let Some(runtime) = state_guard.runtimes.get(&workbook_id) {
+        return Ok(DevServerStatus {
+            running: true,
+            workbook_id,
+            directory,
+            runtime_port: runtime.runtime_port,
+            postgres_port: runtime.postgres_port,
+            wrangler_port: runtime.wrangler_port,
+            message: "Runtime already running".to_string(),
+        });
+    }
+
+    // Start hands-runtime process
+    let mut child = Command::new("bun")
+        .args([
+            "run",
+            "--cwd",
+            env!("CARGO_MANIFEST_DIR"),
+            "../../runtime/src/index.ts",
+            &format!("--workbook-id={}", workbook_id),
+            &format!("--workbook-dir={}", directory),
+        ])
+        .stdout(Stdio::piped())
+        .stderr(Stdio::inherit())
+        .kill_on_drop(true)
+        .spawn()
+        .map_err(|e| format!("Failed to start runtime: {}", e))?;
+
+    // Read stdout to get the ready message with port info
+    let stdout = child.stdout.take().ok_or("Failed to get stdout")?;
+    let mut reader = BufReader::new(stdout).lines();
+
+    // Wait for ready message (with timeout)
+    let timeout_result = tokio::time::timeout(Duration::from_secs(60), async {
+        while let Ok(Some(line)) = reader.next_line().await {
+            println!("[runtime] {}", line);
+
+            // Try to parse as ready message
+            if line.starts_with('{') {
+                if let Ok(ready) = serde_json::from_str::<RuntimeReady>(&line) {
+                    if ready.msg_type == "ready" {
+                        return Ok((ready.runtime_port, ready.postgres_port, ready.wrangler_port));
+                    }
+                }
+            }
+        }
+        Err("Runtime exited without ready message".to_string())
+    }).await;
+
+    let (runtime_port, postgres_port, wrangler_port) = match timeout_result {
+        Ok(Ok(ports)) => ports,
+        Ok(Err(e)) => {
+            let _ = child.kill().await;
+            return Err(e);
+        }
+        Err(_) => {
+            let _ = child.kill().await;
+            return Err("Timeout waiting for runtime to start".to_string());
+        }
+    };
+
+    // Store the runtime process
+    state_guard.runtimes.insert(workbook_id.clone(), RuntimeProcess {
+        child,
+        runtime_port,
+        postgres_port,
+        wrangler_port,
+    });
+
+    println!(
+        "Runtime started for workbook {} - runtime:{}, postgres:{}, wrangler:{}",
+        workbook_id, runtime_port, postgres_port, wrangler_port
+    );
+
+    Ok(DevServerStatus {
+        running: true,
+        workbook_id,
+        directory,
+        runtime_port,
+        postgres_port,
+        wrangler_port,
+        message: format!("Runtime started on port {}", runtime_port),
     })
 }
 
+/// Set the active workbook and restart OpenCode server with new database URL
+#[tauri::command]
+async fn set_active_workbook(
+    app: tauri::AppHandle,
+    state: tauri::State<'_, Arc<Mutex<AppState>>>,
+    workbook_id: String,
+) -> Result<HealthCheck, String> {
+    {
+        let mut state_guard = state.lock().await;
+        state_guard.active_workbook_id = Some(workbook_id.clone());
+        println!("Set active workbook to: {}", workbook_id);
+    }
+
+    // Restart server to pick up new database URL
+    restart_server(app, state).await
+}
+
+/// Stop the runtime for a workbook
+#[tauri::command]
+async fn stop_runtime(
+    state: tauri::State<'_, Arc<Mutex<AppState>>>,
+    workbook_id: String,
+) -> Result<DevServerStatus, String> {
+    let mut state_guard = state.lock().await;
+
+    if let Some(mut runtime) = state_guard.runtimes.remove(&workbook_id) {
+        // Try graceful shutdown via /stop endpoint
+        let stop_url = format!("http://localhost:{}/stop", runtime.runtime_port);
+        let _ = reqwest::Client::new()
+            .post(&stop_url)
+            .timeout(Duration::from_secs(5))
+            .send()
+            .await;
+
+        // Force kill if still running
+        let _ = runtime.child.kill().await;
+
+        println!("Runtime stopped for workbook {}", workbook_id);
+
+        return Ok(DevServerStatus {
+            running: false,
+            workbook_id,
+            directory: String::new(),
+            runtime_port: 0,
+            postgres_port: 0,
+            wrangler_port: 0,
+            message: "Runtime stopped".to_string(),
+        });
+    }
+
+    Ok(DevServerStatus {
+        running: false,
+        workbook_id,
+        directory: String::new(),
+        runtime_port: 0,
+        postgres_port: 0,
+        wrangler_port: 0,
+        message: "Runtime was not running".to_string(),
+    })
+}
+
+/// Get runtime status for a workbook
+#[tauri::command]
+async fn get_runtime_status(
+    state: tauri::State<'_, Arc<Mutex<AppState>>>,
+    workbook_id: String,
+) -> Result<DevServerStatus, String> {
+    let state_guard = state.lock().await;
+
+    if let Some(runtime) = state_guard.runtimes.get(&workbook_id) {
+        // Ping the runtime to verify it's still alive
+        let status_url = format!("http://localhost:{}/status", runtime.runtime_port);
+        match reqwest::get(&status_url).await {
+            Ok(resp) if resp.status().is_success() => {
+                return Ok(DevServerStatus {
+                    running: true,
+                    workbook_id,
+                    directory: String::new(),
+                    runtime_port: runtime.runtime_port,
+                    postgres_port: runtime.postgres_port,
+                    wrangler_port: runtime.wrangler_port,
+                    message: "Runtime is running".to_string(),
+                });
+            }
+            _ => {}
+        }
+    }
+
+    Ok(DevServerStatus {
+        running: false,
+        workbook_id,
+        directory: String::new(),
+        runtime_port: 0,
+        postgres_port: 0,
+        wrangler_port: 0,
+        message: "Runtime is not running".to_string(),
+    })
+}
+
+/// Execute SQL query through runtime
+#[tauri::command]
+async fn runtime_query(
+    state: tauri::State<'_, Arc<Mutex<AppState>>>,
+    workbook_id: String,
+    query: String,
+) -> Result<serde_json::Value, String> {
+    let state_guard = state.lock().await;
+
+    let runtime = state_guard.runtimes.get(&workbook_id)
+        .ok_or("Runtime not running for this workbook")?;
+
+    let url = format!("http://localhost:{}/postgres/query", runtime.runtime_port);
+
+    let resp = reqwest::Client::new()
+        .post(&url)
+        .json(&serde_json::json!({ "query": query }))
+        .send()
+        .await
+        .map_err(|e| format!("Failed to execute query: {}", e))?;
+
+    if !resp.status().is_success() {
+        let error = resp.text().await.unwrap_or_default();
+        return Err(format!("Query failed: {}", error));
+    }
+
+    resp.json().await.map_err(|e| format!("Failed to parse response: {}", e))
+}
+
+/// Trigger eval on runtime
+#[tauri::command]
+async fn runtime_eval(
+    state: tauri::State<'_, Arc<Mutex<AppState>>>,
+    workbook_id: String,
+) -> Result<serde_json::Value, String> {
+    let state_guard = state.lock().await;
+
+    let runtime = state_guard.runtimes.get(&workbook_id)
+        .ok_or("Runtime not running for this workbook")?;
+
+    let url = format!("http://localhost:{}/eval", runtime.runtime_port);
+
+    let resp = reqwest::Client::new()
+        .post(&url)
+        .send()
+        .await
+        .map_err(|e| format!("Failed to run eval: {}", e))?;
+
+    resp.json().await.map_err(|e| format!("Failed to parse response: {}", e))
+}
+
+// OpenCode server management
 #[tauri::command]
 async fn check_server_health(port: u16) -> Result<HealthCheck, String> {
-    // Use /session endpoint since /health returns HTML (SPA)
     let url = format!("http://localhost:{}/session", port);
 
     match reqwest::get(&url).await {
         Ok(response) => {
             if response.status().is_success() {
-                // Verify it returns JSON, not HTML
                 if let Ok(text) = response.text().await {
                     if text.starts_with('[') || text.starts_with('{') {
                         return Ok(HealthCheck {
@@ -602,179 +786,42 @@ async fn check_server_health(port: u16) -> Result<HealthCheck, String> {
     }
 }
 
-#[tauri::command]
-async fn db_execute(
-    state: tauri::State<'_, Arc<Mutex<AppState>>>,
-    query: String,
-) -> Result<String, String> {
-    let state = state.lock().await;
-    let db = state.db.as_ref().ok_or("Database not initialized")?;
-    sqlx::query(&query)
-        .execute(db)
-        .await
-        .map_err(|e| e.to_string())?;
-    Ok("OK".to_string())
-}
+fn get_api_keys_from_store(app: &tauri::AppHandle) -> HashMap<String, String> {
+    let mut env_vars = HashMap::new();
 
-#[tauri::command]
-async fn get_database_status(
-    state: tauri::State<'_, Arc<Mutex<AppState>>>,
-) -> Result<DatabaseStatus, String> {
-    let state = state.lock().await;
+    if let Ok(store) = app.store("settings.json") {
+        let keys = [
+            ("anthropic_api_key", "ANTHROPIC_API_KEY"),
+            ("openai_api_key", "OPENAI_API_KEY"),
+            ("google_api_key", "GOOGLE_GENERATIVE_AI_API_KEY"),
+        ];
 
-    match &state.db {
-        Some(pool) => {
-            // Get database size
-            let size_result: Result<(i64,), _> = sqlx::query_as(
-                "SELECT pg_database_size('hands_db')"
-            )
-            .fetch_one(pool)
-            .await;
-
-            // Get table count
-            let table_result: Result<(i64,), _> = sqlx::query_as(
-                "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = 'public'"
-            )
-            .fetch_one(pool)
-            .await;
-
-            // Get connection count
-            let conn_count = pool.size() as i32;
-
-            let stats = match (size_result, table_result) {
-                (Ok((size,)), Ok((tables,))) => {
-                    let formatted = format_bytes(size);
-                    Some(DatabaseStats {
-                        size_bytes: size,
-                        size_formatted: formatted,
-                        table_count: tables,
-                        connection_count: conn_count,
-                    })
+        for (store_key, env_key) in keys {
+            if let Some(value) = store.get(store_key) {
+                if let Some(s) = value.as_str() {
+                    if !s.is_empty() {
+                        env_vars.insert(env_key.to_string(), s.to_string());
+                    }
                 }
-                _ => None,
-            };
-
-            Ok(DatabaseStatus {
-                connected: true,
-                message: "Connected".to_string(),
-                port: 5433,
-                database: "hands_db".to_string(),
-                stats,
-            })
+            }
         }
-        None => Ok(DatabaseStatus {
-            connected: false,
-            message: "Database not initialized".to_string(),
-            port: 5433,
-            database: "hands_db".to_string(),
-            stats: None,
-        }),
     }
+
+    env_vars
 }
 
-fn format_bytes(bytes: i64) -> String {
-    const KB: i64 = 1024;
-    const MB: i64 = KB * 1024;
-    const GB: i64 = MB * 1024;
+fn get_model_from_store(app: &tauri::AppHandle) -> Option<String> {
+    if let Ok(store) = app.store("settings.json") {
+        if let Some(settings) = store.get("settings") {
+            let provider = settings.get("provider").and_then(|v| v.as_str());
+            let model = settings.get("model").and_then(|v| v.as_str());
 
-    if bytes >= GB {
-        format!("{:.1} GB", bytes as f64 / GB as f64)
-    } else if bytes >= MB {
-        format!("{:.1} MB", bytes as f64 / MB as f64)
-    } else if bytes >= KB {
-        format!("{:.1} KB", bytes as f64 / KB as f64)
-    } else {
-        format!("{} B", bytes)
-    }
-}
-
-#[tauri::command]
-async fn db_query(
-    state: tauri::State<'_, Arc<Mutex<AppState>>>,
-    query: String,
-) -> Result<serde_json::Value, String> {
-    let state = state.lock().await;
-    let db = state.db.as_ref().ok_or("Database not initialized")?;
-    let rows = sqlx::query(&query)
-        .fetch_all(db)
-        .await
-        .map_err(|e| e.to_string())?;
-
-    // Convert rows to JSON (simplified - you'd want proper column handling)
-    let result: Vec<serde_json::Value> = rows
-        .iter()
-        .map(|_row| serde_json::json!({}))
-        .collect();
-    Ok(serde_json::json!(result))
-}
-
-async fn init_postgres(data_dir: PathBuf) -> Result<(PgEmbed, PgPool), String> {
-    let pg_settings = PgSettings {
-        database_dir: data_dir.clone(),
-        port: 5433, // Use non-standard port to avoid conflicts
-        user: "hands".to_string(),
-        password: "hands".to_string(),
-        auth_method: PgAuthMethod::Plain,
-        persistent: true,
-        timeout: Some(Duration::from_secs(30)),
-        migration_dir: None,
-    };
-
-    let fetch_settings = PgFetchSettings {
-        version: PG_V15,
-        ..Default::default()
-    };
-
-    // Create and start PostgreSQL
-    let mut pg = PgEmbed::new(pg_settings, fetch_settings)
-        .await
-        .map_err(|e| format!("Failed to create PgEmbed: {}", e))?;
-
-    pg.setup()
-        .await
-        .map_err(|e| format!("Failed to setup PostgreSQL: {}", e))?;
-
-    pg.start_db()
-        .await
-        .map_err(|e| format!("Failed to start PostgreSQL: {}", e))?;
-
-    // Create the database (ignore if already exists)
-    if let Err(e) = pg.create_database("hands_db").await {
-        let err_str = format!("{:?}", e);
-        // Only log if it's not an "already exists" error
-        if !err_str.contains("42P04") && !err_str.contains("already exists") {
-            return Err(format!("Failed to create database: {}", e));
+            if let (Some(p), Some(m)) = (provider, model) {
+                return Some(format!("{}/{}", p, m));
+            }
         }
-        println!("Database 'hands_db' already exists, continuing...");
     }
-
-    // Build connection string
-    let connection_string = format!(
-        "postgres://hands:hands@localhost:5433/hands_db"
-    );
-
-    // Create connection pool
-    let pool = PgPoolOptions::new()
-        .max_connections(5)
-        .connect(&connection_string)
-        .await
-        .map_err(|e| format!("Failed to connect to PostgreSQL: {}", e))?;
-
-    // Run initial migrations
-    sqlx::query(
-        "CREATE TABLE IF NOT EXISTS apps (
-            id SERIAL PRIMARY KEY,
-            name TEXT NOT NULL,
-            created_at TIMESTAMPTZ DEFAULT NOW()
-        )",
-    )
-    .execute(&pool)
-    .await
-    .map_err(|e| format!("Failed to create table: {}", e))?;
-
-    println!("PostgreSQL initialized with database 'hands_db'");
-
-    Ok((pg, pool))
+    None
 }
 
 async fn start_opencode_server(
@@ -783,26 +830,19 @@ async fn start_opencode_server(
     env_vars: HashMap<String, String>,
     config_dir: Option<String>,
 ) -> Result<Child, String> {
-    // Spawn opencode serve directly
-    // In debug mode, inherit stdio to see logs; in release, pipe to log file
-
     let port_str = port.to_string();
 
-    // Build environment with model config if provided
     let mut all_env = env_vars.clone();
     if let Some(ref m) = model {
-        // Pass model via config content
         let config = serde_json::json!({ "model": m });
         all_env.insert("OPENCODE_CONFIG_CONTENT".to_string(), config.to_string());
     }
 
-    // Set config dir for bundled agents/tools/plugins
     if let Some(ref dir) = config_dir {
         all_env.insert("OPENCODE_CONFIG_DIR".to_string(), dir.clone());
         println!("OpenCode config dir: {}", dir);
     }
 
-    // Try bunx first (uses local node_modules/.bin/opencode)
     let child = Command::new("bunx")
         .args(["opencode-ai", "serve", "--port", &port_str])
         .envs(&all_env)
@@ -811,7 +851,6 @@ async fn start_opencode_server(
         .kill_on_drop(true)
         .spawn()
         .or_else(|_| {
-            // Fallback to npx
             Command::new("npx")
                 .args(["opencode-ai", "serve", "--port", &port_str])
                 .envs(&all_env)
@@ -827,7 +866,6 @@ async fn start_opencode_server(
 }
 
 async fn wait_for_server(port: u16, timeout_secs: u64) -> bool {
-    // Use /session endpoint since /health returns HTML (SPA)
     let url = format!("http://localhost:{}/session", port);
     let start = std::time::Instant::now();
     let timeout = Duration::from_secs(timeout_secs);
@@ -835,7 +873,6 @@ async fn wait_for_server(port: u16, timeout_secs: u64) -> bool {
     while start.elapsed() < timeout {
         if let Ok(resp) = reqwest::get(&url).await {
             if resp.status().is_success() {
-                // Verify it returns JSON, not HTML
                 if let Ok(text) = resp.text().await {
                     if text.starts_with('[') || text.starts_with('{') {
                         return true;
@@ -853,18 +890,28 @@ async fn restart_server(
     app: tauri::AppHandle,
     state: tauri::State<'_, Arc<Mutex<AppState>>>,
 ) -> Result<HealthCheck, String> {
-    let mut state = state.lock().await;
+    let mut state_guard = state.lock().await;
 
-    // Kill existing server if running
-    if let Some(ref mut server) = state.server {
+    if let Some(ref mut server) = state_guard.server {
         let _ = server.kill().await;
     }
 
-    // Read API keys and model from store
-    let env_vars = get_api_keys_from_store(&app);
+    let mut env_vars = get_api_keys_from_store(&app);
     let model = get_model_from_store(&app);
 
-    // Get bundled opencode config dir (same logic as setup)
+    // Add database URL for active workbook
+    if let Some(ref workbook_id) = state_guard.active_workbook_id {
+        if let Some(runtime) = state_guard.runtimes.get(workbook_id) {
+            let db_name = format!("hands_{}", workbook_id.replace('-', "_"));
+            let db_url = format!(
+                "postgres://hands:hands@localhost:{}/{}",
+                runtime.postgres_port, db_name
+            );
+            env_vars.insert("HANDS_DATABASE_URL".to_string(), db_url.clone());
+            println!("Setting HANDS_DATABASE_URL for workbook {}: {}", workbook_id, db_url);
+        }
+    }
+
     let config_dir = app.path().resource_dir()
         .ok()
         .map(|p| p.join("opencode"))
@@ -888,12 +935,10 @@ async fn restart_server(
         })
         .map(|p| p.to_string_lossy().to_string());
 
-    // Start new server with env vars and model
     match start_opencode_server(4096, model, env_vars, config_dir).await {
         Ok(child) => {
-            state.server = Some(child);
+            state_guard.server = Some(child);
 
-            // Wait for it to be healthy
             if wait_for_server(4096, 30).await {
                 Ok(HealthCheck {
                     healthy: true,
@@ -913,370 +958,6 @@ async fn restart_server(
     }
 }
 
-fn get_api_keys_from_store(app: &tauri::AppHandle) -> HashMap<String, String> {
-    let mut env_vars = HashMap::new();
-
-    // Try to get the store
-    if let Ok(store) = app.store("settings.json") {
-        // List of API key settings to check
-        let keys = [
-            ("anthropic_api_key", "ANTHROPIC_API_KEY"),
-            ("openai_api_key", "OPENAI_API_KEY"),
-            ("google_api_key", "GOOGLE_GENERATIVE_AI_API_KEY"),
-        ];
-
-        for (store_key, env_key) in keys {
-            if let Some(value) = store.get(store_key) {
-                if let Some(s) = value.as_str() {
-                    if !s.is_empty() {
-                        env_vars.insert(env_key.to_string(), s.to_string());
-                    }
-                }
-            }
-        }
-    }
-
-    env_vars
-}
-
-fn get_model_from_store(app: &tauri::AppHandle) -> Option<String> {
-    if let Ok(store) = app.store("settings.json") {
-        // Get settings object which contains provider and model
-        if let Some(settings) = store.get("settings") {
-            let provider = settings.get("provider").and_then(|v| v.as_str());
-            let model = settings.get("model").and_then(|v| v.as_str());
-
-            if let (Some(p), Some(m)) = (provider, model) {
-                // Return in "provider/model" format
-                return Some(format!("{}/{}", p, m));
-            }
-        }
-    }
-    None
-}
-
-// Wrangler dev server status
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct DevServerStatus {
-    pub running: bool,
-    pub workbook_id: String,
-    pub directory: String,
-    pub port: u16,
-    pub message: String,
-}
-
-#[tauri::command]
-async fn start_dev_server(
-    state: tauri::State<'_, Arc<Mutex<AppState>>>,
-    workbook_id: String,
-    directory: String,
-) -> Result<DevServerStatus, String> {
-    let mut state = state.lock().await;
-
-    // Check if already running for this workbook
-    if state.sst_servers.contains_key(&workbook_id) {
-        return Ok(DevServerStatus {
-            running: true,
-            workbook_id,
-            directory,
-            port: 8787,
-            message: "Dev server already running".to_string(),
-        });
-    }
-
-    // First, install dependencies if needed
-    let node_modules = PathBuf::from(&directory).join("node_modules");
-    if !node_modules.exists() {
-        println!("Installing dependencies in {}...", directory);
-        let install_output = std::process::Command::new("bun")
-            .args(["install"])
-            .current_dir(&directory)
-            .output()
-            .or_else(|_| {
-                std::process::Command::new("npm")
-                    .args(["install"])
-                    .current_dir(&directory)
-                    .output()
-            })
-            .map_err(|e| format!("Failed to install dependencies: {}", e))?;
-
-        if !install_output.status.success() {
-            return Err(format!(
-                "Failed to install dependencies: {}",
-                String::from_utf8_lossy(&install_output.stderr)
-            ));
-        }
-    }
-
-    // Initialize D1 database if schema exists
-    let schema_path = PathBuf::from(&directory).join("schema.sql");
-    if schema_path.exists() {
-        println!("Initializing D1 database...");
-        let _ = std::process::Command::new("bunx")
-            .args(["wrangler", "d1", "execute", "hands-db", "--local", "--file=./schema.sql"])
-            .current_dir(&directory)
-            .output();
-    }
-
-    // Check if wrangler.toml exists and is valid before starting
-    let wrangler_path = PathBuf::from(&directory).join("wrangler.toml");
-    if wrangler_path.exists() {
-        if let Ok(content) = fs::read_to_string(&wrangler_path) {
-            if content.contains("{{name}}") || content.contains("{{database_url}}") {
-                return Ok(DevServerStatus {
-                    running: false,
-                    workbook_id,
-                    directory,
-                    port: 8787,
-                    message: "wrangler.toml contains unresolved placeholders. Please recreate the workbook.".to_string(),
-                });
-            }
-        }
-    } else {
-        return Ok(DevServerStatus {
-            running: false,
-            workbook_id,
-            directory,
-            port: 8787,
-            message: "No wrangler.toml found in workbook directory".to_string(),
-        });
-    }
-
-    // Start wrangler dev server (Miniflare)
-    let child = Command::new("bunx")
-        .args(["wrangler", "dev", "--local"])
-        .current_dir(&directory)
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
-        .kill_on_drop(true)
-        .spawn()
-        .or_else(|_| {
-            Command::new("npx")
-                .args(["wrangler", "dev", "--local"])
-                .current_dir(&directory)
-                .stdout(Stdio::piped())
-                .stderr(Stdio::piped())
-                .kill_on_drop(true)
-                .spawn()
-        });
-
-    match child {
-        Ok(child) => {
-            state.sst_servers.insert(workbook_id.clone(), child);
-            println!("Wrangler dev server started for workbook {} on port 8787", workbook_id);
-
-            Ok(DevServerStatus {
-                running: true,
-                workbook_id,
-                directory,
-                port: 8787,
-                message: "Dev server started on http://localhost:8787".to_string(),
-            })
-        }
-        Err(e) => {
-            println!("Failed to start wrangler dev server: {}", e);
-            Ok(DevServerStatus {
-                running: false,
-                workbook_id,
-                directory,
-                port: 8787,
-                message: format!("Failed to start dev server: {}. Install wrangler with: npm install -g wrangler", e),
-            })
-        }
-    }
-}
-
-#[tauri::command]
-async fn stop_dev_server(
-    state: tauri::State<'_, Arc<Mutex<AppState>>>,
-    workbook_id: String,
-) -> Result<DevServerStatus, String> {
-    let mut state = state.lock().await;
-
-    if let Some(mut child) = state.sst_servers.remove(&workbook_id) {
-        let _ = child.kill().await;
-        println!("Dev server stopped for workbook {}", workbook_id);
-        return Ok(DevServerStatus {
-            running: false,
-            workbook_id,
-            directory: String::new(),
-            port: 8787,
-            message: "Dev server stopped".to_string(),
-        });
-    }
-
-    Ok(DevServerStatus {
-        running: false,
-        workbook_id,
-        directory: String::new(),
-        port: 8787,
-        message: "Dev server was not running".to_string(),
-    })
-}
-
-#[tauri::command]
-async fn get_dev_server_status(
-    state: tauri::State<'_, Arc<Mutex<AppState>>>,
-    workbook_id: String,
-) -> Result<DevServerStatus, String> {
-    let state = state.lock().await;
-
-    let running = state.sst_servers.contains_key(&workbook_id);
-
-    Ok(DevServerStatus {
-        running,
-        workbook_id: workbook_id.clone(),
-        directory: String::new(),
-        port: 8787,
-        message: if running {
-            "Dev server is running on http://localhost:8787".to_string()
-        } else {
-            "Dev server is not running".to_string()
-        },
-    })
-}
-
-// Dev server outputs - introspection from filesystem
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct DevServerOutputs {
-    pub available: bool,
-    pub url: String,
-    pub routes: Vec<DevRoute>,
-    pub charts: Vec<ChartInfo>,
-    pub crons: Vec<CronTrigger>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct DevRoute {
-    pub path: String,
-    pub method: String,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ChartInfo {
-    pub id: String,
-    pub title: String,
-    pub chart_type: String,
-    pub description: Option<String>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct CronTrigger {
-    pub cron: String,
-    pub description: Option<String>,
-}
-
-// Parse Hono routes from src/index.ts
-fn parse_routes_from_source(directory: &str) -> Vec<DevRoute> {
-    let index_path = PathBuf::from(directory).join("src/index.ts");
-    let mut routes = Vec::new();
-
-    if let Ok(content) = fs::read_to_string(&index_path) {
-        // Match patterns like: app.get("/path", ...) or app.post("/api/foo", ...)
-        let route_pattern = regex::Regex::new(r#"app\.(get|post|put|delete|patch)\s*\(\s*["']([^"']+)["']"#).unwrap();
-
-        for cap in route_pattern.captures_iter(&content) {
-            let method = cap.get(1).map(|m| m.as_str().to_uppercase()).unwrap_or_default();
-            let path = cap.get(2).map(|m| m.as_str().to_string()).unwrap_or_default();
-            routes.push(DevRoute { method, path });
-        }
-    }
-
-    routes
-}
-
-// Parse charts from charts/index.ts
-fn parse_charts_from_source(directory: &str) -> Vec<ChartInfo> {
-    let charts_path = PathBuf::from(directory).join("charts/index.ts");
-    let mut charts = Vec::new();
-
-    if let Ok(content) = fs::read_to_string(&charts_path) {
-        // Match chart objects in the array: { id: "...", title: "...", type: "...", ... }
-        // This is a simplified parser - matches id, title, type fields
-        let chart_pattern = regex::Regex::new(
-            r#"\{\s*id:\s*["']([^"']+)["'][^}]*title:\s*["']([^"']+)["'][^}]*type:\s*["']([^"']+)["']"#
-        ).unwrap();
-
-        for cap in chart_pattern.captures_iter(&content) {
-            charts.push(ChartInfo {
-                id: cap.get(1).map(|m| m.as_str().to_string()).unwrap_or_default(),
-                title: cap.get(2).map(|m| m.as_str().to_string()).unwrap_or_default(),
-                chart_type: cap.get(3).map(|m| m.as_str().to_string()).unwrap_or_default(),
-                description: None,
-            });
-        }
-    }
-
-    charts
-}
-
-// Parse cron triggers from wrangler.toml
-fn parse_crons_from_wrangler(directory: &str) -> Vec<CronTrigger> {
-    let wrangler_path = PathBuf::from(directory).join("wrangler.toml");
-    let mut crons = Vec::new();
-
-    if let Ok(content) = fs::read_to_string(&wrangler_path) {
-        if let Ok(config) = content.parse::<toml::Table>() {
-            // Look for [triggers] section with crons array
-            if let Some(triggers) = config.get("triggers") {
-                if let Some(cron_array) = triggers.get("crons") {
-                    if let Some(arr) = cron_array.as_array() {
-                        for cron_value in arr {
-                            if let Some(cron_str) = cron_value.as_str() {
-                                crons.push(CronTrigger {
-                                    cron: cron_str.to_string(),
-                                    description: None,
-                                });
-                            }
-                        }
-                    }
-                }
-            }
-        }
-    }
-
-    crons
-}
-
-#[tauri::command]
-async fn get_dev_server_routes(
-    state: tauri::State<'_, Arc<Mutex<AppState>>>,
-    workbook_id: String,
-) -> Result<DevServerOutputs, String> {
-    let state = state.lock().await;
-    let running = state.sst_servers.contains_key(&workbook_id);
-
-    // Get workbook directory - parse filesystem even if server not running
-    let workbook_dir = get_workbook_dir(&workbook_id)?;
-    let directory = workbook_dir.to_string_lossy().to_string();
-
-    // Check if this looks like a valid workbook (has wrangler.toml)
-    let wrangler_exists = PathBuf::from(&directory).join("wrangler.toml").exists();
-
-    if !wrangler_exists {
-        return Ok(DevServerOutputs {
-            available: false,
-            url: String::new(),
-            routes: vec![],
-            charts: vec![],
-            crons: vec![],
-        });
-    }
-
-    // Parse routes from src/index.ts, charts from charts/, crons from wrangler.toml
-    let routes = parse_routes_from_source(&directory);
-    let charts = parse_charts_from_source(&directory);
-    let crons = parse_crons_from_wrangler(&directory);
-
-    Ok(DevServerOutputs {
-        available: true,
-        url: if running { "http://localhost:8787".to_string() } else { String::new() },
-        routes,
-        charts,
-        crons,
-    })
-}
-
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CopyFilesResult {
     pub copied_files: Vec<String>,
@@ -1291,7 +972,6 @@ async fn copy_files_to_workbook(
     let workbook_dir = get_workbook_dir(&workbook_id)?;
     let data_dir = workbook_dir.join("data");
 
-    // Create data directory if it doesn't exist
     fs::create_dir_all(&data_dir).map_err(|e| format!("Failed to create data directory: {}", e))?;
 
     let mut copied_files = Vec::new();
@@ -1307,7 +987,6 @@ async fn copy_files_to_workbook(
             .ok_or_else(|| "Invalid file path".to_string())?;
         let dest = data_dir.join(file_name);
 
-        // Copy the file
         fs::copy(&source, &dest).map_err(|e| format!("Failed to copy {}: {}", source_path, e))?;
 
         copied_files.push(dest.to_string_lossy().to_string());
@@ -1328,7 +1007,6 @@ async fn open_webview(
     use tauri::WebviewWindowBuilder;
     use tauri::WebviewUrl;
 
-    // Generate a unique window label
     let label = format!("preview_{}", std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .unwrap()
@@ -1336,8 +1014,6 @@ async fn open_webview(
 
     let window_title = title.clone().unwrap_or_else(|| "Preview".to_string());
 
-    // Build URL with query params for our preview wrapper
-    // The preview page will render our custom titlebar + iframe with the target URL
     let encoded_url = urlencoding::encode(&url);
     let encoded_title = urlencoding::encode(&window_title);
     let preview_url = format!("index.html?preview=true&url={}&title={}", encoded_url, encoded_title);
@@ -1346,12 +1022,11 @@ async fn open_webview(
         .title(&window_title)
         .inner_size(900.0, 700.0)
         .min_inner_size(400.0, 300.0)
-        .decorations(false)  // Custom window chrome
+        .decorations(false)
         .transparent(true)
         .resizable(true)
         .center();
 
-    // Set transparent background on macOS
     #[cfg(target_os = "macos")]
     let builder = builder.title_bar_style(tauri::TitleBarStyle::Overlay);
 
@@ -1369,60 +1044,43 @@ pub fn run() {
         .plugin(tauri_plugin_shell::init())
         .invoke_handler(tauri::generate_handler![
             check_server_health,
-            db_query,
-            db_execute,
-            copy_files_to_workbook,
             restart_server,
-            get_database_status,
             create_workbook,
             list_workbooks,
             get_workbook,
-            get_workbook_database,
             update_workbook,
             delete_workbook,
-            start_dev_server,
-            stop_dev_server,
-            get_dev_server_status,
-            get_dev_server_routes,
-            open_webview
+            start_runtime,
+            stop_runtime,
+            get_runtime_status,
+            runtime_query,
+            runtime_eval,
+            copy_files_to_workbook,
+            open_webview,
+            set_active_workbook
         ])
         .setup(|app| {
-            // Initialize empty state first
             let state = Arc::new(Mutex::new(AppState {
-                db: None,
-                pg: None,
                 server: None,
-                sst_servers: HashMap::new(),
+                runtimes: HashMap::new(),
+                active_workbook_id: None,
             }));
             app.manage(state.clone());
 
-            // Get app data directory for storing postgres data
             let app_handle = app.handle().clone();
-            let data_dir = app_handle
-                .path()
-                .app_data_dir()
-                .expect("Failed to get app data dir")
-                .join("postgres");
-
-            // Get API keys and model from store for initial server start
             let env_vars = get_api_keys_from_store(&app_handle);
             let model = get_model_from_store(&app_handle);
 
-            // Get bundled opencode config dir (contains agents, tools, plugins)
-            // In dev mode, resource_dir() points to target/debug where build.rs copies the resources
-            // In production, resources are bundled by Tauri based on tauri.conf.json
             let config_dir = app_handle.path().resource_dir()
                 .ok()
                 .map(|p| p.join("opencode"))
                 .filter(|p| p.exists())
                 .or_else(|| {
-                    // Fallback: check relative to exe for non-standard setups
                     std::env::current_exe().ok().and_then(|exe| {
                         let dev_path = exe.parent()?.join("resources/opencode");
                         if dev_path.exists() {
                             return Some(dev_path);
                         }
-                        // Also try walking up to find src-tauri/resources
                         let mut path = exe;
                         for _ in 0..5 {
                             path = path.parent()?.to_path_buf();
@@ -1436,28 +1094,13 @@ pub fn run() {
                 })
                 .map(|p| p.to_string_lossy().to_string());
 
-            // Initialize postgres and server in background
+            // Start OpenCode server only (no postgres - runtime manages it per workbook)
             tauri::async_runtime::spawn(async move {
-                // Start PostgreSQL
-                match init_postgres(data_dir).await {
-                    Ok((pg, pool)) => {
-                        let mut s = state.lock().await;
-                        s.db = Some(pool);
-                        s.pg = Some(pg);
-                        println!("PostgreSQL started successfully on port 5433!");
-                    }
-                    Err(e) => {
-                        eprintln!("Failed to initialize PostgreSQL: {}", e);
-                    }
-                }
-
-                // Start OpenCode server with API keys and model
                 match start_opencode_server(4096, model, env_vars, config_dir).await {
                     Ok(child) => {
                         let mut s = state.lock().await;
                         s.server = Some(child);
 
-                        // Wait for server to be ready
                         if wait_for_server(4096, 30).await {
                             println!("Hands agent is ready!");
                         } else {
@@ -1470,7 +1113,6 @@ pub fn run() {
                 }
             });
 
-            // Set transparent background on macOS using objc2
             #[cfg(target_os = "macos")]
             {
                 use objc2_app_kit::{NSColor, NSWindow};
