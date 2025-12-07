@@ -1,0 +1,248 @@
+---
+title: Build Your First Dashboard
+description: "Create a complete dashboard in 10 minutes"
+---
+
+# Build Your First Dashboard
+
+In this guide, you'll import sample data and create an interactive sales dashboard.
+
+## What You'll Build
+
+- Import a CSV file into PostgreSQL
+- Create multiple chart types
+- Build a complete dashboard page
+- Deploy to Cloudflare Workers
+
+## Prerequisites
+
+- Hands installed and configured
+- An AI provider API key
+
+## Step 1: Create a Workbook
+
+Open Hands and create a new workbook:
+
+1. Click the dropdown in the toolbar
+2. Select **New Workbook**
+3. Name it "Sales Dashboard"
+
+## Step 2: Import Sample Data
+
+Let's create some sample sales data. In the chat:
+
+```
+Create a sample sales dataset with:
+- 1000 orders
+- Date range: last 12 months
+- Fields: order_id, date, customer, product, amount, region
+- Realistic product names and amounts
+```
+
+The AI will generate and insert the data:
+
+```sql
+INSERT INTO orders (order_id, date, customer, product, amount, region)
+VALUES
+  ('ORD001', '2024-01-15', 'Acme Corp', 'Widget Pro', 299.99, 'West'),
+  ...
+```
+
+## Step 3: Explore the Data
+
+Ask some questions to understand the data:
+
+```
+How many orders do we have?
+
+What's the total revenue?
+
+Show me the top 5 customers by spending
+```
+
+## Step 4: Create Your First Chart
+
+```
+Create a line chart showing monthly revenue
+```
+
+The AI creates a chart definition:
+
+```typescript
+// charts/index.ts
+export const charts = {
+  monthlyRevenue: {
+    id: "monthly-revenue",
+    title: "Monthly Revenue",
+    type: "line",
+    query: `
+      SELECT
+        date_trunc('month', date) as date,
+        SUM(amount) as value
+      FROM orders
+      GROUP BY 1
+      ORDER BY 1
+    `
+  }
+};
+```
+
+## Step 5: Add More Charts
+
+```
+Add these charts:
+- Bar chart of sales by region
+- Pie chart of top products
+- Table of recent orders
+```
+
+The AI adds more chart definitions:
+
+```typescript
+export const charts = {
+  monthlyRevenue: { ... },
+
+  salesByRegion: {
+    id: "sales-by-region",
+    title: "Sales by Region",
+    type: "bar",
+    query: `
+      SELECT region as name, SUM(amount) as value
+      FROM orders
+      GROUP BY region
+      ORDER BY value DESC
+    `
+  },
+
+  topProducts: {
+    id: "top-products",
+    title: "Top Products",
+    type: "pie",
+    query: `
+      SELECT product as name, SUM(amount) as value
+      FROM orders
+      GROUP BY product
+      ORDER BY value DESC
+      LIMIT 5
+    `
+  },
+
+  recentOrders: {
+    id: "recent-orders",
+    title: "Recent Orders",
+    type: "table",
+    query: `
+      SELECT order_id, date, customer, product, amount
+      FROM orders
+      ORDER BY date DESC
+      LIMIT 20
+    `
+  }
+};
+```
+
+## Step 6: Build the Dashboard
+
+```
+Create a dashboard page with:
+- Header showing total revenue and order count
+- Monthly revenue chart at full width
+- Sales by region and top products side by side
+- Recent orders table at the bottom
+```
+
+The AI creates the React component:
+
+```tsx
+// src/pages/Dashboard.tsx
+export function Dashboard({ data }) {
+  return (
+    <div className="p-8 space-y-6 bg-gray-50 min-h-screen">
+      <h1 className="text-3xl font-bold">Sales Dashboard</h1>
+
+      {/* Metrics */}
+      <div className="grid grid-cols-3 gap-4">
+        <MetricCard
+          title="Total Revenue"
+          value={`$${data.totalRevenue.toLocaleString()}`}
+        />
+        <MetricCard
+          title="Orders"
+          value={data.orderCount}
+        />
+        <MetricCard
+          title="Avg Order Value"
+          value={`$${data.avgOrder.toFixed(2)}`}
+        />
+      </div>
+
+      {/* Revenue Trend */}
+      <Chart chart={charts.monthlyRevenue} data={data.monthlyRevenue} />
+
+      {/* Side by side charts */}
+      <div className="grid grid-cols-2 gap-4">
+        <Chart chart={charts.salesByRegion} data={data.salesByRegion} />
+        <Chart chart={charts.topProducts} data={data.topProducts} />
+      </div>
+
+      {/* Recent Orders */}
+      <Table chart={charts.recentOrders} data={data.recentOrders} />
+    </div>
+  );
+}
+```
+
+## Step 7: View Your Dashboard
+
+Your dashboard is now live at:
+
+```
+http://localhost:8787
+```
+
+Open it in your browser to see your charts!
+
+## Step 8: Add Interactivity
+
+```
+Add a date range filter that lets users select last 7 days, 30 days, 90 days, or all time
+```
+
+The AI adds a filter component and updates the queries.
+
+## Step 9: Style Improvements
+
+```
+Make the dashboard match our brand:
+- Use a dark theme
+- Primary color: indigo
+- Add card shadows
+- More spacing between elements
+```
+
+## Step 10: Deploy
+
+When you're happy with your dashboard:
+
+```
+Deploy this to Cloudflare
+```
+
+Your dashboard is now live! Share the URL with your team.
+
+## What's Next?
+
+<CardGroup cols={2}>
+  <Card title="Add Scheduled Updates" icon="clock" href="/apps/scheduled-jobs">
+    Keep data fresh with cron jobs
+  </Card>
+  <Card title="Build an API" icon="code" href="/guides/api-backend">
+    Add API endpoints for your data
+  </Card>
+  <Card title="Data Pipelines" icon="diagram-project" href="/guides/data-pipeline">
+    Automate data processing
+  </Card>
+  <Card title="Charts Reference" icon="chart-line" href="/apps/charts">
+    Explore all chart types
+  </Card>
+</CardGroup>

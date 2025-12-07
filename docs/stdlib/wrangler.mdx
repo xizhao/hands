@@ -1,0 +1,225 @@
+---
+title: Wrangler Configuration
+description: "Cloudflare Workers configuration"
+---
+
+# Wrangler Configuration
+
+The `wrangler.toml` file configures your app for Cloudflare Workers. Hands generates this for you, but you can customize it.
+
+## Basic Structure
+
+```toml
+name = "my-app"
+main = "src/index.tsx"
+compatibility_date = "2024-01-01"
+compatibility_flags = ["nodejs_compat"]
+
+[vars]
+ENVIRONMENT = "development"
+
+[dev]
+port = 8787
+local_protocol = "http"
+```
+
+## Common Settings
+
+### Application Name
+
+```toml
+name = "my-app"
+```
+
+Used for deployment and logging.
+
+### Entry Point
+
+```toml
+main = "src/index.tsx"
+```
+
+Your Hono app entry file.
+
+### Compatibility
+
+```toml
+compatibility_date = "2024-01-01"
+compatibility_flags = ["nodejs_compat"]
+```
+
+`nodejs_compat` enables Node.js APIs in Workers.
+
+## Environment Variables
+
+### Development Variables
+
+```toml
+[vars]
+ENVIRONMENT = "development"
+API_KEY = "dev-key"
+DEBUG = "true"
+```
+
+### Production Secrets
+
+Use `wrangler secret` for sensitive values:
+
+```bash
+wrangler secret put DATABASE_URL
+wrangler secret put API_KEY
+```
+
+Secrets are encrypted and not stored in version control.
+
+## Database Connection
+
+### Local Development
+
+In development, Hands provides an embedded PostgreSQL:
+
+```toml
+[vars]
+DATABASE_URL = "postgresql://hands:hands@localhost:5433/hands_db"
+```
+
+### Production (Hyperdrive)
+
+For production, use Cloudflare Hyperdrive:
+
+```toml
+[[hyperdrive]]
+binding = "HYPERDRIVE"
+id = "your-hyperdrive-id"
+```
+
+Then access in code:
+
+```typescript
+const db = c.env.HYPERDRIVE.connect();
+```
+
+## Scheduled Jobs
+
+Enable cron triggers for monitors:
+
+```toml
+[triggers]
+crons = ["0 * * * *", "0 2 * * *", "*/15 * * * *"]
+```
+
+Each cron expression corresponds to a monitor in `hands.config.ts`.
+
+## Dev Server
+
+```toml
+[dev]
+port = 8787
+local_protocol = "http"
+ip = "localhost"
+```
+
+## Build Settings
+
+```toml
+[build]
+command = "bun run build"
+cwd = "."
+```
+
+## Routes
+
+For custom domains:
+
+```toml
+routes = [
+  { pattern = "app.example.com/*", zone_name = "example.com" }
+]
+```
+
+## KV Storage
+
+For key-value storage:
+
+```toml
+[[kv_namespaces]]
+binding = "CACHE"
+id = "your-kv-namespace-id"
+```
+
+## R2 Storage
+
+For object storage:
+
+```toml
+[[r2_buckets]]
+binding = "BUCKET"
+bucket_name = "my-bucket"
+```
+
+## D1 Database
+
+For SQLite (alternative to PostgreSQL):
+
+```toml
+[[d1_databases]]
+binding = "DB"
+database_name = "my-database"
+database_id = "your-database-id"
+```
+
+## Complete Example
+
+```toml
+name = "sales-analytics"
+main = "src/index.tsx"
+compatibility_date = "2024-01-01"
+compatibility_flags = ["nodejs_compat"]
+
+[vars]
+ENVIRONMENT = "production"
+APP_NAME = "Sales Analytics"
+
+[[hyperdrive]]
+binding = "HYPERDRIVE"
+id = "abc123def456"
+
+[[kv_namespaces]]
+binding = "CACHE"
+id = "xyz789"
+
+[triggers]
+crons = ["0 2 * * *", "0 * * * *"]
+
+routes = [
+  { pattern = "sales.example.com/*", zone_name = "example.com" }
+]
+
+[dev]
+port = 8787
+local_protocol = "http"
+```
+
+## Environment-Specific Files
+
+Create separate files for different environments:
+
+- `wrangler.toml` - Development
+- `wrangler.production.toml` - Production
+
+Deploy with:
+
+```bash
+wrangler deploy --config wrangler.production.toml
+```
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Deploy" icon="rocket" href="/deploy/cloudflare">
+    Deploy to Cloudflare
+  </Card>
+  <Card title="Configuration" icon="gear" href="/stdlib/config">
+    Hands config reference
+  </Card>
+</CardGroup>

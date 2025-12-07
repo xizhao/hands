@@ -1,0 +1,210 @@
+---
+title: Querying Data
+description: "Explore and analyze your data with SQL and natural language"
+---
+
+# Querying Data
+
+Hands lets you query your data using natural language or SQL. The AI translates your questions into optimized queries and presents the results.
+
+## Natural Language Queries
+
+Just ask what you want to know:
+
+```
+Show me all orders from last month
+
+What's the average order value by customer?
+
+Find customers who haven't ordered in 90 days
+
+Which products have the highest profit margin?
+```
+
+The AI:
+1. Understands your question
+2. Writes the SQL query
+3. Executes it against your database
+4. Presents the results
+
+## Viewing SQL
+
+Every query shows the SQL used:
+
+```
+You: Show me the top 10 customers by total spending
+
+AI: Here are your top customers:
+
+SELECT
+  customer_name,
+  SUM(amount) as total_spent,
+  COUNT(*) as order_count
+FROM orders
+GROUP BY customer_name
+ORDER BY total_spent DESC
+LIMIT 10;
+
+| customer_name | total_spent | order_count |
+|--------------|-------------|-------------|
+| Acme Corp    | $125,430    | 47          |
+| GlobalTech   | $98,200     | 32          |
+| ...          | ...         | ...         |
+```
+
+## Writing SQL Directly
+
+You can also write SQL yourself:
+
+```
+Run this query:
+
+SELECT date_trunc('month', created_at) as month,
+       SUM(amount) as revenue
+FROM orders
+WHERE status = 'completed'
+GROUP BY 1
+ORDER BY 1;
+```
+
+Or use the SQL tool directly:
+
+```sql
+SELECT * FROM customers WHERE region = 'West'
+```
+
+## Exploring Tables
+
+### List All Tables
+
+```
+What tables do I have?
+
+Show me the database schema
+```
+
+### Describe a Table
+
+```
+Describe the orders table
+
+What columns are in customers?
+```
+
+### Sample Data
+
+```
+Show me 5 random rows from products
+
+What does the data in orders look like?
+```
+
+## Common Query Patterns
+
+### Aggregations
+
+```
+Total revenue by month
+Average order value per customer
+Count of orders by status
+```
+
+### Filtering
+
+```
+Orders over $1000
+Customers in California
+Products with low stock (quantity < 10)
+```
+
+### Joins
+
+```
+Show me orders with customer names
+
+Which products haven't been ordered?
+
+Match invoices with payments
+```
+
+### Time-Based Analysis
+
+```
+Revenue trend over the last 12 months
+Week-over-week growth
+Compare this quarter to last quarter
+```
+
+## Query History
+
+Your query history is saved in the conversation. Refer to previous results:
+
+```
+Filter that last result to only show California
+
+Add the product names to those results
+
+Export that to CSV
+```
+
+## Performance Tips
+
+<AccordionGroup>
+  <Accordion title="Use LIMIT for exploration">
+    When exploring data, start with `LIMIT 100` to avoid loading too much:
+    ```
+    Show me a sample of 100 rows from the big_table
+    ```
+  </Accordion>
+
+  <Accordion title="Create indexes for common queries">
+    If you frequently filter by certain columns:
+    ```
+    Create an index on orders(customer_id)
+    ```
+  </Accordion>
+
+  <Accordion title="Use EXPLAIN for slow queries">
+    ```
+    Explain why this query is slow:
+    SELECT * FROM orders WHERE LOWER(customer_name) LIKE '%acme%'
+    ```
+  </Accordion>
+</AccordionGroup>
+
+## Exporting Results
+
+Export query results to files:
+
+```
+Export that result to CSV
+
+Download those customers as JSON
+
+Save this report to Excel
+```
+
+## Saving Queries
+
+Save frequently-used queries:
+
+```
+Save this query as "monthly_revenue"
+```
+
+Then reuse them:
+
+```
+Run the monthly_revenue query for 2024
+```
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Transform Data" icon="wand-magic-sparkles" href="/data/transforming">
+    Clean and reshape your data
+  </Card>
+  <Card title="Create Charts" icon="chart-line" href="/apps/charts">
+    Visualize your query results
+  </Card>
+</CardGroup>

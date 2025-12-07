@@ -1,0 +1,157 @@
+---
+title: Building Apps
+description: "Create full-stack data applications with Hands"
+---
+
+# Building Apps
+
+Hands apps are full-stack data applications that combine:
+
+- **Dashboards** - Interactive web pages with charts and metrics
+- **Charts** - Data visualizations powered by SQL queries
+- **API Routes** - HTTP endpoints for your data
+- **Scheduled Jobs** - Automated data pipelines
+
+All of this runs on Cloudflare Workers at the edge.
+
+## App Architecture
+
+```
+┌─────────────────────────────────────────────┐
+│                 Your App                    │
+├─────────────────────────────────────────────┤
+│  Dashboards (React SSR)                     │
+│  ├── Charts (SQL queries)                   │
+│  ├── Tables                                 │
+│  └── Metrics                                │
+├─────────────────────────────────────────────┤
+│  API Routes (Hono)                          │
+│  ├── GET /api/data                          │
+│  ├── POST /api/webhook                      │
+│  └── Custom endpoints                       │
+├─────────────────────────────────────────────┤
+│  Scheduled Jobs (Cron)                      │
+│  ├── Data pipelines                         │
+│  ├── Reports                                │
+│  └── Sync tasks                             │
+├─────────────────────────────────────────────┤
+│  PostgreSQL Database                        │
+│  (Embedded locally, Hyperdrive in prod)     │
+└─────────────────────────────────────────────┘
+```
+
+## Quick Example
+
+Create a complete app with one prompt:
+
+```
+Create a sales dashboard with:
+- Total revenue card
+- Revenue by month line chart
+- Top products table
+- An API endpoint to get current metrics
+```
+
+The AI generates:
+
+1. Dashboard page with React components
+2. Chart definitions with SQL queries
+3. API route returning JSON
+4. All the styling and configuration
+
+## The Development Loop
+
+<Steps>
+  <Step title="Ask the AI">
+    Describe what you want to build in natural language
+  </Step>
+
+  <Step title="Review the Code">
+    The AI shows you what it's creating and why
+  </Step>
+
+  <Step title="See It Live">
+    Changes hot-reload at http://localhost:8787
+  </Step>
+
+  <Step title="Iterate">
+    Ask for modifications, additions, or fixes
+  </Step>
+</Steps>
+
+## App Components
+
+<CardGroup cols={2}>
+  <Card title="Dashboards" icon="gauge" href="/apps/dashboards">
+    Build interactive data dashboards with React
+  </Card>
+  <Card title="Charts" icon="chart-line" href="/apps/charts">
+    Visualize data with charts and tables
+  </Card>
+  <Card title="API Routes" icon="code" href="/apps/api-routes">
+    Create HTTP endpoints for your data
+  </Card>
+  <Card title="Scheduled Jobs" icon="clock" href="/apps/scheduled-jobs">
+    Automate tasks with cron schedules
+  </Card>
+</CardGroup>
+
+## Tech Stack
+
+Your apps use production-ready technologies:
+
+| Component | Technology |
+|-----------|------------|
+| Runtime | Cloudflare Workers |
+| Web Framework | Hono |
+| UI | React 19 + TailwindCSS |
+| Rendering | Server-Side Rendering (SSR) |
+| Database | PostgreSQL |
+
+## File Structure
+
+```
+my-workbook/
+├── src/
+│   ├── index.tsx          # Main entry point
+│   ├── pages/             # Dashboard pages
+│   │   └── Dashboard.tsx
+│   ├── components/        # Reusable UI
+│   └── lib/
+│       └── db.ts          # Database utilities
+├── charts/
+│   └── index.ts           # Chart definitions
+├── monitors/              # Scheduled jobs
+├── wrangler.toml          # Cloudflare config
+└── hands.config.ts        # Hands config
+```
+
+## Local Development
+
+The dev server runs automatically:
+
+```
+http://localhost:8787
+```
+
+Features:
+- Hot module reloading
+- TypeScript compilation
+- Error overlays
+- Database access
+
+Check the toolbar for:
+- Server status (green = running)
+- TypeScript errors
+- Routes and crons
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Build a Dashboard" icon="chart-line" href="/guides/first-dashboard">
+    Step-by-step guide to your first dashboard
+  </Card>
+  <Card title="Deploy to Production" icon="rocket" href="/deploy/cloudflare">
+    Go live on Cloudflare Workers
+  </Card>
+</CardGroup>

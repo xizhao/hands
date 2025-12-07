@@ -1,0 +1,388 @@
+---
+title: Build an API Backend
+description: "Create a REST API for your data"
+---
+
+# Build an API Backend
+
+In this guide, you'll create a REST API that:
+- Serves your data as JSON
+- Handles authentication
+- Supports filtering and pagination
+- Includes webhooks
+
+## What You'll Build
+
+- RESTful CRUD endpoints
+- API key authentication
+- Pagination and filtering
+- Webhook endpoints
+
+## Step 1: Set Up the Data
+
+Create a sample products and orders schema:
+
+```
+Create tables for an e-commerce API:
+- products (id, name, price, category, stock)
+- orders (id, customer_email, status, total, created_at)
+- order_items (order_id, product_id, quantity, price)
+```
+
+## Step 2: Create Basic Endpoints
+
+```
+Create RESTful API endpoints for products:
+- GET /api/products - list all
+- GET /api/products/:id - get one
+- POST /api/products - create
+- PUT /api/products/:id - update
+- DELETE /api/products/:id - delete
+```
+
+The AI creates:
+
+```typescript
+// src/index.tsx
+import { Hono } from "hono";
+import { createDb } from "./lib/db";
+
+const app = new Hono<{ Bindings: Bindings }>();
+
+// List products
+app.get("/api/products", async (c) => {
+  const sql = createDb(c.env.DATABASE_URL);
+  const products = await sql`SELECT * FROM products ORDER BY id`;
+  return c.json(products);
+});
+
+// Get single product
+app.get("/api/products/:id", async (c) => {
+  const sql = createDb(c.env.DATABASE_URL);
+  const id = c.req.param("id");
+
+  const [product] = await sql`SELECT * FROM products WHERE id = ${id}`;
+
+  if (!product) {
+    return c.json({ error: "Product not found" }, 404);
+  }
+
+  return c.json(product);
+});
+
+// Create product
+app.post("/api/products", async (c) => {
+  const sql = createDb(c.env.DATABASE_URL);
+  const body = await c.req.json();
+
+  const [product] = await sql`
+    INSERT INTO products (name, price, category, stock)
+    VALUES (${body.name}, ${body.price}, ${body.category}, ${body.stock})
+    RETURNING *
+  `;
+
+  return c.json(product, 201);
+});
+
+// Update product
+app.put("/api/products/:id", async (c) => {
+  const sql = createDb(c.env.DATABASE_URL);
+  const id = c.req.param("id");
+  const body = await c.req.json();
+
+  const [product] = await sql`
+    UPDATE products
+    SET name = ${body.name}, price = ${body.price},
+        category = ${body.category}, stock = ${body.stock}
+    WHERE id = ${id}
+    RETURNING *
+  `;
+
+  if (!product) {
+    return c.json({ error: "Product not found" }, 404);
+  }
+
+  return c.json(product);
+});
+
+// Delete product
+app.delete("/api/products/:id", async (c) => {
+  const sql = createDb(c.env.DATABASE_URL);
+  const id = c.req.param("id");
+
+  await sql`DELETE FROM products WHERE id = ${id}`;
+
+  return c.json({ deleted: true });
+});
+```
+
+## Step 3: Add Authentication
+
+```
+Add API key authentication to the API endpoints
+```
+
+```typescript
+// middleware/auth.ts
+export const apiAuth = async (c, next) => {
+  const apiKey = c.req.header("X-API-Key");
+
+  if (!apiKey) {
+    return c.json({ error: "API key required" }, 401);
+  }
+
+  // Validate API key
+  const sql = createDb(c.env.DATABASE_URL);
+  const [key] = await sql`
+    SELECT * FROM api_keys WHERE key = ${apiKey} AND active = true
+  `;
+
+  if (!key) {
+    return c.json({ error: "Invalid API key" }, 401);
+  }
+
+  // Store key info for later use
+  c.set("apiKey", key);
+
+  await next();
+};
+
+// Apply to API routes
+app.use("/api/*", apiAuth);
+```
+
+## Step 4: Add Pagination
+
+```
+Add pagination support with page and limit parameters
+```
+
+```typescript
+app.get("/api/products", async (c) => {
+  const sql = createDb(c.env.DATABASE_URL);
+
+  const page = parseInt(c.req.query("page") || "1");
+  const limit = Math.min(parseInt(c.req.query("limit") || "20"), 100);
+  const offset = (page - 1) * limit;
+
+  const products = await sql`
+    SELECT * FROM products
+    ORDER BY id
+    LIMIT ${limit} OFFSET ${offset}
+  `;
+
+  const [{ count }] = await sql`SELECT COUNT(*) FROM products`;
+
+  return c.json({
+    data: products,
+    pagination: {
+      page,
+      limit,
+      total: parseInt(count),
+      pages: Math.ceil(count / limit)
+    }
+  });
+});
+```
+
+## Step 5: Add Filtering
+
+```
+Add filtering by category and search by name
+```
+
+```typescript
+app.get("/api/products", async (c) => {
+  const sql = createDb(c.env.DATABASE_URL);
+
+  const page = parseInt(c.req.query("page") || "1");
+  const limit = Math.min(parseInt(c.req.query("limit") || "20"), 100);
+  const offset = (page - 1) * limit;
+  const category = c.req.query("category");
+  const search = c.req.query("search");
+
+  let query = sql`SELECT * FROM products WHERE 1=1`;
+
+  if (category) {
+    query = sql`${query} AND category = ${category}`;
+  }
+
+  if (search) {
+    query = sql`${query} AND name ILIKE ${'%' + search + '%'}`;
+  }
+
+  query = sql`${query} ORDER BY id LIMIT ${limit} OFFSET ${offset}`;
+
+  const products = await query;
+
+  return c.json({
+    data: products,
+    filters: { category, search }
+  });
+});
+```
+
+## Step 6: Add Order Endpoints
+
+```
+Create order endpoints with:
+- Create order with items
+- Get order with items
+- Update order status
+- List orders with filtering
+```
+
+```typescript
+// Create order with items
+app.post("/api/orders", async (c) => {
+  const sql = createDb(c.env.DATABASE_URL);
+  const body = await c.req.json();
+
+  // Start transaction
+  return await sql.begin(async (tx) => {
+    // Calculate total
+    let total = 0;
+    for (const item of body.items) {
+      const [product] = await tx`
+        SELECT price FROM products WHERE id = ${item.product_id}
+      `;
+      total += product.price * item.quantity;
+    }
+
+    // Create order
+    const [order] = await tx`
+      INSERT INTO orders (customer_email, status, total)
+      VALUES (${body.email}, 'pending', ${total})
+      RETURNING *
+    `;
+
+    // Create order items
+    for (const item of body.items) {
+      const [product] = await tx`
+        SELECT price FROM products WHERE id = ${item.product_id}
+      `;
+      await tx`
+        INSERT INTO order_items (order_id, product_id, quantity, price)
+        VALUES (${order.id}, ${item.product_id}, ${item.quantity}, ${product.price})
+      `;
+    }
+
+    return c.json(order, 201);
+  });
+});
+```
+
+## Step 7: Add Webhooks
+
+```
+Create a webhook system that notifies external services when orders are created
+```
+
+```typescript
+// lib/webhooks.ts
+export async function triggerWebhook(event: string, data: any, env: any) {
+  const sql = createDb(env.DATABASE_URL);
+
+  // Get active webhooks for this event
+  const webhooks = await sql`
+    SELECT * FROM webhooks WHERE event = ${event} AND active = true
+  `;
+
+  for (const webhook of webhooks) {
+    try {
+      await fetch(webhook.url, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "X-Webhook-Event": event,
+          "X-Webhook-Signature": sign(JSON.stringify(data), webhook.secret)
+        },
+        body: JSON.stringify(data)
+      });
+    } catch (error) {
+      console.error(`Webhook failed: ${webhook.url}`, error);
+    }
+  }
+}
+
+// In order creation
+const [order] = await tx`...`;
+await triggerWebhook("order.created", order, c.env);
+```
+
+## Step 8: Add CORS
+
+```
+Enable CORS for browser access
+```
+
+```typescript
+import { cors } from "hono/cors";
+
+app.use("/api/*", cors({
+  origin: ["https://yourapp.com"],
+  allowMethods: ["GET", "POST", "PUT", "DELETE"],
+  allowHeaders: ["Content-Type", "X-API-Key"]
+}));
+```
+
+## Step 9: Add Error Handling
+
+```typescript
+app.onError((err, c) => {
+  console.error(err);
+
+  if (err.message.includes("unique constraint")) {
+    return c.json({ error: "Resource already exists" }, 409);
+  }
+
+  if (err.message.includes("foreign key")) {
+    return c.json({ error: "Referenced resource not found" }, 400);
+  }
+
+  return c.json({
+    error: "Internal server error",
+    requestId: c.req.header("cf-ray")
+  }, 500);
+});
+```
+
+## Step 10: Deploy
+
+```
+Deploy the API to Cloudflare
+```
+
+Set your secrets:
+
+```bash
+wrangler secret put DATABASE_URL
+```
+
+## API Documentation
+
+Your API is now available at:
+
+```
+GET    /api/products           # List products
+GET    /api/products/:id       # Get product
+POST   /api/products           # Create product
+PUT    /api/products/:id       # Update product
+DELETE /api/products/:id       # Delete product
+
+GET    /api/orders             # List orders
+GET    /api/orders/:id         # Get order
+POST   /api/orders             # Create order
+PUT    /api/orders/:id/status  # Update status
+```
+
+## What's Next?
+
+<CardGroup cols={2}>
+  <Card title="Add a Dashboard" icon="chart-line" href="/guides/first-dashboard">
+    Visualize your API data
+  </Card>
+  <Card title="Data Pipeline" icon="diagram-project" href="/guides/data-pipeline">
+    Automate data processing
+  </Card>
+</CardGroup>

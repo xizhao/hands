@@ -1,0 +1,272 @@
+---
+title: Deploy to Cloudflare
+description: "Go live with Cloudflare Workers"
+---
+
+# Deploy to Cloudflare
+
+Hands apps deploy to Cloudflare Workers, running at the edge with global distribution and millisecond latency.
+
+## Prerequisites
+
+<Steps>
+  <Step title="Cloudflare Account">
+    Sign up at [cloudflare.com](https://cloudflare.com) if you don't have an account.
+  </Step>
+
+  <Step title="Wrangler CLI">
+    Install the Cloudflare CLI:
+    ```bash
+    npm install -g wrangler
+    ```
+  </Step>
+
+  <Step title="Login">
+    Authenticate with Cloudflare:
+    ```bash
+    wrangler login
+    ```
+  </Step>
+</Steps>
+
+## Quick Deploy
+
+From the Hands chat:
+
+```
+Deploy this workbook to Cloudflare
+```
+
+Or from the command line:
+
+```bash
+cd path/to/workbook
+wrangler deploy
+```
+
+## First Deployment
+
+On first deploy, Cloudflare creates:
+
+- A Worker with your application code
+- A subdomain: `your-app.your-account.workers.dev`
+- Configured routes and triggers
+
+```
+✨ Successfully published your script!
+✨ https://my-app.my-account.workers.dev
+```
+
+## Database Setup
+
+### Option 1: Hyperdrive (Recommended)
+
+Hyperdrive is Cloudflare's connection pooler for external databases.
+
+<Steps>
+  <Step title="Create a PostgreSQL database">
+    Use any PostgreSQL provider:
+    - Neon
+    - Supabase
+    - Railway
+    - Your own server
+  </Step>
+
+  <Step title="Create Hyperdrive config">
+    ```bash
+    wrangler hyperdrive create my-hyperdrive \
+      --connection-string "postgresql://user:pass@host:5432/db"
+    ```
+  </Step>
+
+  <Step title="Add to wrangler.toml">
+    ```toml
+    [[hyperdrive]]
+    binding = "HYPERDRIVE"
+    id = "your-hyperdrive-id"
+    ```
+  </Step>
+
+  <Step title="Update your code">
+    ```typescript
+    const db = c.env.HYPERDRIVE.connect();
+    ```
+  </Step>
+</Steps>
+
+### Option 2: D1 (SQLite)
+
+For simpler use cases, use Cloudflare D1:
+
+```bash
+wrangler d1 create my-database
+```
+
+```toml
+[[d1_databases]]
+binding = "DB"
+database_name = "my-database"
+database_id = "your-id"
+```
+
+## Secrets
+
+Never put sensitive values in `wrangler.toml`. Use secrets:
+
+```bash
+# Set a secret
+wrangler secret put API_KEY
+
+# List secrets
+wrangler secret list
+
+# Delete a secret
+wrangler secret delete API_KEY
+```
+
+Access in code:
+
+```typescript
+const apiKey = c.env.API_KEY;
+```
+
+## Custom Domain
+
+<Steps>
+  <Step title="Add domain to Cloudflare">
+    Add your domain to Cloudflare and update nameservers.
+  </Step>
+
+  <Step title="Configure routes">
+    In `wrangler.toml`:
+    ```toml
+    routes = [
+      { pattern = "app.yourdomain.com/*", zone_name = "yourdomain.com" }
+    ]
+    ```
+  </Step>
+
+  <Step title="Deploy">
+    ```bash
+    wrangler deploy
+    ```
+  </Step>
+</Steps>
+
+## Environments
+
+Deploy to different environments:
+
+```bash
+# Production
+wrangler deploy --env production
+
+# Staging
+wrangler deploy --env staging
+```
+
+Configure in `wrangler.toml`:
+
+```toml
+[env.production]
+name = "my-app"
+routes = [{ pattern = "app.example.com/*", zone_name = "example.com" }]
+
+[env.staging]
+name = "my-app-staging"
+routes = [{ pattern = "staging.example.com/*", zone_name = "example.com" }]
+```
+
+## Monitoring
+
+### Logs
+
+View real-time logs:
+
+```bash
+wrangler tail
+```
+
+### Analytics
+
+Access analytics in the Cloudflare dashboard:
+- Request volume
+- Error rates
+- Response times
+- Geographic distribution
+
+## Rollbacks
+
+Deploy a previous version:
+
+```bash
+# List deployments
+wrangler deployments list
+
+# Rollback to specific version
+wrangler rollback
+```
+
+## CI/CD
+
+### GitHub Actions
+
+```yaml
+name: Deploy
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Deploy
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CF_API_TOKEN }}
+```
+
+## Troubleshooting
+
+<AccordionGroup>
+  <Accordion title="Worker size too large">
+    Workers have a 1MB limit. To reduce size:
+    - Use tree shaking
+    - Remove unused dependencies
+    - Split into multiple workers
+  </Accordion>
+
+  <Accordion title="Database connection failed">
+    Check your Hyperdrive configuration:
+    - Connection string is correct
+    - Database is accessible from Cloudflare
+    - SSL mode matches your database
+  </Accordion>
+
+  <Accordion title="Cron not running">
+    Verify cron triggers in `wrangler.toml`:
+    ```toml
+    [triggers]
+    crons = ["0 * * * *"]
+    ```
+    Then redeploy.
+  </Accordion>
+</AccordionGroup>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Configuration" icon="gear" href="/deploy/configuration">
+    Advanced deployment settings
+  </Card>
+  <Card title="Wrangler Reference" icon="book" href="/stdlib/wrangler">
+    Full wrangler.toml reference
+  </Card>
+</CardGroup>

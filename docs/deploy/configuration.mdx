@@ -1,0 +1,241 @@
+---
+title: Deployment Configuration
+description: "Advanced deployment settings"
+---
+
+# Deployment Configuration
+
+Fine-tune your deployment for production workloads.
+
+## Performance
+
+### CPU Limits
+
+Workers have CPU time limits:
+- **Free**: 10ms CPU time
+- **Paid**: 50ms CPU time (Bundled), 30s (Unbound)
+
+For long-running tasks, use Unbound:
+
+```toml
+usage_model = "unbound"
+```
+
+### Memory
+
+Workers get 128MB memory by default. Configure in `hands.config.ts`:
+
+```typescript
+monitors: {
+  "heavy-job": {
+    handler: "monitors/heavy.handler",
+    memory: 1024  // MB
+  }
+}
+```
+
+### Caching
+
+Add caching for better performance:
+
+```typescript
+app.get("/api/data", async (c) => {
+  const cached = await c.env.CACHE.get("data");
+  if (cached) return c.json(JSON.parse(cached));
+
+  const data = await fetchData();
+  await c.env.CACHE.put("data", JSON.stringify(data), {
+    expirationTtl: 3600
+  });
+
+  return c.json(data);
+});
+```
+
+## Security
+
+### CORS
+
+Configure in your Hono app:
+
+```typescript
+import { cors } from "hono/cors";
+
+app.use("/api/*", cors({
+  origin: ["https://app.example.com"],
+  allowMethods: ["GET", "POST", "PUT", "DELETE"],
+  allowHeaders: ["Content-Type", "Authorization"]
+}));
+```
+
+### Rate Limiting
+
+Use Cloudflare Rate Limiting in the dashboard or via Wrangler.
+
+### Authentication
+
+Protect routes with middleware:
+
+```typescript
+const auth = async (c, next) => {
+  const token = c.req.header("Authorization")?.replace("Bearer ", "");
+  if (!token || !verifyToken(token)) {
+    return c.json({ error: "Unauthorized" }, 401);
+  }
+  await next();
+};
+
+app.use("/api/*", auth);
+```
+
+## High Availability
+
+### Multiple Regions
+
+Workers run globally by default. For databases, consider:
+
+- **Hyperdrive**: Connection pooling from all regions
+- **Read replicas**: For read-heavy workloads
+- **Regional databases**: For compliance requirements
+
+### Error Handling
+
+Add global error handling:
+
+```typescript
+app.onError((err, c) => {
+  console.error(err);
+  return c.json({
+    error: "Internal Server Error",
+    requestId: c.req.header("cf-ray")
+  }, 500);
+});
+```
+
+## Monitoring
+
+### Logging
+
+Structure logs for easier analysis:
+
+```typescript
+function log(level: string, message: string, data?: object) {
+  console.log(JSON.stringify({
+    level,
+    message,
+    timestamp: new Date().toISOString(),
+    ...data
+  }));
+}
+
+log("info", "Request processed", { userId: 123, duration: 45 });
+```
+
+### Alerts
+
+Set up alerts in Cloudflare dashboard for:
+- Error rate spikes
+- Latency increases
+- CPU/memory limits hit
+
+## Cost Optimization
+
+### Request Costs
+
+Workers charge per request:
+- **Free**: 100,000 requests/day
+- **Paid**: $0.50/million requests
+
+### Duration Costs
+
+For Unbound workers:
+- $12.50/million GB-seconds
+
+Optimize by:
+- Caching frequently accessed data
+- Reducing database queries
+- Using streaming responses
+
+## Environment Variables
+
+### Development vs Production
+
+```toml
+[vars]
+ENVIRONMENT = "production"
+LOG_LEVEL = "info"
+
+[env.staging.vars]
+ENVIRONMENT = "staging"
+LOG_LEVEL = "debug"
+```
+
+### Accessing in Code
+
+```typescript
+const isProd = c.env.ENVIRONMENT === "production";
+const logLevel = c.env.LOG_LEVEL;
+```
+
+## Health Checks
+
+Add a health endpoint:
+
+```typescript
+app.get("/health", async (c) => {
+  try {
+    await c.env.DB.exec("SELECT 1");
+    return c.json({ status: "healthy", timestamp: Date.now() });
+  } catch (error) {
+    return c.json({ status: "unhealthy", error: error.message }, 500);
+  }
+});
+```
+
+Use for:
+- Load balancer health checks
+- Uptime monitoring
+- Automated alerts
+
+## Migration
+
+### Zero-Downtime Deployments
+
+Cloudflare Workers provide zero-downtime deployments by default. New code is deployed globally in seconds.
+
+### Database Migrations
+
+Run migrations before deploying new code:
+
+```typescript
+// Run in a monitor or manually
+export const migrate = async (sql) => {
+  await sql`
+    CREATE TABLE IF NOT EXISTS migrations (
+      id SERIAL PRIMARY KEY,
+      name TEXT NOT NULL,
+      applied_at TIMESTAMP DEFAULT NOW()
+    )
+  `;
+
+  // Apply pending migrations
+  const applied = await sql`SELECT name FROM migrations`;
+  for (const migration of MIGRATIONS) {
+    if (!applied.includes(migration.name)) {
+      await migration.up(sql);
+      await sql`INSERT INTO migrations (name) VALUES (${migration.name})`;
+    }
+  }
+};
+```
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Cloudflare Docs" icon="cloud" href="https://developers.cloudflare.com/workers/">
+    Official Cloudflare Workers documentation
+  </Card>
+  <Card title="Wrangler Reference" icon="book" href="/stdlib/wrangler">
+    Full wrangler.toml reference
+  </Card>
+</CardGroup>

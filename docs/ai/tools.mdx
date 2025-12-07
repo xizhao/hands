@@ -1,0 +1,211 @@
+---
+title: AI Tools
+description: "Capabilities available to the AI"
+---
+
+# AI Tools
+
+Tools are capabilities the AI uses to interact with your system. When you ask for something, the AI picks the right tools and uses them.
+
+## Available Tools
+
+### File Operations
+
+<CardGroup cols={2}>
+  <Card title="read" icon="file">
+    Read file contents
+  </Card>
+  <Card title="write" icon="pen">
+    Create new files
+  </Card>
+  <Card title="edit" icon="edit">
+    Modify existing files
+  </Card>
+  <Card title="glob" icon="folder-tree">
+    Find files by pattern
+  </Card>
+  <Card title="grep" icon="magnifying-glass">
+    Search file contents
+  </Card>
+  <Card title="list" icon="list">
+    List directory contents
+  </Card>
+</CardGroup>
+
+### Database
+
+<Card title="sql" icon="database">
+  Execute SQL queries against your PostgreSQL database.
+
+  The AI uses this for:
+  - Running SELECT queries
+  - Creating/altering tables
+  - Inserting/updating data
+  - Database administration
+</Card>
+
+### System
+
+<Card title="bash" icon="terminal">
+  Run shell commands.
+
+  Used for:
+  - Running npm/bun commands
+  - Git operations
+  - File system operations
+  - Any CLI tool
+</Card>
+
+### Web
+
+<CardGroup cols={2}>
+  <Card title="webfetch" icon="globe">
+    Fetch content from URLs
+  </Card>
+  <Card title="websearch" icon="search">
+    Search the web for information
+  </Card>
+</CardGroup>
+
+### Agents
+
+<Card title="task" icon="users">
+  Delegate work to sub-agents.
+
+  Used when:
+  - Breaking down complex tasks
+  - Using specialized agents
+  - Parallel processing
+</Card>
+
+### Planning
+
+<Card title="todowrite" icon="list-check">
+  Track task progress.
+
+  Creates checklists for:
+  - Multi-step operations
+  - Complex features
+  - Long-running tasks
+</Card>
+
+## Tool Invocations
+
+When the AI uses a tool, you see it in the chat:
+
+```
+📖 Read File: src/pages/Dashboard.tsx
+   Reading 156 lines...
+
+🗄️ SQL Query: SELECT COUNT(*) FROM orders
+   Result: 10,847 rows
+
+💻 Terminal: npm run build
+   Build completed successfully
+```
+
+Click to expand and see:
+- Input parameters
+- Full output
+- Any errors
+
+## Permissions
+
+The AI asks permission before:
+
+- Writing to new files
+- Running potentially dangerous commands
+- Modifying sensitive data
+
+You can respond:
+
+- **Allow Once** - Permit this specific action
+- **Always Allow** - Remember this permission
+- **Reject** - Deny the action
+
+## Configuring Tool Access
+
+For agents, control tool access in the YAML frontmatter:
+
+```yaml
+tools:
+  read: true
+  write: true
+  edit: true
+  bash: true
+  sql: true
+  webfetch: false
+  websearch: false
+```
+
+And fine-grained permissions:
+
+```yaml
+permission:
+  bash:
+    "npm install *": "allow"
+    "rm -rf *": "deny"
+  write:
+    "src/*": "allow"
+    "*.config.js": "deny"
+```
+
+## Tool Output
+
+### Truncation
+
+Long outputs are truncated:
+
+```
+📖 Read File: big_log.txt
+   [First 2000 lines shown]
+   ...
+   [Output truncated - 50,000 more lines]
+```
+
+### Errors
+
+If a tool fails:
+
+```
+🗄️ SQL Query: SELECT * FROM nonexistent
+   ❌ Error: relation "nonexistent" does not exist
+```
+
+The AI sees the error and can fix the issue.
+
+## Custom Tools
+
+Create custom tools in `.opencode/tool/`:
+
+```typescript
+// .opencode/tool/custom-analysis.ts
+import { defineTool } from "@opencode-ai/sdk";
+
+export default defineTool({
+  name: "custom_analysis",
+  description: "Run custom analysis on data",
+  parameters: {
+    type: "object",
+    properties: {
+      query: { type: "string" }
+    },
+    required: ["query"]
+  },
+  execute: async ({ query }) => {
+    // Custom logic here
+    return { result: "analysis complete" };
+  }
+});
+```
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="AI Agents" icon="robot" href="/ai/agents">
+    Create specialized agents
+  </Card>
+  <Card title="Stdlib Reference" icon="book" href="/stdlib/overview">
+    Learn the standard library
+  </Card>
+</CardGroup>

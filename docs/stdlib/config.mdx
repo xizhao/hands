@@ -1,0 +1,239 @@
+---
+title: Configuration
+description: "hands.config.ts reference"
+---
+
+# Configuration
+
+The `hands.config.ts` file defines your application's structure, including monitors, dashboards, and integrations.
+
+## Basic Structure
+
+```typescript
+import { defineConfig } from "@hands/stdlib";
+
+export default defineConfig({
+  name: "my-app",
+
+  database: {
+    // Database settings
+  },
+
+  monitors: {
+    // Scheduled jobs
+  },
+
+  dashboards: {
+    // Web pages
+  },
+
+  integrations: {
+    // External connectors
+  }
+});
+```
+
+## Full Reference
+
+### Root Properties
+
+```typescript
+defineConfig({
+  // Application name (used in logs and dashboards)
+  name: "my-app",
+
+  // Database configuration (optional)
+  database: {
+    connectionString: "postgresql://..."
+  },
+
+  // Scheduled jobs
+  monitors: { ... },
+
+  // Dashboard pages
+  dashboards: { ... },
+
+  // External integrations
+  integrations: { ... }
+});
+```
+
+### Monitors
+
+```typescript
+monitors: {
+  "job-name": {
+    // Required: Schedule expression
+    schedule: "rate(1 hour)" | "cron(0 * * * *)",
+
+    // Required: Handler path
+    handler: "monitors/job-name.handler",
+
+    // Optional: Timeout in seconds (default: 30)
+    timeout: 60,
+
+    // Optional: Memory in MB (default: 256)
+    memory: 512
+  }
+}
+```
+
+### Dashboards
+
+```typescript
+dashboards: {
+  "dashboard-name": {
+    // Required: Display title
+    title: "My Dashboard",
+
+    // Required: Handler path
+    handler: "dashboards/dashboard.handler",
+
+    // Optional: Require authentication (default: false)
+    auth: true
+  }
+}
+```
+
+### Integrations
+
+```typescript
+integrations: {
+  // Webhook integration
+  "webhook-name": {
+    type: "webhook",
+    handler: "integrations/webhook.handler"
+  },
+
+  // Polling integration
+  "sync-name": {
+    type: "polling",
+    schedule: "rate(30 minutes)",
+    handler: "integrations/sync.handler"
+  },
+
+  // Stream integration
+  "stream-name": {
+    type: "stream",
+    handler: "integrations/stream.handler"
+  }
+}
+```
+
+## Complete Example
+
+```typescript
+import { defineConfig } from "@hands/stdlib";
+
+export default defineConfig({
+  name: "sales-analytics",
+
+  database: {
+    connectionString: process.env.DATABASE_URL
+  },
+
+  monitors: {
+    "daily-stats": {
+      schedule: "cron(0 2 * * *)",
+      handler: "monitors/daily-stats.handler",
+      timeout: 120,
+      memory: 512
+    },
+
+    "hourly-sync": {
+      schedule: "rate(1 hour)",
+      handler: "monitors/sync.handler"
+    },
+
+    "cleanup": {
+      schedule: "cron(0 3 * * 0)",  // Weekly on Sunday
+      handler: "monitors/cleanup.handler"
+    }
+  },
+
+  dashboards: {
+    "main": {
+      title: "Sales Dashboard",
+      handler: "dashboards/main.handler",
+      auth: false
+    },
+
+    "admin": {
+      title: "Admin Dashboard",
+      handler: "dashboards/admin.handler",
+      auth: true
+    }
+  },
+
+  integrations: {
+    "stripe-webhook": {
+      type: "webhook",
+      handler: "integrations/stripe.handler"
+    },
+
+    "salesforce-sync": {
+      type: "polling",
+      schedule: "rate(30 minutes)",
+      handler: "integrations/salesforce.handler"
+    }
+  }
+});
+```
+
+## Environment-Specific Config
+
+Use environment variables for different environments:
+
+```typescript
+const isProd = process.env.NODE_ENV === "production";
+
+export default defineConfig({
+  name: isProd ? "sales-prod" : "sales-dev",
+
+  database: {
+    connectionString: isProd
+      ? process.env.PROD_DATABASE_URL
+      : "postgresql://hands:hands@localhost:5433/hands_db"
+  },
+
+  monitors: {
+    "heavy-job": {
+      schedule: "rate(1 hour)",
+      handler: "monitors/heavy.handler",
+      // More resources in production
+      timeout: isProd ? 300 : 60,
+      memory: isProd ? 1024 : 256
+    }
+  }
+});
+```
+
+## Type Safety
+
+The config is fully typed. Your IDE will provide autocomplete and error checking.
+
+```typescript
+import { defineConfig, HandsConfig } from "@hands/stdlib";
+
+// Full type checking
+export default defineConfig({
+  name: "my-app",
+  monitors: {
+    "test": {
+      schedule: "invalid",  // ❌ Type error
+      handler: 123          // ❌ Type error
+    }
+  }
+});
+```
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Wrangler Config" icon="cloud" href="/stdlib/wrangler">
+    Cloudflare Workers configuration
+  </Card>
+  <Card title="Deployment" icon="rocket" href="/deploy/cloudflare">
+    Deploy your app
+  </Card>
+</CardGroup>

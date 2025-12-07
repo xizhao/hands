@@ -1,0 +1,259 @@
+---
+title: Charts
+description: "Visualize your data with charts and tables"
+---
+
+# Charts
+
+Charts turn your SQL queries into visualizations. Define them once, and they render automatically in your dashboards.
+
+## Chart Definition
+
+Charts are defined in `charts/index.ts`:
+
+```typescript
+import { Chart } from "@hands/stdlib";
+
+export const charts: Record<string, Chart> = {
+  revenueByMonth: {
+    id: "revenue-by-month",
+    title: "Monthly Revenue",
+    type: "line",
+    description: "Revenue trend over the last 12 months",
+    query: `
+      SELECT
+        date_trunc('month', order_date) as date,
+        SUM(amount) as value
+      FROM orders
+      WHERE order_date > NOW() - INTERVAL '12 months'
+      GROUP BY 1
+      ORDER BY 1
+    `
+  }
+};
+```
+
+## Chart Types
+
+### Line Chart
+
+Best for: Trends over time
+
+```typescript
+{
+  type: "line",
+  query: `
+    SELECT date, value FROM metrics ORDER BY date
+  `
+}
+```
+
+**Required columns:**
+- `date` - X-axis (timestamp or date)
+- `value` - Y-axis (number)
+
+### Area Chart
+
+Best for: Cumulative data over time
+
+```typescript
+{
+  type: "area",
+  query: `
+    SELECT date, value FROM cumulative_sales ORDER BY date
+  `
+}
+```
+
+**Required columns:**
+- `date` - X-axis
+- `value` - Y-axis
+
+### Bar Chart
+
+Best for: Comparing categories
+
+```typescript
+{
+  type: "bar",
+  query: `
+    SELECT category as name, SUM(amount) as value
+    FROM products GROUP BY category
+  `
+}
+```
+
+**Required columns:**
+- `name` - X-axis categories
+- `value` - Y-axis heights
+
+### Pie Chart
+
+Best for: Showing proportions
+
+```typescript
+{
+  type: "pie",
+  query: `
+    SELECT status as name, COUNT(*) as value
+    FROM orders GROUP BY status
+  `
+}
+```
+
+**Required columns:**
+- `name` - Segment labels
+- `value` - Segment sizes
+
+### Table
+
+Best for: Detailed data
+
+```typescript
+{
+  type: "table",
+  query: `
+    SELECT id, customer, amount, date
+    FROM orders
+    ORDER BY date DESC
+    LIMIT 50
+  `
+}
+```
+
+**Any columns work** - they become table headers.
+
+## Creating Charts with AI
+
+Ask naturally:
+
+```
+Create a line chart of daily active users
+
+Show me revenue by product category as a bar chart
+
+Make a pie chart of order status distribution
+
+Build a table of the top 100 customers by spending
+```
+
+## Chart Options
+
+```typescript
+{
+  id: "unique-id",
+  title: "Display Title",
+  description: "Shown as subtitle",
+  type: "line" | "bar" | "pie" | "area" | "table",
+  query: "SELECT ..."
+}
+```
+
+## Multi-Series Charts
+
+For comparing multiple data series:
+
+```typescript
+{
+  type: "line",
+  query: `
+    SELECT
+      date_trunc('month', date) as date,
+      'Revenue' as series,
+      SUM(amount) as value
+    FROM orders
+    GROUP BY 1, 2
+
+    UNION ALL
+
+    SELECT
+      date_trunc('month', date) as date,
+      'Costs' as series,
+      SUM(cost) as value
+    FROM expenses
+    GROUP BY 1, 2
+
+    ORDER BY date
+  `
+}
+```
+
+**Required columns:**
+- `date` - X-axis
+- `series` - Line/bar identifier
+- `value` - Y-axis
+
+## Dynamic Charts
+
+Charts can accept parameters:
+
+```typescript
+{
+  id: "revenue-by-region",
+  query: (region: string) => `
+    SELECT date, value
+    FROM metrics
+    WHERE region = '${region}'
+  `
+}
+```
+
+## Chart APIs
+
+Charts expose API endpoints automatically:
+
+```
+GET /api/charts              # List all charts
+GET /api/charts/:id          # Get chart config
+POST /api/charts/:id/query   # Execute chart query
+```
+
+Use these for:
+- Custom frontends
+- External dashboards
+- Data exports
+
+## Styling Charts
+
+The AI handles chart styling, but you can customize:
+
+```
+Make the revenue chart use blue instead of green
+
+Add grid lines to all charts
+
+Use larger fonts for chart titles
+```
+
+## Performance
+
+For large datasets:
+
+```
+Optimize this chart query - it's slow
+
+Add caching to the sales chart
+
+Only load the last 1000 data points
+```
+
+## Exporting Charts
+
+```
+Export the monthly revenue chart as PNG
+
+Download the products table as CSV
+
+Get this chart data as JSON
+```
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Dashboards" icon="gauge" href="/apps/dashboards">
+    Combine charts into dashboards
+  </Card>
+  <Card title="API Routes" icon="code" href="/apps/api-routes">
+    Serve chart data via API
+  </Card>
+</CardGroup>

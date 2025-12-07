@@ -1,0 +1,234 @@
+---
+title: Transforming Data
+description: "Clean, reshape, and enrich your data"
+---
+
+# Transforming Data
+
+After importing data, you'll often need to clean it up, reshape it, or enrich it with additional information.
+
+## Common Transformations
+
+### Cleaning Data
+
+```
+Remove duplicate rows from orders
+
+Fill null values in 'region' with 'Unknown'
+
+Trim whitespace from all text columns
+
+Fix inconsistent capitalization in customer names
+```
+
+### Changing Data Types
+
+```
+Convert the 'date' column from text to timestamp
+
+Change 'amount' from text to numeric
+
+Cast 'is_active' to boolean
+```
+
+### Renaming
+
+```
+Rename column 'cust_name' to 'customer_name'
+
+Rename the 'tbl_orders' table to 'orders'
+```
+
+### Adding Columns
+
+```
+Add a 'created_at' timestamp column with default NOW()
+
+Create a 'full_name' column combining first and last name
+
+Add a calculated 'profit_margin' column
+```
+
+## Creating Derived Tables
+
+Create new tables from existing data:
+
+```
+Create a monthly_summary table with revenue by month
+
+Build a customer_segments table based on purchase history
+
+Make a products_enriched table with category names joined in
+```
+
+Example:
+
+```sql
+CREATE TABLE monthly_revenue AS
+SELECT
+  date_trunc('month', order_date) as month,
+  SUM(amount) as revenue,
+  COUNT(*) as orders,
+  COUNT(DISTINCT customer_id) as customers
+FROM orders
+GROUP BY 1;
+```
+
+## Views vs Tables
+
+### Views
+
+Views are virtual tables that run a query each time:
+
+```
+Create a view called 'active_customers' for customers with orders in the last 30 days
+```
+
+```sql
+CREATE VIEW active_customers AS
+SELECT DISTINCT c.*
+FROM customers c
+JOIN orders o ON c.id = o.customer_id
+WHERE o.order_date > NOW() - INTERVAL '30 days';
+```
+
+**Use views when:**
+- Data changes frequently
+- You want always-current results
+- Storage space is limited
+
+### Materialized Views
+
+Materialized views store results for faster queries:
+
+```
+Create a materialized view for the daily stats
+```
+
+```sql
+CREATE MATERIALIZED VIEW daily_stats AS
+SELECT
+  date_trunc('day', created_at) as day,
+  COUNT(*) as count,
+  SUM(amount) as total
+FROM orders
+GROUP BY 1;
+```
+
+Refresh when needed:
+
+```
+Refresh the daily_stats materialized view
+```
+
+## Data Enrichment
+
+### Geocoding
+
+```
+Add latitude and longitude to the addresses table
+```
+
+### Lookups
+
+```
+Join region codes with region names from the regions reference table
+```
+
+### Calculations
+
+```
+Calculate the running total of sales for each customer
+
+Add a 'days_since_last_order' column
+
+Compute percentile ranks for order amounts
+```
+
+## Normalization
+
+Split denormalized data into proper tables:
+
+```
+The orders table has embedded customer data.
+Extract it into a separate customers table and link by customer_id.
+```
+
+The AI will:
+1. Create the new table
+2. Populate it with unique records
+3. Add foreign keys
+4. Update the original table
+
+## Bulk Updates
+
+```
+Set status to 'archived' for all orders older than 1 year
+
+Update all prices by 10%
+
+Mark inactive customers who haven't ordered in 6 months
+```
+
+<Warning>
+Always verify bulk updates before running. The AI will ask for confirmation on destructive operations.
+</Warning>
+
+## Data Pipelines
+
+For regular transformations, create a monitor:
+
+```typescript
+// monitors/daily-aggregation.ts
+import { monitor } from "@hands/stdlib";
+
+export const handler = monitor(async (ctx) => {
+  // Refresh materialized views
+  await ctx.sql`REFRESH MATERIALIZED VIEW daily_stats`;
+
+  // Archive old data
+  await ctx.sql`
+    UPDATE orders
+    SET status = 'archived'
+    WHERE order_date < NOW() - INTERVAL '1 year'
+    AND status = 'completed'
+  `;
+
+  return { status: "ok" };
+});
+```
+
+Schedule it:
+
+```typescript
+// hands.config.ts
+monitors: {
+  "daily-aggregation": {
+    schedule: "cron(0 2 * * *)",  // 2 AM daily
+    handler: "monitors/daily-aggregation.handler"
+  }
+}
+```
+
+## Undo Changes
+
+Hands tracks your schema changes. To undo:
+
+```
+Undo the last column addition
+
+Revert the table rename
+
+Restore the original data types
+```
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Build Dashboards" icon="chart-line" href="/apps/dashboards">
+    Visualize your transformed data
+  </Card>
+  <Card title="Scheduled Jobs" icon="clock" href="/apps/scheduled-jobs">
+    Automate data pipelines
+  </Card>
+</CardGroup>

@@ -1,0 +1,302 @@
+---
+title: Integration
+description: "External data connectors"
+---
+
+# Integration
+
+Integrations connect your app to external data sources. They can receive webhooks, poll APIs, or stream data.
+
+## Import
+
+```typescript
+import { integration } from "@hands/stdlib";
+```
+
+## Basic Usage
+
+```typescript
+// integrations/webhook.ts
+import { integration } from "@hands/stdlib";
+
+export const handler = integration(async (ctx) => {
+  const event = ctx.request.body;
+
+  await ctx.sql`
+    INSERT INTO webhook_events (source, payload)
+    VALUES ('external', ${JSON.stringify(event)})
+  `;
+
+  return { status: 200, body: { received: true } };
+});
+```
+
+## Context Object
+
+| Property | Type | Description |
+|----------|------|-------------|
+| `sql` | `SqlClient` | Database query client |
+| `log` | `(msg: string) => void` | Structured logging |
+| `env` | `Record<string, string>` | Environment variables |
+| `request` | `IntegrationRequest` | Incoming request data |
+
+### Request Object
+
+```typescript
+ctx.request = {
+  method: "POST",
+  headers: { "content-type": "application/json", ... },
+  body: { ... },  // Parsed JSON or raw string
+  query: { key: "value", ... }
+}
+```
+
+## Return Value
+
+Integrations return an HTTP response:
+
+```typescript
+return {
+  status: 200,
+  headers: { "Content-Type": "application/json" },
+  body: { success: true }
+};
+```
+
+## Integration Types
+
+### Webhook
+
+Receive incoming HTTP requests:
+
+```typescript
+export const handler = integration(async (ctx) => {
+  const signature = ctx.request.headers["x-webhook-signature"];
+
+  // Verify signature
+  if (!verifySignature(signature, ctx.request.body, ctx.env.WEBHOOK_SECRET)) {
+    return { status: 401, body: { error: "Invalid signature" } };
+  }
+
+  // Process webhook
+  await processEvent(ctx.request.body);
+
+  return { status: 200, body: { ok: true } };
+});
+```
+
+Configuration:
+
+```typescript
+integrations: {
+  "stripe-webhook": {
+    type: "webhook",
+    handler: "integrations/stripe.handler"
+  }
+}
+```
+
+### Polling
+
+Periodically fetch from external APIs:
+
+```typescript
+export const handler = integration(async (ctx) => {
+  const response = await fetch("https://api.example.com/data", {
+    headers: { "Authorization": `Bearer ${ctx.env.API_KEY}` }
+  });
+
+  const data = await response.json();
+
+  for (const item of data) {
+    await ctx.sql`
+      INSERT INTO external_data (id, data)
+      VALUES (${item.id}, ${JSON.stringify(item)})
+      ON CONFLICT (id) DO UPDATE SET data = EXCLUDED.data
+    `;
+  }
+
+  return { status: 200, body: { synced: data.length } };
+});
+```
+
+Configuration:
+
+```typescript
+integrations: {
+  "api-sync": {
+    type: "polling",
+    schedule: "rate(1 hour)",
+    handler: "integrations/sync.handler"
+  }
+}
+```
+
+### Stream
+
+Process streaming data (advanced):
+
+```typescript
+export const handler = integration(async (ctx) => {
+  // Handle streaming connection
+  // Implementation depends on the data source
+});
+```
+
+Configuration:
+
+```typescript
+integrations: {
+  "event-stream": {
+    type: "stream",
+    handler: "integrations/stream.handler"
+  }
+}
+```
+
+## Configuration
+
+Register in `hands.config.ts`:
+
+```typescript
+import { defineConfig } from "@hands/stdlib";
+
+export default defineConfig({
+  integrations: {
+    "stripe-webhook": {
+      type: "webhook",
+      handler: "integrations/stripe.handler"
+    },
+
+    "salesforce-sync": {
+      type: "polling",
+      schedule: "rate(30 minutes)",
+      handler: "integrations/salesforce.handler"
+    }
+  }
+});
+```
+
+## Common Patterns
+
+### Stripe Webhook
+
+```typescript
+import { integration } from "@hands/stdlib";
+import Stripe from "stripe";
+
+export const handler = integration(async (ctx) => {
+  const stripe = new Stripe(ctx.env.STRIPE_SECRET_KEY);
+  const signature = ctx.request.headers["stripe-signature"];
+
+  let event;
+  try {
+    event = stripe.webhooks.constructEvent(
+      ctx.request.body,
+      signature,
+      ctx.env.STRIPE_WEBHOOK_SECRET
+    );
+  } catch (err) {
+    return { status: 400, body: { error: "Invalid signature" } };
+  }
+
+  switch (event.type) {
+    case "payment_intent.succeeded":
+      await ctx.sql`
+        UPDATE orders SET status = 'paid'
+        WHERE stripe_id = ${event.data.object.id}
+      `;
+      break;
+    // ... handle other events
+  }
+
+  return { status: 200, body: { received: true } };
+});
+```
+
+### GitHub Webhook
+
+```typescript
+import { integration } from "@hands/stdlib";
+import crypto from "crypto";
+
+export const handler = integration(async (ctx) => {
+  const signature = ctx.request.headers["x-hub-signature-256"];
+  const payload = JSON.stringify(ctx.request.body);
+
+  const expected = "sha256=" + crypto
+    .createHmac("sha256", ctx.env.GITHUB_WEBHOOK_SECRET)
+    .update(payload)
+    .digest("hex");
+
+  if (signature !== expected) {
+    return { status: 401, body: { error: "Invalid signature" } };
+  }
+
+  const event = ctx.request.headers["x-github-event"];
+  await ctx.sql`
+    INSERT INTO github_events (event_type, payload)
+    VALUES (${event}, ${payload})
+  `;
+
+  return { status: 200, body: { ok: true } };
+});
+```
+
+### API Polling
+
+```typescript
+export const handler = integration(async (ctx) => {
+  // Get last sync timestamp
+  const [{ last_sync }] = await ctx.sql`
+    SELECT MAX(synced_at) as last_sync FROM synced_data
+  `;
+
+  // Fetch updates since last sync
+  const response = await fetch(
+    `https://api.example.com/updates?since=${last_sync}`,
+    { headers: { "Authorization": `Bearer ${ctx.env.API_KEY}` } }
+  );
+
+  const updates = await response.json();
+
+  for (const item of updates) {
+    await ctx.sql`
+      INSERT INTO synced_data (external_id, data, synced_at)
+      VALUES (${item.id}, ${JSON.stringify(item)}, NOW())
+      ON CONFLICT (external_id) DO UPDATE
+      SET data = EXCLUDED.data, synced_at = NOW()
+    `;
+  }
+
+  ctx.log(`Synced ${updates.length} items`);
+  return { status: 200, body: { synced: updates.length } };
+});
+```
+
+## TypeScript Types
+
+```typescript
+import {
+  integration,
+  IntegrationContext,
+  IntegrationResult
+} from "@hands/stdlib";
+
+export const handler = integration(
+  async (ctx: IntegrationContext): Promise<IntegrationResult> => {
+    // ...
+  }
+);
+```
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Configuration" icon="gear" href="/stdlib/config">
+    Full config reference
+  </Card>
+  <Card title="Deployment" icon="rocket" href="/deploy/cloudflare">
+    Deploy your integrations
+  </Card>
+</CardGroup>

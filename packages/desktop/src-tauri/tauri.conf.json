@@ -17,7 +17,7 @@
         "title": "Hands",
         "width": 500,
         "height": 600,
-        "minWidth": 400,
+        "minWidth": 500,
         "minHeight": 60,
         "maxWidth": 1200,
         "resizable": true,

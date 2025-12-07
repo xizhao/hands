@@ -1,0 +1,104 @@
+---
+title: Introduction
+description: "Build data apps with AI and deploy to the edge"
+---
+
+# Welcome to Hands
+
+Hands is a desktop app for building data applications. Import your data, analyze it with AI, create dashboards and APIs, then deploy to Cloudflare Workers with one command.
+
+<CardGroup cols={2}>
+  <Card title="Quickstart" icon="rocket" href="/quickstart">
+    Get up and running in 5 minutes
+  </Card>
+  <Card title="Workbooks" icon="folder" href="/workbooks">
+    Understand how Hands organizes your work
+  </Card>
+  <Card title="Build a Dashboard" icon="chart-line" href="/guides/first-dashboard">
+    Create your first data dashboard
+  </Card>
+  <Card title="Stdlib Reference" icon="book" href="/stdlib/overview">
+    Explore the standard library
+  </Card>
+</CardGroup>
+
+## What is Hands?
+
+Hands combines several powerful tools into one seamless experience:
+
+<AccordionGroup>
+  <Accordion title="Embedded PostgreSQL" icon="database">
+    Every workbook includes a local PostgreSQL database. Import CSV, JSON, or Excel files and start querying immediately. No database setup required.
+  </Accordion>
+
+  <Accordion title="AI-Powered Development" icon="brain">
+    Chat with AI to analyze your data, write SQL queries, build charts, and create APIs. Supports Claude, GPT, Gemini, and more.
+  </Accordion>
+
+  <Accordion title="Full-Stack Data Apps" icon="layer-group">
+    Build complete applications with:
+    - **Dashboards** - Interactive data visualizations
+    - **Charts** - Line, bar, pie, area, and table views
+    - **API Routes** - HTTP endpoints for your data
+    - **Scheduled Jobs** - Cron-based data pipelines
+  </Accordion>
+
+  <Accordion title="Edge Deployment" icon="cloud">
+    Deploy to Cloudflare Workers with a single command. Your apps run globally at the edge with millisecond latency.
+  </Accordion>
+</AccordionGroup>
+
+## How It Works
+
+<Steps>
+  <Step title="Create a Workbook">
+    Each workbook is a complete project with its own database, code, and configuration.
+  </Step>
+
+  <Step title="Import Your Data">
+    Drag and drop files or use the AI to ingest data from any source. Hands automatically creates tables and infers schemas.
+  </Step>
+
+  <Step title="Build with AI">
+    Ask the AI to analyze data, create visualizations, build APIs, or write any code you need.
+  </Step>
+
+  <Step title="Deploy">
+    Push to Cloudflare Workers. Your data app is now live and accessible worldwide.
+  </Step>
+</Steps>
+
+## Example: From CSV to Dashboard
+
+```
+You: Import this sales data and show me revenue by region
+
+AI: I'll import the CSV and create a dashboard for you.
+
+[Creates table 'sales' with columns: date, region, amount, product]
+[Generates dashboard with regional breakdown chart]
+
+Your dashboard is ready at http://localhost:8787
+```
+
+## Tech Stack
+
+| Component | Technology |
+|-----------|------------|
+| Runtime | Cloudflare Workers |
+| Web Framework | Hono |
+| Database | PostgreSQL (embedded locally, Hyperdrive in production) |
+| Frontend | React + TailwindCSS (SSR) |
+| AI Backend | OpenCode |
+| Desktop | Tauri |
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Install Hands" icon="download" href="/quickstart">
+    Download and set up Hands on your machine
+  </Card>
+  <Card title="Your First App" icon="play" href="/guides/first-dashboard">
+    Build a complete dashboard in 10 minutes
+  </Card>
+</CardGroup>

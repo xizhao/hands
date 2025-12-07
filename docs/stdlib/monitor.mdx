@@ -1,0 +1,285 @@
+---
+title: Monitor
+description: "Scheduled job handlers"
+---
+
+# Monitor
+
+Monitors are scheduled jobs that run on a cron or rate schedule. Use them for data pipelines, cleanup tasks, reports, and more.
+
+## Import
+
+```typescript
+import { monitor } from "@hands/stdlib";
+```
+
+## Basic Usage
+
+```typescript
+// monitors/daily-stats.ts
+import { monitor } from "@hands/stdlib";
+
+export const handler = monitor(async (ctx) => {
+  // Your job logic here
+  await ctx.sql`REFRESH MATERIALIZED VIEW daily_stats`;
+
+  return { status: "ok" };
+});
+```
+
+## Context Object
+
+| Property | Type | Description |
+|----------|------|-------------|
+| `sql` | `SqlClient` | Database query client |
+| `log` | `(msg: string) => void` | Structured logging |
+| `env` | `Record<string, string>` | Environment variables |
+
+### Using SQL
+
+```typescript
+export const handler = monitor(async (ctx) => {
+  const users = await ctx.sql`SELECT * FROM users WHERE active = true`;
+
+  for (const user of users) {
+    await ctx.sql`
+      UPDATE users SET last_checked = NOW() WHERE id = ${user.id}
+    `;
+  }
+
+  return { status: "ok", checked: users.length };
+});
+```
+
+### Logging
+
+```typescript
+export const handler = monitor(async (ctx) => {
+  ctx.log("Starting cleanup job");
+
+  const deleted = await ctx.sql`
+    DELETE FROM logs WHERE created_at < NOW() - INTERVAL '90 days'
+  `;
+
+  ctx.log(`Deleted ${deleted.count} old logs`);
+
+  return { status: "ok" };
+});
+```
+
+### Environment Variables
+
+```typescript
+export const handler = monitor(async (ctx) => {
+  const apiKey = ctx.env.EXTERNAL_API_KEY;
+
+  const response = await fetch("https://api.example.com/sync", {
+    headers: { "Authorization": `Bearer ${apiKey}` }
+  });
+
+  // ...
+});
+```
+
+## Return Value
+
+Monitors must return a status:
+
+```typescript
+// Success
+return { status: "ok" };
+
+// Success with metadata
+return {
+  status: "ok",
+  rows: 1000,
+  duration: "2.5s"
+};
+
+// Warning (job completed but with issues)
+return {
+  status: "warning",
+  message: "3 records skipped due to invalid data"
+};
+
+// Error
+return {
+  status: "error",
+  message: "Database connection failed"
+};
+```
+
+## Configuration
+
+Register in `hands.config.ts`:
+
+```typescript
+import { defineConfig } from "@hands/stdlib";
+
+export default defineConfig({
+  monitors: {
+    "daily-stats": {
+      schedule: "cron(0 2 * * *)",  // 2 AM daily
+      handler: "monitors/daily-stats.handler",
+      timeout: 60,    // seconds
+      memory: 512     // MB
+    },
+
+    "hourly-sync": {
+      schedule: "rate(1 hour)",
+      handler: "monitors/hourly-sync.handler"
+    }
+  }
+});
+```
+
+## Schedule Formats
+
+### Rate Expressions
+
+```typescript
+"rate(5 minutes)"    // Every 5 minutes
+"rate(1 hour)"       // Every hour
+"rate(6 hours)"      // Every 6 hours
+"rate(1 day)"        // Every day
+```
+
+### Cron Expressions
+
+```typescript
+"cron(0 * * * *)"      // Every hour at minute 0
+"cron(0 2 * * *)"      // Daily at 2 AM
+"cron(0 9 * * 1)"      // Every Monday at 9 AM
+"cron(0 0 1 * *)"      // First of every month
+"cron(*/15 * * * *)"   // Every 15 minutes
+```
+
+Format: `cron(minute hour day-of-month month day-of-week)`
+
+## Common Patterns
+
+### Data Pipeline
+
+```typescript
+export const handler = monitor(async (ctx) => {
+  // Extract
+  const raw = await ctx.sql`
+    SELECT * FROM raw_events WHERE processed = false LIMIT 1000
+  `;
+
+  // Transform & Load
+  for (const event of raw) {
+    const transformed = transformEvent(event);
+    await ctx.sql`INSERT INTO processed_events ${ctx.sql(transformed)}`;
+    await ctx.sql`UPDATE raw_events SET processed = true WHERE id = ${event.id}`;
+  }
+
+  return { status: "ok", processed: raw.length };
+});
+```
+
+### Materialized View Refresh
+
+```typescript
+export const handler = monitor(async (ctx) => {
+  await ctx.sql`REFRESH MATERIALIZED VIEW CONCURRENTLY sales_summary`;
+  await ctx.sql`REFRESH MATERIALIZED VIEW CONCURRENTLY customer_stats`;
+
+  return { status: "ok" };
+});
+```
+
+### External API Sync
+
+```typescript
+export const handler = monitor(async (ctx) => {
+  const response = await fetch("https://api.example.com/data", {
+    headers: { "Authorization": `Bearer ${ctx.env.API_KEY}` }
+  });
+
+  if (!response.ok) {
+    return { status: "error", message: `API returned ${response.status}` };
+  }
+
+  const data = await response.json();
+
+  for (const item of data) {
+    await ctx.sql`
+      INSERT INTO synced_data (external_id, data)
+      VALUES (${item.id}, ${JSON.stringify(item)})
+      ON CONFLICT (external_id) DO UPDATE SET data = EXCLUDED.data
+    `;
+  }
+
+  return { status: "ok", synced: data.length };
+});
+```
+
+### Cleanup Job
+
+```typescript
+export const handler = monitor(async (ctx) => {
+  // Delete old data
+  const deleted = await ctx.sql`
+    DELETE FROM sessions WHERE expires_at < NOW()
+  `;
+
+  // Archive old records
+  await ctx.sql`
+    INSERT INTO archive_orders
+    SELECT * FROM orders WHERE created_at < NOW() - INTERVAL '1 year'
+  `;
+
+  await ctx.sql`
+    DELETE FROM orders WHERE created_at < NOW() - INTERVAL '1 year'
+  `;
+
+  return { status: "ok" };
+});
+```
+
+## Error Handling
+
+```typescript
+export const handler = monitor(async (ctx) => {
+  try {
+    await riskyOperation();
+    return { status: "ok" };
+  } catch (error) {
+    ctx.log(`Error: ${error.message}`);
+    return { status: "error", message: error.message };
+  }
+});
+```
+
+## Wrangler Configuration
+
+Monitors also need cron triggers in `wrangler.toml`:
+
+```toml
+[triggers]
+crons = ["0 2 * * *", "*/15 * * * *"]
+```
+
+## TypeScript Types
+
+```typescript
+import { monitor, MonitorContext, MonitorResult } from "@hands/stdlib";
+
+export const handler = monitor(
+  async (ctx: MonitorContext): Promise<MonitorResult> => {
+    // ...
+  }
+);
+```
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Dashboard" icon="gauge" href="/stdlib/dashboard">
+    Create web pages
+  </Card>
+  <Card title="Integration" icon="plug" href="/stdlib/integration">
+    External connectors
+  </Card>
+</CardGroup>
