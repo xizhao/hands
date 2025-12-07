@@ -63,6 +63,7 @@ export function useMessages(sessionId: string | null) {
     queryKey: ["messages", sessionId, directory],
     queryFn: () => api.messages.list(sessionId!, directory),
     enabled: !!sessionId,
+    initialData: [], // Ensure cache exists immediately
     select: (data) =>
       [...data].sort((a, b) => a.info.time.created - b.info.time.created),
   });
@@ -225,46 +226,43 @@ export function useEventSubscription() {
           const { info } = event.properties;
           const sessionID = info.sessionID;
 
-          // Find all matching query caches and update them
-          const queries = queryClient.getQueriesData<MessageWithParts[]>({
-            queryKey: ["messages"],
-          });
+          // Update all message caches that match this sessionID
+          queryClient.setQueriesData<MessageWithParts[]>(
+            { queryKey: ["messages"] },
+            (oldData, { queryKey }) => {
+              // Only update caches for this session
+              if (queryKey[1] !== sessionID) return oldData;
 
-          // Update each matching query that has this sessionID
-          queries.forEach(([queryKey, oldData]) => {
-            if (queryKey[1] === sessionID && oldData) {
+              const data = oldData || [];
               // Check if message already exists (by real ID)
-              const existingIdx = oldData.findIndex((m) => m.info.id === info.id);
+              const existingIdx = data.findIndex((m) => m.info.id === info.id);
 
-              let newData: MessageWithParts[];
               if (existingIdx >= 0) {
                 // Update existing message - preserve existing parts
-                newData = oldData.map((m, idx) =>
+                return data.map((m, idx) =>
                   idx === existingIdx ? { ...m, info } : m
                 );
               } else if (info.role === "user") {
                 // For user messages, replace any temp optimistic message
-                const tempIdx = oldData.findIndex(
+                const tempIdx = data.findIndex(
                   (m) => m.info.id.startsWith("temp-") && m.info.role === "user"
                 );
 
                 if (tempIdx >= 0) {
                   // Replace temp message with real one, preserving parts
-                  newData = oldData.map((m, idx) =>
+                  return data.map((m, idx) =>
                     idx === tempIdx ? { info, parts: m.parts } : m
                   );
                 } else {
-                  // No temp message found, add new (shouldn't happen normally)
-                  newData = [...oldData, { info, parts: [] }];
+                  // No temp message found, add new
+                  return [...data, { info, parts: [] }];
                 }
               } else {
                 // Assistant message - add new with empty parts
-                newData = [...oldData, { info, parts: [] }];
+                return [...data, { info, parts: [] }];
               }
-
-              queryClient.setQueryData(queryKey, newData);
             }
-          });
+          );
           break;
         }
 
@@ -272,17 +270,13 @@ export function useEventSubscription() {
           // Type: EventMessageRemoved
           // Properties: { sessionID: string, messageID: string }
           const { sessionID, messageID } = event.properties;
-          const queries = queryClient.getQueriesData<MessageWithParts[]>({
-            queryKey: ["messages"],
-          });
-          queries.forEach(([queryKey, oldData]) => {
-            if (queryKey[1] === sessionID && oldData) {
-              queryClient.setQueryData(
-                queryKey,
-                oldData.filter((m) => m.info.id !== messageID)
-              );
+          queryClient.setQueriesData<MessageWithParts[]>(
+            { queryKey: ["messages"] },
+            (oldData, { queryKey }) => {
+              if (queryKey[1] !== sessionID || !oldData) return oldData;
+              return oldData.filter((m) => m.info.id !== messageID);
             }
-          });
+          );
           break;
         }
 
@@ -293,24 +287,38 @@ export function useEventSubscription() {
           const sessionID = part.sessionID;
           const messageID = part.messageID;
 
-          const queries = queryClient.getQueriesData<MessageWithParts[]>({
-            queryKey: ["messages"],
-          });
+          // Update all message caches that match this sessionID
+          queryClient.setQueriesData<MessageWithParts[]>(
+            { queryKey: ["messages"] },
+            (oldData, { queryKey }) => {
+              // Only update caches for this session
+              if (queryKey[1] !== sessionID) return oldData;
 
-          queries.forEach(([queryKey, oldData]) => {
-            if (queryKey[1] === sessionID && oldData) {
+              const data = oldData || [];
               // Find message by ID or temp message for user parts
-              const messageIdx = oldData.findIndex(
+              const messageIdx = data.findIndex(
                 (m) => m.info.id === messageID ||
                   (m.info.id.startsWith("temp-") && m.info.role === "user")
               );
 
               if (messageIdx < 0) {
-                // Message doesn't exist yet, skip
-                return;
+                // Message doesn't exist yet - this can happen if part.updated arrives before message.updated
+                // Create a placeholder message with this part
+                const newMessage: MessageWithParts = {
+                  info: {
+                    id: messageID,
+                    sessionID,
+                    role: "assistant",
+                    time: { created: Date.now() },
+                    agent: "default",
+                    model: { providerID: "", modelID: "" },
+                  },
+                  parts: [part],
+                };
+                return [...data, newMessage];
               }
 
-              const newData = oldData.map((m, idx) => {
+              return data.map((m, idx) => {
                 if (idx !== messageIdx) return m;
                 const partIdx = m.parts.findIndex((p) => p.id === part.id);
                 return {
@@ -320,10 +328,8 @@ export function useEventSubscription() {
                     : [...m.parts, part],
                 };
               });
-
-              queryClient.setQueryData(queryKey, newData);
             }
-          });
+          );
           break;
         }
 
