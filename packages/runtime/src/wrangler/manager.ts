@@ -8,6 +8,14 @@ import { join, dirname } from "path";
 import type { ServiceStatus } from "../types";
 import { validateWranglerConfig } from "./parser";
 
+// Get the runtime's wrangler binary path
+function getWranglerBinPath(): string {
+  // import.meta.dir is packages/runtime/src/wrangler
+  // We need packages/runtime/node_modules/.bin/wrangler
+  const runtimeDir = dirname(dirname(import.meta.dir));
+  return join(runtimeDir, "node_modules", ".bin", "wrangler");
+}
+
 interface WranglerManagerConfig {
   workbookDir: string;
   port: number;
@@ -147,8 +155,11 @@ export class WranglerManager {
     this.output = [];
     this.errors = [];
 
+    const wranglerBin = getWranglerBinPath();
+    console.log(`Using wrangler at: ${wranglerBin}`);
+
     this.process = spawn(
-      ["bunx", "wrangler", "dev", "--local", "--port", String(this.config.port)],
+      [wranglerBin, "dev", "--local", "--port", String(this.config.port)],
       {
         cwd: this.config.workbookDir,
         stdout: "pipe",

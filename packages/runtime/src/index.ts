@@ -4,6 +4,7 @@
  *
  * Usage:
  *   hands-runtime --workbook-id=<id> --workbook-dir=<dir> [--port=<port>]
+ *   hands-runtime --preflight   # Run preflight checks only
  *
  * Manages:
  *   - Embedded PostgreSQL (data in workbook-dir/postgres)
@@ -14,6 +15,7 @@
 import { watch } from "fs";
 import { initRuntime, startServices, stopServices, createServer } from "./server";
 import { runEval } from "./eval";
+import { runPreflightChecks, printPreflightResults } from "./preflight";
 
 // Parse CLI args
 function parseArgs(): {
@@ -116,6 +118,25 @@ function setupFileWatcher(
  * Main entry point
  */
 async function main() {
+  // Check for --preflight flag
+  if (process.argv.includes("--preflight")) {
+    const result = await runPreflightChecks();
+    printPreflightResults(result);
+    process.exit(result.ok ? 0 : 1);
+  }
+
+  // Run preflight checks before starting
+  console.log("Running preflight checks...");
+  const preflightResult = await runPreflightChecks();
+
+  if (!preflightResult.ok) {
+    printPreflightResults(preflightResult);
+    process.exit(1);
+  }
+
+  // Print brief success message
+  console.log("Preflight checks passed\n");
+
   const { workbookId, workbookDir, port } = parseArgs();
 
   console.log(`Starting Hands Runtime for workbook: ${workbookId}`);
