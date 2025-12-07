@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { useSessions, useCreateSession, useEventSubscription } from "@/hooks/useSession";
+import { useSessions, useEventSubscription } from "@/hooks/useSession";
+import { useWorkbooks, useCreateWorkbook } from "@/hooks/useWorkbook";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { Toolbar } from "@/components/Toolbar";
 import { Thread } from "@/components/Thread";
@@ -23,9 +24,31 @@ function FloatingApp() {
   const [showSettings, setShowSettings] = useState(false);
   const [hasData] = useState(false); // TODO: Check if DB has tables
 
-  const { data: sessions, isLoading: sessionsLoading } = useSessions();
-  const createSession = useCreateSession();
   const { activeSessionId, activeWorkbookId, setActiveSession, setActiveWorkbook } = useUIStore();
+  const { data: sessions, isLoading: sessionsLoading } = useSessions();
+  const { data: workbooks, isLoading: workbooksLoading } = useWorkbooks();
+  const createWorkbook = useCreateWorkbook();
+
+  // Auto-select or create a workbook on startup
+  useEffect(() => {
+    if (workbooksLoading || activeWorkbookId) return;
+
+    if (workbooks && workbooks.length > 0) {
+      // Select the most recently opened workbook
+      const mostRecent = workbooks[0];
+      setActiveWorkbook(mostRecent.id, mostRecent.directory);
+    } else if (!createWorkbook.isPending) {
+      // No workbooks exist, create a default one
+      createWorkbook.mutate(
+        { name: "Default Workbook", description: "Auto-created workspace" },
+        {
+          onSuccess: (workbook) => {
+            setActiveWorkbook(workbook.id, workbook.directory);
+          },
+        }
+      );
+    }
+  }, [workbooks, workbooksLoading, activeWorkbookId, setActiveWorkbook, createWorkbook]);
 
   // If sessions exist but none is active, select the first one
   useEffect(() => {

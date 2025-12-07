@@ -163,7 +163,10 @@ fn read_workbook_config(workbook_dir: &PathBuf) -> Option<Workbook> {
 }
 
 #[tauri::command]
-async fn create_workbook(request: CreateWorkbookRequest) -> Result<Workbook, String> {
+async fn create_workbook(
+    state: tauri::State<'_, Arc<Mutex<AppState>>>,
+    request: CreateWorkbookRequest,
+) -> Result<Workbook, String> {
     // Generate ID from slugified name
     let slug = request.name.to_lowercase()
         .chars()
@@ -193,6 +196,24 @@ async fn create_workbook(request: CreateWorkbookRequest) -> Result<Workbook, Str
     // Create SST project structure
     init_sst_project(&workbook_dir, &request.name, request.description.as_deref())?;
 
+    // Create a database for this workbook
+    let db_name = workbook_id_to_db_name(&id);
+    {
+        let state = state.lock().await;
+        if let Some(ref pool) = state.db {
+            // Create database for this workbook (ignore if exists)
+            let create_query = format!("CREATE DATABASE \"{}\"", db_name);
+            if let Err(e) = sqlx::query(&create_query).execute(pool).await {
+                let err_str = format!("{:?}", e);
+                if !err_str.contains("42P04") && !err_str.contains("already exists") {
+                    println!("Warning: Failed to create database {}: {}", db_name, e);
+                }
+            } else {
+                println!("Created database '{}' for workbook '{}'", db_name, id);
+            }
+        }
+    }
+
     let now = timestamp as u64;
     let workbook = Workbook {
         id: id.clone(),
@@ -213,6 +234,16 @@ async fn create_workbook(request: CreateWorkbookRequest) -> Result<Workbook, Str
     write_workbooks_index(&index)?;
 
     Ok(workbook)
+}
+
+// Convert workbook ID to a valid PostgreSQL database name
+fn workbook_id_to_db_name(id: &str) -> String {
+    // PostgreSQL identifiers: lowercase, replace invalid chars with underscore
+    let name: String = id.to_lowercase()
+        .chars()
+        .map(|c| if c.is_alphanumeric() || c == '_' { c } else { '_' })
+        .collect();
+    format!("hands_{}", name)
 }
 
 fn get_template_dir() -> Result<PathBuf, String> {
@@ -279,6 +310,8 @@ fn init_sst_project(workbook_dir: &PathBuf, name: &str, description: Option<&str
     // Replace placeholders in files
     let slug = name.to_lowercase().replace(" ", "-");
     let desc = description.unwrap_or("");
+    let db_name = workbook_id_to_db_name(&slug);
+    let database_url = format!("postgres://hands:hands@localhost:5433/{}", db_name);
 
     // Update package.json
     let package_path = workbook_dir.join("package.json");
@@ -286,6 +319,16 @@ fn init_sst_project(workbook_dir: &PathBuf, name: &str, description: Option<&str
         let content = fs::read_to_string(&package_path).map_err(|e| e.to_string())?;
         let content = content.replace("{{name}}", &slug);
         fs::write(&package_path, content).map_err(|e| e.to_string())?;
+    }
+
+    // Update wrangler.toml
+    let wrangler_path = workbook_dir.join("wrangler.toml");
+    if wrangler_path.exists() {
+        let content = fs::read_to_string(&wrangler_path).map_err(|e| e.to_string())?;
+        let content = content
+            .replace("{{name}}", &slug)
+            .replace("{{database_url}}", &database_url);
+        fs::write(&wrangler_path, content).map_err(|e| e.to_string())?;
     }
 
     // Update sst.config.ts
@@ -457,8 +500,33 @@ async fn update_workbook(workbook: Workbook) -> Result<Workbook, String> {
 }
 
 #[tauri::command]
-async fn delete_workbook(id: String) -> Result<bool, String> {
+async fn delete_workbook(
+    state: tauri::State<'_, Arc<Mutex<AppState>>>,
+    id: String,
+) -> Result<bool, String> {
     let workbook_dir = get_workbook_dir(&id)?;
+
+    // Drop the workbook's database
+    let db_name = workbook_id_to_db_name(&id);
+    {
+        let state = state.lock().await;
+        if let Some(ref pool) = state.db {
+            // Terminate connections to the database first
+            let terminate_query = format!(
+                "SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = '{}'",
+                db_name
+            );
+            let _ = sqlx::query(&terminate_query).execute(pool).await;
+
+            // Drop the database
+            let drop_query = format!("DROP DATABASE IF EXISTS \"{}\"", db_name);
+            if let Err(e) = sqlx::query(&drop_query).execute(pool).await {
+                println!("Warning: Failed to drop database {}: {}", db_name, e);
+            } else {
+                println!("Dropped database '{}' for workbook '{}'", db_name, id);
+            }
+        }
+    }
 
     // Remove from filesystem
     if workbook_dir.exists() {
@@ -472,6 +540,31 @@ async fn delete_workbook(id: String) -> Result<bool, String> {
     let _ = write_workbooks_index(&index);
 
     Ok(true)
+}
+
+// Get the database connection info for a workbook
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct WorkbookDatabaseInfo {
+    pub workbook_id: String,
+    pub database_name: String,
+    pub connection_string: String,
+    pub host: String,
+    pub port: u16,
+    pub user: String,
+}
+
+#[tauri::command]
+async fn get_workbook_database(workbook_id: String) -> Result<WorkbookDatabaseInfo, String> {
+    let db_name = workbook_id_to_db_name(&workbook_id);
+
+    Ok(WorkbookDatabaseInfo {
+        workbook_id: workbook_id.clone(),
+        database_name: db_name.clone(),
+        connection_string: format!("postgres://hands:hands@localhost:5433/{}", db_name),
+        host: "localhost".to_string(),
+        port: 5433,
+        user: "hands".to_string(),
+    })
 }
 
 #[tauri::command]
@@ -925,35 +1018,72 @@ async fn start_dev_server(
             .output();
     }
 
+    // Check if wrangler.toml exists and is valid before starting
+    let wrangler_path = PathBuf::from(&directory).join("wrangler.toml");
+    if wrangler_path.exists() {
+        if let Ok(content) = fs::read_to_string(&wrangler_path) {
+            if content.contains("{{name}}") || content.contains("{{database_url}}") {
+                return Ok(DevServerStatus {
+                    running: false,
+                    workbook_id,
+                    directory,
+                    port: 8787,
+                    message: "wrangler.toml contains unresolved placeholders. Please recreate the workbook.".to_string(),
+                });
+            }
+        }
+    } else {
+        return Ok(DevServerStatus {
+            running: false,
+            workbook_id,
+            directory,
+            port: 8787,
+            message: "No wrangler.toml found in workbook directory".to_string(),
+        });
+    }
+
     // Start wrangler dev server (Miniflare)
     let child = Command::new("bunx")
         .args(["wrangler", "dev", "--local"])
         .current_dir(&directory)
-        .stdout(Stdio::inherit())
-        .stderr(Stdio::inherit())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
         .kill_on_drop(true)
         .spawn()
         .or_else(|_| {
             Command::new("npx")
                 .args(["wrangler", "dev", "--local"])
                 .current_dir(&directory)
-                .stdout(Stdio::inherit())
-                .stderr(Stdio::inherit())
+                .stdout(Stdio::piped())
+                .stderr(Stdio::piped())
                 .kill_on_drop(true)
                 .spawn()
-        })
-        .map_err(|e| format!("Failed to start dev server: {}", e))?;
+        });
 
-    state.sst_servers.insert(workbook_id.clone(), child);
-    println!("Wrangler dev server started for workbook {} on port 8787", workbook_id);
+    match child {
+        Ok(child) => {
+            state.sst_servers.insert(workbook_id.clone(), child);
+            println!("Wrangler dev server started for workbook {} on port 8787", workbook_id);
 
-    Ok(DevServerStatus {
-        running: true,
-        workbook_id,
-        directory,
-        port: 8787,
-        message: "Dev server started on http://localhost:8787".to_string(),
-    })
+            Ok(DevServerStatus {
+                running: true,
+                workbook_id,
+                directory,
+                port: 8787,
+                message: "Dev server started on http://localhost:8787".to_string(),
+            })
+        }
+        Err(e) => {
+            println!("Failed to start wrangler dev server: {}", e);
+            Ok(DevServerStatus {
+                running: false,
+                workbook_id,
+                directory,
+                port: 8787,
+                message: format!("Failed to start dev server: {}. Install wrangler with: npm install -g wrangler", e),
+            })
+        }
+    }
 }
 
 #[tauri::command]
@@ -1189,6 +1319,49 @@ async fn copy_files_to_workbook(
     })
 }
 
+#[tauri::command]
+async fn open_webview(
+    app: tauri::AppHandle,
+    url: String,
+    title: Option<String>,
+) -> Result<(), String> {
+    use tauri::WebviewWindowBuilder;
+    use tauri::WebviewUrl;
+
+    // Generate a unique window label
+    let label = format!("preview_{}", std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap()
+        .as_millis());
+
+    let window_title = title.clone().unwrap_or_else(|| "Preview".to_string());
+
+    // Build URL with query params for our preview wrapper
+    // The preview page will render our custom titlebar + iframe with the target URL
+    let encoded_url = urlencoding::encode(&url);
+    let encoded_title = urlencoding::encode(&window_title);
+    let preview_url = format!("index.html?preview=true&url={}&title={}", encoded_url, encoded_title);
+
+    let builder = WebviewWindowBuilder::new(&app, &label, WebviewUrl::App(preview_url.into()))
+        .title(&window_title)
+        .inner_size(900.0, 700.0)
+        .min_inner_size(400.0, 300.0)
+        .decorations(false)  // Custom window chrome
+        .transparent(true)
+        .resizable(true)
+        .center();
+
+    // Set transparent background on macOS
+    #[cfg(target_os = "macos")]
+    let builder = builder.title_bar_style(tauri::TitleBarStyle::Overlay);
+
+    builder
+        .build()
+        .map_err(|e| format!("Failed to create window: {}", e))?;
+
+    Ok(())
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -1204,12 +1377,14 @@ pub fn run() {
             create_workbook,
             list_workbooks,
             get_workbook,
+            get_workbook_database,
             update_workbook,
             delete_workbook,
             start_dev_server,
             stop_dev_server,
             get_dev_server_status,
-            get_dev_server_routes
+            get_dev_server_routes,
+            open_webview
         ])
         .setup(|app| {
             // Initialize empty state first

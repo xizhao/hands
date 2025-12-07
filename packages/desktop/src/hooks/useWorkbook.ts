@@ -193,6 +193,26 @@ export function useDevServerRoutes(workbookId: string | null) {
   });
 }
 
+// Workbook database info
+export interface WorkbookDatabaseInfo {
+  workbook_id: string;
+  database_name: string;
+  connection_string: string;
+  host: string;
+  port: number;
+  user: string;
+}
+
+// Get database connection info for a workbook
+export function useWorkbookDatabase(workbookId: string | null) {
+  return useQuery({
+    queryKey: ["workbook-database", workbookId],
+    queryFn: () => invoke<WorkbookDatabaseInfo>("get_workbook_database", { workbookId: workbookId! }),
+    enabled: !!workbookId,
+    staleTime: Infinity, // Database info doesn't change
+  });
+}
+
 // Legacy aliases for backwards compatibility
 export const useSstStatus = useDevServerStatus;
 export const useSstOutputs = (directory: string | null) => {

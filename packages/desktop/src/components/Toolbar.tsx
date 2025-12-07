@@ -1,7 +1,9 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useSendMessage, useAbortSession, useSessionStatuses, useSessions, useCreateSession, useDeleteSession } from "@/hooks/useSession";
+import { api } from "@/lib/api";
 import { useUIStore } from "@/stores/ui";
+import { useBackgroundStore } from "@/stores/background";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -13,10 +15,12 @@ import {
   DropdownMenuSubTrigger,
   DropdownMenuSubContent,
 } from "@/components/ui/dropdown-menu";
-import { ArrowUp, Square, Loader2, GripVertical, Hand, Settings, Plus, Database, Clock, MessageSquare, X, Check, Trash2 } from "lucide-react";
+import { ArrowUp, Square, Loader2, GripVertical, Hand, Settings, Plus, Database, FolderOpen, Check, Trash2, Radio, Clock, Route, BarChart3, ExternalLink, Pencil } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { listen } from "@tauri-apps/api/event";
-import { useWorkbook, useWorkbooks } from "@/hooks/useWorkbook";
+import { invoke } from "@tauri-apps/api/core";
+import { useWorkbook, useWorkbooks, useCreateWorkbook, useUpdateWorkbook, useDeleteWorkbook, useStartDevServer, useStopDevServer, useDevServerStatus, useDevServerRoutes, useWorkbookDatabase } from "@/hooks/useWorkbook";
+import { getAllWebviewWindows } from "@tauri-apps/api/webviewWindow";
 
 interface ToolbarProps {
   expanded: boolean;
@@ -34,6 +38,7 @@ export function Toolbar({ expanded, onExpandChange, hasData, onOpenSettings }: T
   const hasHandledDrop = useRef(false); // Prevent duplicate drops
   const queryClient = useQueryClient();
   const { activeSessionId, activeWorkbookId, setActiveWorkbook, setActiveSession } = useUIStore();
+  const { addTask } = useBackgroundStore();
   const { data: sessionStatuses = {} } = useSessionStatuses();
   const sendMessage = useSendMessage(activeSessionId);
   const abortSession = useAbortSession(activeSessionId);
@@ -46,11 +51,30 @@ export function Toolbar({ expanded, onExpandChange, hasData, onOpenSettings }: T
   // Fetch current workbook and all workbooks for the dropdown
   const { data: activeWorkbook } = useWorkbook(activeWorkbookId);
   const { data: workbooks = [] } = useWorkbooks();
+  const createWorkbook = useCreateWorkbook();
+  const updateWorkbook = useUpdateWorkbook();
+  const deleteWorkbook = useDeleteWorkbook();
 
-  // Recent workbooks (excluding current, sorted by last opened)
-  const recentWorkbooks = workbooks
-    .filter((wb) => wb.id !== activeWorkbookId)
-    .slice(0, 5);
+  // Editing state for workbook rename
+  const [editingWorkbookId, setEditingWorkbookId] = useState<string | null>(null);
+  const [editingName, setEditingName] = useState("");
+
+  // Dev server management
+  const startDevServer = useStartDevServer();
+  const stopDevServer = useStopDevServer();
+  const { data: devServerStatus } = useDevServerStatus(activeWorkbookId);
+  const { data: devServerRoutes } = useDevServerRoutes(activeWorkbookId);
+  const { data: workbookDatabase } = useWorkbookDatabase(activeWorkbookId);
+
+  // Auto-start dev server when workbook changes
+  useEffect(() => {
+    if (activeWorkbook && !devServerStatus?.running) {
+      startDevServer.mutate({
+        workbookId: activeWorkbook.id,
+        directory: activeWorkbook.directory,
+      });
+    }
+  }, [activeWorkbook?.id]); // Only trigger on workbook ID change
 
   const status = activeSessionId ? sessionStatuses[activeSessionId] : null;
   const isBusy = status?.type === "busy" || status?.type === "running";
@@ -62,32 +86,55 @@ export function Toolbar({ expanded, onExpandChange, hasData, onOpenSettings }: T
 
     const setupListeners = async () => {
       const unlistenDrop = await listen<{ paths: string[] }>("tauri://drag-drop", async (event) => {
+        console.log("Drop event received:", event.payload);
+
         // Prevent duplicate handling
         if (hasHandledDrop.current) return;
         hasHandledDrop.current = true;
         setTimeout(() => { hasHandledDrop.current = false; }, 500);
 
         const filePaths = event.payload.paths;
-        if (!activeSessionId || filePaths.length === 0) return;
+        if (filePaths.length === 0) return;
 
         setIsDragging(false);
 
-        // Expand the panel to show the conversation
-        onExpandChange(true);
+        // Create a background session for file import
+        // This runs independently without blocking the main thread
+        try {
+          const fileNames = filePaths.map(p => p.split("/").pop() || p);
+          const title = fileNames.length === 1
+            ? `Import ${fileNames[0]}`
+            : `Import ${fileNames.length} files`;
 
-        // Build a simple prompt that invokes the import subagent
-        const ingestPrompt = `@import ${filePaths.join(" ")}`;
+          // Create a new session for the background import
+          const bgSession = await api.sessions.create({ title });
 
-        sendMessage.mutate(ingestPrompt);
+          // Track it in the background store
+          addTask({
+            id: bgSession.id,
+            type: "import",
+            title,
+            status: "running",
+            startedAt: Date.now(),
+          });
+
+          // Start the import with the import agent
+          const importPrompt = `Import these files into the database:\n${filePaths.join("\n")}`;
+          await api.promptWithAgent(bgSession.id, importPrompt, "import");
+        } catch (err) {
+          console.error("Failed to start background import:", err);
+        }
       });
       unlisteners.push(unlistenDrop);
 
       const unlistenEnter = await listen("tauri://drag-enter", () => {
+        console.log("Drag enter");
         setIsDragging(true);
       });
       unlisteners.push(unlistenEnter);
 
       const unlistenLeave = await listen("tauri://drag-leave", () => {
+        console.log("Drag leave");
         setIsDragging(false);
       });
       unlisteners.push(unlistenLeave);
@@ -98,7 +145,7 @@ export function Toolbar({ expanded, onExpandChange, hasData, onOpenSettings }: T
     return () => {
       unlisteners.forEach((unlisten) => unlisten());
     };
-  }, [activeSessionId]); // Minimal dependencies - refs used for mutable values
+  }, [addTask]); // Background session creation doesn't depend on active session
 
   // Drag & drop handlers
   const handleDragEnter = useCallback((e: React.DragEvent) => {
@@ -172,39 +219,84 @@ export function Toolbar({ expanded, onExpandChange, hasData, onOpenSettings }: T
     }
   };
 
-  const handleNewThread = () => {
-    createSession.mutate({}, {
-      onSuccess: (newSession) => {
-        setActiveSession(newSession.id);
-        setMenuOpen(false);
+  const handleSwitchWorkbook = async (workbookId: string, directory: string) => {
+    // Close all spawned webview windows
+    try {
+      const windows = await getAllWebviewWindows();
+      for (const win of windows) {
+        // Only close webview windows we spawned (they have webview_ prefix)
+        if (win.label.startsWith("webview_")) {
+          await win.close();
+        }
       }
-    });
-  };
+    } catch (err) {
+      console.error("Failed to close webview windows:", err);
+    }
 
-  const handleSwitchThread = (sessionId: string) => {
-    setActiveSession(sessionId);
+    // Stop current dev server
+    if (activeWorkbookId) {
+      stopDevServer.mutate(activeWorkbookId);
+    }
+
+    // Clear session-related caches for clean slate
+    queryClient.removeQueries({ queryKey: ["messages"] });
+    queryClient.removeQueries({ queryKey: ["todos"] });
+    queryClient.removeQueries({ queryKey: ["sessions"] });
+
+    // Switch to new workbook (this also clears activeSessionId)
+    setActiveWorkbook(workbookId, directory);
     setMenuOpen(false);
   };
 
-  const handleDeleteThread = (sessionId: string, e: React.MouseEvent) => {
-    e.stopPropagation();
-    deleteSession.mutate(sessionId, {
-      onSuccess: () => {
-        // If we deleted the active session, switch to another one
-        if (sessionId === activeSessionId && sessions.length > 1) {
-          const nextSession = sessions.find(s => s.id !== sessionId);
-          if (nextSession) {
-            setActiveSession(nextSession.id);
-          }
-        }
+  const handleNewWorkbook = () => {
+    // Create a new workbook with a default name
+    const name = `Workbook ${workbooks.length + 1}`;
+    createWorkbook.mutate({ name }, {
+      onSuccess: (newWorkbook) => {
+        handleSwitchWorkbook(newWorkbook.id, newWorkbook.directory);
       }
     });
+  };
+
+  const handleStartRename = (wb: { id: string; name: string }) => {
+    setEditingWorkbookId(wb.id);
+    setEditingName(wb.name);
+  };
+
+  const handleSaveRename = () => {
+    if (!editingWorkbookId || !editingName.trim()) {
+      setEditingWorkbookId(null);
+      return;
+    }
+    const wb = workbooks.find(w => w.id === editingWorkbookId);
+    if (wb) {
+      updateWorkbook.mutate({ ...wb, name: editingName.trim() });
+    }
+    setEditingWorkbookId(null);
+  };
+
+  const handleDeleteWorkbook = async (workbookId: string) => {
+    // If deleting active workbook, switch to another one first
+    if (workbookId === activeWorkbookId) {
+      const otherWorkbook = workbooks.find(w => w.id !== workbookId);
+      if (otherWorkbook) {
+        await handleSwitchWorkbook(otherWorkbook.id, otherWorkbook.directory);
+      } else {
+        setActiveWorkbook(null, null);
+      }
+    }
+    deleteWorkbook.mutate(workbookId);
   };
 
   const handleClearAllData = async () => {
     // Clear active session first to stop showing messages
     setActiveSession(null);
     setMenuOpen(false);
+
+    // Abort all running sessions first
+    await Promise.all(sessions.map((session) =>
+      api.abort(session.id).catch(() => {})
+    ));
 
     // Clear all caches immediately
     queryClient.removeQueries({ queryKey: ["messages"] });
@@ -216,6 +308,21 @@ export function Toolbar({ expanded, onExpandChange, hasData, onOpenSettings }: T
 
     // Clear sessions cache after deletions complete
     queryClient.removeQueries({ queryKey: ["sessions"] });
+  };
+
+  // Open a URL in a webview window
+  const openInWebview = async (url: string, title?: string) => {
+    try {
+      await invoke("open_webview", { url, title });
+    } catch (err) {
+      console.error("Failed to open webview:", err);
+    }
+  };
+
+  // Build URL for a route
+  const getRouteUrl = (path: string) => {
+    const baseUrl = devServerRoutes?.url || "http://localhost:8787";
+    return `${baseUrl}${path}`;
   };
 
   const placeholder = hasData
@@ -256,94 +363,66 @@ export function Toolbar({ expanded, onExpandChange, hasData, onOpenSettings }: T
           </Button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="start" className="w-64">
-          {/* Current workbook info */}
-          {activeWorkbook && (
-            <>
-              <div className="px-2 py-2">
-                <div className="font-medium text-sm">{activeWorkbook.name}</div>
-                <div className="flex items-center gap-1.5 mt-1 text-xs text-muted-foreground">
-                  <Database className="h-3 w-3" />
-                  <span>Local PostgreSQL</span>
-                </div>
-                {activeWorkbook.description && (
-                  <div className="text-xs text-muted-foreground mt-1 line-clamp-2">
-                    {activeWorkbook.description}
-                  </div>
-                )}
-              </div>
-              <DropdownMenuSeparator />
-            </>
-          )}
-
-          {/* Threads section */}
-          {sessions.length > 0 && (
-            <>
-              <DropdownMenuSub>
-                <DropdownMenuSubTrigger>
-                  <MessageSquare className="h-4 w-4 mr-2" />
-                  Threads
-                  <span className="ml-auto text-xs text-muted-foreground">{sessions.length}</span>
-                </DropdownMenuSubTrigger>
-                <DropdownMenuSubContent className="w-56">
-                  {sessions.map((session) => (
-                    <DropdownMenuItem
-                      key={session.id}
-                      onClick={() => handleSwitchThread(session.id)}
-                      className="flex items-center justify-between group"
-                    >
-                      <div className="flex items-center gap-2 flex-1 min-w-0">
-                        {session.id === activeSessionId && (
-                          <Check className="h-3 w-3 text-primary shrink-0" />
-                        )}
-                        <span className="truncate">
-                          {session.title || `Thread ${session.id.slice(0, 6)}`}
-                        </span>
-                      </div>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-5 w-5 opacity-0 group-hover:opacity-100 shrink-0"
-                        onClick={(e) => handleDeleteThread(session.id, e)}
+          {/* Workbooks section */}
+          <DropdownMenuSub>
+            <DropdownMenuSubTrigger>
+              <FolderOpen className="h-4 w-4 mr-2" />
+              <span className="truncate flex-1">{activeWorkbook?.name || "Workbooks"}</span>
+              <span className="ml-auto text-xs text-muted-foreground">{workbooks.length}</span>
+            </DropdownMenuSubTrigger>
+            <DropdownMenuSubContent className="w-64">
+              {workbooks.map((wb) => (
+                <div key={wb.id} className="flex items-center gap-1 px-2 py-1.5 hover:bg-accent rounded-sm group">
+                  {editingWorkbookId === wb.id ? (
+                    <input
+                      type="text"
+                      value={editingName}
+                      onChange={(e) => setEditingName(e.target.value)}
+                      onBlur={handleSaveRename}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") handleSaveRename();
+                        if (e.key === "Escape") setEditingWorkbookId(null);
+                      }}
+                      className="flex-1 bg-background border rounded px-2 py-0.5 text-sm focus:outline-none focus:ring-1 focus:ring-primary"
+                      autoFocus
+                      onClick={(e) => e.stopPropagation()}
+                    />
+                  ) : (
+                    <>
+                      <button
+                        onClick={() => handleSwitchWorkbook(wb.id, wb.directory)}
+                        className="flex items-center gap-2 flex-1 min-w-0 text-left"
                       >
-                        <X className="h-3 w-3" />
-                      </Button>
-                    </DropdownMenuItem>
-                  ))}
-                  <DropdownMenuSeparator />
-                  <DropdownMenuItem onClick={handleNewThread}>
-                    <Plus className="h-4 w-4 mr-2" />
-                    New Thread
-                  </DropdownMenuItem>
-                </DropdownMenuSubContent>
-              </DropdownMenuSub>
+                        {wb.id === activeWorkbookId ? (
+                          <Check className="h-3 w-3 text-primary shrink-0" />
+                        ) : (
+                          <span className="w-3" />
+                        )}
+                        <span className="truncate text-sm">{wb.name}</span>
+                      </button>
+                      <button
+                        onClick={(e) => { e.stopPropagation(); handleStartRename(wb); }}
+                        className="opacity-0 group-hover:opacity-100 p-1 hover:bg-muted rounded transition-opacity"
+                      >
+                        <Pencil className="h-3 w-3 text-muted-foreground" />
+                      </button>
+                      <button
+                        onClick={(e) => { e.stopPropagation(); handleDeleteWorkbook(wb.id); }}
+                        className="opacity-0 group-hover:opacity-100 p-1 hover:bg-destructive/20 rounded transition-opacity"
+                      >
+                        <Trash2 className="h-3 w-3 text-destructive" />
+                      </button>
+                    </>
+                  )}
+                </div>
+              ))}
               <DropdownMenuSeparator />
-            </>
-          )}
-
-          {/* Recent workbooks */}
-          {recentWorkbooks.length > 0 && (
-            <DropdownMenuSub>
-              <DropdownMenuSubTrigger>
-                <Clock className="h-4 w-4 mr-2" />
-                Recent Workbooks
-              </DropdownMenuSubTrigger>
-              <DropdownMenuSubContent className="w-48">
-                {recentWorkbooks.map((wb) => (
-                  <DropdownMenuItem
-                    key={wb.id}
-                    onClick={() => setActiveWorkbook(wb.id, wb.directory)}
-                  >
-                    {wb.name}
-                  </DropdownMenuItem>
-                ))}
-              </DropdownMenuSubContent>
-            </DropdownMenuSub>
-          )}
-
-          <DropdownMenuItem>
-            <Plus className="h-4 w-4 mr-2" />
-            New Workbook
-          </DropdownMenuItem>
+              <DropdownMenuItem onClick={handleNewWorkbook}>
+                <Plus className="h-4 w-4 mr-2" />
+                New Workbook
+              </DropdownMenuItem>
+            </DropdownMenuSubContent>
+          </DropdownMenuSub>
 
           <DropdownMenuSeparator />
 
@@ -366,6 +445,64 @@ export function Toolbar({ expanded, onExpandChange, hasData, onOpenSettings }: T
           )}
         </DropdownMenuContent>
       </DropdownMenu>
+
+      {/* Charts - always visible on left */}
+      {devServerRoutes?.charts && devServerRoutes.charts.length > 0 && (
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-8 px-2 gap-1.5 text-xs text-muted-foreground hover:text-foreground"
+            >
+              <BarChart3 className="h-3.5 w-3.5 text-orange-400" />
+              <span>{devServerRoutes.charts.length}</span>
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="start" className="w-56">
+            {devServerRoutes.charts.map((chart, i) => (
+              <DropdownMenuItem
+                key={i}
+                onClick={() => openInWebview(getRouteUrl(`/charts/${chart.id}`), chart.title)}
+                className="flex items-center gap-2"
+              >
+                <BarChart3 className="h-3 w-3 text-orange-400 shrink-0" />
+                <div className="flex-1 min-w-0">
+                  <div className="text-xs truncate">{chart.title}</div>
+                </div>
+                <ExternalLink className="h-3 w-3 opacity-50 shrink-0" />
+              </DropdownMenuItem>
+            ))}
+          </DropdownMenuContent>
+        </DropdownMenu>
+      )}
+
+      {/* Scheduled Jobs - always visible on left */}
+      {devServerRoutes?.crons && devServerRoutes.crons.length > 0 && (
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-8 px-2 gap-1.5 text-xs text-muted-foreground hover:text-foreground"
+            >
+              <Clock className="h-3.5 w-3.5 text-purple-400" />
+              <span>{devServerRoutes.crons.length}</span>
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="start" className="w-56">
+            {devServerRoutes.crons.map((cron, i) => (
+              <DropdownMenuItem key={i} className="font-mono text-xs">
+                <Clock className="h-3 w-3 mr-2 text-purple-400" />
+                {cron.cron}
+                {cron.description && (
+                  <span className="ml-2 text-muted-foreground">{cron.description}</span>
+                )}
+              </DropdownMenuItem>
+            ))}
+          </DropdownMenuContent>
+        </DropdownMenu>
+      )}
 
       {/* Input section */}
       <div className="flex-1 flex items-center gap-2">
@@ -411,6 +548,122 @@ export function Toolbar({ expanded, onExpandChange, hasData, onOpenSettings }: T
               <ArrowUp className="h-4 w-4" />
             )}
           </Button>
+        )}
+
+        {/* Status indicator - far right after submit button */}
+        {activeWorkbook && (
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <div className="flex h-5 w-5 items-center justify-center cursor-pointer group">
+                <span className={cn(
+                  "inline-flex rounded-full h-2 w-2 transition-transform group-hover:scale-125",
+                  devServerStatus?.running ? "bg-green-500" : "bg-zinc-500"
+                )} />
+              </div>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-72 p-0">
+              {/* Tabs */}
+              <div className="flex border-b border-border">
+                <button className="flex-1 px-3 py-2 text-sm font-medium text-foreground border-b-2 border-primary flex items-center justify-center gap-1.5">
+                  <span className={cn(
+                    "inline-flex rounded-full h-1.5 w-1.5",
+                    devServerStatus?.running ? "bg-green-500" : "bg-zinc-500"
+                  )} />
+                  Local
+                </button>
+                <button className="flex-1 px-3 py-2 text-sm text-muted-foreground hover:text-foreground transition-colors cursor-not-allowed">
+                  Production
+                  <span className="ml-1 text-[10px] text-muted-foreground/60">soon</span>
+                </button>
+              </div>
+
+              {/* Local content */}
+              <div className="p-1">
+                {/* PostgreSQL Status */}
+                <div className="px-2 py-2">
+                  <div className="flex items-center gap-2">
+                    <Database className="h-4 w-4 text-blue-400" />
+                    <div className="flex-1">
+                      <div className="text-sm font-medium">PostgreSQL</div>
+                      <div className="text-xs text-muted-foreground">
+                        {workbookDatabase ? `${workbookDatabase.database_name} on port ${workbookDatabase.port}` : "Connecting..."}
+                      </div>
+                    </div>
+                    <span className="inline-flex rounded-full h-2 w-2 bg-green-500" />
+                  </div>
+                </div>
+
+                <DropdownMenuSeparator />
+
+                {/* Dev Server Status */}
+                <div className="px-2 py-2">
+                  <div className="flex items-center gap-2">
+                    <Radio className="h-4 w-4 text-purple-400" />
+                    <div className="flex-1">
+                      <div className="text-sm font-medium">Dev Server</div>
+                      <div className="text-xs text-muted-foreground">
+                        {devServerStatus?.running ? devServerRoutes?.url || "http://localhost:8787" : "Not running"}
+                      </div>
+                    </div>
+                    <span className={cn(
+                      "inline-flex rounded-full h-2 w-2",
+                      devServerStatus?.running ? "bg-green-500" : "bg-zinc-500"
+                    )} />
+                  </div>
+                </div>
+
+                {/* API Routes submenu */}
+                {devServerRoutes?.routes && devServerRoutes.routes.length > 0 && (
+                  <>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuSub>
+                      <DropdownMenuSubTrigger className="flex items-center gap-2">
+                        <Route className="h-4 w-4 text-blue-400" />
+                        <span>API Routes</span>
+                        <span className="ml-auto text-xs text-muted-foreground">{devServerRoutes.routes.length}</span>
+                      </DropdownMenuSubTrigger>
+                      <DropdownMenuSubContent className="w-64 max-h-80 overflow-y-auto">
+                        {devServerRoutes.routes.map((route, i) => (
+                          <DropdownMenuItem
+                            key={i}
+                            onClick={() => openInWebview(getRouteUrl(route.path), `${route.method} ${route.path}`)}
+                            className="flex items-center gap-2 font-mono text-xs"
+                          >
+                            <span className={cn(
+                              "text-[10px] px-1.5 py-0.5 rounded font-medium shrink-0",
+                              route.method === "GET" && "bg-green-500/20 text-green-400",
+                              route.method === "POST" && "bg-blue-500/20 text-blue-400",
+                              route.method === "PUT" && "bg-yellow-500/20 text-yellow-400",
+                              route.method === "DELETE" && "bg-red-500/20 text-red-400",
+                              route.method === "PATCH" && "bg-purple-500/20 text-purple-400"
+                            )}>
+                              {route.method}
+                            </span>
+                            <span className="flex-1 truncate">{route.path}</span>
+                            <ExternalLink className="h-3 w-3 opacity-50 shrink-0" />
+                          </DropdownMenuItem>
+                        ))}
+                      </DropdownMenuSubContent>
+                    </DropdownMenuSub>
+                  </>
+                )}
+
+                {/* Open dev server in browser */}
+                {devServerStatus?.running && devServerRoutes?.url && (
+                  <>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem
+                      onClick={() => openInWebview(devServerRoutes.url, "Dev Server")}
+                      className="flex items-center gap-2"
+                    >
+                      <ExternalLink className="h-4 w-4" />
+                      <span>Open in Preview</span>
+                    </DropdownMenuItem>
+                  </>
+                )}
+              </div>
+            </DropdownMenuContent>
+          </DropdownMenu>
         )}
       </div>
     </div>

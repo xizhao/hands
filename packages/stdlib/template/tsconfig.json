@@ -8,9 +8,14 @@
     "skipLibCheck": true,
     "forceConsistentCasingInFileNames": true,
     "resolveJsonModule": true,
-    "lib": ["ESNext"],
-    "types": ["@cloudflare/workers-types"]
+    "jsx": "react-jsx",
+    "lib": ["ESNext", "DOM"],
+    "types": ["@cloudflare/workers-types"],
+    "baseUrl": ".",
+    "paths": {
+      "@/*": ["./src/*"]
+    }
   },
-  "include": ["src/**/*.ts", "charts/**/*.ts", "monitors/**/*.ts"],
+  "include": ["src/**/*.ts", "src/**/*.tsx", "charts/**/*.ts"],
   "exclude": ["node_modules", ".wrangler"]
 }

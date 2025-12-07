@@ -1,8 +1,8 @@
-import { createOpencodeClient, type OpencodeClient } from "@opencode-ai/sdk";
+import { createOpencodeClient, type OpencodeClient } from "@opencode-ai/sdk/client";
 
 const DEFAULT_PORT = 4096;
 
-// Re-export types from SDK
+// Re-export types from SDK client (avoids importing server-only code)
 export type {
   UserMessage,
   AssistantMessage,
@@ -37,7 +37,7 @@ export type {
   SessionStatus as SdkSessionStatus,
   Session as SdkSession,
   Todo as SdkTodo,
-} from "@opencode-ai/sdk";
+} from "@opencode-ai/sdk/client";
 
 // Import types we need locally
 import type {
@@ -46,7 +46,7 @@ import type {
   Part as SdkPart,
   Event as SdkEventType,
   GlobalEvent as SdkGlobalEvent,
-} from "@opencode-ai/sdk";
+} from "@opencode-ai/sdk/client";
 
 // Alias SDK types
 export type Session = SdkSession;
@@ -98,6 +98,7 @@ export type ServerEvent = SdkEventType;
 export interface PromptRequest {
   parts: Array<{ type: "text"; text: string } | { type: "file"; mediaType: string; url?: string; filename?: string }>;
   model?: { providerID: string; modelID: string };
+  agent?: string;
   noReply?: boolean;
   system?: string;
 }
@@ -200,7 +201,7 @@ export const api = {
     },
     get: async (sessionId: string, messageId: string, directory?: string | null): Promise<MessageWithParts> => {
       const client = getClient(directory);
-      const result = await client.session.message({ path: { id: sessionId, messageId } });
+      const result = await client.session.message({ path: { id: sessionId, messageID: messageId } });
       return result.data as MessageWithParts;
     },
   },
@@ -260,7 +261,9 @@ export const api = {
     options?: { directory?: string | null }
   ) => {
     const client = getClient(options?.directory);
-    const parts: PromptRequest["parts"] = [];
+    type FilePart = { type: "file"; mime: string; url: string; filename?: string };
+    type TextPart = { type: "text"; text: string };
+    const parts: (FilePart | TextPart)[] = [];
 
     // Add file parts for each path
     for (const filePath of filePaths) {
@@ -270,7 +273,7 @@ export const api = {
         type: "file",
         url: `file://${filePath}`,
         filename,
-        mediaType: "application/octet-stream", // Let server detect actual type
+        mime: "application/octet-stream", // Let server detect actual type
       });
     }
 
@@ -282,6 +285,23 @@ export const api = {
     return client.session.promptAsync({
       path: { id: sessionId },
       body: { parts },
+    });
+  },
+
+  // Prompt with a specific agent - used for background tasks
+  promptWithAgent: async (
+    sessionId: string,
+    content: string,
+    agent: string,
+    options?: { directory?: string | null }
+  ) => {
+    const client = getClient(options?.directory);
+    return client.session.promptAsync({
+      path: { id: sessionId },
+      body: {
+        parts: [{ type: "text", text: content }],
+        agent,
+      },
     });
   },
 
@@ -299,7 +319,7 @@ export const api = {
   ): Promise<boolean> => {
     const client = getClient(directory);
     await client.postSessionIdPermissionsPermissionId({
-      path: { id: sessionId, permissionId },
+      path: { id: sessionId, permissionID: permissionId },
       body: { response },
     });
     return true;

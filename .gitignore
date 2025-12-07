@@ -33,3 +33,9 @@ npm-debug.log*
 
 # Bun
 bun.lockb
+
+# Tauri
+**/src-tauri/gen/
+
+# Generated opencode resources (built from packages/agent)
+packages/desktop/src-tauri/resources/opencode/

@@ -26,6 +26,7 @@ tauri-plugin-store = "2.0.0-beta.0"
 dirs = "5"
 regex = "1"
 toml = "0.8"
+urlencoding = "2"
 
 [target.'cfg(target_os = "macos")'.dependencies]
 objc2 = "0.6"

@@ -7,13 +7,14 @@
     "dev": "vite",
     "dev:server": "bunx opencode-ai serve --port 4096",
     "dev:all": "concurrently -n server,vite -c blue,green \"bun run dev:server\" \"bun run dev\"",
-    "build": "bun run bundle:tools && tsc -b && vite build",
-    "bundle:tools": "bun run scripts/bundle-plugin.ts",
+    "build": "bun run bundle && tsc -b && vite build",
+    "bundle": "bun run scripts/bundle-plugin.ts",
+    "bundle:watch": "bun run scripts/bundle-plugin.ts --watch",
     "typecheck": "tsc --noEmit",
     "preview": "vite preview",
     "tauri": "tauri",
-    "tauri:dev": "bun run bundle:tools && concurrently -n server,tauri -c blue,green -k \"bun run dev:server\" \"tauri dev\"",
-    "tauri:build": "bun run bundle:tools && tauri build"
+    "tauri:dev": "bun run bundle && concurrently -n server,bundle,tauri -c blue,yellow,green -k \"bun run dev:server\" \"bun run bundle:watch\" \"tauri dev\"",
+    "tauri:build": "bun run bundle && tauri build"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.24.3",

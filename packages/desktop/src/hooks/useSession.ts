@@ -94,11 +94,10 @@ export function useSendMessage(sessionId: string | null) {
 
   return useMutation({
     mutationFn: async (content: string) => {
-      // Use prompt_async - it returns immediately (204) and streams via SSE
-      const response = await api.promptAsync(sessionId!, content, { directory });
-      if (!response.ok && response.status !== 204) {
-        const text = await response.text();
-        throw new Error(`Failed to send message: ${text}`);
+      // Use prompt_async - it returns immediately and streams via SSE
+      const result = await api.promptAsync(sessionId!, content, { directory });
+      if (result.error) {
+        throw new Error(`Failed to send message: ${result.error}`);
       }
     },
     onMutate: async (content) => {

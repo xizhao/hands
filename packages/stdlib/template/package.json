@@ -6,15 +6,28 @@
   "scripts": {
     "dev": "wrangler dev",
     "deploy": "wrangler deploy",
-    "db:create": "wrangler d1 create hands-db",
-    "db:migrate": "wrangler d1 execute hands-db --local --file=./schema.sql"
+    "typecheck": "tsc --noEmit"
   },
   "devDependencies": {
     "@cloudflare/workers-types": "^4",
+    "@types/react": "^19",
+    "@types/react-dom": "^19",
+    "autoprefixer": "^10",
+    "postcss": "^8",
+    "tailwindcss": "^3",
+    "tailwindcss-animate": "^1",
     "typescript": "^5",
     "wrangler": "^3"
   },
   "dependencies": {
-    "hono": "^4"
+    "@neondatabase/serverless": "^0.10",
+    "class-variance-authority": "^0.7",
+    "clsx": "^2",
+    "hono": "^4",
+    "lucide-react": "^0.468",
+    "react": "^19",
+    "react-dom": "^19",
+    "recharts": "^2",
+    "tailwind-merge": "^2"
   }
 }
