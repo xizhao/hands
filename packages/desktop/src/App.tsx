@@ -1,17 +1,21 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef, useCallback } from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { useWorkbooks, useCreateWorkbook, useOpenWorkbook } from "@/hooks/useWorkbook";
+import { invoke } from "@tauri-apps/api/core";
+import { useWorkbooks, useCreateWorkbook, useOpenWorkbook, RuntimeStatus } from "@/hooks/useWorkbook";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { Toolbar } from "@/components/Toolbar";
 import { Thread } from "@/components/Thread";
 import { SettingsPanel } from "@/components/SettingsPanel";
 import { useUIStore } from "@/stores/ui";
 import { useThemeStore } from "@/stores/theme";
-import { startSync } from "@/store";
-import { useSessions } from "@/store/hooks";
+import { startSSESync } from "@/lib/sse";
+import { useSessions } from "@/hooks/useSession";
+import { useDbSync } from "@/store/db-hooks";
+import type { ChangeRecord } from "@/store/db-hooks";
 
-// React Query client - only used for workbook hooks now
-const queryClient = new QueryClient({
+
+// Export queryClient so SSE handler can access it
+export const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
       staleTime: 5000,
@@ -21,11 +25,35 @@ const queryClient = new QueryClient({
 });
 
 function FloatingApp() {
-  // Start TanStack DB sync on mount
+  // Start SSE sync on mount
   useEffect(() => {
-    const cleanup = startSync();
+    const cleanup = startSSESync(queryClient);
     return cleanup;
   }, []);
+
+  // Track if DB browser has been opened for this session (to avoid re-opening constantly)
+  const dbBrowserOpenedRef = useRef(false);
+
+  // Handle new database changes - auto-open DB browser on first change
+  const handleDbChange = useCallback((change: ChangeRecord) => {
+    // Only auto-open once per session to avoid being annoying
+    if (dbBrowserOpenedRef.current) return;
+
+    const runtimePort = useUIStore.getState().runtimePort;
+    const workbookId = useUIStore.getState().activeWorkbookId;
+
+    if (runtimePort && workbookId) {
+      console.log("[app] Auto-opening DB browser for change:", change.op, change.table);
+      dbBrowserOpenedRef.current = true;
+      invoke("open_db_browser", { runtimePort, workbookId }).catch((err) => {
+        console.error("[app] Failed to auto-open DB browser:", err);
+        dbBrowserOpenedRef.current = false; // Reset so we can try again
+      });
+    }
+  }, []);
+
+  // Start database change SSE subscription (uses runtimePort from UIStore)
+  useDbSync(handleDbChange);
 
   const [expanded, setExpanded] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
@@ -37,33 +65,70 @@ function FloatingApp() {
   const createWorkbook = useCreateWorkbook();
   const openWorkbook = useOpenWorkbook();
 
-  // Auto-select or create a workbook on startup
+  // Track if we've initialized this session (persists across hot reloads)
+  const initialized = useRef(false);
+  const initializingRef = useRef(false);
+
+  // On startup: check Tauri for active runtime, or start one
   useEffect(() => {
-    // Wait for workbooks query to complete
+    // Prevent multiple concurrent initializations
+    if (initialized.current || initializingRef.current) return;
     if (workbooksLoading || workbooks === undefined) return;
-    // Skip if already have an active workbook
-    if (activeWorkbookId) return;
-    // Skip if mutation is in progress
     if (createWorkbook.isPending || openWorkbook.isPending) return;
 
-    if (workbooks.length > 0) {
-      // Open the most recently used workbook (starts runtime)
-      const mostRecent = workbooks[0];
-      setActiveWorkbook(mostRecent.id, mostRecent.directory);
-      openWorkbook.mutate(mostRecent);
-    } else {
-      // No workbooks exist, create a default one
-      createWorkbook.mutate(
-        { name: "My Workbook" },
-        {
-          onSuccess: (workbook) => {
-            setActiveWorkbook(workbook.id, workbook.directory);
-            openWorkbook.mutate(workbook);
-          },
-        }
-      );
-    }
-  }, [workbooks, workbooksLoading, activeWorkbookId, setActiveWorkbook, createWorkbook, openWorkbook]);
+    initializingRef.current = true;
+
+    // Check if Tauri already has an active runtime
+    invoke<RuntimeStatus | null>("get_active_runtime").then((active) => {
+      if (active) {
+        console.log("[app] Tauri has active runtime:", active.workbook_id, "ports:", active.runtime_port, active.postgres_port, active.worker_port);
+        setActiveWorkbook(active.workbook_id, active.directory);
+        initialized.current = true;
+        initializingRef.current = false;
+        return;
+      }
+
+      // No active runtime - start one
+      console.log("[app] No active runtime, starting one...");
+
+      if (workbooks.length > 0) {
+        const mostRecent = workbooks[0];
+        console.log("[app] Opening most recent workbook:", mostRecent.id);
+        setActiveWorkbook(mostRecent.id, mostRecent.directory);
+        openWorkbook.mutate(mostRecent, {
+          onSettled: () => {
+            initialized.current = true;
+            initializingRef.current = false;
+          }
+        });
+      } else {
+        // No workbooks exist, create a default one
+        createWorkbook.mutate(
+          { name: "My Workbook" },
+          {
+            onSuccess: (workbook) => {
+              console.log("[app] Created new workbook:", workbook.id);
+              setActiveWorkbook(workbook.id, workbook.directory);
+              openWorkbook.mutate(workbook, {
+                onSettled: () => {
+                  initialized.current = true;
+                  initializingRef.current = false;
+                }
+              });
+            },
+            onError: () => {
+              initialized.current = true;
+              initializingRef.current = false;
+            }
+          }
+        );
+      }
+    }).catch((err) => {
+      console.error("[app] Failed to check active runtime:", err);
+      initialized.current = true;
+      initializingRef.current = false;
+    });
+  }, [workbooks, workbooksLoading, setActiveWorkbook, createWorkbook, openWorkbook]);
 
   // Clear activeSessionId if it points to a deleted session
   useEffect(() => {

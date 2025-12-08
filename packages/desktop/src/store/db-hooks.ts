@@ -18,6 +18,9 @@ import {
 } from "./db-browser";
 import { useRuntimePort } from "./db-context";
 
+// Re-export ChangeRecord for consumers
+export type { ChangeRecord } from "./db-browser";
+
 // ============ CHANGE HOOKS ============
 
 /**
@@ -141,21 +144,29 @@ export function useTableRows(tableName: string | null, page = 0, pageSize = 50) 
 /**
  * Initialize SSE subscription for database changes
  * Call this once in your app (e.g., in DbBrowser component)
+ *
+ * @param onNewChange - Optional callback when a new change is received (not history)
  */
-export function useDbSync() {
+export function useDbSync(onNewChange?: (change: ChangeRecord) => void) {
   const runtimePort = useRuntimePort();
 
   useEffect(() => {
     if (!runtimePort) {
+      console.log("[useDbSync] No runtime port available yet, waiting...");
       return;
     }
 
-    const cleanup = subscribeToDbChanges(runtimePort, (err) => {
-      console.error("[useDbSync] SSE error:", err);
-    });
+    console.log("[useDbSync] Starting db sync with runtime port:", runtimePort);
+    const cleanup = subscribeToDbChanges(
+      runtimePort,
+      (err) => {
+        console.error("[useDbSync] SSE error:", err);
+      },
+      onNewChange
+    );
 
     return cleanup;
-  }, [runtimePort]);
+  }, [runtimePort, onNewChange]);
 }
 
 // ============ UTILITY HOOKS ============

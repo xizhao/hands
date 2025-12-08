@@ -81,34 +81,3 @@ export async function parseWranglerConfig(workbookDir: string): Promise<Wrangler
   }
 }
 
-/**
- * Validate wrangler.toml doesn't have unresolved placeholders
- * @param configDir - Directory containing wrangler.toml (can be workbook root or .hands/)
- */
-export async function validateWranglerConfig(configDir: string): Promise<string[]> {
-  const wranglerPath = join(configDir, "wrangler.toml");
-  const errors: string[] = [];
-
-  if (!existsSync(wranglerPath)) {
-    errors.push(`wrangler.toml not found at ${wranglerPath}`);
-    return errors;
-  }
-
-  const content = await Bun.file(wranglerPath).text();
-
-  // Check for unresolved template placeholders
-  const placeholderPattern = /\{\{(\w+)\}\}/g;
-  let match;
-  while ((match = placeholderPattern.exec(content)) !== null) {
-    errors.push(`Unresolved placeholder: {{${match[1]}}}`);
-  }
-
-  // Try to parse to check for syntax errors
-  try {
-    parseToml(content);
-  } catch (error) {
-    errors.push(`TOML syntax error: ${error instanceof Error ? error.message : String(error)}`);
-  }
-
-  return errors;
-}

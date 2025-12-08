@@ -5,6 +5,19 @@
 
 import postgres from "postgres";
 
+/**
+ * Format PostgreSQL notice messages for clean logging
+ */
+function formatNotice(notice: { severity?: string; message?: string; code?: string }): string {
+  const severity = notice.severity || "NOTICE";
+  const message = notice.message || "Unknown notice";
+  // Only show code for non-standard messages
+  const codeStr = notice.code && !["00000", "42P06", "42P07"].includes(notice.code)
+    ? ` [${notice.code}]`
+    : "";
+  return `[postgres] ${severity}${codeStr}: ${message}`;
+}
+
 export interface DatabaseChange {
   table: string;
   op: "INSERT" | "UPDATE" | "DELETE";
@@ -24,9 +37,15 @@ interface HistoryEvent {
 
 export type ChangeStreamEvent = ChangeEvent | HistoryEvent;
 
+// Internal schema for Hands infrastructure (hidden from user)
+const INTERNAL_SCHEMA = "_hands";
+
 const SETUP_SQL = `
--- Notification function for table changes
-CREATE OR REPLACE FUNCTION hands_notify_change() RETURNS TRIGGER AS $$
+-- Create internal schema for Hands infrastructure
+CREATE SCHEMA IF NOT EXISTS ${INTERNAL_SCHEMA};
+
+-- Notification function for table changes (in internal schema)
+CREATE OR REPLACE FUNCTION ${INTERNAL_SCHEMA}.notify_change() RETURNS TRIGGER AS $$
 BEGIN
   PERFORM pg_notify('hands_changes', json_build_object(
     'table', TG_TABLE_NAME,
@@ -43,8 +62,8 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
--- Function to attach triggers to all user tables
-CREATE OR REPLACE FUNCTION hands_attach_triggers() RETURNS void AS $$
+-- Function to attach triggers to all user tables (in internal schema)
+CREATE OR REPLACE FUNCTION ${INTERNAL_SCHEMA}.attach_triggers() RETURNS void AS $$
 DECLARE
   t RECORD;
 BEGIN
@@ -55,11 +74,11 @@ BEGIN
       AND table_type = 'BASE TABLE'
   LOOP
     BEGIN
-      EXECUTE format('DROP TRIGGER IF EXISTS hands_change_trigger ON %I', t.table_name);
+      EXECUTE format('DROP TRIGGER IF EXISTS _hands_change_trigger ON public.%I', t.table_name);
       EXECUTE format(
-        'CREATE TRIGGER hands_change_trigger
-         AFTER INSERT OR UPDATE OR DELETE ON %I
-         FOR EACH ROW EXECUTE FUNCTION hands_notify_change()',
+        'CREATE TRIGGER _hands_change_trigger
+         AFTER INSERT OR UPDATE OR DELETE ON public.%I
+         FOR EACH ROW EXECUTE FUNCTION ${INTERNAL_SCHEMA}.notify_change()',
         t.table_name
       );
     EXCEPTION WHEN OTHERS THEN
@@ -89,6 +108,7 @@ export class PostgresListener {
       max: 1,
       idle_timeout: 0, // Keep alive
       connect_timeout: 10,
+      onnotice: (notice) => console.log(formatNotice(notice)),
     });
 
     // Setup trigger infrastructure (idempotent)
@@ -118,7 +138,7 @@ export class PostgresListener {
       await this.sql.unsafe(SETUP_SQL);
 
       // Attach triggers to all existing tables
-      await this.sql`SELECT hands_attach_triggers()`;
+      await this.sql.unsafe(`SELECT ${INTERNAL_SCHEMA}.attach_triggers()`);
 
       this.isSetup = true;
       console.log("[listener] Triggers attached to all tables");
@@ -133,7 +153,7 @@ export class PostgresListener {
    */
   async refreshTriggers(): Promise<void> {
     if (!this.sql) return;
-    await this.sql`SELECT hands_attach_triggers()`;
+    await this.sql.unsafe(`SELECT ${INTERNAL_SCHEMA}.attach_triggers()`);
     console.log("[listener] Triggers refreshed");
   }
 

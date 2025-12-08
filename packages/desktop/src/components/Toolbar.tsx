@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, useCallback } from "react";
-import { useSendMessage, useAbortSession, useSessionStatuses, useSessions, useCreateSession, useDeleteSession } from "@/store/hooks";
+import { useSendMessage, useAbortSession, useSessionStatuses, useSessions, useCreateSession, useDeleteSession } from "@/hooks/useSession";
 import { api } from "@/lib/api";
 import { useServer } from "@/hooks/useServer";
 import { useUIStore } from "@/stores/ui";
@@ -36,7 +36,7 @@ export function Toolbar({ expanded, onExpandChange, hasData, onOpenSettings }: T
   const inputRef = useRef<HTMLInputElement>(null);
   const dropRef = useRef<HTMLDivElement>(null);
   const hasHandledDrop = useRef(false); // Prevent duplicate drops
-  const { activeSessionId, activeWorkbookId, setActiveWorkbook, setActiveSession } = useUIStore();
+  const { activeSessionId, activeWorkbookId, setActiveWorkbook, setActiveSession, setRuntimePort } = useUIStore();
   const { addTask } = useBackgroundStore();
   const { data: sessionStatuses = {} } = useSessionStatuses();
   const sendMessage = useSendMessage();
@@ -85,6 +85,14 @@ export function Toolbar({ expanded, onExpandChange, hasData, onOpenSettings }: T
       });
     }
   }, [activeWorkbook?.id, devServerStatus?.runtime_port, startDevServer.isPending]);
+
+  // Update UIStore with runtime port for db-browser SSE subscription
+  useEffect(() => {
+    if (devServerStatus?.runtime_port) {
+      console.log("[Toolbar] Setting runtime port in UIStore:", devServerStatus.runtime_port);
+      setRuntimePort(devServerStatus.runtime_port);
+    }
+  }, [devServerStatus?.runtime_port, setRuntimePort]);
 
   const status = activeSessionId ? sessionStatuses[activeSessionId] : null;
   const isBusy = status?.type === "busy" || status?.type === "running";
@@ -212,7 +220,8 @@ ${activeWorkbook.description ? `Description: ${activeWorkbook.description}` : ""
 - \`config/\` - Integration configurations
 
 ## Guidelines
-- Use the postgres package with DATABASE_URL env var for database queries
+- Use SchemaRead to view database tables and columns before writing queries
+- Use psql to execute SQL queries
 - Create API routes in src/index.ts
 - Create charts in charts/ directory`;
   };
@@ -604,7 +613,7 @@ ${activeWorkbook.description ? `Description: ${activeWorkbook.description}` : ""
                   tsErrors > 0 ? "bg-red-500" :
                   (tsWarnings > 0 || unusedCount > 0) ? "bg-yellow-500" :
                   // Green if services are up OR we have runtime ports assigned
-                  (evalResult?.services?.postgres?.up || devServerStatus?.runtime_port) ? "bg-green-500" : "bg-zinc-500"
+                  devServerStatus?.running ? "bg-green-500" : "bg-zinc-500"
                 )} />
               </div>
             </DropdownMenuTrigger>
@@ -615,7 +624,7 @@ ${activeWorkbook.description ? `Description: ${activeWorkbook.description}` : ""
                   <span className={cn(
                     "inline-flex rounded-full h-1.5 w-1.5",
                     // Green if services are up OR we have runtime ports assigned
-                    (evalResult?.services?.postgres?.up || devServerStatus?.runtime_port) ? "bg-green-500" : "bg-zinc-500"
+                    devServerStatus?.running ? "bg-green-500" : "bg-zinc-500"
                   )} />
                   Local
                 </button>
@@ -634,8 +643,8 @@ ${activeWorkbook.description ? `Description: ${activeWorkbook.description}` : ""
                     <div className="flex-1">
                       <div className="text-sm font-medium">PostgreSQL</div>
                       <div className="text-xs text-muted-foreground">
-                        {evalResult?.services?.postgres?.up
-                          ? `${workbookDatabase?.database_name || "database"} on port ${evalResult.services.postgres.port}`
+                        {devServerStatus?.running && devServerStatus?.postgres_port
+                          ? `${workbookDatabase?.database_name || "database"} on port ${devServerStatus.postgres_port}`
                           : devServerStatus?.postgres_port
                             ? `Starting on port ${devServerStatus.postgres_port}...`
                             : "Connecting..."}
@@ -686,7 +695,7 @@ ${activeWorkbook.description ? `Description: ${activeWorkbook.description}` : ""
                     </button>
                     <span className={cn(
                       "inline-flex rounded-full h-2 w-2",
-                      evalResult?.services?.postgres?.up ? "bg-green-500" :
+                      devServerStatus?.running && devServerStatus?.postgres_port ? "bg-green-500" :
                       devServerStatus?.postgres_port ? "bg-yellow-500 animate-pulse" : "bg-zinc-500"
                     )} />
                   </div>
@@ -701,8 +710,8 @@ ${activeWorkbook.description ? `Description: ${activeWorkbook.description}` : ""
                     <div className="flex-1">
                       <div className="text-sm font-medium">Dev Server</div>
                       <div className="text-xs text-muted-foreground">
-                        {evalResult?.services?.worker?.up
-                          ? devServerRoutes?.url || `http://localhost:${evalResult.services.worker.port}`
+                        {devServerStatus?.running && devServerStatus?.worker_port
+                          ? `http://localhost:${devServerStatus.worker_port}`
                           : devServerStatus?.worker_port
                             ? `Starting on port ${devServerStatus.worker_port}...`
                             : "Not running"}
@@ -710,7 +719,7 @@ ${activeWorkbook.description ? `Description: ${activeWorkbook.description}` : ""
                     </div>
                     <span className={cn(
                       "inline-flex rounded-full h-2 w-2",
-                      evalResult?.services?.worker?.up ? "bg-green-500" :
+                      devServerStatus?.running && devServerStatus?.worker_port ? "bg-green-500" :
                       devServerStatus?.worker_port ? "bg-yellow-500 animate-pulse" : "bg-zinc-500"
                     )} />
                   </div>

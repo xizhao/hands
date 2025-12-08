@@ -59,9 +59,11 @@ export async function initRuntime(config: {
   const postgres = new PostgresManager({
     dataDir: `${workbookDir}/postgres`,
     port: postgresPort,
-    user: "hands",
-    password: "hands",
+    user: "hands_admin",        // Admin user for infrastructure
+    password: "hands_admin",
     database: `hands_${workbookId.replace(/-/g, "_")}`,
+    clientUser: "hands",        // Limited client user for agent/Tauri
+    clientPassword: "hands",
   });
 
   const pool = new PostgresPool(postgres.connectionString);
@@ -70,6 +72,7 @@ export async function initRuntime(config: {
   const worker = new WorkerManager({
     workbookDir,
     port: wranglerPort,
+    databaseUrl: postgres.connectionString,
   });
 
   const sync = new SyncManager(pool);
@@ -91,16 +94,36 @@ export async function initRuntime(config: {
 }
 
 /**
- * Start all services
+ * Start postgres and essential services (called before HTTP server)
  */
-export async function startServices(): Promise<void> {
+export async function startPostgres(): Promise<void> {
   if (!state) throw new Error("Runtime not initialized");
 
-  // Start postgres
+  // Start postgres first and wait for it to be fully ready
   await state.postgres.start();
   state.pool.connect();
 
-  // Start change listener (for real-time DB notifications)
+  // Verify postgres is accepting connections before proceeding
+  let connected = false;
+  for (let i = 0; i < 10; i++) {
+    try {
+      await state.pool.ping();
+      connected = true;
+      break;
+    } catch {
+      await new Promise(r => setTimeout(r, 200));
+    }
+  }
+  if (!connected) {
+    console.error("[runtime] Warning: Could not verify postgres connection");
+  }
+
+  // Update lockfile with postgres PID
+  if (state.postgres.status.pid) {
+    await updateLockfile({ postgresPid: state.postgres.status.pid });
+  }
+
+  // Now start change listener (after postgres is confirmed ready)
   try {
     await state.listener.start();
     // Wire up listener to broadcast changes
@@ -112,22 +135,6 @@ export async function startServices(): Promise<void> {
   } catch (err) {
     console.error("[runtime] Failed to start change listener:", err);
     // Continue - listener is not critical
-  }
-
-  // Update lockfile with postgres PID
-  if (state.postgres.status.pid) {
-    await updateLockfile({ postgresPid: state.postgres.status.pid });
-  }
-
-  // Start worker dev server
-  try {
-    await state.worker.start();
-    // Update lockfile with worker port
-    await updateLockfile({ wranglerPort: state.worker.status.port });
-  } catch (error) {
-    console.error("Worker failed to start:", error);
-    // Continue even if worker fails - postgres is more important
-    // Build errors are available via state.worker.buildErrors
   }
 
   // Initialize sync manager tables and start scheduler
@@ -144,6 +151,31 @@ export async function startServices(): Promise<void> {
     console.error("[runtime] Failed to initialize sync manager:", err);
     // Continue - sync is not critical for basic operation
   }
+}
+
+/**
+ * Start worker dev server (can be called after HTTP server is up)
+ */
+export async function startWorker(): Promise<void> {
+  if (!state) throw new Error("Runtime not initialized");
+
+  try {
+    await state.worker.start();
+    // Update lockfile with worker port
+    await updateLockfile({ wranglerPort: state.worker.status.port });
+  } catch (error) {
+    console.error("Worker failed to start:", error);
+    // Continue even if worker fails - postgres is more important
+    // Build errors are available via state.worker.buildErrors
+  }
+}
+
+/**
+ * Start all services (backwards compat - calls postgres then worker)
+ */
+export async function startServices(): Promise<void> {
+  await startPostgres();
+  await startWorker();
 }
 
 /**
@@ -549,6 +581,33 @@ export function createServer(port: number) {
             limit,
             offset,
           }, { headers });
+        }
+
+        // GET /postgres/schema - Get full schema (tables with columns) for agent context
+        if (method === "GET" && url.pathname === "/postgres/schema") {
+          if (!state) {
+            return Response.json({ error: "Not initialized" }, { status: 500, headers });
+          }
+
+          // Get all tables with their columns in a single query
+          const result = await state.pool.query(`
+            SELECT
+              t.table_name,
+              json_agg(
+                json_build_object(
+                  'name', c.column_name,
+                  'type', c.data_type,
+                  'nullable', c.is_nullable = 'YES'
+                ) ORDER BY c.ordinal_position
+              ) as columns
+            FROM information_schema.tables t
+            JOIN information_schema.columns c ON c.table_schema = t.table_schema AND c.table_name = t.table_name
+            WHERE t.table_schema = 'public' AND t.table_type = 'BASE TABLE'
+            GROUP BY t.table_name
+            ORDER BY t.table_name
+          `);
+
+          return Response.json(result.rows, { headers });
         }
 
         // POST /postgres/triggers/refresh - Refresh change triggers on all tables

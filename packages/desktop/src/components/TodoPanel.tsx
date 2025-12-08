@@ -1,6 +1,6 @@
 import { memo } from "react";
 import type { Todo } from "@/lib/api";
-import { useTodos } from "@/store/hooks";
+import { useTodos } from "@/hooks/useSession";
 import { useUIStore } from "@/stores/ui";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { CheckCircle2, Circle, Loader2, ListTodo } from "lucide-react";

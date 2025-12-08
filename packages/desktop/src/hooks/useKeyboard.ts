@@ -1,6 +1,6 @@
 import { useEffect } from "react";
 import { useUIStore } from "@/stores/ui";
-import { useCreateSession, useAbortSession } from "@/store/hooks";
+import { useCreateSession, useAbortSession } from "@/hooks/useSession";
 
 export function useKeyboard() {
   const { activeSessionId, setActiveSession } = useUIStore();

@@ -145,18 +145,20 @@ export function useOpenWorkbook() {
 
       // Start runtime for this workbook
       try {
+        console.log("[runtime] Starting runtime for workbook:", workbook.id, "dir:", workbook.directory);
         const status = await invoke<RuntimeStatus>("start_runtime", {
           workbookId: workbook.id,
           directory: workbook.directory,
         });
-        console.log("Runtime:", status.message);
+        console.log("[runtime] Started:", JSON.stringify(status, null, 2));
         queryClient.setQueryData(["runtime-status", workbook.id], status);
 
         // Set this as the active workbook and restart OpenCode server with database URL
+        console.log("[runtime] Setting active workbook...");
         await invoke("set_active_workbook", { workbookId: workbook.id });
-        console.log("Set active workbook:", workbook.id);
+        console.log("[runtime] Active workbook set:", workbook.id);
       } catch (err) {
-        console.error("Failed to start runtime:", err);
+        console.error("[runtime] Failed to start runtime:", err);
       }
 
       return updated;
@@ -164,14 +166,20 @@ export function useOpenWorkbook() {
   });
 }
 
-// Get runtime status for a workbook
+// Get runtime status for a workbook - no caching, always fresh from Tauri
 export function useRuntimeStatus(workbookId: string | null) {
   return useQuery({
     queryKey: ["runtime-status", workbookId],
-    queryFn: () =>
-      invoke<RuntimeStatus>("get_runtime_status", { workbookId: workbookId! }),
+    queryFn: async () => {
+      console.log("[runtime] Checking status for:", workbookId);
+      const status = await invoke<RuntimeStatus>("get_runtime_status", { workbookId: workbookId! });
+      console.log("[runtime] Status:", status.running ? "running" : "stopped", "ports:", status.runtime_port, status.postgres_port, status.worker_port);
+      return status;
+    },
     enabled: !!workbookId,
     refetchInterval: 5000,
+    staleTime: 0, // Always refetch
+    gcTime: 0, // Don't cache
   });
 }
 
@@ -346,6 +354,33 @@ export function useWorkbookDatabase(workbookId: string | null) {
       };
     },
     enabled: !!workbookId && !!runtimeStatus.data?.postgres_port,
+  });
+}
+
+// Database schema for agent context
+export interface TableSchema {
+  table_name: string;
+  columns: { name: string; type: string; nullable: boolean }[];
+}
+
+// Get database schema for a workbook (from runtime)
+export function useDbSchema(workbookId: string | null) {
+  const runtimeStatus = useRuntimeStatus(workbookId);
+
+  return useQuery({
+    queryKey: ["db-schema", workbookId],
+    queryFn: async (): Promise<TableSchema[]> => {
+      const port = runtimeStatus.data?.runtime_port;
+      if (!port) return [];
+
+      const response = await fetch(`http://localhost:${port}/postgres/schema`);
+      if (!response.ok) return [];
+
+      return response.json();
+    },
+    enabled: !!workbookId && !!runtimeStatus.data?.runtime_port && runtimeStatus.data?.running,
+    staleTime: 30000, // Cache for 30 seconds
+    refetchInterval: 60000, // Refresh every minute
   });
 }
 

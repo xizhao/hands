@@ -6,6 +6,7 @@
  */
 
 import { createContext, useContext, useState, useEffect, type ReactNode } from "react";
+import { useUIStore } from "@/stores/ui";
 
 interface DbContextValue {
   runtimePort: number | null;
@@ -49,6 +50,12 @@ export function useRuntimePort(): number | null {
   const ctx = useContext(DbContext);
   if (ctx?.runtimePort) {
     return ctx.runtimePort;
+  }
+
+  // Try UIStore (main app window)
+  const storePort = useUIStore((s) => s.runtimePort);
+  if (storePort) {
+    return storePort;
   }
 
   // Fallback: try URL params

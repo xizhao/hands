@@ -1,2 +1,2 @@
 export { WranglerManager } from "./manager";
-export { parseWranglerConfig, validateWranglerConfig } from "./parser";
+export { parseWranglerConfig } from "./parser";

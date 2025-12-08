@@ -13,10 +13,11 @@ import type {
 } from "./sync-types";
 import type { PostgresPool } from "./connection";
 
-// Schema for storing data source configs
-const SOURCES_TABLE = "_sync_sources";
-const SECRETS_TABLE = "_sync_secrets";
-const SYNC_LOG_TABLE = "_sync_log";
+// Internal schema for Hands infrastructure (hidden from user)
+const INTERNAL_SCHEMA = "_hands";
+const SOURCES_TABLE = `${INTERNAL_SCHEMA}._sync_sources`;
+const SECRETS_TABLE = `${INTERNAL_SCHEMA}._sync_secrets`;
+const SYNC_LOG_TABLE = `${INTERNAL_SCHEMA}._sync_log`;
 
 export class SyncManager {
   private pool: PostgresPool;
@@ -32,6 +33,9 @@ export class SyncManager {
    * Initialize sync tables if they don't exist
    */
   async init(): Promise<void> {
+    // Create internal schema (hidden from default user)
+    await this.pool.query(`CREATE SCHEMA IF NOT EXISTS ${INTERNAL_SCHEMA}`);
+
     await this.pool.query(`
       CREATE TABLE IF NOT EXISTS ${SOURCES_TABLE} (
         id TEXT PRIMARY KEY,

@@ -100,10 +100,14 @@ let currentSubscription: (() => void) | null = null;
 
 export function subscribeToDbChanges(
   runtimePort: number,
-  onError?: (err: unknown) => void
+  onError?: (err: unknown) => void,
+  onNewChange?: (change: ChangeRecord) => void
 ): () => void {
+  console.log("[db-browser] Starting SSE subscription to port", runtimePort);
+
   // Cleanup existing subscription
   if (currentSubscription) {
+    console.log("[db-browser] Cleaning up existing subscription");
     currentSubscription();
     currentSubscription = null;
   }
@@ -112,72 +116,88 @@ export function subscribeToDbChanges(
   clearChanges();
 
   const abortController = new AbortController();
+  let reconnectAttempts = 0;
+  let currentEventSource: EventSource | null = null;
 
-  const connect = async () => {
-    try {
-      const response = await fetch(`http://localhost:${runtimePort}/postgres/changes`, {
-        signal: abortController.signal,
-      });
+  const connect = () => {
+    const url = `http://localhost:${runtimePort}/postgres/changes`;
+    console.log("[db-browser] Connecting to SSE via EventSource:", url);
 
-      if (!response.ok) {
-        throw new Error(`Failed to connect: ${response.status}`);
-      }
+    const eventSource = new EventSource(url);
+    currentEventSource = eventSource;
 
-      const reader = response.body?.getReader();
-      if (!reader) {
-        throw new Error("No response body");
-      }
+    eventSource.onopen = () => {
+      console.log("[db-browser] EventSource connected");
+      reconnectAttempts = 0; // Reset on successful connection
+    };
 
-      const decoder = new TextDecoder();
-      let buffer = "";
+    eventSource.onmessage = (event) => {
+      try {
+        const data = JSON.parse(event.data);
+        console.log("[db-browser] EventSource message:", data.type);
 
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-
-        buffer += decoder.decode(value, { stream: true });
-        const lines = buffer.split("\n");
-        buffer = lines.pop() || ""; // Keep incomplete line in buffer
-
-        for (const line of lines) {
-          if (line.startsWith("data: ")) {
-            try {
-              const data = JSON.parse(line.slice(6));
-
-              if (data.type === "history") {
-                // Initial history load
-                for (const change of data.changes as DatabaseChange[]) {
-                  const changeRecord: ChangeRecord = {
-                    ...change,
-                    id: `${change.table}-${change.ts}-${change.rowId ?? "null"}`,
-                  };
-                  addChange(changeRecord);
-                }
-              } else if (data.type === "change") {
-                const change = data.change as DatabaseChange;
-                const changeRecord: ChangeRecord = {
-                  ...change,
-                  id: `${change.table}-${change.ts}-${change.rowId ?? "null"}`,
-                };
-                addChange(changeRecord);
-              }
-            } catch (parseErr) {
-              console.error("[db-browser] Failed to parse SSE data:", parseErr);
-            }
+        if (data.type === "history") {
+          console.log("[db-browser] Received history with", data.changes?.length ?? 0, "changes");
+          for (const change of data.changes as DatabaseChange[]) {
+            const changeRecord: ChangeRecord = {
+              ...change,
+              id: `${change.table}-${change.ts}-${change.rowId ?? "null"}`,
+            };
+            addChange(changeRecord);
           }
+        } else if (data.type === "change") {
+          const change = data.change as DatabaseChange;
+          console.log("[db-browser] Received change:", change.op, change.table, change.rowId);
+          const changeRecord: ChangeRecord = {
+            ...change,
+            id: `${change.table}-${change.ts}-${change.rowId ?? "null"}`,
+          };
+          addChange(changeRecord);
+          // Notify caller about new change (for auto-opening DB browser)
+          onNewChange?.(changeRecord);
+        } else {
+          console.log("[db-browser] Received unknown event type:", data.type);
         }
+      } catch (parseErr) {
+        console.error("[db-browser] Failed to parse SSE data:", parseErr, event.data);
       }
-    } catch (err) {
-      if (!abortController.signal.aborted) {
-        console.error("[db-browser] SSE connection error:", err);
-        onError?.(err);
+    };
+
+    eventSource.onerror = () => {
+      // Don't log every error - just reconnect silently with backoff
+      eventSource.close();
+      currentEventSource = null;
+
+      if (abortController.signal.aborted) return;
+
+      // Exponential backoff: 2s, 4s, 8s, 16s, max 30s
+      reconnectAttempts++;
+      const delay = Math.min(2000 * Math.pow(2, reconnectAttempts - 1), 30000);
+
+      if (reconnectAttempts <= 3) {
+        // Only log first few reconnects
+        console.log(`[db-browser] Reconnecting in ${delay / 1000}s (attempt ${reconnectAttempts})...`);
       }
-    }
+
+      setTimeout(() => {
+        if (!abortController.signal.aborted) {
+          connect();
+        }
+      }, delay);
+    };
   };
+
+  // Cleanup handler
+  abortController.signal.addEventListener("abort", () => {
+    console.log("[db-browser] Closing EventSource");
+    currentEventSource?.close();
+    currentEventSource = null;
+  });
 
   connect();
 
   const cleanup = () => {
+    console.log("[db-browser] Cleaning up SSE subscription");
     abortController.abort();
     currentSubscription = null;
   };

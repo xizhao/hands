@@ -63,6 +63,7 @@ interface ToolConfig {
   getSubtitle?: (input: Record<string, unknown>) => string;
 }
 
+
 const TOOL_REGISTRY: Record<string, ToolConfig> = {
   read: {
     icon: Glasses,
@@ -128,6 +129,16 @@ const TOOL_REGISTRY: Record<string, ToolConfig> = {
     icon: Database,
     label: "Query",
   },
+  psql: {
+    icon: Database,
+    label: "psql",
+    getSubtitle: (input) => input.query ? String(input.query).slice(0, 40) : "",
+  },
+  schemaread: {
+    icon: Database,
+    label: "Schema",
+    getSubtitle: (input) => input.table ? String(input.table) : "all tables",
+  },
 };
 
 const getFilename = (path: string): string => {
@@ -165,6 +176,120 @@ const CopyButton = ({ text, className }: { text: string; className?: string }) =
     </Button>
   );
 };
+
+// Parse psql table output into structured data
+interface ParsedTable {
+  headers: string[];
+  rows: string[][];
+  rowCount: number;
+}
+
+const parsePsqlOutput = (output: string): ParsedTable | null => {
+  if (!output || output.startsWith("Query executed") || output.startsWith("(no rows)")) {
+    return null;
+  }
+
+  const lines = output.trim().split("\n");
+  if (lines.length < 2) return null;
+
+  // Find the separator line (---+---)
+  const sepIndex = lines.findIndex(line => /^-+(\+-+)+$/.test(line.replace(/\s/g, '')));
+  if (sepIndex < 1) return null;
+
+  // Parse headers from line before separator
+  const headerLine = lines[sepIndex - 1];
+  const headers = headerLine.split("|").map(h => h.trim()).filter(Boolean);
+  if (headers.length === 0) return null;
+
+  // Parse data rows (after separator, before row count)
+  const rows: string[][] = [];
+  for (let i = sepIndex + 1; i < lines.length; i++) {
+    const line = lines[i];
+    // Stop at row count line
+    if (line.match(/^\s*\(\d+ rows?\)\s*$/)) break;
+    if (!line.includes("|")) continue;
+
+    const cells = line.split("|").map(c => c.trim());
+    if (cells.length >= headers.length) {
+      rows.push(cells.slice(0, headers.length));
+    }
+  }
+
+  // Extract row count from footer
+  const countMatch = output.match(/\((\d+) rows?\)/);
+  const rowCount = countMatch ? parseInt(countMatch[1], 10) : rows.length;
+
+  return { headers, rows, rowCount };
+};
+
+// QueryResult component - renders psql output as expandable DataTable
+const QueryResult = memo(({ output, query }: { output: string; query?: string }) => {
+  const [expanded, setExpanded] = useState(false);
+  const parsed = useMemo(() => parsePsqlOutput(output), [output]);
+
+  // If not a table result, show as plain text
+  if (!parsed || parsed.rows.length === 0) {
+    return (
+      <div className="text-[11px] text-muted-foreground/70 font-mono">
+        {output.slice(0, 200)}{output.length > 200 && "..."}
+      </div>
+    );
+  }
+
+  const previewRows = parsed.rows.slice(0, 3);
+  const hasMore = parsed.rows.length > 3;
+
+  return (
+    <div className="mt-1">
+      {/* Compact preview table */}
+      <div className="rounded-md overflow-hidden border border-border/30 bg-black/20">
+        <table className="w-full text-[10px] font-mono">
+          <thead>
+            <tr className="bg-black/30">
+              {parsed.headers.map((h, i) => (
+                <th key={i} className="px-2 py-1 text-left text-muted-foreground/60 font-medium truncate max-w-[120px]">
+                  {h}
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {(expanded ? parsed.rows : previewRows).map((row, i) => (
+              <tr key={i} className="border-t border-border/20 hover:bg-white/5">
+                {row.map((cell, j) => (
+                  <td key={j} className="px-2 py-1 text-muted-foreground/80 truncate max-w-[120px]" title={cell}>
+                    {cell || <span className="text-muted-foreground/30">null</span>}
+                  </td>
+                ))}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+
+      {/* Footer with expand/collapse and row count */}
+      <div className="flex items-center justify-between mt-1 px-1">
+        <span className="text-[9px] text-muted-foreground/40">
+          {parsed.rowCount} row{parsed.rowCount !== 1 && "s"}
+        </span>
+        {hasMore && (
+          <button
+            onClick={() => setExpanded(!expanded)}
+            className="text-[9px] text-blue-400/70 hover:text-blue-400 flex items-center gap-0.5"
+          >
+            {expanded ? (
+              <>Show less <ChevronDown className="h-2.5 w-2.5" /></>
+            ) : (
+              <>Show all {parsed.rowCount} <ChevronRight className="h-2.5 w-2.5" /></>
+            )}
+          </button>
+        )}
+      </div>
+    </div>
+  );
+});
+
+QueryResult.displayName = "QueryResult";
 
 // Collapsible tool thread
 const ToolThread = memo(({ tools }: { tools: ToolPart[] }) => {
@@ -232,6 +357,16 @@ const ToolInvocation = memo(({ part }: { part: ToolPart }) => {
   const isRunning = state.status === "running" || state.status === "pending";
   const isError = state.status === "error";
 
+  // Check if this is a SQL tool with table output
+  // Tool name could be "psql", "psqlTool", or prefixed like "hands_psql", "psql_psqlTool"
+  const isPsqlTool = toolName.toLowerCase().endsWith("psql") ||
+    toolName.toLowerCase().endsWith("psqltool");
+  const hasTableResult = isPsqlTool &&
+    state.status === "completed" &&
+    state.output &&
+    state.output.includes("|") &&
+    state.output.includes("---");
+
   const subtitle = useMemo(() => {
     if (state.status === "completed" && state.title) return state.title;
     if (state.status === "running" && state.title) return state.title;
@@ -242,6 +377,24 @@ const ToolInvocation = memo(({ part }: { part: ToolPart }) => {
   }, [state, config]);
 
   const hasDetails = Boolean(state.input || (state.status === "completed" && state.output) || isError);
+
+  // For psql with table results, always show the result inline
+  if (hasTableResult) {
+    return (
+      <div className="py-1">
+        <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground/60 mb-1">
+          <Database className="h-2.5 w-2.5 text-blue-400" />
+          <span className="font-mono text-[10px] text-muted-foreground/50 truncate max-w-[250px]">
+            {(state.input as Record<string, unknown>)?.query as string}
+          </span>
+        </div>
+        <QueryResult
+          output={state.output!}
+          query={(state.input as Record<string, unknown>)?.query as string}
+        />
+      </div>
+    );
+  }
 
   return (
     <div className="py-0.5">

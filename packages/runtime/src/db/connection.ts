@@ -5,6 +5,19 @@
 import postgres from "postgres";
 import type { QueryResult } from "../types";
 
+/**
+ * Format PostgreSQL notice messages for clean logging
+ */
+function formatNotice(notice: { severity?: string; message?: string; code?: string }): string {
+  const severity = notice.severity || "NOTICE";
+  const message = notice.message || "Unknown notice";
+  // Only show code for non-standard messages
+  const codeStr = notice.code && !["00000", "42P06", "42P07"].includes(notice.code)
+    ? ` [${notice.code}]`
+    : "";
+  return `[postgres] ${severity}${codeStr}: ${message}`;
+}
+
 export class PostgresPool {
   private sql: ReturnType<typeof postgres> | null = null;
   private connectionString: string;
@@ -26,6 +39,7 @@ export class PostgresPool {
       max: 10,
       idle_timeout: 20,
       connect_timeout: 10,
+      onnotice: (notice) => console.log(formatNotice(notice)),
     });
   }
 

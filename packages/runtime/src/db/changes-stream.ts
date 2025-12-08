@@ -39,29 +39,66 @@ export function createChangesStream(
   signal?: AbortSignal
 ): ReadableStream<Uint8Array> {
   const encoder = new TextEncoder();
+  let unsubscribe: (() => void) | null = null;
+  let heartbeatInterval: ReturnType<typeof setInterval> | null = null;
+  let isClosed = false;
 
   return new ReadableStream({
     start(controller) {
-      // Send recent changes as history first
+      // Always send history event first (even if empty) to flush the connection
       const recent = source.getRecentChanges();
-      if (recent.length > 0) {
-        const historyEvent: HistoryEvent = { type: "history", changes: recent };
-        const data = `data: ${JSON.stringify(historyEvent)}\n\n`;
-        controller.enqueue(encoder.encode(data));
-      }
+      const historyEvent: HistoryEvent = { type: "history", changes: recent };
+      const data = `data: ${JSON.stringify(historyEvent)}\n\n`;
+      controller.enqueue(encoder.encode(data));
 
       // Subscribe to new changes
-      const unsubscribe = source.subscribe((change) => {
-        const changeEvent: ChangeStreamEvent = { type: "change", change };
-        const data = `data: ${JSON.stringify(changeEvent)}\n\n`;
-        controller.enqueue(encoder.encode(data));
+      unsubscribe = source.subscribe((change) => {
+        if (isClosed) return;
+        try {
+          const changeEvent: ChangeStreamEvent = { type: "change", change };
+          const data = `data: ${JSON.stringify(changeEvent)}\n\n`;
+          controller.enqueue(encoder.encode(data));
+        } catch (err) {
+          console.error("[changes-stream] Error enqueueing change:", err);
+        }
       });
 
+      // Send heartbeat every 15 seconds to keep connection alive
+      heartbeatInterval = setInterval(() => {
+        if (isClosed) return;
+        try {
+          // SSE comment line (starts with :) - keeps connection alive without triggering onmessage
+          controller.enqueue(encoder.encode(": heartbeat\n\n"));
+        } catch {
+          // Controller closed, cleanup will happen via abort
+        }
+      }, 15000);
+
       // Cleanup on abort/disconnect
-      signal?.addEventListener("abort", () => {
-        unsubscribe();
-        controller.close();
-      });
+      const cleanup = () => {
+        isClosed = true;
+        unsubscribe?.();
+        if (heartbeatInterval) {
+          clearInterval(heartbeatInterval);
+          heartbeatInterval = null;
+        }
+        try {
+          controller.close();
+        } catch {
+          // Already closed
+        }
+      };
+
+      signal?.addEventListener("abort", cleanup);
+    },
+
+    cancel() {
+      isClosed = true;
+      unsubscribe?.();
+      if (heartbeatInterval) {
+        clearInterval(heartbeatInterval);
+        heartbeatInterval = null;
+      }
     },
   });
 }

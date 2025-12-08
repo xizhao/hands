@@ -1,1 +1,1 @@
-export { WorkerManager } from "./manager";
+export { WranglerManager as WorkerManager } from "../wrangler/manager";

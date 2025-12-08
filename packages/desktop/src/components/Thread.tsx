@@ -1,6 +1,6 @@
 import { useEffect, useRef, useMemo, useCallback, useState } from "react";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { useMessages, useSessions, useSessionStatuses, useDeleteSession } from "@/store/hooks";
+import { useMessages, useSessions, useSessionStatuses, useDeleteSession } from "@/hooks/useSession";
 import { useUIStore } from "@/stores/ui";
 import { useBackgroundStore } from "@/stores/background";
 import { ChatMessage } from "@/components/ChatMessage";

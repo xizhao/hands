@@ -13,7 +13,7 @@
  */
 
 import { watch } from "fs";
-import { initRuntime, startServices, stopServices, createServer } from "./server";
+import { initRuntime, startPostgres, startWorker, stopServices, createServer } from "./server";
 import { runEval } from "./eval";
 import { runPreflightChecks, printPreflightResults } from "./preflight";
 
@@ -159,21 +159,27 @@ async function main() {
     runtimePort,
   });
 
-  // Start services
-  console.log("Starting services...");
-  await startServices();
+  // Start postgres first (blocking - required for runtime to function)
+  console.log("Starting postgres...");
+  await startPostgres();
 
-  // Create HTTP server
+  // Create HTTP server (before worker, so we can respond to health checks)
   const server = createServer(runtimePort);
   console.log(`Runtime server listening on http://localhost:${runtimePort}`);
 
-  // Output JSON for parent process to read
+  // Output JSON for parent process to read (runtime is now usable)
   console.log(JSON.stringify({
     type: "ready",
     runtimePort,
     postgresPort: servicePorts.postgres,
-    workerPort: servicePorts.wrangler, // Still uses wrangler port internally
+    workerPort: servicePorts.wrangler,
   }));
+
+  // Start worker in background (non-blocking - can be slow/fail without blocking runtime)
+  console.log("Starting worker...");
+  startWorker().catch(err => {
+    console.error("Worker startup error:", err);
+  });
 
   // Set up file watcher
   setupFileWatcher(workbookDir, async () => {

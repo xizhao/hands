@@ -509,6 +509,26 @@ pub struct DevServerStatus {
     pub message: String,
 }
 
+/// Kill processes listening on a specific port
+fn kill_processes_on_port(port: u16) {
+    if let Ok(output) = std::process::Command::new("lsof")
+        .args(["-ti", &format!(":{}", port)])
+        .output()
+    {
+        if output.status.success() {
+            let pids = String::from_utf8_lossy(&output.stdout);
+            for pid in pids.lines() {
+                if let Ok(pid_num) = pid.trim().parse::<i32>() {
+                    println!("[cleanup] Killing process {} on port {}", pid_num, port);
+                    let _ = std::process::Command::new("kill")
+                        .args(["-9", &pid_num.to_string()])
+                        .output();
+                }
+            }
+        }
+    }
+}
+
 /// Force cleanup any stale runtime lockfile and processes
 async fn force_cleanup_runtime() {
     // Get lockfile path (macOS: ~/Library/Application Support/Hands/runtime.lock)
@@ -518,29 +538,40 @@ async fn force_cleanup_runtime() {
 
     if let Some(path) = lock_path {
         if path.exists() {
-            // Read the lockfile to get PIDs
+            // Read the lockfile to get PIDs and ports
             if let Ok(content) = std::fs::read_to_string(&path) {
                 if let Ok(lock) = serde_json::from_str::<serde_json::Value>(&content) {
-                    // Kill the runtime process
+                    // Kill the runtime process by PID
                     if let Some(pid) = lock.get("pid").and_then(|v| v.as_i64()) {
                         println!("[cleanup] Killing stale runtime PID {}", pid);
                         let _ = std::process::Command::new("kill")
                             .args(["-9", &pid.to_string()])
                             .output();
                     }
-                    // Kill postgres
+                    // Kill postgres by PID
                     if let Some(pid) = lock.get("postgresPid").and_then(|v| v.as_i64()) {
                         println!("[cleanup] Killing stale postgres PID {}", pid);
                         let _ = std::process::Command::new("kill")
                             .args(["-9", &pid.to_string()])
                             .output();
                     }
-                    // Kill wrangler
+                    // Kill wrangler by PID
                     if let Some(pid) = lock.get("wranglerPid").and_then(|v| v.as_i64()) {
                         println!("[cleanup] Killing stale wrangler PID {}", pid);
                         let _ = std::process::Command::new("kill")
                             .args(["-9", &pid.to_string()])
                             .output();
+                    }
+
+                    // Also kill by port (in case PIDs are stale but processes respawned)
+                    if let Some(port) = lock.get("postgresPort").and_then(|v| v.as_u64()) {
+                        kill_processes_on_port(port as u16);
+                    }
+                    if let Some(port) = lock.get("wranglerPort").and_then(|v| v.as_u64()) {
+                        kill_processes_on_port(port as u16);
+                    }
+                    if let Some(port) = lock.get("runtimePort").and_then(|v| v.as_u64()) {
+                        kill_processes_on_port(port as u16);
                     }
                 }
             }
@@ -548,7 +579,23 @@ async fn force_cleanup_runtime() {
             println!("[cleanup] Removing stale lockfile: {:?}", path);
             let _ = std::fs::remove_file(&path);
             // Wait for processes to die
-            tokio::time::sleep(Duration::from_millis(500)).await;
+            tokio::time::sleep(Duration::from_millis(1000)).await;
+        }
+    }
+
+    // Also cleanup postmaster.pid files that might be stale
+    if let Some(home) = std::env::var("HOME").ok() {
+        let hands_dir = PathBuf::from(&home).join(".hands");
+        if hands_dir.exists() {
+            if let Ok(entries) = std::fs::read_dir(&hands_dir) {
+                for entry in entries.filter_map(|e| e.ok()) {
+                    let postmaster_pid = entry.path().join("postgres/postmaster.pid");
+                    if postmaster_pid.exists() {
+                        println!("[cleanup] Removing stale postmaster.pid: {:?}", postmaster_pid);
+                        let _ = std::fs::remove_file(&postmaster_pid);
+                    }
+                }
+            }
         }
     }
 }
@@ -708,7 +755,7 @@ async fn start_runtime(
 ) -> Result<DevServerStatus, String> {
     let state_guard = state.lock().await;
 
-    // Check if already running
+    // Check if already tracked in our state
     if let Some(runtime) = state_guard.runtimes.get(&workbook_id) {
         return Ok(DevServerStatus {
             running: true,
@@ -813,6 +860,33 @@ async fn stop_runtime(
         worker_port: 0,
         message: "Runtime was not running".to_string(),
     })
+}
+
+/// Get the currently active runtime (if any)
+#[tauri::command]
+async fn get_active_runtime(
+    state: tauri::State<'_, Arc<Mutex<AppState>>>,
+) -> Result<Option<DevServerStatus>, String> {
+    let state_guard = state.lock().await;
+
+    let workbook_id = match &state_guard.active_workbook_id {
+        Some(id) => id.clone(),
+        None => return Ok(None),
+    };
+
+    if let Some(runtime) = state_guard.runtimes.get(&workbook_id) {
+        return Ok(Some(DevServerStatus {
+            running: true,
+            workbook_id,
+            directory: runtime.directory.clone(),
+            runtime_port: runtime.runtime_port,
+            postgres_port: runtime.postgres_port,
+            worker_port: runtime.worker_port,
+            message: "Runtime is running".to_string(),
+        }));
+    }
+
+    Ok(None)
 }
 
 /// Get runtime status for a workbook
@@ -1257,7 +1331,8 @@ async fn open_db_browser(
     }
 
     // Open DB browser with runtime port as query param
-    let url = format!("index.html?db-browser=true&port={}", runtime_port);
+    // Use just query params (not index.html) for Vite dev server compatibility
+    let url = format!("?db-browser=true&port={}", runtime_port);
 
     let mut builder = WebviewWindowBuilder::new(&app, &window_label, WebviewUrl::App(url.into()))
         .title("Database Browser")
@@ -1348,6 +1423,7 @@ pub fn run() {
             start_runtime,
             stop_runtime,
             get_runtime_status,
+            get_active_runtime,
             runtime_query,
             runtime_eval,
             copy_files_to_workbook,

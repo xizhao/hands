@@ -30,9 +30,11 @@ const PG_BINARIES_DIR = join(getCacheDir(), "postgres", PG_VERSION);
 interface PostgresConfig {
   dataDir: string;
   port: number;
-  user: string;
+  user: string;         // Admin user (owns database, manages infrastructure)
   password: string;
   database: string;
+  clientUser?: string;  // Limited client user (for agent/Tauri, defaults to "hands")
+  clientPassword?: string;
 }
 
 export class PostgresManager {
@@ -47,9 +49,22 @@ export class PostgresManager {
     this.config = config;
   }
 
+  /**
+   * Admin connection string (for runtime infrastructure)
+   */
   get connectionString(): string {
     const { user, password, port, database } = this.config;
     return `postgres://${user}:${password}@localhost:${port}/${database}`;
+  }
+
+  /**
+   * Client connection string (for agent/Tauri - limited to public schema)
+   */
+  get clientConnectionString(): string {
+    const clientUser = this.config.clientUser || "hands";
+    const clientPassword = this.config.clientPassword || "hands";
+    const { port, database } = this.config;
+    return `postgres://${clientUser}:${clientPassword}@localhost:${port}/${database}`;
   }
 
   get status(): ServiceStatus {
@@ -240,8 +255,8 @@ shared_buffers = 128MB
       // Create the database if it doesn't exist
       await this.ensureDatabase();
 
-      // Set user password
-      await this.setPassword();
+      // Setup admin and client users with proper permissions
+      await this.setupUsers();
 
       this._state = "running";
       this._startedAt = Date.now();
@@ -307,21 +322,52 @@ shared_buffers = 128MB
     }
   }
 
-  private async setPassword(): Promise<void> {
+  private async setupUsers(): Promise<void> {
     // Connect via localhost (trust auth configured in pg_hba.conf)
     const postgres = await import("postgres");
     const sql = postgres.default({
       host: "localhost",
       port: this.config.port,
       user: this.config.user,
-      database: "postgres",
+      database: this.config.database,
     });
 
+    const clientUser = this.config.clientUser || "hands";
+    const clientPassword = this.config.clientPassword || "hands";
+
     try {
+      // Set admin password
       await sql.unsafe(`ALTER USER ${this.config.user} WITH PASSWORD '${this.config.password}'`);
-      console.log(`Set password for user: ${this.config.user}`);
+      console.log(`Set password for admin user: ${this.config.user}`);
+
+      // Create client user if not exists
+      const userExists = await sql`SELECT 1 FROM pg_roles WHERE rolname = ${clientUser}`;
+      if (userExists.length === 0) {
+        await sql.unsafe(`CREATE USER ${clientUser} WITH PASSWORD '${clientPassword}'`);
+        console.log(`Created client user: ${clientUser}`);
+      } else {
+        await sql.unsafe(`ALTER USER ${clientUser} WITH PASSWORD '${clientPassword}'`);
+      }
+
+      // Create internal schema owned by admin
+      await sql.unsafe(`CREATE SCHEMA IF NOT EXISTS _hands AUTHORIZATION ${this.config.user}`);
+
+      // Grant client user full access to public schema (can create tables, etc.)
+      await sql.unsafe(`GRANT ALL ON SCHEMA public TO ${clientUser}`);
+      await sql.unsafe(`GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA public TO ${clientUser}`);
+      await sql.unsafe(`GRANT ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA public TO ${clientUser}`);
+      await sql.unsafe(`ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON TABLES TO ${clientUser}`);
+      await sql.unsafe(`ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON SEQUENCES TO ${clientUser}`);
+
+      // Explicitly revoke access to internal schema from client
+      await sql.unsafe(`REVOKE ALL ON SCHEMA _hands FROM ${clientUser}`);
+
+      // Set client's search_path to only public (can't see _hands)
+      await sql.unsafe(`ALTER USER ${clientUser} SET search_path TO public`);
+
+      console.log(`Configured permissions for client user: ${clientUser}`);
     } catch (err) {
-      console.log(`Set password:`, err);
+      console.error(`Error setting up users:`, err);
     } finally {
       await sql.end();
     }
