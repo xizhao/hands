@@ -1,14 +1,18 @@
 /**
  * Eval loop orchestrator
  *
- * Runs all code quality checks and returns structured results
+ * Runs all code quality checks and returns structured results.
+ * Uses @hands/stdlib for the core check implementations.
  */
 
 import type { EvalResult, ServiceStatus } from "../types";
 import { parseWranglerConfig } from "../wrangler/parser";
-import { checkTypescript } from "./typescript";
-import { formatCode } from "./format";
-import { findUnused } from "./unused";
+import {
+  checkTypescript,
+  formatCode,
+  checkFormat,
+  findUnused,
+} from "@hands/stdlib";
 
 export interface EvalOptions {
   workbookDir: string;
@@ -47,6 +51,5 @@ export async function runEval(options: EvalOptions): Promise<EvalResult> {
   };
 }
 
-export { checkTypescript } from "./typescript";
-export { formatCode, checkFormat } from "./format";
-export { findUnused } from "./unused";
+// Re-export from stdlib for backwards compatibility
+export { checkTypescript, formatCode, checkFormat, findUnused } from "@hands/stdlib";

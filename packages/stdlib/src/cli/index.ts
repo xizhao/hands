@@ -5,7 +5,8 @@
  * Usage:
  *   hands init <name>           Create a new workbook
  *   hands add source <name>     Add a source from the registry
- *   hands build                 Generate .hands/ from hands.json
+ *   hands build                 Generate .hands/ and run checks
+ *   hands check                 Run code quality checks
  *   hands dev                   Start the dev server
  *   hands sources               List available sources
  */
@@ -13,6 +14,7 @@
 import { build } from "../build/index.js"
 import { addSource, listSources } from "./add.js"
 import { createDefaultHandsJson, saveHandsJson } from "../build/schema.js"
+import { runChecks, hasErrors, summarizeChecks, type CheckResult, type Diagnostic } from "../checks/index.js"
 import { mkdir } from "fs/promises"
 import { join } from "path"
 import { existsSync } from "fs"
@@ -23,9 +25,16 @@ hands - Data analysis workbook CLI
 Usage:
   hands init <name>           Create a new workbook
   hands add source <name>     Add a source from the registry
-  hands build                 Generate .hands/ from hands.json
+  hands build [options]       Generate .hands/ and run checks
+  hands check [options]       Run code quality checks only
   hands dev                   Start the dev server
   hands sources               List available sources
+
+Build options:
+  --no-check                  Skip code quality checks
+  --no-fix                    Don't auto-fix formatting
+  --json                      Output check results as JSON
+  --strict                    Exit with error on any issue
 
 Examples:
   hands init my-dashboard
@@ -50,6 +59,10 @@ async function main() {
 
     case "build":
       await handleBuild(args.slice(1))
+      break
+
+    case "check":
+      await handleCheck(args.slice(1))
       break
 
     case "dev":
@@ -230,6 +243,10 @@ async function handleAdd(args: string[]) {
 async function handleBuild(args: string[]) {
   const verbose = args.includes("--verbose") || args.includes("-v")
   const dev = args.includes("--dev")
+  const skipCheck = args.includes("--no-check")
+  const noFix = args.includes("--no-fix")
+  const jsonOutput = args.includes("--json")
+  const strict = args.includes("--strict")
 
   console.log("Building workbook...")
 
@@ -249,6 +266,122 @@ async function handleBuild(args: string[]) {
     for (const file of result.files) {
       console.log(`  ${file}`)
     }
+  }
+
+  // Run checks unless --no-check is specified
+  if (!skipCheck) {
+    console.log()
+    console.log("Running checks...")
+
+    const checkResult = await runChecks(process.cwd(), { fix: !noFix })
+
+    if (jsonOutput) {
+      console.log(JSON.stringify(checkResult, null, 2))
+    } else {
+      console.log()
+      console.log(summarizeChecks(checkResult))
+
+      // Print detailed diagnostics
+      if (checkResult.typescript.errors.length > 0) {
+        console.log()
+        console.log("TypeScript errors:")
+        for (const diag of checkResult.typescript.errors) {
+          console.log(`  ${diag.file}:${diag.line}:${diag.column}: ${diag.message}`)
+        }
+      }
+
+      if (checkResult.unused.exports.length > 0 || checkResult.unused.files.length > 0) {
+        console.log()
+        console.log("Unused code:")
+        for (const exp of checkResult.unused.exports) {
+          console.log(`  ${exp}`)
+        }
+        for (const file of checkResult.unused.files) {
+          console.log(`  ${file} (unused file)`)
+        }
+      }
+    }
+
+    // Exit with error if there are issues
+    if (hasErrors(checkResult)) {
+      process.exit(1)
+    }
+
+    // In strict mode, unused code is also an error
+    if (strict && (checkResult.unused.exports.length > 0 || checkResult.unused.files.length > 0)) {
+      console.error()
+      console.error("Strict mode: unused code is not allowed")
+      process.exit(1)
+    }
+  }
+}
+
+async function handleCheck(args: string[]) {
+  const noFix = args.includes("--no-fix")
+  const jsonOutput = args.includes("--json")
+  const strict = args.includes("--strict")
+
+  if (!jsonOutput) {
+    console.log("Running checks...")
+  }
+
+  const checkResult = await runChecks(process.cwd(), { fix: !noFix })
+
+  if (jsonOutput) {
+    console.log(JSON.stringify(checkResult, null, 2))
+  } else {
+    console.log()
+    console.log(summarizeChecks(checkResult))
+
+    // Print detailed diagnostics
+    if (checkResult.typescript.errors.length > 0) {
+      console.log()
+      console.log("TypeScript errors:")
+      for (const diag of checkResult.typescript.errors) {
+        console.log(`  ${diag.file}:${diag.line}:${diag.column}: ${diag.message}`)
+      }
+    }
+
+    if (checkResult.typescript.warnings.length > 0) {
+      console.log()
+      console.log("TypeScript warnings:")
+      for (const diag of checkResult.typescript.warnings) {
+        console.log(`  ${diag.file}:${diag.line}:${diag.column}: ${diag.message}`)
+      }
+    }
+
+    if (checkResult.format.fixed.length > 0) {
+      console.log()
+      console.log("Formatted files:")
+      for (const file of checkResult.format.fixed) {
+        console.log(`  ${file}`)
+      }
+    }
+
+    if (checkResult.unused.exports.length > 0 || checkResult.unused.files.length > 0) {
+      console.log()
+      console.log("Unused code:")
+      for (const exp of checkResult.unused.exports) {
+        console.log(`  ${exp}`)
+      }
+      for (const file of checkResult.unused.files) {
+        console.log(`  ${file} (unused file)`)
+      }
+    }
+  }
+
+  // Exit with error if there are issues
+  if (hasErrors(checkResult)) {
+    process.exit(1)
+  }
+
+  // In strict mode, unused code is also an error
+  if (strict && (checkResult.unused.exports.length > 0 || checkResult.unused.files.length > 0)) {
+    if (!jsonOutput) {
+      console.error()
+      console.error("Strict mode: unused code is not allowed")
+    }
+    process.exit(1)
   }
 }
 

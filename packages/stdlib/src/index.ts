@@ -43,3 +43,17 @@ export {
 
 // CLI utilities (for programmatic use)
 export { addSource, listSources, type AddSourceOptions, type AddSourceResult } from "./cli/add.js"
+
+// Code quality checks
+export {
+  runChecks,
+  hasErrors,
+  summarizeChecks,
+  checkTypescript,
+  formatCode,
+  checkFormat,
+  findUnused,
+  type Diagnostic,
+  type CheckResult,
+  type CheckOptions,
+} from "./checks/index.js"
