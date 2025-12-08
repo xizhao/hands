@@ -2,20 +2,21 @@
  * HTTP server for the runtime API
  */
 
-// Server type from Bun
-import type { EvalResult, RuntimeStatus, QueryResult } from "./types";
+import type { EvalResult, RuntimeStatus, ServiceStatus } from "./types";
 import { PostgresManager, PostgresPool } from "./postgres";
-import { WranglerManager, parseWranglerConfig } from "./wrangler";
+import { WorkerManager } from "./worker";
 import { runEval } from "./eval";
+import { acquireLock, updateLockfile, releaseLock, readLockfile, type RuntimeLock } from "./lockfile";
 
 interface RuntimeState {
   workbookId: string;
   workbookDir: string;
   postgres: PostgresManager;
   pool: PostgresPool;
-  wrangler: WranglerManager;
+  worker: WorkerManager;
   startedAt: number;
   evalListeners: Set<(result: EvalResult) => void>;
+  lock: RuntimeLock;
 }
 
 let state: RuntimeState | null = null;
@@ -28,8 +29,18 @@ export async function initRuntime(config: {
   workbookDir: string;
   postgresPort: number;
   wranglerPort: number;
+  runtimePort: number;
 }): Promise<void> {
-  const { workbookId, workbookDir, postgresPort, wranglerPort } = config;
+  const { workbookId, workbookDir, postgresPort, wranglerPort, runtimePort } = config;
+
+  // Acquire lock (also cleans up orphans)
+  const lock = await acquireLock({
+    runtimePort,
+    postgresPort,
+    wranglerPort,
+    workbookId,
+    workbookDir,
+  });
 
   const postgres = new PostgresManager({
     dataDir: `${workbookDir}/postgres`,
@@ -41,7 +52,7 @@ export async function initRuntime(config: {
 
   const pool = new PostgresPool(postgres.connectionString);
 
-  const wrangler = new WranglerManager({
+  const worker = new WorkerManager({
     workbookDir,
     port: wranglerPort,
   });
@@ -51,9 +62,10 @@ export async function initRuntime(config: {
     workbookDir,
     postgres,
     pool,
-    wrangler,
+    worker,
     startedAt: Date.now(),
     evalListeners: new Set(),
+    lock,
   };
 }
 
@@ -63,14 +75,24 @@ export async function initRuntime(config: {
 export async function startServices(): Promise<void> {
   if (!state) throw new Error("Runtime not initialized");
 
+  // Start postgres
   await state.postgres.start();
   state.pool.connect();
 
+  // Update lockfile with postgres PID
+  if (state.postgres.status.pid) {
+    await updateLockfile({ postgresPid: state.postgres.status.pid });
+  }
+
+  // Start worker dev server
   try {
-    await state.wrangler.start();
+    await state.worker.start();
+    // Update lockfile with worker port
+    await updateLockfile({ wranglerPort: state.worker.status.port });
   } catch (error) {
-    console.error("Wrangler failed to start:", error);
-    // Continue even if wrangler fails - postgres is more important
+    console.error("Worker failed to start:", error);
+    // Continue even if worker fails - postgres is more important
+    // Build errors are available via state.worker.buildErrors
   }
 }
 
@@ -81,8 +103,48 @@ export async function stopServices(): Promise<void> {
   if (!state) return;
 
   await state.pool.close();
-  await state.wrangler.stop();
+  await state.worker.stop();
   await state.postgres.stop();
+
+  // Release the lock
+  await releaseLock();
+}
+
+/**
+ * Switch to a different workbook
+ */
+export async function switchWorkbook(newWorkbookId: string, newWorkbookDir: string): Promise<void> {
+  if (!state) throw new Error("Runtime not initialized");
+
+  console.log(`Switching workbook from ${state.workbookId} to ${newWorkbookId}`);
+
+  // Close current pool
+  await state.pool.close();
+
+  // Switch postgres to new workbook
+  const newDatabase = `hands_${newWorkbookId.replace(/-/g, "_")}`;
+  await state.postgres.switchWorkbook(`${newWorkbookDir}/postgres`, newDatabase);
+
+  // Reconnect pool with new connection string
+  state.pool = new PostgresPool(state.postgres.connectionString);
+  state.pool.connect();
+
+  // Switch worker to new workbook
+  await state.worker.switchWorkbook(newWorkbookDir);
+
+  // Update state
+  state.workbookId = newWorkbookId;
+  state.workbookDir = newWorkbookDir;
+
+  // Update lockfile
+  await updateLockfile({
+    workbookId: newWorkbookId,
+    workbookDir: newWorkbookDir,
+    postgresPid: state.postgres.status.pid,
+    wranglerPort: state.worker.status.port,
+  });
+
+  console.log(`Switched to workbook ${newWorkbookId}`);
 }
 
 /**
@@ -98,7 +160,42 @@ function getStatus(): RuntimeStatus {
     startedAt: state.startedAt,
     services: {
       postgres: state.postgres.status,
-      wrangler: state.wrangler.status,
+      worker: state.worker.status,
+    },
+  };
+}
+
+/**
+ * Get detailed health info for services
+ */
+function getHealth(): {
+  healthy: boolean;
+  uptime: number;
+  services: {
+    postgres: ServiceStatus & { connectionOk?: boolean };
+    worker: ServiceStatus;
+  };
+} {
+  if (!state) {
+    return {
+      healthy: false,
+      uptime: 0,
+      services: {
+        postgres: { state: "stopped", up: false, port: 0, restartCount: 0 },
+        worker: { state: "stopped", up: false, port: 0, restartCount: 0 },
+      },
+    };
+  }
+
+  const postgresStatus = state.postgres.status;
+  const workerStatus = state.worker.status;
+
+  return {
+    healthy: postgresStatus.up, // Postgres is required, worker is optional
+    uptime: Date.now() - state.startedAt,
+    services: {
+      postgres: postgresStatus,
+      worker: workerStatus,
     },
   };
 }
@@ -113,8 +210,10 @@ async function ensureServicesHealthy(): Promise<void> {
   if (!state.postgres.status.up) {
     console.log("Postgres is down, attempting to restart...");
     try {
-      await state.postgres.start();
+      await state.postgres.restart();
+      state.pool = new PostgresPool(state.postgres.connectionString);
       state.pool.connect();
+      await updateLockfile({ postgresPid: state.postgres.status.pid });
       console.log("Postgres restarted successfully");
     } catch (error) {
       console.error("Failed to restart postgres:", error);
@@ -133,15 +232,16 @@ async function ensureServicesHealthy(): Promise<void> {
     }
   }
 
-  // Check wrangler health
-  if (!state.wrangler.status.up) {
-    console.log("Wrangler is down, attempting to restart...");
+  // Check worker health
+  if (!state.worker.status.up && state.worker.status.state !== "failed") {
+    console.log("Worker is down, attempting to restart...");
     try {
-      await state.wrangler.start();
-      console.log("Wrangler restarted successfully");
+      await state.worker.restart();
+      await updateLockfile({ wranglerPort: state.worker.status.port });
+      console.log("Worker restarted successfully");
     } catch (error) {
-      console.error("Failed to restart wrangler:", error);
-      // Don't throw - wrangler is optional
+      console.error("Failed to restart worker:", error);
+      // Don't throw - worker is optional
     }
   }
 }
@@ -159,7 +259,7 @@ async function doEval(): Promise<EvalResult> {
     workbookDir: state.workbookDir,
     services: {
       postgres: state.postgres.status,
-      wrangler: state.wrangler.status,
+      worker: state.worker.status,
     },
   });
 
@@ -195,11 +295,24 @@ export function createServer(port: number) {
       }
 
       try {
-        // GET /status - Health check
+        // GET /status - Basic status
         if (method === "GET" && url.pathname === "/status") {
           const status = getStatus();
           status.runtimePort = port;
           return Response.json(status, { headers });
+        }
+
+        // GET /health - Detailed health check
+        if (method === "GET" && url.pathname === "/health") {
+          const health = getHealth();
+          const statusCode = health.healthy ? 200 : 503;
+          return Response.json(health, { status: statusCode, headers });
+        }
+
+        // GET /lock - Get current lockfile info
+        if (method === "GET" && url.pathname === "/lock") {
+          const lock = await readLockfile();
+          return Response.json(lock || { error: "No lockfile" }, { headers });
         }
 
         // POST /eval - Run eval loop
@@ -245,25 +358,52 @@ export function createServer(port: number) {
           });
         }
 
+        // POST /workbook/switch - Switch to different workbook
+        if (method === "POST" && url.pathname === "/workbook/switch") {
+          const body = (await req.json()) as { workbookId: string; workbookDir: string };
+          if (!body.workbookId || !body.workbookDir) {
+            return Response.json(
+              { error: "Missing workbookId or workbookDir" },
+              { status: 400, headers }
+            );
+          }
+
+          await switchWorkbook(body.workbookId, body.workbookDir);
+          return Response.json({ success: true, workbookId: body.workbookId }, { headers });
+        }
+
         // POST /postgres/query - Execute SQL
         if (method === "POST" && url.pathname === "/postgres/query") {
           if (!state) {
             return Response.json({ error: "Not initialized" }, { status: 500, headers });
           }
 
-          const body = await req.json() as { query: string };
+          const body = (await req.json()) as { query: string };
           const result = await state.pool.query(body.query);
           return Response.json(result, { headers });
         }
 
-        // POST /wrangler/restart - Restart wrangler
-        if (method === "POST" && url.pathname === "/wrangler/restart") {
+        // GET /worker/status - Get detailed worker status including build errors
+        if (method === "GET" && url.pathname === "/worker/status") {
           if (!state) {
             return Response.json({ error: "Not initialized" }, { status: 500, headers });
           }
 
-          await state.wrangler.restart();
-          return Response.json({ success: true }, { headers });
+          return Response.json({
+            status: state.worker.status,
+            buildErrors: state.worker.buildErrors,
+          }, { headers });
+        }
+
+        // POST /worker/restart - Restart worker
+        if (method === "POST" && url.pathname === "/worker/restart") {
+          if (!state) {
+            return Response.json({ error: "Not initialized" }, { status: 500, headers });
+          }
+
+          await state.worker.restart();
+          await updateLockfile({ wranglerPort: state.worker.status.port });
+          return Response.json({ success: true, status: state.worker.status }, { headers });
         }
 
         // POST /postgres/restart - Restart postgres
@@ -273,10 +413,11 @@ export function createServer(port: number) {
           }
 
           await state.pool.close();
-          await state.postgres.stop();
-          await state.postgres.start();
+          await state.postgres.restart();
+          state.pool = new PostgresPool(state.postgres.connectionString);
           state.pool.connect();
-          return Response.json({ success: true }, { headers });
+          await updateLockfile({ postgresPid: state.postgres.status.pid });
+          return Response.json({ success: true, status: state.postgres.status }, { headers });
         }
 
         // POST /stop - Graceful shutdown

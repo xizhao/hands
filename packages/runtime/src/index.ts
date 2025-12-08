@@ -156,6 +156,7 @@ async function main() {
     workbookDir,
     postgresPort: servicePorts.postgres,
     wranglerPort: servicePorts.wrangler,
+    runtimePort,
   });
 
   // Start services
@@ -171,7 +172,7 @@ async function main() {
     type: "ready",
     runtimePort,
     postgresPort: servicePorts.postgres,
-    wranglerPort: servicePorts.wrangler,
+    workerPort: servicePorts.wrangler, // Still uses wrangler port internally
   }));
 
   // Set up file watcher

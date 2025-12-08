@@ -1,4 +1,4 @@
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient, useMutation } from "@tanstack/react-query";
 import { invoke } from "@tauri-apps/api/core";
 import { api } from "@/lib/api";
 
@@ -20,25 +20,30 @@ export function useServer() {
     staleTime: 5000,
   });
 
-  const restartServer = async () => {
-    try {
-      // Call Tauri to restart the server process
+  // Restart mutation for better state tracking
+  const restartMutation = useMutation({
+    mutationFn: async () => {
       const result = await invoke<HealthCheck>("restart_server");
       console.log("Restart server result:", result);
-
+      return result;
+    },
+    onSuccess: () => {
       // Invalidate health query to refetch
       queryClient.invalidateQueries({ queryKey: ["health"] });
+      // Also invalidate agents and tools since they may have changed
+      queryClient.invalidateQueries({ queryKey: ["agents"] });
+      queryClient.invalidateQueries({ queryKey: ["tools"] });
+    },
+  });
 
-      return result;
-    } catch (error) {
-      console.error("Failed to restart server:", error);
-      throw error;
-    }
+  const restartServer = async () => {
+    return restartMutation.mutateAsync();
   };
 
   return {
     isConnected: health.isSuccess,
     isConnecting: health.isPending || (health.isError && health.isFetching),
+    isRestarting: restartMutation.isPending,
     error: health.error,
     restartServer,
   };

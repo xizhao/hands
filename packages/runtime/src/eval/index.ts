@@ -14,7 +14,7 @@ export interface EvalOptions {
   workbookDir: string;
   services: {
     postgres: ServiceStatus;
-    wrangler: ServiceStatus;
+    worker: ServiceStatus;
   };
   autoFormat?: boolean;
 }

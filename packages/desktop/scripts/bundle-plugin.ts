@@ -39,6 +39,15 @@ async function ensureDir(dir: string) {
   await fs.mkdir(dir, { recursive: true })
 }
 
+async function cleanDir(dir: string) {
+  try {
+    await fs.rm(dir, { recursive: true, force: true })
+  } catch {
+    // Ignore if doesn't exist
+  }
+  await fs.mkdir(dir, { recursive: true })
+}
+
 async function copyAgents() {
   await ensureDir(AGENTS_DEST)
 
@@ -83,14 +92,33 @@ async function bundleTools() {
       process.exit(1)
     }
 
-    // Add default export if we know the export name
+    // Replace any named/combined export with default-only export
+    // OpenCode registers tools by default export, and we must NOT have named exports
+    // otherwise both get registered as separate tools
     if (exportName) {
       const outPath = path.join(TOOLS_DEST, `${toolName}.js`)
       let content = await Bun.file(outPath).text()
-      if (!content.includes("export default")) {
-        content += `\nexport default ${exportName};\n`
-        await Bun.write(outPath, content)
-      }
+
+      // Handle: export { toolName, toolName as default };
+      content = content.replace(
+        new RegExp(`export\\s*\\{\\s*${exportName}\\s*,\\s*${exportName}\\s+as\\s+default\\s*\\};`),
+        `export default ${exportName};`
+      )
+
+      // Handle: export { toolName };  (no default)
+      content = content.replace(
+        new RegExp(`export\\s*\\{\\s*${exportName}\\s*\\};`),
+        `export default ${exportName};`
+      )
+
+      // Handle multi-line: export {\n  toolName,\n  xxx_default as default\n};
+      // This format is used when Bun creates an intermediate variable
+      content = content.replace(
+        new RegExp(`export\\s*\\{\\s*${exportName}\\s*,\\s*\\w+\\s+as\\s+default\\s*\\};`, 's'),
+        `export default ${exportName};`
+      )
+
+      await Bun.write(outPath, content)
     }
   }
 }
@@ -105,7 +133,8 @@ async function copyConfig() {
 async function build() {
   console.log("Bundling opencode agents and tools...")
 
-  await ensureDir(RESOURCES_DIR)
+  // Clean and recreate the resources directory
+  await cleanDir(RESOURCES_DIR)
   await copyAgents()
   await bundleTools()
   await copyConfig()

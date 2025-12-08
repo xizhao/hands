@@ -1,4 +1,4 @@
-import { X, ChevronDown, Database, Cpu, Bot, Wrench } from "lucide-react";
+import { X, ChevronDown, Database, Cpu, Bot, Wrench, RotateCw } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { useSettings, modelOptions, providerOptions, type Settings } from "@/hooks/useSettings";
 import { useThemeStore, getThemeList, THEMES } from "@/stores/theme";
@@ -12,13 +12,13 @@ interface SettingsPanelProps {
 }
 
 export function SettingsPanel({ onClose }: SettingsPanelProps) {
-  const { settings, loading, updateSetting, updateApiKey, currentApiKey } = useSettings();
+  const { settings, loading, updateSetting, updateApiKey, currentApiKey, syncModel } = useSettings();
   const { currentTheme, setTheme } = useThemeStore();
   const themeList = getThemeList();
 
   // Status hooks
   const { isConnected: dbConnected, status: dbStatus } = useDatabase();
-  const { isConnected: serverConnected } = useServer();
+  const { isConnected: serverConnected, isConnecting, isRestarting, restartServer } = useServer();
 
   // Fetch agents and tools
   const { data: agents = [] } = useQuery({
@@ -117,6 +117,18 @@ export function SettingsPanel({ onClose }: SettingsPanelProps) {
               type="password"
               value={currentApiKey}
               onChange={(e) => updateApiKey(apiKeyField, e.target.value)}
+              onBlur={async () => {
+                // Restart server to pick up new API key, then sync model
+                if (currentApiKey) {
+                  try {
+                    await restartServer();
+                    // Wait a bit for server to be ready, then sync model
+                    setTimeout(() => syncModel(), 1000);
+                  } catch (e) {
+                    console.error("Failed to restart server:", e);
+                  }
+                }
+              }}
               placeholder={`${settings.provider} API key`}
               className="w-full h-8 px-2 text-xs bg-zinc-800 border border-zinc-700 rounded text-zinc-200 placeholder:text-zinc-600 focus:outline-none focus:border-zinc-600 font-mono"
             />
@@ -184,12 +196,26 @@ export function SettingsPanel({ onClose }: SettingsPanelProps) {
             <div className="flex items-center gap-1.5">
               <div className={cn(
                 "h-1.5 w-1.5 rounded-full",
+                isRestarting || isConnecting ? "bg-yellow-500 animate-pulse" :
                 serverConnected ? "bg-green-500" : "bg-red-500"
               )} />
               <span className="text-[10px] text-zinc-400">
-                {serverConnected ? "OpenCode" : "Disconnected"}
+                {isRestarting ? "Restarting..." :
+                 isConnecting ? "Connecting..." :
+                 serverConnected ? "OpenCode" : "Disconnected"}
               </span>
             </div>
+            <button
+              onClick={() => restartServer()}
+              disabled={isRestarting}
+              className={cn(
+                "p-1 rounded hover:bg-zinc-800 text-zinc-500 hover:text-zinc-300 transition-colors",
+                isRestarting && "opacity-50 cursor-not-allowed"
+              )}
+              title="Restart OpenCode server"
+            >
+              <RotateCw className={cn("h-3 w-3", isRestarting && "animate-spin")} />
+            </button>
           </div>
         </div>
 

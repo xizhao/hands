@@ -3,6 +3,30 @@ import { motion } from "framer-motion";
 import { cn } from "@/lib/utils";
 import { Brain, Sparkles } from "lucide-react";
 
+// Shimmer text effect - gradient sweeps across text
+interface ShimmerTextProps {
+  text: string;
+  className?: string;
+}
+
+export const ShimmerText = memo(({ text, className }: ShimmerTextProps) => (
+  <span
+    className={cn(
+      "inline-block bg-clip-text text-transparent",
+      "bg-[length:200%_100%]",
+      "animate-shimmer",
+      className
+    )}
+    style={{
+      backgroundImage: "linear-gradient(90deg, hsl(var(--muted-foreground)) 0%, hsl(var(--foreground)) 50%, hsl(var(--muted-foreground)) 100%)",
+    }}
+  >
+    {text}
+  </span>
+));
+
+ShimmerText.displayName = "ShimmerText";
+
 interface ThinkingIndicatorProps {
   className?: string;
   variant?: "dots" | "pulse" | "sparkle" | "brain";

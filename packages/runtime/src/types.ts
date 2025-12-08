@@ -18,11 +18,28 @@ export interface WranglerConfig {
   vars: Record<string, string>;
 }
 
+export type ServiceState = "stopped" | "starting" | "running" | "failed" | "restarting";
+
+export interface BuildError {
+  type: "resolve" | "syntax" | "type" | "other";
+  module?: string;       // e.g., "d3-array"
+  file?: string;         // e.g., "node_modules/d3-scale/src/band.js"
+  line?: number;
+  column?: number;
+  message: string;       // Full error message
+  suggestion?: string;   // e.g., "mark as external"
+}
+
 export interface ServiceStatus {
-  up: boolean;
+  state: ServiceState;
+  up: boolean; // Convenience: state === "running"
   port: number;
   pid?: number;
   error?: string;
+  lastError?: string;
+  startedAt?: number;
+  restartCount: number;
+  buildErrors?: BuildError[];  // Parsed build errors for wrangler
 }
 
 export interface EvalResult {
@@ -49,7 +66,7 @@ export interface EvalResult {
   // Environment status
   services: {
     postgres: ServiceStatus;
-    wrangler: ServiceStatus;
+    worker: ServiceStatus;
   };
 }
 
@@ -60,7 +77,7 @@ export interface RuntimeStatus {
   startedAt: number;
   services: {
     postgres: ServiceStatus;
-    wrangler: ServiceStatus;
+    worker: ServiceStatus;
   };
 }
 

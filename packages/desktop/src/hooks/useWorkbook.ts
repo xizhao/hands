@@ -14,7 +14,7 @@ export interface RuntimeStatus {
   directory: string;
   runtime_port: number;
   postgres_port: number;
-  wrangler_port: number;
+  worker_port: number;
   message: string;
 }
 
@@ -42,7 +42,7 @@ export interface EvalResult {
   };
   services: {
     postgres: ServiceStatus;
-    wrangler: ServiceStatus;
+    worker: ServiceStatus;
   };
 }
 
@@ -291,11 +291,11 @@ export function useDevServerRoutes(workbookId: string | null) {
       }
 
       const wrangler = evalResult.data.wrangler;
-      const wranglerPort = runtimeStatus.data?.wrangler_port ?? 8787;
+      const workerPort = runtimeStatus.data?.worker_port ?? 8787;
 
       return {
-        available: evalResult.data.services.wrangler.up,
-        url: `http://localhost:${wranglerPort}`,
+        available: evalResult.data.services.worker.up,
+        url: `http://localhost:${workerPort}`,
         routes: wrangler.routes.map((r) => ({
           method: r.method,
           path: r.path,

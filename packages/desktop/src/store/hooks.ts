@@ -234,8 +234,8 @@ export function useDeleteSession() {
  */
 export function useSendMessage() {
   const mutate = useCallback(
-    async ({ sessionId, content }: { sessionId: string; content: string }) => {
-      const result = await api.promptAsync(sessionId, content)
+    async ({ sessionId, content, system }: { sessionId: string; content: string; system?: string }) => {
+      const result = await api.promptAsync(sessionId, content, { system })
       if (result.error) {
         throw new Error(`Failed to send message: ${result.error}`)
       }

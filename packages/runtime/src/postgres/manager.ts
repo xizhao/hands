@@ -8,7 +8,7 @@
 import { spawn, type Subprocess } from "bun";
 import { existsSync, mkdirSync, chmodSync, readdirSync } from "fs";
 import { join, dirname } from "path";
-import type { ServiceStatus } from "../types";
+import type { ServiceStatus, ServiceState } from "../types";
 
 const PG_VERSION = "18.1.0";
 
@@ -38,7 +38,10 @@ interface PostgresConfig {
 export class PostgresManager {
   private config: PostgresConfig;
   private process: Subprocess | null = null;
-  private ready = false;
+  private _state: ServiceState = "stopped";
+  private _lastError?: string;
+  private _startedAt?: number;
+  private _restartCount = 0;
 
   constructor(config: PostgresConfig) {
     this.config = config;
@@ -51,10 +54,14 @@ export class PostgresManager {
 
   get status(): ServiceStatus {
     return {
-      up: this.ready && this.process !== null,
+      state: this._state,
+      up: this._state === "running",
       port: this.config.port,
       pid: this.process?.pid,
-      error: undefined,
+      error: this._state === "failed" ? this._lastError : undefined,
+      lastError: this._lastError,
+      startedAt: this._startedAt,
+      restartCount: this._restartCount,
     };
   }
 
@@ -202,39 +209,48 @@ shared_buffers = 128MB
    * Start the postgres server
    */
   async start(): Promise<void> {
-    if (this.process) {
+    if (this.process && this._state === "running") {
       console.log("Postgres already running");
       return;
     }
 
-    const pgBin = await this.ensureBinaries();
-    await this.initDataDir(pgBin);
+    this._state = "starting";
 
-    const postgres = join(pgBin, "postgres");
-    const pgData = this.config.dataDir;
+    try {
+      const pgBin = await this.ensureBinaries();
+      await this.initDataDir(pgBin);
 
-    console.log(`Starting postgres on port ${this.config.port}...`);
+      const postgres = join(pgBin, "postgres");
+      const pgData = this.config.dataDir;
 
-    this.process = spawn([
-      postgres,
-      "-D", pgData,
-      "-p", String(this.config.port),
-    ], {
-      stdout: "inherit",
-      stderr: "inherit",
-    });
+      console.log(`Starting postgres on port ${this.config.port}...`);
 
-    // Wait for postgres to be ready
-    await this.waitForReady(pgBin);
+      this.process = spawn([
+        postgres,
+        "-D", pgData,
+        "-p", String(this.config.port),
+      ], {
+        stdout: "inherit",
+        stderr: "inherit",
+      });
 
-    // Create the database if it doesn't exist
-    await this.ensureDatabase();
+      // Wait for postgres to be ready
+      await this.waitForReady(pgBin);
 
-    // Set user password
-    await this.setPassword();
+      // Create the database if it doesn't exist
+      await this.ensureDatabase();
 
-    this.ready = true;
-    console.log(`Postgres ready on port ${this.config.port}`);
+      // Set user password
+      await this.setPassword();
+
+      this._state = "running";
+      this._startedAt = Date.now();
+      console.log(`Postgres ready on port ${this.config.port}`);
+    } catch (error) {
+      this._state = "failed";
+      this._lastError = error instanceof Error ? error.message : String(error);
+      throw error;
+    }
   }
 
   private async waitForReady(pgBin: string, maxAttempts = 30): Promise<void> {
@@ -316,11 +332,11 @@ shared_buffers = 128MB
    */
   async stop(): Promise<void> {
     if (!this.process) {
+      this._state = "stopped";
       return;
     }
 
     console.log("Stopping postgres...");
-    this.ready = false;
 
     // Send SIGTERM for graceful shutdown
     this.process.kill("SIGTERM");
@@ -334,6 +350,29 @@ shared_buffers = 128MB
     clearTimeout(timeout);
 
     this.process = null;
+    this._state = "stopped";
     console.log("Postgres stopped");
+  }
+
+  /**
+   * Restart postgres
+   */
+  async restart(): Promise<void> {
+    this._state = "restarting";
+    this._restartCount++;
+    await this.stop();
+    await this.start();
+  }
+
+  /**
+   * Switch to a different workbook data directory
+   */
+  async switchWorkbook(newDataDir: string, newDatabase: string): Promise<void> {
+    console.log(`Switching postgres to workbook data: ${newDataDir}`);
+    await this.stop();
+    this.config.dataDir = newDataDir;
+    this.config.database = newDatabase;
+    this._restartCount = 0;
+    await this.start();
   }
 }

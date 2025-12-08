@@ -14,7 +14,7 @@
     "preview": "vite preview",
     "tauri": "tauri",
     "build:docs": "cd ../../docs && bun run build",
-    "tauri:dev": "bun run build:docs && bun run bundle && concurrently -n server,bundle,tauri -c blue,yellow,green -k \"bun run dev:server\" \"bun run bundle:watch\" \"tauri dev\"",
+    "tauri:dev": "bun run build:docs && bun run bundle && concurrently -n bundle,tauri -c yellow,green -k \"bun run bundle:watch\" \"tauri dev\"",
     "tauri:build": "bun run build:docs && bun run bundle && tauri build"
   },
   "dependencies": {

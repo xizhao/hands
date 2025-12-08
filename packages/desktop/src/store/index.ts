@@ -181,11 +181,31 @@ function handleSessionStatus(sessionId: string, sdkStatus: SdkSessionStatus) {
 }
 
 function handleMessageUpdated(message: SdkMessage) {
+  console.log("[store] handleMessageUpdated:", message.id, "sessionID:", message.sessionID, "role:", message.role, "full message:", message)
   const w = syncWriters.messages
-  if (!w) return
+  if (!w) {
+    console.log("[store] WARNING: messages syncWriter not ready!")
+    return
+  }
   w.begin()
   w.write({ value: message, type: "update" })
   w.commit()
+  console.log("[store] Message written to collection")
+
+  // Check if message has inline parts (non-streaming response)
+  const msgAny = message as unknown as { parts?: SdkPart[] }
+  if (msgAny.parts && msgAny.parts.length > 0) {
+    console.log("[store] Message has inline parts:", msgAny.parts.length)
+    const pw = syncWriters.parts
+    if (pw) {
+      pw.begin()
+      for (const part of msgAny.parts) {
+        console.log("[store] Writing inline part:", part.id, part.type)
+        pw.write({ value: part, type: "update" })
+      }
+      pw.commit()
+    }
+  }
 }
 
 function handleMessageRemoved(messageId: string) {
@@ -197,8 +217,12 @@ function handleMessageRemoved(messageId: string) {
 }
 
 function handlePartUpdated(part: SdkPart) {
+  console.log("[store] handlePartUpdated:", part.id, "messageID:", part.messageID, "type:", part.type)
   const w = syncWriters.parts
-  if (!w) return
+  if (!w) {
+    console.log("[store] WARNING: parts syncWriter not ready!")
+    return
+  }
   w.begin()
   w.write({ value: part, type: "update" })
   w.commit()
@@ -257,6 +281,17 @@ function handleSessionDiff(
   w.commit()
 }
 
+/**
+ * Handle session.idle event - re-sync messages to get complete parts
+ */
+async function handleSessionIdle(sessionId: string) {
+  console.log("[store] handleSessionIdle:", sessionId)
+  // Clear the sync cache so we re-fetch messages with complete parts
+  syncedSessions.delete(sessionId)
+  // Re-sync the session
+  await syncSession(sessionId)
+}
+
 // ============ PROCESS SSE EVENTS ============
 
 function processEvent(event: ServerEvent) {
@@ -290,6 +325,10 @@ function processEvent(event: ServerEvent) {
       break
     case "session.diff":
       handleSessionDiff(event.properties.sessionID, event.properties.diff)
+      break
+    case "session.idle":
+      // Session finished processing - re-sync messages to get complete parts
+      handleSessionIdle(event.properties.sessionID)
       break
     default:
       console.log("[store] Unknown event:", (event as { type: string }).type)

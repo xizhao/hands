@@ -1,12 +1,12 @@
 import { useEffect, useRef, useMemo, useCallback, useState } from "react";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { useMessages, useSessions, useDeleteSession, useSessionStatuses } from "@/store/hooks";
-import { api } from "@/lib/api";
+import { useMessages, useSessions, useSessionStatuses, useDeleteSession } from "@/store/hooks";
 import { useUIStore } from "@/stores/ui";
 import { useBackgroundStore } from "@/stores/background";
 import { ChatMessage } from "@/components/ChatMessage";
 import { cn } from "@/lib/utils";
-import { Database, FileUp, Link, ChevronDown, ChevronUp, ChevronRight, MessageSquare, X, Loader2, Brain } from "lucide-react";
+import { Database, FileUp, Link, ChevronDown, ChevronUp, ChevronRight, X, Loader2 } from "lucide-react";
+import { ShimmerText } from "@/components/ui/thinking-indicator";
 import { motion, AnimatePresence } from "framer-motion";
 import { getCurrentWindow, LogicalSize } from "@tauri-apps/api/window";
 
@@ -118,24 +118,14 @@ export function Thread({ expanded, hasData, onCollapse, onExpand }: ThreadProps)
     onExpand();
   };
 
-  const handleDeleteThread = async (sessionId: string, e: React.MouseEvent) => {
+  const handleDeleteThread = (sessionId: string, e: React.MouseEvent) => {
     e.stopPropagation();
-
-    // Abort any running execution first
-    try {
-      await api.abort(sessionId);
-    } catch {
-      // Ignore abort errors (session might not be running)
-    }
-
-    // If deleting the active session, switch first to prevent stale data showing
-    if (sessionId === activeSessionId) {
-      const nextSession = sessions.find(s => s.id !== sessionId);
-      setActiveSession(nextSession?.id ?? null);
-    }
-
-    // Delete on server - TanStack DB collections will be updated via SSE events
+    // Delete a non-active thread
     deleteSession.mutate(sessionId);
+    // Also remove from background tasks if it was one
+    if (backgroundTaskIds.has(sessionId)) {
+      removeTask(sessionId);
+    }
   };
 
   // Handler to view a background task (just switches to it, keeps it in background store)
@@ -154,54 +144,32 @@ export function Thread({ expanded, hasData, onCollapse, onExpand }: ThreadProps)
     return (
       <div className="mt-2 px-2 animate-in fade-in duration-200">
         <div className="flex flex-wrap gap-2 items-start">
-          {/* Current thread chip - regular session with title */}
+          {/* Current thread chip - regular session with title (no X button, collapse deselects) */}
           {currentHasTitle && activeSessionId && !isCurrentBackground && (
-            <div className="flex items-center">
-              <button
-                onClick={onExpand}
-                className="flex items-center gap-1.5 px-3 py-1.5 text-xs text-zinc-100 rounded-2xl rounded-tl-md bg-zinc-800 shadow-lg hover:bg-zinc-700 transition-colors"
-              >
-                <StatusDot status={getSessionStatus(activeSessionId)} />
-                <MessageSquare className="h-3 w-3" />
-                <span>{currentSession?.title}</span>
-                <ChevronUp className="h-3 w-3" />
-              </button>
-              <button
-                onClick={(e) => handleDeleteThread(activeSessionId, e)}
-                className="ml-1 p-0.5 rounded-full bg-zinc-400/30 backdrop-blur hover:bg-zinc-400/50 transition-colors"
-              >
-                <X className="h-2.5 w-2.5 text-white" />
-              </button>
-            </div>
+            <button
+              onClick={onExpand}
+              className="flex items-center gap-1.5 px-3 py-1.5 text-xs text-zinc-100 rounded-2xl rounded-tl-md bg-zinc-800 shadow-lg hover:bg-zinc-700 transition-colors"
+            >
+              <StatusDot status={getSessionStatus(activeSessionId)} />
+              <span>{currentSession?.title}</span>
+              <ChevronUp className="h-3 w-3" />
+            </button>
           )}
 
-          {/* Current thread chip - if viewing a background task */}
+          {/* Current thread chip - if viewing a background task (no X button) */}
           {isCurrentBackground && currentBackgroundTask && activeSessionId && (
-            <div className="flex items-center">
-              <button
-                onClick={onExpand}
-                className="flex items-center gap-1.5 px-3 py-1.5 text-xs text-zinc-300 rounded-2xl rounded-tl-md bg-zinc-700/50 shadow-lg hover:bg-zinc-600/50 transition-colors border border-zinc-500/20"
-              >
-                {currentBackgroundTask.status === "running" ? (
-                  <Loader2 className="h-3 w-3 animate-spin text-zinc-400" />
-                ) : (
-                  <FileUp className="h-3 w-3 text-zinc-400" />
-                )}
-                <span className="opacity-80">{currentBackgroundTask.title}</span>
-                <ChevronUp className="h-3 w-3" />
-              </button>
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  deleteSession.mutate(activeSessionId);
-                  removeTask(activeSessionId);
-                  setActiveSession(null);
-                }}
-                className="ml-1 p-0.5 rounded-full bg-zinc-400/30 backdrop-blur hover:bg-zinc-400/50 transition-colors"
-              >
-                <X className="h-2.5 w-2.5 text-white" />
-              </button>
-            </div>
+            <button
+              onClick={onExpand}
+              className="flex items-center gap-1.5 px-3 py-1.5 text-xs text-zinc-300 rounded-2xl rounded-tl-md bg-zinc-700/50 shadow-lg hover:bg-zinc-600/50 transition-colors border border-zinc-500/20"
+            >
+              {currentBackgroundTask.status === "running" ? (
+                <Loader2 className="h-3 w-3 animate-spin text-zinc-400" />
+              ) : (
+                <FileUp className="h-3 w-3 text-zinc-400" />
+              )}
+              <span className="opacity-80">{currentBackgroundTask.title}</span>
+              <ChevronUp className="h-3 w-3" />
+            </button>
           )}
 
           {/* Other foreground thread chips */}
@@ -212,7 +180,6 @@ export function Thread({ expanded, hasData, onCollapse, onExpand }: ThreadProps)
                 className="flex items-center gap-1.5 px-3 py-1.5 text-xs text-zinc-400 rounded-2xl rounded-tl-md bg-zinc-800/60 shadow-lg hover:bg-zinc-700 hover:text-zinc-100 transition-colors"
               >
                 <StatusDot status={getSessionStatus(session.id)} />
-                <MessageSquare className="h-3 w-3" />
                 <span>{session.title}</span>
               </button>
               <button
@@ -250,11 +217,7 @@ export function Thread({ expanded, hasData, onCollapse, onExpand }: ThreadProps)
                     <span className="opacity-70">{task.progress || task.title}</span>
                   </button>
                   <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      deleteSession.mutate(task.id);
-                      removeTask(task.id);
-                    }}
+                    onClick={(e) => handleDeleteThread(task.id, e)}
                     className="ml-1 p-0.5 rounded-full bg-zinc-400/30 backdrop-blur hover:bg-zinc-400/50 transition-colors"
                   >
                     <X className="h-2.5 w-2.5 text-white" />
@@ -298,11 +261,7 @@ export function Thread({ expanded, hasData, onCollapse, onExpand }: ThreadProps)
                             <span className="opacity-70 max-w-[100px] truncate">{task.progress || task.title}</span>
                           </button>
                           <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              deleteSession.mutate(task.id);
-                              removeTask(task.id);
-                            }}
+                            onClick={(e) => handleDeleteThread(task.id, e)}
                             className="ml-0.5 p-0.5 rounded-full bg-zinc-400/20 hover:bg-zinc-400/40 transition-colors"
                           >
                             <X className="h-2 w-2 text-zinc-400" />
@@ -339,7 +298,6 @@ export function Thread({ expanded, hasData, onCollapse, onExpand }: ThreadProps)
                 className="flex items-center gap-1.5 px-2.5 py-1 text-[11px] text-zinc-400 rounded-xl bg-zinc-800/60 hover:bg-zinc-700 hover:text-zinc-100 transition-colors"
               >
                 <StatusDot status={getSessionStatus(session.id)} />
-                <MessageSquare className="h-3 w-3" />
                 <span className="max-w-[100px] truncate">{session.title}</span>
               </button>
               <button
@@ -377,11 +335,7 @@ export function Thread({ expanded, hasData, onCollapse, onExpand }: ThreadProps)
                     <span className="opacity-70 max-w-[100px] truncate">{task.progress || task.title}</span>
                   </button>
                   <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      deleteSession.mutate(task.id);
-                      removeTask(task.id);
-                    }}
+                    onClick={(e) => handleDeleteThread(task.id, e)}
                     className="ml-0.5 p-0.5 rounded-full bg-zinc-400/20 hover:bg-zinc-400/40 transition-colors"
                   >
                     <X className="h-2 w-2 text-zinc-400" />
@@ -424,11 +378,7 @@ export function Thread({ expanded, hasData, onCollapse, onExpand }: ThreadProps)
                         <span className="opacity-70 max-w-[80px] truncate">{task.progress || task.title}</span>
                       </button>
                       <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          deleteSession.mutate(task.id);
-                          removeTask(task.id);
-                        }}
+                        onClick={(e) => handleDeleteThread(task.id, e)}
                         className="ml-0.5 p-0.5 rounded-full bg-zinc-400/20 hover:bg-zinc-400/40 transition-colors"
                       >
                         <X className="h-2 w-2 text-zinc-400" />
@@ -442,60 +392,37 @@ export function Thread({ expanded, hasData, onCollapse, onExpand }: ThreadProps)
         </div>
       )}
 
-      {/* Thread chip - shows current session or background task */}
+      {/* Thread chip - shows current session or background task (no X button, collapse deselects) */}
       {activeSessionId && (currentHasTitle || isCurrentBackground) && (
-        <div className="flex items-center px-2 mb-2">
+        <div className="px-2 mb-2">
           {isCurrentBackground && currentBackgroundTask ? (
-            <>
-              <button
-                onClick={onCollapse}
-                className="flex items-center gap-1.5 px-3 py-1.5 text-xs text-zinc-300 rounded-2xl rounded-tl-md bg-zinc-700/50 shadow-lg hover:bg-zinc-600/50 transition-colors border border-zinc-500/20"
-              >
-                {currentBackgroundTask.status === "running" ? (
-                  <Loader2 className="h-3 w-3 animate-spin text-zinc-400" />
-                ) : (
-                  <FileUp className="h-3 w-3 text-zinc-400" />
-                )}
-                <span className="opacity-80">{currentBackgroundTask.title}</span>
-                <ChevronDown className="h-3 w-3" />
-              </button>
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  deleteSession.mutate(activeSessionId);
-                  removeTask(activeSessionId);
-                  setActiveSession(null);
-                  onCollapse();
-                }}
-                className="ml-1 p-0.5 rounded-full bg-zinc-400/30 backdrop-blur hover:bg-zinc-400/50 transition-colors"
-              >
-                <X className="h-2.5 w-2.5 text-white" />
-              </button>
-            </>
+            <button
+              onClick={onCollapse}
+              className="flex items-center gap-1.5 px-3 py-1.5 text-xs text-zinc-300 rounded-2xl rounded-tl-md bg-zinc-700/50 shadow-lg hover:bg-zinc-600/50 transition-colors border border-zinc-500/20"
+            >
+              {currentBackgroundTask.status === "running" ? (
+                <Loader2 className="h-3 w-3 animate-spin text-zinc-400" />
+              ) : (
+                <FileUp className="h-3 w-3 text-zinc-400" />
+              )}
+              <span className="opacity-80">{currentBackgroundTask.title}</span>
+              <ChevronDown className="h-3 w-3" />
+            </button>
           ) : currentHasTitle ? (
-            <>
-              <button
-                onClick={onCollapse}
-                className="flex items-center gap-1.5 px-3 py-1.5 text-xs text-zinc-100 rounded-2xl rounded-tl-md bg-zinc-800 shadow-lg hover:bg-zinc-700 transition-colors"
-              >
-                <StatusDot status={getSessionStatus(activeSessionId)} />
-                <MessageSquare className="h-3 w-3" />
-                <span>{currentSession?.title}</span>
-                <ChevronDown className="h-3 w-3" />
-              </button>
-              <button
-                onClick={(e) => handleDeleteThread(activeSessionId, e)}
-                className="ml-1 p-0.5 rounded-full bg-zinc-400/30 backdrop-blur hover:bg-zinc-400/50 transition-colors"
-              >
-                <X className="h-2.5 w-2.5 text-white" />
-              </button>
-            </>
+            <button
+              onClick={onCollapse}
+              className="flex items-center gap-1.5 px-3 py-1.5 text-xs text-zinc-100 rounded-2xl rounded-tl-md bg-zinc-800 shadow-lg hover:bg-zinc-700 transition-colors"
+            >
+              <StatusDot status={getSessionStatus(activeSessionId)} />
+              <span>{currentSession?.title}</span>
+              <ChevronDown className="h-3 w-3" />
+            </button>
           ) : null}
         </div>
       )}
 
       <ScrollArea className="h-full" ref={scrollRef}>
-        <div className="px-2 py-3 space-y-2">
+        <div className="px-2 py-2 space-y-1">
           {/* Optimistic loading bubble - shown at top when waiting for response */}
           {waitingForResponse && (
             <motion.div
@@ -505,24 +432,10 @@ export function Thread({ expanded, hasData, onCollapse, onExpand }: ThreadProps)
               className="flex w-full justify-start"
             >
               <div className="px-3.5 py-2.5 rounded-2xl rounded-tl-md bg-zinc-800 text-zinc-100 shadow-lg">
-                <div className="flex items-center gap-2">
-                  {activeForm?.toLowerCase().includes("reason") || activeForm?.toLowerCase().includes("think") ? (
-                    <>
-                      <Brain className="h-4 w-4 text-purple-400 animate-pulse" />
-                      <span className="text-xs text-purple-400">{activeForm}</span>
-                    </>
-                  ) : activeForm ? (
-                    <>
-                      <Loader2 className="h-4 w-4 animate-spin text-zinc-400" />
-                      <span className="text-xs text-zinc-400">{activeForm}</span>
-                    </>
-                  ) : (
-                    <>
-                      <Loader2 className="h-4 w-4 animate-spin text-zinc-400" />
-                      <span className="text-xs text-zinc-500">Thinking...</span>
-                    </>
-                  )}
-                </div>
+                <ShimmerText
+                  text={activeForm || "Thinking..."}
+                  className="text-sm font-medium"
+                />
               </div>
             </motion.div>
           )}
@@ -546,10 +459,8 @@ export function Thread({ expanded, hasData, onCollapse, onExpand }: ThreadProps)
   );
 }
 
-// Status dot for session chips
+// Status dot for session chips - always shows a dot (gray idle, green busy, red error)
 function StatusDot({ status }: { status: "busy" | "error" | null }) {
-  if (!status) return null;
-
   if (status === "busy") {
     return (
       <span className="relative flex h-2 w-2">
@@ -563,7 +474,8 @@ function StatusDot({ status }: { status: "busy" | "error" | null }) {
     return <span className="inline-flex rounded-full h-2 w-2 bg-red-500" />;
   }
 
-  return null;
+  // Idle state - gray dot
+  return <span className="inline-flex rounded-full h-2 w-2 bg-zinc-500" />;
 }
 
 function WelcomeHints() {

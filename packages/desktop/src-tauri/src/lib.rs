@@ -17,7 +17,9 @@ pub struct RuntimeProcess {
     pub child: Child,
     pub runtime_port: u16,
     pub postgres_port: u16,
-    pub wrangler_port: u16,
+    pub worker_port: u16,
+    pub directory: String,
+    pub restart_count: u32,
 }
 
 // App state - now just tracks runtime processes and opencode server
@@ -197,7 +199,7 @@ fn copy_dir_recursive(src: &PathBuf, dst: &PathBuf) -> Result<(), String> {
     Ok(())
 }
 
-fn init_sst_project(workbook_dir: &PathBuf, name: &str, description: Option<&str>) -> Result<(), String> {
+fn init_workbook(workbook_dir: &PathBuf, name: &str, description: Option<&str>) -> Result<(), String> {
     let template_dir = get_template_dir()?;
     copy_dir_recursive(&template_dir, workbook_dir)?;
 
@@ -270,7 +272,7 @@ async fn create_workbook(
     }
 
     // Create project structure from template
-    init_sst_project(&workbook_dir, &request.name, request.description.as_deref())?;
+    init_workbook(&workbook_dir, &request.name, request.description.as_deref())?;
 
     let now = timestamp as u64;
     let workbook = Workbook {
@@ -472,7 +474,7 @@ pub struct RuntimeStatus {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct RuntimeServices {
     pub postgres: ServiceStatus,
-    pub wrangler: ServiceStatus,
+    pub worker: ServiceStatus,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -492,8 +494,8 @@ struct RuntimeReady {
     runtime_port: u16,
     #[serde(rename = "postgresPort")]
     postgres_port: u16,
-    #[serde(rename = "wranglerPort")]
-    wrangler_port: u16,
+    #[serde(rename = "workerPort")]
+    worker_port: u16,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -503,42 +505,74 @@ pub struct DevServerStatus {
     pub directory: String,
     pub runtime_port: u16,
     pub postgres_port: u16,
-    pub wrangler_port: u16,
+    pub worker_port: u16,
     pub message: String,
 }
 
-/// Start the hands-runtime for a workbook
-#[tauri::command]
-async fn start_runtime(
-    state: tauri::State<'_, Arc<Mutex<AppState>>>,
-    workbook_id: String,
-    directory: String,
-) -> Result<DevServerStatus, String> {
-    let mut state_guard = state.lock().await;
+/// Force cleanup any stale runtime lockfile and processes
+async fn force_cleanup_runtime() {
+    // Get lockfile path (macOS: ~/Library/Application Support/Hands/runtime.lock)
+    let lock_path = std::env::var("HOME").ok().map(|h| {
+        PathBuf::from(h).join("Library/Application Support/Hands/runtime.lock")
+    });
 
-    // Check if already running
-    if let Some(runtime) = state_guard.runtimes.get(&workbook_id) {
-        return Ok(DevServerStatus {
-            running: true,
-            workbook_id,
-            directory,
-            runtime_port: runtime.runtime_port,
-            postgres_port: runtime.postgres_port,
-            wrangler_port: runtime.wrangler_port,
-            message: "Runtime already running".to_string(),
-        });
+    if let Some(path) = lock_path {
+        if path.exists() {
+            // Read the lockfile to get PIDs
+            if let Ok(content) = std::fs::read_to_string(&path) {
+                if let Ok(lock) = serde_json::from_str::<serde_json::Value>(&content) {
+                    // Kill the runtime process
+                    if let Some(pid) = lock.get("pid").and_then(|v| v.as_i64()) {
+                        println!("[cleanup] Killing stale runtime PID {}", pid);
+                        let _ = std::process::Command::new("kill")
+                            .args(["-9", &pid.to_string()])
+                            .output();
+                    }
+                    // Kill postgres
+                    if let Some(pid) = lock.get("postgresPid").and_then(|v| v.as_i64()) {
+                        println!("[cleanup] Killing stale postgres PID {}", pid);
+                        let _ = std::process::Command::new("kill")
+                            .args(["-9", &pid.to_string()])
+                            .output();
+                    }
+                    // Kill wrangler
+                    if let Some(pid) = lock.get("wranglerPid").and_then(|v| v.as_i64()) {
+                        println!("[cleanup] Killing stale wrangler PID {}", pid);
+                        let _ = std::process::Command::new("kill")
+                            .args(["-9", &pid.to_string()])
+                            .output();
+                    }
+                }
+            }
+            // Remove the lockfile
+            println!("[cleanup] Removing stale lockfile: {:?}", path);
+            let _ = std::fs::remove_file(&path);
+            // Wait for processes to die
+            tokio::time::sleep(Duration::from_millis(500)).await;
+        }
     }
+}
 
-    // Start hands-runtime process
+/// Internal helper to spawn and wait for runtime ready
+async fn spawn_runtime(
+    workbook_id: &str,
+    directory: &str,
+) -> Result<(Child, u16, u16, u16), String> {
+    // Force cleanup any stale processes before starting
+    force_cleanup_runtime().await;
+
+    // Get the runtime script path (relative to CARGO_MANIFEST_DIR which is src-tauri)
+    let runtime_script = format!("{}/../../runtime/src/index.ts", env!("CARGO_MANIFEST_DIR"));
+
+    // Start hands-runtime process - run from the workbook directory
     let mut child = Command::new("bun")
         .args([
             "run",
-            "--cwd",
-            env!("CARGO_MANIFEST_DIR"),
-            "../../runtime/src/index.ts",
+            &runtime_script,
             &format!("--workbook-id={}", workbook_id),
             &format!("--workbook-dir={}", directory),
         ])
+        .current_dir(directory)
         .stdout(Stdio::piped())
         .stderr(Stdio::inherit())
         .kill_on_drop(true)
@@ -558,7 +592,7 @@ async fn start_runtime(
             if line.starts_with('{') {
                 if let Ok(ready) = serde_json::from_str::<RuntimeReady>(&line) {
                     if ready.msg_type == "ready" {
-                        return Ok((ready.runtime_port, ready.postgres_port, ready.wrangler_port));
+                        return Ok((ready.runtime_port, ready.postgres_port, ready.worker_port));
                     }
                 }
             }
@@ -566,29 +600,147 @@ async fn start_runtime(
         Err("Runtime exited without ready message".to_string())
     }).await;
 
-    let (runtime_port, postgres_port, wrangler_port) = match timeout_result {
-        Ok(Ok(ports)) => ports,
+    match timeout_result {
+        Ok(Ok((runtime_port, postgres_port, worker_port))) => {
+            Ok((child, runtime_port, postgres_port, worker_port))
+        }
         Ok(Err(e)) => {
             let _ = child.kill().await;
-            return Err(e);
+            Err(e)
         }
         Err(_) => {
             let _ = child.kill().await;
-            return Err("Timeout waiting for runtime to start".to_string());
+            Err("Timeout waiting for runtime to start".to_string())
         }
-    };
+    }
+}
 
-    // Store the runtime process
+/// Start runtime monitoring task that auto-restarts crashed runtimes
+fn start_runtime_monitor(state: Arc<Mutex<AppState>>) {
+    const MAX_RESTARTS: u32 = 5;
+    const RESTART_DELAY_MS: u64 = 2000;
+
+    tauri::async_runtime::spawn(async move {
+        loop {
+            tokio::time::sleep(Duration::from_secs(5)).await;
+
+            let mut state_guard = state.lock().await;
+
+            // Collect workbooks that need restart
+            let mut to_restart: Vec<(String, String, u32)> = Vec::new();
+
+            for (workbook_id, runtime) in state_guard.runtimes.iter_mut() {
+                // Check if process has exited
+                match runtime.child.try_wait() {
+                    Ok(Some(status)) => {
+                        // Process exited
+                        if runtime.restart_count < MAX_RESTARTS {
+                            println!(
+                                "[monitor] Runtime for {} exited with {:?}, will restart (attempt {}/{})",
+                                workbook_id, status, runtime.restart_count + 1, MAX_RESTARTS
+                            );
+                            to_restart.push((
+                                workbook_id.clone(),
+                                runtime.directory.clone(),
+                                runtime.restart_count + 1,
+                            ));
+                        } else {
+                            eprintln!(
+                                "[monitor] Runtime for {} exceeded max restarts ({}), giving up",
+                                workbook_id, MAX_RESTARTS
+                            );
+                        }
+                    }
+                    Ok(None) => {
+                        // Still running, all good
+                    }
+                    Err(e) => {
+                        eprintln!("[monitor] Error checking runtime {}: {}", workbook_id, e);
+                    }
+                }
+            }
+
+            // Remove dead runtimes before restarting
+            for (workbook_id, _, _) in &to_restart {
+                state_guard.runtimes.remove(workbook_id);
+            }
+
+            // Drop lock before spawning new processes
+            drop(state_guard);
+
+            // Restart crashed runtimes
+            for (workbook_id, directory, restart_count) in to_restart {
+                tokio::time::sleep(Duration::from_millis(RESTART_DELAY_MS)).await;
+
+                println!("[monitor] Restarting runtime for {}...", workbook_id);
+
+                match spawn_runtime(&workbook_id, &directory).await {
+                    Ok((child, runtime_port, postgres_port, worker_port)) => {
+                        let mut state_guard = state.lock().await;
+                        state_guard.runtimes.insert(workbook_id.clone(), RuntimeProcess {
+                            child,
+                            runtime_port,
+                            postgres_port,
+                            worker_port,
+                            directory,
+                            restart_count,
+                        });
+                        println!(
+                            "[monitor] Runtime restarted for {} on port {}",
+                            workbook_id, runtime_port
+                        );
+                    }
+                    Err(e) => {
+                        eprintln!("[monitor] Failed to restart runtime for {}: {}", workbook_id, e);
+                    }
+                }
+            }
+        }
+    });
+}
+
+/// Start the hands-runtime for a workbook
+#[tauri::command]
+async fn start_runtime(
+    state: tauri::State<'_, Arc<Mutex<AppState>>>,
+    workbook_id: String,
+    directory: String,
+) -> Result<DevServerStatus, String> {
+    let state_guard = state.lock().await;
+
+    // Check if already running
+    if let Some(runtime) = state_guard.runtimes.get(&workbook_id) {
+        return Ok(DevServerStatus {
+            running: true,
+            workbook_id,
+            directory,
+            runtime_port: runtime.runtime_port,
+            postgres_port: runtime.postgres_port,
+            worker_port: runtime.worker_port,
+            message: "Runtime already running".to_string(),
+        });
+    }
+
+    // Drop lock while spawning
+    drop(state_guard);
+
+    let (child, runtime_port, postgres_port, worker_port) =
+        spawn_runtime(&workbook_id, &directory).await?;
+
+    // Re-acquire lock and store
+    let mut state_guard = state.lock().await;
     state_guard.runtimes.insert(workbook_id.clone(), RuntimeProcess {
         child,
         runtime_port,
         postgres_port,
-        wrangler_port,
+        worker_port,
+        directory: directory.clone(),
+        restart_count: 0,
     });
 
     println!(
-        "Runtime started for workbook {} - runtime:{}, postgres:{}, wrangler:{}",
-        workbook_id, runtime_port, postgres_port, wrangler_port
+        "Runtime started for workbook {} - runtime:{}, postgres:{}, worker:{}",
+        workbook_id, runtime_port, postgres_port, worker_port
     );
 
     Ok(DevServerStatus {
@@ -597,7 +749,7 @@ async fn start_runtime(
         directory,
         runtime_port,
         postgres_port,
-        wrangler_port,
+        worker_port,
         message: format!("Runtime started on port {}", runtime_port),
     })
 }
@@ -647,7 +799,7 @@ async fn stop_runtime(
             directory: String::new(),
             runtime_port: 0,
             postgres_port: 0,
-            wrangler_port: 0,
+            worker_port: 0,
             message: "Runtime stopped".to_string(),
         });
     }
@@ -658,7 +810,7 @@ async fn stop_runtime(
         directory: String::new(),
         runtime_port: 0,
         postgres_port: 0,
-        wrangler_port: 0,
+        worker_port: 0,
         message: "Runtime was not running".to_string(),
     })
 }
@@ -682,7 +834,7 @@ async fn get_runtime_status(
                     directory: String::new(),
                     runtime_port: runtime.runtime_port,
                     postgres_port: runtime.postgres_port,
-                    wrangler_port: runtime.wrangler_port,
+                    worker_port: runtime.worker_port,
                     message: "Runtime is running".to_string(),
                 });
             }
@@ -696,7 +848,7 @@ async fn get_runtime_status(
         directory: String::new(),
         runtime_port: 0,
         postgres_port: 0,
-        wrangler_port: 0,
+        worker_port: 0,
         message: "Runtime is not running".to_string(),
     })
 }
@@ -824,12 +976,41 @@ fn get_model_from_store(app: &tauri::AppHandle) -> Option<String> {
     None
 }
 
+/// Kill any existing process listening on the given port
+async fn kill_process_on_port(port: u16) -> Result<(), String> {
+    // Use lsof to find processes on the port and kill them
+    let output = std::process::Command::new("lsof")
+        .args(["-ti", &format!(":{}", port)])
+        .output();
+
+    if let Ok(output) = output {
+        if output.status.success() {
+            let pids = String::from_utf8_lossy(&output.stdout);
+            for pid in pids.lines() {
+                if let Ok(pid_num) = pid.trim().parse::<i32>() {
+                    println!("Killing existing process {} on port {}", pid_num, port);
+                    let _ = std::process::Command::new("kill")
+                        .args(["-9", &pid_num.to_string()])
+                        .output();
+                }
+            }
+            // Give a moment for the port to be released
+            tokio::time::sleep(Duration::from_millis(500)).await;
+        }
+    }
+    Ok(())
+}
+
 async fn start_opencode_server(
     port: u16,
     model: Option<String>,
     env_vars: HashMap<String, String>,
     config_dir: Option<String>,
+    working_dir: Option<String>,
 ) -> Result<Child, String> {
+    // Kill any existing process on this port first
+    kill_process_on_port(port).await?;
+
     let port_str = port.to_string();
 
     let mut all_env = env_vars.clone();
@@ -841,25 +1022,38 @@ async fn start_opencode_server(
     if let Some(ref dir) = config_dir {
         all_env.insert("OPENCODE_CONFIG_DIR".to_string(), dir.clone());
         println!("OpenCode config dir: {}", dir);
+    } else {
+        println!("WARNING: OpenCode config dir not found, using built-in agents only");
     }
 
-    let child = Command::new("bunx")
-        .args(["opencode-ai", "serve", "--port", &port_str])
+    // Build command with optional working directory
+    let mut cmd = Command::new("bunx");
+    cmd.args(["opencode-ai", "serve", "--port", &port_str])
         .envs(&all_env)
         .stdout(Stdio::inherit())
         .stderr(Stdio::inherit())
-        .kill_on_drop(true)
-        .spawn()
-        .or_else(|_| {
-            Command::new("npx")
-                .args(["opencode-ai", "serve", "--port", &port_str])
-                .envs(&all_env)
-                .stdout(Stdio::inherit())
-                .stderr(Stdio::inherit())
-                .kill_on_drop(true)
-                .spawn()
-        })
-        .map_err(|e| format!("Failed to start opencode server: {}", e))?;
+        .kill_on_drop(true);
+
+    if let Some(ref dir) = working_dir {
+        cmd.current_dir(dir);
+        println!("OpenCode working directory: {}", dir);
+    }
+
+    let child = cmd.spawn().or_else(|_| {
+        let mut cmd = Command::new("npx");
+        cmd.args(["opencode-ai", "serve", "--port", &port_str])
+            .envs(&all_env)
+            .stdout(Stdio::inherit())
+            .stderr(Stdio::inherit())
+            .kill_on_drop(true);
+
+        if let Some(ref dir) = working_dir {
+            cmd.current_dir(dir);
+        }
+
+        cmd.spawn()
+    })
+    .map_err(|e| format!("Failed to start opencode server: {}", e))?;
 
     println!("OpenCode server starting on port {}{}", port, model.map(|m| format!(" with model {}", m)).unwrap_or_default());
     Ok(child)
@@ -899,7 +1093,8 @@ async fn restart_server(
     let mut env_vars = get_api_keys_from_store(&app);
     let model = get_model_from_store(&app);
 
-    // Add database URL for active workbook
+    // Add database URL for active workbook and get working directory
+    let mut working_dir: Option<String> = None;
     if let Some(ref workbook_id) = state_guard.active_workbook_id {
         if let Some(runtime) = state_guard.runtimes.get(workbook_id) {
             let db_name = format!("hands_{}", workbook_id.replace('-', "_"));
@@ -909,6 +1104,8 @@ async fn restart_server(
             );
             env_vars.insert("HANDS_DATABASE_URL".to_string(), db_url.clone());
             println!("Setting HANDS_DATABASE_URL for workbook {}: {}", workbook_id, db_url);
+            // Use workbook directory as working directory
+            working_dir = Some(runtime.directory.clone());
         }
     }
 
@@ -935,7 +1132,7 @@ async fn restart_server(
         })
         .map(|p| p.to_string_lossy().to_string());
 
-    match start_opencode_server(4096, model, env_vars, config_dir).await {
+    match start_opencode_server(4096, model, env_vars, config_dir, working_dir).await {
         Ok(child) => {
             state_guard.server = Some(child);
 
@@ -1037,6 +1234,58 @@ async fn open_webview(
     Ok(())
 }
 
+#[tauri::command]
+async fn open_docs(app: tauri::AppHandle) -> Result<(), String> {
+    use tauri::WebviewWindowBuilder;
+    use tauri::WebviewUrl;
+
+    // Check if docs window already exists
+    if let Some(window) = app.get_webview_window("docs") {
+        window.set_focus().map_err(|e| e.to_string())?;
+        return Ok(());
+    }
+
+    // Find docs directory in resources
+    let docs_dir = app.path().resource_dir()
+        .ok()
+        .map(|p| p.join("docs"))
+        .filter(|p| p.exists())
+        .or_else(|| {
+            // Dev mode fallback
+            std::env::current_exe().ok().and_then(|exe| {
+                let mut path = exe;
+                for _ in 0..5 {
+                    path = path.parent()?.to_path_buf();
+                    let docs = path.join("docs/dist");
+                    if docs.exists() {
+                        return Some(docs);
+                    }
+                }
+                None
+            })
+        });
+
+    let docs_path = docs_dir.ok_or("Docs not found")?;
+    println!("Opening docs from: {:?}", docs_path);
+
+    // Use file:// URL to open local docs
+    let docs_url = format!("file://{}/index.html", docs_path.to_string_lossy());
+
+    let builder = WebviewWindowBuilder::new(&app, "docs", WebviewUrl::External(docs_url.parse().map_err(|e| format!("{}", e))?))
+        .title("Hands Documentation")
+        .inner_size(1000.0, 800.0)
+        .min_inner_size(600.0, 400.0)
+        .decorations(true)
+        .resizable(true)
+        .center();
+
+    builder
+        .build()
+        .map_err(|e| format!("Failed to create docs window: {}", e))?;
+
+    Ok(())
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -1057,6 +1306,7 @@ pub fn run() {
             runtime_eval,
             copy_files_to_workbook,
             open_webview,
+            open_docs,
             set_active_workbook
         ])
         .setup(|app| {
@@ -1066,6 +1316,9 @@ pub fn run() {
                 active_workbook_id: None,
             }));
             app.manage(state.clone());
+
+            // Start runtime monitor for auto-restart
+            start_runtime_monitor(state.clone());
 
             let app_handle = app.handle().clone();
             let env_vars = get_api_keys_from_store(&app_handle);
@@ -1095,8 +1348,9 @@ pub fn run() {
                 .map(|p| p.to_string_lossy().to_string());
 
             // Start OpenCode server only (no postgres - runtime manages it per workbook)
+            // No working directory at startup - will be set when workbook is activated
             tauri::async_runtime::spawn(async move {
-                match start_opencode_server(4096, model, env_vars, config_dir).await {
+                match start_opencode_server(4096, model, env_vars, config_dir, None).await {
                     Ok(child) => {
                         let mut s = state.lock().await;
                         s.server = Some(child);

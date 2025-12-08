@@ -41,7 +41,7 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
-import { Skeleton } from "@/components/ui/thinking-indicator";
+import { Skeleton, ShimmerText } from "@/components/ui/thinking-indicator";
 
 interface ChatMessageProps {
   message: MessageWithParts;
@@ -564,9 +564,8 @@ export const MessageProgress = memo(({ tools, currentStatus, isThinking = false 
   const statusText = currentStatus || (runningTool ? getToolConfig(runningTool.name).label : isThinking ? "Thinking..." : "Working...");
 
   return (
-    <div className="py-3 flex items-center gap-2">
-      <Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground" />
-      <span className="text-xs text-muted-foreground">{statusText}</span>
+    <div className="py-3">
+      <ShimmerText text={statusText} className="text-sm font-medium" />
     </div>
   );
 });
@@ -649,53 +648,55 @@ export const ChatMessage = memo(({ message, isStreaming = false }: ChatMessagePr
 
       {/* Hands/Assistant message - on left, corner angled up, dark zinc */}
       {isAssistant && (
-        <div className="group max-w-[90%] px-3.5 py-2 rounded-2xl rounded-tl-md bg-zinc-800 text-zinc-100 shadow-lg">
-          <div className="space-y-1">
-            {groupedContent.map((group, idx) => {
-              if (group.type === "text") {
-                const textPart = group.items[0] as TextPart;
-                return (
-                  <TextContent
-                    key={idx}
-                    text={textPart.text}
-                    isStreaming={isStreaming && idx === groupedContent.length - 1}
-                  />
-                );
-              }
-              if (group.type === "tools") {
-                // Show collapsible thread if 3+ tools, otherwise show inline
-                if (group.items.length >= 3) {
-                  return <ToolThread key={idx} tools={group.items as ToolPart[]} />;
+        <div className="group max-w-[90%] flex flex-col">
+          <div className="px-3.5 py-2 rounded-2xl rounded-tl-md bg-zinc-800 text-zinc-100 shadow-lg">
+            <div className="space-y-1">
+              {groupedContent.map((group, idx) => {
+                if (group.type === "text") {
+                  const textPart = group.items[0] as TextPart;
+                  return (
+                    <TextContent
+                      key={idx}
+                      text={textPart.text}
+                      isStreaming={isStreaming && idx === groupedContent.length - 1}
+                    />
+                  );
                 }
-                return (
-                  <div key={idx} className="space-y-0.5">
-                    {group.items.map((part) => (
-                      <ToolInvocation key={part.id} part={part as ToolPart} />
-                    ))}
-                  </div>
-                );
-              }
-              if (group.type === "reasoning") {
-                return <ReasoningContent key={idx} part={group.items[0] as ReasoningPart} />;
-              }
-              return null;
-            })}
+                if (group.type === "tools") {
+                  // Show collapsible thread if 3+ tools, otherwise show inline
+                  if (group.items.length >= 3) {
+                    return <ToolThread key={idx} tools={group.items as ToolPart[]} />;
+                  }
+                  return (
+                    <div key={idx} className="space-y-0.5">
+                      {group.items.map((part) => (
+                        <ToolInvocation key={part.id} part={part as ToolPart} />
+                      ))}
+                    </div>
+                  );
+                }
+                if (group.type === "reasoning") {
+                  return <ReasoningContent key={idx} part={group.items[0] as ReasoningPart} />;
+                }
+                return null;
+              })}
 
-            {/* Error display */}
-            {assistantInfo?.error && (
-              <div className="flex items-center gap-2 text-xs text-red-400 px-2 py-1 rounded-lg bg-red-500/10">
-                <AlertCircle className="h-3 w-3" />
-                <span>{assistantInfo.error.data?.message as string || assistantInfo.error.name}</span>
-              </div>
-            )}
-
-            {/* Metadata - shown on hover */}
-            {assistantInfo?.tokens && !isStreaming && (
-              <div className="opacity-0 group-hover:opacity-100 transition-opacity">
-                <MetadataTooltip info={assistantInfo} />
-              </div>
-            )}
+              {/* Error display */}
+              {assistantInfo?.error && (
+                <div className="flex items-center gap-2 text-xs text-red-400 px-2 py-1 rounded-lg bg-red-500/10">
+                  <AlertCircle className="h-3 w-3" />
+                  <span>{assistantInfo.error.data?.message as string || assistantInfo.error.name}</span>
+                </div>
+              )}
+            </div>
           </div>
+
+          {/* Metadata - shown on hover, below the bubble */}
+          {assistantInfo?.tokens && !isStreaming && (
+            <div className="opacity-0 group-hover:opacity-100 transition-opacity mt-0.5 ml-1">
+              <MetadataTooltip info={assistantInfo} />
+            </div>
+          )}
         </div>
       )}
     </motion.div>

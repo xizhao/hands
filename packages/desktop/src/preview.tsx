@@ -3,16 +3,6 @@ import { getCurrentWindow } from "@tauri-apps/api/window";
 import { X, Minus, Maximize2, Minimize2, ExternalLink, RotateCw } from "lucide-react";
 import { cn } from "@/lib/utils";
 
-// Handle window dragging via Tauri API
-const startDrag = async () => {
-  try {
-    const win = getCurrentWindow();
-    await win.startDragging();
-  } catch (err) {
-    console.error("Failed to start dragging:", err);
-  }
-};
-
 // Preview window - wraps external URLs with custom window controls
 export function PreviewWindow() {
   const [url, setUrl] = useState<string | null>(null);
@@ -53,29 +43,56 @@ export function PreviewWindow() {
     };
   }, []);
 
+  const handleDragStart = async (e: React.MouseEvent) => {
+    // Prevent default to avoid text selection
+    e.preventDefault();
+    try {
+      const win = getCurrentWindow();
+      await win.startDragging();
+    } catch (err) {
+      console.error("Failed to start dragging:", err);
+    }
+  };
+
   const handleClose = async () => {
-    const win = getCurrentWindow();
-    await win.close();
+    try {
+      const win = getCurrentWindow();
+      await win.close();
+    } catch (err) {
+      console.error("Failed to close:", err);
+    }
   };
 
   const handleMinimize = async () => {
-    const win = getCurrentWindow();
-    await win.minimize();
+    try {
+      const win = getCurrentWindow();
+      await win.minimize();
+    } catch (err) {
+      console.error("Failed to minimize:", err);
+    }
   };
 
   const handleMaximize = async () => {
-    const win = getCurrentWindow();
-    if (isMaximized) {
-      await win.unmaximize();
-    } else {
-      await win.maximize();
+    try {
+      const win = getCurrentWindow();
+      if (isMaximized) {
+        await win.unmaximize();
+      } else {
+        await win.maximize();
+      }
+    } catch (err) {
+      console.error("Failed to maximize:", err);
     }
   };
 
   const handleOpenExternal = async () => {
     if (url) {
-      const { open } = await import("@tauri-apps/plugin-shell");
-      await open(url);
+      try {
+        const { open } = await import("@tauri-apps/plugin-shell");
+        await open(url);
+      } catch (err) {
+        console.error("Failed to open external:", err);
+      }
     }
   };
 
@@ -95,7 +112,7 @@ export function PreviewWindow() {
       <div className="h-10 flex items-center justify-between bg-zinc-800/80 backdrop-blur-sm border-b border-zinc-700/50 shrink-0">
         {/* Drag region - takes up all space not used by buttons */}
         <div
-          onMouseDown={startDrag}
+          onMouseDown={handleDragStart}
           className="flex-1 h-full flex items-center px-3 cursor-grab active:cursor-grabbing select-none"
         >
           <span className="text-sm text-zinc-300 truncate pointer-events-none">

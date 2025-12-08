@@ -65,11 +65,11 @@ function FloatingApp() {
     }
   }, [workbooks, workbooksLoading, activeWorkbookId, setActiveWorkbook, createWorkbook, openWorkbook]);
 
-  // If sessions exist but none is active, select the first one
+  // Clear activeSessionId if it points to a deleted session
   useEffect(() => {
-    if (sessionsLoading) return;
-    if (sessions && sessions.length > 0 && !activeSessionId) {
-      setActiveSession(sessions[0].id);
+    if (sessionsLoading || !sessions) return;
+    if (activeSessionId && !sessions.some(s => s.id === activeSessionId)) {
+      setActiveSession(null);
     }
   }, [sessions, sessionsLoading, activeSessionId, setActiveSession]);
 
@@ -87,7 +87,7 @@ function FloatingApp() {
         <Thread
           expanded={expanded}
           hasData={hasData}
-          onCollapse={() => setExpanded(false)}
+          onCollapse={() => { setExpanded(false); setActiveSession(null); }}
           onExpand={() => setExpanded(true)}
         />
       )}

@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import { useSendMessage, useAbortSession, useSessionStatuses, useSessions, useCreateSession, useDeleteSession } from "@/store/hooks";
 import { api } from "@/lib/api";
+import { useServer } from "@/hooks/useServer";
 import { useUIStore } from "@/stores/ui";
 import { useBackgroundStore } from "@/stores/background";
 import { Button } from "@/components/ui/button";
@@ -14,7 +15,7 @@ import {
   DropdownMenuSubTrigger,
   DropdownMenuSubContent,
 } from "@/components/ui/dropdown-menu";
-import { ArrowUp, Square, Loader2, GripVertical, Hand, Settings, Plus, Database, FolderOpen, Check, Trash2, Radio, Clock, Route, BarChart3, ExternalLink, Pencil, AlertCircle, AlertTriangle, FileCode, Sparkles, BookOpen } from "lucide-react";
+import { ArrowUp, Square, Loader2, GripVertical, Hand, Settings, Plus, Database, FolderOpen, Check, Trash2, Radio, Clock, Route, BarChart3, ExternalLink, Pencil, AlertCircle, AlertTriangle, FileCode, Sparkles, BookOpen, Cpu, RotateCw } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { listen } from "@tauri-apps/api/event";
 import { invoke } from "@tauri-apps/api/core";
@@ -40,6 +41,7 @@ export function Toolbar({ expanded, onExpandChange, hasData, onOpenSettings }: T
   const { data: sessionStatuses = {} } = useSessionStatuses();
   const sendMessage = useSendMessage();
   const abortSession = useAbortSession(activeSessionId);
+  const { isConnected, isConnecting, isRestarting, restartServer } = useServer();
 
   // Session/thread management
   const { data: sessions = [] } = useSessions();
@@ -182,8 +184,39 @@ export function Toolbar({ expanded, onExpandChange, hasData, onOpenSettings }: T
     // The web API only gives file names, not paths
   }, []);
 
+  // Build system prompt with workbook context
+  const getSystemPrompt = () => {
+    if (!activeWorkbook) return undefined;
+
+    const dbInfo = workbookDatabase
+      ? `Database: PostgreSQL on port ${workbookDatabase.port}, database "${workbookDatabase.database_name}"`
+      : "Database: PostgreSQL (connecting...)";
+
+    const serverInfo = devServerStatus?.running && devServerRoutes?.url
+      ? `Dev Server: ${devServerRoutes.url}`
+      : "Dev Server: Not running";
+
+    return `You are working in the "${activeWorkbook.name}" workbook.
+${activeWorkbook.description ? `Description: ${activeWorkbook.description}` : ""}
+
+## Environment
+- Working Directory: ${activeWorkbook.directory}
+- ${dbInfo}
+- ${serverInfo}
+
+## Project Structure
+- \`src/index.ts\` - Main worker with API routes (Hono framework)
+- \`charts/\` - Data visualizations (React + Recharts)
+- \`config/\` - Integration configurations
+
+## Guidelines
+- Use the postgres package with DATABASE_URL env var for database queries
+- Create API routes in src/index.ts
+- Create charts in charts/ directory`;
+  };
+
   const handleSubmit = async () => {
-    if (!input.trim() || isBusy) return;
+    if (!input.trim() || isBusy || !isConnected) return;
 
     const message = input.trim();
     setInput("");
@@ -193,19 +226,21 @@ export function Toolbar({ expanded, onExpandChange, hasData, onOpenSettings }: T
       onExpandChange(true);
     }
 
+    const system = getSystemPrompt();
+
     // If no session exists, create one first then send message
     if (!activeSessionId) {
       createSession.mutate({}, {
         onSuccess: (newSession) => {
           setActiveSession(newSession.id);
           // Send message to the new session with its ID
-          sendMessage.mutate({ sessionId: newSession.id, content: message });
+          sendMessage.mutate({ sessionId: newSession.id, content: message, system });
         }
       });
       return;
     }
 
-    sendMessage.mutate({ sessionId: activeSessionId, content: message });
+    sendMessage.mutate({ sessionId: activeSessionId, content: message, system });
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
@@ -423,8 +458,11 @@ export function Toolbar({ expanded, onExpandChange, hasData, onOpenSettings }: T
 
           <DropdownMenuItem onClick={async () => {
             setMenuOpen(false);
-            const { open } = await import("@tauri-apps/plugin-shell");
-            await open("https://hands.dev/docs");
+            try {
+              await invoke("open_docs");
+            } catch (err) {
+              console.error("Failed to open docs:", err);
+            }
           }}>
             <BookOpen className="h-4 w-4 mr-2" />
             Documentation
@@ -543,7 +581,7 @@ export function Toolbar({ expanded, onExpandChange, hasData, onOpenSettings }: T
               "h-8 w-8 shrink-0 rounded-lg transition-colors",
               input.trim() && "bg-primary text-primary-foreground hover:bg-primary/90"
             )}
-            disabled={!input.trim() || sendMessage.isPending || createSession.isPending}
+            disabled={!input.trim() || !isConnected || sendMessage.isPending || createSession.isPending}
             onClick={handleSubmit}
           >
             {sendMessage.isPending || createSession.isPending ? (
@@ -615,6 +653,43 @@ export function Toolbar({ expanded, onExpandChange, hasData, onOpenSettings }: T
                       "inline-flex rounded-full h-2 w-2",
                       devServerStatus?.running ? "bg-green-500" : "bg-zinc-500"
                     )} />
+                  </div>
+                </div>
+
+                <DropdownMenuSeparator />
+
+                {/* OpenCode AI Server Status */}
+                <div className="px-2 py-2">
+                  <div className="flex items-center gap-2">
+                    <Cpu className="h-4 w-4 text-orange-400" />
+                    <div className="flex-1">
+                      <div className="text-sm font-medium">OpenCode</div>
+                      <div className="text-xs text-muted-foreground">
+                        {isRestarting ? "Restarting..." :
+                         isConnecting ? "Connecting..." :
+                         isConnected ? "http://localhost:4096" : "Disconnected"}
+                      </div>
+                    </div>
+                    <span className={cn(
+                      "inline-flex rounded-full h-2 w-2",
+                      isRestarting || isConnecting ? "bg-yellow-500 animate-pulse" :
+                      isConnected ? "bg-green-500" : "bg-red-500"
+                    )} />
+                    <button
+                      onClick={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        restartServer();
+                      }}
+                      disabled={isRestarting}
+                      className={cn(
+                        "p-1 rounded hover:bg-muted text-muted-foreground hover:text-foreground transition-colors",
+                        isRestarting && "opacity-50 cursor-not-allowed"
+                      )}
+                      title="Restart OpenCode server"
+                    >
+                      <RotateCw className={cn("h-3 w-3", isRestarting && "animate-spin")} />
+                    </button>
                   </div>
                 </div>
 

@@ -137,6 +137,11 @@ export function useSettings() {
     }
   }, []);
 
+  // Sync current model settings
+  const syncModel = useCallback(() => {
+    syncModelWithOpenCode(settings.provider, settings.model);
+  }, [settings.provider, settings.model, syncModelWithOpenCode]);
+
   // Update a single setting
   const updateSetting = useCallback(async <K extends keyof Settings>(key: K, value: Settings[K]) => {
     const newSettings = { ...settings, [key]: value };
@@ -228,5 +233,6 @@ export function useSettings() {
     resetSettings,
     hasApiKey,
     currentApiKey,
+    syncModel,
   };
 }

@@ -225,7 +225,7 @@ export const api = {
   prompt: async (
     sessionId: string,
     content: string,
-    options?: { model?: { providerID: string; modelID: string }; directory?: string | null }
+    options?: { model?: { providerID: string; modelID: string }; system?: string; directory?: string | null }
   ): Promise<MessageWithParts> => {
     const client = getClient(options?.directory);
     const result = await client.session.prompt({
@@ -233,6 +233,7 @@ export const api = {
       body: {
         parts: [{ type: "text", text: content }],
         model: options?.model,
+        system: options?.system,
       },
     });
     return result.data as MessageWithParts;
@@ -241,7 +242,7 @@ export const api = {
   promptAsync: async (
     sessionId: string,
     content: string,
-    options?: { model?: { providerID: string; modelID: string }; directory?: string | null }
+    options?: { model?: { providerID: string; modelID: string }; system?: string; directory?: string | null }
   ) => {
     const client = getClient(options?.directory);
     return client.session.promptAsync({
@@ -249,6 +250,7 @@ export const api = {
       body: {
         parts: [{ type: "text", text: content }],
         model: options?.model,
+        system: options?.system,
       },
     });
   },
@@ -353,7 +355,7 @@ export const api = {
     list: async (): Promise<Agent[]> => {
       const client = getClient();
       const result = await client.app.agents();
-      return result.data as Agent[];
+      return (result.data as Agent[]) ?? [];
     },
   },
 
@@ -361,7 +363,7 @@ export const api = {
     ids: async (): Promise<string[]> => {
       const client = getClient();
       const result = await client.tool.ids();
-      return result.data as string[];
+      return (result.data as string[]) ?? [];
     },
   },
 
