@@ -1,5 +1,6 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
+import { clearAllCollections } from "@/store";
 
 interface UIState {
   // Active workbook context
@@ -13,11 +14,18 @@ interface UIState {
 
 export const useUIStore = create<UIState>()(
   persist(
-    (set) => ({
+    (set, get) => ({
       activeWorkbookId: null,
       activeWorkbookDirectory: null,
-      setActiveWorkbook: (id, directory) =>
-        set({ activeWorkbookId: id, activeWorkbookDirectory: directory, activeSessionId: null }),
+      setActiveWorkbook: (id, directory) => {
+        const currentId = get().activeWorkbookId;
+        // Only clear if switching to a different workbook
+        if (currentId && currentId !== id) {
+          // Clear all TanStack DB collections when switching workbooks
+          clearAllCollections();
+        }
+        set({ activeWorkbookId: id, activeWorkbookDirectory: directory, activeSessionId: null });
+      },
       activeSessionId: null,
       setActiveSession: (id) => set({ activeSessionId: id }),
     }),

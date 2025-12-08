@@ -83,13 +83,14 @@ export async function parseWranglerConfig(workbookDir: string): Promise<Wrangler
 
 /**
  * Validate wrangler.toml doesn't have unresolved placeholders
+ * @param configDir - Directory containing wrangler.toml (can be workbook root or .hands/)
  */
-export async function validateWranglerConfig(workbookDir: string): Promise<string[]> {
-  const wranglerPath = join(workbookDir, "wrangler.toml");
+export async function validateWranglerConfig(configDir: string): Promise<string[]> {
+  const wranglerPath = join(configDir, "wrangler.toml");
   const errors: string[] = [];
 
   if (!existsSync(wranglerPath)) {
-    errors.push("wrangler.toml not found");
+    errors.push(`wrangler.toml not found at ${wranglerPath}`);
     return errors;
   }
 

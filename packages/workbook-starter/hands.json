@@ -1,0 +1,13 @@
+{
+  "$schema": "https://hands.dev/schema/hands.json",
+  "name": "workbook-starter",
+  "version": "0.1.0",
+  "sources": {},
+  "secrets": {},
+  "database": {
+    "migrations": "./migrations"
+  },
+  "build": {
+    "outDir": ".hands"
+  }
+}

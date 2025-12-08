@@ -1,0 +1,47 @@
+{
+  "$schema": "https://hands.dev/schema/source-registry.json",
+  "name": "hands-sources",
+  "version": "0.1.0",
+  "items": [
+    {
+      "name": "hackernews",
+      "type": "source",
+      "title": "Hacker News",
+      "description": "Sync stories from Hacker News (top, new, best, ask, show, jobs). No authentication required.",
+      "files": [
+        {
+          "path": "registry/hackernews/source.ts",
+          "target": "sources/hackernews.ts"
+        },
+        {
+          "path": "registry/hackernews/migration.sql",
+          "target": "migrations/001_hackernews.sql"
+        }
+      ],
+      "secrets": [],
+      "streams": ["top", "new", "best", "ask", "show", "jobs"],
+      "schedule": "0 * * * *",
+      "tables": ["hn_stories"]
+    },
+    {
+      "name": "github",
+      "type": "source",
+      "title": "GitHub",
+      "description": "Sync stars, issues, and pull requests from GitHub repositories using the GraphQL API.",
+      "files": [
+        {
+          "path": "registry/github/source.ts",
+          "target": "sources/github.ts"
+        },
+        {
+          "path": "registry/github/migration.sql",
+          "target": "migrations/002_github.sql"
+        }
+      ],
+      "secrets": ["GITHUB_TOKEN"],
+      "streams": ["stars", "issues", "pull_requests", "commits"],
+      "schedule": "0 * * * *",
+      "tables": ["github_stars", "github_issues", "github_pull_requests"]
+    }
+  ]
+}

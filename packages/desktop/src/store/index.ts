@@ -341,6 +341,80 @@ let cleanupFn: (() => void) | null = null
 const syncedSessions = new Set<string>()
 
 /**
+ * Clear all collections when switching workbooks.
+ * This ensures fresh state for each workbook.
+ */
+export function clearAllCollections(): void {
+  // Clear synced sessions cache
+  syncedSessions.clear()
+
+  // Get all current data from collections and delete each record
+  // We need to iterate over current state and delete
+
+  // Clear sessions
+  const sw = syncWriters.sessions
+  if (sw) {
+    sw.begin()
+    for (const session of sessionsCollection.state.data?.values() || []) {
+      sw.write({ value: session, type: "delete" })
+    }
+    sw.commit()
+  }
+
+  // Clear messages
+  const mw = syncWriters.messages
+  if (mw) {
+    mw.begin()
+    for (const msg of messagesCollection.state.data?.values() || []) {
+      mw.write({ value: msg, type: "delete" })
+    }
+    mw.commit()
+  }
+
+  // Clear parts
+  const pw = syncWriters.parts
+  if (pw) {
+    pw.begin()
+    for (const part of partsCollection.state.data?.values() || []) {
+      pw.write({ value: part, type: "delete" })
+    }
+    pw.commit()
+  }
+
+  // Clear session status
+  const stw = syncWriters.sessionStatus
+  if (stw) {
+    stw.begin()
+    for (const status of sessionStatusCollection.state.data?.values() || []) {
+      stw.write({ value: status, type: "delete" })
+    }
+    stw.commit()
+  }
+
+  // Clear todos
+  const tw = syncWriters.todos
+  if (tw) {
+    tw.begin()
+    for (const todo of todosCollection.state.data?.values() || []) {
+      tw.write({ value: todo, type: "delete" })
+    }
+    tw.commit()
+  }
+
+  // Clear file diffs
+  const dw = syncWriters.fileDiffs
+  if (dw) {
+    dw.begin()
+    for (const diff of fileDiffsCollection.state.data?.values() || []) {
+      dw.write({ value: diff, type: "delete" })
+    }
+    dw.commit()
+  }
+
+  console.log("[store] Cleared all collections for workbook switch")
+}
+
+/**
  * Bootstrap collections with initial data from API
  */
 async function bootstrap() {

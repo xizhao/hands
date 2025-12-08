@@ -328,11 +328,12 @@ export function useWorkbookDatabase(workbookId: string | null) {
   return useQuery({
     queryKey: ["workbook-database", workbookId],
     queryFn: async (): Promise<WorkbookDatabaseInfo | null> => {
-      if (!runtimeStatus.data?.running) {
+      // Return info if we have a valid postgres port, even if not fully "running" yet
+      const port = runtimeStatus.data?.postgres_port;
+      if (!port || port === 0) {
         return null;
       }
 
-      const port = runtimeStatus.data.postgres_port;
       const dbName = `hands_${workbookId?.replace(/-/g, "_")}`;
 
       return {
@@ -344,7 +345,7 @@ export function useWorkbookDatabase(workbookId: string | null) {
         user: "hands",
       };
     },
-    enabled: !!workbookId && !!runtimeStatus.data?.running,
+    enabled: !!workbookId && !!runtimeStatus.data?.postgres_port,
   });
 }
 

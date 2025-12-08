@@ -71,6 +71,7 @@
       },
       "dependencies": {
         "@biomejs/biome": "^1.9.0",
+        "@hands/stdlib": "workspace:*",
         "knip": "^5.0.0",
         "postgres": "^3.4.7",
         "toml": "^3.0.0",
@@ -84,10 +85,14 @@
     "packages/stdlib": {
       "name": "@hands/stdlib",
       "version": "0.0.1",
+      "bin": {
+        "hands": "./src/cli/index.ts",
+      },
       "dependencies": {
         "zod": "^3.23.8",
       },
       "devDependencies": {
+        "@cloudflare/workers-types": "^4",
         "sst": "3.17.23",
         "typescript": "5.8.2",
       },

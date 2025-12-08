@@ -19,7 +19,7 @@ import { ArrowUp, Square, Loader2, GripVertical, Hand, Settings, Plus, Database,
 import { cn } from "@/lib/utils";
 import { listen } from "@tauri-apps/api/event";
 import { invoke } from "@tauri-apps/api/core";
-import { useWorkbook, useWorkbooks, useCreateWorkbook, useUpdateWorkbook, useDeleteWorkbook, useStartDevServer, useStopDevServer, useDevServerStatus, useDevServerRoutes, useWorkbookDatabase, useEvalResult } from "@/hooks/useWorkbook";
+import { useWorkbook, useWorkbooks, useCreateWorkbook, useUpdateWorkbook, useDeleteWorkbook, useStartDevServer, useStopDevServer, useDevServerStatus, useDevServerRoutes, useWorkbookDatabase, useEvalResult, useRuntimeEval } from "@/hooks/useWorkbook";
 import { getAllWebviewWindows } from "@tauri-apps/api/webviewWindow";
 
 interface ToolbarProps {
@@ -66,6 +66,7 @@ export function Toolbar({ expanded, onExpandChange, hasData, onOpenSettings }: T
   const { data: devServerRoutes } = useDevServerRoutes(activeWorkbookId);
   const { data: workbookDatabase } = useWorkbookDatabase(activeWorkbookId);
   const { data: evalResult } = useEvalResult(activeWorkbookId);
+  const runtimeEval = useRuntimeEval();
 
   // Compute diagnostics counts
   const tsErrors = evalResult?.typescript?.errors?.length ?? 0;
@@ -74,15 +75,16 @@ export function Toolbar({ expanded, onExpandChange, hasData, onOpenSettings }: T
   const unusedCount = (evalResult?.unused?.exports?.length ?? 0) + (evalResult?.unused?.files?.length ?? 0);
   const hasIssues = tsErrors > 0 || tsWarnings > 0 || formatErrors > 0 || unusedCount > 0;
 
-  // Auto-start dev server when workbook changes
+  // Auto-start dev server when workbook changes or isn't running
   useEffect(() => {
-    if (activeWorkbook && !devServerStatus?.running) {
+    // Start if we have a workbook but no runtime ports assigned
+    if (activeWorkbook && !devServerStatus?.runtime_port && !startDevServer.isPending) {
       startDevServer.mutate({
         workbookId: activeWorkbook.id,
         directory: activeWorkbook.directory,
       });
     }
-  }, [activeWorkbook?.id]); // Only trigger on workbook ID change
+  }, [activeWorkbook?.id, devServerStatus?.runtime_port, startDevServer.isPending]);
 
   const status = activeSessionId ? sessionStatuses[activeSessionId] : null;
   const isBusy = status?.type === "busy" || status?.type === "running";
@@ -601,7 +603,8 @@ ${activeWorkbook.description ? `Description: ${activeWorkbook.description}` : ""
                   "inline-flex rounded-full h-2 w-2 transition-transform group-hover:scale-125",
                   tsErrors > 0 ? "bg-red-500" :
                   (tsWarnings > 0 || unusedCount > 0) ? "bg-yellow-500" :
-                  devServerStatus?.running ? "bg-green-500" : "bg-zinc-500"
+                  // Green if services are up OR we have runtime ports assigned
+                  (evalResult?.services?.postgres?.up || devServerStatus?.runtime_port) ? "bg-green-500" : "bg-zinc-500"
                 )} />
               </div>
             </DropdownMenuTrigger>
@@ -611,7 +614,8 @@ ${activeWorkbook.description ? `Description: ${activeWorkbook.description}` : ""
                 <button className="flex-1 px-3 py-2 text-sm font-medium text-foreground border-b-2 border-primary flex items-center justify-center gap-1.5">
                   <span className={cn(
                     "inline-flex rounded-full h-1.5 w-1.5",
-                    devServerStatus?.running ? "bg-green-500" : "bg-zinc-500"
+                    // Green if services are up OR we have runtime ports assigned
+                    (evalResult?.services?.postgres?.up || devServerStatus?.runtime_port) ? "bg-green-500" : "bg-zinc-500"
                   )} />
                   Local
                 </button>
@@ -630,28 +634,84 @@ ${activeWorkbook.description ? `Description: ${activeWorkbook.description}` : ""
                     <div className="flex-1">
                       <div className="text-sm font-medium">PostgreSQL</div>
                       <div className="text-xs text-muted-foreground">
-                        {workbookDatabase ? `${workbookDatabase.database_name} on port ${workbookDatabase.port}` : "Connecting..."}
+                        {evalResult?.services?.postgres?.up
+                          ? `${workbookDatabase?.database_name || "database"} on port ${evalResult.services.postgres.port}`
+                          : devServerStatus?.postgres_port
+                            ? `Starting on port ${devServerStatus.postgres_port}...`
+                            : "Connecting..."}
                       </div>
                     </div>
-                    <span className="inline-flex rounded-full h-2 w-2 bg-green-500" />
+                    <button
+                      onMouseDown={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                      }}
+                      onClick={async (e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        const runtimePort = devServerStatus?.runtime_port;
+                        if (runtimePort && activeWorkbookId) {
+                          try {
+                            await invoke("open_db_browser", {
+                              runtimePort,
+                              workbookId: activeWorkbookId,
+                            });
+                          } catch (err) {
+                            console.error("Failed to open DB browser:", err);
+                          }
+                        }
+                        setMenuOpen(false);
+                      }}
+                      disabled={!devServerStatus?.runtime_port}
+                      className="px-2 py-1 text-xs bg-zinc-700 hover:bg-zinc-600 disabled:opacity-50 disabled:cursor-not-allowed text-zinc-200 rounded transition-colors"
+                    >
+                      Browse
+                    </button>
+                    <button
+                      onClick={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        if (activeWorkbookId) {
+                          runtimeEval.mutate(activeWorkbookId);
+                        }
+                      }}
+                      disabled={runtimeEval.isPending}
+                      className={cn(
+                        "p-1 rounded hover:bg-muted text-muted-foreground hover:text-foreground transition-colors",
+                        runtimeEval.isPending && "opacity-50 cursor-not-allowed"
+                      )}
+                      title="Refresh runtime status"
+                    >
+                      <RotateCw className={cn("h-3 w-3", runtimeEval.isPending && "animate-spin")} />
+                    </button>
+                    <span className={cn(
+                      "inline-flex rounded-full h-2 w-2",
+                      evalResult?.services?.postgres?.up ? "bg-green-500" :
+                      devServerStatus?.postgres_port ? "bg-yellow-500 animate-pulse" : "bg-zinc-500"
+                    )} />
                   </div>
                 </div>
 
                 <DropdownMenuSeparator />
 
-                {/* Dev Server Status */}
+                {/* Dev Server (Worker) Status */}
                 <div className="px-2 py-2">
                   <div className="flex items-center gap-2">
                     <Radio className="h-4 w-4 text-purple-400" />
                     <div className="flex-1">
                       <div className="text-sm font-medium">Dev Server</div>
                       <div className="text-xs text-muted-foreground">
-                        {devServerStatus?.running ? devServerRoutes?.url || "http://localhost:8787" : "Not running"}
+                        {evalResult?.services?.worker?.up
+                          ? devServerRoutes?.url || `http://localhost:${evalResult.services.worker.port}`
+                          : devServerStatus?.worker_port
+                            ? `Starting on port ${devServerStatus.worker_port}...`
+                            : "Not running"}
                       </div>
                     </div>
                     <span className={cn(
                       "inline-flex rounded-full h-2 w-2",
-                      devServerStatus?.running ? "bg-green-500" : "bg-zinc-500"
+                      evalResult?.services?.worker?.up ? "bg-green-500" :
+                      devServerStatus?.worker_port ? "bg-yellow-500 animate-pulse" : "bg-zinc-500"
                     )} />
                   </div>
                 </div>

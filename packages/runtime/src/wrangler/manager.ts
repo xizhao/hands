@@ -7,6 +7,7 @@ import { existsSync, readFileSync, writeFileSync } from "fs";
 import { join, dirname } from "path";
 import type { ServiceStatus, ServiceState, BuildError } from "../types";
 import { validateWranglerConfig } from "./parser";
+import { build, needsBuild } from "@hands/stdlib";
 
 // Get the runtime's wrangler binary path
 function getWranglerBinPath(): string {
@@ -332,6 +333,37 @@ export class WranglerManager {
   }
 
   /**
+   * Run build if hands.json exists, otherwise check for wrangler.toml directly
+   */
+  private async ensureBuild(): Promise<string> {
+    const handsJsonPath = join(this.config.workbookDir, "hands.json");
+    const handsDir = join(this.config.workbookDir, ".hands");
+
+    // Check if this is a hands.json-based workbook
+    if (existsSync(handsJsonPath)) {
+      console.log("Building workbook from hands.json...");
+
+      const result = await build(this.config.workbookDir, { dev: true });
+
+      if (!result.success) {
+        throw new Error(`Build failed: ${result.errors.join(", ")}`);
+      }
+
+      console.log(`Build complete: ${result.files.length} files in ${result.outputDir}`);
+      return handsDir;
+    }
+
+    // Legacy: check for wrangler.toml in root
+    const rootWrangler = join(this.config.workbookDir, "wrangler.toml");
+    if (existsSync(rootWrangler)) {
+      console.log("Using legacy wrangler.toml from workbook root");
+      return this.config.workbookDir;
+    }
+
+    throw new Error("No hands.json or wrangler.toml found in workbook");
+  }
+
+  /**
    * Single attempt to start wrangler
    */
   private async startOnce(): Promise<void> {
@@ -339,8 +371,11 @@ export class WranglerManager {
     this.output = [];
     this.errors = [];
 
-    // Validate wrangler.toml first
-    const configErrors = await validateWranglerConfig(this.config.workbookDir);
+    // Run build (or use legacy wrangler.toml)
+    const wranglerDir = await this.ensureBuild();
+
+    // Validate wrangler.toml
+    const configErrors = await validateWranglerConfig(wranglerDir);
     if (configErrors.length > 0) {
       this.errors = configErrors;
       this._state = "failed";
@@ -355,10 +390,11 @@ export class WranglerManager {
     const wranglerBin = getWranglerBinPath();
     console.log(`Using wrangler at: ${wranglerBin}`);
 
+    // Run wrangler from the directory containing wrangler.toml
     this.process = spawn(
       [wranglerBin, "dev", "--local", "--port", String(this._port)],
       {
-        cwd: this.config.workbookDir,
+        cwd: wranglerDir,
         stdout: "pipe",
         stderr: "pipe",
         env: {

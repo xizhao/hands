@@ -826,20 +826,25 @@ async fn get_runtime_status(
     if let Some(runtime) = state_guard.runtimes.get(&workbook_id) {
         // Ping the runtime to verify it's still alive
         let status_url = format!("http://localhost:{}/status", runtime.runtime_port);
-        match reqwest::get(&status_url).await {
-            Ok(resp) if resp.status().is_success() => {
-                return Ok(DevServerStatus {
-                    running: true,
-                    workbook_id,
-                    directory: String::new(),
-                    runtime_port: runtime.runtime_port,
-                    postgres_port: runtime.postgres_port,
-                    worker_port: runtime.worker_port,
-                    message: "Runtime is running".to_string(),
-                });
-            }
-            _ => {}
-        }
+        let is_running = match reqwest::get(&status_url).await {
+            Ok(resp) if resp.status().is_success() => true,
+            _ => false,
+        };
+
+        // Always return port info if we have a runtime entry
+        return Ok(DevServerStatus {
+            running: is_running,
+            workbook_id,
+            directory: String::new(),
+            runtime_port: runtime.runtime_port,
+            postgres_port: runtime.postgres_port,
+            worker_port: runtime.worker_port,
+            message: if is_running {
+                "Runtime is running".to_string()
+            } else {
+                "Runtime is starting...".to_string()
+            },
+        });
     }
 
     Ok(DevServerStatus {
@@ -1235,6 +1240,47 @@ async fn open_webview(
 }
 
 #[tauri::command]
+async fn open_db_browser(
+    app: tauri::AppHandle,
+    runtime_port: u16,
+    workbook_id: String,
+) -> Result<(), String> {
+    use tauri::WebviewWindowBuilder;
+    use tauri::WebviewUrl;
+
+    let window_label = format!("db_browser_{}", workbook_id);
+
+    // Check if window already exists
+    if let Some(window) = app.get_webview_window(&window_label) {
+        window.set_focus().map_err(|e| e.to_string())?;
+        return Ok(());
+    }
+
+    // Open DB browser with runtime port as query param
+    let url = format!("index.html?db-browser=true&port={}", runtime_port);
+
+    let mut builder = WebviewWindowBuilder::new(&app, &window_label, WebviewUrl::App(url.into()))
+        .title("Database Browser")
+        .inner_size(900.0, 600.0)
+        .min_inner_size(600.0, 400.0)
+        .decorations(true)
+        .resizable(true)
+        .center();
+
+    // macOS: transparent titlebar
+    #[cfg(target_os = "macos")]
+    {
+        builder = builder.title_bar_style(tauri::TitleBarStyle::Overlay);
+    }
+
+    builder
+        .build()
+        .map_err(|e| format!("Failed to create DB browser window: {}", e))?;
+
+    Ok(())
+}
+
+#[tauri::command]
 async fn open_docs(app: tauri::AppHandle) -> Result<(), String> {
     use tauri::WebviewWindowBuilder;
     use tauri::WebviewUrl;
@@ -1306,6 +1352,7 @@ pub fn run() {
             runtime_eval,
             copy_files_to_workbook,
             open_webview,
+            open_db_browser,
             open_docs,
             set_active_workbook
         ])

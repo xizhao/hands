@@ -2,6 +2,9 @@
   "name": "@hands/stdlib",
   "version": "0.0.1",
   "type": "module",
+  "bin": {
+    "hands": "./src/cli/index.ts"
+  },
   "exports": {
     ".": "./src/index.ts",
     "./*": "./src/*.ts"
@@ -19,6 +22,7 @@
     "sst": ">=3.0.0"
   },
   "devDependencies": {
+    "@cloudflare/workers-types": "^4",
     "sst": "3.17.23",
     "typescript": "5.8.2"
   }

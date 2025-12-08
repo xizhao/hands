@@ -8,9 +8,11 @@
   },
   "scripts": {
     "dev": "bun run src/index.ts",
+    "test": "bun test",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@hands/stdlib": "workspace:*",
     "postgres": "^3.4.7",
     "@biomejs/biome": "^1.9.0",
     "toml": "^3.0.0",
