@@ -5,6 +5,7 @@ import charts from "../charts";
 import { Dashboard } from "@/pages/Dashboard";
 import { renderPage } from "@/lib/render";
 import { createDb, runQuery } from "@/lib/db";
+import { renderBlock, wrapBlockHtml, type BlockConfig } from "@/lib/blocks";
 
 type Bindings = {
   DATABASE_URL: string;
@@ -96,6 +97,48 @@ app.post("/api/charts/:id/query", async (c) => {
     return c.json({ data: result });
   } catch (error) {
     return c.json({ error: String(error) }, 500);
+  }
+});
+
+// ============ BLOCKS API ============
+// RSC Block rendering endpoint - renders blocks from notebook
+
+// Render a block by ID (block config passed in body)
+app.post("/blocks/render", async (c) => {
+  try {
+    const block = await c.req.json<BlockConfig>();
+    const html = await renderBlock(block, {
+      databaseUrl: c.env.DATABASE_URL,
+    });
+    return c.html(wrapBlockHtml(html, block.id));
+  } catch (error) {
+    return c.html(
+      wrapBlockHtml(
+        `<div class="p-4 border border-red-200 bg-red-50 text-red-700 rounded-lg">
+          <strong>Render Error:</strong> ${String(error)}
+        </div>`,
+        "error"
+      ),
+      500
+    );
+  }
+});
+
+// Render block inline (returns just the HTML fragment, no wrapper)
+app.post("/blocks/render-fragment", async (c) => {
+  try {
+    const block = await c.req.json<BlockConfig>();
+    const html = await renderBlock(block, {
+      databaseUrl: c.env.DATABASE_URL,
+    });
+    return c.html(html);
+  } catch (error) {
+    return c.html(
+      `<div class="p-4 border border-red-200 bg-red-50 text-red-700 rounded-lg">
+        <strong>Render Error:</strong> ${String(error)}
+      </div>`,
+      500
+    );
   }
 });
 

@@ -9,7 +9,7 @@
 
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useUIStore } from "@/stores/ui";
-import { api, type Session, type MessageWithParts, type SessionStatus, type Todo, type PermissionResponse } from "@/lib/api";
+import { api, type Session, type PermissionResponse } from "@/lib/api";
 
 // ============ SESSION HOOKS ============
 

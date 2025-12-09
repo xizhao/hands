@@ -100,7 +100,7 @@ let currentSubscription: (() => void) | null = null;
 
 export function subscribeToDbChanges(
   runtimePort: number,
-  onError?: (err: unknown) => void,
+  _onError?: (err: unknown) => void,
   onNewChange?: (change: ChangeRecord) => void
 ): () => void {
   console.log("[db-browser] Starting SSE subscription to port", runtimePort);

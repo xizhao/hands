@@ -1,6 +1,8 @@
 import { create } from "zustand";
 import { queryClient } from "@/App";
 
+type TabId = "sources" | "data" | "insights" | "preview";
+
 interface UIState {
   // Active workbook context (not persisted - Tauri is source of truth)
   activeWorkbookId: string | null;
@@ -12,6 +14,9 @@ interface UIState {
   // Active session within workbook
   activeSessionId: string | null;
   setActiveSession: (id: string | null) => void;
+  // Active tab in notebook view
+  activeTab: TabId;
+  setActiveTab: (tab: TabId) => void;
 }
 
 export const useUIStore = create<UIState>()((set, get) => ({
@@ -30,4 +35,6 @@ export const useUIStore = create<UIState>()((set, get) => ({
   setRuntimePort: (port) => set({ runtimePort: port }),
   activeSessionId: null,
   setActiveSession: (id) => set({ activeSessionId: id }),
+  activeTab: "preview",
+  setActiveTab: (tab) => set({ activeTab: tab }),
 }));

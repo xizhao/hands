@@ -801,6 +801,87 @@ export function createServer(port: number) {
           });
         }
 
+        // ========== BLOCKS PROXY ==========
+        // Proxy /blocks/* to the worker for RSC rendering
+
+        if (url.pathname.startsWith("/blocks/")) {
+          if (!state) {
+            return Response.json({ error: "Not initialized" }, { status: 500, headers });
+          }
+
+          const workerPort = state.worker.status.port;
+          if (!workerPort || !state.worker.status.up) {
+            return Response.json(
+              { error: "Worker not ready" },
+              { status: 503, headers }
+            );
+          }
+
+          // Forward the request to the worker
+          const workerUrl = `http://localhost:${workerPort}${url.pathname}${url.search}`;
+          const workerResponse = await fetch(workerUrl, {
+            method,
+            headers: req.headers,
+            body: method !== "GET" && method !== "HEAD" ? req.body : undefined,
+          });
+
+          // Return the worker's response
+          return new Response(workerResponse.body, {
+            status: workerResponse.status,
+            headers: {
+              ...Object.fromEntries(workerResponse.headers.entries()),
+              "Access-Control-Allow-Origin": "*",
+            },
+          });
+        }
+
+        // ========== NOTEBOOK PERSISTENCE ==========
+        // Load/save notebook.json for the Plate editor
+
+        // GET /notebook - Load notebook.json
+        if (method === "GET" && url.pathname === "/notebook") {
+          if (!state) {
+            return Response.json({ error: "Not initialized" }, { status: 500, headers });
+          }
+
+          const fs = await import("fs");
+          const path = await import("path");
+          const notebookPath = path.join(state.workbookDir, "notebook.json");
+
+          if (!fs.existsSync(notebookPath)) {
+            // Return empty notebook
+            return Response.json({
+              version: 1,
+              content: [],
+              modified: new Date().toISOString(),
+            }, { headers });
+          }
+
+          const content = fs.readFileSync(notebookPath, "utf-8");
+          return Response.json(JSON.parse(content), { headers });
+        }
+
+        // PUT /notebook - Save notebook.json
+        if (method === "PUT" && url.pathname === "/notebook") {
+          if (!state) {
+            return Response.json({ error: "Not initialized" }, { status: 500, headers });
+          }
+
+          const fs = await import("fs");
+          const path = await import("path");
+          const body = await req.json() as { content: unknown[] };
+          const notebookPath = path.join(state.workbookDir, "notebook.json");
+
+          const notebook = {
+            version: 1,
+            content: body.content,
+            modified: new Date().toISOString(),
+          };
+
+          fs.writeFileSync(notebookPath, JSON.stringify(notebook, null, 2));
+          return Response.json({ success: true }, { headers });
+        }
+
         // 404
         return Response.json({ error: "Not found" }, { status: 404, headers });
       } catch (error) {

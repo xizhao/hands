@@ -223,7 +223,7 @@ const parsePsqlOutput = (output: string): ParsedTable | null => {
 };
 
 // QueryResult component - renders psql output as expandable DataTable
-const QueryResult = memo(({ output, query }: { output: string; query?: string }) => {
+const QueryResult = memo(({ output, query: _query }: { output: string; query?: string }) => {
   const [expanded, setExpanded] = useState(false);
   const parsed = useMemo(() => parsePsqlOutput(output), [output]);
 

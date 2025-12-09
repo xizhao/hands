@@ -57,3 +57,18 @@ export {
   type CheckResult,
   type CheckOptions,
 } from "./checks/index.js"
+
+// Blocks - RSC components for workbook editor
+export {
+  SqlBlock,
+  ChartBlock,
+  TextBlock,
+  TableBlock,
+  type SqlBlockProps,
+  type ChartBlockProps,
+  type ChartType,
+  type TextBlockProps,
+  type TableBlockProps,
+  type BlockDefinition,
+  type BlockMeta,
+} from "./blocks/index.js"

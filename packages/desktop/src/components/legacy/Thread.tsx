@@ -1,14 +1,13 @@
-import { useEffect, useRef, useMemo, useCallback, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { useMessages, useSessions, useSessionStatuses, useDeleteSession } from "@/hooks/useSession";
 import { useUIStore } from "@/stores/ui";
 import { useBackgroundStore } from "@/stores/background";
 import { ChatMessage } from "@/components/ChatMessage";
 import { cn } from "@/lib/utils";
-import { Database, FileUp, Link, ChevronDown, ChevronUp, ChevronRight, X, Loader2 } from "lucide-react";
+import { Database, FileUp, Link, ChevronDown, ChevronUp, ChevronRight, X, Loader2, GripHorizontal } from "lucide-react";
 import { ShimmerText } from "@/components/ui/thinking-indicator";
 import { motion, AnimatePresence } from "framer-motion";
-import { getCurrentWindow, LogicalSize } from "@tauri-apps/api/window";
 
 interface ThreadProps {
   expanded: boolean;
@@ -78,37 +77,16 @@ export function Thread({ expanded, hasData, onCollapse, onExpand }: ThreadProps)
   const scrollRef = useRef<HTMLDivElement>(null);
   const prevMessagesLength = useRef(0);
 
-  // Reverse messages so newest appears at top, coming down
-  const reversedMessages = useMemo(() => {
-    return [...messages].reverse();
-  }, [messages]);
-
-  // Auto-scroll to top when new messages arrive (since newest is at top)
+  // Auto-scroll to bottom when new messages arrive (newest at bottom, near input)
   useEffect(() => {
     if (messages.length > prevMessagesLength.current && scrollRef.current) {
       scrollRef.current.scrollTo({
-        top: 0,
+        top: scrollRef.current.scrollHeight,
         behavior: "smooth",
       });
     }
     prevMessagesLength.current = messages.length;
   }, [messages.length]);
-
-  // Resize window when expanding/collapsing
-  const resizeWindow = useCallback(async (expand: boolean) => {
-    try {
-      const window = getCurrentWindow();
-      const size = await window.innerSize();
-      const targetHeight = expand ? Math.max(size.height, 500) : 120;
-      await window.setSize(new LogicalSize(size.width, targetHeight));
-    } catch (e) {
-      console.error("Failed to resize window:", e);
-    }
-  }, []);
-
-  useEffect(() => {
-    resizeWindow(expanded);
-  }, [expanded, resizeWindow]);
 
   const hasMessages = messages.length > 0;
 
@@ -279,14 +257,19 @@ export function Thread({ expanded, hasData, onCollapse, onExpand }: ThreadProps)
     );
   }
 
-  // Expanded state - show messages
+  // Expanded state - show messages (expands upward from toolbar)
   return (
     <div
       className={cn(
-        "flex-1 mt-2 overflow-hidden",
-        "animate-in slide-in-from-top-2 fade-in duration-200"
+        "flex-1 mb-2 overflow-hidden rounded-2xl bg-background/95 backdrop-blur-xl border border-border/50 shadow-lg",
+        "animate-in slide-in-from-bottom-2 fade-in duration-200"
       )}
     >
+      {/* Drag handle header */}
+      <div className="flex items-center justify-center py-1.5 border-b border-border/30 cursor-grab active:cursor-grabbing">
+        <GripHorizontal className="h-4 w-4 text-muted-foreground/40" />
+      </div>
+
       {/* Other threads and background tasks - always visible at top when expanded */}
       {(otherSessions.length > 0 || backgroundTaskList.filter(t => t.id !== activeSessionId).length > 0) && (
         <div className="flex flex-wrap gap-1.5 px-2 mb-2">
@@ -421,12 +404,26 @@ export function Thread({ expanded, hasData, onCollapse, onExpand }: ThreadProps)
         </div>
       )}
 
-      <ScrollArea className="h-full" ref={scrollRef}>
-        <div className="px-2 py-2 space-y-1">
-          {/* Optimistic loading bubble - shown at top when waiting for response */}
+      <ScrollArea className="h-[300px] max-h-[50vh]" ref={scrollRef}>
+        <div className="px-3 py-3 space-y-2">
+          {/* Show welcome hints at top if no data yet */}
+          {!hasData && !hasMessages && <WelcomeHints />}
+
+          {/* If we have data but no conversation, show a prompt */}
+          {hasData && !hasMessages && <DataReadyHint />}
+
+          {/* Messages displayed chronologically (oldest at top, newest at bottom near input) */}
+          {messages.map((message, idx) => (
+            <ChatMessage
+              key={message.info.id || idx}
+              message={message}
+            />
+          ))}
+
+          {/* Optimistic loading bubble - shown at bottom when waiting for response */}
           {waitingForResponse && (
             <motion.div
-              initial={{ opacity: 0, y: -20 }}
+              initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.25, ease: "easeOut" }}
               className="flex w-full justify-start"
@@ -439,20 +436,6 @@ export function Thread({ expanded, hasData, onCollapse, onExpand }: ThreadProps)
               </div>
             </motion.div>
           )}
-
-          {/* Messages displayed newest first (top), older below */}
-          {reversedMessages.map((message, idx) => (
-            <ChatMessage
-              key={message.info.id || idx}
-              message={message}
-            />
-          ))}
-
-          {/* Show welcome hints at bottom if no data yet */}
-          {!hasData && !hasMessages && <WelcomeHints />}
-
-          {/* If we have data but no conversation, show a prompt */}
-          {hasData && !hasMessages && <DataReadyHint />}
         </div>
       </ScrollArea>
     </div>
