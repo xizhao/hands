@@ -4,7 +4,7 @@ import type { TSuggestionText } from 'platejs';
 import { SlateLeaf, type SlateLeafProps } from 'platejs/static';
 import * as React from 'react';
 
-import { cn } from '@/lib/utils';
+import { cn } from '../../lib/utils';
 
 export function SuggestionLeafStatic(props: SlateLeafProps<TSuggestionText>) {
   const { editor, leaf } = props;

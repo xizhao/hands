@@ -9,10 +9,12 @@ import {
 } from '@platejs/media';
 import { KEYS } from 'platejs';
 
-import { MediaAudioElementStatic } from '@/registry/ui/media-audio-node-static';
-import { MediaFileElementStatic } from '@/registry/ui/media-file-node-static';
-import { ImageElementStatic } from '@/registry/ui/media-image-node-static';
-import { MediaVideoElementStatic } from '@/registry/ui/media-video-node-static';
+import {
+  ImageElementStatic,
+  MediaAudioElementStatic,
+  MediaFileElementStatic,
+  MediaVideoElementStatic,
+} from '@hands/stdlib/static';
 
 export const BaseMediaKit = [
   BaseImagePlugin.withComponent(ImageElementStatic),

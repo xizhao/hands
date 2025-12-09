@@ -5,8 +5,7 @@ import { usePlateEditor } from 'platejs/react';
 import * as React from 'react';
 
 import { BaseEditorKit } from '@/registry/components/editor/editor-base-kit';
-
-import { EditorStatic } from './editor-static';
+import { EditorStatic } from '@hands/stdlib/static';
 
 export const AIChatEditor = React.memo(function AIChatEditor({
   content,

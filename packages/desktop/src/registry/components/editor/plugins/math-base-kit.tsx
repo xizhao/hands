@@ -3,7 +3,7 @@ import { BaseEquationPlugin, BaseInlineEquationPlugin } from '@platejs/math';
 import {
   EquationElementStatic,
   InlineEquationElementStatic,
-} from '@/registry/ui/equation-node-static';
+} from '@hands/stdlib/static';
 
 export const BaseMathKit = [
   BaseInlineEquationPlugin.withComponent(InlineEquationElementStatic),

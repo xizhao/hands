@@ -178,7 +178,7 @@ function Draggable(props: PlateElementProps) {
 
               {!isInColumn && !isInTable && (
                 <div
-                  className="absolute left-0 h-6"
+                  className="absolute -left-14 h-6"
                   style={{ top: `${dragButtonTop + 3}px` }}
                 >
                   <DraggableInsertHandle />

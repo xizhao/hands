@@ -33,7 +33,7 @@ import {
   Database,
   Radio,
   Cpu,
-  Route,
+  Route as RouteIcon,
   ExternalLink,
   AlertCircle,
   AlertTriangle,
@@ -279,7 +279,7 @@ export function LiveIndicator() {
               <DropdownMenuSeparator />
               <DropdownMenuSub>
                 <DropdownMenuSubTrigger className="flex items-center gap-2">
-                  <Route className="h-4 w-4 text-blue-400" />
+                  <RouteIcon className="h-4 w-4 text-blue-400" />
                   <span>API Routes</span>
                   <span className="ml-auto text-xs text-muted-foreground">
                     {devServerRoutes.routes.length}

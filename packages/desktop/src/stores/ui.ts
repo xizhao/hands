@@ -15,6 +15,9 @@ interface UIState {
   // Active session within workbook
   activeSessionId: string | null;
   setActiveSession: (id: string | null) => void;
+  // Active page within workbook (null = no page selected, show full sidebar)
+  activePageId: string | null;
+  setActivePage: (id: string | null) => void;
   // Active tab in notebook view
   activeTab: TabId;
   setActiveTab: (tab: TabId) => void;
@@ -40,6 +43,8 @@ export const useUIStore = create<UIState>()((set, get) => ({
   setRuntimePort: (port) => set({ runtimePort: port }),
   activeSessionId: null,
   setActiveSession: (id) => set({ activeSessionId: id }),
+  activePageId: null,
+  setActivePage: (id) => set({ activePageId: id }),
   activeTab: "preview",
   setActiveTab: (tab) => set({ activeTab: tab }),
   rightPanel: null,

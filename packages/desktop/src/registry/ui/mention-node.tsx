@@ -23,7 +23,7 @@ import { insertInlineElement } from '@/registry/components/editor/transforms';
 import { useDebounce } from '@/registry/hooks/use-debounce';
 
 import { Avatar, AvatarFallback, AvatarImage } from './avatar';
-import { EditorStatic } from './editor-static';
+import { EditorStatic } from '@hands/stdlib/static';
 import { HoverCard, HoverCardContent, HoverCardTrigger } from './hover-card';
 import {
   InlineCombobox,

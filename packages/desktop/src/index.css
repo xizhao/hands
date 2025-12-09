@@ -159,6 +159,17 @@ svg [opacity="0.2"] {
   background: hsl(var(--primary) / 0.15);
 }
 
+/* Disable browser focus rings on slate editor */
+[data-slate-editor]:focus {
+  outline: none !important;
+  box-shadow: none !important;
+}
+
+[data-slate-editor]:focus-visible {
+  outline: none !important;
+  box-shadow: none !important;
+}
+
 @layer base {
   * {
     @apply border-border;

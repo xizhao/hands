@@ -3,7 +3,7 @@ import { cva } from 'class-variance-authority';
 import { PlateStatic, type PlateStaticProps } from 'platejs/static';
 import * as React from 'react';
 
-import { cn } from '@/lib/utils';
+import { cn } from '../../lib/utils';
 
 export const editorVariants = cva(
   cn(

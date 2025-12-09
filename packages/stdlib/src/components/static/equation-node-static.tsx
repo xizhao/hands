@@ -4,7 +4,7 @@ import type { TEquationElement } from 'platejs';
 import { SlateElement, type SlateElementProps } from 'platejs/static';
 import * as React from 'react';
 
-import { cn } from '@/lib/utils';
+import { cn } from '../../lib/utils';
 
 export function EquationElementStatic(
   props: SlateElementProps<TEquationElement>

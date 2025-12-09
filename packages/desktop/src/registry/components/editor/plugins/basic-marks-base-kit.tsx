@@ -8,7 +8,7 @@ import {
   BaseUnderlinePlugin,
 } from '@platejs/basic-nodes';
 
-import { CodeLeafStatic } from '@/registry/ui/code-node-static';
+import { CodeLeafStatic } from '@hands/stdlib/static';
 
 export const BaseBasicMarksKit = [
   BaseBoldPlugin,

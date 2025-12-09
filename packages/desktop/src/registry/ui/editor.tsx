@@ -87,7 +87,7 @@ const editorVariants = cva(
         true: 'cursor-not-allowed opacity-50',
       },
       focused: {
-        true: 'ring-2 ring-ring ring-offset-2',
+        true: '',
       },
       variant: {
         ai: 'px-0 text-base md:text-sm',
@@ -120,6 +120,7 @@ export function Editor({
 }: PlateContentProps & VariantProps<typeof editorVariants>) {
   return (
     <PlateContent
+      aria-label=""
       className={cn(
         editorVariants({
           disabled,

@@ -69,7 +69,7 @@ const editorVariants = cva(
         true: 'cursor-not-allowed opacity-50',
       },
       focused: {
-        true: 'ring-2 ring-ring ring-offset-2',
+        true: '',
       },
       variant: {
         ai: 'w-full px-0 text-base md:text-sm',

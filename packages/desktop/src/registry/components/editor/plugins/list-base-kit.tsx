@@ -1,7 +1,7 @@
 import { BaseListPlugin } from '@platejs/list';
 import { KEYS } from 'platejs';
 
-import { BlockListStatic } from '@/registry/ui/block-list-static';
+import { BlockListStatic } from '@hands/stdlib/static';
 
 import { BaseIndentKit } from './indent-base-kit';
 

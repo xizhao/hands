@@ -1,6 +1,6 @@
 import { BaseSuggestionPlugin } from '@platejs/suggestion';
 
-import { SuggestionLeafStatic } from '@/registry/ui/suggestion-node-static';
+import { SuggestionLeafStatic } from '@hands/stdlib/static';
 
 export const BaseSuggestionKit = [
   BaseSuggestionPlugin.withComponent(SuggestionLeafStatic),

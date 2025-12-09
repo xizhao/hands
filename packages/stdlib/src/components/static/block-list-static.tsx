@@ -4,7 +4,7 @@ import type { RenderStaticNodeWrapper, TListElement } from 'platejs';
 import type { SlateRenderElementProps } from 'platejs/static';
 import * as React from 'react';
 
-import { cn } from '@/lib/utils';
+import { cn } from '../../lib/utils';
 
 const config: Record<
   string,

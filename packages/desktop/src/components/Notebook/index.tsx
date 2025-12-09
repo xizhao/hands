@@ -1,1 +1,1 @@
-export { NotebookApp } from "./NotebookShell";
+export { NotebookShell } from "./NotebookShell";
