@@ -34,6 +34,8 @@ program
 program
   .command("build")
   .description("Build for production")
+  .option("--production", "Build for production with optimizations and static pre-rendering")
+  .option("--skip-prerender", "Skip static pre-rendering (all SSR at runtime)")
   .option("--no-check", "Skip code quality checks")
   .option("--no-fix", "Don't auto-fix formatting")
   .option("--json", "Output check results as JSON")

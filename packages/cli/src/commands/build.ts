@@ -1,8 +1,13 @@
 /**
- * hands build - Build workbook for production
+ * hands build - Build workbook for deployment
  *
  * Spawns the runtime to perform the actual build.
  * This avoids the CLI needing to resolve workspace dependencies.
+ *
+ * Options:
+ *   --production    Build for production with optimizations and static pre-rendering
+ *   --verbose       Show detailed build output
+ *   --skip-prerender Skip static pre-rendering (all SSR at runtime)
  */
 
 import { spawn } from "bun"
@@ -15,6 +20,8 @@ interface BuildOptions {
   json?: boolean
   strict?: boolean
   verbose?: boolean
+  production?: boolean
+  skipPrerender?: boolean
 }
 
 export async function buildCommand(options: BuildOptions) {
@@ -28,7 +35,11 @@ export async function buildCommand(options: BuildOptions) {
     process.exit(1)
   }
 
-  console.log("Building...")
+  if (options.production) {
+    console.log("Building for production...")
+  } else {
+    console.log("Building...")
+  }
 
   // Find the runtime build script
   const runtimeBuildPath = findRuntimeBuildPath()
@@ -38,9 +49,15 @@ export async function buildCommand(options: BuildOptions) {
     return
   }
 
+  // Build command args
+  const args = ["bun", runtimeBuildPath, workbookDir]
+  if (options.production) args.push("--production")
+  if (options.verbose) args.push("--verbose")
+  if (options.skipPrerender) args.push("--skip-prerender")
+
   // Spawn runtime build
   const proc = spawn({
-    cmd: ["bun", runtimeBuildPath, workbookDir, options.verbose ? "--verbose" : ""],
+    cmd: args.filter(Boolean),
     cwd: workbookDir,
     stdout: "inherit",
     stderr: "inherit",

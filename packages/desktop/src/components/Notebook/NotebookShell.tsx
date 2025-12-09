@@ -11,7 +11,19 @@
 import { useRef, useCallback, useState, useEffect, type ReactNode } from "react";
 import { useRouter, useRouterState } from "@tanstack/react-router";
 import { useUIStore } from "@/stores/ui";
-import { useWorkbooks, useCreateWorkbook, useOpenWorkbook, useUpdateWorkbook, useDbSchema, useDevServerRoutes, useEvalResult } from "@/hooks/useWorkbook";
+import {
+  useWorkbooks,
+  useCreateWorkbook,
+  useOpenWorkbook,
+  useUpdateWorkbook,
+  useDbSchema,
+  useDevServerRoutes,
+  useEvalResult,
+  useRuntimeStatus,
+  useWorkbookManifest,
+  useCreatePage,
+  useImportFile,
+} from "@/hooks/useWorkbook";
 import type { Workbook } from "@/lib/workbook";
 import { cn } from "@/lib/utils";
 
@@ -88,18 +100,26 @@ export function NotebookShell({ children }: NotebookShellProps) {
   const { data: dbSchema } = useDbSchema(activeWorkbookId);
   const { data: devServerRoutes } = useDevServerRoutes(activeWorkbookId);
   const { data: evalResult } = useEvalResult(activeWorkbookId);
+  const { data: runtimeStatus } = useRuntimeStatus(activeWorkbookId);
+  const { data: manifest } = useWorkbookManifest(activeWorkbookId);
+  // Use Tauri-reported port, or fallback to default port 4100 if runtime exists externally
+  const runtimePort = runtimeStatus?.runtime_port || 4100;
+
+  // Mutations for empty state actions
+  const createPage = useCreatePage();
+  const importFile = useImportFile();
+
   const tableCount = dbSchema?.length ?? 0;
   const blockCount = devServerRoutes?.charts?.length ?? 0;
-  const pageCount = MOCK_PAGES.length; // TODO: Replace with real pages data
+  const pageCount = manifest?.pages?.length ?? MOCK_PAGES.length;
 
   // Compute alert counts from eval result
   const alertErrors = (evalResult?.typescript?.errors?.length ?? 0) + (evalResult?.format?.errors?.length ?? 0);
   const alertWarnings = evalResult?.typescript?.warnings?.length ?? 0;
   const alertCount = alertErrors + alertWarnings;
 
-  // Determine if workbook is truly empty (no sources, blocks, or pages)
-  // For now, treat as empty only if no sources AND using mock pages (will be 0 when real)
-  const isWorkbookEmpty = tableCount === 0 && blockCount === 0;
+  // Determine if workbook is truly empty - use manifest if available
+  const isWorkbookEmpty = manifest?.isEmpty ?? (tableCount === 0 && blockCount === 0);
 
   // Current workbook
   const currentWorkbook = workbooks?.find((w) => w.id === activeWorkbookId);
@@ -194,22 +214,53 @@ export function NotebookShell({ children }: NotebookShellProps) {
     router.navigate({ to: indexRoute.to });
   }, [router]);
 
+  // Hidden file input ref for import
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
   // Empty state handlers
   const handleAddSource = useCallback(() => {
-    // TODO: Open source connection dialog
+    // Open database panel where user can add sources
     toggleRightPanel("database");
-    console.log("Add source");
   }, [toggleRightPanel]);
 
   const handleImportFile = useCallback(() => {
-    // TODO: Open file picker for CSV/JSON import
-    console.log("Import file");
+    // Trigger file input click
+    fileInputRef.current?.click();
   }, []);
 
-  const handleAddPage = useCallback(() => {
-    // TODO: Create new page and navigate to it
-    console.log("Add page");
-  }, []);
+  const handleFileSelected = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    try {
+      const result = await importFile.mutateAsync({ runtimePort, file });
+      if (result.success) {
+        console.log(`Imported ${result.rowCount} rows to table: ${result.tableName}`);
+        // TODO: Show toast notification
+      } else {
+        console.error("Import failed:", result.error);
+      }
+    } catch (err) {
+      console.error("Import error:", err);
+      // TODO: Show toast notification on failure
+    }
+
+    // Reset input so same file can be selected again
+    e.target.value = "";
+  }, [runtimePort, importFile]);
+
+  const handleAddPage = useCallback(async () => {
+    try {
+      const result = await createPage.mutateAsync({ runtimePort, title: "Untitled" });
+      if (result.success && result.page) {
+        // Navigate to the new page
+        router.navigate({ to: pageRoute.to, params: { pageId: result.page.id } });
+      }
+    } catch (err) {
+      console.error("Failed to create page:", err);
+      // TODO: Show toast notification on failure
+    }
+  }, [runtimePort, createPage, router]);
 
   // Chat state
   const [chatExpanded, setChatExpanded] = useState(false);
@@ -551,6 +602,15 @@ export function NotebookShell({ children }: NotebookShellProps) {
           onExpandChange={setChatExpanded}
         />
       </div>
+
+      {/* Hidden file input for import */}
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept=".csv,.json,.parquet"
+        onChange={handleFileSelected}
+        className="hidden"
+      />
     </div>
     </TooltipProvider>
   );

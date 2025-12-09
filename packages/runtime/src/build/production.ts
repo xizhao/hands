@@ -1,0 +1,595 @@
+/**
+ * Production Build System
+ *
+ * Generates optimized production builds with:
+ * - Static pre-rendering of pages using PlateStatic
+ * - Minified and tree-shaken bundles
+ * - Static assets for CF Workers Sites or KV
+ * - Optimized worker for dynamic routes only
+ */
+
+import { existsSync, mkdirSync, readFileSync, writeFileSync, readdirSync } from "fs"
+import { join, dirname } from "path"
+import { nodeless } from "unenv"
+import { discoverPages } from "../pages/discovery.js"
+import { discoverBlocks } from "../blocks/discovery.js"
+import type { HandsConfig, BuildResult } from "./index.js"
+import {
+  renderPageToHtml,
+  parseMarkdownDocument,
+  parsePlateDocument,
+  type PageDocument,
+} from "./static-render.js"
+
+export interface ProductionBuildOptions {
+  /** Verbose output */
+  verbose?: boolean
+  /** Skip static pre-rendering (all SSR at runtime) */
+  skipPrerender?: boolean
+  /** Custom output directory */
+  outDir?: string
+}
+
+export interface ProductionBuildResult extends BuildResult {
+  /** Pre-rendered static pages */
+  staticPages?: Array<{ route: string; file: string }>
+  /** Bundle size stats */
+  stats?: {
+    workerSize: number
+    staticSize: number
+    totalSize: number
+  }
+}
+
+/**
+ * Find stdlib path for build-time resolution
+ */
+function findStdlibPath(): string | null {
+  let current = dirname(dirname(dirname(import.meta.dir)))
+  for (let i = 0; i < 10; i++) {
+    const pkgPath = join(current, "package.json")
+    if (existsSync(pkgPath)) {
+      try {
+        const pkg = JSON.parse(readFileSync(pkgPath, "utf-8"))
+        if (pkg.workspaces) {
+          const stdlibPath = join(current, "packages", "stdlib")
+          if (existsSync(join(stdlibPath, "package.json"))) {
+            return stdlibPath
+          }
+        }
+      } catch {}
+    }
+    const parent = dirname(current)
+    if (parent === current) break
+    current = parent
+  }
+  return null
+}
+
+/**
+ * Build for production deployment
+ */
+export async function buildProduction(
+  workbookDir: string,
+  options: ProductionBuildOptions = {}
+): Promise<ProductionBuildResult> {
+  const errors: string[] = []
+  const files: string[] = []
+  const staticPages: Array<{ route: string; file: string }> = []
+
+  // Read hands.json
+  const handsJsonPath = join(workbookDir, "hands.json")
+  if (!existsSync(handsJsonPath)) {
+    return {
+      success: false,
+      outputDir: "",
+      files: [],
+      errors: [`No hands.json found in ${workbookDir}`],
+    }
+  }
+
+  const config: HandsConfig = JSON.parse(readFileSync(handsJsonPath, "utf-8"))
+  const outputDir = join(workbookDir, options.outDir || config.build?.outDir || "dist")
+
+  try {
+    // Clean and create output directories
+    if (existsSync(outputDir)) {
+      const { rmSync } = await import("fs")
+      rmSync(outputDir, { recursive: true })
+    }
+    mkdirSync(outputDir, { recursive: true })
+    mkdirSync(join(outputDir, "_static"), { recursive: true })
+
+    if (options.verbose) {
+      console.log(`Building production bundle in ${outputDir}`)
+    }
+
+    // Discover pages and blocks
+    const pagesDir = join(workbookDir, config.pages?.dir || "./pages")
+    const blocksDir = join(workbookDir, config.blocks?.dir || "./blocks")
+
+    const pagesResult = await discoverPages(pagesDir)
+    const blocksResult = await discoverBlocks(blocksDir, {
+      include: config.blocks?.include,
+      exclude: config.blocks?.exclude,
+    })
+
+    if (pagesResult.errors.length > 0) {
+      for (const err of pagesResult.errors) {
+        errors.push(`Page error (${err.file}): ${err.error}`)
+      }
+    }
+
+    if (blocksResult.errors.length > 0) {
+      for (const err of blocksResult.errors) {
+        errors.push(`Block error (${err.file}): ${err.error}`)
+      }
+    }
+
+    if (options.verbose) {
+      console.log(`Found ${pagesResult.pages.length} pages, ${blocksResult.blocks.length} blocks`)
+    }
+
+    // Analyze pages to determine which can be pre-rendered
+    const staticPageRoutes: string[] = []
+    const dynamicPageRoutes: string[] = []
+
+    for (const page of pagesResult.pages) {
+      const pagePath = join(workbookDir, config.pages?.dir || "./pages", page.path)
+      const content = readFileSync(pagePath, "utf-8")
+
+      // Check if page has dynamic blocks (SQL queries, etc.)
+      const hasDynamicContent = content.includes("<Block") && (
+        content.includes("sql") ||
+        content.includes("query") ||
+        content.includes("fetch")
+      )
+
+      if (hasDynamicContent || options.skipPrerender) {
+        dynamicPageRoutes.push(page.route)
+      } else {
+        staticPageRoutes.push(page.route)
+      }
+    }
+
+    if (options.verbose) {
+      console.log(`Static pages: ${staticPageRoutes.length}, Dynamic pages: ${dynamicPageRoutes.length}`)
+    }
+
+    // Pre-render static pages
+    if (!options.skipPrerender && staticPageRoutes.length > 0) {
+      if (options.verbose) {
+        console.log("Pre-rendering static pages...")
+      }
+
+      for (const route of staticPageRoutes) {
+        const page = pagesResult.pages.find(p => p.route === route)
+        if (!page) continue
+
+        const pagePath = join(workbookDir, config.pages?.dir || "./pages", page.path)
+        const content = readFileSync(pagePath, "utf-8")
+
+        // Pre-render to HTML using the static renderer
+        const html = await prerenderPage(page.path, content, config)
+
+        // Write static file
+        const staticFileName = route === "/" ? "index.html" : `${route.slice(1)}.html`
+        const staticPath = join(outputDir, "_static", staticFileName)
+
+        // Ensure directory exists for nested routes
+        const staticDir = dirname(staticPath)
+        if (!existsSync(staticDir)) {
+          mkdirSync(staticDir, { recursive: true })
+        }
+
+        writeFileSync(staticPath, html)
+        staticPages.push({ route, file: staticFileName })
+
+        if (options.verbose) {
+          console.log(`  Pre-rendered: ${route} -> _static/${staticFileName}`)
+        }
+      }
+    }
+
+    // Generate optimized worker
+    const workerTs = generateProductionWorker(
+      workbookDir,
+      config,
+      pagesResult.pages,
+      blocksResult.blocks,
+      staticPageRoutes
+    )
+    const workerSrcPath = join(outputDir, "worker.src.ts")
+    writeFileSync(workerSrcPath, workerTs)
+
+    // Bundle with optimizations
+    const stdlibPath = findStdlibPath()
+    const unenvAliases = nodeless.alias
+
+    if (options.verbose) {
+      console.log("Bundling worker with optimizations...")
+    }
+
+    const result = await Bun.build({
+      entrypoints: [workerSrcPath],
+      outdir: outputDir,
+      naming: "worker.js",
+      target: "browser",
+      format: "esm",
+      minify: true,  // Production: minify
+      sourcemap: "external",  // External sourcemap for debugging
+      external: ["cloudflare:*"],
+      plugins: [
+        // Resolve Node.js builtins to unenv polyfills
+        {
+          name: "unenv-polyfills",
+          setup(build) {
+            build.onResolve({ filter: /^(node:)?[a-z_]+$/ }, async (args) => {
+              const moduleName = args.path.replace(/^node:/, "")
+              const nodeKey = `node:${moduleName}`
+              const alias = unenvAliases[nodeKey] || unenvAliases[moduleName]
+
+              if (alias) {
+                try {
+                  const resolved = await import.meta.resolve(alias)
+                  const absolutePath = resolved.replace("file://", "")
+                  return { path: absolutePath, external: false }
+                } catch {
+                  return undefined
+                }
+              }
+              return undefined
+            })
+          }
+        },
+        // Resolve @hands/stdlib
+        ...(stdlibPath ? [{
+          name: "stdlib-resolver",
+          setup(build: any) {
+            build.onResolve({ filter: /^@hands\/stdlib/ }, (args: any) => {
+              const subpath = args.path.replace("@hands/stdlib", "")
+              return { path: join(stdlibPath, "src", subpath || "index.ts") }
+            })
+          }
+        }] : []),
+      ],
+    })
+
+    if (!result.success) {
+      for (const log of result.logs) {
+        errors.push(log.message)
+      }
+    } else {
+      files.push("worker.js")
+      files.push("worker.js.map")
+    }
+
+    // Generate production wrangler.toml
+    const wranglerToml = generateProductionWrangler(config, staticPages.length > 0)
+    writeFileSync(join(outputDir, "wrangler.toml"), wranglerToml)
+    files.push("wrangler.toml")
+
+    // Generate .gitignore
+    writeFileSync(join(outputDir, ".gitignore"), "# Build output\n")
+
+    // Calculate stats
+    const workerPath = join(outputDir, "worker.js")
+    const workerSize = existsSync(workerPath) ? readFileSync(workerPath).length : 0
+
+    let staticSize = 0
+    const staticDir = join(outputDir, "_static")
+    if (existsSync(staticDir)) {
+      const staticFiles = readdirSync(staticDir, { recursive: true }) as string[]
+      for (const file of staticFiles) {
+        const filePath = join(staticDir, file)
+        try {
+          const stat = await Bun.file(filePath).exists() ? (await Bun.file(filePath).arrayBuffer()).byteLength : 0
+          staticSize += stat
+        } catch {}
+      }
+    }
+
+    if (options.verbose) {
+      console.log(`\nBuild stats:`)
+      console.log(`  Worker: ${(workerSize / 1024).toFixed(1)} KB`)
+      console.log(`  Static: ${(staticSize / 1024).toFixed(1)} KB`)
+      console.log(`  Total:  ${((workerSize + staticSize) / 1024).toFixed(1)} KB`)
+    }
+
+    return {
+      success: errors.length === 0,
+      outputDir,
+      files,
+      errors,
+      pages: pagesResult.pages.map(p => ({ route: p.route, path: p.path })),
+      blocks: blocksResult.blocks.map(b => ({ id: b.id, path: b.path })),
+      staticPages,
+      stats: {
+        workerSize,
+        staticSize,
+        totalSize: workerSize + staticSize,
+      },
+    }
+  } catch (error) {
+    return {
+      success: false,
+      outputDir,
+      files,
+      errors: [error instanceof Error ? error.message : String(error)],
+    }
+  }
+}
+
+/**
+ * Pre-render a page to static HTML
+ *
+ * Supports both markdown (.md) and Plate documents (.plate.json)
+ */
+async function prerenderPage(
+  pagePath: string,
+  content: string,
+  config: HandsConfig
+): Promise<string> {
+  let doc: PageDocument
+
+  if (pagePath.endsWith(".plate.json")) {
+    // Parse as Plate document
+    const parsed = parsePlateDocument(content)
+    if (!parsed) {
+      throw new Error(`Failed to parse Plate document: ${pagePath}`)
+    }
+    doc = parsed
+  } else {
+    // Parse as markdown
+    doc = parseMarkdownDocument(content)
+  }
+
+  // Use the static renderer
+  return renderPageToHtml(doc, {
+    title: doc.meta.title || config.name,
+    description: doc.meta.description,
+    includeTailwind: true,
+  })
+}
+
+/**
+ * Generate production worker that serves static files and handles dynamic routes
+ */
+function generateProductionWorker(
+  workbookDir: string,
+  config: HandsConfig,
+  pages: Array<{ route: string; path: string }>,
+  blocks: Array<{ id: string; path: string }>,
+  staticRoutes: string[]
+): string {
+  const pagesDir = config.pages?.dir || "./pages"
+  const blocksDir = config.blocks?.dir || "./blocks"
+
+  // Only include dynamic pages in the worker
+  const dynamicPages = pages.filter(p => !staticRoutes.includes(p.route))
+
+  // Read dynamic page contents
+  const pageContents: Record<string, string> = {}
+  for (const page of dynamicPages) {
+    const pagePath = join(workbookDir, pagesDir, page.path)
+    if (existsSync(pagePath)) {
+      pageContents[page.route] = readFileSync(pagePath, "utf-8")
+    }
+  }
+
+  const pageContentEntries = Object.entries(pageContents)
+    .map(([route, content]) => {
+      const escaped = content.replace(/\\/g, "\\\\").replace(/`/g, "\\`").replace(/\$\{/g, "\\${")
+      return `  "${route}": \`${escaped}\``
+    })
+    .join(",\n")
+
+  // Generate static routes map
+  const staticRoutesMap = staticRoutes
+    .map(route => {
+      const file = route === "/" ? "index.html" : `${route.slice(1)}.html`
+      return `  "${route}": "_static/${file}"`
+    })
+    .join(",\n")
+
+  // Generate dynamic page routes
+  const pageRoutes = dynamicPages.map((page) => {
+    return `
+  // Dynamic page: ${page.path}
+  app.get("${page.route}", async (c) => {
+    const content = PAGE_CONTENTS["${page.route}"];
+    const html = await renderPage(content, {
+      db: createDb(c.env.DATABASE_URL),
+      env: c.env,
+      params: c.req.param(),
+    });
+    return c.html(html);
+  });`
+  }).join("\n")
+
+  // Generate block routes
+  const blockRoutes = blocks.map((block) => {
+    const importPath = `../${blocksDir}/${block.path}`
+    return `
+  // Block: ${block.id}
+  app.get("/blocks/${block.id}", async (c) => {
+    const { default: BlockFn } = await import("${importPath}");
+    const props = Object.fromEntries(new URL(c.req.url).searchParams);
+    const ctx = createBlockContext(c.env.DATABASE_URL, c.env, c.req.param());
+    const element = await BlockFn(props, ctx);
+    return c.html(renderToString(element));
+  });
+
+  app.post("/blocks/${block.id}", async (c) => {
+    const { default: BlockFn } = await import("${importPath}");
+    const props = await c.req.json();
+    const ctx = createBlockContext(c.env.DATABASE_URL, c.env, c.req.param());
+    const element = await BlockFn(props, ctx);
+    return c.html(renderToString(element));
+  });`
+  }).join("\n")
+
+  const blocksMeta = blocks.map((b) => `    "${b.id}": { path: "${b.path}" }`).join(",\n")
+
+  return `// Production worker - generated by hands build --production
+// Static pages served from _static/, dynamic routes SSR'd at runtime
+
+import { Hono } from "hono";
+import { cors } from "hono/cors";
+import * as React from "react";
+import { renderToString } from "react-dom/server.edge";
+import postgres from "postgres";
+
+type Bindings = {
+  DATABASE_URL: string;
+  ENVIRONMENT: string;
+  ASSETS?: { fetch: typeof fetch };  // CF Workers Sites
+};
+
+// Static routes (pre-rendered at build time)
+const STATIC_ROUTES: Record<string, string> = {
+${staticRoutesMap}
+};
+
+// Dynamic page contents
+const PAGE_CONTENTS: Record<string, string> = {
+${pageContentEntries}
+};
+
+const app = new Hono<{ Bindings: Bindings }>();
+
+app.use("/*", cors());
+
+// Health check
+app.get("/health", (c) => {
+  return c.json({ status: "ok", name: "${config.name}", env: "production" });
+});
+
+// Block metadata
+app.get("/blocks", (c) => {
+  return c.json({
+${blocksMeta}
+  });
+});
+
+// Serve static pre-rendered pages
+${staticRoutes.length > 0 ? `
+app.get("*", async (c, next) => {
+  const path = new URL(c.req.url).pathname;
+  const staticFile = STATIC_ROUTES[path];
+
+  if (staticFile && c.env.ASSETS) {
+    // Serve from Workers Sites / KV
+    return c.env.ASSETS.fetch(new Request(\`\${new URL(c.req.url).origin}/\${staticFile}\`));
+  }
+
+  return next();
+});
+` : ""}
+${pageRoutes}
+${blockRoutes}
+
+// 404 fallback
+app.all("*", (c) => c.notFound());
+
+export default app;
+
+// === Helpers ===
+
+function createDb(connectionString: string) {
+  const sql = postgres(connectionString, {
+    max: 5,
+    idle_timeout: 20,
+    connect_timeout: 10,
+  });
+
+  const client = async function(strings: TemplateStringsArray, ...values: unknown[]) {
+    return await sql(strings, ...values);
+  } as any;
+
+  client.unsafe = async (query: string, params?: unknown[]) => {
+    return await sql.unsafe(query, params);
+  };
+
+  return client;
+}
+
+function createBlockContext(databaseUrl: string, env: Record<string, string>, params: Record<string, string>) {
+  return {
+    db: createDb(databaseUrl),
+    env,
+    params,
+  };
+}
+
+async function renderPage(content: string, ctx: any) {
+  let html = content;
+
+  if (html.startsWith("---")) {
+    const endIndex = html.indexOf("---", 3);
+    if (endIndex !== -1) {
+      html = html.slice(endIndex + 3).trim();
+    }
+  }
+
+  html = html
+    .replace(/^### (.*$)/gm, "<h3>$1</h3>")
+    .replace(/^## (.*$)/gm, "<h2>$1</h2>")
+    .replace(/^# (.*$)/gm, "<h1>$1</h1>")
+    .replace(/\\*\\*(.*)\\*\\*/g, "<strong>$1</strong>")
+    .replace(/\\*(.*)\\*/g, "<em>$1</em>");
+
+  return \`<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="prose max-w-4xl mx-auto p-8">
+  \${html}
+</body>
+</html>\`;
+}
+`
+}
+
+/**
+ * Generate production wrangler.toml
+ */
+function generateProductionWrangler(config: HandsConfig, hasStaticAssets: boolean): string {
+  const lines = [
+    "# Production wrangler.toml - generated by hands build --production",
+    `name = "${config.name}"`,
+    `compatibility_date = "2025-08-15"`,
+    `compatibility_flags = ["nodejs_compat"]`,
+    `main = "worker.js"`,
+    "",
+  ]
+
+  if (hasStaticAssets) {
+    lines.push("# Static assets (pre-rendered pages)")
+    lines.push("[site]")
+    lines.push('bucket = "./_static"')
+    lines.push("")
+  }
+
+  lines.push("[vars]")
+  lines.push('ENVIRONMENT = "production"')
+  lines.push("# Set DATABASE_URL in Cloudflare dashboard or via wrangler secret")
+
+  // Add source schedules as triggers
+  const sources = config.sources || {}
+  const enabledSources = Object.entries(sources).filter(
+    ([_, s]) => s.enabled !== false && s.schedule
+  )
+
+  if (enabledSources.length > 0) {
+    lines.push("")
+    lines.push("[triggers]")
+    const crons = enabledSources.map(([_, s]) => `"${s.schedule}"`)
+    lines.push(`crons = [${crons.join(", ")}]`)
+  }
+
+  return lines.join("\n") + "\n"
+}

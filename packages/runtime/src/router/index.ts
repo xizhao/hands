@@ -64,6 +64,18 @@ export class Router {
     const url = new URL(req.url);
     const method = req.method;
 
+    // Handle CORS preflight for any path
+    if (method === "OPTIONS") {
+      return new Response(null, {
+        status: 204,
+        headers: {
+          "Access-Control-Allow-Origin": "*",
+          "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
+          "Access-Control-Allow-Headers": "Content-Type",
+        },
+      });
+    }
+
     // Find matching route
     for (const route of this.routes) {
       if (route.method !== method && route.method !== "*") continue;

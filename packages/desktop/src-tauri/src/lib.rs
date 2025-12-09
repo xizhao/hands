@@ -150,95 +150,106 @@ fn read_workbook_config(workbook_dir: &PathBuf) -> Option<Workbook> {
     })
 }
 
-fn get_template_dir() -> Result<PathBuf, String> {
-    // Try relative to executable (production build)
-    if let Ok(exe_path) = std::env::current_exe() {
-        let mut path = exe_path;
-        for _ in 0..5 {
-            path = path.parent().unwrap_or(&path).to_path_buf();
+fn init_workbook(workbook_dir: &PathBuf, name: &str, _description: Option<&str>) -> Result<(), String> {
+    // Create an empty workbook (like `hands init`) instead of copying template
+    // This ensures the user sees the "Get started" empty state
+
+    let slug = name.to_lowercase()
+        .chars()
+        .map(|c| if c.is_alphanumeric() { c } else { '-' })
+        .collect::<String>();
+
+    // Create directory structure
+    fs::create_dir_all(workbook_dir.join("src")).map_err(|e| e.to_string())?;
+    fs::create_dir_all(workbook_dir.join("pages")).map_err(|e| e.to_string())?;
+    fs::create_dir_all(workbook_dir.join("migrations")).map_err(|e| e.to_string())?;
+
+    // Create hands.json
+    let hands_json = serde_json::json!({
+        "$schema": "https://hands.dev/schema/hands.json",
+        "name": slug,
+        "version": "0.0.1",
+        "sources": {},
+        "secrets": {},
+        "database": {
+            "migrations": "./migrations"
         }
-        let template_path = path.join("packages/workbook-starter");
-        if template_path.exists() {
-            return Ok(template_path);
+    });
+    fs::write(
+        workbook_dir.join("hands.json"),
+        serde_json::to_string_pretty(&hands_json).unwrap()
+    ).map_err(|e| e.to_string())?;
+
+    // Create package.json
+    let package_json = serde_json::json!({
+        "name": format!("@hands/{}", slug),
+        "version": "0.0.1",
+        "private": true,
+        "type": "module",
+        "scripts": {
+            "dev": "hands dev",
+            "build": "hands build"
+        },
+        "dependencies": {
+            "@hands/stdlib": "workspace:*",
+            "hono": "^4"
+        },
+        "devDependencies": {
+            "@cloudflare/workers-types": "^4",
+            "typescript": "^5"
         }
-    }
+    });
+    fs::write(
+        workbook_dir.join("package.json"),
+        serde_json::to_string_pretty(&package_json).unwrap()
+    ).map_err(|e| e.to_string())?;
 
-    // Try relative to current working directory (dev mode)
-    let cwd_template = PathBuf::from("../../workbook-starter");
-    if cwd_template.exists() {
-        return Ok(cwd_template);
-    }
+    // Create tsconfig.json
+    let tsconfig = serde_json::json!({
+        "compilerOptions": {
+            "target": "ESNext",
+            "module": "ESNext",
+            "moduleResolution": "bundler",
+            "strict": true,
+            "esModuleInterop": true,
+            "skipLibCheck": true,
+            "jsx": "react-jsx",
+            "jsxImportSource": "hono/jsx"
+        },
+        "include": ["src/**/*", "pages/**/*"]
+    });
+    fs::write(
+        workbook_dir.join("tsconfig.json"),
+        serde_json::to_string_pretty(&tsconfig).unwrap()
+    ).map_err(|e| e.to_string())?;
 
-    // Try from home directory (fallback)
-    if let Some(home) = dirs::home_dir() {
-        let home_template = home.join("hands-proto/packages/workbook-starter");
-        if home_template.exists() {
-            return Ok(home_template);
-        }
-    }
+    // Create minimal src/index.tsx
+    let index_content = format!(r#"import {{ Hono }} from "hono"
 
-    Err("Could not find workbook-starter template directory".to_string())
-}
+const app = new Hono()
 
-fn copy_dir_recursive(src: &PathBuf, dst: &PathBuf) -> Result<(), String> {
-    fs::create_dir_all(dst).map_err(|e| format!("Failed to create directory {:?}: {}", dst, e))?;
+app.get("/", (c) => {{
+  return c.html(`
+    <!DOCTYPE html>
+    <html>
+      <head>
+        <title>{}</title>
+      </head>
+      <body>
+        <h1>Welcome to {}</h1>
+        <p>Create a page or add a data source to get started.</p>
+      </body>
+    </html>
+  `)
+}})
 
-    for entry in fs::read_dir(src).map_err(|e| format!("Failed to read directory {:?}: {}", src, e))? {
-        let entry = entry.map_err(|e| e.to_string())?;
-        let path = entry.path();
-        let dest_path = dst.join(entry.file_name());
+export default app
+"#, name, name);
+    fs::write(workbook_dir.join("src/index.tsx"), index_content).map_err(|e| e.to_string())?;
 
-        if path.is_dir() {
-            copy_dir_recursive(&path, &dest_path)?;
-        } else {
-            fs::copy(&path, &dest_path)
-                .map_err(|e| format!("Failed to copy {:?} to {:?}: {}", path, dest_path, e))?;
-        }
-    }
-
-    Ok(())
-}
-
-fn init_workbook(workbook_dir: &PathBuf, name: &str, description: Option<&str>) -> Result<(), String> {
-    let template_dir = get_template_dir()?;
-    copy_dir_recursive(&template_dir, workbook_dir)?;
-
-    let slug = name.to_lowercase().replace(" ", "-");
-    let desc = description.unwrap_or("");
-
-    // Update package.json
-    let package_path = workbook_dir.join("package.json");
-    if package_path.exists() {
-        let content = fs::read_to_string(&package_path).map_err(|e| e.to_string())?;
-        let content = content.replace("{{name}}", &slug);
-        fs::write(&package_path, content).map_err(|e| e.to_string())?;
-    }
-
-    // Update wrangler.toml - runtime will set DATABASE_URL dynamically
-    let wrangler_path = workbook_dir.join("wrangler.toml");
-    if wrangler_path.exists() {
-        let content = fs::read_to_string(&wrangler_path).map_err(|e| e.to_string())?;
-        let content = content.replace("{{name}}", &slug);
-        // Remove database_url placeholder - runtime manages this
-        let content = content.replace("{{database_url}}", "");
-        fs::write(&wrangler_path, content).map_err(|e| e.to_string())?;
-    }
-
-    // Update sst.config.ts
-    let sst_path = workbook_dir.join("sst.config.ts");
-    if sst_path.exists() {
-        let content = fs::read_to_string(&sst_path).map_err(|e| e.to_string())?;
-        let content = content.replace("{{name}}", &slug);
-        fs::write(&sst_path, content).map_err(|e| e.to_string())?;
-    }
-
-    // Update README.md
-    let readme_path = workbook_dir.join("README.md");
-    if readme_path.exists() {
-        let content = fs::read_to_string(&readme_path).map_err(|e| e.to_string())?;
-        let content = content.replace("{{name}}", name).replace("{{description}}", desc);
-        fs::write(&readme_path, content).map_err(|e| e.to_string())?;
-    }
+    // Create .gitignore
+    let gitignore = "node_modules/\n.hands/\npostgres/\n*.log\n";
+    fs::write(workbook_dir.join(".gitignore"), gitignore).map_err(|e| e.to_string())?;
 
     Ok(())
 }

@@ -393,3 +393,180 @@ export const useSstOutputs = (directory: string | null) => {
     enabled: false,
   });
 };
+
+// ============================================================================
+// Workbook Manifest - Filesystem state as source of truth
+// ============================================================================
+
+export interface WorkbookPage {
+  id: string;
+  route: string;
+  title: string;
+  path: string;
+}
+
+export interface WorkbookSource {
+  name: string;
+  enabled: boolean;
+  schedule?: string;
+}
+
+export interface WorkbookManifest {
+  workbookId: string;
+  workbookDir: string;
+  pages: WorkbookPage[];
+  sources: WorkbookSource[];
+  tables: string[];
+  isEmpty: boolean;
+}
+
+// Get workbook manifest (filesystem state)
+export function useWorkbookManifest(workbookId: string | null) {
+  const runtimeStatus = useRuntimeStatus(workbookId);
+  // Use Tauri-reported port or fallback to default 4100
+  const port = runtimeStatus.data?.runtime_port || 4100;
+
+  return useQuery({
+    queryKey: ["workbook-manifest", workbookId],
+    queryFn: async (): Promise<WorkbookManifest | null> => {
+      try {
+        const response = await fetch(`http://localhost:${port}/workbook/manifest`);
+        if (!response.ok) return null;
+        return response.json();
+      } catch {
+        // Runtime not available
+        return null;
+      }
+    },
+    enabled: !!workbookId,
+    staleTime: 5000,
+    refetchInterval: 10000,
+  });
+}
+
+// Create a new page
+export function useCreatePage() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({ runtimePort, title }: { runtimePort: number; title?: string }) => {
+      const response = await fetch(`http://localhost:${runtimePort}/workbook/pages/create`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ title }),
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || "Failed to create page");
+      }
+
+      return response.json() as Promise<{ success: boolean; page: WorkbookPage }>;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["workbook-manifest"] });
+    },
+  });
+}
+
+// Add source from registry
+export interface AddSourceResult {
+  success: boolean;
+  filesCreated: string[];
+  errors: string[];
+  nextSteps: string[];
+}
+
+export function useAddSource() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({
+      runtimePort,
+      sourceName,
+      schedule,
+    }: {
+      runtimePort: number;
+      sourceName: string;
+      schedule?: string;
+    }) => {
+      const response = await fetch(`http://localhost:${runtimePort}/workbook/sources/add`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ sourceName, schedule }),
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || "Failed to add source");
+      }
+
+      return response.json() as Promise<AddSourceResult>;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["workbook-manifest"] });
+      queryClient.invalidateQueries({ queryKey: ["db-schema"] });
+    },
+  });
+}
+
+// Get available sources from registry
+export interface AvailableSource {
+  name: string;
+  title: string;
+  description: string;
+  secrets: string[];
+  streams: string[];
+}
+
+export function useAvailableSources(runtimePort: number | null) {
+  return useQuery({
+    queryKey: ["available-sources", runtimePort],
+    queryFn: async (): Promise<AvailableSource[]> => {
+      if (!runtimePort) return [];
+
+      const response = await fetch(`http://localhost:${runtimePort}/workbook/sources/available`);
+      if (!response.ok) return [];
+
+      const data = await response.json();
+      return data.sources ?? [];
+    },
+    enabled: !!runtimePort,
+    staleTime: 60000, // Cache for 1 minute
+  });
+}
+
+// Import a file (CSV, JSON, Parquet)
+export interface ImportFileResult {
+  success: boolean;
+  tableName?: string;
+  rowCount?: number;
+  error?: string;
+}
+
+export function useImportFile() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({ runtimePort, file }: { runtimePort: number; file: File }) => {
+      const formData = new FormData();
+      formData.append("file", file);
+
+      const response = await fetch(`http://localhost:${runtimePort}/workbook/files/import`, {
+        method: "POST",
+        body: formData,
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || "Failed to import file");
+      }
+
+      return response.json() as Promise<ImportFileResult>;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["workbook-manifest"] });
+      queryClient.invalidateQueries({ queryKey: ["db-schema"] });
+    },
+  });
+}

@@ -2,47 +2,92 @@
 /**
  * Build CLI - standalone script for building workbooks
  *
- * Usage: bun build/cli.ts <workbook-dir> [--verbose]
+ * Usage:
+ *   bun build/cli.ts <workbook-dir> [--verbose]           # Dev build
+ *   bun build/cli.ts <workbook-dir> --production [--verbose]  # Production build
  *
  * This is spawned by the CLI package to avoid workspace dependency issues.
  */
 
 import { build } from "./index.js"
+import { buildProduction } from "./production.js"
 
 async function main() {
   const args = process.argv.slice(2)
 
   if (args.length === 0) {
-    console.error("Usage: bun build/cli.ts <workbook-dir> [--verbose]")
+    console.error("Usage: bun build/cli.ts <workbook-dir> [--production] [--verbose]")
     process.exit(1)
   }
 
   const workbookDir = args[0]
   const verbose = args.includes("--verbose")
+  const production = args.includes("--production")
+  const skipPrerender = args.includes("--skip-prerender")
 
-  const result = await build(workbookDir, { dev: false, verbose })
+  if (production) {
+    // Production build with static pre-rendering and optimizations
+    console.log("Building for production...")
 
-  if (!result.success) {
-    console.error("Build failed:")
-    for (const error of result.errors) {
-      console.error(`  ${error}`)
+    const result = await buildProduction(workbookDir, {
+      verbose,
+      skipPrerender,
+    })
+
+    if (!result.success) {
+      console.error("Production build failed:")
+      for (const error of result.errors) {
+        console.error(`  ${error}`)
+      }
+      process.exit(1)
     }
-    process.exit(1)
-  }
 
-  console.log(`Generated ${result.files.length} files in ${result.outputDir}`)
+    console.log(`\nProduction build complete!`)
+    console.log(`Output: ${result.outputDir}`)
 
-  if (verbose && result.pages) {
-    console.log(`\nPages: ${result.pages.length}`)
-    for (const page of result.pages) {
-      console.log(`  ${page.route} -> ${page.path}`)
+    if (result.staticPages && result.staticPages.length > 0) {
+      console.log(`\nPre-rendered pages: ${result.staticPages.length}`)
+      if (verbose) {
+        for (const page of result.staticPages) {
+          console.log(`  ${page.route} -> _static/${page.file}`)
+        }
+      }
     }
-  }
 
-  if (verbose && result.blocks) {
-    console.log(`\nBlocks: ${result.blocks.length}`)
-    for (const block of result.blocks) {
-      console.log(`  ${block.id}`)
+    if (result.stats) {
+      console.log(`\nBundle stats:`)
+      console.log(`  Worker: ${(result.stats.workerSize / 1024).toFixed(1)} KB`)
+      console.log(`  Static: ${(result.stats.staticSize / 1024).toFixed(1)} KB`)
+      console.log(`  Total:  ${(result.stats.totalSize / 1024).toFixed(1)} KB`)
+    }
+
+    console.log(`\nDeploy with: cd ${result.outputDir} && wrangler deploy`)
+  } else {
+    // Development build
+    const result = await build(workbookDir, { dev: false, verbose })
+
+    if (!result.success) {
+      console.error("Build failed:")
+      for (const error of result.errors) {
+        console.error(`  ${error}`)
+      }
+      process.exit(1)
+    }
+
+    console.log(`Generated ${result.files.length} files in ${result.outputDir}`)
+
+    if (verbose && result.pages) {
+      console.log(`\nPages: ${result.pages.length}`)
+      for (const page of result.pages) {
+        console.log(`  ${page.route} -> ${page.path}`)
+      }
+    }
+
+    if (verbose && result.blocks) {
+      console.log(`\nBlocks: ${result.blocks.length}`)
+      for (const block of result.blocks) {
+        console.log(`  ${block.id}`)
+      }
     }
   }
 }

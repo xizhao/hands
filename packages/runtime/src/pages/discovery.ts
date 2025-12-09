@@ -99,9 +99,10 @@ export async function discoverPages(pagesDir: string): Promise<PageDiscoveryResu
 }
 
 /**
- * Find markdown files recursively
+ * Find page files recursively
+ * Supports: .md (markdown), .plate.json (Plate documents)
  */
-async function findMarkdownFiles(
+async function findPageFiles(
   dir: string,
   prefix: string = ""
 ): Promise<string[]> {
@@ -113,17 +114,22 @@ async function findMarkdownFiles(
 
     if (entry.isDirectory()) {
       // Recurse into subdirectories
-      const subFiles = await findMarkdownFiles(
+      const subFiles = await findPageFiles(
         join(dir, entry.name),
         relativePath
       )
       files.push(...subFiles)
-    } else if (entry.name.endsWith(".md")) {
+    } else if (entry.name.endsWith(".md") || entry.name.endsWith(".plate.json")) {
       files.push(relativePath)
     }
   }
 
   return files
+}
+
+// Legacy alias for backward compatibility
+async function findMarkdownFiles(dir: string, prefix: string = ""): Promise<string[]> {
+  return findPageFiles(dir, prefix)
 }
 
 /**
@@ -133,10 +139,11 @@ async function findMarkdownFiles(
  * - about.md -> /about
  * - docs/intro.md -> /docs/intro
  * - docs/index.md -> /docs
+ * - dashboard.plate.json -> /dashboard
  */
 function filePathToRoute(filePath: string): string {
-  // Remove .md extension
-  let route = "/" + filePath.replace(/\.md$/, "")
+  // Remove extension (.md or .plate.json)
+  let route = "/" + filePath.replace(/\.(md|plate\.json)$/, "")
 
   // Handle index files
   if (route.endsWith("/index")) {
@@ -150,7 +157,14 @@ function filePathToRoute(filePath: string): string {
  * Generate a title from a file path
  */
 function titleFromPath(filePath: string): string {
-  const name = basename(filePath, ".md")
+  // Remove extension
+  let name = basename(filePath)
+  if (name.endsWith(".plate.json")) {
+    name = name.slice(0, -11)
+  } else if (name.endsWith(".md")) {
+    name = name.slice(0, -3)
+  }
+
   if (name === "index") {
     const dir = dirname(filePath)
     return dir === "." ? "Home" : titleCase(basename(dir))

@@ -5,11 +5,11 @@
 import { useUIStore } from "@/stores/ui";
 import { useEvalResult, useRuntimeEval } from "@/hooks/useWorkbook";
 import {
-  AlertCircle,
-  AlertTriangle,
+  Warning,
+  WarningCircle,
   FileCode,
-  Sparkles,
-  RotateCw,
+  Sparkle,
+  ArrowsClockwise,
 } from "@phosphor-icons/react";
 import { cn } from "@/lib/utils";
 
@@ -43,13 +43,13 @@ export function AlertsPanel() {
         <div className="flex items-center gap-3">
           {totalErrors > 0 && (
             <div className="flex items-center gap-1 text-red-400">
-              <AlertCircle weight="fill" className="h-3.5 w-3.5" />
+              <WarningCircle weight="fill" className="h-3.5 w-3.5" />
               <span className="text-xs font-medium">{totalErrors}</span>
             </div>
           )}
           {totalWarnings > 0 && (
             <div className="flex items-center gap-1 text-yellow-400">
-              <AlertTriangle weight="fill" className="h-3.5 w-3.5" />
+              <Warning weight="fill" className="h-3.5 w-3.5" />
               <span className="text-xs font-medium">{totalWarnings}</span>
             </div>
           )}
@@ -61,7 +61,7 @@ export function AlertsPanel() {
           )}
           {!hasIssues && !isLoading && (
             <div className="flex items-center gap-1 text-green-400">
-              <Sparkles weight="fill" className="h-3.5 w-3.5" />
+              <Sparkle weight="fill" className="h-3.5 w-3.5" />
               <span className="text-xs font-medium">No issues</span>
             </div>
           )}
@@ -75,7 +75,7 @@ export function AlertsPanel() {
           )}
           title="Refresh diagnostics"
         >
-          <RotateCw
+          <ArrowsClockwise
             weight="bold"
             className={cn("h-3.5 w-3.5", runtimeEval.isPending && "animate-spin")}
           />
@@ -90,7 +90,7 @@ export function AlertsPanel() {
           </div>
         ) : !hasIssues ? (
           <div className="p-8 text-center">
-            <Sparkles weight="duotone" className="h-8 w-8 text-green-400/50 mx-auto mb-2" />
+            <Sparkle weight="duotone" className="h-8 w-8 text-green-400/50 mx-auto mb-2" />
             <div className="text-sm text-muted-foreground">
               All clear! No issues detected.
             </div>
@@ -101,7 +101,7 @@ export function AlertsPanel() {
             {tsErrors.length > 0 && (
               <DiagnosticSection
                 title="Errors"
-                icon={<AlertCircle weight="fill" className="h-3.5 w-3.5 text-red-400" />}
+                icon={<WarningCircle weight="fill" className="h-3.5 w-3.5 text-red-400" />}
                 items={tsErrors.map((d) => ({
                   location: `${d.file}:${d.line}:${d.column}`,
                   message: d.message,
@@ -115,7 +115,7 @@ export function AlertsPanel() {
             {tsWarnings.length > 0 && (
               <DiagnosticSection
                 title="Warnings"
-                icon={<AlertTriangle weight="fill" className="h-3.5 w-3.5 text-yellow-400" />}
+                icon={<Warning weight="fill" className="h-3.5 w-3.5 text-yellow-400" />}
                 items={tsWarnings.map((d) => ({
                   location: `${d.file}:${d.line}:${d.column}`,
                   message: d.message,
@@ -129,7 +129,7 @@ export function AlertsPanel() {
             {formatErrors.length > 0 && (
               <DiagnosticSection
                 title="Format"
-                icon={<AlertCircle weight="fill" className="h-3.5 w-3.5 text-red-400" />}
+                icon={<WarningCircle weight="fill" className="h-3.5 w-3.5 text-red-400" />}
                 items={formatErrors.map((f) => ({
                   location: f,
                   message: "Formatting error",
