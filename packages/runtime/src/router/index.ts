@@ -136,21 +136,28 @@ export class Router {
  */
 export function cors(): Middleware {
   return async (req, _ctx, next) => {
-    const headers = {
+    const corsHeaders = {
       "Access-Control-Allow-Origin": "*",
       "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
       "Access-Control-Allow-Headers": "Content-Type",
     };
 
     if (req.method === "OPTIONS") {
-      return new Response(null, { headers });
+      return new Response(null, { headers: corsHeaders });
     }
 
     const response = await next();
 
+    // For SSE streams, the response already has CORS headers - don't recreate
+    const contentType = response.headers.get("Content-Type") || "";
+    if (contentType.includes("text/event-stream")) {
+      // SSE already has CORS headers set in sse() helper - return as-is
+      return response;
+    }
+
     // Add CORS headers to response
     const newHeaders = new Headers(response.headers);
-    for (const [key, value] of Object.entries(headers)) {
+    for (const [key, value] of Object.entries(corsHeaders)) {
       newHeaders.set(key, value);
     }
 

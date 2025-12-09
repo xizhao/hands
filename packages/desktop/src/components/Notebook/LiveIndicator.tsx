@@ -15,6 +15,7 @@ import {
   useWorkbookDatabase,
   useRuntimeEval,
 } from "@/hooks/useWorkbook";
+import { PORTS } from "@/lib/ports";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -66,7 +67,7 @@ export function LiveIndicator() {
 
   // Build URL for a route
   const getRouteUrl = (path: string) => {
-    const baseUrl = devServerRoutes?.url || "http://localhost:8787";
+    const baseUrl = devServerRoutes?.url || `http://localhost:${PORTS.WORKER}`;
     return `${baseUrl}${path}`;
   };
 

@@ -1,3 +1,4 @@
+/** @jsxImportSource react */
 import type { TCaptionElement, TImageElement, TResizableProps } from 'platejs';
 import { NodeApi } from 'platejs';
 import { SlateElement, type SlateElementProps } from 'platejs/static';

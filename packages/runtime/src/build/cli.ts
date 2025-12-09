@@ -5,8 +5,10 @@
  * Usage:
  *   bun build/cli.ts <workbook-dir> [--verbose]           # Dev build
  *   bun build/cli.ts <workbook-dir> --production [--verbose]  # Production build
+ *   bun build/cli.ts <workbook-dir> --dev                 # Dev build (JSON output for subprocess)
  *
- * This is spawned by the CLI package to avoid workspace dependency issues.
+ * This is spawned by the runtime to avoid Bun 1.3.3 crash when Bun.build()
+ * is called from a complex process with many modules loaded.
  */
 
 import { build } from "./index.js"
@@ -16,13 +18,14 @@ async function main() {
   const args = process.argv.slice(2)
 
   if (args.length === 0) {
-    console.error("Usage: bun build/cli.ts <workbook-dir> [--production] [--verbose]")
+    console.error("Usage: bun build/cli.ts <workbook-dir> [--production] [--dev] [--verbose]")
     process.exit(1)
   }
 
   const workbookDir = args[0]
   const verbose = args.includes("--verbose")
   const production = args.includes("--production")
+  const dev = args.includes("--dev")
   const skipPrerender = args.includes("--skip-prerender")
 
   if (production) {
@@ -62,8 +65,17 @@ async function main() {
     }
 
     console.log(`\nDeploy with: cd ${result.outputDir} && wrangler deploy`)
+  } else if (dev) {
+    // Development build (called by runtime as subprocess)
+    // Output JSON result for parent process to parse
+    const result = await build(workbookDir, { dev: true, verbose })
+
+    // Output JSON on last line for parent process to parse
+    console.log(JSON.stringify(result))
+
+    process.exit(result.success ? 0 : 1)
   } else {
-    // Development build
+    // Development build (interactive)
     const result = await build(workbookDir, { dev: false, verbose })
 
     if (!result.success) {

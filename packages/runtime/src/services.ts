@@ -21,8 +21,8 @@ import {
 } from "./db";
 import { WorkerManager } from "./worker";
 import { acquireLock, updateLockfile, releaseLock, type RuntimeLock } from "./lockfile";
-import { build } from "./build";
 import { getEventBus } from "./events";
+import { build } from "./build";
 
 interface InitConfig {
   workbookId: string;
@@ -80,7 +80,18 @@ export async function initRuntime(config: InitConfig): Promise<void> {
     evalListeners: new Set(),
     changeListeners: new Set(),
     syncProgressListeners: new Set(),
+    manifestListeners: new Set(),
     lock,
+  });
+
+  // Wire up manifest:updated event to push to all manifest listeners
+  const bus = getEventBus();
+  bus.on("manifest:updated", ({ manifest }) => {
+    const state = getState();
+    if (!state) return;
+    for (const listener of state.manifestListeners) {
+      listener(manifest);
+    }
   });
 }
 
@@ -155,6 +166,8 @@ export async function startPostgres(): Promise<void> {
 /**
  * Build the workbook (generates .hands/ files)
  *
+ * Uses esbuild directly (not Bun.build()) to avoid Bun 1.3.3 segfault.
+ *
  * This should be called before starting the worker.
  */
 export async function buildWorkbook(): Promise<void> {
@@ -165,6 +178,7 @@ export async function buildWorkbook(): Promise<void> {
   bus.emit("build:started", { workbookDir: state.workbookDir });
 
   console.log("Building workbook...");
+
   const result = await build(state.workbookDir, { dev: true });
 
   if (!result.success) {

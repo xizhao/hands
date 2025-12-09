@@ -1,3 +1,4 @@
+/** @jsxImportSource react */
 /**
  * SQL Block - Displays query results in a formatted view
  */

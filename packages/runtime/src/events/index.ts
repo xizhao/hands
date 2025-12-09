@@ -47,6 +47,9 @@ export interface RuntimeEvents {
   "sync:progress": { progress: SyncProgress }
   "sync:completed": { sourceId: string; success: boolean }
 
+  // Manifest events (pages/sources/tables changed)
+  "manifest:updated": { manifest: import("../state").WorkbookManifest }
+
   // Runtime lifecycle
   "runtime:ready": { runtimePort: number; postgresPort: number; workerPort: number }
   "runtime:shutdown": void

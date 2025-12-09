@@ -1,3 +1,4 @@
+/** @jsxImportSource react */
 /**
  * Table Block - Displays tabular data with formatting
  */

@@ -1,3 +1,4 @@
+/** @jsxImportSource react */
 import type { TAudioElement } from 'platejs';
 import { SlateElement, type SlateElementProps } from 'platejs/static';
 import * as React from 'react';

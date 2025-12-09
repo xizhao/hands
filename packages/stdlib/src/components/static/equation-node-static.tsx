@@ -1,3 +1,4 @@
+/** @jsxImportSource react */
 import { getEquationHtml } from '@platejs/math';
 
 import type { TEquationElement } from 'platejs';

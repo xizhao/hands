@@ -8,11 +8,13 @@
  * - sources/ directory (data connectors)
  *
  * Uses unenv polyfills for Node.js compatibility in Cloudflare Workers/Miniflare.
+ * Uses esbuild directly instead of Bun.build() to avoid Bun 1.3.3 segfault.
  */
 
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "fs"
 import { join, dirname } from "path"
 import { nodeless } from "unenv"
+import { build as esbuild, type Plugin } from "esbuild"
 import { discoverPages } from "../pages/discovery.js"
 import { discoverBlocks } from "../blocks/discovery.js"
 
@@ -182,77 +184,91 @@ export async function build(
     writeFileSync(workerSrcPath, workerTs)
 
     // Bundle to worker.js (Miniflare needs JS, not TS)
+    // Uses esbuild directly to avoid Bun 1.3.3 segfault with Bun.build()
     const stdlibPath = findStdlibPath()
 
     // Get unenv aliases for Node.js polyfills
     // This maps node:os -> unenv/runtime/node/os/index, etc.
     const unenvAliases = nodeless.alias
 
+    // esbuild plugin to resolve npm packages using require.resolve
+    // This is needed because esbuild doesn't understand Bun's .bun folder structure
+    const npmResolverPlugin: Plugin = {
+      name: "npm-resolver",
+      setup(build) {
+        // Match bare imports (no . or / prefix, not node: prefix)
+        build.onResolve({ filter: /^[^./]/ }, async (args) => {
+          // Skip node: imports, cloudflare: imports, and already-resolved paths
+          if (args.path.startsWith("node:") ||
+              args.path.startsWith("cloudflare:") ||
+              args.path.startsWith("/")) {
+            return undefined
+          }
+
+          // Check if it's a Node.js builtin that should be polyfilled
+          const moduleName = args.path.split("/")[0]
+          const nodeKey = `node:${moduleName}`
+          const alias = unenvAliases[nodeKey] || unenvAliases[moduleName]
+
+          if (alias) {
+            // This is a Node.js builtin, resolve via unenv
+            try {
+              const resolved = require.resolve(alias)
+              return { path: resolved, external: false }
+            } catch {
+              return undefined
+            }
+          }
+
+          // Try to resolve as npm package
+          try {
+            const resolved = require.resolve(args.path)
+            return { path: resolved, external: false }
+          } catch {
+            return undefined
+          }
+        })
+      }
+    }
+
+    // esbuild plugin to resolve @hands/stdlib to local path
+    const stdlibPlugin: Plugin = {
+      name: "stdlib-resolver",
+      setup(build) {
+        build.onResolve({ filter: /^@hands\/stdlib/ }, (args) => {
+          if (!stdlibPath) return undefined
+          const subpath = args.path.replace("@hands/stdlib", "")
+          return { path: join(stdlibPath, "src", subpath || "index.ts") }
+        })
+      }
+    }
+
     try {
-      const result = await Bun.build({
-        entrypoints: [workerSrcPath],
-        outdir: outputDir,
-        naming: "worker.js",
-        target: "browser",  // Target browser/workerd - no native Node.js
+      const result = await esbuild({
+        entryPoints: [workerSrcPath],
+        outfile: join(outputDir, "worker.js"),
+        platform: "browser",  // Target browser/workerd - no native Node.js
         format: "esm",
+        bundle: true,
         minify: false,
-        sourcemap: options.dev ? "inline" : "none",
+        sourcemap: options.dev ? "inline" : false,
         // Only cloudflare namespace is external - Node.js builtins are polyfilled
-        external: [
-          "cloudflare:*",
-        ],
+        external: ["cloudflare:*"],
         plugins: [
-          // Resolve Node.js builtins to unenv polyfills
-          {
-            name: "unenv-polyfills",
-            setup(build) {
-              // Match all node: prefixed imports and bare node builtins
-              build.onResolve({ filter: /^(node:)?[a-z_]+$/ }, async (args) => {
-                const moduleName = args.path.replace(/^node:/, "")
-
-                // Check both node:X and X forms in aliases
-                const nodeKey = `node:${moduleName}`
-                const alias = unenvAliases[nodeKey] || unenvAliases[moduleName]
-
-                if (alias) {
-                  // Resolve unenv module to absolute path using Bun's resolver
-                  try {
-                    const resolved = await import.meta.resolve(alias)
-                    // Convert file:// URL to path
-                    const absolutePath = resolved.replace("file://", "")
-                    return { path: absolutePath, external: false }
-                  } catch {
-                    // If resolution fails, return undefined to let default resolver handle it
-                    return undefined
-                  }
-                }
-
-                // Not a known Node.js builtin, let it resolve normally
-                return undefined
-              })
-            }
-          },
-          // Resolve @hands/stdlib to local path if available
-          ...(stdlibPath ? [{
-            name: "stdlib-resolver",
-            setup(build: any) {
-              build.onResolve({ filter: /^@hands\/stdlib/ }, (args: any) => {
-                const subpath = args.path.replace("@hands/stdlib", "")
-                return { path: join(stdlibPath, "src", subpath || "index.ts") }
-              })
-            }
-          }] : []),
+          npmResolverPlugin,
+          ...(stdlibPath ? [stdlibPlugin] : []),
         ],
+        logLevel: "warning",
       })
 
-      if (!result.success) {
-        for (const log of result.logs) {
-          errors.push(log.message)
+      if (result.errors.length > 0) {
+        for (const err of result.errors) {
+          errors.push(err.text)
         }
       } else {
         files.push("worker.js")
         if (options.verbose) {
-          console.log("Bundled worker.js with unenv polyfills")
+          console.log("Bundled worker.js with unenv polyfills (esbuild)")
         }
       }
     } catch (err) {

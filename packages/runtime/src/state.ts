@@ -10,6 +10,16 @@ import type { DatabaseChange, SyncProgress } from "./db";
 import type { PostgresManager, PostgresPool, PostgresListener, SyncManager } from "./db";
 import type { WorkerManager } from "./worker";
 
+// Forward declaration for WorkbookManifest (defined in routes/workbook.ts)
+export interface WorkbookManifest {
+  workbookId: string;
+  workbookDir: string;
+  pages: Array<{ id: string; route: string; title: string; path: string }>;
+  sources: Array<{ name: string; enabled: boolean; schedule?: string }>;
+  tables: string[];
+  isEmpty: boolean;
+}
+
 export interface RuntimeState {
   workbookId: string;
   workbookDir: string;
@@ -22,6 +32,7 @@ export interface RuntimeState {
   evalListeners: Set<(result: EvalResult) => void>;
   changeListeners: Set<(change: DatabaseChange) => void>;
   syncProgressListeners: Set<(progress: SyncProgress) => void>;
+  manifestListeners: Set<(manifest: WorkbookManifest) => void>;
   lock: RuntimeLock;
 }
 

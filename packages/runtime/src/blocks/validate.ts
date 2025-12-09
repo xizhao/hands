@@ -5,7 +5,15 @@
  */
 
 import { readFileSync } from "fs"
-import type { BlockMeta } from "@hands/stdlib"
+
+// Inline type to avoid importing @hands/stdlib at build time
+// (importing stdlib triggers a Bun 1.3.3 crash when combined with Bun.build())
+interface BlockMeta {
+  title?: string
+  description?: string
+  refreshable?: boolean
+  [key: string]: unknown
+}
 
 export interface BlockValidationResult {
   /** Whether the block is valid */

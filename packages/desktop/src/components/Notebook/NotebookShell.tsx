@@ -24,6 +24,7 @@ import {
   useCreatePage,
   useImportFile,
 } from "@/hooks/useWorkbook";
+import { PORTS } from "@/lib/ports";
 import type { Workbook } from "@/lib/workbook";
 import { cn } from "@/lib/utils";
 
@@ -69,13 +70,6 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 
-// Mock pages for breadcrumb lookup - will be replaced with real data
-const MOCK_PAGES = [
-  { id: "1", title: "Getting Started" },
-  { id: "2", title: "Data Analysis" },
-  { id: "3", title: "SQL Queries" },
-];
-
 interface NotebookShellProps {
   children: ReactNode;
 }
@@ -102,8 +96,8 @@ export function NotebookShell({ children }: NotebookShellProps) {
   const { data: evalResult } = useEvalResult(activeWorkbookId);
   const { data: runtimeStatus } = useRuntimeStatus(activeWorkbookId);
   const { data: manifest } = useWorkbookManifest(activeWorkbookId);
-  // Use Tauri-reported port, or fallback to default port 4100 if runtime exists externally
-  const runtimePort = runtimeStatus?.runtime_port || 4100;
+  // Use Tauri-reported port, or fallback to default if runtime exists externally
+  const runtimePort = runtimeStatus?.runtime_port || PORTS.RUNTIME;
 
   // Mutations for empty state actions
   const createPage = useCreatePage();
@@ -111,7 +105,7 @@ export function NotebookShell({ children }: NotebookShellProps) {
 
   const tableCount = dbSchema?.length ?? 0;
   const blockCount = devServerRoutes?.charts?.length ?? 0;
-  const pageCount = manifest?.pages?.length ?? MOCK_PAGES.length;
+  const pageCount = manifest?.pages?.length ?? 0;
 
   // Compute alert counts from eval result
   const alertErrors = (evalResult?.typescript?.errors?.length ?? 0) + (evalResult?.format?.errors?.length ?? 0);
@@ -124,8 +118,8 @@ export function NotebookShell({ children }: NotebookShellProps) {
   // Current workbook
   const currentWorkbook = workbooks?.find((w) => w.id === activeWorkbookId);
 
-  // Current page (for breadcrumb)
-  const currentPage = MOCK_PAGES.find((p) => p.id === pageId);
+  // Current page (for breadcrumb) - from manifest (filesystem source of truth)
+  const currentPage = manifest?.pages?.find((p) => p.id === pageId);
 
   // Sidebar hover state (invisible until hover on left edge) - only used when on a page
   const [sidebarVisible, setSidebarVisible] = useState(false);
@@ -525,7 +519,7 @@ export function NotebookShell({ children }: NotebookShellProps) {
                     key={i}
                     className={cn(
                       "w-1 h-1 rounded-full transition-colors",
-                      MOCK_PAGES[i]?.id === pageId ? "bg-foreground/60" : "bg-foreground/15"
+                      manifest?.pages?.[i]?.id === pageId ? "bg-foreground/60" : "bg-foreground/15"
                     )}
                   />
                 ))}

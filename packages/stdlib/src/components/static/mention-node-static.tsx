@@ -1,3 +1,4 @@
+/** @jsxImportSource react */
 import type { TMentionElement } from 'platejs';
 import { IS_APPLE } from 'platejs';
 import { SlateElement, type SlateElementProps } from 'platejs/static';

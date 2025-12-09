@@ -1,3 +1,4 @@
+/** @jsxImportSource react */
 import type { SlateLeafProps } from 'platejs/static';
 import { SlateLeaf } from 'platejs/static';
 import * as React from 'react';

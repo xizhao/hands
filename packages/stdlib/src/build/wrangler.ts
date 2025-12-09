@@ -81,8 +81,12 @@ export function generateWranglerToml(config: HandsJson, options: { dev?: boolean
 
   // Dev settings
   if (options.dev) {
+    // Use configurable port prefix (55xxx default)
+    const portPrefix = parseInt(process.env.HANDS_PORT_PREFIX || "55", 10)
+    const workerPort = portPrefix * 1000 + 200 // 55200
+
     lines.push("[dev]")
-    lines.push("port = 8787")
+    lines.push(`port = ${workerPort}`)
     lines.push('local_protocol = "http"')
     lines.push("")
   }

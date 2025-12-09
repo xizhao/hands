@@ -1,22 +1,47 @@
 /**
- * AlertsPanel - Code quality diagnostics (TypeScript errors, warnings, unused code)
+ * AlertsPanel - Categorized alerts for App, Runtime, and Code quality
  */
 
+import { useState } from "react";
 import { useUIStore } from "@/stores/ui";
-import { useEvalResult, useRuntimeEval } from "@/hooks/useWorkbook";
+import { useEvalResult, useRuntimeEval, useRuntimeStatus } from "@/hooks/useWorkbook";
+import { useServer } from "@/hooks/useServer";
+import { useIsMutating } from "@tanstack/react-query";
 import {
   Warning,
   WarningCircle,
-  FileCode,
   Sparkle,
   ArrowsClockwise,
+  Desktop,
+  Cpu,
+  Code,
+  CaretDown,
+  CaretRight,
 } from "@phosphor-icons/react";
 import { cn } from "@/lib/utils";
+
+type Category = "app" | "runtime" | "code";
 
 export function AlertsPanel() {
   const { activeWorkbookId } = useUIStore();
   const { data: evalResult, isLoading } = useEvalResult(activeWorkbookId);
+  const { data: runtimeStatus } = useRuntimeStatus(activeWorkbookId);
+  const { isConnected: agentConnected, isConnecting: agentConnecting } = useServer();
   const runtimeEval = useRuntimeEval();
+
+  // Track pending mutations for app alerts
+  const pendingMutations = useIsMutating();
+
+  // Expanded state for categories
+  const [expanded, setExpanded] = useState<Record<Category, boolean>>({
+    app: true,
+    runtime: true,
+    code: true,
+  });
+
+  const toggleCategory = (cat: Category) => {
+    setExpanded((prev) => ({ ...prev, [cat]: !prev[cat] }));
+  };
 
   // Compute diagnostics counts
   const tsErrors = evalResult?.typescript?.errors ?? [];
@@ -25,10 +50,35 @@ export function AlertsPanel() {
   const unusedExports = evalResult?.unused?.exports ?? [];
   const unusedFiles = evalResult?.unused?.files ?? [];
 
-  const totalErrors = tsErrors.length + formatErrors.length;
-  const totalWarnings = tsWarnings.length;
-  const totalUnused = unusedExports.length + unusedFiles.length;
-  const hasIssues = totalErrors > 0 || totalWarnings > 0 || totalUnused > 0;
+  const codeErrors = tsErrors.length + formatErrors.length;
+  const codeWarnings = tsWarnings.length;
+  const codeUnused = unusedExports.length + unusedFiles.length;
+  const hasCodeIssues = codeErrors > 0 || codeWarnings > 0 || codeUnused > 0;
+
+  // Runtime issues
+  const runtimeRunning = runtimeStatus?.running ?? false;
+  const postgresUp = evalResult?.services?.postgres?.up ?? false;
+  const workerUp = evalResult?.services?.worker?.up ?? false;
+  const runtimeIssues: AlertItem[] = [];
+
+  if (!runtimeRunning) {
+    runtimeIssues.push({ message: "Runtime not started", variant: "warning" });
+  } else {
+    if (!postgresUp) {
+      runtimeIssues.push({ message: "PostgreSQL not connected", variant: "error" });
+    }
+    if (!workerUp) {
+      runtimeIssues.push({ message: "Worker not running", variant: "warning" });
+    }
+  }
+
+  // App issues
+  const appIssues: AlertItem[] = [];
+  if (!agentConnected && !agentConnecting) {
+    appIssues.push({ message: "Hands Agent disconnected", variant: "error" });
+  } else if (agentConnecting) {
+    appIssues.push({ message: "Connecting to Hands Agent...", variant: "info" });
+  }
 
   const handleRefresh = () => {
     if (activeWorkbookId) {
@@ -36,33 +86,37 @@ export function AlertsPanel() {
     }
   };
 
+  const totalIssues = appIssues.length + runtimeIssues.length + codeErrors + codeWarnings;
+  const allClear = totalIssues === 0 && !pendingMutations;
+
   return (
     <div className="flex flex-col h-full">
       {/* Summary header */}
       <div className="px-3 py-2 border-b border-border flex items-center justify-between">
         <div className="flex items-center gap-3">
-          {totalErrors > 0 && (
-            <div className="flex items-center gap-1 text-red-400">
-              <WarningCircle weight="fill" className="h-3.5 w-3.5" />
-              <span className="text-xs font-medium">{totalErrors}</span>
-            </div>
-          )}
-          {totalWarnings > 0 && (
-            <div className="flex items-center gap-1 text-yellow-400">
-              <Warning weight="fill" className="h-3.5 w-3.5" />
-              <span className="text-xs font-medium">{totalWarnings}</span>
-            </div>
-          )}
-          {totalUnused > 0 && (
-            <div className="flex items-center gap-1 text-muted-foreground">
-              <FileCode weight="duotone" className="h-3.5 w-3.5" />
-              <span className="text-xs font-medium">{totalUnused}</span>
-            </div>
-          )}
-          {!hasIssues && !isLoading && (
+          {totalIssues > 0 ? (
+            <>
+              {(appIssues.some(i => i.variant === "error") || runtimeIssues.some(i => i.variant === "error") || codeErrors > 0) && (
+                <div className="flex items-center gap-1 text-red-400">
+                  <WarningCircle weight="fill" className="h-3.5 w-3.5" />
+                  <span className="text-xs font-medium">
+                    {appIssues.filter(i => i.variant === "error").length + runtimeIssues.filter(i => i.variant === "error").length + codeErrors}
+                  </span>
+                </div>
+              )}
+              {(runtimeIssues.some(i => i.variant === "warning") || codeWarnings > 0) && (
+                <div className="flex items-center gap-1 text-yellow-400">
+                  <Warning weight="fill" className="h-3.5 w-3.5" />
+                  <span className="text-xs font-medium">
+                    {runtimeIssues.filter(i => i.variant === "warning").length + codeWarnings}
+                  </span>
+                </div>
+              )}
+            </>
+          ) : (
             <div className="flex items-center gap-1 text-green-400">
               <Sparkle weight="fill" className="h-3.5 w-3.5" />
-              <span className="text-xs font-medium">No issues</span>
+              <span className="text-xs font-medium">All clear</span>
             </div>
           )}
         </div>
@@ -82,79 +136,94 @@ export function AlertsPanel() {
         </button>
       </div>
 
-      {/* Diagnostics list */}
+      {/* Categories */}
       <div className="flex-1 overflow-y-auto">
         {isLoading ? (
           <div className="p-4 text-center text-sm text-muted-foreground">
             Loading...
           </div>
-        ) : !hasIssues ? (
+        ) : allClear ? (
           <div className="p-8 text-center">
             <Sparkle weight="duotone" className="h-8 w-8 text-green-400/50 mx-auto mb-2" />
             <div className="text-sm text-muted-foreground">
-              All clear! No issues detected.
+              All systems operational
             </div>
           </div>
         ) : (
           <div className="divide-y divide-border">
-            {/* TypeScript Errors */}
-            {tsErrors.length > 0 && (
-              <DiagnosticSection
-                title="Errors"
-                icon={<WarningCircle weight="fill" className="h-3.5 w-3.5 text-red-400" />}
-                items={tsErrors.map((d) => ({
-                  location: `${d.file}:${d.line}:${d.column}`,
-                  message: d.message,
-                  code: d.code,
-                }))}
-                variant="error"
-              />
+            {/* App issues */}
+            {appIssues.length > 0 && (
+              <CategorySection
+                title="App"
+                icon={<Desktop weight="duotone" className="h-4 w-4" />}
+                expanded={expanded.app}
+                onToggle={() => toggleCategory("app")}
+                errorCount={appIssues.filter(i => i.variant === "error").length}
+                warningCount={appIssues.filter(i => i.variant === "warning").length}
+              >
+                {appIssues.map((item, i) => (
+                  <AlertRow key={i} {...item} />
+                ))}
+              </CategorySection>
             )}
 
-            {/* TypeScript Warnings */}
-            {tsWarnings.length > 0 && (
-              <DiagnosticSection
-                title="Warnings"
-                icon={<Warning weight="fill" className="h-3.5 w-3.5 text-yellow-400" />}
-                items={tsWarnings.map((d) => ({
-                  location: `${d.file}:${d.line}:${d.column}`,
-                  message: d.message,
-                  code: d.code,
-                }))}
-                variant="warning"
-              />
+            {/* Runtime issues */}
+            {runtimeIssues.length > 0 && (
+              <CategorySection
+                title="Runtime"
+                icon={<Cpu weight="duotone" className="h-4 w-4" />}
+                expanded={expanded.runtime}
+                onToggle={() => toggleCategory("runtime")}
+                errorCount={runtimeIssues.filter(i => i.variant === "error").length}
+                warningCount={runtimeIssues.filter(i => i.variant === "warning").length}
+              >
+                {runtimeIssues.map((item, i) => (
+                  <AlertRow key={i} {...item} />
+                ))}
+              </CategorySection>
             )}
 
-            {/* Format Errors */}
-            {formatErrors.length > 0 && (
-              <DiagnosticSection
-                title="Format"
-                icon={<WarningCircle weight="fill" className="h-3.5 w-3.5 text-red-400" />}
-                items={formatErrors.map((f) => ({
-                  location: f,
-                  message: "Formatting error",
-                }))}
-                variant="error"
-              />
-            )}
-
-            {/* Unused Code */}
-            {totalUnused > 0 && (
-              <DiagnosticSection
-                title="Unused"
-                icon={<FileCode weight="duotone" className="h-3.5 w-3.5 text-muted-foreground" />}
-                items={[
-                  ...unusedFiles.map((f) => ({
-                    location: f,
-                    message: "Unused file",
-                  })),
-                  ...unusedExports.map((e) => ({
-                    location: e,
-                    message: "Unused export",
-                  })),
-                ]}
-                variant="muted"
-              />
+            {/* Code issues */}
+            {hasCodeIssues && (
+              <CategorySection
+                title="Code"
+                icon={<Code weight="duotone" className="h-4 w-4" />}
+                expanded={expanded.code}
+                onToggle={() => toggleCategory("code")}
+                errorCount={codeErrors}
+                warningCount={codeWarnings}
+              >
+                {tsErrors.map((d, i) => (
+                  <AlertRow
+                    key={`tse-${i}`}
+                    message={d.message}
+                    location={`${d.file}:${d.line}`}
+                    variant="error"
+                  />
+                ))}
+                {tsWarnings.map((d, i) => (
+                  <AlertRow
+                    key={`tsw-${i}`}
+                    message={d.message}
+                    location={`${d.file}:${d.line}`}
+                    variant="warning"
+                  />
+                ))}
+                {formatErrors.map((f, i) => (
+                  <AlertRow
+                    key={`fmt-${i}`}
+                    message="Formatting error"
+                    location={f}
+                    variant="error"
+                  />
+                ))}
+                {codeUnused > 0 && (
+                  <AlertRow
+                    message={`${codeUnused} unused export${codeUnused > 1 ? "s" : ""}`}
+                    variant="muted"
+                  />
+                )}
+              </CategorySection>
             )}
           </div>
         )}
@@ -163,53 +232,75 @@ export function AlertsPanel() {
   );
 }
 
-interface DiagnosticItem {
-  location: string;
-  message: string;
-  code?: string;
-}
-
-interface DiagnosticSectionProps {
+interface CategorySectionProps {
   title: string;
   icon: React.ReactNode;
-  items: DiagnosticItem[];
-  variant: "error" | "warning" | "muted";
+  expanded: boolean;
+  onToggle: () => void;
+  errorCount: number;
+  warningCount: number;
+  children: React.ReactNode;
 }
 
-function DiagnosticSection({ title, icon, items, variant }: DiagnosticSectionProps) {
-  const messageColor = {
-    error: "text-red-400",
-    warning: "text-yellow-400",
-    muted: "text-muted-foreground",
-  }[variant];
-
+function CategorySection({
+  title,
+  icon,
+  expanded,
+  onToggle,
+  errorCount,
+  warningCount,
+  children,
+}: CategorySectionProps) {
   return (
-    <div className="py-2">
-      <div className="px-3 py-1 flex items-center gap-2 text-xs font-medium text-muted-foreground">
-        {icon}
-        <span>{title}</span>
-        <span className="text-muted-foreground/60">({items.length})</span>
-      </div>
-      <div className="space-y-0.5">
-        {items.map((item, i) => (
-          <button
-            key={i}
-            className="w-full px-3 py-1.5 text-left hover:bg-accent/50 transition-colors"
-          >
-            <div className="text-[11px] font-mono text-muted-foreground truncate">
-              {item.location}
-            </div>
-            <div className={cn("text-xs mt-0.5", messageColor)}>
-              {item.message}
-            </div>
-            {item.code && (
-              <div className="text-[10px] text-muted-foreground/60 mt-0.5 font-mono">
-                {item.code}
-              </div>
-            )}
-          </button>
-        ))}
-      </div>
+    <div>
+      <button
+        onClick={onToggle}
+        className="w-full px-3 py-2 flex items-center gap-2 hover:bg-accent/50 transition-colors"
+      >
+        {expanded ? (
+          <CaretDown weight="bold" className="h-3 w-3 text-muted-foreground" />
+        ) : (
+          <CaretRight weight="bold" className="h-3 w-3 text-muted-foreground" />
+        )}
+        <span className="text-muted-foreground">{icon}</span>
+        <span className="text-sm font-medium flex-1 text-left">{title}</span>
+        <div className="flex items-center gap-2">
+          {errorCount > 0 && (
+            <span className="text-xs text-red-400">{errorCount}</span>
+          )}
+          {warningCount > 0 && (
+            <span className="text-xs text-yellow-400">{warningCount}</span>
+          )}
+        </div>
+      </button>
+      {expanded && <div className="pb-1">{children}</div>}
     </div>
   );
 }
+
+interface AlertItem {
+  message: string;
+  location?: string;
+  variant: "error" | "warning" | "info" | "muted";
+}
+
+function AlertRow({ message, location, variant }: AlertItem) {
+  const colors = {
+    error: "text-red-400",
+    warning: "text-yellow-400",
+    info: "text-blue-400",
+    muted: "text-muted-foreground",
+  };
+
+  return (
+    <div className="px-3 py-1.5 pl-8">
+      <div className={cn("text-xs", colors[variant])}>{message}</div>
+      {location && (
+        <div className="text-[10px] font-mono text-muted-foreground/60 truncate">
+          {location}
+        </div>
+      )}
+    </div>
+  );
+}
+

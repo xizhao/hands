@@ -1,3 +1,4 @@
+/** @jsxImportSource react */
 import { BaseSuggestionPlugin } from '@platejs/suggestion';
 
 import type { TSuggestionText } from 'platejs';

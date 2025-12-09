@@ -298,13 +298,38 @@ shared_buffers = 128MB
 
   private async ensureDatabase(): Promise<void> {
     // Connect via localhost (trust auth configured in pg_hba.conf)
+    // Retry connection since pg_ctl status returns before TCP is ready
     const postgres = await import("postgres");
-    const sql = postgres.default({
-      host: "localhost",
-      port: this.config.port,
-      user: this.config.user,
-      database: "postgres",
-    });
+
+    let sql: ReturnType<typeof postgres.default> | null = null;
+    let lastError: Error | null = null;
+
+    for (let attempt = 0; attempt < 30; attempt++) {
+      try {
+        sql = postgres.default({
+          host: "localhost",
+          port: this.config.port,
+          user: this.config.user,
+          database: "postgres",
+          connect_timeout: 2,
+        });
+
+        // Test connection
+        await sql`SELECT 1`;
+        break;
+      } catch (err) {
+        lastError = err as Error;
+        if (sql) {
+          await sql.end().catch(() => {});
+          sql = null;
+        }
+        await Bun.sleep(500);
+      }
+    }
+
+    if (!sql) {
+      throw new Error(`Failed to connect to postgres after 30 attempts: ${lastError?.message}`);
+    }
 
     try {
       // Check if database exists

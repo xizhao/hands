@@ -37,7 +37,7 @@ describe("generateWranglerToml", () => {
 
     expect(result).toContain('ENVIRONMENT = "development"')
     expect(result).toContain("[dev]")
-    expect(result).toContain("port = 8787")
+    expect(result).toContain("port = 55200")
     expect(result).toContain('local_protocol = "http"')
   })
 

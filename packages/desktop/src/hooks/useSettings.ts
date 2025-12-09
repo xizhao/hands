@@ -1,6 +1,7 @@
 import { useEffect, useState, useCallback } from "react";
 import { load, Store } from "@tauri-apps/plugin-store";
 import { api } from "@/lib/api";
+import { PORTS } from "@/lib/ports";
 
 export interface Settings {
   // AI Provider settings
@@ -24,7 +25,7 @@ export interface ApiKeys {
 const defaultSettings: Settings = {
   provider: "anthropic",
   model: "claude-sonnet-4-5-20250929",
-  serverPort: 4096,
+  serverPort: PORTS.OPENCODE,
   theme: "dark",
 };
 

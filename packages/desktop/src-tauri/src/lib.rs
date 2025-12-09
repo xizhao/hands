@@ -11,6 +11,14 @@ use tokio::io::{AsyncBufReadExt, BufReader};
 use tokio::process::{Child, Command};
 use tokio::sync::Mutex;
 
+// Port configuration - matches packages/runtime/src/ports.ts
+// All ports use 5-digit scheme with configurable prefix (default 55xxx)
+const PORT_PREFIX: u16 = 55;
+// const PORT_RUNTIME: u16 = PORT_PREFIX * 1000;        // 55000
+// const PORT_POSTGRES: u16 = PORT_PREFIX * 1000 + 100; // 55100
+// const PORT_WORKER: u16 = PORT_PREFIX * 1000 + 200;   // 55200
+const PORT_OPENCODE: u16 = PORT_PREFIX * 1000 + 300;    // 55300
+
 // Runtime process info for a workbook
 #[derive(Debug)]
 pub struct RuntimeProcess {
@@ -1222,11 +1230,11 @@ async fn restart_server(
         })
         .map(|p| p.to_string_lossy().to_string());
 
-    match start_opencode_server(4096, model, env_vars, config_dir, working_dir).await {
+    match start_opencode_server(PORT_OPENCODE, model, env_vars, config_dir, working_dir).await {
         Ok(child) => {
             state_guard.server = Some(child);
 
-            if wait_for_server(4096, 30).await {
+            if wait_for_server(PORT_OPENCODE, 30).await {
                 Ok(HealthCheck {
                     healthy: true,
                     message: "Server restarted successfully".to_string(),
@@ -1484,12 +1492,12 @@ pub fn run() {
             // Start OpenCode server only (no postgres - runtime manages it per workbook)
             // No working directory at startup - will be set when workbook is activated
             tauri::async_runtime::spawn(async move {
-                match start_opencode_server(4096, model, env_vars, config_dir, None).await {
+                match start_opencode_server(PORT_OPENCODE, model, env_vars, config_dir, None).await {
                     Ok(child) => {
                         let mut s = state.lock().await;
                         s.server = Some(child);
 
-                        if wait_for_server(4096, 30).await {
+                        if wait_for_server(PORT_OPENCODE, 30).await {
                             println!("Hands agent is ready!");
                         } else {
                             eprintln!("Hands agent started but health check timed out");
@@ -1525,6 +1533,24 @@ pub fn run() {
             }
 
             Ok(())
+        })
+        .on_window_event(|window, event| {
+            if let tauri::WindowEvent::Destroyed = event {
+                // Only cleanup when main window is destroyed
+                if window.label() == "main" {
+                    println!("[shutdown] Main window destroyed, cleaning up...");
+
+                    // Force cleanup runtime lockfile and kill any orphaned processes
+                    tauri::async_runtime::block_on(async {
+                        force_cleanup_runtime().await;
+                    });
+
+                    // Kill OpenCode server port
+                    kill_processes_on_port(PORT_OPENCODE);
+
+                    println!("[shutdown] Cleanup complete");
+                }
+            }
         })
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

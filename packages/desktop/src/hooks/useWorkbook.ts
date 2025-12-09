@@ -1,6 +1,8 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { invoke } from "@tauri-apps/api/core";
+import { useState, useEffect, useCallback } from "react";
 import type { Workbook } from "@/lib/workbook";
+import { PORTS } from "@/lib/ports";
 
 interface CreateWorkbookRequest {
   name: string;
@@ -86,6 +88,7 @@ export function useCreateWorkbook() {
   const queryClient = useQueryClient();
 
   return useMutation({
+    mutationKey: ["workbook", "create"],
     mutationFn: (request: CreateWorkbookRequest) =>
       invoke<Workbook>("create_workbook", { request }),
     onSuccess: (newWorkbook) => {
@@ -101,6 +104,7 @@ export function useUpdateWorkbook() {
   const queryClient = useQueryClient();
 
   return useMutation({
+    mutationKey: ["workbook", "update"],
     mutationFn: (workbook: Workbook) =>
       invoke<Workbook>("update_workbook", { workbook }),
     onSuccess: (updated) => {
@@ -117,6 +121,7 @@ export function useDeleteWorkbook() {
   const queryClient = useQueryClient();
 
   return useMutation({
+    mutationKey: ["workbook", "delete"],
     mutationFn: (id: string) => invoke<boolean>("delete_workbook", { id }),
     onSuccess: (_, deletedId) => {
       queryClient.setQueryData<Workbook[]>(["workbooks"], (old) =>
@@ -134,6 +139,7 @@ export function useOpenWorkbook() {
   const queryClient = useQueryClient();
 
   return useMutation({
+    mutationKey: ["workbook", "open"],
     mutationFn: async (workbook: Workbook) => {
       // Update last opened timestamp
       const updated: Workbook = {
@@ -188,6 +194,7 @@ export function useStartRuntime() {
   const queryClient = useQueryClient();
 
   return useMutation({
+    mutationKey: ["runtime", "start"],
     mutationFn: ({
       workbookId,
       directory,
@@ -206,6 +213,7 @@ export function useStopRuntime() {
   const queryClient = useQueryClient();
 
   return useMutation({
+    mutationKey: ["runtime", "stop"],
     mutationFn: (workbookId: string) =>
       invoke<RuntimeStatus>("stop_runtime", { workbookId }),
     onSuccess: (status) => {
@@ -217,6 +225,7 @@ export function useStopRuntime() {
 // Execute SQL query through runtime
 export function useRuntimeQuery() {
   return useMutation({
+    mutationKey: ["runtime", "query"],
     mutationFn: ({ workbookId, query }: { workbookId: string; query: string }) =>
       invoke<{ rows: unknown[]; rowCount: number; command: string }>("runtime_query", {
         workbookId,
@@ -230,6 +239,7 @@ export function useRuntimeEval() {
   const queryClient = useQueryClient();
 
   return useMutation({
+    mutationKey: ["runtime", "eval"],
     mutationFn: (workbookId: string) =>
       invoke<EvalResult>("runtime_eval", { workbookId }),
     onSuccess: (result, workbookId) => {
@@ -299,7 +309,7 @@ export function useDevServerRoutes(workbookId: string | null) {
       }
 
       const wrangler = evalResult.data.wrangler;
-      const workerPort = runtimeStatus.data?.worker_port ?? 8787;
+      const workerPort = runtimeStatus.data?.worker_port ?? PORTS.WORKER;
 
       return {
         available: evalResult.data.services.worker.up,
@@ -420,28 +430,76 @@ export interface WorkbookManifest {
   isEmpty: boolean;
 }
 
-// Get workbook manifest (filesystem state)
+// Get workbook manifest (filesystem state) - SSE-based for real-time updates
 export function useWorkbookManifest(workbookId: string | null) {
   const runtimeStatus = useRuntimeStatus(workbookId);
-  // Use Tauri-reported port or fallback to default 4100
-  const port = runtimeStatus.data?.runtime_port || 4100;
+  const queryClient = useQueryClient();
+  const port = runtimeStatus.data?.runtime_port || PORTS.RUNTIME;
+  const isRunning = runtimeStatus.data?.running ?? false;
 
-  return useQuery({
-    queryKey: ["workbook-manifest", workbookId],
-    queryFn: async (): Promise<WorkbookManifest | null> => {
+  const [manifest, setManifest] = useState<WorkbookManifest | null>(null);
+  const [isConnected, setIsConnected] = useState(false);
+  const [error, setError] = useState<Error | null>(null);
+
+  useEffect(() => {
+    if (!workbookId || !isRunning || !port) {
+      setManifest(null);
+      setIsConnected(false);
+      return;
+    }
+
+    const url = `http://localhost:${port}/workbook/manifest/watch`;
+    const eventSource = new EventSource(url);
+
+    eventSource.onopen = () => {
+      setIsConnected(true);
+      setError(null);
+    };
+
+    eventSource.onmessage = (event) => {
       try {
-        const response = await fetch(`http://localhost:${port}/workbook/manifest`);
-        if (!response.ok) return null;
-        return response.json();
-      } catch {
-        // Runtime not available
-        return null;
+        const data = JSON.parse(event.data) as WorkbookManifest;
+        setManifest(data);
+        // Also update React Query cache for components using queryKey
+        queryClient.setQueryData(["workbook-manifest", workbookId], data);
+      } catch (err) {
+        console.error("[manifest] Failed to parse SSE data:", err);
       }
-    },
-    enabled: !!workbookId,
-    staleTime: 5000,
-    refetchInterval: 10000,
-  });
+    };
+
+    eventSource.onerror = () => {
+      setIsConnected(false);
+      // EventSource will auto-reconnect
+    };
+
+    return () => {
+      eventSource.close();
+      setIsConnected(false);
+    };
+  }, [workbookId, port, isRunning, queryClient]);
+
+  // Provide a refresh function for manual refresh (e.g., after mutations)
+  const refresh = useCallback(async () => {
+    if (!port) return null;
+    try {
+      const response = await fetch(`http://localhost:${port}/workbook/manifest`);
+      if (!response.ok) return null;
+      const data = await response.json();
+      setManifest(data);
+      queryClient.setQueryData(["workbook-manifest", workbookId], data);
+      return data;
+    } catch {
+      return null;
+    }
+  }, [port, workbookId, queryClient]);
+
+  return {
+    data: manifest,
+    isLoading: !manifest && isRunning,
+    isConnected,
+    error,
+    refetch: refresh,
+  };
 }
 
 // Create a new page
@@ -449,6 +507,7 @@ export function useCreatePage() {
   const queryClient = useQueryClient();
 
   return useMutation({
+    mutationKey: ["page", "create"],
     mutationFn: async ({ runtimePort, title }: { runtimePort: number; title?: string }) => {
       const response = await fetch(`http://localhost:${runtimePort}/workbook/pages/create`, {
         method: "POST",
@@ -481,6 +540,7 @@ export function useAddSource() {
   const queryClient = useQueryClient();
 
   return useMutation({
+    mutationKey: ["source", "add"],
     mutationFn: async ({
       runtimePort,
       sourceName,
@@ -548,6 +608,7 @@ export function useImportFile() {
   const queryClient = useQueryClient();
 
   return useMutation({
+    mutationKey: ["file", "import"],
     mutationFn: async ({ runtimePort, file }: { runtimePort: number; file: File }) => {
       const formData = new FormData();
       formData.append("file", file);

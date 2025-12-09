@@ -1,3 +1,4 @@
+/** @jsxImportSource react */
 import { cva } from 'class-variance-authority';
 import { PathApi } from 'platejs';
 import { SlateElement, type SlateElementProps } from 'platejs/static';

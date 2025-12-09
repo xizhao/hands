@@ -1,6 +1,5 @@
 import { createOpencodeClient, type OpencodeClient } from "@opencode-ai/sdk/client";
-
-const DEFAULT_PORT = 4096;
+import { PORTS } from "./ports";
 
 // Re-export types from SDK client (avoids importing server-only code)
 export type {
@@ -153,7 +152,7 @@ function getClient(directory?: string | null): OpencodeClient {
 
   if (!clients.has(key)) {
     const client = createOpencodeClient({
-      baseUrl: `http://localhost:${DEFAULT_PORT}`,
+      baseUrl: `http://localhost:${PORTS.OPENCODE}`,
       directory: directory || undefined,
     });
     clients.set(key, client);

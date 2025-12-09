@@ -7,8 +7,12 @@
 
 import { tool } from "@opencode-ai/plugin";
 
+// Port configuration - matches runtime/src/ports.ts
+const PORT_PREFIX = parseInt(process.env.HANDS_PORT_PREFIX || "55", 10);
+const RUNTIME_PORT = PORT_PREFIX * 1000; // 55000
+
 // Get runtime URL from environment or use default
-const RUNTIME_URL = process.env.HANDS_RUNTIME_URL || "http://localhost:4100";
+const RUNTIME_URL = process.env.HANDS_RUNTIME_URL || `http://localhost:${RUNTIME_PORT}`;
 
 interface Diagnostic {
   file: string;

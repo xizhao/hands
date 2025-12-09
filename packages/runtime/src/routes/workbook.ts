@@ -9,13 +9,17 @@ import { existsSync } from "fs";
 import { readdir, readFile, writeFile, mkdir } from "fs/promises";
 import { join, basename } from "path";
 import type { Router } from "../router";
-import { json } from "../router";
+import { json, sse } from "../router";
 import type { RuntimeState } from "../state";
 import { updateLockfile } from "../lockfile";
 import { PostgresPool, PostgresListener } from "../db";
 import { discoverPages } from "../pages/discovery";
+import { getEventBus } from "../events";
 
-// Types for workbook manifest
+// Re-export types from state (canonical location)
+import type { WorkbookManifest } from "../state";
+export type { WorkbookManifest };
+
 export interface WorkbookPage {
   id: string;
   route: string;
@@ -27,15 +31,6 @@ export interface WorkbookSource {
   name: string;
   enabled: boolean;
   schedule?: string;
-}
-
-export interface WorkbookManifest {
-  workbookId: string;
-  workbookDir: string;
-  pages: WorkbookPage[];
-  sources: WorkbookSource[];
-  tables: string[];
-  isEmpty: boolean;
 }
 
 export function registerWorkbookRoutes(router: Router, getState: () => RuntimeState | null): void {
@@ -111,6 +106,48 @@ export function registerWorkbookRoutes(router: Router, getState: () => RuntimeSt
       console.error("Failed to build manifest:", error);
       return json({ error: String(error) }, { status: 500 });
     }
+  });
+
+  // GET /workbook/manifest/watch - SSE stream for manifest changes
+  // Desktop app subscribes to this to get notified when pages/sources/tables change
+  router.get("/workbook/manifest/watch", (req) => {
+    const state = getState();
+    if (!state) {
+      return json({ error: "Not initialized" }, { status: 500 });
+    }
+
+    const stream = new ReadableStream({
+      async start(controller) {
+        const encoder = new TextEncoder();
+
+        const sendManifest = async (manifest: WorkbookManifest) => {
+          const data = `data: ${JSON.stringify(manifest)}\n\n`;
+          try {
+            controller.enqueue(encoder.encode(data));
+          } catch {
+            // Stream closed
+          }
+        };
+
+        // Add listener to state
+        state.manifestListeners.add(sendManifest);
+
+        // Send initial manifest
+        try {
+          const manifest = await buildManifest(state);
+          await sendManifest(manifest);
+        } catch (error) {
+          console.error("Failed to build initial manifest:", error);
+        }
+
+        // Cleanup on close
+        req.signal.addEventListener("abort", () => {
+          state.manifestListeners.delete(sendManifest);
+        });
+      },
+    });
+
+    return sse(stream);
   });
 
   // POST /workbook/pages/create - Create a new MDX page

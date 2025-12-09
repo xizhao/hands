@@ -1,3 +1,4 @@
+/** @jsxImportSource react */
 import { BaseTablePlugin } from '@platejs/table';
 
 import type { TTableCellElement, TTableElement } from 'platejs';

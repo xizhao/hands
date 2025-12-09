@@ -8,9 +8,10 @@
  * - Optimized worker for dynamic routes only
  */
 
-import { existsSync, mkdirSync, readFileSync, writeFileSync, readdirSync } from "fs"
+import { existsSync, mkdirSync, readFileSync, writeFileSync, readdirSync, statSync } from "fs"
 import { join, dirname } from "path"
 import { nodeless } from "unenv"
+import { build as esbuild, type Plugin } from "esbuild"
 import { discoverPages } from "../pages/discovery.js"
 import { discoverBlocks } from "../blocks/discovery.js"
 import type { HandsConfig, BuildResult } from "./index.js"
@@ -202,62 +203,67 @@ export async function buildProduction(
     const workerSrcPath = join(outputDir, "worker.src.ts")
     writeFileSync(workerSrcPath, workerTs)
 
-    // Bundle with optimizations
+    // Bundle with optimizations using esbuild (avoid Bun 1.3.3 segfault)
     const stdlibPath = findStdlibPath()
     const unenvAliases = nodeless.alias
 
     if (options.verbose) {
-      console.log("Bundling worker with optimizations...")
+      console.log("Bundling worker with optimizations (esbuild)...")
     }
 
-    const result = await Bun.build({
-      entrypoints: [workerSrcPath],
-      outdir: outputDir,
-      naming: "worker.js",
-      target: "browser",
+    // esbuild plugin to resolve Node.js builtins to unenv polyfills
+    const unenvPlugin: Plugin = {
+      name: "unenv-polyfills",
+      setup(build) {
+        build.onResolve({ filter: /^(node:)?[a-z_]+$/ }, async (args) => {
+          const moduleName = args.path.replace(/^node:/, "")
+          const nodeKey = `node:${moduleName}`
+          const alias = unenvAliases[nodeKey] || unenvAliases[moduleName]
+
+          if (alias) {
+            try {
+              const resolved = require.resolve(alias)
+              return { path: resolved, external: false }
+            } catch {
+              return undefined
+            }
+          }
+          return undefined
+        })
+      }
+    }
+
+    // esbuild plugin to resolve @hands/stdlib
+    const stdlibPlugin: Plugin = {
+      name: "stdlib-resolver",
+      setup(build) {
+        build.onResolve({ filter: /^@hands\/stdlib/ }, (args) => {
+          if (!stdlibPath) return undefined
+          const subpath = args.path.replace("@hands/stdlib", "")
+          return { path: join(stdlibPath, "src", subpath || "index.ts") }
+        })
+      }
+    }
+
+    const result = await esbuild({
+      entryPoints: [workerSrcPath],
+      outfile: join(outputDir, "worker.js"),
+      platform: "browser",
       format: "esm",
+      bundle: true,
       minify: true,  // Production: minify
-      sourcemap: "external",  // External sourcemap for debugging
+      sourcemap: true,  // External sourcemap for debugging
       external: ["cloudflare:*"],
       plugins: [
-        // Resolve Node.js builtins to unenv polyfills
-        {
-          name: "unenv-polyfills",
-          setup(build) {
-            build.onResolve({ filter: /^(node:)?[a-z_]+$/ }, async (args) => {
-              const moduleName = args.path.replace(/^node:/, "")
-              const nodeKey = `node:${moduleName}`
-              const alias = unenvAliases[nodeKey] || unenvAliases[moduleName]
-
-              if (alias) {
-                try {
-                  const resolved = await import.meta.resolve(alias)
-                  const absolutePath = resolved.replace("file://", "")
-                  return { path: absolutePath, external: false }
-                } catch {
-                  return undefined
-                }
-              }
-              return undefined
-            })
-          }
-        },
-        // Resolve @hands/stdlib
-        ...(stdlibPath ? [{
-          name: "stdlib-resolver",
-          setup(build: any) {
-            build.onResolve({ filter: /^@hands\/stdlib/ }, (args: any) => {
-              const subpath = args.path.replace("@hands/stdlib", "")
-              return { path: join(stdlibPath, "src", subpath || "index.ts") }
-            })
-          }
-        }] : []),
+        unenvPlugin,
+        ...(stdlibPath ? [stdlibPlugin] : []),
       ],
+      logLevel: "warning",
     })
 
-    if (!result.success) {
-      for (const log of result.logs) {
-        errors.push(log.message)
+    if (result.errors.length > 0) {
+      for (const err of result.errors) {
+        errors.push(err.text)
       }
     } else {
       files.push("worker.js")
@@ -283,8 +289,10 @@ export async function buildProduction(
       for (const file of staticFiles) {
         const filePath = join(staticDir, file)
         try {
-          const stat = await Bun.file(filePath).exists() ? (await Bun.file(filePath).arrayBuffer()).byteLength : 0
-          staticSize += stat
+          const stat = statSync(filePath)
+          if (stat.isFile()) {
+            staticSize += stat.size
+          }
         } catch {}
       }
     }

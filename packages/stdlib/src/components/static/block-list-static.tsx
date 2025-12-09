@@ -1,3 +1,4 @@
+/** @jsxImportSource react */
 import { isOrderedList } from '@platejs/list';
 import { CheckIcon } from 'lucide-react';
 import type { RenderStaticNodeWrapper, TListElement } from 'platejs';

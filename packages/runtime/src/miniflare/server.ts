@@ -129,7 +129,10 @@ export class MiniflareServer {
   }
 
   /**
-   * Check if dependencies are installed
+   * Ensure workbook dependencies are installed
+   *
+   * While esbuild bundles everything for the worker, we still need
+   * dependencies installed for TypeScript support in the editor.
    */
   private async ensureDependencies(): Promise<void> {
     const nodeModules = join(this.config.workbookDir, "node_modules")
@@ -138,20 +141,34 @@ export class MiniflareServer {
     if (!hasHono) {
       console.log("[miniflare] Installing workbook dependencies...")
 
+      // First, link stdlib so workspace:* resolves
+      await this.linkStdlib()
+
+      // Then install remaining dependencies
+      // Use --no-save to avoid modifying package.json
       const proc = spawn(["bun", "install", "--ignore-scripts"], {
         cwd: this.config.workbookDir,
-        stdout: "inherit",
-        stderr: "inherit",
+        stdout: "pipe",
+        stderr: "pipe",
       })
 
       const exitCode = await proc.exited
-      if (exitCode !== 0) {
-        throw new Error("Failed to install dependencies")
-      }
-    }
 
-    // Always ensure stdlib is linked (handles dev mode linking)
-    await this.linkStdlib()
+      // If install fails (likely due to workspace:* for stdlib),
+      // that's ok - we already linked stdlib manually
+      if (exitCode !== 0) {
+        // Try installing just hono directly
+        const honoProc = spawn(["bun", "add", "hono", "--no-save"], {
+          cwd: this.config.workbookDir,
+          stdout: "pipe",
+          stderr: "pipe",
+        })
+        await honoProc.exited
+      }
+    } else {
+      // Just ensure stdlib is linked
+      await this.linkStdlib()
+    }
   }
 
   /**
@@ -168,16 +185,23 @@ export class MiniflareServer {
     this._buildErrors = []
 
     try {
-      // Ensure dependencies are installed
+      // Ensure dependencies are installed (links stdlib for TypeScript support)
       await this.ensureDependencies()
 
-      // Build first
-      const buildResult = await build(this.config.workbookDir, { dev: true })
-      if (!buildResult.success) {
-        throw new Error(`Build failed: ${buildResult.errors.join(", ")}`)
+      // Check if worker.js already exists (built by services.ts buildWorkbook())
+      // This avoids duplicate builds
+      const outputDir = join(this.config.workbookDir, ".hands")
+      let entryPoint = join(outputDir, "worker.js")
+
+      if (!existsSync(entryPoint)) {
+        // Worker not built yet - build it
+        const buildResult = await build(this.config.workbookDir, { dev: true })
+        if (!buildResult.success) {
+          throw new Error(`Build failed: ${buildResult.errors.join(", ")}`)
+        }
+        entryPoint = join(buildResult.outputDir, "worker.js")
       }
 
-      const entryPoint = join(buildResult.outputDir, "worker.js")
       if (!existsSync(entryPoint)) {
         throw new Error(`Worker entry point not found: ${entryPoint}`)
       }

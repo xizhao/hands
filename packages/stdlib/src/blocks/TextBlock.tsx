@@ -1,3 +1,4 @@
+/** @jsxImportSource react */
 /**
  * Text Block - Rich text content block
  */

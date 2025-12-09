@@ -1,10 +1,13 @@
 /**
  * Biome formatter integration
+ *
+ * Uses embedded default config - no biome.json required in workbook
  */
 
 import { spawn } from "bun"
-import { existsSync } from "fs"
+import { existsSync, mkdirSync, writeFileSync } from "fs"
 import { join } from "path"
+import { tmpdir } from "os"
 
 interface FormatResult {
   fixed: string[]
@@ -17,6 +20,50 @@ interface CheckFormatResult {
 }
 
 /**
+ * Default biome config (embedded, no file needed in workbook)
+ */
+const DEFAULT_BIOME_CONFIG = {
+  $schema: "https://biomejs.dev/schemas/1.9.4/schema.json",
+  formatter: {
+    enabled: true,
+    indentStyle: "space",
+    indentWidth: 2,
+    lineWidth: 100,
+  },
+  javascript: {
+    formatter: {
+      quoteStyle: "double",
+      semicolons: "asNeeded",
+      trailingCommas: "es5",
+    },
+  },
+  files: {
+    ignore: ["node_modules", "dist", ".hands", "*.d.ts"],
+  },
+}
+
+// Cached config file path
+let cachedConfigPath: string | null = null
+
+/**
+ * Get path to embedded biome config (writes to temp dir once per process)
+ */
+function getConfigPath(): string {
+  if (cachedConfigPath && existsSync(cachedConfigPath)) {
+    return cachedConfigPath
+  }
+
+  const configDir = join(tmpdir(), "hands-biome")
+  mkdirSync(configDir, { recursive: true })
+
+  const configPath = join(configDir, "biome.json")
+  writeFileSync(configPath, JSON.stringify(DEFAULT_BIOME_CONFIG, null, 2))
+
+  cachedConfigPath = configPath
+  return configPath
+}
+
+/**
  * Run biome format with auto-fix
  */
 export async function formatCode(workbookDir: string): Promise<FormatResult> {
@@ -26,9 +73,11 @@ export async function formatCode(workbookDir: string): Promise<FormatResult> {
     return { fixed: [], errors: ["src/ directory not found"] }
   }
 
-  // Run biome format with write mode
+  const configPath = getConfigPath()
+
+  // Run biome format with write mode and our embedded config
   const proc = spawn(
-    ["bunx", "@biomejs/biome", "format", "--write", srcDir],
+    ["bunx", "@biomejs/biome", "format", "--write", "--config-path", configPath, srcDir],
     {
       cwd: workbookDir,
       stdout: "pipe",
@@ -84,8 +133,10 @@ export async function checkFormat(workbookDir: string): Promise<CheckFormatResul
     return { needsFormat: [], errors: ["src/ directory not found"] }
   }
 
+  const configPath = getConfigPath()
+
   const proc = spawn(
-    ["bunx", "@biomejs/biome", "format", "--check", srcDir],
+    ["bunx", "@biomejs/biome", "format", "--check", "--config-path", configPath, srcDir],
     {
       cwd: workbookDir,
       stdout: "pipe",

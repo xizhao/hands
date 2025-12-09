@@ -17,7 +17,7 @@ import { FileText, Plus, ChevronDown, ChevronRight, Search, X } from "lucide-rea
 import { Table, TreeStructure, SquaresFour } from "@phosphor-icons/react";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { useUIStore } from "@/stores/ui";
-import { useDbSchema, useDevServerRoutes } from "@/hooks/useWorkbook";
+import { useDbSchema, useDevServerRoutes, useWorkbookManifest } from "@/hooks/useWorkbook";
 
 interface PagesSidebarProps {
   collapsed?: boolean;
@@ -27,15 +27,9 @@ interface PagesSidebarProps {
 interface Page {
   id: string;
   title: string;
-  icon?: string;
+  route?: string;
+  path?: string;
 }
-
-// Mock pages for now - will be replaced with real data
-const MOCK_PAGES: Page[] = [
-  { id: "1", title: "Getting Started" },
-  { id: "2", title: "Data Analysis" },
-  { id: "3", title: "SQL Queries" },
-];
 
 export function PagesSidebar({ collapsed = false, fullWidth = false }: PagesSidebarProps) {
   const navigate = useNavigate();
@@ -45,18 +39,21 @@ export function PagesSidebar({ collapsed = false, fullWidth = false }: PagesSide
   const pageMatch = currentPath.match(/^\/page\/(.+)$/);
   const activePageId = pageMatch?.[1] ?? null;
 
-  const [pages] = useState<Page[]>(MOCK_PAGES);
+  // Get all data from hooks (filesystem as source of truth via manifest)
+  const { activeWorkbookId } = useUIStore();
+  const { data: manifest } = useWorkbookManifest(activeWorkbookId);
+  const { data: schema, isLoading: sourcesLoading } = useDbSchema(activeWorkbookId);
+  const { data: devServerRoutes, isLoading: blocksLoading } = useDevServerRoutes(activeWorkbookId);
+
+  // Pages from manifest (filesystem source of truth)
+  const pages: Page[] = manifest?.pages ?? [];
+  const blocks = devServerRoutes?.charts ?? [];
+
   const [hoveredIndex, setHoveredIndex] = useState<number | null>(null);
   const [pagesExpanded, setPagesExpanded] = useState(true);
   const [sourcesExpanded, setSourcesExpanded] = useState(true);
   const [blocksExpanded, setBlocksExpanded] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
-
-  // Get sources and blocks data
-  const { activeWorkbookId } = useUIStore();
-  const { data: schema, isLoading: sourcesLoading } = useDbSchema(activeWorkbookId);
-  const { data: devServerRoutes, isLoading: blocksLoading } = useDevServerRoutes(activeWorkbookId);
-  const blocks = devServerRoutes?.charts ?? [];
 
   // Filter pages, sources, and blocks based on search query
   const filteredPages = useMemo(() => {
@@ -180,9 +177,141 @@ export function PagesSidebar({ collapsed = false, fullWidth = false }: PagesSide
     navigate({ to: pageRoute.to, params: { pageId } });
   }, [navigate]);
 
+  // Full-width responsive grid layout
+  if (fullWidth) {
+    return (
+      <TooltipProvider delayDuration={0}>
+        <div className="w-full max-w-4xl mx-auto">
+          {/* Search Bar - centered at top */}
+          <div className="relative max-w-md mb-6">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground/70" />
+            <input
+              type="text"
+              placeholder="Search pages, sources, blocks..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="w-full pl-10 pr-10 py-2 text-sm bg-muted/50 border border-border/70 rounded-lg placeholder:text-muted-foreground/60 focus:outline-none focus:border-border focus:ring-1 focus:ring-ring/20"
+            />
+            {searchQuery && (
+              <button
+                onClick={() => setSearchQuery("")}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground/70 hover:text-muted-foreground"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            )}
+          </div>
+
+          {/* Responsive grid - 3 columns on wide, 2 on medium, 1 on narrow */}
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {/* Pages Column */}
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <h3 className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                  Pages
+                </h3>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <button
+                      onClick={handleAddPage}
+                      className="p-1 text-muted-foreground/60 hover:text-muted-foreground hover:bg-accent rounded transition-colors"
+                    >
+                      <Plus className="h-3.5 w-3.5" />
+                    </button>
+                  </TooltipTrigger>
+                  <TooltipContent>Add page</TooltipContent>
+                </Tooltip>
+              </div>
+              <div className="space-y-0.5">
+                {filteredPages.length > 0 ? (
+                  filteredPages.map((page, index) => (
+                    <PageItem
+                      key={page.id}
+                      page={page}
+                      active={activePageId === page.id}
+                      scale={getScale(index)}
+                      collapsed={false}
+                      onClick={() => handlePageClick(page.id)}
+                      onMouseEnter={() => setHoveredIndex(index)}
+                      onMouseLeave={() => setHoveredIndex(null)}
+                    />
+                  ))
+                ) : searchQuery ? (
+                  <div className="text-sm text-muted-foreground/70 py-2">No pages found</div>
+                ) : (
+                  <div className="text-sm text-muted-foreground/70 py-2">No pages yet</div>
+                )}
+              </div>
+            </div>
+
+            {/* Sources Column */}
+            <div className="space-y-2">
+              <h3 className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                Sources
+              </h3>
+              <div className="space-y-0.5">
+                {sourcesLoading ? (
+                  <div className="text-sm text-muted-foreground/70 py-2">Loading...</div>
+                ) : filteredSources && filteredSources.length > 0 ? (
+                  filteredSources.map((table) => (
+                    <button
+                      key={table.table_name}
+                      className="w-full flex items-center gap-2 px-2 py-1.5 text-sm text-muted-foreground hover:text-foreground hover:bg-accent/50 rounded-md transition-colors"
+                    >
+                      <Table weight="duotone" className="h-4 w-4 text-blue-400 shrink-0" />
+                      <span className="flex-1 truncate text-left">{table.table_name}</span>
+                      <span className="text-xs text-muted-foreground/60">{table.columns?.length ?? 0} cols</span>
+                    </button>
+                  ))
+                ) : searchQuery && schema && schema.length > 0 ? (
+                  <div className="text-sm text-muted-foreground/70 py-2">No sources found</div>
+                ) : (
+                  <div className="flex items-center gap-2 py-2 text-sm text-muted-foreground/70">
+                    <TreeStructure weight="duotone" className="h-4 w-4" />
+                    <span>No sources connected</span>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Blocks Column */}
+            <div className="space-y-2">
+              <h3 className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                Blocks
+              </h3>
+              <div className="space-y-0.5">
+                {blocksLoading ? (
+                  <div className="text-sm text-muted-foreground/70 py-2">Loading...</div>
+                ) : filteredBlocks.length > 0 ? (
+                  filteredBlocks.map((block) => (
+                    <button
+                      key={block.id}
+                      className="w-full flex items-center gap-2 px-2 py-1.5 text-sm text-muted-foreground hover:text-foreground hover:bg-accent/50 rounded-md transition-colors"
+                    >
+                      <SquaresFour weight="duotone" className="h-4 w-4 text-amber-500 shrink-0" />
+                      <span className="flex-1 truncate text-left">{block.title}</span>
+                    </button>
+                  ))
+                ) : searchQuery && blocks.length > 0 ? (
+                  <div className="text-sm text-muted-foreground/70 py-2">No blocks found</div>
+                ) : (
+                  <div className="flex items-center gap-2 py-2 text-sm text-muted-foreground/70">
+                    <SquaresFour weight="duotone" className="h-4 w-4" />
+                    <span>No blocks created</span>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      </TooltipProvider>
+    );
+  }
+
+  // Narrow sidebar layout (when not fullWidth)
   return (
     <TooltipProvider delayDuration={0}>
-      <div className={cn("space-y-3", fullWidth ? "w-full" : "w-[140px]")}>
+      <div className="space-y-3 w-[140px]">
         {/* Search Bar */}
         <div className="relative">
           <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-3 w-3 text-muted-foreground/70" />

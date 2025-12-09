@@ -1,3 +1,4 @@
+/** @jsxImportSource react */
 import { FileUp } from 'lucide-react';
 
 import type { TFileElement } from 'platejs';

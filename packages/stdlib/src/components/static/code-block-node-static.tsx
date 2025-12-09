@@ -1,3 +1,4 @@
+/** @jsxImportSource react */
 import type { TCodeBlockElement } from 'platejs';
 import {
   SlateElement,

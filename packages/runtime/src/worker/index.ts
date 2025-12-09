@@ -7,5 +7,4 @@ export { createMiniflareServer as createWorkerServer } from "../miniflare/server
 
 // Re-export for explicit access
 export { MiniflareServer, createMiniflareServer } from "../miniflare/server";
-export { BunServer, createBunServer } from "../bun-server/server";
 export { WranglerManager } from "../wrangler/manager";

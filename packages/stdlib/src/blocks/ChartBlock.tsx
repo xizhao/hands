@@ -1,3 +1,4 @@
+/** @jsxImportSource react */
 /**
  * Chart Block - Renders data visualizations
  *

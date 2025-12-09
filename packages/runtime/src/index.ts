@@ -17,6 +17,7 @@ import { runEval } from "./eval";
 import { runPreflightChecks, printPreflightResults } from "./preflight";
 import { createWatcher } from "./watcher";
 import { getEventBus } from "./events";
+import { PORTS } from "./ports";
 
 // Parse CLI args
 function parseArgs(): {
@@ -46,9 +47,9 @@ function parseArgs(): {
 }
 
 /**
- * Find a free port
+ * Find a free port starting from the given base
  */
-async function findFreePort(start = 4100): Promise<number> {
+async function findFreePort(start: number): Promise<number> {
   for (let port = start; port < start + 100; port++) {
     try {
       const server = Bun.serve({
@@ -63,16 +64,17 @@ async function findFreePort(start = 4100): Promise<number> {
       continue;
     }
   }
-  throw new Error("No free port found");
+  throw new Error(`No free port found starting from ${start}`);
 }
 
 /**
- * Find free ports for postgres and wrangler
+ * Find free ports for all services using configured port constants
  */
-async function findServicePorts(): Promise<{ postgres: number; wrangler: number }> {
-  const postgres = await findFreePort(5500);
-  const wrangler = await findFreePort(8800);
-  return { postgres, wrangler };
+async function findServicePorts(): Promise<{ runtime: number; postgres: number; wrangler: number }> {
+  const runtime = await findFreePort(PORTS.RUNTIME);
+  const postgres = await findFreePort(PORTS.POSTGRES);
+  const wrangler = await findFreePort(PORTS.WORKER);
+  return { runtime, postgres, wrangler };
 }
 
 /**
@@ -97,6 +99,27 @@ function setupFileWatcher(
       });
       const result = await response.json();
       bus.emit("eval:completed", { result });
+
+      // Check if any pages/sources changed - if so, push manifest update
+      const hasPageChange = paths.some(p =>
+        p.includes("pages/") || p.endsWith(".md") || p.endsWith(".mdx") || p.endsWith(".plate.json")
+      );
+      const hasSourceChange = paths.some(p =>
+        p.includes("sources/") || p === "hands.json"
+      );
+
+      if (hasPageChange || hasSourceChange) {
+        // Trigger manifest refresh for connected clients
+        try {
+          const manifestResponse = await fetch(`http://localhost:${runtimePort}/workbook/manifest`);
+          if (manifestResponse.ok) {
+            const manifest = await manifestResponse.json();
+            bus.emit("manifest:updated", { manifest });
+          }
+        } catch (err) {
+          console.error("Failed to refresh manifest:", err);
+        }
+      }
     } catch (error) {
       bus.emit("eval:error", { error: error instanceof Error ? error : new Error(String(error)) });
       console.error("Eval failed:", error);
@@ -134,9 +157,9 @@ async function main() {
   console.log(`Starting Hands Runtime for workbook: ${workbookId}`);
   console.log(`Workbook directory: ${workbookDir}`);
 
-  // Find free ports
-  const runtimePort = port ?? await findFreePort(4100);
+  // Find free ports using centralized port config
   const servicePorts = await findServicePorts();
+  const runtimePort = port ?? servicePorts.runtime;
 
   console.log(`Runtime port: ${runtimePort}`);
   console.log(`Postgres port: ${servicePorts.postgres}`);
