@@ -1,11 +1,11 @@
 import { useState, useRef, useEffect, useCallback } from "react";
-import { useSendMessage, useAbortSession, useSessionStatuses, useSessions, useCreateSession, useDeleteSession } from "@/hooks/useSession";
+import { useSendMessage, useAbortSession, useSessionStatuses, useCreateSession } from "@/hooks/useSession";
 import { api } from "@/lib/api";
 import { useServer } from "@/hooks/useServer";
 import { useUIStore } from "@/stores/ui";
 import { useBackgroundStore } from "@/stores/background";
 import { Button } from "@/components/ui/button";
-import { ArrowUp, Square, Loader2 } from "lucide-react";
+import { ArrowUp, Square, Loader2, Hand } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { listen } from "@tauri-apps/api/event";
 import { useWorkbook, useDevServerStatus, useDevServerRoutes, useWorkbookDatabase, useStartDevServer } from "@/hooks/useWorkbook";
@@ -215,12 +215,21 @@ ${activeWorkbook.description ? `Description: ${activeWorkbook.description}` : ""
       onDragOver={handleDragOver}
       onDrop={handleDrop}
       className={cn(
-        "flex items-center gap-2 px-3 py-2 rounded-xl border transition-colors",
+        "flex items-center gap-2 px-2 py-2 rounded-xl border transition-colors",
         isDragging
           ? "border-primary bg-primary/10"
           : "border-border/40 bg-background/80 backdrop-blur-sm"
       )}
     >
+      {/* Logo button */}
+      <Button
+        variant="ghost"
+        size="icon"
+        className="h-8 w-8 shrink-0 rounded-lg"
+      >
+        <Hand className="h-5 w-5" />
+      </Button>
+
       {/* Input */}
       <input
         ref={inputRef}

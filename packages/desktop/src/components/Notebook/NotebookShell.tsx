@@ -11,7 +11,7 @@
 import { useEffect, useRef, useCallback, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { useUIStore } from "@/stores/ui";
-import { useWorkbooks, useCreateWorkbook, useOpenWorkbook, RuntimeStatus } from "@/hooks/useWorkbook";
+import { useWorkbooks, useCreateWorkbook, useOpenWorkbook, useUpdateWorkbook, RuntimeStatus } from "@/hooks/useWorkbook";
 import type { Workbook } from "@/lib/workbook";
 import { useSessions } from "@/hooks/useSession";
 import { startSSESync } from "@/lib/sse";
@@ -24,7 +24,6 @@ import { PagesSidebar } from "./sidebar/PagesSidebar";
 import { WorkbookEditor } from "./editor/WorkbookEditor";
 import { ChatBar } from "@/components/ChatBar";
 import { Thread } from "@/components/legacy/Thread";
-import { SettingsPanel } from "@/components/legacy/SettingsPanel";
 import { LiveIndicator } from "./LiveIndicator";
 
 import {
@@ -70,6 +69,7 @@ export function NotebookApp() {
   const { data: workbooks, isLoading: workbooksLoading } = useWorkbooks();
   const createWorkbook = useCreateWorkbook();
   const openWorkbook = useOpenWorkbook();
+  const updateWorkbook = useUpdateWorkbook();
 
   // Current workbook
   const currentWorkbook = workbooks?.find((w) => w.id === activeWorkbookId);
@@ -187,12 +187,8 @@ export function NotebookApp() {
   // Page count for indicator
   const pageCount = 3; // Mock - will come from PagesSidebar data
 
-  // Chat toolbar state
+  // Chat state
   const [chatExpanded, setChatExpanded] = useState(false);
-  const [settingsOpen, setSettingsOpen] = useState(false);
-
-  // Check if we have data (for placeholder text)
-  const hasData = false; // TODO: derive from workbook data sources
 
   return (
     <div className="h-screen flex flex-col bg-background overflow-hidden relative">
@@ -206,44 +202,47 @@ export function NotebookApp() {
       >
         {/* Unified control group: title + status dot + dropdown chevron */}
         <div className="flex items-center gap-0 group/titlebar">
-          {/* Editable title - inline width */}
-          <input
-            ref={titleInputRef}
-            type="text"
-            value={isEditingTitle ? editedTitle : (currentWorkbook?.name ?? "Untitled")}
-            onChange={(e) => setEditedTitle(e.target.value)}
+          {/* Editable title - contentEditable for natural width */}
+          <span
+            ref={titleInputRef as React.RefObject<HTMLSpanElement>}
+            contentEditable
+            suppressContentEditableWarning
             onFocus={() => {
-              const currentName = currentWorkbook?.name ?? "Untitled";
-              setEditedTitle(currentName);
               setIsEditingTitle(true);
-              setTimeout(() => titleInputRef.current?.select(), 0);
             }}
-            onBlur={() => {
-              // TODO: Save the edited title
+            onBlur={(e) => {
+              const newName = e.currentTarget.textContent?.trim() || "";
+              if (currentWorkbook && newName && newName !== currentWorkbook.name) {
+                updateWorkbook.mutate({
+                  ...currentWorkbook,
+                  name: newName,
+                  updated_at: Date.now(),
+                });
+              }
               setIsEditingTitle(false);
             }}
             onKeyDown={(e) => {
               if (e.key === "Enter") {
-                titleInputRef.current?.blur();
+                e.preventDefault();
+                e.currentTarget.blur();
               } else if (e.key === "Escape") {
-                setEditedTitle(currentWorkbook?.name ?? "");
-                setIsEditingTitle(false);
-                titleInputRef.current?.blur();
+                e.currentTarget.textContent = currentWorkbook?.name ?? "Untitled";
+                e.currentTarget.blur();
               }
             }}
-            size={Math.max(1, (isEditingTitle ? editedTitle : (currentWorkbook?.name ?? "Untitled")).length)}
             className={cn(
-              "px-1 py-0.5 text-sm font-medium bg-transparent rounded-sm transition-all duration-150",
-              "border border-transparent outline-none",
+              "px-1 py-0.5 text-sm font-medium bg-transparent rounded-sm cursor-text",
+              "outline-none",
               "hover:bg-accent/50",
-              "focus:bg-background focus:border-border/80 focus:ring-1 focus:ring-ring/20",
-              "selection:bg-primary/20",
-              // Width based on content
-              "w-auto min-w-[3ch]"
+              "focus:bg-background focus:ring-1 focus:ring-ring/20"
             )}
-            style={{ width: `${Math.max(3, (isEditingTitle ? editedTitle : (currentWorkbook?.name ?? "Untitled")).length + 1)}ch` }}
             spellCheck={false}
-          />
+          >
+            {currentWorkbook?.name ?? "Untitled"}
+          </span>
+
+          {/* Live indicator (status dot) */}
+          <LiveIndicator />
 
           {/* Workbook switcher dropdown - just a chevron */}
           <DropdownMenu>
@@ -334,27 +333,19 @@ export function NotebookApp() {
         </main>
       </div>
 
-      {/* Floating chat toolbar + thread overlay */}
+      {/* Floating chat - bottom-up layout */}
       <div className="fixed bottom-4 left-4 right-4 z-50 max-w-2xl mx-auto flex flex-col">
-        {/* Settings panel (slides above toolbar when open) */}
-        {settingsOpen && (
-          <SettingsPanel onClose={() => setSettingsOpen(false)} />
-        )}
-
-        {/* Thread (messages) - expands above toolbar */}
+        {/* Thread (chips + messages) - grows upward */}
         <Thread
           expanded={chatExpanded}
-          hasData={hasData}
           onCollapse={() => setChatExpanded(false)}
           onExpand={() => setChatExpanded(true)}
         />
 
-        {/* ChatBar (input bar) - always visible at bottom */}
+        {/* ChatBar (input) - always at bottom */}
         <ChatBar
           expanded={chatExpanded}
           onExpandChange={setChatExpanded}
-          hasData={hasData}
-          onOpenSettings={() => setSettingsOpen(true)}
         />
       </div>
     </div>

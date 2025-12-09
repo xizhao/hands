@@ -46,6 +46,7 @@ import { Skeleton, ShimmerText } from "@/components/ui/thinking-indicator";
 interface ChatMessageProps {
   message: MessageWithParts;
   isStreaming?: boolean;
+  compact?: boolean;
 }
 
 // Format token count with K/M suffix
@@ -462,9 +463,10 @@ const ToolInvocation = memo(({ part }: { part: ToolPart }) => {
 ToolInvocation.displayName = "ToolInvocation";
 
 // Text content with markdown
-const TextContent = memo(({ text, isStreaming = false, darkText = false }: { text: string; isStreaming?: boolean; darkText?: boolean }) => (
+const TextContent = memo(({ text, isStreaming = false, darkText = false, compact = false }: { text: string; isStreaming?: boolean; darkText?: boolean; compact?: boolean }) => (
   <div className={cn(
-    "prose prose-sm max-w-none prose-p:my-1 prose-pre:my-2 prose-p:leading-relaxed text-sm",
+    "prose max-w-none prose-p:my-0.5 prose-pre:my-1 prose-p:leading-relaxed",
+    compact ? "prose-xs text-xs" : "prose-sm text-sm",
     darkText ? "prose-neutral" : "dark:prose-invert"
   )}>
     <ReactMarkdown
@@ -726,7 +728,7 @@ export const MessageProgress = memo(({ tools, currentStatus, isThinking = false 
 MessageProgress.displayName = "MessageProgress";
 
 // Main message component - iOS style bubbles
-export const ChatMessage = memo(({ message, isStreaming = false }: ChatMessageProps) => {
+export const ChatMessage = memo(({ message, isStreaming = false, compact = false }: ChatMessageProps) => {
   const { info, parts = [] } = message;
   const isUser = info.role === "user";
   const isAssistant = info.role === "assistant";
@@ -784,10 +786,16 @@ export const ChatMessage = memo(({ message, isStreaming = false }: ChatMessagePr
         isUser ? "justify-end" : "justify-start"
       )}
     >
-      {/* User message - on right, corner angled up, white with zinc text */}
+      {/* User message - on right, corner angled down toward input, white with zinc text */}
       {isUser && (
-        <div className="max-w-[85%] px-3.5 py-2 rounded-2xl rounded-tr-md bg-white text-zinc-800 shadow-lg">
-          <div className="text-sm leading-relaxed">
+        <div className={cn(
+          "max-w-[85%] rounded-2xl rounded-br-sm bg-white text-zinc-800 shadow-lg",
+          compact ? "px-2.5 py-1.5" : "px-3.5 py-2"
+        )}>
+          <div className={cn(
+            "leading-relaxed",
+            compact ? "text-xs" : "text-sm"
+          )}>
             {groupedContent.map((group, idx) => {
               if (group.type === "text") {
                 const textPart = group.items[0] as TextPart;
@@ -799,11 +807,14 @@ export const ChatMessage = memo(({ message, isStreaming = false }: ChatMessagePr
         </div>
       )}
 
-      {/* Hands/Assistant message - on left, corner angled up, dark zinc */}
+      {/* Hands/Assistant message - on left, corner angled down toward input, dark zinc */}
       {isAssistant && (
         <div className="group max-w-[90%] flex flex-col">
-          <div className="px-3.5 py-2 rounded-2xl rounded-tl-md bg-zinc-800 text-zinc-100 shadow-lg">
-            <div className="space-y-1">
+          <div className={cn(
+            "rounded-2xl rounded-bl-sm bg-zinc-800 text-zinc-100 shadow-lg",
+            compact ? "px-2.5 py-1.5" : "px-3.5 py-2"
+          )}>
+            <div className={cn("space-y-1", compact && "text-xs")}>
               {groupedContent.map((group, idx) => {
                 if (group.type === "text") {
                   const textPart = group.items[0] as TextPart;
@@ -812,6 +823,7 @@ export const ChatMessage = memo(({ message, isStreaming = false }: ChatMessagePr
                       key={idx}
                       text={textPart.text}
                       isStreaming={isStreaming && idx === groupedContent.length - 1}
+                      compact={compact}
                     />
                   );
                 }

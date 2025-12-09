@@ -91,12 +91,11 @@ export function LiveIndicator() {
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <button className="flex items-center justify-center w-5 h-5 rounded hover:bg-accent/50 transition-colors group">
+        <button className="flex items-center justify-center w-5 h-5 rounded hover:bg-accent/50 transition-colors">
           <span
             className={cn(
-              "inline-flex rounded-full h-1.5 w-1.5 transition-all",
-              activeWorkbookId ? getStatusColor() : "bg-zinc-500",
-              "group-hover:scale-125"
+              "inline-flex rounded-full h-1.5 w-1.5",
+              activeWorkbookId ? getStatusColor() : "bg-zinc-500"
             )}
           />
         </button>
