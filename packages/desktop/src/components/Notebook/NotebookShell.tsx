@@ -18,11 +18,13 @@ import {
   useUpdateWorkbook,
   useDbSchema,
   useDevServerRoutes,
+  useDevServerStatus,
   useEvalResult,
   useRuntimeStatus,
   useWorkbookManifest,
   useCreatePage,
   useImportFile,
+  useUpdatePageTitle,
 } from "@/hooks/useWorkbook";
 import { PORTS } from "@/lib/ports";
 import type { Workbook } from "@/lib/workbook";
@@ -34,8 +36,9 @@ import { pageRoute } from "@/routes/_notebook/page.$pageId";
 import { indexRoute } from "@/routes/_notebook/index";
 import { ChatBar } from "@/components/ChatBar";
 import { Thread } from "@/components/legacy/Thread";
-import { LiveIndicator } from "./LiveIndicator";
+import { FileDropOverlay } from "@/components/FileDropOverlay";
 import { RightPanel } from "./panels/RightPanel";
+import { NewWorkbookModal } from "@/components/NewWorkbookModal";
 
 import {
   DropdownMenu,
@@ -93,15 +96,21 @@ export function NotebookShell({ children }: NotebookShellProps) {
   // Data for titlebar indicators and empty state detection
   const { data: dbSchema } = useDbSchema(activeWorkbookId);
   const { data: devServerRoutes } = useDevServerRoutes(activeWorkbookId);
+  const { data: devServerStatus, isLoading: isLoadingStatus } = useDevServerStatus(activeWorkbookId);
   const { data: evalResult } = useEvalResult(activeWorkbookId);
   const { data: runtimeStatus } = useRuntimeStatus(activeWorkbookId);
   const { data: manifest } = useWorkbookManifest(activeWorkbookId);
   // Use Tauri-reported port, or fallback to default if runtime exists externally
   const runtimePort = runtimeStatus?.runtime_port || PORTS.RUNTIME;
 
+  // Runtime connection status
+  const runtimeConnected = devServerStatus?.running ?? false;
+  const dbConnected = runtimeConnected && !!devServerStatus?.postgres_port;
+
   // Mutations for empty state actions
   const createPage = useCreatePage();
   const importFile = useImportFile();
+  const updatePageTitle = useUpdatePageTitle();
 
   const tableCount = dbSchema?.length ?? 0;
   const blockCount = devServerRoutes?.charts?.length ?? 0;
@@ -112,8 +121,8 @@ export function NotebookShell({ children }: NotebookShellProps) {
   const alertWarnings = evalResult?.typescript?.warnings?.length ?? 0;
   const alertCount = alertErrors + alertWarnings;
 
-  // Determine if workbook is truly empty - use manifest if available
-  const isWorkbookEmpty = manifest?.isEmpty ?? (tableCount === 0 && blockCount === 0);
+  // Show getting started when no data in database (0 tables)
+  const showGettingStarted = tableCount === 0;
 
   // Current workbook
   const currentWorkbook = workbooks?.find((w) => w.id === activeWorkbookId);
@@ -190,18 +199,31 @@ export function NotebookShell({ children }: NotebookShellProps) {
     openWorkbook.mutate(workbook as Workbook);
   }, [setActiveWorkbook, openWorkbook]);
 
-  // Handle create new workbook
+  // Handle create new workbook - opens modal
   const handleCreateWorkbook = useCallback(() => {
-    createWorkbook.mutate(
-      { name: `Workbook ${(workbooks?.length ?? 0) + 1}` },
-      {
-        onSuccess: (newWorkbook) => {
-          setActiveWorkbook(newWorkbook.id, newWorkbook.directory);
-          openWorkbook.mutate(newWorkbook);
-        },
-      }
-    );
-  }, [createWorkbook, workbooks, setActiveWorkbook, openWorkbook]);
+    setShowNewWorkbookModal(true);
+  }, []);
+
+  // Handle actual workbook creation from modal
+  const handleWorkbookCreate = useCallback(
+    (name: string, description?: string, templateId?: string) => {
+      createWorkbook.mutate(
+        { name, description },
+        {
+          onSuccess: (newWorkbook) => {
+            setActiveWorkbook(newWorkbook.id, newWorkbook.directory);
+            openWorkbook.mutate(newWorkbook);
+            setShowNewWorkbookModal(false);
+            // TODO: Apply template if templateId is provided
+            if (templateId) {
+              console.log(`Applying template: ${templateId}`);
+            }
+          },
+        }
+      );
+    },
+    [createWorkbook, setActiveWorkbook, openWorkbook]
+  );
 
   // Handle close page (navigate back to index)
   const handleClosePage = useCallback(() => {
@@ -244,20 +266,42 @@ export function NotebookShell({ children }: NotebookShellProps) {
   }, [runtimePort, importFile]);
 
   const handleAddPage = useCallback(async () => {
+    console.log("[handleAddPage] Creating page on port:", runtimePort);
     try {
       const result = await createPage.mutateAsync({ runtimePort, title: "Untitled" });
+      console.log("[handleAddPage] Create result:", result);
       if (result.success && result.page) {
         // Navigate to the new page
+        console.log("[handleAddPage] Navigating to page:", result.page.id);
         router.navigate({ to: pageRoute.to, params: { pageId: result.page.id } });
       }
     } catch (err) {
-      console.error("Failed to create page:", err);
+      console.error("[handleAddPage] Failed to create page:", err);
       // TODO: Show toast notification on failure
     }
   }, [runtimePort, createPage, router]);
 
   // Chat state
   const [chatExpanded, setChatExpanded] = useState(false);
+
+  // New workbook modal state
+  const [showNewWorkbookModal, setShowNewWorkbookModal] = useState(false);
+
+  // File drop handler for external files
+  const handleFileDrop = useCallback(async (file: File) => {
+    if (!runtimePort) return;
+
+    try {
+      const result = await importFile.mutateAsync({ runtimePort, file });
+      if (result.success) {
+        console.log(`Imported ${result.rowCount} rows to table: ${result.tableName}`);
+      } else {
+        console.error("Import failed:", result.error);
+      }
+    } catch (err) {
+      console.error("Import error:", err);
+    }
+  }, [runtimePort, importFile]);
 
   return (
     <TooltipProvider delayDuration={300}>
@@ -307,8 +351,6 @@ export function NotebookShell({ children }: NotebookShellProps) {
             {currentWorkbook?.name ?? "Untitled"}
           </span>
 
-          {/* Live indicator (status dot) */}
-          <LiveIndicator />
 
           {/* Workbook switcher dropdown - always visible */}
           <div className="relative flex items-center justify-center w-5 h-5">
@@ -352,7 +394,34 @@ export function NotebookShell({ children }: NotebookShellProps) {
           {/* Page breadcrumb - only show when on a page route */}
           {isOnPage && currentPage && (
             <>
-              <span className="text-sm text-muted-foreground">{currentPage.title}</span>
+              <span
+                contentEditable
+                suppressContentEditableWarning
+                onBlur={(e) => {
+                  const newTitle = e.currentTarget.textContent?.trim() || "";
+                  if (pageId && newTitle && newTitle !== currentPage.title) {
+                    updatePageTitle.mutate({ pageId, title: newTitle });
+                  }
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    e.preventDefault();
+                    e.currentTarget.blur();
+                  } else if (e.key === "Escape") {
+                    e.currentTarget.textContent = currentPage.title;
+                    e.currentTarget.blur();
+                  }
+                }}
+                className={cn(
+                  "px-1 py-0.5 text-sm text-muted-foreground bg-transparent rounded-sm cursor-text",
+                  "outline-none",
+                  "hover:bg-accent/50 hover:text-foreground",
+                  "focus:bg-background focus:text-foreground focus:ring-1 focus:ring-ring/20"
+                )}
+                spellCheck={false}
+              >
+                {currentPage.title}
+              </span>
               <Tooltip>
                 <TooltipTrigger asChild>
                   <button
@@ -370,58 +439,88 @@ export function NotebookShell({ children }: NotebookShellProps) {
 
         {/* Right: Panel toggles + Share */}
         <div className="flex items-center gap-1">
-          {/* Database - table browser */}
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <button
-                onClick={() => toggleRightPanel("database")}
-                className={cn(
-                  "flex items-center gap-1 px-1.5 py-1 rounded-md text-[11px] transition-colors",
-                  rightPanel === "database"
-                    ? "bg-accent text-foreground"
-                    : tableCount > 0
-                      ? "text-muted-foreground hover:bg-accent/50 hover:text-foreground"
-                      : "text-muted-foreground/70 hover:bg-accent/50 hover:text-muted-foreground"
-                )}
-              >
-                <Database weight="duotone" className={cn("h-3.5 w-3.5", tableCount > 0 && "text-blue-500")} />
-                <span className={cn(
-                  "tabular-nums",
-                  tableCount > 0 ? "text-foreground" : "text-muted-foreground/70"
-                )}>{tableCount}</span>
-              </button>
-            </TooltipTrigger>
-            <TooltipContent side="bottom">Database</TooltipContent>
-          </Tooltip>
+          {/* Loading shimmer when connecting to runtime */}
+          {isLoadingStatus && activeWorkbookId && (
+            <div className="flex items-center gap-1 px-2 py-1">
+              <div className="h-4 w-8 bg-muted/50 rounded animate-pulse" />
+              <div className="h-4 w-8 bg-muted/50 rounded animate-pulse" />
+            </div>
+          )}
 
-          {/* Alerts - code quality diagnostics */}
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <button
-                onClick={() => toggleRightPanel("alerts")}
-                className={cn(
-                  "flex items-center gap-1 px-1.5 py-1 rounded-md text-[11px] transition-colors",
-                  rightPanel === "alerts"
-                    ? "bg-accent text-foreground"
-                    : alertCount > 0
-                      ? "text-muted-foreground hover:bg-accent/50 hover:text-foreground"
-                      : "text-muted-foreground/70 hover:bg-accent/50 hover:text-muted-foreground"
-                )}
-              >
-                <Warning weight="duotone" className={cn(
-                  "h-3.5 w-3.5",
-                  alertErrors > 0 ? "text-red-500" : alertWarnings > 0 ? "text-yellow-500" : ""
-                )} />
-                {alertCount > 0 && (
+          {/* Database - table browser */}
+          {!isLoadingStatus && (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <button
+                  onClick={() => toggleRightPanel("database")}
+                  className={cn(
+                    "flex items-center gap-1 px-1.5 py-1 rounded-md text-[11px] transition-colors",
+                    rightPanel === "database"
+                      ? "bg-accent text-foreground"
+                      : dbConnected && tableCount > 0
+                        ? "text-muted-foreground hover:bg-accent/50 hover:text-foreground"
+                        : "text-muted-foreground/70 hover:bg-accent/50 hover:text-muted-foreground"
+                  )}
+                >
+                  <Database weight="duotone" className={cn("h-3.5 w-3.5", dbConnected && tableCount > 0 && "text-blue-500")} />
                   <span className={cn(
                     "tabular-nums",
-                    alertErrors > 0 ? "text-red-500" : alertWarnings > 0 ? "text-yellow-500" : "text-foreground"
-                  )}>{alertCount}</span>
-                )}
-              </button>
-            </TooltipTrigger>
-            <TooltipContent side="bottom">Alerts</TooltipContent>
-          </Tooltip>
+                    dbConnected && tableCount > 0 ? "text-foreground" : "text-muted-foreground/70"
+                  )}>{tableCount}</span>
+                </button>
+              </TooltipTrigger>
+              <TooltipContent side="bottom">
+                {dbConnected ? "Database" : "Database (not connected)"}
+              </TooltipContent>
+            </Tooltip>
+          )}
+
+          {/* Runtime/Alerts */}
+          {!isLoadingStatus && (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <button
+                  onClick={() => toggleRightPanel("alerts")}
+                  className={cn(
+                    "flex items-center gap-1 px-1.5 py-1 rounded-md text-[11px] transition-colors",
+                    rightPanel === "alerts"
+                      ? "bg-accent text-foreground"
+                      : !runtimeConnected
+                        ? "text-muted-foreground/70 hover:bg-accent/50 hover:text-muted-foreground"
+                        : alertCount > 0
+                          ? "text-muted-foreground hover:bg-accent/50 hover:text-foreground"
+                          : "text-muted-foreground hover:bg-accent/50 hover:text-foreground"
+                  )}
+                >
+                  <Warning weight="duotone" className={cn(
+                    "h-3.5 w-3.5",
+                    !runtimeConnected
+                      ? ""
+                      : alertErrors > 0
+                        ? "text-red-500"
+                        : alertWarnings > 0
+                          ? "text-yellow-500"
+                          : ""
+                  )} />
+                  {runtimeConnected ? (
+                    <span className={cn(
+                      "tabular-nums",
+                      alertErrors > 0 ? "text-red-500" : alertWarnings > 0 ? "text-yellow-500" : "text-muted-foreground/70"
+                    )}>{alertCount}</span>
+                  ) : (
+                    <span className="text-muted-foreground/70">—</span>
+                  )}
+                </button>
+              </TooltipTrigger>
+              <TooltipContent side="bottom">
+                {!runtimeConnected
+                  ? "Runtime (not connected)"
+                  : alertCount > 0
+                    ? "Alerts"
+                    : "All clear"}
+              </TooltipContent>
+            </Tooltip>
+          )}
 
           {/* Settings - gear icon only */}
           <Tooltip>
@@ -538,7 +637,7 @@ export function NotebookShell({ children }: NotebookShellProps) {
                     : "opacity-0 pointer-events-none"
                 )}
               >
-                <PagesSidebar collapsed={false} />
+                <PagesSidebar collapsed={false} onAddPage={handleAddPage} />
               </div>
 
               {/* Resize handle - at the right edge */}
@@ -564,17 +663,15 @@ export function NotebookShell({ children }: NotebookShellProps) {
             </main>
           </>
         ) : (
-          /* Index view: empty state or sidebar navigation */
+          /* Index view: getting started or sidebar navigation */
           <div className="flex-1 flex items-start justify-center overflow-y-auto">
-            {isWorkbookEmpty ? (
+            {showGettingStarted ? (
               <EmptyWorkbookState
-                onAddSource={handleAddSource}
                 onImportFile={handleImportFile}
-                onAddPage={handleAddPage}
               />
             ) : (
               <div className="p-4 pt-8">
-                <PagesSidebar collapsed={false} fullWidth />
+                <PagesSidebar collapsed={false} fullWidth onAddPage={handleAddPage} />
               </div>
             )}
           </div>
@@ -604,6 +701,21 @@ export function NotebookShell({ children }: NotebookShellProps) {
         accept=".csv,.json,.parquet"
         onChange={handleFileSelected}
         className="hidden"
+      />
+
+      {/* File drop overlay for external drag & drop */}
+      <FileDropOverlay
+        onFileDrop={handleFileDrop}
+        accept={[".csv", ".json", ".parquet"]}
+        disabled={!activeWorkbookId || !runtimeConnected}
+      />
+
+      {/* New workbook modal */}
+      <NewWorkbookModal
+        open={showNewWorkbookModal}
+        onOpenChange={setShowNewWorkbookModal}
+        onCreate={handleWorkbookCreate}
+        isCreating={createWorkbook.isPending}
       />
     </div>
     </TooltipProvider>

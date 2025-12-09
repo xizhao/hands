@@ -57,6 +57,10 @@ export class Router {
     return this.on("DELETE", path, handler);
   }
 
+  patch(path: string, handler: Handler): this {
+    return this.on("PATCH", path, handler);
+  }
+
   /**
    * Handle an incoming request
    */
@@ -70,7 +74,7 @@ export class Router {
         status: 204,
         headers: {
           "Access-Control-Allow-Origin": "*",
-          "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
+          "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, PATCH, OPTIONS",
           "Access-Control-Allow-Headers": "Content-Type",
         },
       });

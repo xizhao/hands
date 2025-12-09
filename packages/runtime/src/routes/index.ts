@@ -10,7 +10,6 @@ import { registerPostgresRoutes } from "./postgres";
 import { registerWorkerRoutes } from "./worker";
 import { registerSyncRoutes } from "./sync";
 import { registerBlocksRoutes } from "./blocks";
-import { registerNotebookRoutes } from "./notebook";
 import { registerWorkbookRoutes } from "./workbook";
 import { stopServices } from "../services";
 import { json } from "../router";
@@ -28,7 +27,6 @@ export function createRouter(getState: () => RuntimeState | null, port: number):
   registerWorkerRoutes(router, getState);
   registerSyncRoutes(router, getState);
   registerBlocksRoutes(router, getState);
-  registerNotebookRoutes(router, getState);
   registerWorkbookRoutes(router, getState);
 
   // POST /stop - Graceful shutdown
@@ -46,5 +44,4 @@ export * from "./postgres";
 export * from "./worker";
 export * from "./sync";
 export * from "./blocks";
-export * from "./notebook";
 export * from "./workbook";

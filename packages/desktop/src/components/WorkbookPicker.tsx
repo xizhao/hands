@@ -1,15 +1,8 @@
 import { useState } from "react";
-import { useWorkbooks, useCreateWorkbook, useDeleteWorkbook } from "@/hooks/useWorkbook";
+import { useWorkbooks, useCreateWorkbook, useDeleteWorkbook, useOpenWorkbook } from "@/hooks/useWorkbook";
 import { useUIStore } from "@/stores/ui";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -19,6 +12,7 @@ import {
 import { FolderOpen, Plus, MoreVertical, Trash2, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { Workbook } from "@/lib/workbook";
+import { NewWorkbookModal } from "@/components/NewWorkbookModal";
 
 function formatDate(timestamp: number): string {
   const date = new Date(timestamp);
@@ -98,83 +92,31 @@ function WorkbookCard({
   );
 }
 
-function NewWorkbookDialog({
-  open,
-  onOpenChange,
-  onCreate,
-}: {
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
-  onCreate: (name: string, description?: string) => void;
-}) {
-  const [name, setName] = useState("");
-  const [description, setDescription] = useState("");
-
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (name.trim()) {
-      onCreate(name.trim(), description.trim() || undefined);
-      setName("");
-      setDescription("");
-      onOpenChange(false);
-    }
-  };
-
-  return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent>
-        <DialogHeader>
-          <DialogTitle>Create New Workbook</DialogTitle>
-        </DialogHeader>
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <div className="space-y-2">
-            <label className="text-sm font-medium">Name</label>
-            <Input
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              placeholder="My Project"
-              autoFocus
-            />
-          </div>
-          <div className="space-y-2">
-            <label className="text-sm font-medium">Description (optional)</label>
-            <Input
-              value={description}
-              onChange={(e) => setDescription(e.target.value)}
-              placeholder="What is this workbook for?"
-            />
-          </div>
-          <div className="flex justify-end gap-2">
-            <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
-              Cancel
-            </Button>
-            <Button type="submit" disabled={!name.trim()}>
-              Create
-            </Button>
-          </div>
-        </form>
-      </DialogContent>
-    </Dialog>
-  );
-}
-
 export function WorkbookPicker() {
   const { data: workbooks = [], isLoading } = useWorkbooks();
   const createWorkbook = useCreateWorkbook();
   const deleteWorkbook = useDeleteWorkbook();
+  const openWorkbook = useOpenWorkbook();
   const { setActiveWorkbook } = useUIStore();
   const [showNewDialog, setShowNewDialog] = useState(false);
 
   const handleSelectWorkbook = (workbook: Workbook) => {
     setActiveWorkbook(workbook.id, workbook.directory);
+    openWorkbook.mutate(workbook);
   };
 
-  const handleCreateWorkbook = (name: string, description?: string) => {
+  const handleCreateWorkbook = (name: string, description?: string, templateId?: string) => {
     createWorkbook.mutate(
       { name, description },
       {
         onSuccess: (workbook) => {
           setActiveWorkbook(workbook.id, workbook.directory);
+          openWorkbook.mutate(workbook);
+          setShowNewDialog(false);
+          // TODO: Apply template if templateId is provided
+          if (templateId) {
+            console.log(`Applying template: ${templateId}`);
+          }
         },
       }
     );
@@ -239,10 +181,11 @@ export function WorkbookPicker() {
         )}
       </div>
 
-      <NewWorkbookDialog
+      <NewWorkbookModal
         open={showNewDialog}
         onOpenChange={setShowNewDialog}
         onCreate={handleCreateWorkbook}
+        isCreating={createWorkbook.isPending}
       />
     </div>
   );

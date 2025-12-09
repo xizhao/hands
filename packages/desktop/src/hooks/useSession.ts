@@ -51,6 +51,7 @@ export function useCreateSession() {
   const queryClient = useQueryClient();
 
   return useMutation({
+    mutationKey: ["session", "create"],
     mutationFn: (body?: { parentID?: string; title?: string }) =>
       api.sessions.create(body, directory),
     onSuccess: (newSession) => {
@@ -70,6 +71,7 @@ export function useDeleteSession() {
   const queryClient = useQueryClient();
 
   return useMutation({
+    mutationKey: ["session", "delete"],
     mutationFn: (id: string) => api.sessions.delete(id, directory),
     onSuccess: (_, deletedId) => {
       // Remove from sessions list
@@ -91,6 +93,9 @@ export function useDeleteSession() {
  */
 export function useMessages(sessionId: string | null) {
   const directory = useUIStore((s) => s.activeWorkbookDirectory);
+  const { data: statuses } = useSessionStatuses();
+  const status = sessionId ? statuses?.[sessionId] : null;
+  const isBusy = status?.type === "busy" || status?.type === "running";
 
   return useQuery({
     queryKey: ["messages", sessionId, directory],
@@ -98,6 +103,8 @@ export function useMessages(sessionId: string | null) {
     enabled: !!sessionId,
     staleTime: 0, // Always fetch fresh
     refetchOnMount: true,
+    // Poll while session is busy (fallback for SSE)
+    refetchInterval: isBusy ? 1000 : false,
   });
 }
 
@@ -106,8 +113,10 @@ export function useMessages(sessionId: string | null) {
  */
 export function useSendMessage() {
   const directory = useUIStore((s) => s.activeWorkbookDirectory);
+  const queryClient = useQueryClient();
 
   return useMutation({
+    mutationKey: ["message", "send"],
     mutationFn: ({
       sessionId,
       content,
@@ -117,6 +126,10 @@ export function useSendMessage() {
       content: string;
       system?: string;
     }) => api.promptAsync(sessionId, content, { system, directory }),
+    onSuccess: (_, { sessionId }) => {
+      // Immediately refetch messages to show user message
+      queryClient.invalidateQueries({ queryKey: ["messages", sessionId] });
+    },
   });
 }
 
@@ -124,7 +137,7 @@ export function useSendMessage() {
 
 /**
  * Get all session statuses
- * Note: SSE events update this cache optimistically, so no polling needed
+ * SSE events update this cache optimistically, but we poll as fallback
  */
 export function useSessionStatuses() {
   const directory = useUIStore((s) => s.activeWorkbookDirectory);
@@ -132,8 +145,9 @@ export function useSessionStatuses() {
   return useQuery({
     queryKey: ["session-statuses", directory],
     queryFn: () => api.status.all(directory),
-    staleTime: Infinity, // SSE keeps this fresh
-    refetchOnMount: true, // Fetch on first mount only
+    staleTime: 0,
+    refetchOnMount: true,
+    refetchInterval: 2000, // Poll every 2s as SSE fallback
   });
 }
 
@@ -152,6 +166,7 @@ export function useAbortSession(sessionId: string | null) {
   const directory = useUIStore((s) => s.activeWorkbookDirectory);
 
   return useMutation({
+    mutationKey: ["session", "abort"],
     mutationFn: () => {
       if (!sessionId) throw new Error("No session ID");
       return api.abort(sessionId, directory);
@@ -185,6 +200,7 @@ export function useRespondToPermission(sessionId: string | null) {
   const directory = useUIStore((s) => s.activeWorkbookDirectory);
 
   return useMutation({
+    mutationKey: ["permission", "respond"],
     mutationFn: ({
       permissionId,
       response,

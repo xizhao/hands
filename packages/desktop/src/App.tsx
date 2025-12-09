@@ -17,6 +17,11 @@ const mutationLabels: Record<string, string> = {
   "page.create": "create page",
   "source.add": "add source",
   "file.import": "import file",
+  "session.create": "create session",
+  "session.delete": "delete session",
+  "session.abort": "abort session",
+  "message.send": "send message",
+  "permission.respond": "respond to permission",
 };
 
 function getMutationLabel(mutationKey: unknown): string | null {

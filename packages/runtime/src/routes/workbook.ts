@@ -169,6 +169,96 @@ export function registerWorkbookRoutes(router: Router, getState: () => RuntimeSt
     }
   });
 
+  // GET /workbook/pages/:pageId - Get MDX content for a page
+  router.get("/workbook/pages/:pageId", async (req) => {
+    const state = getState();
+    if (!state) {
+      return json({ error: "Not initialized" }, { status: 500 });
+    }
+
+    const url = new URL(req.url);
+    const pageId = url.pathname.split("/").pop();
+    if (!pageId) {
+      return json({ error: "Missing pageId" }, { status: 400 });
+    }
+
+    try {
+      const content = await getPageContent(state.workbookDir, pageId);
+      return json({ success: true, pageId, content });
+    } catch (error) {
+      console.error("Failed to get page:", error);
+      return json({ error: String(error) }, { status: 404 });
+    }
+  });
+
+  // PATCH /workbook/pages/:pageId/title - Update page title (frontmatter only)
+  router.patch("/workbook/pages/:pageId/title", async (req) => {
+    const state = getState();
+    if (!state) {
+      return json({ error: "Not initialized" }, { status: 500 });
+    }
+
+    // Extract pageId from URL - format: /workbook/pages/{pageId}/title
+    const url = new URL(req.url);
+    const parts = url.pathname.split("/");
+    const pageId = parts[parts.length - 2]; // Second to last segment
+    if (!pageId) {
+      return json({ error: "Missing pageId" }, { status: 400 });
+    }
+
+    const body = (await req.json()) as { title: string };
+    if (!body.title) {
+      return json({ error: "Missing title" }, { status: 400 });
+    }
+
+    try {
+      await updatePageTitle(state.workbookDir, pageId, body.title);
+
+      // Emit manifest update event so UI refreshes
+      const bus = getEventBus();
+      const manifest = await buildManifest(state);
+      bus.emit("manifest:updated", { manifest });
+
+      return json({ success: true, pageId, title: body.title });
+    } catch (error) {
+      console.error("Failed to update page title:", error);
+      return json({ error: String(error) }, { status: 500 });
+    }
+  });
+
+  // PUT /workbook/pages/:pageId - Update MDX content for a page
+  router.put("/workbook/pages/:pageId", async (req) => {
+    const state = getState();
+    if (!state) {
+      return json({ error: "Not initialized" }, { status: 500 });
+    }
+
+    const url = new URL(req.url);
+    const pageId = url.pathname.split("/").pop();
+    if (!pageId) {
+      return json({ error: "Missing pageId" }, { status: 400 });
+    }
+
+    const body = (await req.json()) as { content: string };
+    if (!body.content) {
+      return json({ error: "Missing content" }, { status: 400 });
+    }
+
+    try {
+      await savePageContent(state.workbookDir, pageId, body.content);
+
+      // Emit manifest update event so UI refreshes
+      const bus = getEventBus();
+      const manifest = await buildManifest(state);
+      bus.emit("manifest:updated", { manifest });
+
+      return json({ success: true, pageId });
+    } catch (error) {
+      console.error("Failed to save page:", error);
+      return json({ error: String(error) }, { status: 500 });
+    }
+  });
+
   // POST /workbook/sources/add - Add source from registry
   router.post("/workbook/sources/add", async (req) => {
     const state = getState();
@@ -486,4 +576,89 @@ function sanitizeColumnName(name: string): string {
     .replace(/^_+|_+$/g, "")
     .replace(/_+/g, "_")
     || "column";
+}
+
+/**
+ * Get MDX content for a page by ID
+ * pageId maps to filename (without extension)
+ */
+async function getPageContent(workbookDir: string, pageId: string): Promise<string> {
+  const pagesDir = join(workbookDir, "pages");
+
+  // Try .mdx first, then .md
+  const mdxPath = join(pagesDir, `${pageId}.mdx`);
+  const mdPath = join(pagesDir, `${pageId}.md`);
+
+  if (existsSync(mdxPath)) {
+    return await readFile(mdxPath, "utf-8");
+  } else if (existsSync(mdPath)) {
+    return await readFile(mdPath, "utf-8");
+  }
+
+  throw new Error(`Page not found: ${pageId}`);
+}
+
+/**
+ * Update page title in frontmatter only
+ */
+async function updatePageTitle(workbookDir: string, pageId: string, newTitle: string): Promise<void> {
+  const content = await getPageContent(workbookDir, pageId);
+
+  // Update or add frontmatter with new title
+  let updatedContent: string;
+
+  if (content.startsWith("---")) {
+    const endIndex = content.indexOf("---", 3);
+    if (endIndex !== -1) {
+      // Has existing frontmatter - update title
+      const frontmatter = content.slice(3, endIndex);
+      const body = content.slice(endIndex + 3);
+
+      // Update or add title in frontmatter
+      const lines = frontmatter.split("\n");
+      let titleFound = false;
+      const updatedLines = lines.map(line => {
+        if (line.startsWith("title:")) {
+          titleFound = true;
+          return `title: "${newTitle}"`;
+        }
+        return line;
+      });
+
+      if (!titleFound) {
+        updatedLines.unshift(`title: "${newTitle}"`);
+      }
+
+      updatedContent = `---\n${updatedLines.join("\n").trim()}\n---${body}`;
+    } else {
+      // Malformed frontmatter - add proper one
+      updatedContent = `---\ntitle: "${newTitle}"\n---\n\n${content}`;
+    }
+  } else {
+    // No frontmatter - add it
+    updatedContent = `---\ntitle: "${newTitle}"\n---\n\n${content}`;
+  }
+
+  await savePageContent(workbookDir, pageId, updatedContent);
+}
+
+/**
+ * Save MDX content for a page by ID
+ */
+async function savePageContent(workbookDir: string, pageId: string, content: string): Promise<void> {
+  const pagesDir = join(workbookDir, "pages");
+
+  // Ensure pages directory exists
+  await mkdir(pagesDir, { recursive: true });
+
+  // Try to find existing file first (.mdx or .md)
+  const mdxPath = join(pagesDir, `${pageId}.mdx`);
+  const mdPath = join(pagesDir, `${pageId}.md`);
+
+  // Write to existing file location, or default to .mdx
+  if (existsSync(mdPath)) {
+    await writeFile(mdPath, content, "utf-8");
+  } else {
+    await writeFile(mdxPath, content, "utf-8");
+  }
 }

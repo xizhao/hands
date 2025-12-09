@@ -22,6 +22,7 @@ import { useDbSchema, useDevServerRoutes, useWorkbookManifest } from "@/hooks/us
 interface PagesSidebarProps {
   collapsed?: boolean;
   fullWidth?: boolean;
+  onAddPage?: () => void;
 }
 
 interface Page {
@@ -31,7 +32,7 @@ interface Page {
   path?: string;
 }
 
-export function PagesSidebar({ collapsed = false, fullWidth = false }: PagesSidebarProps) {
+export function PagesSidebar({ collapsed = false, fullWidth = false, onAddPage }: PagesSidebarProps) {
   const navigate = useNavigate();
   const routerState = useRouterState();
   // Get activePageId by parsing the current URL path
@@ -75,8 +76,7 @@ export function PagesSidebar({ collapsed = false, fullWidth = false }: PagesSide
   }, [blocks, searchQuery]);
 
   const handleAddPage = () => {
-    // TODO: Implement add page
-    console.log("Add new page");
+    onAddPage?.();
   };
 
   // Calculate magnetic zoom scale based on distance from hovered item

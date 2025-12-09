@@ -159,24 +159,28 @@ fn read_workbook_config(workbook_dir: &PathBuf) -> Option<Workbook> {
 }
 
 fn init_workbook(workbook_dir: &PathBuf, name: &str, _description: Option<&str>) -> Result<(), String> {
-    // Create an empty workbook (like `hands init`) instead of copying template
-    // This ensures the user sees the "Get started" empty state
+    // Create workbook with blocks/pages architecture (not src/)
+    // Blocks are RSC functions, pages are MDX with embedded blocks
 
     let slug = name.to_lowercase()
         .chars()
         .map(|c| if c.is_alphanumeric() { c } else { '-' })
         .collect::<String>();
 
-    // Create directory structure
-    fs::create_dir_all(workbook_dir.join("src")).map_err(|e| e.to_string())?;
+    // Create directory structure - blocks/pages architecture, NO src/
+    fs::create_dir_all(workbook_dir.join("blocks")).map_err(|e| e.to_string())?;
+    fs::create_dir_all(workbook_dir.join("blocks/ui")).map_err(|e| e.to_string())?;
     fs::create_dir_all(workbook_dir.join("pages")).map_err(|e| e.to_string())?;
     fs::create_dir_all(workbook_dir.join("migrations")).map_err(|e| e.to_string())?;
+    fs::create_dir_all(workbook_dir.join("lib")).map_err(|e| e.to_string())?;
 
-    // Create hands.json
+    // Create hands.json with full schema
     let hands_json = serde_json::json!({
         "$schema": "https://hands.dev/schema/hands.json",
         "name": slug,
         "version": "0.0.1",
+        "pages": { "dir": "./pages" },
+        "blocks": { "dir": "./blocks", "exclude": ["ui/**"] },
         "sources": {},
         "secrets": {},
         "database": {
@@ -188,7 +192,7 @@ fn init_workbook(workbook_dir: &PathBuf, name: &str, _description: Option<&str>)
         serde_json::to_string_pretty(&hands_json).unwrap()
     ).map_err(|e| e.to_string())?;
 
-    // Create package.json
+    // Create package.json (no hono - it's bundled by build system)
     let package_json = serde_json::json!({
         "name": format!("@hands/{}", slug),
         "version": "0.0.1",
@@ -199,11 +203,9 @@ fn init_workbook(workbook_dir: &PathBuf, name: &str, _description: Option<&str>)
             "build": "hands build"
         },
         "dependencies": {
-            "@hands/stdlib": "workspace:*",
-            "hono": "^4"
+            "@hands/stdlib": "workspace:*"
         },
         "devDependencies": {
-            "@cloudflare/workers-types": "^4",
             "typescript": "^5"
         }
     });
@@ -222,41 +224,62 @@ fn init_workbook(workbook_dir: &PathBuf, name: &str, _description: Option<&str>)
             "esModuleInterop": true,
             "skipLibCheck": true,
             "jsx": "react-jsx",
-            "jsxImportSource": "hono/jsx"
+            "jsxImportSource": "react"
         },
-        "include": ["src/**/*", "pages/**/*"]
+        "include": ["blocks/**/*", "pages/**/*", "lib/**/*"]
     });
     fs::write(
         workbook_dir.join("tsconfig.json"),
         serde_json::to_string_pretty(&tsconfig).unwrap()
     ).map_err(|e| e.to_string())?;
 
-    // Create minimal src/index.tsx
-    let index_content = format!(r#"import {{ Hono }} from "hono"
+    // Create example block: blocks/welcome.tsx
+    let welcome_block = format!(r#"import type {{ BlockFn, BlockMeta }} from "@hands/stdlib"
 
-const app = new Hono()
+export const meta: BlockMeta = {{
+  title: "Welcome",
+  description: "Welcome block for new workbooks",
+  refreshable: false
+}}
 
-app.get("/", (c) => {{
-  return c.html(`
-    <!DOCTYPE html>
-    <html>
-      <head>
-        <title>{}</title>
-      </head>
-      <body>
-        <h1>Welcome to {}</h1>
-        <p>Create a page or add a data source to get started.</p>
-      </body>
-    </html>
-  `)
-}})
+const WelcomeBlock: BlockFn<{{ name?: string }}> = async (props, ctx) => {{
+  return (
+    <div className="p-6 bg-gradient-to-br from-blue-50 to-indigo-100 rounded-xl">
+      <h1 className="text-2xl font-bold text-gray-900">
+        Welcome to {{props.name || "{}"}}
+      </h1>
+      <p className="mt-2 text-gray-600">
+        Create blocks to visualize your data.
+      </p>
+    </div>
+  )
+}}
 
-export default app
-"#, name, name);
-    fs::write(workbook_dir.join("src/index.tsx"), index_content).map_err(|e| e.to_string())?;
+export default WelcomeBlock
+"#, name);
+    fs::write(workbook_dir.join("blocks/welcome.tsx"), welcome_block).map_err(|e| e.to_string())?;
+
+    // Create index page: pages/index.mdx
+    let index_page = format!(r#"---
+title: {}
+---
+
+# {}
+
+<Block id="welcome" name="{}" />
+
+Start by creating blocks in the `blocks/` directory.
+"#, name, name, name);
+    fs::write(workbook_dir.join("pages/index.mdx"), index_page).map_err(|e| e.to_string())?;
+
+    // Create lib/db.ts helper
+    let db_helper = r#"// Database helper - re-exported from context for convenience
+export type { SqlClient, BlockContext } from "@hands/stdlib"
+"#;
+    fs::write(workbook_dir.join("lib/db.ts"), db_helper).map_err(|e| e.to_string())?;
 
     // Create .gitignore
-    let gitignore = "node_modules/\n.hands/\npostgres/\n*.log\n";
+    let gitignore = "node_modules/\n.hands/\ndb/\n*.log\n";
     fs::write(workbook_dir.join(".gitignore"), gitignore).map_err(|e| e.to_string())?;
 
     Ok(())

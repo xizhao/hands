@@ -3,6 +3,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { useState, useEffect, useCallback } from "react";
 import type { Workbook } from "@/lib/workbook";
 import { PORTS } from "@/lib/ports";
+import { useUIStore } from "@/stores/ui";
 
 interface CreateWorkbookRequest {
   name: string;
@@ -523,6 +524,89 @@ export function useCreatePage() {
       return response.json() as Promise<{ success: boolean; page: WorkbookPage }>;
     },
     onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["workbook-manifest"] });
+    },
+  });
+}
+
+// Get page content (MDX) by pageId
+export function usePageContent(pageId: string | null) {
+  const port = useUIStore((s) => s.runtimePort);
+
+  return useQuery({
+    queryKey: ["page-content", pageId, port],
+    queryFn: async (): Promise<string> => {
+      if (!port || !pageId) throw new Error("Not ready");
+
+      const response = await fetch(`http://localhost:${port}/workbook/pages/${pageId}`);
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || "Failed to load page");
+      }
+
+      const data = await response.json();
+      return data.content;
+    },
+    enabled: !!port && !!pageId,
+    staleTime: 0, // Always refetch when pageId changes
+  });
+}
+
+// Save page content (MDX)
+export function useSavePageContent() {
+  const port = useUIStore((s) => s.runtimePort);
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationKey: ["page-content", "save"],
+    mutationFn: async ({ pageId, content }: { pageId: string; content: string }) => {
+      if (!port) throw new Error("No runtime connected");
+
+      const response = await fetch(`http://localhost:${port}/workbook/pages/${pageId}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ content }),
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || "Failed to save page");
+      }
+
+      return response.json();
+    },
+    onSuccess: (_, { pageId }) => {
+      queryClient.invalidateQueries({ queryKey: ["page-content", pageId] });
+      queryClient.invalidateQueries({ queryKey: ["workbook-manifest"] });
+    },
+  });
+}
+
+// Update page title (frontmatter only)
+export function useUpdatePageTitle() {
+  const port = useUIStore((s) => s.runtimePort);
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationKey: ["page-title", "update"],
+    mutationFn: async ({ pageId, title }: { pageId: string; title: string }) => {
+      if (!port) throw new Error("No runtime connected");
+
+      const response = await fetch(`http://localhost:${port}/workbook/pages/${pageId}/title`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ title }),
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || "Failed to update page title");
+      }
+
+      return response.json();
+    },
+    onSuccess: (_, { pageId }) => {
+      queryClient.invalidateQueries({ queryKey: ["page-content", pageId] });
       queryClient.invalidateQueries({ queryKey: ["workbook-manifest"] });
     },
   });

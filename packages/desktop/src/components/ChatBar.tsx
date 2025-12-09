@@ -127,6 +127,7 @@ ${activeWorkbook.description ? `Description: ${activeWorkbook.description}` : ""
 
   return (
     <div
+      data-chat-bar
       className="flex items-center gap-2 px-2 py-2 rounded-xl border border-border/40 bg-background/80 backdrop-blur-sm"
     >
       {/* OpenCode settings button */}
