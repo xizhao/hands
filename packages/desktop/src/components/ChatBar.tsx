@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { ArrowUp, Square, Loader2, Hand } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useWorkbook, useDevServerStatus, useDevServerRoutes, useWorkbookDatabase, useStartDevServer } from "@/hooks/useWorkbook";
+import { ChatSettings } from "@/components/ChatSettings";
 
 interface ChatBarProps {
   expanded: boolean;
@@ -128,14 +129,19 @@ ${activeWorkbook.description ? `Description: ${activeWorkbook.description}` : ""
     <div
       className="flex items-center gap-2 px-2 py-2 rounded-xl border border-border/40 bg-background/80 backdrop-blur-sm"
     >
-      {/* Logo button */}
-      <Button
-        variant="ghost"
-        size="icon"
-        className="h-8 w-8 shrink-0 rounded-lg"
-      >
-        <Hand className="h-5 w-5" />
-      </Button>
+      {/* OpenCode settings button */}
+      <ChatSettings>
+        <Button
+          variant="ghost"
+          size="icon"
+          className={cn(
+            "h-8 w-8 shrink-0 rounded-lg",
+            !isConnected && "text-red-400"
+          )}
+        >
+          <Hand className="h-5 w-5" />
+        </Button>
+      </ChatSettings>
 
       {/* Input */}
       <input

@@ -2,6 +2,12 @@
   "$schema": "https://hands.dev/schema/hands.json",
   "name": "workbook-starter",
   "version": "0.1.0",
+  "pages": {
+    "dir": "./pages"
+  },
+  "blocks": {
+    "dir": "./blocks"
+  },
   "sources": {},
   "secrets": {},
   "database": {

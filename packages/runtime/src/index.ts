@@ -7,15 +7,16 @@
  *   hands-runtime --preflight   # Run preflight checks only
  *
  * Manages:
- *   - Embedded PostgreSQL (data in workbook-dir/postgres)
- *   - Wrangler dev server
+ *   - Embedded PostgreSQL (data in workbook-dir/db)
+ *   - Miniflare dev server (CF Workers compatible runtime)
  *   - Continuous code quality evaluation (tsc, biome, knip)
  */
 
-import { watch } from "fs";
 import { initRuntime, startPostgres, startWorker, stopServices, createServer } from "./server";
 import { runEval } from "./eval";
 import { runPreflightChecks, printPreflightResults } from "./preflight";
+import { createWatcher } from "./watcher";
+import { getEventBus } from "./events";
 
 // Parse CLI args
 function parseArgs(): {
@@ -75,43 +76,34 @@ async function findServicePorts(): Promise<{ postgres: number; wrangler: number 
 }
 
 /**
- * Set up file watcher with debounced eval
+ * Set up file watcher with improved race condition handling
  */
 function setupFileWatcher(
   workbookDir: string,
-  onEval: () => Promise<void>
-): void {
-  let debounceTimer: ReturnType<typeof setTimeout> | null = null;
+  runtimePort: number
+): ReturnType<typeof createWatcher> {
+  const bus = getEventBus();
+  const watcher = createWatcher({ workbookDir });
 
-  const watcher = watch(
-    workbookDir,
-    { recursive: true },
-    (event, filename) => {
-      // Ignore non-source files and postgres data
-      if (!filename) return;
-      if (filename.startsWith("postgres/")) return;
-      if (filename.startsWith("node_modules/")) return;
-      if (filename.startsWith(".")) return;
-      if (!filename.match(/\.(ts|tsx|js|jsx|json|toml)$/)) return;
+  // Handle debounced file changes
+  bus.on("file:debounced", async ({ paths }) => {
+    console.log(`Files changed: ${paths.join(", ")}`);
 
-      // Debounce
-      if (debounceTimer) clearTimeout(debounceTimer);
-      debounceTimer = setTimeout(async () => {
-        console.log(`File changed: ${filename}`);
-        try {
-          await onEval();
-        } catch (error) {
-          console.error("Eval failed:", error);
-        }
-      }, 500);
+    bus.emit("eval:started");
+    try {
+      // Trigger eval via HTTP endpoint (keeps eval logic centralized)
+      const response = await fetch(`http://localhost:${runtimePort}/eval`, {
+        method: "POST",
+      });
+      const result = await response.json();
+      bus.emit("eval:completed", { result });
+    } catch (error) {
+      bus.emit("eval:error", { error: error instanceof Error ? error : new Error(String(error)) });
+      console.error("Eval failed:", error);
     }
-  );
-
-  // Cleanup on exit
-  process.on("SIGINT", () => {
-    watcher.close();
-    process.exit(0);
   });
+
+  return watcher;
 }
 
 /**
@@ -148,7 +140,7 @@ async function main() {
 
   console.log(`Runtime port: ${runtimePort}`);
   console.log(`Postgres port: ${servicePorts.postgres}`);
-  console.log(`Wrangler port: ${servicePorts.wrangler}`);
+  console.log(`Worker port: ${servicePorts.wrangler}`);
 
   // Initialize runtime
   await initRuntime({
@@ -181,19 +173,21 @@ async function main() {
     console.error("Worker startup error:", err);
   });
 
-  // Set up file watcher
-  setupFileWatcher(workbookDir, async () => {
-    // The server's /eval/watch SSE endpoint handles broadcasting
-    // This just triggers a new eval
-    const response = await fetch(`http://localhost:${runtimePort}/eval`, {
-      method: "POST",
-    });
-    await response.json();
+  // Set up file watcher with race condition protection
+  const watcher = setupFileWatcher(workbookDir, runtimePort);
+
+  // Emit runtime ready event
+  const bus = getEventBus();
+  bus.emit("runtime:ready", {
+    runtimePort,
+    postgresPort: servicePorts.postgres,
+    workerPort: servicePorts.wrangler,
   });
 
   // Handle shutdown
   process.on("SIGTERM", async () => {
     console.log("Shutting down...");
+    watcher.stop();
     await stopServices();
     server.stop();
     process.exit(0);
@@ -201,6 +195,7 @@ async function main() {
 
   process.on("SIGINT", async () => {
     console.log("Interrupted, shutting down...");
+    watcher.stop();
     await stopServices();
     server.stop();
     process.exit(0);

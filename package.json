@@ -21,7 +21,8 @@
     "opencode-ai": "^1.0.134",
     "postgres": "^3.4.7",
     "turbo": "2.5.6",
-    "typescript": "5.8.2"
+    "typescript": "5.8.2",
+    "unenv": "^1.10.0"
   },
   "trustedDependencies": [
     "esbuild",

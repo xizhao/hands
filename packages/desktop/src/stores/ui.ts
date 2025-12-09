@@ -2,7 +2,7 @@ import { create } from "zustand";
 import { queryClient } from "@/App";
 
 type TabId = "sources" | "data" | "insights" | "preview";
-type RightPanelId = "sources" | "database" | "blocks" | "settings" | null;
+type RightPanelId = "sources" | "database" | "blocks" | "settings" | "alerts" | null;
 
 interface UIState {
   // Active workbook context (not persisted - Tauri is source of truth)

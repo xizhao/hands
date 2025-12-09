@@ -10,6 +10,7 @@ import { SourcesPanel } from "./SourcesPanel";
 import { DatabasePanel } from "./DatabasePanel";
 import { BlocksPanel } from "./BlocksPanel";
 import { SettingsPanel } from "./SettingsPanel";
+import { AlertsPanel } from "./AlertsPanel";
 import { AnimatePresence, motion } from "framer-motion";
 
 export function RightPanel() {
@@ -20,6 +21,7 @@ export function RightPanel() {
     database: "Database",
     blocks: "Blocks",
     settings: "Settings",
+    alerts: "Alerts",
   }[rightPanel] : "";
 
   return (
@@ -64,6 +66,7 @@ export function RightPanel() {
               {rightPanel === "database" && <DatabasePanel />}
               {rightPanel === "blocks" && <BlocksPanel />}
               {rightPanel === "settings" && <SettingsPanel />}
+              {rightPanel === "alerts" && <AlertsPanel />}
             </div>
           </motion.div>
         </>

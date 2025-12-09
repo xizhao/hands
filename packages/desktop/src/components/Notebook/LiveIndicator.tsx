@@ -4,19 +4,15 @@
  * Shows a colored dot indicating overall status and a dropdown with:
  * - PostgreSQL connection status
  * - Dev Server (Worker) status
- * - OpenCode AI server status
  * - API routes
- * - TypeScript diagnostics
  */
 
 import { invoke } from "@tauri-apps/api/core";
 import { useUIStore } from "@/stores/ui";
-import { useServer } from "@/hooks/useServer";
 import {
   useDevServerStatus,
   useDevServerRoutes,
   useWorkbookDatabase,
-  useEvalResult,
   useRuntimeEval,
 } from "@/hooks/useWorkbook";
 import {
@@ -32,42 +28,29 @@ import {
 import {
   Database,
   Radio,
-  Cpu,
   Route as RouteIcon,
   ExternalLink,
-  AlertCircle,
-  AlertTriangle,
-  FileCode,
-  Sparkles,
   RotateCw,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 
 export function LiveIndicator() {
   const { activeWorkbookId } = useUIStore();
-  const { isConnected, isConnecting, isRestarting, restartServer } = useServer();
 
-  // Dev server and eval data
+  // Dev server data
   const { data: devServerStatus } = useDevServerStatus(activeWorkbookId);
   const { data: devServerRoutes } = useDevServerRoutes(activeWorkbookId);
   const { data: workbookDatabase } = useWorkbookDatabase(activeWorkbookId);
-  const { data: evalResult } = useEvalResult(activeWorkbookId);
   const runtimeEval = useRuntimeEval();
 
-  // Compute diagnostics counts
-  const tsErrors = evalResult?.typescript?.errors?.length ?? 0;
-  const tsWarnings = evalResult?.typescript?.warnings?.length ?? 0;
-  const formatErrors = evalResult?.format?.errors?.length ?? 0;
-  const unusedCount =
-    (evalResult?.unused?.exports?.length ?? 0) +
-    (evalResult?.unused?.files?.length ?? 0);
-  const hasIssues =
-    tsErrors > 0 || tsWarnings > 0 || formatErrors > 0 || unusedCount > 0;
-
-  // Overall status color
+  // Overall status color - just based on dev server running status
   const getStatusColor = () => {
-    if (tsErrors > 0) return "bg-red-500";
-    if (tsWarnings > 0 || unusedCount > 0) return "bg-yellow-500";
     if (devServerStatus?.running) return "bg-green-500";
     return "bg-zinc-500";
   };
@@ -101,6 +84,7 @@ export function LiveIndicator() {
         </button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="start" className="w-72 p-0">
+        <TooltipProvider delayDuration={300}>
         {/* Tabs */}
         <div className="flex border-b border-border">
           <button className="flex-1 px-3 py-2 text-sm font-medium text-foreground border-b-2 border-primary flex items-center justify-center gap-1.5">
@@ -161,28 +145,32 @@ export function LiveIndicator() {
               >
                 Browse
               </button>
-              <button
-                onClick={(e) => {
-                  e.preventDefault();
-                  e.stopPropagation();
-                  if (activeWorkbookId) {
-                    runtimeEval.mutate(activeWorkbookId);
-                  }
-                }}
-                disabled={runtimeEval.isPending}
-                className={cn(
-                  "p-1 rounded hover:bg-muted text-muted-foreground hover:text-foreground transition-colors",
-                  runtimeEval.isPending && "opacity-50 cursor-not-allowed"
-                )}
-                title="Refresh runtime status"
-              >
-                <RotateCw
-                  className={cn(
-                    "h-3 w-3",
-                    runtimeEval.isPending && "animate-spin"
-                  )}
-                />
-              </button>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <button
+                    onClick={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      if (activeWorkbookId) {
+                        runtimeEval.mutate(activeWorkbookId);
+                      }
+                    }}
+                    disabled={runtimeEval.isPending}
+                    className={cn(
+                      "p-1 rounded hover:bg-muted text-muted-foreground hover:text-foreground transition-colors",
+                      runtimeEval.isPending && "opacity-50 cursor-not-allowed"
+                    )}
+                  >
+                    <RotateCw
+                      className={cn(
+                        "h-3 w-3",
+                        runtimeEval.isPending && "animate-spin"
+                      )}
+                    />
+                  </button>
+                </TooltipTrigger>
+                <TooltipContent>Refresh runtime status</TooltipContent>
+              </Tooltip>
               <span
                 className={cn(
                   "inline-flex rounded-full h-2 w-2",
@@ -222,54 +210,6 @@ export function LiveIndicator() {
                       : "bg-zinc-500"
                 )}
               />
-            </div>
-          </div>
-
-          <DropdownMenuSeparator />
-
-          {/* OpenCode AI Server Status */}
-          <div className="px-2 py-2">
-            <div className="flex items-center gap-2">
-              <Cpu className="h-4 w-4 text-orange-400" />
-              <div className="flex-1">
-                <div className="text-sm font-medium">OpenCode</div>
-                <div className="text-xs text-muted-foreground">
-                  {isRestarting
-                    ? "Restarting..."
-                    : isConnecting
-                      ? "Connecting..."
-                      : isConnected
-                        ? "http://localhost:4096"
-                        : "Disconnected"}
-                </div>
-              </div>
-              <span
-                className={cn(
-                  "inline-flex rounded-full h-2 w-2",
-                  isRestarting || isConnecting
-                    ? "bg-yellow-500 animate-pulse"
-                    : isConnected
-                      ? "bg-green-500"
-                      : "bg-red-500"
-                )}
-              />
-              <button
-                onClick={(e) => {
-                  e.preventDefault();
-                  e.stopPropagation();
-                  restartServer();
-                }}
-                disabled={isRestarting}
-                className={cn(
-                  "p-1 rounded hover:bg-muted text-muted-foreground hover:text-foreground transition-colors",
-                  isRestarting && "opacity-50 cursor-not-allowed"
-                )}
-                title="Restart OpenCode server"
-              >
-                <RotateCw
-                  className={cn("h-3 w-3", isRestarting && "animate-spin")}
-                />
-              </button>
             </div>
           </div>
 
@@ -323,123 +263,6 @@ export function LiveIndicator() {
             </>
           )}
 
-          {/* Diagnostics section */}
-          {hasIssues && (
-            <>
-              <DropdownMenuSeparator />
-              <div className="px-2 py-1.5">
-                <div className="text-xs font-medium text-muted-foreground mb-1.5">
-                  Code Quality
-                </div>
-
-                {/* TypeScript Errors */}
-                {tsErrors > 0 && (
-                  <DropdownMenuSub>
-                    <DropdownMenuSubTrigger className="flex items-center gap-2 text-red-400">
-                      <AlertCircle className="h-3.5 w-3.5" />
-                      <span className="text-sm">
-                        {tsErrors} error{tsErrors !== 1 ? "s" : ""}
-                      </span>
-                    </DropdownMenuSubTrigger>
-                    <DropdownMenuSubContent className="w-80 max-h-64 overflow-y-auto">
-                      {evalResult?.typescript?.errors?.map((diag, i) => (
-                        <div
-                          key={i}
-                          className="px-2 py-1.5 text-xs border-b border-border/50 last:border-0"
-                        >
-                          <div className="font-mono text-muted-foreground truncate">
-                            {diag.file}:{diag.line}:{diag.column}
-                          </div>
-                          <div className="text-red-400 mt-0.5">
-                            {diag.message}
-                          </div>
-                          {diag.code && (
-                            <div className="text-muted-foreground/60 mt-0.5">
-                              {diag.code}
-                            </div>
-                          )}
-                        </div>
-                      ))}
-                    </DropdownMenuSubContent>
-                  </DropdownMenuSub>
-                )}
-
-                {/* TypeScript Warnings */}
-                {tsWarnings > 0 && (
-                  <DropdownMenuSub>
-                    <DropdownMenuSubTrigger className="flex items-center gap-2 text-yellow-400">
-                      <AlertTriangle className="h-3.5 w-3.5" />
-                      <span className="text-sm">
-                        {tsWarnings} warning{tsWarnings !== 1 ? "s" : ""}
-                      </span>
-                    </DropdownMenuSubTrigger>
-                    <DropdownMenuSubContent className="w-80 max-h-64 overflow-y-auto">
-                      {evalResult?.typescript?.warnings?.map((diag, i) => (
-                        <div
-                          key={i}
-                          className="px-2 py-1.5 text-xs border-b border-border/50 last:border-0"
-                        >
-                          <div className="font-mono text-muted-foreground truncate">
-                            {diag.file}:{diag.line}:{diag.column}
-                          </div>
-                          <div className="text-yellow-400 mt-0.5">
-                            {diag.message}
-                          </div>
-                          {diag.code && (
-                            <div className="text-muted-foreground/60 mt-0.5">
-                              {diag.code}
-                            </div>
-                          )}
-                        </div>
-                      ))}
-                    </DropdownMenuSubContent>
-                  </DropdownMenuSub>
-                )}
-
-                {/* Unused Code */}
-                {unusedCount > 0 && (
-                  <DropdownMenuSub>
-                    <DropdownMenuSubTrigger className="flex items-center gap-2 text-muted-foreground">
-                      <FileCode className="h-3.5 w-3.5" />
-                      <span className="text-sm">{unusedCount} unused</span>
-                    </DropdownMenuSubTrigger>
-                    <DropdownMenuSubContent className="w-64 max-h-64 overflow-y-auto">
-                      {evalResult?.unused?.files?.map((file, i) => (
-                        <div
-                          key={`file-${i}`}
-                          className="px-2 py-1 text-xs font-mono text-muted-foreground"
-                        >
-                          <span className="text-yellow-400/60">file:</span>{" "}
-                          {file}
-                        </div>
-                      ))}
-                      {evalResult?.unused?.exports?.map((exp, i) => (
-                        <div
-                          key={`exp-${i}`}
-                          className="px-2 py-1 text-xs font-mono text-muted-foreground"
-                        >
-                          <span className="text-blue-400/60">export:</span>{" "}
-                          {exp}
-                        </div>
-                      ))}
-                    </DropdownMenuSubContent>
-                  </DropdownMenuSub>
-                )}
-              </div>
-            </>
-          )}
-
-          {/* All clear indicator */}
-          {!hasIssues && evalResult && (
-            <>
-              <DropdownMenuSeparator />
-              <div className="px-2 py-2 flex items-center gap-2 text-green-400">
-                <Sparkles className="h-4 w-4" />
-                <span className="text-sm">No issues</span>
-              </div>
-            </>
-          )}
-
           {/* Open dev server in browser */}
           {devServerStatus?.running && devServerRoutes?.url && (
             <>
@@ -454,6 +277,7 @@ export function LiveIndicator() {
             </>
           )}
         </div>
+        </TooltipProvider>
       </DropdownMenuContent>
     </DropdownMenu>
   );

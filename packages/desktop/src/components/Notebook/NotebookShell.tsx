@@ -11,11 +11,12 @@
 import { useRef, useCallback, useState, useEffect, type ReactNode } from "react";
 import { useRouter, useRouterState } from "@tanstack/react-router";
 import { useUIStore } from "@/stores/ui";
-import { useWorkbooks, useCreateWorkbook, useOpenWorkbook, useUpdateWorkbook, useDbSchema } from "@/hooks/useWorkbook";
+import { useWorkbooks, useCreateWorkbook, useOpenWorkbook, useUpdateWorkbook, useDbSchema, useDevServerRoutes, useEvalResult } from "@/hooks/useWorkbook";
 import type { Workbook } from "@/lib/workbook";
 import { cn } from "@/lib/utils";
 
 import { PagesSidebar } from "./sidebar/PagesSidebar";
+import { EmptyWorkbookState } from "./EmptyWorkbookState";
 import { pageRoute } from "@/routes/_notebook/page.$pageId";
 import { indexRoute } from "@/routes/_notebook/index";
 import { ChatBar } from "@/components/ChatBar";
@@ -40,6 +41,7 @@ import {
   Link as LinkIcon,
   Copy,
   X,
+  Warning,
 } from "@phosphor-icons/react";
 
 import {
@@ -47,6 +49,13 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
+
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 
 // Mock pages for breadcrumb lookup - will be replaced with real data
 const MOCK_PAGES = [
@@ -75,9 +84,22 @@ export function NotebookShell({ children }: NotebookShellProps) {
   const updateWorkbook = useUpdateWorkbook();
   const { setActiveWorkbook } = useUIStore();
 
-  // Data for titlebar indicators
+  // Data for titlebar indicators and empty state detection
   const { data: dbSchema } = useDbSchema(activeWorkbookId);
+  const { data: devServerRoutes } = useDevServerRoutes(activeWorkbookId);
+  const { data: evalResult } = useEvalResult(activeWorkbookId);
   const tableCount = dbSchema?.length ?? 0;
+  const blockCount = devServerRoutes?.charts?.length ?? 0;
+  const pageCount = MOCK_PAGES.length; // TODO: Replace with real pages data
+
+  // Compute alert counts from eval result
+  const alertErrors = (evalResult?.typescript?.errors?.length ?? 0) + (evalResult?.format?.errors?.length ?? 0);
+  const alertWarnings = evalResult?.typescript?.warnings?.length ?? 0;
+  const alertCount = alertErrors + alertWarnings;
+
+  // Determine if workbook is truly empty (no sources, blocks, or pages)
+  // For now, treat as empty only if no sources AND using mock pages (will be 0 when real)
+  const isWorkbookEmpty = tableCount === 0 && blockCount === 0;
 
   // Current workbook
   const currentWorkbook = workbooks?.find((w) => w.id === activeWorkbookId);
@@ -172,13 +194,28 @@ export function NotebookShell({ children }: NotebookShellProps) {
     router.navigate({ to: indexRoute.to });
   }, [router]);
 
-  // Page count for indicator dots
-  const pageCount = MOCK_PAGES.length;
+  // Empty state handlers
+  const handleAddSource = useCallback(() => {
+    // TODO: Open source connection dialog
+    toggleRightPanel("database");
+    console.log("Add source");
+  }, [toggleRightPanel]);
+
+  const handleImportFile = useCallback(() => {
+    // TODO: Open file picker for CSV/JSON import
+    console.log("Import file");
+  }, []);
+
+  const handleAddPage = useCallback(() => {
+    // TODO: Create new page and navigate to it
+    console.log("Add page");
+  }, []);
 
   // Chat state
   const [chatExpanded, setChatExpanded] = useState(false);
 
   return (
+    <TooltipProvider delayDuration={300}>
     <div className="h-screen flex flex-col bg-background overflow-hidden relative">
       {/* Subtle 1px inset border on overall window - matches macOS ~10px corner radius */}
       <div className="absolute inset-0 pointer-events-none z-50 border border-white/[0.08] dark:border-white/[0.06]" style={{ borderRadius: '10px' }} />
@@ -228,16 +265,20 @@ export function NotebookShell({ children }: NotebookShellProps) {
           {/* Live indicator (status dot) */}
           <LiveIndicator />
 
-          {/* Workbook switcher - shows / by default, dropdown chevron on hover */}
+          {/* Workbook switcher dropdown - always visible */}
           <div className="relative flex items-center justify-center w-5 h-5">
-            {/* Slash separator - visible by default, hidden on hover */}
-            <span className="text-muted-foreground/60 text-sm group-hover/titlebar:opacity-0 transition-opacity">/</span>
-            {/* Dropdown trigger - hidden by default, visible on hover */}
+            {/* Slash separator - only visible when on a page, hidden on hover */}
+            {isOnPage && (
+              <span className="text-muted-foreground/60 text-sm group-hover/titlebar:opacity-0 transition-opacity">/</span>
+            )}
+            {/* Dropdown trigger - hidden by default (shows on hover), or always visible when not on page */}
             <DropdownMenu>
               <DropdownMenuTrigger className={cn(
                 "absolute inset-0 flex items-center justify-center rounded-sm transition-all",
                 "text-muted-foreground/70 hover:text-muted-foreground hover:bg-accent/50",
-                "opacity-0 group-hover/titlebar:opacity-100 focus:opacity-100"
+                isOnPage
+                  ? "opacity-0 group-hover/titlebar:opacity-100 focus:opacity-100"
+                  : "opacity-100"
               )}>
                 <CaretDown weight="bold" className="h-3 w-3" />
               </DropdownMenuTrigger>
@@ -263,17 +304,21 @@ export function NotebookShell({ children }: NotebookShellProps) {
             </DropdownMenu>
           </div>
 
-          {/* Page name when on a page */}
+          {/* Page breadcrumb - only show when on a page route */}
           {isOnPage && currentPage && (
             <>
               <span className="text-sm text-muted-foreground">{currentPage.title}</span>
-              <button
-                onClick={handleClosePage}
-                className="ml-1 p-0.5 rounded-sm text-muted-foreground/70 hover:text-muted-foreground hover:bg-accent/50 transition-colors opacity-0 group-hover/titlebar:opacity-100"
-                title="Close page"
-              >
-                <X weight="bold" className="h-3 w-3" />
-              </button>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <button
+                    onClick={handleClosePage}
+                    className="ml-1 p-0.5 rounded-sm text-muted-foreground/70 hover:text-muted-foreground hover:bg-accent/50 transition-colors opacity-0 group-hover/titlebar:opacity-100"
+                  >
+                    <X weight="bold" className="h-3 w-3" />
+                  </button>
+                </TooltipTrigger>
+                <TooltipContent side="bottom">Close page</TooltipContent>
+              </Tooltip>
             </>
           )}
         </div>
@@ -281,38 +326,75 @@ export function NotebookShell({ children }: NotebookShellProps) {
         {/* Right: Panel toggles + Share */}
         <div className="flex items-center gap-1">
           {/* Database - table browser */}
-          <button
-            onClick={() => toggleRightPanel("database")}
-            className={cn(
-              "flex items-center gap-1 px-1.5 py-1 rounded-md text-[11px] transition-colors",
-              rightPanel === "database"
-                ? "bg-accent text-foreground"
-                : tableCount > 0
-                  ? "text-muted-foreground hover:bg-accent/50 hover:text-foreground"
-                  : "text-muted-foreground/70 hover:bg-accent/50 hover:text-muted-foreground"
-            )}
-            title="Database"
-          >
-            <Database weight="duotone" className={cn("h-3.5 w-3.5", tableCount > 0 && "text-blue-500")} />
-            <span className={cn(
-              "tabular-nums",
-              tableCount > 0 ? "text-foreground" : "text-muted-foreground/70"
-            )}>{tableCount}</span>
-          </button>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <button
+                onClick={() => toggleRightPanel("database")}
+                className={cn(
+                  "flex items-center gap-1 px-1.5 py-1 rounded-md text-[11px] transition-colors",
+                  rightPanel === "database"
+                    ? "bg-accent text-foreground"
+                    : tableCount > 0
+                      ? "text-muted-foreground hover:bg-accent/50 hover:text-foreground"
+                      : "text-muted-foreground/70 hover:bg-accent/50 hover:text-muted-foreground"
+                )}
+              >
+                <Database weight="duotone" className={cn("h-3.5 w-3.5", tableCount > 0 && "text-blue-500")} />
+                <span className={cn(
+                  "tabular-nums",
+                  tableCount > 0 ? "text-foreground" : "text-muted-foreground/70"
+                )}>{tableCount}</span>
+              </button>
+            </TooltipTrigger>
+            <TooltipContent side="bottom">Database</TooltipContent>
+          </Tooltip>
+
+          {/* Alerts - code quality diagnostics */}
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <button
+                onClick={() => toggleRightPanel("alerts")}
+                className={cn(
+                  "flex items-center gap-1 px-1.5 py-1 rounded-md text-[11px] transition-colors",
+                  rightPanel === "alerts"
+                    ? "bg-accent text-foreground"
+                    : alertCount > 0
+                      ? "text-muted-foreground hover:bg-accent/50 hover:text-foreground"
+                      : "text-muted-foreground/70 hover:bg-accent/50 hover:text-muted-foreground"
+                )}
+              >
+                <Warning weight="duotone" className={cn(
+                  "h-3.5 w-3.5",
+                  alertErrors > 0 ? "text-red-500" : alertWarnings > 0 ? "text-yellow-500" : ""
+                )} />
+                {alertCount > 0 && (
+                  <span className={cn(
+                    "tabular-nums",
+                    alertErrors > 0 ? "text-red-500" : alertWarnings > 0 ? "text-yellow-500" : "text-foreground"
+                  )}>{alertCount}</span>
+                )}
+              </button>
+            </TooltipTrigger>
+            <TooltipContent side="bottom">Alerts</TooltipContent>
+          </Tooltip>
 
           {/* Settings - gear icon only */}
-          <button
-            onClick={() => toggleRightPanel("settings")}
-            className={cn(
-              "flex items-center justify-center w-6 h-6 rounded-md transition-colors",
-              rightPanel === "settings"
-                ? "bg-accent text-foreground"
-                : "text-muted-foreground hover:bg-accent/50 hover:text-foreground"
-            )}
-            title="Settings"
-          >
-            <Gear weight="duotone" className="h-4 w-4" />
-          </button>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <button
+                onClick={() => toggleRightPanel("settings")}
+                className={cn(
+                  "flex items-center justify-center w-6 h-6 rounded-md transition-colors",
+                  rightPanel === "settings"
+                    ? "bg-accent text-foreground"
+                    : "text-muted-foreground hover:bg-accent/50 hover:text-foreground"
+                )}
+              >
+                <Gear weight="duotone" className="h-4 w-4" />
+              </button>
+            </TooltipTrigger>
+            <TooltipContent side="bottom">Settings</TooltipContent>
+          </Tooltip>
 
           {/* Separator */}
           <div className="w-px h-4 bg-border mx-0.5" />
@@ -337,15 +419,19 @@ export function NotebookShell({ children }: NotebookShellProps) {
                   <div className="flex-1 px-2 py-1.5 text-xs font-mono bg-muted rounded-md truncate text-muted-foreground">
                     hands.app/w/{activeWorkbookId?.slice(0, 8)}
                   </div>
-                  <button
-                    onClick={() => {
-                      navigator.clipboard.writeText(`https://hands.app/w/${activeWorkbookId}`);
-                    }}
-                    className="p-1.5 rounded-md hover:bg-accent transition-colors"
-                    title="Copy link"
-                  >
-                    <Copy weight="duotone" className="h-3.5 w-3.5 text-muted-foreground" />
-                  </button>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <button
+                        onClick={() => {
+                          navigator.clipboard.writeText(`https://hands.app/w/${activeWorkbookId}`);
+                        }}
+                        className="p-1.5 rounded-md hover:bg-accent transition-colors"
+                      >
+                        <Copy weight="duotone" className="h-3.5 w-3.5 text-muted-foreground" />
+                      </button>
+                    </TooltipTrigger>
+                    <TooltipContent>Copy link</TooltipContent>
+                  </Tooltip>
                 </div>
 
                 <div className="pt-2 border-t border-border">
@@ -433,11 +519,19 @@ export function NotebookShell({ children }: NotebookShellProps) {
             </main>
           </>
         ) : (
-          /* Index view: fullscreen centered sidebar */
-          <div className="flex-1 flex items-start justify-center pt-8 overflow-y-auto">
-            <div className="p-4">
-              <PagesSidebar collapsed={false} fullWidth />
-            </div>
+          /* Index view: empty state or sidebar navigation */
+          <div className="flex-1 flex items-start justify-center overflow-y-auto">
+            {isWorkbookEmpty ? (
+              <EmptyWorkbookState
+                onAddSource={handleAddSource}
+                onImportFile={handleImportFile}
+                onAddPage={handleAddPage}
+              />
+            ) : (
+              <div className="p-4 pt-8">
+                <PagesSidebar collapsed={false} fullWidth />
+              </div>
+            )}
           </div>
         )}
       </div>
@@ -458,5 +552,6 @@ export function NotebookShell({ children }: NotebookShellProps) {
         />
       </div>
     </div>
+    </TooltipProvider>
   );
 }

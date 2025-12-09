@@ -1,4 +1,15 @@
+# Dependencies
 node_modules/
+
+# Build output
 .hands/
-postgres/
+
+# Database
+db/
+
+# Logs
 *.log
+
+# Environment
+.env
+.env.local

@@ -3,6 +3,14 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
+  "main": "./src/index.ts",
+  "exports": {
+    ".": "./src/index.ts",
+    "./build": "./src/build/index.ts",
+    "./config": "./src/config/index.ts",
+    "./eval": "./src/eval/index.ts",
+    "./types": "./src/types.ts"
+  },
   "bin": {
     "hands-runtime": "./src/index.ts"
   },
@@ -12,15 +20,20 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@hands/stdlib": "workspace:*",
-    "postgres": "^3.4.7",
     "@biomejs/biome": "^1.9.0",
-    "toml": "^3.0.0",
+    "@hands/stdlib": "workspace:*",
     "knip": "^5.0.0",
+    "miniflare": "^4.20251202.0",
+    "postgres": "^3.4.7",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0",
+    "toml": "^3.0.0",
     "typescript": "^5.8.0",
-    "wrangler": "^4"
+    "unenv": "^1.10.0",
+    "zod": "^3.23.8"
   },
   "devDependencies": {
-    "@types/bun": "^1.1.0"
+    "@types/bun": "^1.1.0",
+    "@types/react": "^19.0.0"
   }
 }
