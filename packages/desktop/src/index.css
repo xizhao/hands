@@ -2,6 +2,12 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Phosphor duotone icon styling - make secondary layer more visible */
+svg[class*="ph-"] [opacity="0.2"],
+svg [opacity="0.2"] {
+  opacity: 0.35;
+}
+
 @layer base {
   :root {
     /* Premium light theme - Stripe/Clerk inspired */
@@ -30,8 +36,8 @@
     --chart-3: 197 37% 24%;
     --chart-4: 43 74% 66%;
     --chart-5: 27 87% 67%;
-    --brand: oklch(0.623 0.214 259.815);
-    --highlight: oklch(0.852 0.199 91.936);
+    --brand: 211 77% 51%;
+    --highlight: 48 100% 50%;
   }
 
   .dark {
@@ -60,8 +66,8 @@
     --chart-3: 30 80% 55%;
     --chart-4: 280 65% 60%;
     --chart-5: 340 75% 55%;
-    --brand: oklch(0.707 0.165 254.624);
-    --highlight: oklch(0.852 0.199 91.936);
+    --brand: 211 77% 51%;
+    --highlight: 48 100% 50%;
   }
 }
 

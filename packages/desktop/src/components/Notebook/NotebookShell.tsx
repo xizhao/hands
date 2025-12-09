@@ -11,7 +11,7 @@
 import { useEffect, useRef, useCallback, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { useUIStore } from "@/stores/ui";
-import { useWorkbooks, useCreateWorkbook, useOpenWorkbook, useUpdateWorkbook, RuntimeStatus } from "@/hooks/useWorkbook";
+import { useWorkbooks, useCreateWorkbook, useOpenWorkbook, useUpdateWorkbook, useDevServerRoutes, useDbSchema, RuntimeStatus } from "@/hooks/useWorkbook";
 import type { Workbook } from "@/lib/workbook";
 import { useSessions } from "@/hooks/useSession";
 import { startSSESync } from "@/lib/sse";
@@ -25,6 +25,7 @@ import { WorkbookEditor } from "./editor/WorkbookEditor";
 import { ChatBar } from "@/components/ChatBar";
 import { Thread } from "@/components/legacy/Thread";
 import { LiveIndicator } from "./LiveIndicator";
+import { RightPanel } from "./panels/RightPanel";
 
 import {
   DropdownMenu,
@@ -35,10 +36,22 @@ import {
 } from "@/components/ui/dropdown-menu";
 
 import {
-  ChevronDown,
+  CaretDown,
   Plus,
   Check,
-} from "lucide-react";
+  TreeStructure,
+  Database,
+  SquaresFour,
+  Gear,
+  Link,
+  Copy,
+} from "@phosphor-icons/react";
+
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
 
 export function NotebookApp() {
   // Start SSE sync on mount
@@ -64,12 +77,20 @@ export function NotebookApp() {
   // Start database change SSE subscription
   useDbSync(handleDbChange);
 
-  const { activeSessionId, activeWorkbookId, setActiveSession, setActiveWorkbook } = useUIStore();
+  const { activeSessionId, activeWorkbookId, setActiveSession, setActiveWorkbook, rightPanel, toggleRightPanel } = useUIStore();
   const { data: sessions, isLoading: sessionsLoading } = useSessions();
   const { data: workbooks, isLoading: workbooksLoading } = useWorkbooks();
   const createWorkbook = useCreateWorkbook();
   const openWorkbook = useOpenWorkbook();
   const updateWorkbook = useUpdateWorkbook();
+
+  // Data for titlebar indicators
+  const { data: dbSchema } = useDbSchema(activeWorkbookId);
+  const { data: devServerRoutes } = useDevServerRoutes(activeWorkbookId);
+
+  // Extract counts for indicators
+  const tableCount = dbSchema?.length ?? 0;
+  const blockCount = devServerRoutes?.charts?.length ?? 0;
 
   // Current workbook
   const currentWorkbook = workbooks?.find((w) => w.id === activeWorkbookId);
@@ -91,10 +112,8 @@ export function NotebookApp() {
     }, 300);
   }, []);
 
-  // Workbook title editing state
-  const [isEditingTitle, setIsEditingTitle] = useState(false);
-  const [editedTitle, setEditedTitle] = useState("");
-  const titleInputRef = useRef<HTMLInputElement>(null);
+  // Workbook title ref
+  const titleInputRef = useRef<HTMLSpanElement>(null);
 
   // Track initialization
   const initialized = useRef(false);
@@ -198,18 +217,15 @@ export function NotebookApp() {
       {/* macOS Titlebar - traffic lights at x:16 y:18 in tauri.conf.json */}
       <header
         data-tauri-drag-region
-        className="h-11 flex items-center pl-[80px] pr-4 border-b border-border/50 bg-background shrink-0"
+        className="h-11 flex items-center justify-between pl-[80px] pr-4 border-b border-border/50 bg-background shrink-0"
       >
-        {/* Unified control group: title + status dot + dropdown chevron */}
+        {/* Left: Unified control group: title + status dot + dropdown chevron */}
         <div className="flex items-center gap-0 group/titlebar">
           {/* Editable title - contentEditable for natural width */}
           <span
-            ref={titleInputRef as React.RefObject<HTMLSpanElement>}
+            ref={titleInputRef}
             contentEditable
             suppressContentEditableWarning
-            onFocus={() => {
-              setIsEditingTitle(true);
-            }}
             onBlur={(e) => {
               const newName = e.currentTarget.textContent?.trim() || "";
               if (currentWorkbook && newName && newName !== currentWorkbook.name) {
@@ -219,7 +235,6 @@ export function NotebookApp() {
                   updated_at: Date.now(),
                 });
               }
-              setIsEditingTitle(false);
             }}
             onKeyDown={(e) => {
               if (e.key === "Enter") {
@@ -251,7 +266,7 @@ export function NotebookApp() {
               "text-muted-foreground/50 hover:text-muted-foreground hover:bg-accent/50",
               "opacity-0 group-hover/titlebar:opacity-100 focus:opacity-100"
             )}>
-              <ChevronDown className="h-3 w-3" />
+              <CaretDown weight="bold" className="h-3 w-3" />
             </DropdownMenuTrigger>
             <DropdownMenuContent align="start" className="w-[200px]">
               {workbooks?.map((wb) => (
@@ -262,17 +277,133 @@ export function NotebookApp() {
                 >
                   <span className="truncate text-[13px]">{wb.name}</span>
                   {wb.id === activeWorkbookId && (
-                    <Check className="h-3.5 w-3.5 text-primary shrink-0" />
+                    <Check weight="bold" className="h-3.5 w-3.5 text-primary shrink-0" />
                   )}
                 </DropdownMenuItem>
               ))}
               <DropdownMenuSeparator />
               <DropdownMenuItem onClick={handleCreateWorkbook}>
-                <Plus className="h-3.5 w-3.5 mr-2" />
+                <Plus weight="bold" className="h-3.5 w-3.5 mr-2" />
                 <span className="text-[13px]">New Notebook</span>
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
+        </div>
+
+        {/* Right: Panel toggles + Share */}
+        <div className="flex items-center gap-1">
+          {/* Sources - data pipelines */}
+          <button
+            onClick={() => toggleRightPanel("sources")}
+            className={cn(
+              "flex items-center gap-1 px-1.5 py-1 rounded-md text-[11px] transition-colors",
+              rightPanel === "sources"
+                ? "bg-accent text-foreground"
+                : "text-muted-foreground/50 hover:bg-accent/50 hover:text-muted-foreground"
+            )}
+            title="Sources"
+          >
+            <TreeStructure weight="duotone" className="h-3.5 w-3.5" />
+            <span className="tabular-nums">0</span>
+          </button>
+
+          {/* Database - table browser */}
+          <button
+            onClick={() => toggleRightPanel("database")}
+            className={cn(
+              "flex items-center gap-1 px-1.5 py-1 rounded-md text-[11px] transition-colors",
+              rightPanel === "database"
+                ? "bg-accent text-foreground"
+                : tableCount > 0
+                  ? "text-muted-foreground hover:bg-accent/50 hover:text-foreground"
+                  : "text-muted-foreground/50 hover:bg-accent/50 hover:text-muted-foreground"
+            )}
+            title="Database"
+          >
+            <Database weight="duotone" className={cn("h-3.5 w-3.5", tableCount > 0 && "text-blue-500")} />
+            <span className={cn(
+              "tabular-nums",
+              tableCount > 0 ? "text-foreground" : "text-muted-foreground/50"
+            )}>{tableCount}</span>
+          </button>
+
+          {/* Blocks - charts/insights */}
+          <button
+            onClick={() => toggleRightPanel("blocks")}
+            className={cn(
+              "flex items-center gap-1 px-1.5 py-1 rounded-md text-[11px] transition-colors",
+              rightPanel === "blocks"
+                ? "bg-accent text-foreground"
+                : blockCount > 0
+                  ? "text-muted-foreground hover:bg-accent/50 hover:text-foreground"
+                  : "text-muted-foreground/50 hover:bg-accent/50 hover:text-muted-foreground"
+            )}
+            title="Blocks"
+          >
+            <SquaresFour weight="duotone" className={cn("h-3.5 w-3.5", blockCount > 0 && "text-amber-500")} />
+            <span className={cn(
+              "tabular-nums",
+              blockCount > 0 ? "text-foreground" : "text-muted-foreground/50"
+            )}>{blockCount}</span>
+          </button>
+
+          {/* Settings - gear icon only */}
+          <button
+            onClick={() => toggleRightPanel("settings")}
+            className={cn(
+              "flex items-center justify-center w-6 h-6 rounded-md transition-colors",
+              rightPanel === "settings"
+                ? "bg-accent text-foreground"
+                : "text-muted-foreground hover:bg-accent/50 hover:text-foreground"
+            )}
+            title="Settings"
+          >
+            <Gear weight="duotone" className="h-4 w-4" />
+          </button>
+
+          {/* Separator */}
+          <div className="w-px h-4 bg-border mx-0.5" />
+
+          {/* Share - text button with popover */}
+          <Popover>
+            <PopoverTrigger asChild>
+              <button className="px-2 py-1 rounded-md text-[12px] font-medium text-muted-foreground hover:text-foreground hover:bg-accent/50 transition-colors">
+                Share
+              </button>
+            </PopoverTrigger>
+            <PopoverContent align="end" className="w-64 p-3">
+              <div className="space-y-3">
+                <div>
+                  <div className="text-sm font-medium mb-1">Share workbook</div>
+                  <p className="text-xs text-muted-foreground">
+                    Anyone with the link can view this workbook.
+                  </p>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <div className="flex-1 px-2 py-1.5 text-xs font-mono bg-muted rounded-md truncate text-muted-foreground">
+                    hands.app/w/{activeWorkbookId?.slice(0, 8)}
+                  </div>
+                  <button
+                    onClick={() => {
+                      navigator.clipboard.writeText(`https://hands.app/w/${activeWorkbookId}`);
+                    }}
+                    className="p-1.5 rounded-md hover:bg-accent transition-colors"
+                    title="Copy link"
+                  >
+                    <Copy weight="duotone" className="h-3.5 w-3.5 text-muted-foreground" />
+                  </button>
+                </div>
+
+                <div className="pt-2 border-t border-border">
+                  <button className="w-full flex items-center gap-2 px-2 py-1.5 text-xs rounded-md hover:bg-accent transition-colors">
+                    <Link weight="duotone" className="h-3.5 w-3.5 text-muted-foreground" />
+                    <span>Copy link</span>
+                  </button>
+                </div>
+              </div>
+            </PopoverContent>
+          </Popover>
         </div>
       </header>
 
@@ -332,6 +463,9 @@ export function NotebookApp() {
           </div>
         </main>
       </div>
+
+      {/* Right panel overlay */}
+      <RightPanel />
 
       {/* Floating chat - bottom-up layout */}
       <div className="fixed bottom-4 left-4 right-4 z-50 max-w-2xl mx-auto flex flex-col">

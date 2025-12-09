@@ -2,6 +2,7 @@ import { create } from "zustand";
 import { queryClient } from "@/App";
 
 type TabId = "sources" | "data" | "insights" | "preview";
+type RightPanelId = "sources" | "database" | "blocks" | "settings" | null;
 
 interface UIState {
   // Active workbook context (not persisted - Tauri is source of truth)
@@ -17,6 +18,10 @@ interface UIState {
   // Active tab in notebook view
   activeTab: TabId;
   setActiveTab: (tab: TabId) => void;
+  // Right panel state
+  rightPanel: RightPanelId;
+  setRightPanel: (panel: RightPanelId) => void;
+  toggleRightPanel: (panel: Exclude<RightPanelId, null>) => void;
 }
 
 export const useUIStore = create<UIState>()((set, get) => ({
@@ -37,4 +42,9 @@ export const useUIStore = create<UIState>()((set, get) => ({
   setActiveSession: (id) => set({ activeSessionId: id }),
   activeTab: "preview",
   setActiveTab: (tab) => set({ activeTab: tab }),
+  rightPanel: null,
+  setRightPanel: (panel) => set({ rightPanel: panel }),
+  toggleRightPanel: (panel) => set((state) => ({
+    rightPanel: state.rightPanel === panel ? null : panel
+  })),
 }));

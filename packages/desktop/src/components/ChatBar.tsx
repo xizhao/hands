@@ -1,13 +1,10 @@
-import { useState, useRef, useEffect, useCallback } from "react";
+import { useState, useRef, useEffect } from "react";
 import { useSendMessage, useAbortSession, useSessionStatuses, useCreateSession } from "@/hooks/useSession";
-import { api } from "@/lib/api";
 import { useServer } from "@/hooks/useServer";
 import { useUIStore } from "@/stores/ui";
-import { useBackgroundStore } from "@/stores/background";
 import { Button } from "@/components/ui/button";
 import { ArrowUp, Square, Loader2, Hand } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { listen } from "@tauri-apps/api/event";
 import { useWorkbook, useDevServerStatus, useDevServerRoutes, useWorkbookDatabase, useStartDevServer } from "@/hooks/useWorkbook";
 
 interface ChatBarProps {
@@ -17,12 +14,8 @@ interface ChatBarProps {
 
 export function ChatBar({ expanded, onExpandChange }: ChatBarProps) {
   const [input, setInput] = useState("");
-  const [isDragging, setIsDragging] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
-  const dropRef = useRef<HTMLDivElement>(null);
-  const hasHandledDrop = useRef(false);
   const { activeSessionId, activeWorkbookId, setActiveSession, setRuntimePort } = useUIStore();
-  const { addTask } = useBackgroundStore();
   const { data: sessionStatuses = {} } = useSessionStatuses();
   const sendMessage = useSendMessage();
   const abortSession = useAbortSession(activeSessionId);
@@ -57,82 +50,6 @@ export function ChatBar({ expanded, onExpandChange }: ChatBarProps) {
 
   const status = activeSessionId ? sessionStatuses[activeSessionId] : null;
   const isBusy = status?.type === "busy" || status?.type === "running";
-
-  // Tauri file drop handling
-  useEffect(() => {
-    const unlisteners: (() => void)[] = [];
-
-    const setupListeners = async () => {
-      const unlistenDrop = await listen<{ paths: string[] }>("tauri://drag-drop", async (event) => {
-        if (hasHandledDrop.current) return;
-        hasHandledDrop.current = true;
-        setTimeout(() => { hasHandledDrop.current = false; }, 500);
-
-        const filePaths = event.payload.paths;
-        if (filePaths.length === 0) return;
-
-        setIsDragging(false);
-
-        try {
-          const fileNames = filePaths.map(p => p.split("/").pop() || p);
-          const title = fileNames.length === 1
-            ? `Import ${fileNames[0]}`
-            : `Import ${fileNames.length} files`;
-
-          const bgSession = await api.sessions.create({ title });
-
-          addTask({
-            id: bgSession.id,
-            type: "import",
-            title,
-            status: "running",
-            startedAt: Date.now(),
-          });
-
-          const importPrompt = `Import these files into the database:\n${filePaths.join("\n")}`;
-          await api.promptWithAgent(bgSession.id, importPrompt, "import");
-        } catch (err) {
-          console.error("Failed to start background import:", err);
-        }
-      });
-      unlisteners.push(unlistenDrop);
-
-      const unlistenEnter = await listen("tauri://drag-enter", () => setIsDragging(true));
-      unlisteners.push(unlistenEnter);
-
-      const unlistenLeave = await listen("tauri://drag-leave", () => setIsDragging(false));
-      unlisteners.push(unlistenLeave);
-    };
-
-    setupListeners();
-    return () => unlisteners.forEach((unlisten) => unlisten());
-  }, [addTask]);
-
-  // Drag handlers
-  const handleDragEnter = useCallback((e: React.DragEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-    setIsDragging(true);
-  }, []);
-
-  const handleDragLeave = useCallback((e: React.DragEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-    if (dropRef.current && !dropRef.current.contains(e.relatedTarget as Node)) {
-      setIsDragging(false);
-    }
-  }, []);
-
-  const handleDragOver = useCallback((e: React.DragEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-  }, []);
-
-  const handleDrop = useCallback((e: React.DragEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-    setIsDragging(false);
-  }, []);
 
   // System prompt with workbook context
   const getSystemPrompt = () => {
@@ -209,17 +126,7 @@ ${activeWorkbook.description ? `Description: ${activeWorkbook.description}` : ""
 
   return (
     <div
-      ref={dropRef}
-      onDragEnter={handleDragEnter}
-      onDragLeave={handleDragLeave}
-      onDragOver={handleDragOver}
-      onDrop={handleDrop}
-      className={cn(
-        "flex items-center gap-2 px-2 py-2 rounded-xl border transition-colors",
-        isDragging
-          ? "border-primary bg-primary/10"
-          : "border-border/40 bg-background/80 backdrop-blur-sm"
-      )}
+      className="flex items-center gap-2 px-2 py-2 rounded-xl border border-border/40 bg-background/80 backdrop-blur-sm"
     >
       {/* Logo button */}
       <Button

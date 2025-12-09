@@ -1,5 +1,5 @@
 /**
- * WorkbookEditor - Plate-based rich editor with RSC block support
+ * WorkbookEditor - Plate-based rich editor with full Notion-like features
  *
  * Uses Plate UI components and idiomatic Plate patterns.
  */
@@ -8,9 +8,8 @@ import { useMemo, useCallback, useState } from "react";
 import { Plate, usePlateEditor } from "platejs/react";
 import type { Value } from "platejs";
 
-import { BasicNodesKit } from "@/components/editor/plugins/basic-nodes-kit";
-import { DndKit } from "@/components/editor/plugins/dnd-kit";
-import { Editor, EditorContainer } from "@/components/ui/editor";
+import { EditorKit } from "@/registry/components/editor/editor-kit";
+import { Editor, EditorContainer } from "@/registry/ui/editor";
 import { useNotebook, useNotebookAutoSave } from "@/lib/blocks-client";
 import { cn } from "@/lib/utils";
 
@@ -45,9 +44,11 @@ export function WorkbookEditor({ className, readOnly = false }: WorkbookEditorPr
     return EMPTY_DOCUMENT;
   }, [notebook]);
 
-  // Create editor with plugins (BasicNodesKit + DnD for drag handles)
+  // Create editor with full Potion plugin kit
+  // EditorKit includes: AI, blocks, tables, code blocks, media, mentions,
+  // comments, slash commands, drag-and-drop, formatting, markdown, and more
   const editor = usePlateEditor({
-    plugins: [...BasicNodesKit, ...DndKit],
+    plugins: EditorKit,
     value: initialValue,
   });
 
@@ -60,8 +61,8 @@ export function WorkbookEditor({ className, readOnly = false }: WorkbookEditorPr
     !readOnly && !isLoading && value !== null
   );
 
-  const handleChange = useCallback(({ value }: { value: Value }) => {
-    setValue(value);
+  const handleChange = useCallback((options: { editor: any; value: any }) => {
+    setValue(options.value as Value);
   }, []);
 
   if (isLoading) {

@@ -24,11 +24,11 @@
         "fullscreen": false,
         "decorations": true,
         "transparent": false,
-        "alwaysOnTop": true,
+        "alwaysOnTop": false,
         "center": true,
         "visible": true,
         "shadow": true,
-        "dragDropEnabled": true,
+        "dragDropEnabled": false,
         "titleBarStyle": "Overlay",
         "hiddenTitle": true,
         "trafficLightPosition": {

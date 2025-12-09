@@ -124,6 +124,7 @@ export function useSendMessage() {
 
 /**
  * Get all session statuses
+ * Note: SSE events update this cache optimistically, so no polling needed
  */
 export function useSessionStatuses() {
   const directory = useUIStore((s) => s.activeWorkbookDirectory);
@@ -131,8 +132,8 @@ export function useSessionStatuses() {
   return useQuery({
     queryKey: ["session-statuses", directory],
     queryFn: () => api.status.all(directory),
-    staleTime: 0,
-    refetchInterval: 1000, // Poll every second for status updates
+    staleTime: Infinity, // SSE keeps this fresh
+    refetchOnMount: true, // Fetch on first mount only
   });
 }
 

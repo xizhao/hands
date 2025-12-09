@@ -355,7 +355,7 @@ export const api = {
     list: async (): Promise<Agent[]> => {
       const client = getClient();
       const result = await client.app.agents();
-      return (result.data as Agent[]) ?? [];
+      return (result.data as unknown as Agent[]) ?? [];
     },
   },
 
