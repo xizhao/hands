@@ -113,7 +113,7 @@ export function PagesSidebar({ collapsed = false, fullWidth = false }: PagesSide
               <TooltipTrigger asChild>
                 <button
                   onClick={handleAddPage}
-                  className="w-full flex items-center justify-center p-1.5 text-muted-foreground/40 hover:text-muted-foreground/70 transition-all"
+                  className="w-full flex items-center justify-center p-1.5 text-muted-foreground/60 hover:text-muted-foreground transition-all"
                 >
                   <Plus className="h-3 w-3" />
                 </button>
@@ -130,7 +130,7 @@ export function PagesSidebar({ collapsed = false, fullWidth = false }: PagesSide
               {schema.slice(0, 3).map((table) => (
                 <Tooltip key={table.table_name}>
                   <TooltipTrigger asChild>
-                    <button className="w-full flex items-center justify-center p-1.5 text-muted-foreground/70 hover:text-foreground transition-all">
+                    <button className="w-full flex items-center justify-center p-1.5 text-muted-foreground hover:text-foreground transition-all">
                       <Table weight="duotone" className="h-3.5 w-3.5 text-blue-400" />
                     </button>
                   </TooltipTrigger>
@@ -140,7 +140,7 @@ export function PagesSidebar({ collapsed = false, fullWidth = false }: PagesSide
                 </Tooltip>
               ))}
               {schema.length > 3 && (
-                <div className="text-[8px] text-muted-foreground/50 text-center">
+                <div className="text-[8px] text-muted-foreground/70 text-center">
                   +{schema.length - 3}
                 </div>
               )}
@@ -153,7 +153,7 @@ export function PagesSidebar({ collapsed = false, fullWidth = false }: PagesSide
               {blocks.slice(0, 3).map((block) => (
                 <Tooltip key={block.id}>
                   <TooltipTrigger asChild>
-                    <button className="w-full flex items-center justify-center p-1.5 text-muted-foreground/70 hover:text-foreground transition-all">
+                    <button className="w-full flex items-center justify-center p-1.5 text-muted-foreground hover:text-foreground transition-all">
                       <SquaresFour weight="duotone" className="h-3.5 w-3.5 text-amber-500" />
                     </button>
                   </TooltipTrigger>
@@ -163,7 +163,7 @@ export function PagesSidebar({ collapsed = false, fullWidth = false }: PagesSide
                 </Tooltip>
               ))}
               {blocks.length > 3 && (
-                <div className="text-[8px] text-muted-foreground/50 text-center">
+                <div className="text-[8px] text-muted-foreground/70 text-center">
                   +{blocks.length - 3}
                 </div>
               )}
@@ -185,18 +185,18 @@ export function PagesSidebar({ collapsed = false, fullWidth = false }: PagesSide
       <div className={cn("space-y-3", fullWidth ? "w-full" : "w-[140px]")}>
         {/* Search Bar */}
         <div className="relative">
-          <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-3 w-3 text-muted-foreground/50" />
+          <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-3 w-3 text-muted-foreground/70" />
           <input
             type="text"
             placeholder="Search..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full pl-7 pr-7 py-1 text-[11px] bg-muted/50 border border-border/50 rounded-md placeholder:text-muted-foreground/40 focus:outline-none focus:border-border"
+            className="w-full pl-7 pr-7 py-1 text-[11px] bg-muted/50 border border-border/70 rounded-md placeholder:text-muted-foreground/60 focus:outline-none focus:border-border"
           />
           {searchQuery && (
             <button
               onClick={() => setSearchQuery("")}
-              className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground/50 hover:text-muted-foreground"
+              className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground/70 hover:text-muted-foreground"
             >
               <X className="h-3 w-3" />
             </button>
@@ -208,7 +208,7 @@ export function PagesSidebar({ collapsed = false, fullWidth = false }: PagesSide
           <div className="flex items-center justify-between mb-1">
             <button
               onClick={() => setPagesExpanded(!pagesExpanded)}
-              className="flex items-center gap-1 text-[10px] font-medium text-muted-foreground/60 uppercase tracking-wider hover:text-muted-foreground transition-colors"
+              className="flex items-center gap-1 text-[10px] font-medium text-muted-foreground/80 uppercase tracking-wider hover:text-muted-foreground transition-colors"
             >
               {pagesExpanded ? (
                 <ChevronDown className="h-3 w-3" />
@@ -221,7 +221,7 @@ export function PagesSidebar({ collapsed = false, fullWidth = false }: PagesSide
               <TooltipTrigger asChild>
                 <button
                   onClick={handleAddPage}
-                  className="p-0.5 text-muted-foreground/40 hover:text-muted-foreground/70 transition-colors"
+                  className="p-0.5 text-muted-foreground/60 hover:text-muted-foreground transition-colors"
                 >
                   <Plus className="h-3 w-3" />
                 </button>
@@ -247,7 +247,7 @@ export function PagesSidebar({ collapsed = false, fullWidth = false }: PagesSide
                 />
               ))}
               {filteredPages.length === 0 && searchQuery && (
-                <div className="text-[11px] text-muted-foreground/50 py-1">
+                <div className="text-[11px] text-muted-foreground/70 py-1">
                   No pages found
                 </div>
               )}
@@ -259,7 +259,7 @@ export function PagesSidebar({ collapsed = false, fullWidth = false }: PagesSide
         <div>
           <button
             onClick={() => setSourcesExpanded(!sourcesExpanded)}
-            className="flex items-center gap-1 text-[10px] font-medium text-muted-foreground/60 uppercase tracking-wider hover:text-muted-foreground transition-colors mb-1"
+            className="flex items-center gap-1 text-[10px] font-medium text-muted-foreground/80 uppercase tracking-wider hover:text-muted-foreground transition-colors mb-1"
           >
             {sourcesExpanded ? (
               <ChevronDown className="h-3 w-3" />
@@ -272,7 +272,7 @@ export function PagesSidebar({ collapsed = false, fullWidth = false }: PagesSide
           {sourcesExpanded && (
             <div className="space-y-0">
               {sourcesLoading ? (
-                <div className="text-[11px] text-muted-foreground/50 py-1">
+                <div className="text-[11px] text-muted-foreground/70 py-1">
                   Loading...
                 </div>
               ) : filteredSources && filteredSources.length > 0 ? (
@@ -281,7 +281,7 @@ export function PagesSidebar({ collapsed = false, fullWidth = false }: PagesSide
                     key={table.table_name}
                     className={cn(
                       "w-full flex items-center gap-2 py-0.5 text-[13px] transition-all duration-150 origin-left group",
-                      "text-muted-foreground/70 hover:text-foreground"
+                      "text-muted-foreground hover:text-foreground"
                     )}
                   >
                     <Table weight="duotone" className="h-3.5 w-3.5 text-blue-400 shrink-0" />
@@ -289,11 +289,11 @@ export function PagesSidebar({ collapsed = false, fullWidth = false }: PagesSide
                   </button>
                 ))
               ) : searchQuery && schema && schema.length > 0 ? (
-                <div className="text-[11px] text-muted-foreground/50 py-1">
+                <div className="text-[11px] text-muted-foreground/70 py-1">
                   No sources found
                 </div>
               ) : (
-                <div className="flex items-center gap-2 py-1 text-[11px] text-muted-foreground/50">
+                <div className="flex items-center gap-2 py-1 text-[11px] text-muted-foreground/70">
                   <TreeStructure weight="duotone" className="h-3.5 w-3.5" />
                   <span>No sources</span>
                 </div>
@@ -306,7 +306,7 @@ export function PagesSidebar({ collapsed = false, fullWidth = false }: PagesSide
         <div>
           <button
             onClick={() => setBlocksExpanded(!blocksExpanded)}
-            className="flex items-center gap-1 text-[10px] font-medium text-muted-foreground/60 uppercase tracking-wider hover:text-muted-foreground transition-colors mb-1"
+            className="flex items-center gap-1 text-[10px] font-medium text-muted-foreground/80 uppercase tracking-wider hover:text-muted-foreground transition-colors mb-1"
           >
             {blocksExpanded ? (
               <ChevronDown className="h-3 w-3" />
@@ -319,7 +319,7 @@ export function PagesSidebar({ collapsed = false, fullWidth = false }: PagesSide
           {blocksExpanded && (
             <div className="space-y-0">
               {blocksLoading ? (
-                <div className="text-[11px] text-muted-foreground/50 py-1">
+                <div className="text-[11px] text-muted-foreground/70 py-1">
                   Loading...
                 </div>
               ) : filteredBlocks.length > 0 ? (
@@ -328,7 +328,7 @@ export function PagesSidebar({ collapsed = false, fullWidth = false }: PagesSide
                     key={block.id}
                     className={cn(
                       "w-full flex items-center gap-2 py-0.5 text-[13px] transition-all duration-150 origin-left group",
-                      "text-muted-foreground/70 hover:text-foreground"
+                      "text-muted-foreground hover:text-foreground"
                     )}
                   >
                     <SquaresFour weight="duotone" className="h-3.5 w-3.5 text-amber-500 shrink-0" />
@@ -336,11 +336,11 @@ export function PagesSidebar({ collapsed = false, fullWidth = false }: PagesSide
                   </button>
                 ))
               ) : searchQuery && blocks.length > 0 ? (
-                <div className="text-[11px] text-muted-foreground/50 py-1">
+                <div className="text-[11px] text-muted-foreground/70 py-1">
                   No blocks found
                 </div>
               ) : (
-                <div className="flex items-center gap-2 py-1 text-[11px] text-muted-foreground/50">
+                <div className="flex items-center gap-2 py-1 text-[11px] text-muted-foreground/70">
                   <SquaresFour weight="duotone" className="h-3.5 w-3.5" />
                   <span>No blocks</span>
                 </div>
@@ -385,7 +385,7 @@ function PageItem({
               "w-full flex items-center justify-center p-1.5 transition-all duration-150 origin-left",
               active
                 ? "text-foreground"
-                : "text-muted-foreground/70 hover:text-foreground"
+                : "text-muted-foreground hover:text-foreground"
             )}
           >
             <FileText className="h-3.5 w-3.5" />
@@ -408,7 +408,7 @@ function PageItem({
         "w-full flex items-center gap-2 py-0.5 text-[13px] transition-all duration-150 origin-left group",
         active
           ? "text-foreground font-medium"
-          : "text-muted-foreground/70 hover:text-foreground"
+          : "text-muted-foreground hover:text-foreground"
       )}
     >
       <span className="flex-1 truncate text-left">{page.title}</span>

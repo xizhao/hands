@@ -89,25 +89,28 @@ export function NotebookShell({ children }: NotebookShellProps) {
   const [sidebarVisible, setSidebarVisible] = useState(false);
   const sidebarTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
+  // Sidebar width state (for resizing when expanded)
+  const [sidebarWidth, setSidebarWidth] = useState(200);
+  const [isResizing, setIsResizing] = useState(false);
+  const resizeStartX = useRef(0);
+  const resizeStartWidth = useRef(0);
+
   const handleMouseEnterLeftEdge = useCallback(() => {
     if (sidebarTimeoutRef.current) clearTimeout(sidebarTimeoutRef.current);
     setSidebarVisible(true);
   }, []);
 
   const handleMouseLeaveSidebar = useCallback(() => {
+    // Don't hide while resizing
+    if (isResizing) return;
     sidebarTimeoutRef.current = setTimeout(() => {
       setSidebarVisible(false);
     }, 300);
-  }, []);
-
-  // Sidebar resize state (for index view)
-  const [sidebarWidth, setSidebarWidth] = useState(280);
-  const [isResizing, setIsResizing] = useState(false);
-  const resizeStartX = useRef(0);
-  const resizeStartWidth = useRef(0);
+  }, [isResizing]);
 
   const handleResizeStart = useCallback((e: React.MouseEvent) => {
     e.preventDefault();
+    e.stopPropagation();
     setIsResizing(true);
     resizeStartX.current = e.clientX;
     resizeStartWidth.current = sidebarWidth;
@@ -116,13 +119,12 @@ export function NotebookShell({ children }: NotebookShellProps) {
   useEffect(() => {
     if (!isResizing) return;
 
-    // Prevent text selection during resize
     document.body.style.userSelect = "none";
     document.body.style.cursor = "col-resize";
 
     const handleMouseMove = (e: MouseEvent) => {
       const delta = e.clientX - resizeStartX.current;
-      const newWidth = Math.min(Math.max(resizeStartWidth.current + delta, 200), 500);
+      const newWidth = Math.min(Math.max(resizeStartWidth.current + delta, 160), 400);
       setSidebarWidth(newWidth);
     };
 
@@ -229,12 +231,12 @@ export function NotebookShell({ children }: NotebookShellProps) {
           {/* Workbook switcher - shows / by default, dropdown chevron on hover */}
           <div className="relative flex items-center justify-center w-5 h-5">
             {/* Slash separator - visible by default, hidden on hover */}
-            <span className="text-muted-foreground/40 text-sm group-hover/titlebar:opacity-0 transition-opacity">/</span>
+            <span className="text-muted-foreground/60 text-sm group-hover/titlebar:opacity-0 transition-opacity">/</span>
             {/* Dropdown trigger - hidden by default, visible on hover */}
             <DropdownMenu>
               <DropdownMenuTrigger className={cn(
                 "absolute inset-0 flex items-center justify-center rounded-sm transition-all",
-                "text-muted-foreground/50 hover:text-muted-foreground hover:bg-accent/50",
+                "text-muted-foreground/70 hover:text-muted-foreground hover:bg-accent/50",
                 "opacity-0 group-hover/titlebar:opacity-100 focus:opacity-100"
               )}>
                 <CaretDown weight="bold" className="h-3 w-3" />
@@ -267,7 +269,7 @@ export function NotebookShell({ children }: NotebookShellProps) {
               <span className="text-sm text-muted-foreground">{currentPage.title}</span>
               <button
                 onClick={handleClosePage}
-                className="ml-1 p-0.5 rounded-sm text-muted-foreground/50 hover:text-muted-foreground hover:bg-accent/50 transition-colors opacity-0 group-hover/titlebar:opacity-100"
+                className="ml-1 p-0.5 rounded-sm text-muted-foreground/70 hover:text-muted-foreground hover:bg-accent/50 transition-colors opacity-0 group-hover/titlebar:opacity-100"
                 title="Close page"
               >
                 <X weight="bold" className="h-3 w-3" />
@@ -287,14 +289,14 @@ export function NotebookShell({ children }: NotebookShellProps) {
                 ? "bg-accent text-foreground"
                 : tableCount > 0
                   ? "text-muted-foreground hover:bg-accent/50 hover:text-foreground"
-                  : "text-muted-foreground/50 hover:bg-accent/50 hover:text-muted-foreground"
+                  : "text-muted-foreground/70 hover:bg-accent/50 hover:text-muted-foreground"
             )}
             title="Database"
           >
             <Database weight="duotone" className={cn("h-3.5 w-3.5", tableCount > 0 && "text-blue-500")} />
             <span className={cn(
               "tabular-nums",
-              tableCount > 0 ? "text-foreground" : "text-muted-foreground/50"
+              tableCount > 0 ? "text-foreground" : "text-muted-foreground/70"
             )}>{tableCount}</span>
           </button>
 
@@ -360,105 +362,84 @@ export function NotebookShell({ children }: NotebookShellProps) {
 
       {/* Main layout */}
       <div className="flex-1 flex overflow-hidden">
-        {/* Sidebar zone - always rendered, animates between states */}
-        <div
-          onMouseEnter={isOnPage ? handleMouseEnterLeftEdge : undefined}
-          onMouseLeave={isOnPage ? handleMouseLeaveSidebar : undefined}
-          className={cn(
-            "shrink-0 flex flex-col transition-all duration-300 ease-out relative",
-            isOnPage
-              ? sidebarVisible ? "w-[180px]" : "w-6"
-              : "w-full"
-          )}
-        >
-          {/* Index view: centered sidebar */}
-          <div
-            className={cn(
-              "absolute inset-0 flex items-start justify-center pt-8",
-              "transition-all duration-300 ease-out",
-              isOnPage
-                ? "opacity-0 pointer-events-none scale-95"
-                : "opacity-100 scale-100"
-            )}
-          >
-            <div style={{ width: sidebarWidth }}>
-              <PagesSidebar collapsed={false} fullWidth />
-            </div>
-            {/* Resize handle - invisible but interactive */}
-            {!isOnPage && (
+        {isOnPage ? (
+          /* Page view: collapsible sidebar + content */
+          <>
+            {/* Sidebar zone - collapses to thin strip, expands on hover */}
+            <div
+              onMouseEnter={handleMouseEnterLeftEdge}
+              onMouseLeave={handleMouseLeaveSidebar}
+              style={{ width: sidebarVisible || isResizing ? sidebarWidth : 24 }}
+              className={cn(
+                "shrink-0 relative transition-[width] duration-200 ease-out",
+                isResizing && "transition-none"
+              )}
+            >
+              {/* Page indicator dots (when collapsed) */}
+              <div
+                className={cn(
+                  "absolute inset-0 flex flex-col items-center gap-0.5 pt-4",
+                  "transition-opacity duration-200",
+                  sidebarVisible ? "opacity-0 pointer-events-none" : "opacity-100"
+                )}
+              >
+                {Array.from({ length: Math.min(pageCount, 5) }).map((_, i) => (
+                  <div
+                    key={i}
+                    className={cn(
+                      "w-1 h-1 rounded-full transition-colors",
+                      MOCK_PAGES[i]?.id === pageId ? "bg-foreground/60" : "bg-foreground/15"
+                    )}
+                  />
+                ))}
+                {pageCount > 5 && (
+                  <span className="text-[8px] text-muted-foreground/80 mt-0.5">+{pageCount - 5}</span>
+                )}
+              </div>
+
+              {/* Sidebar content (when expanded) */}
+              <div
+                className={cn(
+                  "absolute inset-0 p-4 overflow-y-auto",
+                  "transition-opacity duration-200 ease-out",
+                  sidebarVisible
+                    ? "opacity-100"
+                    : "opacity-0 pointer-events-none"
+                )}
+              >
+                <PagesSidebar collapsed={false} />
+              </div>
+
+              {/* Resize handle - at the right edge */}
               <div
                 onMouseDown={handleResizeStart}
                 className={cn(
-                  "absolute top-0 bottom-0 w-1 cursor-col-resize",
-                  "hover:bg-border/50 active:bg-border transition-colors",
+                  "absolute top-0 bottom-0 right-0 w-1 cursor-col-resize z-10",
+                  "transition-opacity duration-200",
+                  sidebarVisible
+                    ? "opacity-100 hover:bg-border/50 active:bg-border"
+                    : "opacity-0 pointer-events-none",
                   isResizing && "bg-border"
                 )}
-                style={{ left: `calc(50% + ${sidebarWidth / 2}px)` }}
               />
-            )}
-          </div>
-
-          {/* Page view: collapsed sidebar with hover */}
-          <div
-            className={cn(
-              "absolute inset-0",
-              "transition-all duration-300 ease-out",
-              isOnPage
-                ? "opacity-100"
-                : "opacity-0 pointer-events-none"
-            )}
-          >
-            {/* Page indicator dots (when collapsed) */}
-            <div
-              className={cn(
-                "flex flex-col items-center gap-0.5 pt-4 px-2",
-                "transition-opacity duration-200",
-                sidebarVisible ? "opacity-0" : "opacity-100"
-              )}
-            >
-              {Array.from({ length: Math.min(pageCount, 5) }).map((_, i) => (
-                <div
-                  key={i}
-                  className={cn(
-                    "w-1 h-1 rounded-full transition-colors",
-                    MOCK_PAGES[i]?.id === pageId ? "bg-foreground/60" : "bg-foreground/15"
-                  )}
-                />
-              ))}
-              {pageCount > 5 && (
-                <span className="text-[8px] text-muted-foreground/60 mt-0.5">+{pageCount - 5}</span>
-              )}
             </div>
 
-            {/* Pages list (when expanded via hover) */}
-            <div
-              className={cn(
-                "absolute left-0 top-0 px-3 pt-4 h-full",
-                "transition-all duration-200 ease-out",
-                sidebarVisible
-                  ? "opacity-100 translate-x-0"
-                  : "opacity-0 -translate-x-2 pointer-events-none"
-              )}
-            >
-              <PagesSidebar collapsed={false} />
+            {/* Main content */}
+            <main className="flex-1 flex flex-col min-w-0 bg-background">
+              <div className="flex-1 relative">
+                <div className="absolute inset-0 pointer-events-none border border-black/[0.06] rounded-sm" />
+                {children}
+              </div>
+            </main>
+          </>
+        ) : (
+          /* Index view: fullscreen centered sidebar */
+          <div className="flex-1 flex items-start justify-center pt-8 overflow-y-auto">
+            <div className="p-4">
+              <PagesSidebar collapsed={false} fullWidth />
             </div>
           </div>
-        </div>
-
-        {/* Main content area - routed content */}
-        <main
-          className={cn(
-            "flex flex-col min-w-0 bg-background transition-all duration-300 ease-out",
-            isOnPage ? "flex-1" : "w-0 overflow-hidden"
-          )}
-        >
-          <div className="flex-1 relative">
-            {isOnPage && (
-              <div className="absolute inset-0 pointer-events-none border border-black/[0.06] rounded-sm" />
-            )}
-            {children}
-          </div>
-        </main>
+        )}
       </div>
 
       {/* Right panel overlay */}
