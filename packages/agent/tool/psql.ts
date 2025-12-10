@@ -1,79 +1,38 @@
 import { tool } from "@opencode-ai/plugin";
-import { existsSync, readFileSync } from "fs";
-import { join } from "path";
-import postgres from "postgres";
 
-// Lockfile location (same as runtime)
-function getLockfilePath(): string {
-  const home = process.env.HOME || "~";
-  if (process.platform === "darwin") {
-    return join(
-      home,
-      "Library",
-      "Application Support",
-      "Hands",
-      "runtime.lock"
-    );
-  } else if (process.platform === "win32") {
-    return join(
-      process.env.LOCALAPPDATA || join(home, "AppData", "Local"),
-      "Hands",
-      "runtime.lock"
-    );
-  } else {
-    return join(
-      process.env.XDG_STATE_HOME || join(home, ".local", "state"),
-      "hands",
-      "runtime.lock"
-    );
+// Default runtime port (matches packages/runtime/src/ports.ts)
+const DEFAULT_RUNTIME_PORT = 55000;
+
+// Get runtime port from env or use default
+function getRuntimePort(): number {
+  // HANDS_RUNTIME_PORT is set by Tauri when starting the agent
+  const envPort = process.env.HANDS_RUNTIME_PORT;
+  if (envPort) {
+    return parseInt(envPort, 10);
   }
+  return DEFAULT_RUNTIME_PORT;
 }
 
-// Dynamically get database URL - first from lockfile, then fallback to env var
-function getDatabaseUrl(): string {
-  // Try reading from runtime lockfile (most reliable - always current)
-  const lockfilePath = getLockfilePath();
-  if (existsSync(lockfilePath)) {
-    try {
-      const lock = JSON.parse(readFileSync(lockfilePath, "utf-8"));
-      if (lock.postgresPort && lock.workbookId) {
-        const dbName = `hands_${lock.workbookId.replace(/-/g, "_")}`;
-        return `postgres://hands:hands@localhost:${lock.postgresPort}/${dbName}`;
-      }
-    } catch (e) {
-      // Fall through to env var
+// Execute query via HTTP API to runtime
+async function executeQuery(query: string): Promise<{ rows: unknown[]; rowCount: number }> {
+  const port = getRuntimePort();
+  const url = `http://localhost:${port}/postgres/query`;
+
+  const response = await fetch(url, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ query }),
+  });
+
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({ error: response.statusText }));
+    if (error.booting) {
+      throw new Error("Database is still booting. Please wait a moment and try again.");
     }
+    throw new Error(error.error || `HTTP ${response.status}`);
   }
 
-  // Fallback to env var (set by Tauri when OpenCode starts)
-  const url = process.env.HANDS_DATABASE_URL;
-  if (!url) {
-    throw new Error(
-      "No active workbook found. Open a workbook in Hands or check if the runtime is running."
-    );
-  }
-  return url;
-}
-
-let sql: ReturnType<typeof postgres> | null = null;
-let currentUrl: string | null = null;
-
-function getClient() {
-  const url = getDatabaseUrl();
-  // Reconnect if URL changed (workbook switched)
-  if (sql && currentUrl !== url) {
-    sql.end();
-    sql = null;
-  }
-  if (!sql) {
-    currentUrl = url;
-    sql = postgres(url, {
-      max: 1,
-      idle_timeout: 20,
-      connect_timeout: 10,
-    });
-  }
-  return sql;
+  return response.json();
 }
 
 function formatTable(rows: Record<string, unknown>[]): string {
@@ -155,20 +114,18 @@ This would modify/delete data. To proceed, run again with confirm_destructive: t
     }
 
     try {
-      const client = getClient();
-      const result = await client.unsafe(query);
+      const result = await executeQuery(query);
 
       // For non-SELECT queries
-      if (!Array.isArray(result) || result.length === 0) {
-        const count = (result as any).count;
-        if (count !== undefined) {
-          return `Query executed successfully. Rows affected: ${count}`;
+      if (!Array.isArray(result.rows) || result.rows.length === 0) {
+        if (result.rowCount !== undefined && result.rowCount > 0) {
+          return `Query executed successfully. Rows affected: ${result.rowCount}`;
         }
         return `Query executed successfully.`;
       }
 
       // Format results
-      const rows = result as Record<string, unknown>[];
+      const rows = result.rows as Record<string, unknown>[];
 
       if (format === "json") {
         return JSON.stringify(rows, null, 2);
@@ -183,23 +140,22 @@ This would modify/delete data. To proceed, run again with confirm_destructive: t
       const message = error instanceof Error ? error.message : String(error);
 
       // Check for connection errors
-      if (message.includes("connect") || message.includes("ECONNREFUSED")) {
-        return `❌ Database connection failed.
+      if (message.includes("ECONNREFUSED") || message.includes("fetch failed")) {
+        return `❌ Cannot connect to runtime.
 
 Error: ${message}
 
-Make sure a workbook is open in Hands (the runtime starts embedded Postgres automatically).
-Lockfile: ${getLockfilePath()}
-Env HANDS_DATABASE_URL: ${process.env.HANDS_DATABASE_URL || "(not set)"}`;
+Make sure a workbook is open in Hands (the runtime provides the database).
+Runtime port: ${getRuntimePort()}`;
       }
 
-      // Check for missing workbook
-      if (message.includes("No active workbook")) {
-        return `❌ No database configured.
+      // Check for booting database
+      if (message.includes("booting")) {
+        return `⏳ Database is starting up.
 
 ${message}
 
-Open a workbook in Hands to connect to its database.`;
+Try again in a few seconds.`;
       }
 
       return `❌ SQL Error: ${message}`;

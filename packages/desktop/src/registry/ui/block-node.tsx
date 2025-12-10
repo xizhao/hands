@@ -14,10 +14,17 @@
 import { Suspense, useCallback, useMemo, useState } from 'react';
 import { PlateElement, type PlateElementProps } from 'platejs/react';
 import { useBlock } from '@/lib/blocks-client';
-import { ArrowsClockwise, WarningCircle } from '@phosphor-icons/react';
-import { Hand } from 'lucide-react';
+import { ArrowsClockwise, WarningCircle, DotsThree } from '@phosphor-icons/react';
+import { Hand, RefreshCw } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useUIStore } from '@/stores/ui';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 
 interface BlockElementData {
   type: 'block';
@@ -35,6 +42,15 @@ function BlockSkeleton() {
         backgroundImage: "linear-gradient(90deg, transparent 0%, hsl(var(--muted)/0.5) 50%, transparent 100%)",
       }}
     />
+  );
+}
+
+// Simple status indicator shown while runtime is booting
+function BlockBootingSkeleton({ blockId }: { blockId: string }) {
+  return (
+    <span className="inline-flex items-center px-1 py-0.5" title={`Loading ${blockId}...`}>
+      <span className="h-1.5 w-1.5 rounded-full bg-yellow-500 animate-pulse" />
+    </span>
   );
 }
 
@@ -83,7 +99,7 @@ export function BlockElement(props: PlateElementProps) {
     return rest;
   }, [blockElement]);
 
-  const { data, isLoading, isRefetching, invalidate } = useBlock(blockId, blockProps);
+  const { data, isLoading, isRefetching, invalidate, runtimeReady, isWaitingForRuntime } = useBlock(blockId, blockProps);
 
   const handleRefresh = useCallback(() => {
     invalidate();
@@ -114,26 +130,48 @@ export function BlockElement(props: PlateElementProps) {
         onMouseEnter={() => setIsHovered(true)}
         onMouseLeave={() => setIsHovered(false)}
       >
-        {/* Refresh button - in gutter area */}
-        <button
-          onClick={handleRefresh}
-          disabled={loading}
-          className={cn(
-            'absolute -left-8 top-6 z-10 p-1 rounded-full',
-            'bg-muted/80 backdrop-blur-sm border border-border/50',
-            'hover:bg-muted transition-all duration-150',
-            isHovered || loading ? 'opacity-100' : 'opacity-0'
-          )}
-          title={`Refresh ${blockId}`}
-        >
-          <ArrowsClockwise
-            weight="bold"
-            className={cn(
-              'h-3 w-3 text-muted-foreground',
-              loading && 'animate-spin'
-            )}
-          />
-        </button>
+        {/* Block menu - on right side (only show when runtime is ready) */}
+        {runtimeReady && (
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <button
+                className={cn(
+                  'absolute -right-5 top-0 z-10 p-0.5 rounded',
+                  'bg-muted/60 backdrop-blur-sm border border-border/30',
+                  'hover:bg-muted transition-all duration-150',
+                  isHovered || loading ? 'opacity-100' : 'opacity-0'
+                )}
+              >
+                {loading ? (
+                  <ArrowsClockwise
+                    weight="bold"
+                    className="h-2.5 w-2.5 text-muted-foreground animate-spin"
+                  />
+                ) : (
+                  <DotsThree weight="bold" className="h-2.5 w-2.5 text-muted-foreground" />
+                )}
+              </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="min-w-[140px]">
+              <DropdownMenuItem
+                onClick={() => handleFixWithHands(`Help me improve the ${blockId} block`)}
+                className="text-xs"
+              >
+                <Hand className="h-3 w-3 mr-1.5" />
+                Edit with Hands
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem
+                onClick={handleRefresh}
+                disabled={loading}
+                className="text-xs"
+              >
+                <RefreshCw className={cn("h-3 w-3 mr-1.5", loading && "animate-spin")} />
+                Refresh
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        )}
 
         {/* Block content - RSC element */}
         {!blockId ? (
@@ -141,6 +179,9 @@ export function BlockElement(props: PlateElementProps) {
             <WarningCircle className="h-3.5 w-3.5" />
             Missing block id
           </span>
+        ) : isWaitingForRuntime ? (
+          // Show special skeleton while runtime boots
+          <BlockBootingSkeleton blockId={blockId} />
         ) : data?.error ? (
           <BlockError
             blockId={blockId}

@@ -256,7 +256,7 @@ export function useDebouncedCallback<T extends (...args: any) => ReturnType<T>>(
       const isInvoking = shouldInvoke(time);
 
       lastArgs.current = args;
-      lastThis.current = this;
+      lastThis.current = undefined;
       lastCallTime.current = time;
 
       if (isInvoking) {

@@ -9,6 +9,7 @@
  */
 
 import type { PGlite } from "@electric-sql/pglite"
+import type { DbContext } from "@hands/stdlib"
 
 export interface Query {
   text: string
@@ -26,28 +27,21 @@ export function sql(strings: TemplateStringsArray, ...values: any[]): Query {
   return { text, values }
 }
 
-/**
- * DB context exposed to blocks via ctx.db
- */
-export interface DbContext {
-  sql<T = Record<string, any>>(
-    strings: TemplateStringsArray,
-    ...values: any[]
-  ): Promise<T[]>
-}
+// Re-export DbContext from stdlib
+export type { DbContext } from "@hands/stdlib"
 
 /**
  * Create the db context wrapper for a PGlite instance
  */
 export function createDbContext(pglite: PGlite): DbContext {
   return {
-    sql: async <T = Record<string, any>>(
+    sql: async <T = Record<string, unknown>>(
       strings: TemplateStringsArray,
-      ...values: any[]
+      ...values: unknown[]
     ): Promise<T[]> => {
       const query = sql(strings, ...values)
       const result = await pglite.query<T>(query.text, query.values)
       return result.rows
-    }
+    },
   }
 }

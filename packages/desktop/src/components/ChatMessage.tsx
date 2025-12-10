@@ -25,9 +25,7 @@ import {
   Database,
   Globe,
   Brain,
-  Coins,
   GitBranch,
-  Zap,
   List,
   PenLine,
   ListTodo,
@@ -40,11 +38,6 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipTrigger,
-} from "@/components/ui/tooltip";
 import { Skeleton, ShimmerText } from "@/components/ui/thinking-indicator";
 import { SecretsForm, parseSecretsOutput } from "@/components/SecretsForm";
 import { NavigateCard, parseNavigateOutput } from "@/components/NavigateCard";
@@ -554,11 +547,11 @@ const ToolInvocation = memo(({ part }: { part: ToolPart }) => {
     state.status === "completed" &&
     state.output ? parseNavigateOutput(state.output) : null;
 
-  // For navigate with valid output, show the navigation card
+  // For navigate with valid output, show the navigation link
   if (navigateRequest) {
     return (
-      <div className="py-1">
-        <NavigateCard output={navigateRequest} />
+      <div className="py-0.5">
+        <NavigateCard output={navigateRequest} toolId={part.id} />
       </div>
     );
   }
@@ -803,65 +796,19 @@ const UserTextContent = memo(({ text }: { text: string }) => {
 
 UserTextContent.displayName = "UserTextContent";
 
-// Metadata tooltip for assistant messages
-const MetadataTooltip = memo(({ info }: { info: AssistantMessage }) => {
-  const tokens = info.tokens;
-  const total = tokens ? tokens.input + tokens.output + tokens.reasoning + tokens.cache.read : 0;
+// Cost indicator for assistant messages - shown to the left of the bubble
+const CostIndicator = memo(({ info }: { info: AssistantMessage }) => {
+  // Only show if there's a cost
+  if (!info.cost || info.cost <= 0) return null;
 
   return (
-    <Tooltip>
-      <TooltipTrigger asChild>
-        <button className="text-[10px] text-muted-foreground/30 hover:text-muted-foreground/50 font-mono flex items-center gap-1 px-2 py-0.5 rounded hover:bg-white/5">
-          <Zap className="h-2.5 w-2.5" />
-          {formatTokens(total)}
-          {info.cost > 0 && <span>· ${info.cost.toFixed(4)}</span>}
-        </button>
-      </TooltipTrigger>
-      <TooltipContent side="left" className="text-xs font-mono bg-background/95 backdrop-blur-xl">
-        <div className="space-y-1">
-          <div className="flex justify-between gap-4">
-            <span className="text-muted-foreground">Model</span>
-            <span>{info.modelID}</span>
-          </div>
-          {tokens && (
-            <>
-              <div className="flex justify-between gap-4">
-                <span className="text-muted-foreground">Input</span>
-                <span>{formatTokens(tokens.input)}</span>
-              </div>
-              <div className="flex justify-between gap-4">
-                <span className="text-muted-foreground">Output</span>
-                <span>{formatTokens(tokens.output)}</span>
-              </div>
-              {tokens.reasoning > 0 && (
-                <div className="flex justify-between gap-4">
-                  <span className="text-purple-400">Reasoning</span>
-                  <span className="text-purple-400">{formatTokens(tokens.reasoning)}</span>
-                </div>
-              )}
-              {tokens.cache.read > 0 && (
-                <div className="flex justify-between gap-4">
-                  <span className="text-green-400">Cache</span>
-                  <span className="text-green-400">{formatTokens(tokens.cache.read)}</span>
-                </div>
-              )}
-            </>
-          )}
-          {info.cost > 0 && (
-            <div className="flex justify-between gap-4 pt-1 border-t border-border/50">
-              <span className="text-muted-foreground flex items-center gap-1">
-                <Coins className="h-2.5 w-2.5" /> Cost
-              </span>
-              <span>${info.cost.toFixed(4)}</span>
-            </div>
-          )}
-        </div>
-      </TooltipContent>
-    </Tooltip>
+    <span className="text-[9px] text-muted-foreground/30 font-mono opacity-0 group-hover:opacity-100 transition-opacity">
+      ${info.cost.toFixed(4)}
+    </span>
   );
 });
 
-MetadataTooltip.displayName = "MetadataTooltip";
+CostIndicator.displayName = "CostIndicator";
 
 // Loading skeleton
 export const MessageSkeleton = memo(({ isAssistant = false }: { isAssistant?: boolean }) => (
@@ -975,12 +922,12 @@ export const ChatMessage = memo(({ message, isStreaming = false, compact = false
 
       {/* Hands/Assistant message - on left, corner angled down toward input, dark zinc */}
       {isAssistant && (
-        <div className="group max-w-[90%] flex flex-col">
+        <div className="group max-w-[90%] flex items-center gap-2">
           <div className={cn(
             "rounded-2xl rounded-bl-sm bg-zinc-800 text-zinc-100 shadow-lg",
             compact ? "px-2.5 py-1.5" : "px-3.5 py-2"
           )}>
-            <div className={cn("space-y-1", compact && "text-xs")}>
+            <div className={cn("space-y-0.5", compact && "text-xs")}>
               {groupedContent.map((group, idx) => {
                 if (group.type === "text") {
                   const textPart = group.items[0] as TextPart;
@@ -1022,10 +969,10 @@ export const ChatMessage = memo(({ message, isStreaming = false, compact = false
             </div>
           </div>
 
-          {/* Metadata - shown on hover, below the bubble */}
-          {assistantInfo?.tokens && !isStreaming && (
-            <div className="opacity-0 group-hover:opacity-100 transition-opacity mt-0.5 ml-1">
-              <MetadataTooltip info={assistantInfo} />
+          {/* Cost indicator - shown to the right of the bubble on hover */}
+          {assistantInfo && !isStreaming && (
+            <div className="shrink-0">
+              <CostIndicator info={assistantInfo} />
             </div>
           )}
         </div>

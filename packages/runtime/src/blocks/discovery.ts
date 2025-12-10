@@ -7,22 +7,8 @@
 import { existsSync } from "fs"
 import { readdir } from "fs/promises"
 import { join, basename } from "path"
+import type { BlockMeta, DiscoveredBlock } from "@hands/stdlib"
 import { validateBlockFile } from "./validate.js"
-
-// Inline types to avoid stdlib dependency for build-time code
-export interface BlockMeta {
-  title: string
-  description?: string
-  refreshable?: boolean
-  [key: string]: unknown
-}
-
-export interface DiscoveredBlock {
-  id: string
-  path: string
-  meta: BlockMeta
-  load: () => Promise<{ default: unknown; meta?: BlockMeta }>
-}
 
 export interface BlockDiscoveryResult {
   /** Successfully discovered blocks */

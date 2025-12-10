@@ -8,20 +8,8 @@
 import { existsSync } from "fs"
 import { readdir, readFile } from "fs/promises"
 import { join, basename, dirname } from "path"
+import type { PageMeta, DiscoveredPage } from "@hands/stdlib"
 import { formatPages } from "./formatter"
-
-// Inline types to avoid stdlib dependency for build-time code
-export interface PageMeta {
-  title: string
-  description?: string
-  [key: string]: unknown
-}
-
-export interface DiscoveredPage {
-  route: string
-  path: string
-  meta: PageMeta
-}
 
 export interface PageDiscoveryResult {
   /** Successfully discovered pages */

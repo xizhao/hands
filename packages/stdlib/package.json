@@ -6,41 +6,26 @@
   "types": "./src/index.ts",
   "exports": {
     ".": "./src/index.ts",
-    "./static": "./src/components/static/index.ts",
-    "./registry": "./src/registry.json",
-    "./sources/registry.json": "./src/sources/registry.json",
-    "./components/*": "./src/components/*"
+    "./types": "./src/types/index.ts",
+    "./sources": "./src/sources/index.ts",
+    "./registry": "./src/registry/index.ts",
+    "./registry/json": "./src/registry.json",
+    "./registry/*": "./src/registry/*"
   },
   "scripts": {
-    "build": "tsup src/index.ts --format esm --dts",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
     "clsx": "^2.1.1",
     "tailwind-merge": "^2.5.2",
     "class-variance-authority": "^0.7.0",
-    "lucide-react": "^0.460.0",
     "zod": "^3.23.8"
   },
   "peerDependencies": {
-    "react": "^18.0.0 || ^19.0.0",
-    "react-dom": "^18.0.0 || ^19.0.0",
-    "platejs": ">=52.0.0"
-  },
-  "peerDependenciesMeta": {
-    "platejs": {
-      "optional": true
-    }
+    "react": "^18.0.0 || ^19.0.0"
   },
   "devDependencies": {
     "@types/react": "^19.0.0",
-    "typescript": "^5.6.0",
-    "tsup": "^8.0.0",
-    "@platejs/list": "^52.0.0",
-    "@platejs/math": "^52.0.0",
-    "@platejs/suggestion": "^52.0.0",
-    "@platejs/table": "^52.0.0",
-    "@platejs/toc": "^52.0.0",
-    "platejs": "^52.0.0"
+    "typescript": "^5.6.0"
   }
 }

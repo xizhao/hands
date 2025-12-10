@@ -63,12 +63,15 @@ export const MarkdownKit = [
       rules: {
         // MDX <Block> element -> Plate block element
         // Key "Block" is used for DESERIALIZE (MDX tag name)
+        // Usage: <Block src="my-block" />
         Block: {
           deserialize: (node: any) => {
             const attrs = getMdxAttributes(node);
+            const { src, ...restProps } = attrs;
             return {
               type: BLOCK_KEY,
-              src: attrs.src as string,
+              src: src as string,
+              ...restProps,
               children: [{ text: '' }],
             };
           },

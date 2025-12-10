@@ -15,6 +15,7 @@ interface NavigateOutput {
   title?: string;
   description?: string;
   anchor?: string;
+  autoNavigate?: boolean;
 }
 
 const navigate = tool({
@@ -60,13 +61,14 @@ Use this tool after completing work to show the user the result. For example:
       return `Error: Page routes must start with "/" (e.g., "/dashboard"). Got: "${page}"`;
     }
 
-    // Build the navigation output
+    // Build the navigation output - always auto-navigate
     const output: NavigateOutput = {
       type: "navigate",
       page,
       title: title || page.replace(/^\//, "").replace(/\//g, " > ") || "Home",
       description,
       anchor,
+      autoNavigate: true,
     };
 
     return JSON.stringify(output);

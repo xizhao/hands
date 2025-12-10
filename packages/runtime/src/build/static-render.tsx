@@ -10,7 +10,11 @@
 
 import * as React from "react"
 import { renderToString } from "react-dom/server"
-import type { TDescendant, TElement, TText } from "@udecode/plate"
+
+// Plate types (simplified local definitions to avoid heavy dependency)
+type TText = { text: string; [key: string]: unknown }
+type TElement = { type?: string; children?: TDescendant[]; [key: string]: unknown }
+type TDescendant = TText | TElement
 
 export interface StaticRenderOptions {
   /** Page title */
@@ -90,7 +94,7 @@ function PlateNode({ node }: { node: TDescendant }): React.ReactElement | null {
   }
 
   const element = node as TElement
-  const children = element.children?.map((child, index) => (
+  const children = element.children?.map((child: TDescendant, index: number) => (
     <PlateNode key={index} node={child} />
   ))
 

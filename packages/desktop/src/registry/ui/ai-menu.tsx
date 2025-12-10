@@ -35,7 +35,6 @@ import React, { useEffect } from 'react';
 
 import { cn } from '@/lib/utils';
 
-import { AIChatEditor } from './ai-chat-editor';
 import { Button } from './button';
 import {
   type Action,
@@ -174,7 +173,9 @@ export function AIMenu() {
           {mode === 'chat' &&
             isSelecting &&
             content &&
-            toolName === 'generate' && <AIChatEditor content={content} />}
+            toolName === 'generate' && (
+              <div className="px-3 py-2 text-sm text-muted-foreground whitespace-pre-wrap">{content}</div>
+            )}
 
           <div className="flex gap-1.5 px-3 text-sm">
             {isLoading ? (
@@ -589,12 +590,12 @@ function AIMenuItems({
 }
 
 function TranslateMenuItems({
-  input,
   menuState,
 }: {
-  input: string;
   menuState: EditorChatState;
 }) {
+  // Input is not passed from parent, use empty string for translation prompts
+  const input = "";
   const editor = useEditorRef();
   const [searchValue] = useComboboxValueState();
 

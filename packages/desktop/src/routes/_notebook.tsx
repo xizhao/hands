@@ -1,11 +1,11 @@
-import { createRoute, Outlet } from "@tanstack/react-router";
+import { createRoute, Outlet, useNavigate } from "@tanstack/react-router";
 import { useEffect, useRef, useCallback } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { useUIStore } from "@/stores/ui";
 import { useWorkbooks, useCreateWorkbook, useOpenWorkbook, RuntimeStatus } from "@/hooks/useWorkbook";
 import type { Workbook } from "@/lib/workbook";
 import { useSessions } from "@/hooks/useSession";
-import { startSSESync } from "@/lib/sse";
+import { startSSESync, setNavigateCallback } from "@/lib/sse";
 import { useDbSync } from "@/store/db-hooks";
 import { queryClient } from "@/App";
 import type { ChangeRecord } from "@/store/db-hooks";
@@ -20,6 +20,18 @@ export const notebookRoute = createRoute({
 });
 
 function NotebookLayout() {
+  const navigate = useNavigate();
+  const { setActivePage } = useUIStore();
+
+  // Set up navigate callback for SSE
+  useEffect(() => {
+    setNavigateCallback((page: string) => {
+      const pageId = page.replace(/^\//, "").replace(/\//g, "-") || "index";
+      setActivePage(pageId);
+      navigate({ to: "/page/$pageId", params: { pageId } });
+    });
+  }, [navigate, setActivePage]);
+
   // Start SSE sync on mount
   useEffect(() => {
     const cleanup = startSSESync(queryClient);

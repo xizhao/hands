@@ -25,7 +25,7 @@ export function RscBlockElement(props: PlateElementProps<RscBlockElementData>) {
   const [editProps, setEditProps] = useState(blockElement.blockProps);
 
   // Use RSC hook for Flight wire format
-  const { data, isLoading, invalidate, isRefetching } = useBlock(blockElement.blockId, editProps);
+  const { data, isLoading, invalidate, isRefetching, runtimeReady, isWaitingForRuntime } = useBlock(blockElement.blockId, editProps);
 
   const handleRefresh = useCallback(() => {
     invalidate();
@@ -45,35 +45,40 @@ export function RscBlockElement(props: PlateElementProps<RscBlockElementData>) {
                 {getBlockTypeName(blockElement.blockType)}
               </span>
             </div>
-            <div className="flex items-center gap-1">
-              <button
-                onClick={() => setIsEditing(!isEditing)}
-                className={cn(
-                  "p-1 rounded hover:bg-muted transition-colors",
-                  isEditing && "bg-muted"
-                )}
-                title="Edit block settings"
-              >
-                <Settings className="h-3.5 w-3.5 text-muted-foreground" />
-              </button>
-              <button
-                onClick={handleRefresh}
-                disabled={loading}
-                className="p-1 rounded hover:bg-muted transition-colors"
-                title="Refresh"
-              >
-                <RefreshCw
+            {/* Toolbar buttons - only show when runtime is ready */}
+            {runtimeReady ? (
+              <div className="flex items-center gap-1">
+                <button
+                  onClick={() => setIsEditing(!isEditing)}
                   className={cn(
-                    "h-3.5 w-3.5 text-muted-foreground",
-                    loading && "animate-spin"
+                    "p-1 rounded hover:bg-muted transition-colors",
+                    isEditing && "bg-muted"
                   )}
-                />
-              </button>
-            </div>
+                  title="Edit block settings"
+                >
+                  <Settings className="h-3.5 w-3.5 text-muted-foreground" />
+                </button>
+                <button
+                  onClick={handleRefresh}
+                  disabled={loading}
+                  className="p-1 rounded hover:bg-muted transition-colors"
+                  title="Refresh"
+                >
+                  <RefreshCw
+                    className={cn(
+                      "h-3.5 w-3.5 text-muted-foreground",
+                      loading && "animate-spin"
+                    )}
+                  />
+                </button>
+              </div>
+            ) : (
+              <div className="h-1.5 w-1.5 rounded-full bg-yellow-500 animate-pulse" title="Starting..." />
+            )}
           </div>
 
-          {/* Edit mode */}
-          {isEditing && (
+          {/* Edit mode - only available when runtime is ready */}
+          {isEditing && runtimeReady && (
             <div className="p-3 bg-muted/30 border-b border-border">
               <BlockPropsEditor
                 type={blockElement.blockType}
@@ -88,7 +93,12 @@ export function RscBlockElement(props: PlateElementProps<RscBlockElementData>) {
 
           {/* Block content - RSC element */}
           <div className="p-4">
-            {data?.error ? (
+            {isWaitingForRuntime ? (
+              // Show booting state placeholder
+              <div className="flex items-center justify-center h-24 rounded bg-muted/30 border border-dashed border-border/50">
+                <div className="h-2 w-2 rounded-full bg-yellow-500 animate-pulse" title="Starting..." />
+              </div>
+            ) : data?.error ? (
               <div className="flex items-center gap-2 text-destructive">
                 <AlertCircle className="h-4 w-4" />
                 <span className="text-sm">{data.error}</span>

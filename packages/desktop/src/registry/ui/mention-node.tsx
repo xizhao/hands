@@ -3,27 +3,24 @@
 import { DatePlugin } from '@platejs/date/react';
 import { MentionPlugin } from '@platejs/mention/react';
 import { ArrowUpRightIcon, FileTextIcon } from 'lucide-react';
-import { IS_APPLE, type Value } from 'platejs';
+import { IS_APPLE } from 'platejs';
 import {
   PlateElement,
   type PlateElementProps,
   useEditorRef,
   useFocused,
   useHotkeys,
-  usePlateEditor,
   useReadOnly,
   useSelected,
 } from 'platejs/react';
 import React, { useEffect, useMemo, useState } from 'react';
 import { useMounted } from 'react-tweet';
 import { cn } from '@/lib/utils';
-import { BaseEditorKit } from '@/registry/components/editor/editor-base-kit';
 import type { MyMentionElement } from '@/registry/components/editor/plate-types';
 import { insertInlineElement } from '@/registry/components/editor/transforms';
 import { useDebounce } from '@/registry/hooks/use-debounce';
 
 import { Avatar, AvatarFallback, AvatarImage } from './avatar';
-import { EditorStatic } from '@hands/stdlib/static';
 import { HoverCard, HoverCardContent, HoverCardTrigger } from './hover-card';
 import {
   InlineCombobox,
@@ -43,11 +40,6 @@ import {
 
 type DocumentItem = {
   id: string;
-  contentRich: {
-    children: { text: string }[];
-    type: string;
-  }[];
-  coverImage: string;
   icon: string;
   title: string;
 };
@@ -59,68 +51,10 @@ type PeopleComboboxGroupProps = {
 };
 
 export const mockMentionDocuments = [
-  {
-    id: 'docs/examples/ai',
-    contentRich: [
-      {
-        children: [
-          {
-            text: 'A comprehensive guide to using AI features in your documents.',
-          },
-        ],
-        type: 'p',
-      },
-    ],
-    coverImage: 'https://picsum.photos/seed/ai/800/400',
-    icon: '📋',
-    title: 'AI',
-  },
-  {
-    id: 'docs/examples/callout',
-    contentRich: [
-      {
-        children: [
-          {
-            text: 'Learn how to use callouts to highlight important information.',
-          },
-        ],
-        type: 'p',
-      },
-    ],
-    coverImage: 'https://picsum.photos/seed/callout/800/400',
-    icon: '🧰',
-    title: 'Callout',
-  },
-  {
-    id: 'docs/examples/equation',
-    contentRich: [
-      {
-        children: [
-          { text: 'Everything you need to know about mathematical equations.' },
-        ],
-        type: 'p',
-      },
-    ],
-    coverImage: 'https://picsum.photos/seed/equation/800/400',
-    icon: '🧮',
-    title: 'Equation',
-  },
-  {
-    id: 'docs/examples/toc',
-    contentRich: [
-      {
-        children: [
-          {
-            text: 'How to create and manage table of contents in your documents.',
-          },
-        ],
-        type: 'p',
-      },
-    ],
-    coverImage: 'https://picsum.photos/seed/toc/800/400',
-    icon: '📚',
-    title: 'Table of Contents',
-  },
+  { id: 'docs/examples/ai', icon: '📋', title: 'AI' },
+  { id: 'docs/examples/callout', icon: '🧰', title: 'Callout' },
+  { id: 'docs/examples/equation', icon: '🧮', title: 'Equation' },
+  { id: 'docs/examples/toc', icon: '📚', title: 'Table of Contents' },
 ];
 
 type UserItem = {
@@ -131,43 +65,13 @@ type UserItem = {
 };
 
 const mockUsers = [
-  {
-    id: '1',
-    email: 'john@example.com',
-    name: 'John Doe',
-    image: 'https://api.dicebear.com/7.x/avataaars/svg?seed=John',
-  },
-  {
-    id: '2',
-    email: 'jane@example.com',
-    name: 'Jane Smith',
-    image: 'https://api.dicebear.com/7.x/avataaars/svg?seed=Jane',
-  },
-  {
-    id: '3',
-    email: 'bob@example.com',
-    name: 'Bob Wilson',
-    image: 'https://api.dicebear.com/7.x/avataaars/svg?seed=Bob',
-  },
-  {
-    id: '4',
-    email: 'alice@example.com',
-    name: 'Alice Brown',
-    image: 'https://api.dicebear.com/7.x/avataaars/svg?seed=Alice',
-  },
-  {
-    id: '5',
-    email: 'charlie@example.com',
-    name: 'Charlie Davis',
-    image: 'https://api.dicebear.com/7.x/avataaars/svg?seed=Charlie',
-  },
+  { id: '1', email: 'john@example.com', name: 'John Doe', image: 'https://api.dicebear.com/7.x/avataaars/svg?seed=John' },
+  { id: '2', email: 'jane@example.com', name: 'Jane Smith', image: 'https://api.dicebear.com/7.x/avataaars/svg?seed=Jane' },
+  { id: '3', email: 'bob@example.com', name: 'Bob Wilson', image: 'https://api.dicebear.com/7.x/avataaars/svg?seed=Bob' },
 ];
 
 export function MentionInputElement(props: PlateElementProps) {
-  const [placeholder, setPlaceholder] = useState(
-    'Mention a person,page,or date...'
-  );
-
+  const [placeholder, setPlaceholder] = useState('Mention a person, page, or date...');
   const { children, editor, element } = props;
   const [search, setSearch] = React.useState('');
 
@@ -182,10 +86,7 @@ export function MentionInputElement(props: PlateElementProps) {
       >
         <span className="rounded-md bg-muted px-1.5 py-0.5 align-baseline text-sm ring-ring">
           <span className="font-bold">@</span>
-          <InlineComboboxInput
-            className="min-w-[100px]"
-            placeholder={placeholder}
-          />
+          <InlineComboboxInput className="min-w-[100px]" placeholder={placeholder} />
         </span>
 
         <InlineComboboxContent variant="mention">
@@ -194,9 +95,7 @@ export function MentionInputElement(props: PlateElementProps) {
           <InlineComboboxGroup>
             <InlineComboboxGroupLabel>Date</InlineComboboxGroupLabel>
             <InlineComboboxItem
-              onClick={() => {
-                insertInlineElement(editor, DatePlugin.key);
-              }}
+              onClick={() => insertInlineElement(editor, DatePlugin.key)}
               onFocus={() => setPlaceholder('Today')}
               onMouseEnter={() => setPlaceholder('Today')}
               value="today"
@@ -204,11 +103,7 @@ export function MentionInputElement(props: PlateElementProps) {
               <span>Today</span>
               <span className="mx-1 text-muted-foreground">—</span>
               <span className="font-medium text-muted-foreground text-xs">
-                {new Date().toLocaleDateString(undefined, {
-                  day: 'numeric',
-                  month: 'long',
-                  year: 'numeric',
-                })}
+                {new Date().toLocaleDateString(undefined, { day: 'numeric', month: 'long', year: 'numeric' })}
               </span>
             </InlineComboboxItem>
           </InlineComboboxGroup>
@@ -219,7 +114,6 @@ export function MentionInputElement(props: PlateElementProps) {
               editor.tf.insertNodes<MyMentionElement>({
                 key: `/${document.id}`,
                 children: [{ text: '' }],
-                coverImage: document.coverImage ?? undefined,
                 icon: document.icon ?? undefined,
                 type: MentionPlugin.key,
                 value: document.title!,
@@ -255,31 +149,21 @@ type DocumentComboboxGroupProps = {
   onDocumentSelect: (document: DocumentItem) => void;
 };
 
-function PeopleComboboxGroup({
-  search: searchRaw,
-  onUserHover,
-  onUserSelect,
-}: PeopleComboboxGroupProps) {
+function PeopleComboboxGroup({ search: searchRaw, onUserHover, onUserSelect }: PeopleComboboxGroupProps) {
   const search = useDebounce(searchRaw, 100);
-
   const allUsers = useMemo(
-    () =>
-      mockUsers.filter(
-        (user) =>
-          user.name?.toLowerCase().includes(search.toLowerCase()) ||
-          user.email?.toLowerCase().includes(search.toLowerCase())
-      ),
+    () => mockUsers.filter((user) =>
+      user.name?.toLowerCase().includes(search.toLowerCase()) ||
+      user.email?.toLowerCase().includes(search.toLowerCase())
+    ),
     [search]
   );
 
-  if (allUsers.length === 0) {
-    return null;
-  }
+  if (allUsers.length === 0) return null;
 
   return (
     <InlineComboboxGroup>
       <InlineComboboxGroupLabel>People</InlineComboboxGroupLabel>
-
       {allUsers.map((user) => (
         <InlineComboboxItem
           key={user.id}
@@ -290,11 +174,8 @@ function PeopleComboboxGroup({
         >
           <Avatar className="mr-2.5 size-5">
             <AvatarImage alt={user.name!} src={user.image!} />
-            <AvatarFallback>
-              {user.name?.charAt(0).toUpperCase()}
-            </AvatarFallback>
+            <AvatarFallback>{user.name?.charAt(0).toUpperCase()}</AvatarFallback>
           </Avatar>
-
           {user.name ?? user.email}
         </InlineComboboxItem>
       ))}
@@ -302,29 +183,18 @@ function PeopleComboboxGroup({
   );
 }
 
-function DocumentComboboxGroup({
-  search: searchRaw,
-  onDocumentHover,
-  onDocumentSelect,
-}: DocumentComboboxGroupProps) {
+function DocumentComboboxGroup({ search: searchRaw, onDocumentHover, onDocumentSelect }: DocumentComboboxGroupProps) {
   const search = useDebounce(searchRaw, 500);
-
   const allDocuments = useMemo(
-    () =>
-      mockMentionDocuments.filter((doc) =>
-        doc.title.toLowerCase().includes(search.toLowerCase())
-      ),
+    () => mockMentionDocuments.filter((doc) => doc.title.toLowerCase().includes(search.toLowerCase())),
     [search]
   );
 
-  if (allDocuments.length === 0) {
-    return null;
-  }
+  if (allDocuments.length === 0) return null;
 
   return (
     <InlineComboboxGroup>
       <InlineComboboxGroupLabel>Link to page</InlineComboboxGroupLabel>
-
       {allDocuments.map((document) => (
         <InlineComboboxItem
           key={document.id}
@@ -333,9 +203,7 @@ function DocumentComboboxGroup({
           onMouseEnter={() => onDocumentHover(document.title ?? '')}
           value={document.title || 'Untitled Document'}
         >
-          <span className="mr-2 size-5">
-            {document.icon ?? <FileTextIcon />}
-          </span>
+          <span className="mr-2 size-5">{document.icon ?? <FileTextIcon />}</span>
           {document.title ?? 'Untitled Document'}
         </InlineComboboxItem>
       ))}
@@ -344,39 +212,18 @@ function DocumentComboboxGroup({
 }
 
 const openDocument = (id: string) => {
-  const host = window.location.host;
-  const baseUrl =
-    // TODO: Remove this for demo only
-    host === 'pro.platejs.org'
-      ? 'https://potion.platejs.org'
-      : window.location.origin;
-
-  window.open(`${baseUrl}/${id}`, '_self');
+  window.open(`${window.location.origin}/${id}`, '_self');
 };
 
-function DocumentMentionElement(
-  props: PlateElementProps<MyMentionElement> & {
-    prefix?: string;
-  }
-) {
+function DocumentMentionElement(props: PlateElementProps<MyMentionElement> & { prefix?: string }) {
   const { children } = props;
   const element = props.element;
   const selected = useSelected();
   const focused = useFocused();
 
-  useHotkeys(
-    'enter',
-    () => {
-      if (selected && focused) {
-        openDocument(element.key!.slice(1));
-      }
-    },
-    {
-      enabled: selected && focused,
-      enableOnContentEditable: true,
-      enableOnFormTags: true,
-    }
-  );
+  useHotkeys('enter', () => {
+    if (selected && focused) openDocument(element.key!.slice(1));
+  }, { enabled: selected && focused, enableOnContentEditable: true, enableOnFormTags: true });
 
   return (
     <TooltipProvider>
@@ -391,9 +238,7 @@ function DocumentMentionElement(
                   contentEditable: false,
                   'data-slate-value': element.value,
                   draggable: true,
-                  onClick: () => {
-                    openDocument(element.key!.slice(1));
-                  },
+                  onClick: () => openDocument(element.key!.slice(1)),
                   onMouseDown: (e) => e.preventDefault(),
                 }}
                 className={cn(
@@ -411,14 +256,14 @@ function DocumentMentionElement(
               </PlateElement>
             </TooltipTrigger>
             <TooltipContent>
-              <p>
-                <span className="mr-1">Open Page</span>
-                <kbd>↵</kbd>
-              </p>
+              <p><span className="mr-1">Open Page</span><kbd>↵</kbd></p>
             </TooltipContent>
           </HoverCardTrigger>
-          <HoverCardContent className="relative p-0 pb-4">
-            <MentionHoverCardContent element={element} />
+          <HoverCardContent className="p-4">
+            <div className="flex items-center gap-2">
+              <span className="text-2xl">{element.icon}</span>
+              <span className="font-medium">{element.value}</span>
+            </div>
           </HoverCardContent>
         </HoverCard>
       </Tooltip>
@@ -426,74 +271,7 @@ function DocumentMentionElement(
   );
 }
 
-function MentionHoverCardContent(props: { element: MyMentionElement }) {
-  const editor = useEditorRef();
-  const { element } = props;
-
-  const isDocument = element.key!.startsWith('/');
-
-  // Find the document from mockDocuments
-  const document = React.useMemo(() => {
-    if (!isDocument) return null;
-
-    return mockMentionDocuments.find((doc) => doc.id === element.key!.slice(1));
-  }, [element.key, isDocument]);
-
-  useEffect(() => {
-    if (!document) return;
-    if (
-      element.coverImage !== document.coverImage ||
-      element.icon !== document.icon ||
-      element.value !== document.title
-    ) {
-      editor.tf.setNodes<MyMentionElement>(
-        {
-          coverImage: document.coverImage,
-          icon: document.icon,
-          value: document.title,
-        },
-        {
-          at: [],
-          mode: 'lowest',
-          match: (n) => n.type === MentionPlugin.key && n.id === element.id,
-        }
-      );
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [document]);
-
-  const previewEditor = useEditorPreview(
-    (document?.contentRich as Value | undefined)?.slice(0, 2) ?? []
-  );
-
-  return (
-    <div className="flex flex-col overflow-hidden rounded">
-      <div className={cn('h-10 w-full')}>
-        {element.coverImage && (
-          <img
-            alt={element.value}
-            className="size-full object-cover"
-            src={element.coverImage}
-          />
-        )}
-      </div>
-      <div className="absolute top-5 left-4 text-[30px]">{element.icon}</div>
-      <h1 className="mt-5 px-4 font-bold text-lg">{element.value}</h1>
-      <EditorStatic
-        className="px-4 text-xs"
-        editor={previewEditor}
-        // components={basicComponents}
-        variant="mention"
-      />
-    </div>
-  );
-}
-
-function UserMentionElement(
-  props: PlateElementProps<MyMentionElement> & {
-    prefix?: string;
-  }
-) {
+function UserMentionElement(props: PlateElementProps<MyMentionElement> & { prefix?: string }) {
   const { children } = props;
   const element = props.element;
   const readOnly = useReadOnly();
@@ -518,47 +296,16 @@ function UserMentionElement(
     >
       <span className="font-semibold text-primary/45">@</span>
       {mounted && IS_APPLE ? (
-        // Mac OS IME https://github.com/ianstormtaylor/slate/issues/3490
-        <>
-          {children}
-          {props.prefix}
-          {element.value}
-        </>
+        <>{children}{props.prefix}{element.value}</>
       ) : (
-        // Others like Android https://github.com/ianstormtaylor/slate/pull/5360
-        <>
-          {props.prefix}
-          {element.value}
-          {children}
-        </>
+        <>{props.prefix}{element.value}{children}</>
       )}
     </PlateElement>
   );
 }
 
-export function MentionElement(
-  props: PlateElementProps<MyMentionElement> & {
-    prefix?: string;
-  }
-) {
+export function MentionElement(props: PlateElementProps<MyMentionElement> & { prefix?: string }) {
   const element = props.element;
   const isDocument = element.key?.startsWith('/');
-
-  return isDocument ? (
-    <DocumentMentionElement {...props} />
-  ) : (
-    <UserMentionElement {...props} />
-  );
+  return isDocument ? <DocumentMentionElement {...props} /> : <UserMentionElement {...props} />;
 }
-
-const useEditorPreview = (value: Value) => {
-  const editorStatic = usePlateEditor(
-    {
-      plugins: BaseEditorKit,
-      value,
-    },
-    [value]
-  );
-
-  return editorStatic;
-};

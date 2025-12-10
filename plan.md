@@ -145,7 +145,7 @@ title: {}
 
 # {}
 
-<Block id="welcome" name="{}" />
+<Block src="welcome" name="{}" />
 
 Start by creating blocks in the `blocks/` directory.
 "#, name, name, name);

@@ -5,73 +5,57 @@
   "components": {
     "button": {
       "name": "Button",
-      "type": "ui",
+      "category": "ui",
       "description": "A button component with multiple variants and sizes",
-      "files": ["components/ui/button.tsx"],
-      "dependencies": ["class-variance-authority"],
-      "registryDependencies": []
+      "files": ["registry/components/ui/button.tsx"],
+      "dependencies": ["class-variance-authority"]
     },
     "card": {
       "name": "Card",
-      "type": "ui",
+      "category": "ui",
       "description": "A card container with header, content, and footer sections",
-      "files": ["components/ui/card.tsx"],
-      "dependencies": [],
-      "registryDependencies": []
+      "files": ["registry/components/ui/card.tsx"],
+      "dependencies": []
     },
     "badge": {
       "name": "Badge",
-      "type": "ui",
+      "category": "ui",
       "description": "A small badge/chip for labels and status indicators",
-      "files": ["components/ui/badge.tsx"],
-      "dependencies": ["class-variance-authority"],
-      "registryDependencies": []
+      "files": ["registry/components/ui/badge.tsx"],
+      "dependencies": ["class-variance-authority"]
     },
     "metric-card": {
       "name": "MetricCard",
-      "type": "data",
+      "category": "data",
       "description": "Display a single metric with label, value, and optional trend",
-      "files": ["components/data/metric-card.tsx"],
-      "dependencies": [],
-      "registryDependencies": ["card"]
+      "files": ["registry/components/data/metric-card.tsx"],
+      "dependencies": []
     },
     "data-table": {
       "name": "DataTable",
-      "type": "data",
+      "category": "data",
       "description": "A simple data table for displaying rows of data",
-      "files": ["components/data/data-table.tsx"],
-      "dependencies": [],
-      "registryDependencies": []
+      "files": ["registry/components/data/data-table.tsx"],
+      "dependencies": []
     },
     "line-chart": {
       "name": "LineChart",
-      "type": "chart",
+      "category": "charts",
       "description": "A line chart for time series data using SVG",
-      "files": ["components/charts/line-chart.tsx"],
-      "dependencies": [],
-      "registryDependencies": []
+      "files": ["registry/components/charts/line-chart.tsx"],
+      "dependencies": []
     },
     "bar-chart": {
       "name": "BarChart",
-      "type": "chart",
+      "category": "charts",
       "description": "A bar chart for categorical comparisons",
-      "files": ["components/charts/bar-chart.tsx"],
-      "dependencies": [],
-      "registryDependencies": []
+      "files": ["registry/components/charts/bar-chart.tsx"],
+      "dependencies": []
     }
   },
   "categories": {
-    "ui": {
-      "name": "UI",
-      "description": "Base UI components"
-    },
-    "data": {
-      "name": "Data",
-      "description": "Components for displaying data"
-    },
-    "chart": {
-      "name": "Charts",
-      "description": "Data visualization components"
-    }
+    "ui": { "name": "UI", "description": "Base UI components" },
+    "data": { "name": "Data", "description": "Components for displaying data" },
+    "charts": { "name": "Charts", "description": "Data visualization components" }
   }
 }

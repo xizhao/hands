@@ -13,15 +13,16 @@
  */
 
 import { spawn, type ChildProcess } from "child_process"
-import { existsSync, readdirSync, readFileSync } from "fs"
+import { existsSync, readdirSync, readFileSync, watch, type FSWatcher } from "fs"
 import { join } from "path"
-import { createServer } from "http"
-import { PGlite } from "@electric-sql/pglite"
+import { createServer, type ServerResponse } from "http"
 import { Hono } from "hono"
 import { cors } from "hono/cors"
+import { streamSSE } from "hono/streaming"
 import { buildRSC } from "./build/rsc.js"
 import { PORTS } from "./ports.js"
-import { createDbContext, type DbContext } from "./db/index.js"
+import { initWorkbookDb, type WorkbookDb } from "./db/index.js"
+import { lintBlockRefs, type BlockLintResult } from "./blocks/lint.js"
 import type { BlockContext } from "./ctx.js"
 
 interface RuntimeConfig {
@@ -34,9 +35,13 @@ interface RuntimeState {
   dbReady: boolean
   viteReady: boolean
   vitePort: number | null
-  db: PGlite | null
-  dbContext: DbContext | null
+  workbookDb: WorkbookDb | null
   viteProc: ChildProcess | null
+  // SSE clients for manifest watch
+  manifestClients: Set<(manifest: ReturnType<typeof getManifest>) => void>
+  fileWatchers: FSWatcher[]
+  // Cached lint results
+  lintResult: BlockLintResult | null
 }
 
 // Global state for progressive readiness
@@ -44,9 +49,11 @@ const state: RuntimeState = {
   dbReady: false,
   viteReady: false,
   vitePort: null,
-  db: null,
-  dbContext: null,
+  workbookDb: null,
   viteProc: null,
+  lintResult: null,
+  manifestClients: new Set(),
+  fileWatchers: [],
 }
 
 // Parse CLI args
@@ -136,6 +143,96 @@ function extractTitle(content: string): string | null {
 }
 
 /**
+ * Broadcast manifest update to all SSE clients
+ */
+function broadcastManifest(workbookDir: string, workbookId: string) {
+  if (state.manifestClients.size === 0) return
+  const manifest = getManifest(workbookDir, workbookId)
+  for (const sendUpdate of state.manifestClients) {
+    sendUpdate(manifest)
+  }
+}
+
+/**
+ * Start watching pages/ and blocks/ directories for changes
+ * Uses fs.watch for real-time updates (not polling)
+ */
+function startFileWatcher(config: RuntimeConfig) {
+  const { workbookDir, workbookId } = config
+  const pagesDir = join(workbookDir, "pages")
+  const blocksDir = join(workbookDir, "blocks")
+
+  // Debounce to avoid duplicate events
+  let debounceTimer: ReturnType<typeof setTimeout> | null = null
+  const debouncedBroadcast = () => {
+    if (debounceTimer) clearTimeout(debounceTimer)
+    debounceTimer = setTimeout(() => {
+      console.log("[runtime] File change detected, broadcasting manifest update")
+      broadcastManifest(workbookDir, workbookId)
+    }, 100) // 100ms debounce
+  }
+
+  // Invalidate lint cache and re-run lint
+  const invalidateLint = () => {
+    state.lintResult = lintBlockRefs(workbookDir)
+    if (state.lintResult.errors.length > 0) {
+      console.log(`[lint] Found ${state.lintResult.errors.length} block reference error(s)`)
+      for (const err of state.lintResult.errors) {
+        console.log(`  ${err.page}:${err.line} - Block src="${err.src}" not found`)
+      }
+    }
+  }
+
+  // Watch pages directory
+  if (existsSync(pagesDir)) {
+    try {
+      const watcher = watch(pagesDir, { recursive: true }, (event, filename) => {
+        if (filename && (filename.endsWith(".md") || filename.endsWith(".mdx"))) {
+          invalidateLint()
+          debouncedBroadcast()
+        }
+      })
+      state.fileWatchers.push(watcher)
+      console.log("[runtime] Watching pages/ for changes")
+    } catch (err) {
+      console.warn("[runtime] Could not watch pages/:", err)
+    }
+  }
+
+  // Watch blocks directory
+  if (existsSync(blocksDir)) {
+    try {
+      const watcher = watch(blocksDir, { recursive: true }, (event, filename) => {
+        if (filename && (filename.endsWith(".ts") || filename.endsWith(".tsx"))) {
+          invalidateLint()
+          debouncedBroadcast()
+        }
+      })
+      state.fileWatchers.push(watcher)
+      console.log("[runtime] Watching blocks/ for changes")
+    } catch (err) {
+      console.warn("[runtime] Could not watch blocks/:", err)
+    }
+  }
+
+  // Run initial lint
+  invalidateLint()
+}
+
+/**
+ * Check if a SQL query is DDL (schema-changing)
+ */
+function isDDL(sql: string): boolean {
+  const normalized = sql.trim().toUpperCase()
+  return (
+    normalized.startsWith("CREATE ") ||
+    normalized.startsWith("ALTER ") ||
+    normalized.startsWith("DROP ") ||
+    normalized.startsWith("TRUNCATE ")
+  )
+}
+
+/**
  * Create the Hono app for instant serving
  */
 function createApp(config: RuntimeConfig) {
@@ -144,13 +241,13 @@ function createApp(config: RuntimeConfig) {
   // CORS
   app.use("/*", cors())
 
-  // Health - instant, shows progressive readiness
+  // Health - simple ready/booting status
+  // Single process architecture: ready when both DB and Vite are up
   app.get("/health", (c) => {
+    const ready = state.dbReady && state.viteReady
     return c.json({
-      status: state.dbReady && state.viteReady ? "ready" : "booting",
-      db: state.dbReady,
-      vite: state.viteReady,
-      vitePort: state.vitePort,
+      ready,
+      status: ready ? "ready" : "booting", // backward compat
     })
   })
 
@@ -166,10 +263,76 @@ function createApp(config: RuntimeConfig) {
     })
   })
 
+  // Eval - returns diagnostic info for AlertsPanel
+  // Simplified version (no tsc/biome) - just service status
+  app.post("/eval", (c) => {
+    // Run lint if not cached
+    if (!state.lintResult) {
+      state.lintResult = lintBlockRefs(config.workbookDir)
+    }
+
+    return c.json({
+      timestamp: Date.now(),
+      duration: 0,
+      wrangler: null,
+      typescript: { errors: [], warnings: [] },
+      format: { fixed: [], errors: [] },
+      unused: { exports: [], files: [] },
+      blockRefs: state.lintResult,
+      services: {
+        postgres: {
+          up: state.dbReady,
+          port: 0, // PGlite is in-process, no TCP port
+          error: state.dbReady ? undefined : "Database is booting",
+        },
+        worker: {
+          up: state.viteReady,
+          port: state.vitePort ?? 0,
+          error: state.viteReady ? undefined : "Vite is starting",
+        },
+      },
+    })
+  })
+
   // Manifest - instant! Reads from filesystem only
   app.get("/workbook/manifest", (c) => {
     const manifest = getManifest(config.workbookDir, config.workbookId)
     return c.json(manifest)
+  })
+
+  // Manifest watch - SSE for real-time updates
+  app.get("/workbook/manifest/watch", async (c) => {
+    return streamSSE(c, async (stream) => {
+      // Send initial manifest
+      const initialManifest = getManifest(config.workbookDir, config.workbookId)
+      await stream.writeSSE({ data: JSON.stringify(initialManifest) })
+
+      // Register callback for updates
+      const sendUpdate = (manifest: ReturnType<typeof getManifest>) => {
+        stream.writeSSE({ data: JSON.stringify(manifest) }).catch(() => {
+          // Client disconnected
+          state.manifestClients.delete(sendUpdate)
+        })
+      }
+      state.manifestClients.add(sendUpdate)
+
+      // Keep connection alive
+      const keepAlive = setInterval(() => {
+        stream.writeSSE({ event: "ping", data: "" }).catch(() => {
+          clearInterval(keepAlive)
+          state.manifestClients.delete(sendUpdate)
+        })
+      }, 30000)
+
+      // Cleanup on disconnect
+      stream.onAbort(() => {
+        clearInterval(keepAlive)
+        state.manifestClients.delete(sendUpdate)
+      })
+
+      // Keep stream open indefinitely
+      await new Promise(() => {})
+    })
   })
 
   // Page content - instant! Reads from filesystem
@@ -190,13 +353,19 @@ function createApp(config: RuntimeConfig) {
 
   // DB routes - require DB ready
   app.post("/db/query", async (c) => {
-    if (!state.dbReady || !state.db) {
+    if (!state.dbReady || !state.workbookDb) {
       return c.json({ error: "Database not ready", booting: true }, 503)
     }
 
     const { query } = await c.req.json<{ query: string }>()
     try {
-      const result = await state.db.query(query)
+      const result = await state.workbookDb.db.query(query)
+
+      // Check if DDL - regenerate schema
+      if (isDDL(query)) {
+        await state.workbookDb.regenerateSchema()
+      }
+
       return c.json({ rows: result.rows, rowCount: result.rows.length })
     } catch (err) {
       return c.json({ error: String(err) }, 500)
@@ -204,12 +373,12 @@ function createApp(config: RuntimeConfig) {
   })
 
   app.get("/db/tables", async (c) => {
-    if (!state.dbReady || !state.db) {
+    if (!state.dbReady || !state.workbookDb) {
       return c.json({ error: "Database not ready", booting: true }, 503)
     }
 
     try {
-      const result = await state.db.query(`
+      const result = await state.workbookDb.db.query(`
         SELECT table_name as name
         FROM information_schema.tables
         WHERE table_schema = 'public' AND table_type = 'BASE TABLE'
@@ -221,13 +390,112 @@ function createApp(config: RuntimeConfig) {
     }
   })
 
+  // Backward-compatible /postgres/* routes for desktop app
+  app.post("/postgres/query", async (c) => {
+    if (!state.dbReady || !state.workbookDb) {
+      return c.json({ error: "Database not ready", booting: true }, 503)
+    }
+
+    const { query } = await c.req.json<{ query: string }>()
+    try {
+      const result = await state.workbookDb.db.query(query)
+
+      if (isDDL(query)) {
+        await state.workbookDb.regenerateSchema()
+      }
+
+      return c.json({ rows: result.rows, rowCount: result.rows.length })
+    } catch (err) {
+      return c.json({ error: String(err) }, 500)
+    }
+  })
+
+  app.get("/postgres/tables", async (c) => {
+    if (!state.dbReady || !state.workbookDb) {
+      return c.json({ error: "Database not ready", booting: true }, 503)
+    }
+
+    try {
+      const result = await state.workbookDb.db.query(`
+        SELECT table_name as name
+        FROM information_schema.tables
+        WHERE table_schema = 'public' AND table_type = 'BASE TABLE'
+        ORDER BY table_name
+      `)
+      return c.json(result.rows)
+    } catch (err) {
+      return c.json({ error: String(err) }, 500)
+    }
+  })
+
+  app.get("/postgres/schema", async (c) => {
+    if (!state.dbReady || !state.workbookDb) {
+      return c.json({ error: "Database not ready", booting: true }, 503)
+    }
+
+    try {
+      // Get columns for all tables
+      const result = await state.workbookDb.db.query(`
+        SELECT
+          t.table_name,
+          c.column_name,
+          c.data_type,
+          c.is_nullable,
+          c.column_default
+        FROM information_schema.tables t
+        JOIN information_schema.columns c ON t.table_name = c.table_name
+        WHERE t.table_schema = 'public' AND t.table_type = 'BASE TABLE'
+        ORDER BY t.table_name, c.ordinal_position
+      `)
+
+      // Group by table for desktop app
+      const tables: Record<string, { table_name: string; columns: { name: string; type: string; nullable: boolean }[] }> = {}
+      for (const row of result.rows as Array<{ table_name: string; column_name: string; data_type: string; is_nullable: string }>) {
+        if (!tables[row.table_name]) {
+          tables[row.table_name] = { table_name: row.table_name, columns: [] }
+        }
+        tables[row.table_name].columns.push({
+          name: row.column_name,
+          type: row.data_type,
+          nullable: row.is_nullable === "YES",
+        })
+      }
+
+      return c.json(Object.values(tables))
+    } catch (err) {
+      return c.json({ error: String(err) }, 500)
+    }
+  })
+
+  // Save workbook (dump DB to .hands/db.tar.gz)
+  app.post("/db/save", async (c) => {
+    if (!state.dbReady || !state.workbookDb) {
+      return c.json({ error: "Database not ready", booting: true }, 503)
+    }
+
+    try {
+      await state.workbookDb.save()
+      return c.json({ success: true })
+    } catch (err) {
+      return c.json({ error: String(err) }, 500)
+    }
+  })
+
   // Get block context (for Vite server to use)
   app.get("/ctx", async (c) => {
-    if (!state.dbReady || !state.dbContext) {
+    if (!state.dbReady || !state.workbookDb) {
       return c.json({ error: "Database not ready", booting: true }, 503)
     }
     // Context is ready - Vite will call this to check
     return c.json({ ready: true })
+  })
+
+  // Stop endpoint for graceful shutdown (used by Tauri)
+  app.post("/stop", async (c) => {
+    console.log("[runtime] Stop requested via /stop endpoint")
+    // Trigger shutdown after responding
+    setTimeout(() => process.exit(0), 100)
+    return c.json({ success: true })
   })
 
   // Proxy to Vite for RSC routes
@@ -246,9 +514,14 @@ function createApp(config: RuntimeConfig) {
         body: c.req.method !== "GET" ? await c.req.text() : undefined,
       })
 
+      // Copy headers but remove transfer-encoding to avoid conflicts
+      // The Node.js server will handle chunked encoding itself
+      const headers = new Headers(response.headers)
+      headers.delete("transfer-encoding")
+
       return new Response(response.body, {
         status: response.status,
-        headers: response.headers,
+        headers,
       })
     } catch (err) {
       return c.json({ error: "Vite proxy failed: " + String(err) }, 502)
@@ -260,20 +533,17 @@ function createApp(config: RuntimeConfig) {
 
 /**
  * Boot PGlite in background
+ * Loads from .hands/db.tar.gz if exists, generates schema.ts
  */
 async function bootPGlite(workbookDir: string) {
-  const dbPath = join(workbookDir, "db")
-  console.log(`[runtime] Booting PGlite at ${dbPath}...`)
+  console.log(`[runtime] Booting database for ${workbookDir}...`)
 
   try {
-    // Use PGlite with Node.js filesystem
-    state.db = new PGlite(dbPath)
-    await state.db.waitReady
-    state.dbContext = createDbContext(state.db)
+    state.workbookDb = await initWorkbookDb(workbookDir)
     state.dbReady = true
-    console.log("[runtime] PGlite ready")
+    console.log("[runtime] Database ready")
   } catch (err) {
-    console.error("[runtime] PGlite failed:", err)
+    console.error("[runtime] Database failed:", err)
   }
 }
 
@@ -281,11 +551,12 @@ async function bootPGlite(workbookDir: string) {
  * Create block context for execution
  */
 function createBlockContext(params: Record<string, any> = {}): BlockContext {
-  if (!state.dbContext) {
+  if (!state.workbookDb) {
     throw new Error("Database not ready")
   }
   return {
-    db: state.dbContext,
+    db: state.workbookDb.ctx,
+    sql: state.workbookDb.ctx.sql,
     params,
   }
 }
@@ -295,7 +566,7 @@ function createBlockContext(params: Record<string, any> = {}): BlockContext {
  */
 async function bootVite(config: RuntimeConfig) {
   const { workbookDir, workbookId } = config
-  const vitePort = PORTS.RUNTIME + 100 // Use next port for Vite
+  const vitePort = PORTS.WORKER // Use worker port for Vite (55200)
 
   console.log("[runtime] Building RSC project...")
 
@@ -330,13 +601,21 @@ async function bootVite(config: RuntimeConfig) {
     console.log(`[runtime] Starting Vite on port ${vitePort}...`)
     state.viteProc = spawn("npx", ["vite", "dev", "--port", String(vitePort), "--host", "127.0.0.1"], {
       cwd: handsDir,
-      stdio: "inherit",
+      stdio: ["ignore", "pipe", "pipe"],
       env: {
         ...process.env,
         WORKBOOK_ID: workbookId,
         WORKBOOK_DIR: workbookDir,
         RUNTIME_PORT: String(config.port),
       },
+    })
+
+    // Forward Vite output but ignore EPIPE errors on shutdown
+    state.viteProc.stdout?.on("data", (data) => {
+      process.stdout.write(data, () => {})
+    })
+    state.viteProc.stderr?.on("data", (data) => {
+      process.stderr.write(data, () => {})
     })
 
     // Wait for Vite to be ready
@@ -422,8 +701,13 @@ async function main() {
     console.log(`[runtime] Server ready on http://localhost:${port}`)
     console.log(`[runtime] Manifest available at http://localhost:${port}/workbook/manifest`)
 
-    // Output ready JSON for CLI
-    console.log(JSON.stringify({ type: "server_ready", port }))
+    // Output ready JSON for Tauri - format must match lib.rs expectations
+    console.log(JSON.stringify({
+      type: "ready",
+      runtimePort: port,
+      postgresPort: port, // PGlite is in-process, use same port
+      workerPort: PORTS.WORKER,
+    }))
   })
 
   // 2. Boot PGlite in background (non-blocking)
@@ -432,11 +716,21 @@ async function main() {
   // 3. Build and start Vite in background (non-blocking)
   bootVite(config)
 
+  // 4. Start file watcher for real-time manifest updates
+  startFileWatcher(config)
+
   // Handle shutdown
   const shutdown = async () => {
     console.log("[runtime] Shutting down...")
+    // Close file watchers
+    for (const watcher of state.fileWatchers) {
+      watcher.close()
+    }
     if (state.viteProc) state.viteProc.kill()
-    if (state.db) await state.db.close()
+    if (state.workbookDb) {
+      await state.workbookDb.save()
+      await state.workbookDb.close()
+    }
     server.close()
     process.exit(0)
   }

@@ -62,8 +62,8 @@ export async function serveBlock(options: BlockServeOptions): Promise<BlockServe
       }
     }
 
-    // Render the block
-    const element = await BlockFn(props, context)
+    // Render the block (ctx is passed inside props now)
+    const element = await BlockFn({ ...props, ctx: context })
     const html = renderToString(element)
 
     return {

@@ -9,6 +9,16 @@ import { QueryClient } from "@tanstack/react-query";
 import { subscribeToEvents, type ServerEvent, type Session, type MessageWithParts, type SessionStatus, type Todo } from "@/lib/api";
 import type { Message as SdkMessage, Part as SdkPart, Todo as SdkTodo } from "@opencode-ai/sdk/client";
 
+// Navigation callback - set by the app to handle navigate tool
+let navigateCallback: ((page: string) => void) | null = null;
+
+export function setNavigateCallback(callback: (page: string) => void) {
+  navigateCallback = callback;
+}
+
+// Track which tool parts have already triggered navigation
+const navigatedParts = new Set<string>();
+
 export function startSSESync(queryClient: QueryClient): () => void {
   console.log("[sse] Starting SSE sync with React Query");
 
@@ -244,6 +254,27 @@ function handleMessageRemoved(messageId: string, queryClient: QueryClient) {
 function handlePartUpdated(part: SdkPart, queryClient: QueryClient, directory?: string) {
   console.log("[sse] part.updated:", part.id, "message:", part.messageID, "type:", part.type, "directory:", directory);
 
+  // Check for navigate tool completion
+  if (part.type === "tool" && navigateCallback && !navigatedParts.has(part.id)) {
+    const toolPart = part as { id: string; tool?: string; state?: { status?: string; output?: string } };
+    if (
+      toolPart.tool?.toLowerCase().includes("navigate") &&
+      toolPart.state?.status === "completed" &&
+      toolPart.state?.output
+    ) {
+      try {
+        const parsed = JSON.parse(toolPart.state.output);
+        if (parsed?.type === "navigate" && parsed.page && parsed.autoNavigate) {
+          navigatedParts.add(toolPart.id);
+          console.log("[sse] Navigate tool completed, navigating to:", parsed.page);
+          navigateCallback(parsed.page);
+        }
+      } catch {
+        // Not valid JSON, ignore
+      }
+    }
+  }
+
   // Debug: Log all queries that might match
   const allQueries = queryClient.getQueryCache().getAll();
   const matchingQueries = allQueries.filter(q =>
@@ -264,7 +295,7 @@ function handlePartUpdated(part: SdkPart, queryClient: QueryClient, directory?: 
           sessionID: part.sessionID,
           role: "assistant",
           time: { created: Date.now(), updated: Date.now() },
-        } as MessageWithParts["info"],
+        } as unknown as MessageWithParts["info"],
         parts: [part],
       }];
     }
@@ -279,7 +310,7 @@ function handlePartUpdated(part: SdkPart, queryClient: QueryClient, directory?: 
           sessionID: part.sessionID,
           role: "assistant",
           time: { created: Date.now(), updated: Date.now() },
-        } as MessageWithParts["info"],
+        } as unknown as MessageWithParts["info"],
         parts: [part],
       }];
     }

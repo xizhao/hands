@@ -84,7 +84,7 @@ export const suggestionPlugin = toTPlatePlugin<SuggestionConfig>(
   })
 ).configure({
   render: {
-    belowNodes: SuggestionLineBreak,
+    belowNodes: SuggestionLineBreak as any,
     node: SuggestionLeaf,
   },
 });

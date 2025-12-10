@@ -11,6 +11,7 @@
  */
 
 import { useUIStore } from "@/stores/ui";
+import { useRuntimeHealth } from "@/hooks/useWorkbook";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useCallback, useState, useEffect, use } from "react";
 import type { ReactNode } from "react";
@@ -138,10 +139,17 @@ function getBlockPromise(
 /**
  * React hook for RSC block rendering
  * Returns a React element that can be rendered directly
+ *
+ * Includes Vite readiness check - blocks won't fetch until Vite is ready.
+ * This allows pages to load instantly while blocks show "waiting" state.
  */
 export function useBlock(blockId: string | null, props?: Record<string, unknown>) {
   const port = useUIStore((s) => s.runtimePort);
   const queryClient = useQueryClient();
+
+  // Check runtime health - blocks available when runtime is ready
+  const { data: health } = useRuntimeHealth(port);
+  const runtimeReady = health?.ready ?? false;
 
   const query = useQuery({
     queryKey: ["block", blockId, props],
@@ -151,7 +159,8 @@ export function useBlock(blockId: string | null, props?: Record<string, unknown>
       }
       return fetchBlock(port, blockId, props);
     },
-    enabled: !!blockId && !!port,
+    // Only fetch when runtime is ready
+    enabled: !!blockId && !!port && runtimeReady,
     staleTime: 30_000,
     refetchOnWindowFocus: false,
   });
@@ -172,6 +181,9 @@ export function useBlock(blockId: string | null, props?: Record<string, unknown>
   return {
     ...query,
     invalidate,
+    // Expose runtime readiness for UI to show different loading states
+    runtimeReady,
+    isWaitingForRuntime: !runtimeReady && !!blockId,
   };
 }
 

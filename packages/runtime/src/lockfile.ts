@@ -2,50 +2,47 @@
  * Process lockfile management for Hands runtime
  *
  * Handles:
- * - Single instance guarantee (only one runtime per machine)
- * - Process ownership tracking (which PIDs belong to Hands)
+ * - Single instance guarantee (only one runtime per workbook)
+ * - Process ownership tracking
  * - Orphan cleanup on startup (kill stale processes from crashes)
  */
 
-import { existsSync, mkdirSync, unlinkSync } from "fs";
-import { join, dirname } from "path";
+import { existsSync, mkdirSync, unlinkSync } from "fs"
+import { join, dirname } from "path"
 
 export interface RuntimeLock {
-  pid: number;
-  runtimePort: number;
-  postgresPort: number;
-  postgresPid?: number;
-  wranglerPort: number;
-  wranglerPid?: number;
-  workbookId: string;
-  workbookDir: string;
-  startedAt: number;
+  pid: number
+  runtimePort: number
+  vitePort: number
+  vitePid?: number
+  workbookId: string
+  workbookDir: string
+  startedAt: number
 }
 
 // Lockfile location - platform specific
 function getLockDir(): string {
-  const home = process.env.HOME || "~";
+  const home = process.env.HOME || "~"
   if (process.platform === "darwin") {
-    return join(home, "Library", "Application Support", "Hands");
+    return join(home, "Library", "Application Support", "Hands")
   } else if (process.platform === "win32") {
-    return join(process.env.LOCALAPPDATA || join(home, "AppData", "Local"), "Hands");
+    return join(process.env.LOCALAPPDATA || join(home, "AppData", "Local"), "Hands")
   } else {
-    return join(process.env.XDG_STATE_HOME || join(home, ".local", "state"), "hands");
+    return join(process.env.XDG_STATE_HOME || join(home, ".local", "state"), "hands")
   }
 }
 
-const LOCK_FILE = join(getLockDir(), "runtime.lock");
+const LOCK_FILE = join(getLockDir(), "runtime.lock")
 
 /**
  * Check if a process is still running
  */
 function isProcessRunning(pid: number): boolean {
   try {
-    // Sending signal 0 doesn't kill, just checks if process exists
-    process.kill(pid, 0);
-    return true;
+    process.kill(pid, 0)
+    return true
   } catch {
-    return false;
+    return false
   }
 }
 
@@ -54,10 +51,10 @@ function isProcessRunning(pid: number): boolean {
  */
 function killProcess(pid: number, signal: NodeJS.Signals = "SIGTERM"): boolean {
   try {
-    process.kill(pid, signal);
-    return true;
+    process.kill(pid, signal)
+    return true
   } catch {
-    return false;
+    return false
   }
 }
 
@@ -66,14 +63,14 @@ function killProcess(pid: number, signal: NodeJS.Signals = "SIGTERM"): boolean {
  */
 export async function readLockfile(): Promise<RuntimeLock | null> {
   if (!existsSync(LOCK_FILE)) {
-    return null;
+    return null
   }
 
   try {
-    const content = await Bun.file(LOCK_FILE).text();
-    return JSON.parse(content) as RuntimeLock;
+    const content = await Bun.file(LOCK_FILE).text()
+    return JSON.parse(content) as RuntimeLock
   } catch {
-    return null;
+    return null
   }
 }
 
@@ -81,22 +78,22 @@ export async function readLockfile(): Promise<RuntimeLock | null> {
  * Write the lockfile
  */
 export async function writeLockfile(lock: RuntimeLock): Promise<void> {
-  const dir = dirname(LOCK_FILE);
+  const dir = dirname(LOCK_FILE)
   if (!existsSync(dir)) {
-    mkdirSync(dir, { recursive: true });
+    mkdirSync(dir, { recursive: true })
   }
-  await Bun.write(LOCK_FILE, JSON.stringify(lock, null, 2));
+  await Bun.write(LOCK_FILE, JSON.stringify(lock, null, 2))
 }
 
 /**
  * Update specific fields in the lockfile
  */
 export async function updateLockfile(updates: Partial<RuntimeLock>): Promise<void> {
-  const current = await readLockfile();
+  const current = await readLockfile()
   if (!current) {
-    throw new Error("No lockfile to update");
+    throw new Error("No lockfile to update")
   }
-  await writeLockfile({ ...current, ...updates });
+  await writeLockfile({ ...current, ...updates })
 }
 
 /**
@@ -105,7 +102,7 @@ export async function updateLockfile(updates: Partial<RuntimeLock>): Promise<voi
 export function removeLockfile(): void {
   try {
     if (existsSync(LOCK_FILE)) {
-      unlinkSync(LOCK_FILE);
+      unlinkSync(LOCK_FILE)
     }
   } catch {
     // Ignore errors
@@ -114,171 +111,143 @@ export function removeLockfile(): void {
 
 /**
  * Check if another runtime is already running
- * Returns the lock if running, null if not
  */
 export async function checkExistingRuntime(): Promise<RuntimeLock | null> {
-  const lock = await readLockfile();
+  const lock = await readLockfile()
   if (!lock) {
-    return null;
+    return null
   }
 
-  // Check if the parent runtime process is still alive
   if (isProcessRunning(lock.pid)) {
-    return lock;
+    return lock
   }
 
-  // Parent is dead - this is an orphaned lockfile
-  return null;
+  // Parent is dead - orphaned lockfile
+  return null
 }
 
 /**
  * Cleanup orphaned processes from a crashed runtime
- * Call this on startup before starting new services
  */
 export async function cleanupOrphanedProcesses(): Promise<{
-  cleaned: boolean;
-  orphanedLock: RuntimeLock | null;
-  killedPids: number[];
+  cleaned: boolean
+  orphanedLock: RuntimeLock | null
+  killedPids: number[]
 }> {
-  const lock = await readLockfile();
+  const lock = await readLockfile()
   if (!lock) {
-    return { cleaned: false, orphanedLock: null, killedPids: [] };
+    return { cleaned: false, orphanedLock: null, killedPids: [] }
   }
 
-  // Check if parent runtime is still alive
   if (isProcessRunning(lock.pid)) {
-    // Runtime is still running - don't touch it
-    return { cleaned: false, orphanedLock: null, killedPids: [] };
+    return { cleaned: false, orphanedLock: null, killedPids: [] }
   }
 
-  // Parent is dead - we have orphans to clean up
-  console.log(`Found orphaned runtime lock from PID ${lock.pid}`);
-  const killedPids: number[] = [];
+  console.log(`Found orphaned runtime lock from PID ${lock.pid}`)
+  const killedPids: number[] = []
 
-  // Kill postgres if it's still running
-  if (lock.postgresPid && isProcessRunning(lock.postgresPid)) {
-    console.log(`Killing orphaned postgres (PID ${lock.postgresPid})`);
-    killProcess(lock.postgresPid, "SIGTERM");
-    killedPids.push(lock.postgresPid);
+  // Kill Vite if still running
+  if (lock.vitePid && isProcessRunning(lock.vitePid)) {
+    console.log(`Killing orphaned Vite (PID ${lock.vitePid})`)
+    killProcess(lock.vitePid, "SIGTERM")
+    killedPids.push(lock.vitePid)
   }
 
-  // Kill wrangler if it's still running
-  if (lock.wranglerPid && isProcessRunning(lock.wranglerPid)) {
-    console.log(`Killing orphaned wrangler (PID ${lock.wranglerPid})`);
-    killProcess(lock.wranglerPid, "SIGTERM");
-    killedPids.push(lock.wranglerPid);
-  }
+  // Also try to kill processes on the port
+  await killProcessOnPort(lock.vitePort)
 
-  // Also try to kill any processes on the ports (in case PIDs changed)
-  await killProcessesOnPorts([lock.postgresPort, lock.wranglerPort]);
-
-  // Wait a bit for processes to die
   if (killedPids.length > 0) {
-    await Bun.sleep(1000);
+    await Bun.sleep(1000)
 
-    // Force kill if still alive
     for (const pid of killedPids) {
       if (isProcessRunning(pid)) {
-        console.log(`Force killing PID ${pid}`);
-        killProcess(pid, "SIGKILL");
+        console.log(`Force killing PID ${pid}`)
+        killProcess(pid, "SIGKILL")
       }
     }
-    await Bun.sleep(500);
+    await Bun.sleep(500)
   }
 
-  // Remove the stale lockfile
-  removeLockfile();
-  console.log("Cleaned up orphaned lockfile");
+  removeLockfile()
+  console.log("Cleaned up orphaned lockfile")
 
-  return { cleaned: true, orphanedLock: lock, killedPids };
+  return { cleaned: true, orphanedLock: lock, killedPids }
 }
 
 /**
- * Kill any processes listening on specific ports
+ * Kill any process listening on a port
  */
-async function killProcessesOnPorts(ports: number[]): Promise<void> {
-  for (const port of ports) {
-    try {
-      const result = Bun.spawnSync(["lsof", "-ti", `:${port}`]);
-      const pids = new TextDecoder()
-        .decode(result.stdout)
-        .trim()
-        .split("\n")
-        .filter(Boolean)
-        .map(p => parseInt(p, 10));
+async function killProcessOnPort(port: number): Promise<void> {
+  try {
+    const result = Bun.spawnSync(["lsof", "-ti", `:${port}`])
+    const pids = new TextDecoder()
+      .decode(result.stdout)
+      .trim()
+      .split("\n")
+      .filter(Boolean)
+      .map((p) => parseInt(p, 10))
 
-      for (const pid of pids) {
-        // Don't kill ourselves
-        if (pid === process.pid) continue;
-
-        console.log(`Killing process ${pid} on port ${port}`);
-        killProcess(pid, "SIGTERM");
-      }
-    } catch {
-      // lsof not available or failed
+    for (const pid of pids) {
+      if (pid === process.pid) continue
+      console.log(`Killing process ${pid} on port ${port}`)
+      killProcess(pid, "SIGTERM")
     }
+  } catch {
+    // lsof not available or failed
   }
 }
 
 /**
  * Acquire the runtime lock
- * Fails if another runtime is already running
  */
 export async function acquireLock(config: {
-  runtimePort: number;
-  postgresPort: number;
-  wranglerPort: number;
-  workbookId: string;
-  workbookDir: string;
+  runtimePort: number
+  vitePort: number
+  workbookId: string
+  workbookDir: string
 }): Promise<RuntimeLock> {
-  // First, check for and clean up any orphaned processes
-  const cleanup = await cleanupOrphanedProcesses();
+  const cleanup = await cleanupOrphanedProcesses()
   if (cleanup.cleaned) {
-    console.log(`Cleaned up ${cleanup.killedPids.length} orphaned processes`);
+    console.log(`Cleaned up ${cleanup.killedPids.length} orphaned processes`)
   }
 
-  // Check if another runtime is running
-  const existing = await checkExistingRuntime();
+  const existing = await checkExistingRuntime()
   if (existing) {
     throw new Error(
       `Another Hands runtime is already running (PID ${existing.pid} on port ${existing.runtimePort})`
-    );
+    )
   }
 
-  // Create our lock
   const lock: RuntimeLock = {
     pid: process.pid,
     runtimePort: config.runtimePort,
-    postgresPort: config.postgresPort,
-    wranglerPort: config.wranglerPort,
+    vitePort: config.vitePort,
     workbookId: config.workbookId,
     workbookDir: config.workbookDir,
     startedAt: Date.now(),
-  };
+  }
 
-  await writeLockfile(lock);
-  console.log(`Acquired runtime lock (PID ${process.pid})`);
+  await writeLockfile(lock)
+  console.log(`Acquired runtime lock (PID ${process.pid})`)
 
-  return lock;
+  return lock
 }
 
 /**
  * Release the runtime lock
- * Call this during graceful shutdown
  */
 export async function releaseLock(): Promise<void> {
-  const lock = await readLockfile();
+  const lock = await readLockfile()
 
-  // Only remove if we own the lock
   if (lock && lock.pid === process.pid) {
-    removeLockfile();
-    console.log("Released runtime lock");
+    removeLockfile()
+    console.log("Released runtime lock")
   }
 }
 
 /**
- * Get the lockfile path (for debugging/testing)
+ * Get the lockfile path (for debugging)
  */
 export function getLockfilePath(): string {
-  return LOCK_FILE;
+  return LOCK_FILE
 }

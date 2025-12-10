@@ -193,7 +193,7 @@ export function Thread({ expanded, onCollapse, onExpand }: ThreadProps) {
       {expanded && hasMessages && (
         <div className="mb-1.5">
           <ScrollArea className="max-h-[calc(100vh-12rem)]">
-              <div className="space-y-1.5 px-1 pb-2">
+              <div className="space-y-1 px-1 pb-2">
                 {/* Messages (oldest to newest, bottom-aligned) */}
                 {messages.map((message, idx) => (
                   <ChatMessage

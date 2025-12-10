@@ -973,6 +973,31 @@ async fn get_runtime_status(
         });
     }
 
+    // Drop lock before making HTTP requests
+    drop(state_guard);
+
+    // Fallback: Check if runtime is running on default port (started externally)
+    // Default ports: runtime=55000, postgres=55100, worker=55200
+    let default_runtime_port: u16 = PORT_PREFIX as u16 * 1000;
+    let default_postgres_port: u16 = default_runtime_port + 100;
+    let default_worker_port: u16 = default_runtime_port + 200;
+
+    let status_url = format!("http://localhost:{}/status", default_runtime_port);
+    if let Ok(resp) = reqwest::get(&status_url).await {
+        if resp.status().is_success() {
+            // Runtime is running on default port - return it
+            return Ok(DevServerStatus {
+                running: true,
+                workbook_id,
+                directory: String::new(),
+                runtime_port: default_runtime_port,
+                postgres_port: default_postgres_port,
+                worker_port: default_worker_port,
+                message: "Runtime detected on default port".to_string(),
+            });
+        }
+    }
+
     Ok(DevServerStatus {
         running: false,
         workbook_id,

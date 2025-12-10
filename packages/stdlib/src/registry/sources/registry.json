@@ -1,0 +1,6 @@
+{
+  "$schema": "https://hands.dev/schema/source-registry.json",
+  "name": "hands-sources",
+  "version": "0.1.0",
+  "items": []
+}

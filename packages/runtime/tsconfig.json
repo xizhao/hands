@@ -9,8 +9,9 @@
     "noEmit": true,
     "resolveJsonModule": true,
     "isolatedModules": true,
-    "types": ["bun"]
+    "jsx": "react-jsx",
+    "types": ["bun", "@types/react", "@types/react-dom"]
   },
-  "include": ["src/**/*.ts"],
+  "include": ["src/**/*.ts", "src/**/*.tsx"],
   "exclude": ["node_modules"]
 }

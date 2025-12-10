@@ -129,8 +129,11 @@ app.get("/blocks/:blockId", async (c) => {
   }
 
   const props = Object.fromEntries(new URL(c.req.url).searchParams);
+  const db = c.get("db");
   const ctx = {
-    db: c.get("db"),
+    db,
+    sql: db.sql,
+    params: props,
     env: c.env,
   };
 
@@ -160,8 +163,11 @@ app.post("/blocks/:blockId/rsc", async (c) => {
   }
 
   const props = await c.req.json();
+  const db = c.get("db");
   const ctx = {
-    db: c.get("db"),
+    db,
+    sql: db.sql,
+    params: props,
     env: c.env,
   };
 
@@ -246,23 +252,42 @@ export default app;
 function createDbProxy(runtimePort: number) {
   const baseUrl = \`http://localhost:\${runtimePort}\`;
 
+  const query = async (sql: string, params?: unknown[]) => {
+    const response = await fetch(\`\${baseUrl}/db/query\`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ query: sql, params }),
+    });
+
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.error || "Database query failed");
+    }
+
+    const result = await response.json();
+    return result.rows;
+  };
+
+  // Tagged template literal for SQL queries
+  const sql = async <T = Record<string, unknown>>(
+    strings: TemplateStringsArray,
+    ...values: unknown[]
+  ): Promise<T[]> => {
+    // Build parameterized query: "SELECT * FROM users WHERE id = $1"
+    let queryText = strings[0];
+    const params: unknown[] = [];
+
+    for (let i = 0; i < values.length; i++) {
+      params.push(values[i]);
+      queryText += \`$\${i + 1}\` + strings[i + 1];
+    }
+
+    return query(queryText, params) as Promise<T[]>;
+  };
+
   return {
-    query: async (sql: string, params?: unknown[]) => {
-      const response = await fetch(\`\${baseUrl}/db/query\`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ query: sql, params }),
-      });
-
-      if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.error || "Database query failed");
-      }
-
-      const result = await response.json();
-      return result.rows;
-    },
-
+    query,
+    sql,
     tables: async () => {
       const response = await fetch(\`\${baseUrl}/db/tables\`);
       if (!response.ok) {

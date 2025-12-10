@@ -47,7 +47,7 @@ export async function addCommand(name: string, options: AddOptions) {
 
   // Copy each file from registry
   for (const file of registryItem.files) {
-    const sourcePath = join(stdlibPath, "src/sources", file.path)
+    const sourcePath = join(stdlibPath, "src/registry/sources", file.path)
     const targetPath = join(workbookDir, file.target)
 
     try {
@@ -153,7 +153,7 @@ interface Registry {
  */
 async function loadRegistry(): Promise<Registry> {
   const stdlibPath = getStdlibPath()
-  const registryPath = join(stdlibPath, "src/sources/registry.json")
+  const registryPath = join(stdlibPath, "src/registry/sources/registry.json")
 
   try {
     const file = Bun.file(registryPath)
@@ -170,7 +170,7 @@ async function loadRegistry(): Promise<Registry> {
 function getStdlibPath(): string {
   // Try workspace path (development)
   const devPath = resolve(import.meta.dir, "../../../stdlib")
-  if (existsSync(join(devPath, "src/sources/registry.json"))) {
+  if (existsSync(join(devPath, "src/registry/sources/registry.json"))) {
     return devPath
   }
 

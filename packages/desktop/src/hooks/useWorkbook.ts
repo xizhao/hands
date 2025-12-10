@@ -192,6 +192,33 @@ export function useOpenWorkbook() {
   });
 }
 
+// Runtime health - simple ready/booting status
+// Single process architecture: ready when runtime is fully operational
+export interface RuntimeHealth {
+  ready: boolean;
+  status: "ready" | "booting"; // backward compat
+}
+
+// Get runtime health for progressive loading (instant manifest, delayed blocks)
+export function useRuntimeHealth(runtimePort: number | null) {
+  return useQuery({
+    queryKey: ["runtime-health", runtimePort],
+    queryFn: async (): Promise<RuntimeHealth> => {
+      if (!runtimePort) throw new Error("No runtime port");
+      const response = await fetch(`http://localhost:${runtimePort}/health`);
+      if (!response.ok) throw new Error("Failed to get health");
+      return response.json();
+    },
+    enabled: !!runtimePort && runtimePort > 0,
+    refetchInterval: (query) => {
+      // Poll frequently during boot, less often when ready
+      const data = query.state.data;
+      return data?.ready ? 10000 : 1000;
+    },
+    staleTime: 0,
+  });
+}
+
 // Get runtime status for a workbook - no caching, always fresh from Tauri
 export function useRuntimeStatus(workbookId: string | null) {
   return useQuery({
@@ -491,8 +518,12 @@ export function useWorkbookManifest(workbookId: string | null) {
       try {
         const data = JSON.parse(event.data) as WorkbookManifest;
         setManifest(data);
-        // Also update React Query cache for components using queryKey
+        // Update React Query cache for components using queryKey
         queryClient.setQueryData(["workbook-manifest", workbookId], data);
+        // Invalidate page content queries - triggers refetch for any open pages
+        queryClient.invalidateQueries({ queryKey: ["page-content"] });
+        // Invalidate block queries if blocks changed
+        queryClient.invalidateQueries({ queryKey: ["block"] });
       } catch (err) {
         console.error("[manifest] Failed to parse SSE data:", err);
       }
@@ -561,7 +592,9 @@ export function useCreatePage() {
 
 // Get page content (MDX) by pageId
 export function usePageContent(pageId: string | null) {
-  const port = useUIStore((s) => s.runtimePort);
+  const workbookId = useUIStore((s) => s.activeWorkbookId);
+  const runtimeStatus = useRuntimeStatus(workbookId);
+  const port = runtimeStatus.data?.runtime_port;
 
   return useQuery({
     queryKey: ["page-content", pageId, port],
@@ -577,7 +610,7 @@ export function usePageContent(pageId: string | null) {
       const data = await response.json();
       return data.content;
     },
-    enabled: !!port && !!pageId,
+    enabled: !!port && port > 0 && !!pageId,
     staleTime: 0, // Always refetch when pageId changes
     refetchInterval: 2000, // Poll every 2 seconds for external changes (hot reload)
   });
@@ -585,13 +618,15 @@ export function usePageContent(pageId: string | null) {
 
 // Save page content (MDX)
 export function useSavePageContent() {
-  const port = useUIStore((s) => s.runtimePort);
+  const workbookId = useUIStore((s) => s.activeWorkbookId);
+  const runtimeStatus = useRuntimeStatus(workbookId);
+  const port = runtimeStatus.data?.runtime_port;
   const queryClient = useQueryClient();
 
   return useMutation({
     mutationKey: ["page-content", "save"],
     mutationFn: async ({ pageId, content }: { pageId: string; content: string }) => {
-      if (!port) throw new Error("No runtime connected");
+      if (!port || port <= 0) throw new Error("No runtime connected");
 
       const response = await fetch(`http://localhost:${port}/workbook/pages/${pageId}`, {
         method: "PUT",
@@ -615,13 +650,15 @@ export function useSavePageContent() {
 
 // Update page title (frontmatter only)
 export function useUpdatePageTitle() {
-  const port = useUIStore((s) => s.runtimePort);
+  const workbookId = useUIStore((s) => s.activeWorkbookId);
+  const runtimeStatus = useRuntimeStatus(workbookId);
+  const port = runtimeStatus.data?.runtime_port;
   const queryClient = useQueryClient();
 
   return useMutation({
     mutationKey: ["page-title", "update"],
     mutationFn: async ({ pageId, title }: { pageId: string; title: string }) => {
-      if (!port) throw new Error("No runtime connected");
+      if (!port || port <= 0) throw new Error("No runtime connected");
 
       const response = await fetch(`http://localhost:${port}/workbook/pages/${pageId}/title`, {
         method: "PATCH",

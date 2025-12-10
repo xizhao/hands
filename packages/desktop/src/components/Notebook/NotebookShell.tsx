@@ -21,6 +21,7 @@ import {
   useDevServerStatus,
   useEvalResult,
   useRuntimeStatus,
+  useRuntimeHealth,
   useWorkbookManifest,
   useCreatePage,
   useUpdatePageTitle,
@@ -99,6 +100,11 @@ export function NotebookShell({ children }: NotebookShellProps) {
   const { data: manifest } = useWorkbookManifest(activeWorkbookId);
   // Use Tauri-reported port - don't fallback to default since runtime may be on different port
   const runtimePort = runtimeStatus?.runtime_port ?? 0;
+
+  // Progressive readiness - shows manifest instantly, tracks DB/Vite boot status
+  const { data: runtimeHealth } = useRuntimeHealth(runtimePort > 0 ? runtimePort : null);
+  const isRuntimeBooting = runtimeHealth?.status === "booting";
+  const isRuntimeReady = runtimeHealth?.status === "ready";
 
   // Runtime connection status
   const runtimeConnected = devServerStatus?.running ?? false;
@@ -433,6 +439,13 @@ export function NotebookShell({ children }: NotebookShellProps) {
             </div>
           )}
 
+          {/* Booting indicator - shows when runtime is starting */}
+          {isRuntimeBooting && !isLoadingStatus && (
+            <div className="px-2 py-1" title="Starting...">
+              <div className="h-1.5 w-1.5 rounded-full bg-yellow-500 animate-pulse" />
+            </div>
+          )}
+
           {/* Database - table browser */}
           {!isLoadingStatus && (
             <Tooltip>
@@ -689,11 +702,11 @@ export function NotebookShell({ children }: NotebookShellProps) {
         className="hidden"
       />
 
-      {/* File drop overlay for external drag & drop */}
+      {/* File drop overlay for external drag & drop - disabled until runtime fully ready */}
       <FileDropOverlay
         onFileDrop={handleFileDrop}
         accept={[".csv", ".json", ".parquet"]}
-        disabled={!activeWorkbookId || !runtimeConnected}
+        disabled={!activeWorkbookId || !isRuntimeReady}
       />
 
       {/* New workbook modal */}

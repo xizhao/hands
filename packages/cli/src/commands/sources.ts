@@ -53,7 +53,7 @@ export async function sourcesCommand() {
  */
 async function loadRegistry(): Promise<Registry> {
   const stdlibPath = getStdlibPath()
-  const registryPath = join(stdlibPath, "src/sources/registry.json")
+  const registryPath = join(stdlibPath, "src/registry/sources/registry.json")
 
   try {
     const file = Bun.file(registryPath)
@@ -70,7 +70,7 @@ async function loadRegistry(): Promise<Registry> {
 function getStdlibPath(): string {
   // Try workspace path (development)
   const devPath = resolve(import.meta.dir, "../../../stdlib")
-  if (existsSync(join(devPath, "src/sources/registry.json"))) {
+  if (existsSync(join(devPath, "src/registry/sources/registry.json"))) {
     return devPath
   }
 
