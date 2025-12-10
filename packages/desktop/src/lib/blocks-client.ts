@@ -10,10 +10,9 @@
  * 3. Render React element with Suspense
  */
 
-import { useUIStore } from "@/stores/ui";
-import { useRuntimeHealth } from "@/hooks/useWorkbook";
+import { useRuntime } from "@/providers/RuntimeProvider";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { useCallback, useState, useEffect, use } from "react";
+import { useCallback, use } from "react";
 import type { ReactNode } from "react";
 
 // @ts-ignore - react-server-dom-webpack/client lacks type definitions
@@ -140,19 +139,17 @@ function getBlockPromise(
  * React hook for RSC block rendering
  * Returns a React element that can be rendered directly
  *
- * Includes Vite readiness check - blocks won't fetch until Vite is ready.
+ * Uses RuntimeProvider for ready state - blocks won't fetch until runtime is ready.
  * This allows pages to load instantly while blocks show "waiting" state.
  */
 export function useBlock(blockId: string | null, props?: Record<string, unknown>) {
-  const port = useUIStore((s) => s.runtimePort);
+  // Get port and ready state from centralized RuntimeProvider
+  const { port, isReady: runtimeReady } = useRuntime();
   const queryClient = useQueryClient();
 
-  // Check runtime health - blocks available when runtime is ready
-  const { data: health } = useRuntimeHealth(port);
-  const runtimeReady = health?.ready ?? false;
-
   const query = useQuery({
-    queryKey: ["block", blockId, props],
+    // Include port in cache key to avoid stale data when switching notebooks
+    queryKey: ["block", port, blockId, props],
     queryFn: async () => {
       if (!blockId || !port) {
         return { element: null, error: "Not ready" };
@@ -166,14 +163,14 @@ export function useBlock(blockId: string | null, props?: Record<string, unknown>
   });
 
   const invalidate = useCallback(() => {
-    if (blockId) {
+    if (blockId && port) {
       // Clear promise cache
       const cacheKey = `${port}:${blockId}:${JSON.stringify(props)}`;
       blockPromiseCache.delete(cacheKey);
 
-      // Invalidate React Query cache
+      // Invalidate React Query cache (include port in key)
       queryClient.invalidateQueries({
-        queryKey: ["block", blockId],
+        queryKey: ["block", port, blockId],
       });
     }
   }, [blockId, port, props, queryClient]);
@@ -192,7 +189,7 @@ export function useBlock(blockId: string | null, props?: Record<string, unknown>
  * Use this inside a Suspense boundary for streaming
  */
 export function useBlockSuspense(blockId: string, props?: Record<string, unknown>): ReactNode {
-  const port = useUIStore((s) => s.runtimePort);
+  const { port } = useRuntime();
 
   if (!port) {
     throw new Error("Runtime not connected");
@@ -206,7 +203,7 @@ export function useBlockSuspense(blockId: string, props?: Record<string, unknown
  * Manual block fetching (for imperative use)
  */
 export function useBlockFetcher() {
-  const port = useUIStore((s) => s.runtimePort);
+  const { port } = useRuntime();
   const queryClient = useQueryClient();
 
   const fetch = useCallback(
@@ -217,8 +214,8 @@ export function useBlockFetcher() {
 
       const result = await fetchBlock(port, blockId, props);
 
-      // Update cache
-      queryClient.setQueryData(["block", blockId, props], result);
+      // Update cache (include port in key)
+      queryClient.setQueryData(["block", port, blockId, props], result);
 
       return result;
     },
@@ -229,10 +226,10 @@ export function useBlockFetcher() {
     (blockId: string) => {
       queryClient.invalidateQueries({
         predicate: (query) =>
-          query.queryKey[0] === "block" && query.queryKey[1] === blockId,
+          query.queryKey[0] === "block" && query.queryKey[1] === port && query.queryKey[2] === blockId,
       });
     },
-    [queryClient]
+    [port, queryClient]
   );
 
   return { fetch, invalidate };

@@ -495,21 +495,33 @@ export function useWorkbookManifest(workbookId: string | null) {
   // Only connect when we have a valid port (non-zero) from the runtime status
   const shouldConnect = !!workbookId && !!port && port > 0;
 
+  console.log("[manifest] useWorkbookManifest called:", {
+    workbookId,
+    port,
+    runtimeRunning: runtimeStatus.data?.running,
+    shouldConnect,
+  });
+
   const [manifest, setManifest] = useState<WorkbookManifest | null>(null);
   const [isConnected, setIsConnected] = useState(false);
   const [error, setError] = useState<Error | null>(null);
 
   useEffect(() => {
+    console.log("[manifest] useEffect running, shouldConnect:", shouldConnect, "port:", port);
+
     if (!shouldConnect) {
+      console.log("[manifest] Not connecting - shouldConnect is false");
       setManifest(null);
       setIsConnected(false);
       return;
     }
 
     const url = `http://localhost:${port}/workbook/manifest/watch`;
+    console.log("[manifest] Connecting to SSE:", url);
     const eventSource = new EventSource(url);
 
     eventSource.onopen = () => {
+      console.log("[manifest] SSE connection opened");
       setIsConnected(true);
       setError(null);
     };
@@ -517,10 +529,18 @@ export function useWorkbookManifest(workbookId: string | null) {
     eventSource.onmessage = (event) => {
       try {
         const data = JSON.parse(event.data) as WorkbookManifest;
+        console.log("[manifest] SSE message received:", {
+          workbookId: data.workbookId,
+          pageCount: data.pages?.length ?? 0,
+          blockCount: data.blocks?.length ?? 0,
+          tableCount: data.tables?.length ?? 0,
+          pages: data.pages?.map(p => ({ id: p.id, title: p.title })),
+        });
         setManifest(data);
         // Update React Query cache for components using queryKey
         queryClient.setQueryData(["workbook-manifest", workbookId], data);
         // Invalidate page content queries - triggers refetch for any open pages
+        console.log("[manifest] Invalidating page-content and block queries");
         queryClient.invalidateQueries({ queryKey: ["page-content"] });
         // Invalidate block queries if blocks changed
         queryClient.invalidateQueries({ queryKey: ["block"] });
@@ -529,16 +549,18 @@ export function useWorkbookManifest(workbookId: string | null) {
       }
     };
 
-    eventSource.onerror = () => {
+    eventSource.onerror = (err) => {
+      console.error("[manifest] SSE connection error:", err);
       setIsConnected(false);
       // EventSource will auto-reconnect
     };
 
     return () => {
+      console.log("[manifest] Closing SSE connection");
       eventSource.close();
       setIsConnected(false);
     };
-  }, [shouldConnect, port, queryClient]);
+  }, [shouldConnect, port, queryClient, workbookId]);
 
   // Provide a refresh function for manual refresh (e.g., after mutations)
   const refresh = useCallback(async () => {
@@ -566,12 +588,17 @@ export function useWorkbookManifest(workbookId: string | null) {
 
 // Create a new page
 export function useCreatePage() {
+  const workbookId = useUIStore((s) => s.activeWorkbookId);
+  const runtimeStatus = useRuntimeStatus(workbookId);
   const queryClient = useQueryClient();
 
   return useMutation({
     mutationKey: ["page", "create"],
-    mutationFn: async ({ runtimePort, title }: { runtimePort: number; title?: string }) => {
-      const response = await fetch(`http://localhost:${runtimePort}/workbook/pages/create`, {
+    mutationFn: async ({ title }: { title?: string }) => {
+      const port = runtimeStatus.data?.runtime_port;
+      if (!port || port <= 0) throw new Error("Runtime not connected");
+
+      const response = await fetch(`http://localhost:${port}/workbook/pages/create`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ title }),
@@ -689,20 +716,23 @@ export interface AddSourceResult {
 }
 
 export function useAddSource() {
+  const workbookId = useUIStore((s) => s.activeWorkbookId);
+  const runtimeStatus = useRuntimeStatus(workbookId);
   const queryClient = useQueryClient();
 
   return useMutation({
     mutationKey: ["source", "add"],
     mutationFn: async ({
-      runtimePort,
       sourceName,
       schedule,
     }: {
-      runtimePort: number;
       sourceName: string;
       schedule?: string;
     }) => {
-      const response = await fetch(`http://localhost:${runtimePort}/workbook/sources/add`, {
+      const port = runtimeStatus.data?.runtime_port;
+      if (!port || port <= 0) throw new Error("Runtime not connected");
+
+      const response = await fetch(`http://localhost:${port}/workbook/sources/add`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ sourceName, schedule }),
@@ -731,19 +761,23 @@ export interface AvailableSource {
   streams: string[];
 }
 
-export function useAvailableSources(runtimePort: number | null) {
-  return useQuery({
-    queryKey: ["available-sources", runtimePort],
-    queryFn: async (): Promise<AvailableSource[]> => {
-      if (!runtimePort) return [];
+export function useAvailableSources() {
+  const workbookId = useUIStore((s) => s.activeWorkbookId);
+  const runtimeStatus = useRuntimeStatus(workbookId);
+  const port = runtimeStatus.data?.runtime_port;
 
-      const response = await fetch(`http://localhost:${runtimePort}/workbook/sources/available`);
+  return useQuery({
+    queryKey: ["available-sources", port],
+    queryFn: async (): Promise<AvailableSource[]> => {
+      if (!port || port <= 0) return [];
+
+      const response = await fetch(`http://localhost:${port}/workbook/sources/available`);
       if (!response.ok) return [];
 
       const data = await response.json();
       return data.sources ?? [];
     },
-    enabled: !!runtimePort,
+    enabled: !!port && port > 0,
     staleTime: 60000, // Cache for 1 minute
   });
 }
@@ -757,15 +791,20 @@ export interface ImportFileResult {
 }
 
 export function useImportFile() {
+  const workbookId = useUIStore((s) => s.activeWorkbookId);
+  const runtimeStatus = useRuntimeStatus(workbookId);
   const queryClient = useQueryClient();
 
   return useMutation({
     mutationKey: ["file", "import"],
-    mutationFn: async ({ runtimePort, file }: { runtimePort: number; file: File }) => {
+    mutationFn: async ({ file }: { file: File }) => {
+      const port = runtimeStatus.data?.runtime_port;
+      if (!port || port <= 0) throw new Error("Runtime not connected");
+
       const formData = new FormData();
       formData.append("file", file);
 
-      const response = await fetch(`http://localhost:${runtimePort}/workbook/files/import`, {
+      const response = await fetch(`http://localhost:${port}/workbook/files/import`, {
         method: "POST",
         body: formData,
       });

@@ -1,5 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { useRuntimeStatus } from "./useWorkbook";
+import { useRuntime } from "@/providers/RuntimeProvider";
 import { useEffect, useState } from "react";
 
 // Types matching the runtime sync module
@@ -66,10 +66,10 @@ export interface SyncHistoryEntry {
 /**
  * Get the runtime API base URL
  */
-function useRuntimeUrl(workbookId: string | null) {
-  const runtimeStatus = useRuntimeStatus(workbookId);
-  if (!runtimeStatus.data?.running) return null;
-  return `http://localhost:${runtimeStatus.data.runtime_port}`;
+function useRuntimeUrl(_workbookId: string | null) {
+  const { port, isReady } = useRuntime();
+  if (!isReady || !port) return null;
+  return `http://localhost:${port}`;
 }
 
 /**

@@ -1,11 +1,11 @@
 /**
- * PagesSidebar - Navigation sidebar for notebook pages and sources
+ * DraftsSidebar - Navigation sidebar for notebook drafts and sources
  *
  * Features:
- * - Pages section with list of notebook pages
+ * - Drafts section with list of notebook drafts
  * - Sources section with database tables
  * - Collapsible sections with headers
- * - Add new page button
+ * - Add new draft button
  * - Router-based navigation
  */
 
@@ -17,22 +17,23 @@ import { FileText, Plus, ChevronDown, ChevronRight, Search, X } from "lucide-rea
 import { Table, TreeStructure, SquaresFour } from "@phosphor-icons/react";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { useUIStore } from "@/stores/ui";
-import { useDbSchema, useDevServerRoutes, useWorkbookManifest } from "@/hooks/useWorkbook";
+import { useDbSchema, useDevServerRoutes } from "@/hooks/useWorkbook";
+import { useRuntime } from "@/providers/RuntimeProvider";
 
-interface PagesSidebarProps {
+interface DraftsSidebarProps {
   collapsed?: boolean;
   fullWidth?: boolean;
-  onAddPage?: () => void;
+  onAddDraft?: () => void;
 }
 
-interface Page {
+interface Draft {
   id: string;
   title: string;
   route?: string;
   path?: string;
 }
 
-export function PagesSidebar({ collapsed = false, fullWidth = false, onAddPage }: PagesSidebarProps) {
+export function DraftsSidebar({ collapsed = false, fullWidth = false, onAddDraft }: DraftsSidebarProps) {
   const navigate = useNavigate();
   const routerState = useRouterState();
   // Get activePageId by parsing the current URL path
@@ -42,26 +43,26 @@ export function PagesSidebar({ collapsed = false, fullWidth = false, onAddPage }
 
   // Get all data from hooks (filesystem as source of truth via manifest)
   const { activeWorkbookId } = useUIStore();
-  const { data: manifest } = useWorkbookManifest(activeWorkbookId);
+  const { manifest } = useRuntime();
   const { data: schema, isLoading: sourcesLoading } = useDbSchema(activeWorkbookId);
   const { data: devServerRoutes, isLoading: blocksLoading } = useDevServerRoutes(activeWorkbookId);
 
-  // Pages from manifest (filesystem source of truth)
-  const pages: Page[] = manifest?.pages ?? [];
+  // Drafts from manifest (filesystem source of truth)
+  const drafts: Draft[] = manifest?.pages ?? [];
   const blocks = devServerRoutes?.charts ?? [];
 
   const [hoveredIndex, setHoveredIndex] = useState<number | null>(null);
-  const [pagesExpanded, setPagesExpanded] = useState(true);
+  const [draftsExpanded, setDraftsExpanded] = useState(true);
   const [sourcesExpanded, setSourcesExpanded] = useState(true);
   const [blocksExpanded, setBlocksExpanded] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
 
-  // Filter pages, sources, and blocks based on search query
-  const filteredPages = useMemo(() => {
-    if (!searchQuery.trim()) return pages;
+  // Filter drafts, sources, and blocks based on search query
+  const filteredDrafts = useMemo(() => {
+    if (!searchQuery.trim()) return drafts;
     const query = searchQuery.toLowerCase();
-    return pages.filter((page) => page.title.toLowerCase().includes(query));
-  }, [pages, searchQuery]);
+    return drafts.filter((draft) => draft.title.toLowerCase().includes(query));
+  }, [drafts, searchQuery]);
 
   const filteredSources = useMemo(() => {
     if (!searchQuery.trim() || !schema) return schema;
@@ -75,8 +76,8 @@ export function PagesSidebar({ collapsed = false, fullWidth = false, onAddPage }
     return blocks.filter((block) => block.title.toLowerCase().includes(query));
   }, [blocks, searchQuery]);
 
-  const handleAddPage = () => {
-    onAddPage?.();
+  const handleAddDraft = () => {
+    onAddDraft?.();
   };
 
   // Calculate magnetic zoom scale based on distance from hovered item
@@ -92,16 +93,16 @@ export function PagesSidebar({ collapsed = false, fullWidth = false, onAddPage }
     return (
       <TooltipProvider delayDuration={0}>
         <div className="space-y-4">
-          {/* Pages section - collapsed */}
+          {/* Drafts section - collapsed */}
           <div className="space-y-0.5">
-            {pages.map((page, index) => (
-              <PageItem
-                key={page.id}
-                page={page}
-                active={activePageId === page.id}
+            {drafts.map((draft, index) => (
+              <DraftItem
+                key={draft.id}
+                draft={draft}
+                active={activePageId === draft.id}
                 scale={getScale(index)}
                 collapsed={true}
-                onClick={() => handlePageClick(page.id)}
+                onClick={() => handleDraftClick(draft.id)}
                 onMouseEnter={() => setHoveredIndex(index)}
                 onMouseLeave={() => setHoveredIndex(null)}
               />
@@ -109,14 +110,14 @@ export function PagesSidebar({ collapsed = false, fullWidth = false, onAddPage }
             <Tooltip>
               <TooltipTrigger asChild>
                 <button
-                  onClick={handleAddPage}
+                  onClick={handleAddDraft}
                   className="w-full flex items-center justify-center p-1.5 text-muted-foreground/60 hover:text-muted-foreground transition-all"
                 >
                   <Plus className="h-3 w-3" />
                 </button>
               </TooltipTrigger>
               <TooltipContent side="right">
-                <p>Add page</p>
+                <p>Add draft</p>
               </TooltipContent>
             </Tooltip>
           </div>
@@ -171,9 +172,9 @@ export function PagesSidebar({ collapsed = false, fullWidth = false, onAddPage }
     );
   }
 
-  // Handle page click - navigate to page route
-  const handlePageClick = useCallback((pageId: string) => {
-    console.log("[sidebar] navigating to page:", pageId);
+  // Handle draft click - navigate to page route
+  const handleDraftClick = useCallback((pageId: string) => {
+    console.log("[sidebar] navigating to draft:", pageId);
     navigate({ to: pageRoute.to, params: { pageId } });
   }, [navigate]);
 
@@ -204,42 +205,42 @@ export function PagesSidebar({ collapsed = false, fullWidth = false, onAddPage }
 
           {/* Responsive grid - 3 columns on wide, 2 on medium, 1 on narrow */}
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {/* Pages Column */}
+            {/* Drafts Column */}
             <div className="space-y-2">
               <div className="flex items-center justify-between">
                 <h3 className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
-                  Pages
+                  Drafts
                 </h3>
                 <Tooltip>
                   <TooltipTrigger asChild>
                     <button
-                      onClick={handleAddPage}
+                      onClick={handleAddDraft}
                       className="p-1 text-muted-foreground/60 hover:text-muted-foreground hover:bg-accent rounded transition-colors"
                     >
                       <Plus className="h-3.5 w-3.5" />
                     </button>
                   </TooltipTrigger>
-                  <TooltipContent>Add page</TooltipContent>
+                  <TooltipContent>Add draft</TooltipContent>
                 </Tooltip>
               </div>
               <div className="space-y-0.5">
-                {filteredPages.length > 0 ? (
-                  filteredPages.map((page, index) => (
-                    <PageItem
-                      key={page.id}
-                      page={page}
-                      active={activePageId === page.id}
+                {filteredDrafts.length > 0 ? (
+                  filteredDrafts.map((draft, index) => (
+                    <DraftItem
+                      key={draft.id}
+                      draft={draft}
+                      active={activePageId === draft.id}
                       scale={getScale(index)}
                       collapsed={false}
-                      onClick={() => handlePageClick(page.id)}
+                      onClick={() => handleDraftClick(draft.id)}
                       onMouseEnter={() => setHoveredIndex(index)}
                       onMouseLeave={() => setHoveredIndex(null)}
                     />
                   ))
                 ) : searchQuery ? (
-                  <div className="text-sm text-muted-foreground/70 py-2">No pages found</div>
+                  <div className="text-sm text-muted-foreground/70 py-2">No drafts found</div>
                 ) : (
-                  <div className="text-sm text-muted-foreground/70 py-2">No pages yet</div>
+                  <div className="text-sm text-muted-foreground/70 py-2">No drafts yet</div>
                 )}
               </div>
             </div>
@@ -332,52 +333,52 @@ export function PagesSidebar({ collapsed = false, fullWidth = false, onAddPage }
           )}
         </div>
 
-        {/* Pages Section */}
+        {/* Drafts Section */}
         <div>
           <div className="flex items-center justify-between mb-1">
             <button
-              onClick={() => setPagesExpanded(!pagesExpanded)}
+              onClick={() => setDraftsExpanded(!draftsExpanded)}
               className="flex items-center gap-1 text-[10px] font-medium text-muted-foreground/80 uppercase tracking-wider hover:text-muted-foreground transition-colors"
             >
-              {pagesExpanded ? (
+              {draftsExpanded ? (
                 <ChevronDown className="h-3 w-3" />
               ) : (
                 <ChevronRight className="h-3 w-3" />
               )}
-              Pages
+              Drafts
             </button>
             <Tooltip>
               <TooltipTrigger asChild>
                 <button
-                  onClick={handleAddPage}
+                  onClick={handleAddDraft}
                   className="p-0.5 text-muted-foreground/60 hover:text-muted-foreground transition-colors"
                 >
                   <Plus className="h-3 w-3" />
                 </button>
               </TooltipTrigger>
               <TooltipContent side="right">
-                <p>Add page</p>
+                <p>Add draft</p>
               </TooltipContent>
             </Tooltip>
           </div>
 
-          {pagesExpanded && (
+          {draftsExpanded && (
             <div className="space-y-0">
-              {filteredPages.map((page, index) => (
-                <PageItem
-                  key={page.id}
-                  page={page}
-                  active={activePageId === page.id}
+              {filteredDrafts.map((draft, index) => (
+                <DraftItem
+                  key={draft.id}
+                  draft={draft}
+                  active={activePageId === draft.id}
                   scale={getScale(index)}
                   collapsed={false}
-                  onClick={() => handlePageClick(page.id)}
+                  onClick={() => handleDraftClick(draft.id)}
                   onMouseEnter={() => setHoveredIndex(index)}
                   onMouseLeave={() => setHoveredIndex(null)}
                 />
               ))}
-              {filteredPages.length === 0 && searchQuery && (
+              {filteredDrafts.length === 0 && searchQuery && (
                 <div className="text-[11px] text-muted-foreground/70 py-1">
-                  No pages found
+                  No drafts found
                 </div>
               )}
             </div>
@@ -482,8 +483,8 @@ export function PagesSidebar({ collapsed = false, fullWidth = false, onAddPage }
   );
 }
 
-interface PageItemProps {
-  page: Page;
+interface DraftItemProps {
+  draft: Draft;
   active: boolean;
   scale: number;
   collapsed: boolean;
@@ -492,15 +493,15 @@ interface PageItemProps {
   onMouseLeave: () => void;
 }
 
-function PageItem({
-  page,
+function DraftItem({
+  draft,
   active,
   scale,
   collapsed,
   onClick,
   onMouseEnter,
   onMouseLeave,
-}: PageItemProps) {
+}: DraftItemProps) {
   if (collapsed) {
     return (
       <Tooltip>
@@ -521,7 +522,7 @@ function PageItem({
           </button>
         </TooltipTrigger>
         <TooltipContent side="right">
-          <p>{page.title}</p>
+          <p>{draft.title}</p>
         </TooltipContent>
       </Tooltip>
     );
@@ -540,7 +541,10 @@ function PageItem({
           : "text-muted-foreground hover:text-foreground"
       )}
     >
-      <span className="flex-1 truncate text-left">{page.title}</span>
+      <span className="flex-1 truncate text-left">{draft.title}</span>
     </button>
   );
 }
+
+// Legacy alias for backwards compatibility
+export const PagesSidebar = DraftsSidebar;

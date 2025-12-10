@@ -2,18 +2,16 @@
  * BlocksPanel - Shows blocks (charts and insights) via SSE manifest
  */
 
-import { useUIStore } from "@/stores/ui";
-import { useWorkbookManifest } from "@/hooks/useWorkbook";
+import { useRuntime } from "@/providers/RuntimeProvider";
 import { SquaresFour, CaretRight, Sparkle } from "@phosphor-icons/react";
 import { cn } from "@/lib/utils";
 
 export function BlocksPanel() {
-  const { activeWorkbookId } = useUIStore();
-  const { data: manifest, isLoading } = useWorkbookManifest(activeWorkbookId);
-
+  const { manifest } = useRuntime();
   const blocks = manifest?.blocks ?? [];
 
-  if (isLoading) {
+  // Loading handled by RuntimeProvider - manifest will be null initially
+  if (!manifest) {
     return (
       <div className="p-4 text-sm text-muted-foreground">
         Loading blocks...

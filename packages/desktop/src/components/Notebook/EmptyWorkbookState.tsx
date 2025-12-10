@@ -26,7 +26,6 @@ import {
 import {
   useAvailableSources,
   useAddSource,
-  useRuntimeStatus,
   type AvailableSource,
 } from "@/hooks/useWorkbook";
 import { useUIStore } from "@/stores/ui";
@@ -163,11 +162,9 @@ export function EmptyWorkbookState({
   const [showSources, setShowSources] = useState(false);
   const [arrowCoords, setArrowCoords] = useState<{ startX: number; startY: number; endX: number; endY: number } | null>(null);
   const askHandsRef = useRef<HTMLDivElement>(null);
-  const { activeWorkbookId, chatExpanded } = useUIStore();
-  const { data: runtimeStatus } = useRuntimeStatus(activeWorkbookId);
-  const runtimePort = runtimeStatus?.runtime_port ?? null;
+  const { chatExpanded } = useUIStore();
 
-  const { data: availableSources = [] } = useAvailableSources(runtimePort);
+  const { data: availableSources = [] } = useAvailableSources();
   const addSource = useAddSource();
 
   // Calculate arrow position
@@ -203,11 +200,8 @@ export function EmptyWorkbookState({
   }, []);
 
   const handleAddSource = async (source: AvailableSource) => {
-    if (!runtimePort) return;
-
     try {
       await addSource.mutateAsync({
-        runtimePort,
         sourceName: source.name,
       });
       setShowSources(false);

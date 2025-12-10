@@ -20,16 +20,14 @@ import {
   useDevServerRoutes,
   useDevServerStatus,
   useEvalResult,
-  useRuntimeStatus,
-  useRuntimeHealth,
-  useWorkbookManifest,
   useCreatePage,
   useUpdatePageTitle,
 } from "@/hooks/useWorkbook";
+import { useRuntime } from "@/providers/RuntimeProvider";
 import type { Workbook } from "@/lib/workbook";
 import { cn } from "@/lib/utils";
 
-import { PagesSidebar } from "./sidebar/PagesSidebar";
+import { DraftsSidebar } from "./sidebar/PagesSidebar";
 import { EmptyWorkbookState } from "./EmptyWorkbookState";
 import { pageRoute } from "@/routes/_notebook/page.$pageId";
 import { indexRoute } from "@/routes/_notebook/index";
@@ -96,19 +94,16 @@ export function NotebookShell({ children }: NotebookShellProps) {
   const { data: devServerRoutes } = useDevServerRoutes(activeWorkbookId);
   const { data: devServerStatus, isLoading: isLoadingStatus } = useDevServerStatus(activeWorkbookId);
   const { data: evalResult } = useEvalResult(activeWorkbookId);
-  const { data: runtimeStatus } = useRuntimeStatus(activeWorkbookId);
-  const { data: manifest } = useWorkbookManifest(activeWorkbookId);
-  // Use Tauri-reported port - don't fallback to default since runtime may be on different port
-  const runtimePort = runtimeStatus?.runtime_port ?? 0;
 
-  // Progressive readiness - shows manifest instantly, tracks DB/Vite boot status
-  const { data: runtimeHealth } = useRuntimeHealth(runtimePort > 0 ? runtimePort : null);
-  const isRuntimeBooting = runtimeHealth?.status === "booting";
-  const isRuntimeReady = runtimeHealth?.status === "ready";
+  // Get runtime state from centralized provider
+  const { state: runtimeState, port: runtimePort, isReady: isRuntimeReady, isConnecting, manifest } = useRuntime();
 
-  // Runtime connection status
-  const runtimeConnected = devServerStatus?.running ?? false;
-  const dbConnected = runtimeConnected && !!devServerStatus?.postgres_port;
+  // Compute booting state from runtime state
+  const isRuntimeBooting = runtimeState === "booting" || runtimeState === "connecting";
+
+  // Runtime connection status - use provider state as source of truth
+  const runtimeConnected = isRuntimeReady;
+  const dbConnected = runtimeConnected && runtimePort > 0;
 
   // Mutations for empty state actions
   const createPage = useCreatePage();
@@ -116,17 +111,17 @@ export function NotebookShell({ children }: NotebookShellProps) {
 
   const tableCount = dbSchema?.length ?? 0;
   const blockCount = devServerRoutes?.charts?.length ?? 0;
-  const pageCount = manifest?.pages?.length ?? 0;
+  const draftCount = manifest?.pages?.length ?? 0;
 
   // Compute alert counts from eval result
   const alertErrors = (evalResult?.typescript?.errors?.length ?? 0) + (evalResult?.format?.errors?.length ?? 0);
   const alertWarnings = evalResult?.typescript?.warnings?.length ?? 0;
   const alertCount = alertErrors + alertWarnings;
 
-  // Show getting started when no data - use manifest.tables (from SSE) which loads faster
-  // Fall back to dbSchema for titlebar button count (more detailed schema info)
+  // Show getting started when no data and no drafts
+  // Use manifest.tables (from SSE) which loads faster, fallback to dbSchema for titlebar
   const manifestTableCount = manifest?.tables?.length ?? 0;
-  const showGettingStarted = manifestTableCount === 0 && tableCount === 0;
+  const showGettingStarted = manifestTableCount === 0 && tableCount === 0 && draftCount === 0;
 
   // Current workbook
   const currentWorkbook = workbooks?.find((w) => w.id === activeWorkbookId);
@@ -265,9 +260,9 @@ export function NotebookShell({ children }: NotebookShellProps) {
   }, [setPendingAttachment]);
 
   const handleAddPage = useCallback(async () => {
-    console.log("[handleAddPage] Creating page on port:", runtimePort);
+    console.log("[handleAddPage] Creating page...");
     try {
-      const result = await createPage.mutateAsync({ runtimePort, title: "Untitled" });
+      const result = await createPage.mutateAsync({ title: "Untitled" });
       console.log("[handleAddPage] Create result:", result);
       if (result.success && result.page) {
         // Navigate to the new page
@@ -278,7 +273,7 @@ export function NotebookShell({ children }: NotebookShellProps) {
       console.error("[handleAddPage] Failed to create page:", err);
       // TODO: Show toast notification on failure
     }
-  }, [runtimePort, createPage, router]);
+  }, [createPage, router]);
 
   // Chat state
   const [chatExpanded, setChatExpanded] = useState(false);
@@ -604,7 +599,7 @@ export function NotebookShell({ children }: NotebookShellProps) {
                 isResizing && "transition-none"
               )}
             >
-              {/* Page indicator dots (when collapsed) */}
+              {/* Draft indicator dots (when collapsed) */}
               <div
                 className={cn(
                   "absolute inset-0 flex flex-col items-center gap-0.5 pt-4",
@@ -612,7 +607,7 @@ export function NotebookShell({ children }: NotebookShellProps) {
                   sidebarVisible ? "opacity-0 pointer-events-none" : "opacity-100"
                 )}
               >
-                {Array.from({ length: Math.min(pageCount, 5) }).map((_, i) => (
+                {Array.from({ length: Math.min(draftCount, 5) }).map((_, i) => (
                   <div
                     key={i}
                     className={cn(
@@ -621,8 +616,8 @@ export function NotebookShell({ children }: NotebookShellProps) {
                     )}
                   />
                 ))}
-                {pageCount > 5 && (
-                  <span className="text-[8px] text-muted-foreground/80 mt-0.5">+{pageCount - 5}</span>
+                {draftCount > 5 && (
+                  <span className="text-[8px] text-muted-foreground/80 mt-0.5">+{draftCount - 5}</span>
                 )}
               </div>
 
@@ -636,7 +631,7 @@ export function NotebookShell({ children }: NotebookShellProps) {
                     : "opacity-0 pointer-events-none"
                 )}
               >
-                <PagesSidebar collapsed={false} onAddPage={handleAddPage} />
+                <DraftsSidebar collapsed={false} onAddDraft={handleAddPage} />
               </div>
 
               {/* Resize handle - at the right edge */}
@@ -670,7 +665,7 @@ export function NotebookShell({ children }: NotebookShellProps) {
               />
             ) : (
               <div className="p-4 pt-8">
-                <PagesSidebar collapsed={false} fullWidth onAddPage={handleAddPage} />
+                <DraftsSidebar collapsed={false} fullWidth onAddDraft={handleAddPage} />
               </div>
             )}
           </div>

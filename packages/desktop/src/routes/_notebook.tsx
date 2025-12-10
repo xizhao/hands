@@ -11,6 +11,7 @@ import { queryClient } from "@/App";
 import type { ChangeRecord } from "@/store/db-hooks";
 
 import { NotebookShell } from "@/components/Notebook/NotebookShell";
+import { RuntimeProvider } from "@/providers/RuntimeProvider";
 import { rootRoute } from "./__root";
 
 export const notebookRoute = createRoute({
@@ -130,9 +131,14 @@ function NotebookLayout() {
     }
   }, [sessions, sessionsLoading, activeSessionId, setActiveSession]);
 
+  // Get workbook ID for RuntimeProvider
+  const { activeWorkbookId } = useUIStore();
+
   return (
-    <NotebookShell>
-      <Outlet />
-    </NotebookShell>
+    <RuntimeProvider workbookId={activeWorkbookId}>
+      <NotebookShell>
+        <Outlet />
+      </NotebookShell>
+    </RuntimeProvider>
   );
 }

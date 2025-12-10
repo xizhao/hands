@@ -4,7 +4,8 @@
 
 import { useState } from "react";
 import { useUIStore } from "@/stores/ui";
-import { useEvalResult, useRuntimeEval, useRuntimeStatus } from "@/hooks/useWorkbook";
+import { useEvalResult, useRuntimeEval } from "@/hooks/useWorkbook";
+import { useRuntime } from "@/providers/RuntimeProvider";
 import { useServer } from "@/hooks/useServer";
 import { useIsMutating } from "@tanstack/react-query";
 import {
@@ -25,7 +26,7 @@ type Category = "app" | "runtime" | "code";
 export function AlertsPanel() {
   const { activeWorkbookId } = useUIStore();
   const { data: evalResult, isLoading } = useEvalResult(activeWorkbookId);
-  const { data: runtimeStatus } = useRuntimeStatus(activeWorkbookId);
+  const { isReady: runtimeRunning, port: runtimePort } = useRuntime();
   const { isConnected: agentConnected, isConnecting: agentConnecting } = useServer();
   const runtimeEval = useRuntimeEval();
 
@@ -55,8 +56,7 @@ export function AlertsPanel() {
   const codeUnused = unusedExports.length + unusedFiles.length;
   const hasCodeIssues = codeErrors > 0 || codeWarnings > 0 || codeUnused > 0;
 
-  // Runtime issues
-  const runtimeRunning = runtimeStatus?.running ?? false;
+  // Runtime issues (runtimeRunning comes from useRuntime above)
   const postgresUp = evalResult?.services?.postgres?.up ?? false;
   const workerUp = evalResult?.services?.worker?.up ?? false;
   const runtimeIssues: AlertItem[] = [];

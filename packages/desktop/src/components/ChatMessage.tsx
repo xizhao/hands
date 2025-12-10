@@ -38,6 +38,11 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import { Skeleton, ShimmerText } from "@/components/ui/thinking-indicator";
 import { SecretsForm, parseSecretsOutput } from "@/components/SecretsForm";
 import { NavigateCard, parseNavigateOutput } from "@/components/NavigateCard";
@@ -796,15 +801,53 @@ const UserTextContent = memo(({ text }: { text: string }) => {
 
 UserTextContent.displayName = "UserTextContent";
 
-// Cost indicator for assistant messages - shown to the left of the bubble
+// Cost indicator for assistant messages - shown to the left of the bubble with popover on hover
 const CostIndicator = memo(({ info }: { info: AssistantMessage }) => {
   // Only show if there's a cost
   if (!info.cost || info.cost <= 0) return null;
 
+  const tokens = info.tokens;
+
   return (
-    <span className="text-[9px] text-muted-foreground/30 font-mono opacity-0 group-hover:opacity-100 transition-opacity">
-      ${info.cost.toFixed(4)}
-    </span>
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <span className="text-[9px] text-muted-foreground/30 font-mono opacity-0 group-hover:opacity-100 transition-opacity cursor-default">
+          ${info.cost.toFixed(4)}
+        </span>
+      </TooltipTrigger>
+      <TooltipContent side="right" className="text-xs font-mono bg-background/95 backdrop-blur-xl">
+        <div className="space-y-1">
+          <div className="flex justify-between gap-4">
+            <span className="text-muted-foreground">Model</span>
+            <span>{info.modelID}</span>
+          </div>
+          {tokens && (
+            <>
+              <div className="flex justify-between gap-4">
+                <span className="text-muted-foreground">Input</span>
+                <span>{formatTokens(tokens.input)}</span>
+              </div>
+              <div className="flex justify-between gap-4">
+                <span className="text-muted-foreground">Output</span>
+                <span>{formatTokens(tokens.output)}</span>
+              </div>
+              {tokens.reasoning > 0 && (
+                <div className="flex justify-between gap-4">
+                  <span className="text-purple-400">Reasoning</span>
+                  <span className="text-purple-400">{formatTokens(tokens.reasoning)}</span>
+                </div>
+              )}
+              {tokens.cache.read > 0 && (
+                <div className="flex justify-between gap-4">
+                  <span className="text-green-400">Cache</span>
+                  <span className="text-green-400">{formatTokens(tokens.cache.read)}</span>
+                </div>
+              )}
+            </>
+          )}
+        </div>
+      </TooltipContent>
+    </Tooltip>
   );
 });
 
