@@ -13,7 +13,8 @@
     "./types": "./src/types.ts"
   },
   "bin": {
-    "hands-runtime": "./src/index.ts"
+    "hands-runtime": "./src/index.ts",
+    "hands-config": "./src/config/cli.ts"
   },
   "scripts": {
     "dev": "bun run src/index.ts",

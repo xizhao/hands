@@ -80,7 +80,7 @@ function parseArgs(): RuntimeConfig {
  */
 function getManifest(workbookDir: string, workbookId: string) {
   const pages: Array<{ id: string; title: string; path: string }> = []
-  const blocks: Array<{ id: string; path: string }> = []
+  const blocks: Array<{ id: string; title: string; path: string }> = []
 
   // Read pages from filesystem
   const pagesDir = join(workbookDir, "pages")
@@ -101,7 +101,10 @@ function getManifest(workbookDir: string, workbookId: string) {
     for (const file of readdirSync(blocksDir)) {
       if ((file.endsWith(".tsx") || file.endsWith(".ts")) && !file.startsWith("_")) {
         const id = file.replace(/\.tsx?$/, "")
-        blocks.push({ id, path: file })
+        // Extract title from meta export
+        const content = readFileSync(join(blocksDir, file), "utf-8")
+        const title = extractBlockTitle(content) || id
+        blocks.push({ id, title, path: file })
       }
     }
   }
@@ -135,6 +138,13 @@ function extractTitle(content: string): string | null {
   // Try first heading
   const headingMatch = content.match(/^#\s+(.+)$/m)
   if (headingMatch) return headingMatch[1]
+  return null
+}
+
+function extractBlockTitle(content: string): string | null {
+  // Look for: export const meta = { title: "..." }
+  const metaMatch = content.match(/export\s+const\s+meta\s*=\s*{[\s\S]*?title\s*:\s*["']([^"']+)["']/)
+  if (metaMatch) return metaMatch[1]
   return null
 }
 
@@ -772,6 +782,19 @@ async function main() {
   const { workbookId, workbookDir, port } = config
 
   console.log(`[runtime] Starting workbook: ${workbookId}`)
+
+  // Preflight: Check for hands.json before starting anything
+  const handsJsonPath = join(workbookDir, "hands.json")
+  if (!existsSync(handsJsonPath)) {
+    console.error(`\n[runtime] ERROR: No hands.json found in ${workbookDir}`)
+    console.error(`[runtime] A hands.json file is required to run blocks.`)
+    console.error(`[runtime] Create one with minimal config:`)
+    console.error(`\n  {`)
+    console.error(`    "name": "${workbookId}",`)
+    console.error(`    "blocks": { "dir": "./blocks" }`)
+    console.error(`  }\n`)
+    process.exit(1)
+  }
 
   // 1. IMMEDIATELY start HTTP server using Node's http module with Hono
   const app = createApp(config)

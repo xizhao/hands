@@ -22,7 +22,7 @@ import {
   useUpdatePageTitle,
 } from "@/hooks/useWorkbook";
 import { cn } from "@/lib/utils";
-import { pageRoute } from "@/routes/_notebook/page.$pageId";
+import { useParams } from "@tanstack/react-router";
 
 // Default empty document
 const EMPTY_DOCUMENT: Value = [
@@ -134,7 +134,7 @@ export function WorkbookEditor({
   readOnly = false,
 }: WorkbookEditorProps) {
   // Get pageId from route params
-  const { pageId } = pageRoute.useParams();
+  const { pageId } = useParams({ from: "/_notebook/page/$pageId" });
 
   // Load MDX content from runtime - refetch every 2 seconds to detect external changes
   const {

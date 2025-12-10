@@ -31,6 +31,9 @@ npm-debug.log*
 # Turbo
 .turbo/
 
+# TanStack Router generated route tree
+**/routeTree.gen.ts
+
 # Bun
 bun.lockb
 

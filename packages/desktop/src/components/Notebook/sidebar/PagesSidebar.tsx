@@ -10,11 +10,10 @@
  */
 
 import { useState, useMemo, useCallback } from "react";
-import { useNavigate, useRouterState } from "@tanstack/react-router";
-import { pageRoute } from "@/routes/_notebook/page.$pageId";
+import { useNavigate, useRouterState, useRouter } from "@tanstack/react-router";
 import { cn } from "@/lib/utils";
-import { FileText, Plus, ChevronDown, ChevronRight, Search, X } from "lucide-react";
-import { Table, TreeStructure, SquaresFour } from "@phosphor-icons/react";
+import { FileText, Plus, ChevronDown, ChevronRight, Search, X, Pin, PinOff, ChevronLeft } from "lucide-react";
+import { Table, TreeStructure, SquaresFour, CaretLeft, CaretRight } from "@phosphor-icons/react";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { useDbSchema, useManifest, useActiveWorkbookId } from "@/hooks/useWorkbook";
 
@@ -22,6 +21,10 @@ interface DraftsSidebarProps {
   collapsed?: boolean;
   fullWidth?: boolean;
   onAddDraft?: () => void;
+  /** Whether sidebar is pinned open */
+  pinned?: boolean;
+  /** Callback to toggle pinned state */
+  onPinnedChange?: (pinned: boolean) => void;
 }
 
 interface Draft {
@@ -31,8 +34,9 @@ interface Draft {
   path?: string;
 }
 
-export function DraftsSidebar({ collapsed = false, fullWidth = false, onAddDraft }: DraftsSidebarProps) {
+export function DraftsSidebar({ collapsed = false, fullWidth = false, onAddDraft, pinned = false, onPinnedChange }: DraftsSidebarProps) {
   const navigate = useNavigate();
+  const router = useRouter();
   const routerState = useRouterState();
   // Get activePageId by parsing the current URL path
   const currentPath = routerState.location.pathname;
@@ -86,6 +90,18 @@ export function DraftsSidebar({ collapsed = false, fullWidth = false, onAddDraft
     if (distance === 1) return 1.02; // Adjacent items
     return 1; // Far items
   }, [hoveredIndex]);
+
+  // Handle draft click - navigate to page route
+  const handleDraftClick = useCallback((pageId: string) => {
+    console.log("[sidebar] navigating to draft:", pageId);
+    navigate({ to: "/page/$pageId", params: { pageId } });
+  }, [navigate]);
+
+  // Handle block click - navigate to block editor
+  const handleBlockClick = useCallback((blockId: string) => {
+    console.log("[sidebar] navigating to block:", blockId);
+    navigate({ to: "/blocks/$blockId", params: { blockId } });
+  }, [navigate]);
 
   if (collapsed) {
     return (
@@ -149,12 +165,15 @@ export function DraftsSidebar({ collapsed = false, fullWidth = false, onAddDraft
               {blocks.slice(0, 3).map((block) => (
                 <Tooltip key={block.id}>
                   <TooltipTrigger asChild>
-                    <button className="w-full flex items-center justify-center p-1.5 text-muted-foreground hover:text-foreground transition-all">
+                    <button
+                      onClick={() => handleBlockClick(block.id)}
+                      className="w-full flex items-center justify-center p-1.5 text-muted-foreground hover:text-foreground transition-all"
+                    >
                       <SquaresFour weight="duotone" className="h-3.5 w-3.5 text-amber-500" />
                     </button>
                   </TooltipTrigger>
                   <TooltipContent side="right">
-                    <p>{block.title}</p>
+                    <p>{block.title || block.id}</p>
                   </TooltipContent>
                 </Tooltip>
               ))}
@@ -169,12 +188,6 @@ export function DraftsSidebar({ collapsed = false, fullWidth = false, onAddDraft
       </TooltipProvider>
     );
   }
-
-  // Handle draft click - navigate to page route
-  const handleDraftClick = useCallback((pageId: string) => {
-    console.log("[sidebar] navigating to draft:", pageId);
-    navigate({ to: pageRoute.to, params: { pageId } });
-  }, [navigate]);
 
   // Full-width responsive grid layout
   if (fullWidth) {
@@ -285,10 +298,11 @@ export function DraftsSidebar({ collapsed = false, fullWidth = false, onAddDraft
                   filteredBlocks.map((block) => (
                     <button
                       key={block.id}
+                      onClick={() => handleBlockClick(block.id)}
                       className="w-full flex items-center gap-2 px-2 py-1.5 text-sm text-muted-foreground hover:text-foreground hover:bg-accent/50 rounded-md transition-colors"
                     >
                       <SquaresFour weight="duotone" className="h-4 w-4 text-amber-500 shrink-0" />
-                      <span className="flex-1 truncate text-left">{block.title}</span>
+                      <span className="flex-1 truncate text-left">{block.title || block.id}</span>
                     </button>
                   ))
                 ) : searchQuery && blocks.length > 0 ? (
@@ -311,6 +325,54 @@ export function DraftsSidebar({ collapsed = false, fullWidth = false, onAddDraft
   return (
     <TooltipProvider delayDuration={0}>
       <div className="space-y-3 w-full">
+        {/* Navigation Controls */}
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-0.5">
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <button
+                  onClick={() => router.history.back()}
+                  className="p-1 text-muted-foreground/70 hover:text-foreground hover:bg-accent/50 rounded transition-colors disabled:opacity-30 disabled:pointer-events-none"
+                >
+                  <CaretLeft weight="bold" className="h-3.5 w-3.5" />
+                </button>
+              </TooltipTrigger>
+              <TooltipContent side="bottom">Back</TooltipContent>
+            </Tooltip>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <button
+                  onClick={() => router.history.forward()}
+                  className="p-1 text-muted-foreground/70 hover:text-foreground hover:bg-accent/50 rounded transition-colors disabled:opacity-30 disabled:pointer-events-none"
+                >
+                  <CaretRight weight="bold" className="h-3.5 w-3.5" />
+                </button>
+              </TooltipTrigger>
+              <TooltipContent side="bottom">Forward</TooltipContent>
+            </Tooltip>
+          </div>
+          {onPinnedChange && (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <button
+                  onClick={() => onPinnedChange(!pinned)}
+                  className={cn(
+                    "p-1 rounded transition-colors",
+                    pinned
+                      ? "text-foreground bg-accent/50"
+                      : "text-muted-foreground/70 hover:text-foreground hover:bg-accent/50"
+                  )}
+                >
+                  {pinned ? <Pin className="h-3.5 w-3.5" /> : <PinOff className="h-3.5 w-3.5" />}
+                </button>
+              </TooltipTrigger>
+              <TooltipContent side="bottom">
+                {pinned ? "Unpin sidebar" : "Pin sidebar open"}
+              </TooltipContent>
+            </Tooltip>
+          )}
+        </div>
+
         {/* Search Bar */}
         <div className="relative">
           <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-3 w-3 text-muted-foreground/70" />
@@ -454,13 +516,14 @@ export function DraftsSidebar({ collapsed = false, fullWidth = false, onAddDraft
                 filteredBlocks.map((block) => (
                   <button
                     key={block.id}
+                    onClick={() => handleBlockClick(block.id)}
                     className={cn(
                       "w-full flex items-center gap-2 py-0.5 text-[13px] transition-all duration-150 origin-left group",
                       "text-muted-foreground hover:text-foreground"
                     )}
                   >
                     <SquaresFour weight="duotone" className="h-3.5 w-3.5 text-amber-500 shrink-0" />
-                    <span className="flex-1 truncate text-left">{block.title}</span>
+                    <span className="flex-1 truncate text-left">{block.title || block.id}</span>
                   </button>
                 ))
               ) : searchQuery && blocks.length > 0 ? (

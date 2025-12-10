@@ -4,28 +4,31 @@
  * Visual editor for a specific block.
  */
 
-import { createRoute, Link, useParams } from "@tanstack/react-router";
-import { notebookRoute } from "../../_notebook";
+import { createFileRoute, Link } from "@tanstack/react-router";
 import { BlockEditor } from "@/components/BlockEditor";
-import { ArrowLeft } from "@phosphor-icons/react";
+import { ArrowLeft, SquaresFour } from "@phosphor-icons/react";
 import { cn } from "@/lib/utils";
+import { useManifest } from "@/hooks/useWorkbook";
 
-export const blockEditorRoute = createRoute({
-  getParentRoute: () => notebookRoute,
-  path: "/blocks/$blockId",
+export const Route = createFileRoute("/_notebook/blocks/$blockId")({
   component: BlockEditorPage,
 });
 
 function BlockEditorPage() {
-  const { blockId } = useParams({ from: "/_notebook/blocks/$blockId" });
+  const { blockId } = Route.useParams();
+  const { data: manifest } = useManifest();
 
   // Handle "new" as a special case
   const isNew = blockId === "new";
 
+  // Find the block to get its title
+  const block = manifest?.blocks?.find((b) => b.id === blockId);
+  const blockTitle = block?.title ?? blockId;
+
   return (
     <div className="h-full flex flex-col bg-background">
-      {/* Back link */}
-      <div className="px-4 py-2 border-b bg-muted/30">
+      {/* Header with back link and title */}
+      <div className="px-4 py-2 border-b bg-muted/30 flex items-center justify-between">
         <Link
           to="/blocks"
           className={cn(
@@ -36,6 +39,12 @@ function BlockEditorPage() {
           <ArrowLeft weight="bold" className="h-3.5 w-3.5" />
           Back to Blocks
         </Link>
+        {!isNew && (
+          <div className="flex items-center gap-2 text-sm font-medium">
+            <SquaresFour weight="duotone" className="h-4 w-4 text-amber-500" />
+            <span>{blockTitle}</span>
+          </div>
+        )}
       </div>
 
       {/* Editor */}

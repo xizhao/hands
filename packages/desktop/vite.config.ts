@@ -1,11 +1,18 @@
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react-swc";
+import { TanStackRouterVite } from "@tanstack/router-plugin/vite";
 import path from "path";
 
 const host = process.env.TAURI_DEV_HOST;
 
 export default defineConfig({
-  plugins: [react()],
+  plugins: [
+    TanStackRouterVite({
+      routesDirectory: "./src/routes",
+      generatedRouteTree: "./src/routeTree.gen.ts",
+    }),
+    react(),
+  ],
   resolve: {
     alias: {
       "@": path.resolve(__dirname, "./src"),

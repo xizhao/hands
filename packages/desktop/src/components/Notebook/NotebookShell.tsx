@@ -29,9 +29,6 @@ import type { Workbook } from "@/lib/workbook";
 import { cn } from "@/lib/utils";
 
 import { DraftsSidebar } from "./sidebar/PagesSidebar";
-import { EmptyWorkbookState } from "./EmptyWorkbookState";
-import { pageRoute } from "@/routes/_notebook/page.$pageId";
-import { indexRoute } from "@/routes/_notebook/index";
 import { ChatBar } from "@/components/ChatBar";
 import { Thread } from "@/components/Notebook/Thread";
 import { FileDropOverlay } from "@/components/FileDropOverlay";
@@ -83,6 +80,12 @@ export function NotebookShell({ children }: NotebookShellProps) {
   const pageMatch = currentPath.match(/^\/page\/(.+)$/);
   const pageId = pageMatch?.[1];
   const isOnPage = !!pageId;
+  // Check if we're on a block editor route and extract blockId
+  const blockMatch = currentPath.match(/^\/blocks\/(.+)$/);
+  const blockId = blockMatch?.[1];
+  const isOnBlock = !!blockId;
+  // Check if we're on any content route (page or block) that needs the editor layout
+  const isOnContentRoute = isOnPage || isOnBlock;
 
   const activeWorkbookId = useActiveWorkbookId();
   const { panel: rightPanel, togglePanel: toggleRightPanel } = useRightPanel();
@@ -121,10 +124,6 @@ export function NotebookShell({ children }: NotebookShellProps) {
   const alertWarnings = evalResult?.typescript?.warnings?.length ?? 0;
   const alertCount = alertErrors + alertWarnings;
 
-  // Show getting started when manifest is loaded but empty (no tables, no pages)
-  // Don't show if manifest is undefined (still loading) - React Query returns undefined, not null
-  const manifestTableCount = manifest?.tables?.length ?? 0;
-  const showGettingStarted = manifest !== undefined && manifestTableCount === 0 && tableCount === 0 && draftCount === 0;
 
   // Current workbook
   const currentWorkbook = workbooks?.find((w) => w.id === activeWorkbookId);
@@ -132,13 +131,20 @@ export function NotebookShell({ children }: NotebookShellProps) {
   // Current page (for breadcrumb) - from manifest (filesystem source of truth)
   const currentPage = manifest?.pages?.find((p) => p.id === pageId);
 
+  // Current block (for breadcrumb)
+  const currentBlock = manifest?.blocks?.find((b) => b.id === blockId);
+
   // Sidebar hover state (invisible until hover on left edge) - only used when on a page
   const [sidebarVisible, setSidebarVisible] = useState(false);
+  const [sidebarPinned, setSidebarPinned] = useState(false);
   const sidebarTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   // Sidebar width state (for resizing when expanded)
   const [sidebarWidth, setSidebarWidth] = useState(200);
   const [isResizing, setIsResizing] = useState(false);
+
+  // Computed: sidebar is shown if pinned or hovered
+  const sidebarShown = sidebarPinned || sidebarVisible;
   const resizeStartX = useRef(0);
   const resizeStartWidth = useRef(0);
 
@@ -148,12 +154,12 @@ export function NotebookShell({ children }: NotebookShellProps) {
   }, []);
 
   const handleMouseLeaveSidebar = useCallback(() => {
-    // Don't hide while resizing
-    if (isResizing) return;
+    // Don't hide while resizing or pinned
+    if (isResizing || sidebarPinned) return;
     sidebarTimeoutRef.current = setTimeout(() => {
       setSidebarVisible(false);
     }, 300);
-  }, [isResizing]);
+  }, [isResizing, sidebarPinned]);
 
   const handleResizeStart = useCallback((e: React.MouseEvent) => {
     e.preventDefault();
@@ -230,7 +236,7 @@ export function NotebookShell({ children }: NotebookShellProps) {
 
   // Handle close page (navigate back to index)
   const handleClosePage = useCallback(() => {
-    router.navigate({ to: indexRoute.to });
+    router.navigate({ to: "/" });
   }, [router]);
 
   // Hidden file input ref for import
@@ -269,7 +275,7 @@ export function NotebookShell({ children }: NotebookShellProps) {
       if (result.success && result.page) {
         // Navigate to the new page
         console.log("[handleAddPage] Navigating to page:", result.page.id);
-        router.navigate({ to: pageRoute.to, params: { pageId: result.page.id } });
+        router.navigate({ to: "/page/$pageId", params: { pageId: result.page.id } });
       }
     } catch (err) {
       console.error("[handleAddPage] Failed to create page:", err);
@@ -343,16 +349,16 @@ export function NotebookShell({ children }: NotebookShellProps) {
 
           {/* Workbook switcher dropdown - always visible */}
           <div className="relative flex items-center justify-center w-5 h-5">
-            {/* Slash separator - only visible when on a page, hidden on hover */}
-            {isOnPage && (
+            {/* Slash separator - only visible when on a content route, hidden on hover */}
+            {isOnContentRoute && (
               <span className="text-muted-foreground/60 text-sm group-hover/titlebar:opacity-0 transition-opacity">/</span>
             )}
-            {/* Dropdown trigger - hidden by default (shows on hover), or always visible when not on page */}
+            {/* Dropdown trigger - hidden by default (shows on hover), or always visible when not on content route */}
             <DropdownMenu>
               <DropdownMenuTrigger className={cn(
                 "absolute inset-0 flex items-center justify-center rounded-sm transition-all",
                 "text-muted-foreground/70 hover:text-muted-foreground hover:bg-accent/50",
-                isOnPage
+                isOnContentRoute
                   ? "opacity-0 group-hover/titlebar:opacity-100 focus:opacity-100"
                   : "opacity-100"
               )}>
@@ -380,7 +386,7 @@ export function NotebookShell({ children }: NotebookShellProps) {
             </DropdownMenu>
           </div>
 
-          {/* Page breadcrumb - only show when on a page route */}
+          {/* Breadcrumb - show for page or block routes */}
           {isOnPage && currentPage && (
             <>
               <span
@@ -421,6 +427,29 @@ export function NotebookShell({ children }: NotebookShellProps) {
                   </button>
                 </TooltipTrigger>
                 <TooltipContent side="bottom">Close page</TooltipContent>
+              </Tooltip>
+            </>
+          )}
+          {isOnBlock && (
+            <>
+              <span
+                className={cn(
+                  "px-1 py-0.5 text-sm text-muted-foreground bg-transparent rounded-sm",
+                  "hover:bg-accent/50 hover:text-foreground"
+                )}
+              >
+                {currentBlock?.title || blockId}
+              </span>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <button
+                    onClick={handleClosePage}
+                    className="ml-1 p-0.5 rounded-sm text-muted-foreground/70 hover:text-muted-foreground hover:bg-accent/50 transition-colors opacity-0 group-hover/titlebar:opacity-100"
+                  >
+                    <X weight="bold" className="h-3 w-3" />
+                  </button>
+                </TooltipTrigger>
+                <TooltipContent side="bottom">Close block</TooltipContent>
               </Tooltip>
             </>
           )}
@@ -579,16 +608,16 @@ export function NotebookShell({ children }: NotebookShellProps) {
         </div>
       </header>
 
-      {/* Main layout */}
+      {/* Main layout - routes handle their own content */}
       <div className="flex-1 flex overflow-hidden">
-        {isOnPage ? (
-          /* Page view: collapsible sidebar + content */
+        {isOnContentRoute ? (
+          /* Content route (page/blocks): collapsible sidebar + content */
           <>
             {/* Sidebar zone - collapses to thin strip, expands on hover */}
             <div
               onMouseEnter={handleMouseEnterLeftEdge}
               onMouseLeave={handleMouseLeaveSidebar}
-              style={{ width: sidebarVisible || isResizing ? sidebarWidth : 24 }}
+              style={{ width: sidebarShown || isResizing ? sidebarWidth : 24 }}
               className={cn(
                 "shrink-0 relative transition-[width] duration-200 ease-out",
                 isResizing && "transition-none"
@@ -599,7 +628,7 @@ export function NotebookShell({ children }: NotebookShellProps) {
                 className={cn(
                   "absolute inset-0 flex flex-col items-center gap-0.5 pt-4",
                   "transition-opacity duration-200",
-                  sidebarVisible ? "opacity-0 pointer-events-none" : "opacity-100"
+                  sidebarShown ? "opacity-0 pointer-events-none" : "opacity-100"
                 )}
               >
                 {Array.from({ length: Math.min(draftCount, 5) }).map((_, i) => (
@@ -621,12 +650,17 @@ export function NotebookShell({ children }: NotebookShellProps) {
                 className={cn(
                   "absolute inset-0 p-4 overflow-y-auto",
                   "transition-opacity duration-200 ease-out",
-                  sidebarVisible
+                  sidebarShown
                     ? "opacity-100"
                     : "opacity-0 pointer-events-none"
                 )}
               >
-                <DraftsSidebar collapsed={false} onAddDraft={handleAddPage} />
+                <DraftsSidebar
+                  collapsed={false}
+                  onAddDraft={handleAddPage}
+                  pinned={sidebarPinned}
+                  onPinnedChange={setSidebarPinned}
+                />
               </div>
 
               {/* Resize handle - at the right edge */}
@@ -635,7 +669,7 @@ export function NotebookShell({ children }: NotebookShellProps) {
                 className={cn(
                   "absolute top-0 bottom-0 right-0 w-1 cursor-col-resize z-10",
                   "transition-opacity duration-200",
-                  sidebarVisible
+                  sidebarShown
                     ? "opacity-100 hover:bg-border/50 active:bg-border"
                     : "opacity-0 pointer-events-none",
                   isResizing && "bg-border"
@@ -651,29 +685,11 @@ export function NotebookShell({ children }: NotebookShellProps) {
               </div>
             </main>
           </>
-        ) : manifest === undefined ? (
-          /* Loading state - manifest not yet loaded (React Query returns undefined) */
-          <div className="flex-1 flex items-center justify-center">
-            <div className="space-y-3 w-48">
-              <div className="h-3 bg-muted/50 rounded animate-pulse" />
-              <div className="h-3 bg-muted/50 rounded animate-pulse w-3/4" />
-              <div className="h-3 bg-muted/50 rounded animate-pulse w-1/2" />
-            </div>
-          </div>
         ) : (
-          /* Index view: getting started or sidebar navigation */
-          <div className="flex-1 flex items-start justify-center overflow-y-auto">
-            {showGettingStarted ? (
-              <EmptyWorkbookState
-                onImportFile={handleImportFile}
-                chatExpanded={chatState.chatExpanded}
-              />
-            ) : (
-              <div className="p-4 pt-8">
-                <DraftsSidebar collapsed={false} fullWidth onAddDraft={handleAddPage} />
-              </div>
-            )}
-          </div>
+          /* Index route - let the route component handle its own layout */
+          <main className="flex-1 flex flex-col min-w-0 bg-background overflow-hidden">
+            {children}
+          </main>
         )}
       </div>
 

@@ -1,4 +1,4 @@
-import { createRoute, Outlet, useNavigate } from "@tanstack/react-router";
+import { createFileRoute, Outlet, useNavigate } from "@tanstack/react-router";
 import { useEffect, useRef } from "react";
 import {
   useWorkbooks,
@@ -12,12 +12,9 @@ import { startSSESync, setNavigateCallback } from "@/lib/sse";
 import { queryClient } from "@/App";
 
 import { NotebookShell } from "@/components/Notebook/NotebookShell";
-import { rootRoute } from "./__root";
 import type { NavSearchParams } from "@/hooks/useNavState";
 
-export const notebookRoute = createRoute({
-  getParentRoute: () => rootRoute,
-  id: "_notebook",
+export const Route = createFileRoute("/_notebook")({
   component: NotebookLayout,
   validateSearch: (search: Record<string, unknown>): NavSearchParams => ({
     panel: search.panel as NavSearchParams["panel"],

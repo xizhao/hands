@@ -2,7 +2,7 @@ import { createRootRoute, Outlet } from "@tanstack/react-router";
 import { useEffect } from "react";
 import { initTheme } from "@/lib/theme";
 
-export const rootRoute = createRootRoute({
+export const Route = createRootRoute({
   component: RootComponent,
 });
 

@@ -158,129 +158,28 @@ fn read_workbook_config(workbook_dir: &PathBuf) -> Option<Workbook> {
     })
 }
 
+/// Initialize workbook by calling the shared TypeScript implementation.
+/// This ensures CLI and desktop app create identical workbook structures.
 fn init_workbook(workbook_dir: &PathBuf, name: &str, _description: Option<&str>) -> Result<(), String> {
-    // Create workbook with blocks/pages architecture (not src/)
-    // Blocks are RSC functions, pages are MDX with embedded blocks
+    // Get the config CLI script path (relative to CARGO_MANIFEST_DIR which is src-tauri)
+    let config_script = format!("{}/../../runtime/src/config/cli.ts", env!("CARGO_MANIFEST_DIR"));
 
-    let slug = name.to_lowercase()
-        .chars()
-        .map(|c| if c.is_alphanumeric() { c } else { '-' })
-        .collect::<String>();
+    let output = std::process::Command::new("bun")
+        .args([
+            "run",
+            &config_script,
+            "init",
+            &format!("--name={}", name),
+            &format!("--dir={}", workbook_dir.to_string_lossy()),
+        ])
+        .output()
+        .map_err(|e| format!("Failed to run init script: {}", e))?;
 
-    // Create directory structure - blocks/pages architecture, NO src/
-    fs::create_dir_all(workbook_dir.join("blocks")).map_err(|e| e.to_string())?;
-    fs::create_dir_all(workbook_dir.join("blocks/ui")).map_err(|e| e.to_string())?;
-    fs::create_dir_all(workbook_dir.join("pages")).map_err(|e| e.to_string())?;
-    fs::create_dir_all(workbook_dir.join("migrations")).map_err(|e| e.to_string())?;
-    fs::create_dir_all(workbook_dir.join("lib")).map_err(|e| e.to_string())?;
-
-    // Create hands.json with full schema
-    let hands_json = serde_json::json!({
-        "$schema": "https://hands.dev/schema/hands.json",
-        "name": slug,
-        "version": "0.0.1",
-        "pages": { "dir": "./pages" },
-        "blocks": { "dir": "./blocks", "exclude": ["ui/**"] },
-        "sources": {},
-        "secrets": {},
-        "database": {
-            "migrations": "./migrations"
-        }
-    });
-    fs::write(
-        workbook_dir.join("hands.json"),
-        serde_json::to_string_pretty(&hands_json).unwrap()
-    ).map_err(|e| e.to_string())?;
-
-    // Create package.json (no hono - it's bundled by build system)
-    let package_json = serde_json::json!({
-        "name": format!("@hands/{}", slug),
-        "version": "0.0.1",
-        "private": true,
-        "type": "module",
-        "scripts": {
-            "dev": "hands dev",
-            "build": "hands build"
-        },
-        "dependencies": {
-            "@hands/stdlib": "workspace:*"
-        },
-        "devDependencies": {
-            "typescript": "^5"
-        }
-    });
-    fs::write(
-        workbook_dir.join("package.json"),
-        serde_json::to_string_pretty(&package_json).unwrap()
-    ).map_err(|e| e.to_string())?;
-
-    // Create tsconfig.json
-    let tsconfig = serde_json::json!({
-        "compilerOptions": {
-            "target": "ESNext",
-            "module": "ESNext",
-            "moduleResolution": "bundler",
-            "strict": true,
-            "esModuleInterop": true,
-            "skipLibCheck": true,
-            "jsx": "react-jsx",
-            "jsxImportSource": "react"
-        },
-        "include": ["blocks/**/*", "pages/**/*", "lib/**/*"]
-    });
-    fs::write(
-        workbook_dir.join("tsconfig.json"),
-        serde_json::to_string_pretty(&tsconfig).unwrap()
-    ).map_err(|e| e.to_string())?;
-
-    // Create example block: blocks/welcome.tsx
-    let welcome_block = format!(r#"import type {{ BlockFn, BlockMeta }} from "@hands/stdlib"
-
-export const meta: BlockMeta = {{
-  title: "Welcome",
-  description: "Welcome block for new workbooks",
-  refreshable: false
-}}
-
-const WelcomeBlock: BlockFn<{{ name?: string }}> = async (props, ctx) => {{
-  return (
-    <div className="p-6 bg-gradient-to-br from-blue-50 to-indigo-100 rounded-xl">
-      <h1 className="text-2xl font-bold text-gray-900">
-        Welcome to {{props.name || "{}"}}
-      </h1>
-      <p className="mt-2 text-gray-600">
-        Create blocks to visualize your data.
-      </p>
-    </div>
-  )
-}}
-
-export default WelcomeBlock
-"#, name);
-    fs::write(workbook_dir.join("blocks/welcome.tsx"), welcome_block).map_err(|e| e.to_string())?;
-
-    // Create index page: pages/index.md
-    let index_page = format!(r#"---
-title: {}
----
-
-# {}
-
-<Block id="welcome" name="{}" />
-
-Start by creating blocks in the `blocks/` directory.
-"#, name, name, name);
-    fs::write(workbook_dir.join("pages/index.md"), index_page).map_err(|e| e.to_string())?;
-
-    // Create lib/db.ts helper
-    let db_helper = r#"// Database helper - re-exported from context for convenience
-export type { SqlClient, BlockContext } from "@hands/stdlib"
-"#;
-    fs::write(workbook_dir.join("lib/db.ts"), db_helper).map_err(|e| e.to_string())?;
-
-    // Create .gitignore
-    let gitignore = "node_modules/\n.hands/\ndb/\n*.log\n";
-    fs::write(workbook_dir.join(".gitignore"), gitignore).map_err(|e| e.to_string())?;
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        return Err(format!("Init failed: {} {}", stderr, stdout));
+    }
 
     Ok(())
 }
@@ -820,6 +719,11 @@ async fn start_runtime(
 
     // Small delay to ensure port is released
     tokio::time::sleep(Duration::from_millis(500)).await;
+
+    // Force kill any process still on runtime port (55000) - handles orphaned processes
+    let runtime_port_default: u16 = PORT_PREFIX as u16 * 1000;
+    kill_processes_on_port(runtime_port_default);
+    tokio::time::sleep(Duration::from_millis(300)).await;
 
     let (child, runtime_port, postgres_port, worker_port) =
         spawn_runtime(&workbook_id, &directory).await?;

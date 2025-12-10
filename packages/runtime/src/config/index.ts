@@ -135,3 +135,150 @@ export function slugify(str: string): string {
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/^-|-$/g, "")
 }
+
+// ============================================
+// Workbook Initialization
+// ============================================
+
+export interface InitWorkbookOptions {
+  /** Display name of the workbook */
+  name: string
+  /** Optional description */
+  description?: string
+  /** Target directory (must exist or will be created) */
+  directory: string
+}
+
+/**
+ * Initialize a new workbook with standard structure and starter files.
+ * This is the single source of truth for workbook creation - used by CLI and desktop app.
+ */
+export async function initWorkbook(options: InitWorkbookOptions): Promise<void> {
+  const { name, directory } = options
+  const { mkdirSync, writeFileSync } = await import("fs")
+  const { join } = await import("path")
+
+  const slug = slugify(name)
+
+  // Create directory structure
+  mkdirSync(join(directory, "blocks"), { recursive: true })
+  mkdirSync(join(directory, "blocks/ui"), { recursive: true })
+  mkdirSync(join(directory, "pages"), { recursive: true })
+  mkdirSync(join(directory, "migrations"), { recursive: true })
+  mkdirSync(join(directory, "lib"), { recursive: true })
+
+  // Create hands.json
+  const handsJson: HandsJson = {
+    $schema: "https://hands.dev/schema/hands.json",
+    name: slug,
+    version: "0.1.0",
+    pages: { dir: "./pages" },
+    blocks: { dir: "./blocks" },
+    sources: {},
+    secrets: {},
+    database: { migrations: "./migrations" },
+    build: { outDir: ".hands" },
+    dev: { hmr: true },
+  }
+  writeFileSync(
+    join(directory, "hands.json"),
+    JSON.stringify(handsJson, null, 2) + "\n"
+  )
+
+  // Create package.json
+  const packageJson = {
+    name: `@hands/${slug}`,
+    version: "0.0.1",
+    private: true,
+    type: "module",
+    scripts: {
+      dev: "hands dev",
+      build: "hands build",
+    },
+    dependencies: {
+      "@hands/stdlib": "workspace:*",
+    },
+    devDependencies: {
+      typescript: "^5",
+    },
+  }
+  writeFileSync(
+    join(directory, "package.json"),
+    JSON.stringify(packageJson, null, 2) + "\n"
+  )
+
+  // Create tsconfig.json
+  const tsconfig = {
+    compilerOptions: {
+      target: "ESNext",
+      module: "ESNext",
+      moduleResolution: "bundler",
+      strict: true,
+      esModuleInterop: true,
+      skipLibCheck: true,
+      jsx: "react-jsx",
+      jsxImportSource: "react",
+    },
+    include: ["blocks/**/*", "pages/**/*", "lib/**/*"],
+  }
+  writeFileSync(
+    join(directory, "tsconfig.json"),
+    JSON.stringify(tsconfig, null, 2) + "\n"
+  )
+
+  // Create .gitignore
+  const gitignore = `node_modules/
+.hands/
+db/
+*.log
+`
+  writeFileSync(join(directory, ".gitignore"), gitignore)
+
+  // Create blocks/welcome.tsx
+  const welcomeBlock = `import type { BlockFn, BlockMeta } from "@hands/stdlib"
+
+export const meta: BlockMeta = {
+  title: "Welcome",
+  description: "Welcome block for new workbooks",
+  refreshable: false
+}
+
+const WelcomeBlock: BlockFn<{ name?: string }> = async (props, ctx) => {
+  return (
+    <div className="p-6 bg-gradient-to-br from-blue-50 to-indigo-100 rounded-xl">
+      <h1 className="text-2xl font-bold text-gray-900">
+        Welcome to {props.name || "${name}"}
+      </h1>
+      <p className="mt-2 text-gray-600">
+        Create blocks to visualize your data.
+      </p>
+    </div>
+  )
+}
+
+export default WelcomeBlock
+`
+  writeFileSync(join(directory, "blocks/welcome.tsx"), welcomeBlock)
+
+  // Create blocks/ui/.gitkeep
+  writeFileSync(join(directory, "blocks/ui/.gitkeep"), "")
+
+  // Create pages/index.md
+  const indexPage = `---
+title: ${name}
+---
+
+# ${name}
+
+<Block src="welcome" name="${name}" />
+
+Start by creating blocks in the \`blocks/\` directory.
+`
+  writeFileSync(join(directory, "pages/index.md"), indexPage)
+
+  // Create lib/db.ts helper
+  const dbHelper = `// Database helper - re-exported from context for convenience
+export type { SqlClient, BlockContext } from "@hands/stdlib"
+`
+  writeFileSync(join(directory, "lib/db.ts"), dbHelper)
+}
