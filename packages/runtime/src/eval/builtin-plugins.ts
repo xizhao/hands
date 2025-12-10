@@ -6,8 +6,8 @@
 
 import { join } from "node:path"
 import { readdir, readFile } from "node:fs/promises"
+import { existsSync, readFileSync } from "node:fs"
 import type { EvalPlugin, EvalContext, PluginResult } from "./plugins"
-import { parseWranglerConfig } from "../wrangler/parser"
 import { compilePage } from "../pages/mdx"
 import {
   checkTypescript,
@@ -16,23 +16,46 @@ import {
 } from "@hands/stdlib"
 
 /**
- * Wrangler config parsing plugin
+ * Hands config validation plugin
  * Order: 50 (pre-processing)
  */
-export const wranglerPlugin: EvalPlugin = {
-  name: "wrangler",
+export const configPlugin: EvalPlugin = {
+  name: "config",
   order: 50,
   parallel: true,
   async eval(ctx: EvalContext): Promise<PluginResult> {
-    const config = await parseWranglerConfig(ctx.workbookDir)
+    const handsJsonPath = join(ctx.workbookDir, "hands.json")
 
-    return {
-      name: "wrangler",
-      duration: 0,
-      ok: config !== null,
-      errors: config === null ? [{ message: "No wrangler.toml found" }] : [],
-      warnings: [],
-      data: { config },
+    if (!existsSync(handsJsonPath)) {
+      return {
+        name: "config",
+        duration: 0,
+        ok: false,
+        errors: [{ message: "No hands.json found" }],
+        warnings: [],
+        data: { config: null },
+      }
+    }
+
+    try {
+      const config = JSON.parse(readFileSync(handsJsonPath, "utf-8"))
+      return {
+        name: "config",
+        duration: 0,
+        ok: true,
+        errors: [],
+        warnings: [],
+        data: { config },
+      }
+    } catch (err) {
+      return {
+        name: "config",
+        duration: 0,
+        ok: false,
+        errors: [{ message: `Invalid hands.json: ${err}` }],
+        warnings: [],
+        data: { config: null },
+      }
     }
   },
 }
@@ -239,7 +262,7 @@ export const blockRefsPlugin: EvalPlugin = {
  */
 export function getBuiltinPlugins(): EvalPlugin[] {
   return [
-    wranglerPlugin,
+    configPlugin,
     formatPlugin,
     typescriptPlugin,
     blockRefsPlugin,

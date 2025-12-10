@@ -1,10 +1,11 @@
 /**
  * RSC Block Element - Renders server-side content in the editor
+ * Uses Flight wire format for full RSC reactivity
  */
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, Suspense } from "react";
 import { PlateElement, type PlateElementProps } from "platejs/react";
-import { useRenderBlock, type BlockConfig } from "@/lib/blocks-client";
+import { useBlock } from "@/lib/blocks-client";
 import { RefreshCw, AlertCircle, Settings } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -23,18 +24,12 @@ export function RscBlockElement(props: PlateElementProps<RscBlockElementData>) {
   const blockElement = element as unknown as RscBlockElementData;
   const [editProps, setEditProps] = useState(blockElement.blockProps);
 
-  // Build block config from element
-  const blockConfig: BlockConfig = {
-    id: blockElement.blockId,
-    type: blockElement.blockType,
-    props: editProps,
-  };
-
-  const { data, isLoading, refetch, isRefetching } = useRenderBlock(blockConfig);
+  // Use RSC hook for Flight wire format
+  const { data, isLoading, invalidate, isRefetching } = useBlock(blockElement.blockId, editProps);
 
   const handleRefresh = useCallback(() => {
-    refetch();
-  }, [refetch]);
+    invalidate();
+  }, [invalidate]);
 
   const loading = isLoading || isRefetching;
 
@@ -91,7 +86,7 @@ export function RscBlockElement(props: PlateElementProps<RscBlockElementData>) {
             </div>
           )}
 
-          {/* Block content */}
+          {/* Block content - RSC element */}
           <div className="p-4">
             {data?.error ? (
               <div className="flex items-center gap-2 text-destructive">
@@ -100,11 +95,12 @@ export function RscBlockElement(props: PlateElementProps<RscBlockElementData>) {
               </div>
             ) : loading ? (
               <div className="animate-pulse bg-muted h-24 rounded" />
-            ) : data?.html ? (
-              <div
-                dangerouslySetInnerHTML={{ __html: data.html }}
-                className="[&>*]:!m-0"
-              />
+            ) : data?.element ? (
+              <Suspense fallback={<div className="animate-pulse bg-muted h-24 rounded" />}>
+                <div className="[&>*]:!m-0">
+                  {data.element}
+                </div>
+              </Suspense>
             ) : (
               <div className="text-muted-foreground text-sm">
                 Configure this block to see content

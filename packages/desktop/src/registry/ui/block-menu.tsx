@@ -15,12 +15,15 @@ import {
   AlignRight,
   CaptionsIcon,
   FilesIcon,
+  Hand,
   type LucideProps,
   MessageSquareText,
   PaintRoller,
   RefreshCwIcon,
   Trash2,
 } from 'lucide-react';
+import { useUIStore } from '@/stores/ui';
+import { BLOCK_KEY } from '@/registry/components/editor/plugins/block-kit';
 import { KEYS, type TElement } from 'platejs';
 import { type PlateEditor, useEditorRef, useHotkeys } from 'platejs/react';
 import * as React from 'react';
@@ -200,6 +203,14 @@ export const blockMenuItems = {
       editor.getApi(AIChatPlugin).aiChat.show();
     },
   },
+  editWithHands: {
+    focusEditor: false,
+    icon: <Hand className="h-4 w-4" />,
+    keywords: ['edit', 'hands', 'chat', 'modify'],
+    label: 'Edit with Hands',
+    value: 'editWithHands',
+    // onSelect is handled specially in BlockMenuItems since it needs the block ID
+  },
   caption: {
     icon: <CaptionsIcon />,
     keywords: ['alt'],
@@ -300,11 +311,7 @@ export const blockMenuItems = {
 
 const orderedMenuItems = [
   {
-    items: [blockMenuItems.comment],
-  },
-  {
     items: [
-      blockMenuItems.askAI,
       blockMenuItems.delete,
       blockMenuItems.duplicate,
       blockMenuItems[GROUP.TURN_INTO],
@@ -327,10 +334,21 @@ const mediaMenuItems = [
   },
 ];
 
+// Menu items for RSC Block elements (<Block id="..." />)
+const rscBlockMenuItems = [
+  {
+    items: [blockMenuItems.editWithHands],
+  },
+  {
+    items: [blockMenuItems.delete, blockMenuItems.duplicate],
+  },
+];
+
 function BlockMenuItems() {
   const [searchValue] = useComboboxValueState();
   const selectedBlocks = useBlockSelectionNodes();
   const editor = useEditorRef();
+  const { setPendingAttachment, setChatExpanded } = useUIStore();
 
   const menuGroups = React.useMemo(() => {
     const isMedia =
@@ -341,10 +359,34 @@ function BlockMenuItems() {
         )
       );
 
-    const items = isMedia ? mediaMenuItems : orderedMenuItems;
+    // Check if this is an RSC Block element
+    const isRscBlock =
+      selectedBlocks.length === 1 &&
+      selectedBlocks[0]?.[0]?.type === BLOCK_KEY;
+
+    const items = isRscBlock ? rscBlockMenuItems : isMedia ? mediaMenuItems : orderedMenuItems;
 
     return filterMenuGroups(items, searchValue) || items;
   }, [selectedBlocks, searchValue]);
+
+  // Get block ID for RSC blocks
+  const rscBlockId = React.useMemo(() => {
+    if (selectedBlocks.length === 1 && selectedBlocks[0]?.[0]?.type === BLOCK_KEY) {
+      return (selectedBlocks[0][0] as TElement & { src?: string }).src;
+    }
+    return null;
+  }, [selectedBlocks]);
+
+  const handleEditWithHands = React.useCallback(() => {
+    if (rscBlockId) {
+      setPendingAttachment({
+        type: 'block',
+        blockId: rscBlockId,
+        name: rscBlockId,
+      });
+      setChatExpanded(true);
+    }
+  }, [rscBlockId, setPendingAttachment, setChatExpanded]);
 
   return (
     <>
@@ -357,6 +399,18 @@ function BlockMenuItems() {
               const ItemComponent = menuItem.component;
 
               return <ItemComponent key={item.value} />;
+            }
+
+            // Special handling for editWithHands
+            if (item.value === 'editWithHands') {
+              return (
+                <MenuItem
+                  icon={menuItem.icon}
+                  key={item.value}
+                  label={menuItem.label}
+                  onClick={handleEditWithHands}
+                />
+              );
             }
 
             return (

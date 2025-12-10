@@ -6,8 +6,18 @@ type RightPanelId = "sources" | "database" | "blocks" | "settings" | "alerts" | 
 
 // Pending file attachment for chat
 export interface PendingAttachment {
+  type: "file";
   file: File;
   name: string;
+}
+
+// Pending block attachment for chat (block://<id>)
+export interface PendingBlockAttachment {
+  type: "block";
+  blockId: string;
+  name: string;
+  // Optional error context for "Fix with Hands" action - triggers auto-submit
+  errorContext?: string;
 }
 
 interface UIState {
@@ -31,9 +41,9 @@ interface UIState {
   rightPanel: RightPanelId;
   setRightPanel: (panel: RightPanelId) => void;
   toggleRightPanel: (panel: Exclude<RightPanelId, null>) => void;
-  // Pending file attachment for chat
-  pendingAttachment: PendingAttachment | null;
-  setPendingAttachment: (attachment: PendingAttachment | null) => void;
+  // Pending attachment for chat (file or block)
+  pendingAttachment: PendingAttachment | PendingBlockAttachment | null;
+  setPendingAttachment: (attachment: PendingAttachment | PendingBlockAttachment | null) => void;
   // Auto-submit trigger for file drops
   autoSubmitPending: boolean;
   setAutoSubmitPending: (pending: boolean) => void;

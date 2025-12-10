@@ -7,7 +7,7 @@
  * - blocks/ directory (RSC functions)
  * - sources/ directory (data connectors)
  *
- * Uses unenv polyfills for Node.js compatibility in Cloudflare Workers/Miniflare.
+ * Uses unenv polyfills for Node.js compatibility in Cloudflare Workers.
  * Uses esbuild directly instead of Bun.build() to avoid Bun 1.3.3 segfault.
  */
 
@@ -183,7 +183,7 @@ export async function build(
     const workerSrcPath = join(outputDir, "worker.src.ts")
     writeFileSync(workerSrcPath, workerTs)
 
-    // Bundle to worker.js (Miniflare needs JS, not TS)
+    // Bundle to worker.js
     // Uses esbuild directly to avoid Bun 1.3.3 segfault with Bun.build()
     const stdlibPath = findStdlibPath()
 
@@ -516,3 +516,6 @@ async function renderPage(content: string, ctx: any) {
 }
 `
 }
+
+// Re-export RSC build system
+export { buildRSC, type RSCBuildResult } from "./rsc.js"

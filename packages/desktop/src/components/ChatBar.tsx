@@ -16,7 +16,7 @@ import {
 } from "@/hooks/useWorkbook";
 import { cn } from "@/lib/utils";
 import { useUIStore } from "@/stores/ui";
-import { ArrowUp, Hand, Loader2, Square, X, Paperclip } from "lucide-react";
+import { ArrowUp, Hand, Loader2, Square, X, Paperclip, Blocks } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 
@@ -127,30 +127,37 @@ export function ChatBar({ expanded, onExpandChange }: ChatBarProps) {
 
     const system = getSystemPrompt();
 
-    // Build message content - if there's an attachment, copy it and include the path
+    // Build message content based on attachment type
     let finalMessage = userText;
-    if (pendingAttachment && activeWorkbookId) {
-      try {
-        // Copy file to workbook data directory
-        const buffer = await pendingAttachment.file.arrayBuffer();
-        const bytes = Array.from(new Uint8Array(buffer));
-        const result = await invoke<CopyFilesResult>("write_file_to_workbook", {
-          workbookId: activeWorkbookId,
-          fileData: { filename: pendingAttachment.name, bytes },
-        });
+    if (pendingAttachment) {
+      if (pendingAttachment.type === "block") {
+        // Block attachment - include block:// URI
+        const blockUri = `block://${pendingAttachment.blockId}`;
+        finalMessage = userText
+          ? `${userText}\n\n[Attached block: ${blockUri}]`
+          : `[Attached block: ${blockUri}]`;
+        setPendingAttachment(null);
+      } else if (pendingAttachment.type === "file" && activeWorkbookId) {
+        // File attachment - copy to workbook and include path
+        try {
+          const buffer = await pendingAttachment.file.arrayBuffer();
+          const bytes = Array.from(new Uint8Array(buffer));
+          const result = await invoke<CopyFilesResult>("write_file_to_workbook", {
+            workbookId: activeWorkbookId,
+            fileData: { filename: pendingAttachment.name, bytes },
+          });
 
-        const filePath = result.copied_files[0];
-        if (filePath) {
-          // Append file reference to message - just include the file path, no instructions
-          finalMessage = userText
-            ? `${userText}\n\n[Attached file: ${filePath}]`
-            : `[Attached file: ${filePath}]`;
+          const filePath = result.copied_files[0];
+          if (filePath) {
+            finalMessage = userText
+              ? `${userText}\n\n[Attached file: ${filePath}]`
+              : `[Attached file: ${filePath}]`;
+          }
+        } catch (err) {
+          console.error("[ChatBar] Failed to copy attachment:", err);
         }
-      } catch (err) {
-        console.error("[ChatBar] Failed to copy attachment:", err);
+        setPendingAttachment(null);
       }
-      // Clear attachment after processing
-      setPendingAttachment(null);
     }
     setIsUploadingFile(false);
 
@@ -178,12 +185,22 @@ export function ChatBar({ expanded, onExpandChange }: ChatBarProps) {
     });
   }, [input, pendingAttachment, isBusy, isConnected, expanded, activeWorkbookId, activeSessionId, onExpandChange, getSystemPrompt, setPendingAttachment, createSession, setActiveSession, sendMessage]);
 
-  // Auto-submit when file is dropped (triggered by autoSubmitPending flag)
+  // Auto-submit when file is dropped or block error fix is triggered
   useEffect(() => {
     if (autoSubmitPending && pendingAttachment && isConnected && !isBusy) {
       setAutoSubmitPending(false);
-      // Set default prompt for file drops
-      setInput("Import this data and make it useful");
+
+      if (pendingAttachment.type === "file") {
+        // File drops: import prompt
+        setInput("Import this data and make it useful");
+      } else if (pendingAttachment.type === "block" && pendingAttachment.errorContext) {
+        // Block error fix: include block ID and error context in prompt
+        setInput(`Fix the error in block "${pendingAttachment.blockId}": ${pendingAttachment.errorContext}`);
+      } else {
+        // Other cases: don't auto-submit
+        return;
+      }
+
       // Submit on next tick after input is set
       setTimeout(() => handleSubmit(), 0);
     }
@@ -212,11 +229,15 @@ export function ChatBar({ expanded, onExpandChange }: ChatBarProps) {
       data-chat-bar
       className="flex flex-col gap-1 px-2 py-2 rounded-xl border border-border/40 bg-background/80 backdrop-blur-sm overflow-visible"
     >
-      {/* Attachment chip - show when file is attached */}
+      {/* Attachment chip - show when file or block is attached */}
       {pendingAttachment && (
         <div className="flex items-center gap-1 px-1">
           <div className="flex items-center gap-1.5 px-2 py-1 rounded-md bg-accent/50 text-xs">
-            <Paperclip className="h-3 w-3 text-muted-foreground" />
+            {pendingAttachment.type === "block" ? (
+              <Blocks className="h-3 w-3 text-muted-foreground" />
+            ) : (
+              <Paperclip className="h-3 w-3 text-muted-foreground" />
+            )}
             <span className="max-w-[200px] truncate">{pendingAttachment.name}</span>
             <button
               onClick={() => setPendingAttachment(null)}

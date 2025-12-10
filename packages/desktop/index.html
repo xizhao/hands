@@ -11,6 +11,16 @@
         background: #0a0a0a !important;
       }
     </style>
+    <script>
+      // Webpack shim for react-server-dom-webpack/client (used for Flight stream consumption)
+      // This provides minimal compatibility for Vite-based apps consuming RSC output
+      globalThis.__webpack_require__ = function(id) {
+        // Flight client uses this to resolve client component references
+        // Since our blocks are server-only, we return a placeholder component
+        return { default: function ServerComponent(props) { return props.children || null; } };
+      };
+      globalThis.__webpack_chunk_load__ = function() { return Promise.resolve(); };
+    </script>
   </head>
   <body>
     <div id="root"></div>

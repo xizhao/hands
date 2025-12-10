@@ -11,6 +11,14 @@ export default defineConfig({
       "@": path.resolve(__dirname, "./src"),
     },
   },
+  define: {
+    // Webpack compatibility shims for react-server-dom-webpack/client
+    // These are required for Flight stream consumption in Vite
+    __webpack_require__: "globalThis.__webpack_require__",
+  },
+  optimizeDeps: {
+    include: ["react-server-dom-webpack/client"],
+  },
   clearScreen: false,
   server: {
     port: 1420,

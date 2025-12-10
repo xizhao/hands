@@ -250,7 +250,7 @@ export function NotebookShell({ children }: NotebookShellProps) {
     if (!file) return;
 
     // Set as pending attachment
-    setPendingAttachment({ file, name: file.name });
+    setPendingAttachment({ type: "file", file, name: file.name });
     // Expand chat to show the attachment
     setChatExpanded(true);
 
@@ -283,7 +283,7 @@ export function NotebookShell({ children }: NotebookShellProps) {
   // File drop handler for external files - set as pending attachment and auto-submit
   const handleFileDrop = useCallback((file: File) => {
     console.log("[handleFileDrop] File dropped, setting as attachment and auto-submitting:", file.name);
-    setPendingAttachment({ file, name: file.name });
+    setPendingAttachment({ type: "file", file, name: file.name });
     // Expand chat and trigger auto-submit
     setChatExpanded(true);
     setAutoSubmitPending(true);

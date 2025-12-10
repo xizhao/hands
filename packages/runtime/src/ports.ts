@@ -7,7 +7,7 @@
  * Port layout:
  * - ${PREFIX}000: Runtime API server
  * - ${PREFIX}100: PostgreSQL database
- * - ${PREFIX}200: Worker (Miniflare/Wrangler dev server)
+ * - ${PREFIX}200: Worker (Vite RSC dev server)
  * - ${PREFIX}300: OpenCode AI server
  */
 
@@ -31,7 +31,7 @@ export const PORTS = {
   /** PostgreSQL database (default: 55100) */
   POSTGRES: getPort(100),
 
-  /** Worker/Miniflare dev server (default: 55200) */
+  /** Worker/Vite RSC dev server (default: 55200) */
   WORKER: getPort(200),
 
   /** OpenCode AI server (default: 55300) */
