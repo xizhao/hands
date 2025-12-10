@@ -18,7 +18,6 @@ import { join } from "path"
 import { createServer, type ServerResponse } from "http"
 import { Hono } from "hono"
 import { cors } from "hono/cors"
-import { streamSSE } from "hono/streaming"
 import { buildRSC } from "./build/rsc.js"
 import { PORTS } from "./ports.js"
 import { initWorkbookDb, type WorkbookDb } from "./db/index.js"
@@ -37,8 +36,6 @@ interface RuntimeState {
   vitePort: number | null
   workbookDb: WorkbookDb | null
   viteProc: ChildProcess | null
-  // SSE clients for manifest watch
-  manifestClients: Set<(manifest: ReturnType<typeof getManifest>) => void>
   fileWatchers: FSWatcher[]
   // Cached lint results
   lintResult: BlockLintResult | null
@@ -52,7 +49,6 @@ const state: RuntimeState = {
   workbookDb: null,
   viteProc: null,
   lintResult: null,
-  manifestClients: new Set(),
   fileWatchers: [],
 }
 
@@ -143,14 +139,37 @@ function extractTitle(content: string): string | null {
 }
 
 /**
- * Broadcast manifest update to all SSE clients
+ * Generate default block source code
  */
-function broadcastManifest(workbookDir: string, workbookId: string) {
-  if (state.manifestClients.size === 0) return
-  const manifest = getManifest(workbookDir, workbookId)
-  for (const sendUpdate of state.manifestClients) {
-    sendUpdate(manifest)
-  }
+function generateDefaultBlockSource(blockId: string): string {
+  // Convert blockId to PascalCase for function name
+  const functionName = blockId
+    .split(/[-_]/)
+    .map((word) => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+    .join("")
+
+  return `import type { BlockFn, BlockMeta } from "@hands/stdlib"
+
+const ${functionName}: BlockFn = async ({ ctx }) => {
+  // Query your data here
+  // const data = await ctx.sql\`SELECT * FROM your_table\`
+
+  return (
+    <div>
+      <h2>${functionName}</h2>
+      <p>Edit this block to add your content</p>
+    </div>
+  )
+}
+
+export default ${functionName}
+
+export const meta: BlockMeta = {
+  title: "${blockId}",
+  description: "A new block",
+  refreshable: true,
+}
+`
 }
 
 /**
@@ -161,16 +180,6 @@ function startFileWatcher(config: RuntimeConfig) {
   const { workbookDir, workbookId } = config
   const pagesDir = join(workbookDir, "pages")
   const blocksDir = join(workbookDir, "blocks")
-
-  // Debounce to avoid duplicate events
-  let debounceTimer: ReturnType<typeof setTimeout> | null = null
-  const debouncedBroadcast = () => {
-    if (debounceTimer) clearTimeout(debounceTimer)
-    debounceTimer = setTimeout(() => {
-      console.log("[runtime] File change detected, broadcasting manifest update")
-      broadcastManifest(workbookDir, workbookId)
-    }, 100) // 100ms debounce
-  }
 
   // Invalidate lint cache and re-run lint
   const invalidateLint = () => {
@@ -189,7 +198,6 @@ function startFileWatcher(config: RuntimeConfig) {
       const watcher = watch(pagesDir, { recursive: true }, (event, filename) => {
         if (filename && (filename.endsWith(".md") || filename.endsWith(".mdx"))) {
           invalidateLint()
-          debouncedBroadcast()
         }
       })
       state.fileWatchers.push(watcher)
@@ -205,7 +213,6 @@ function startFileWatcher(config: RuntimeConfig) {
       const watcher = watch(blocksDir, { recursive: true }, (event, filename) => {
         if (filename && (filename.endsWith(".ts") || filename.endsWith(".tsx"))) {
           invalidateLint()
-          debouncedBroadcast()
         }
       })
       state.fileWatchers.push(watcher)
@@ -295,44 +302,10 @@ function createApp(config: RuntimeConfig) {
   })
 
   // Manifest - instant! Reads from filesystem only
+  // Clients poll this endpoint (every 1s) instead of using SSE
   app.get("/workbook/manifest", (c) => {
     const manifest = getManifest(config.workbookDir, config.workbookId)
     return c.json(manifest)
-  })
-
-  // Manifest watch - SSE for real-time updates
-  app.get("/workbook/manifest/watch", async (c) => {
-    return streamSSE(c, async (stream) => {
-      // Send initial manifest
-      const initialManifest = getManifest(config.workbookDir, config.workbookId)
-      await stream.writeSSE({ data: JSON.stringify(initialManifest) })
-
-      // Register callback for updates
-      const sendUpdate = (manifest: ReturnType<typeof getManifest>) => {
-        stream.writeSSE({ data: JSON.stringify(manifest) }).catch(() => {
-          // Client disconnected
-          state.manifestClients.delete(sendUpdate)
-        })
-      }
-      state.manifestClients.add(sendUpdate)
-
-      // Keep connection alive
-      const keepAlive = setInterval(() => {
-        stream.writeSSE({ event: "ping", data: "" }).catch(() => {
-          clearInterval(keepAlive)
-          state.manifestClients.delete(sendUpdate)
-        })
-      }, 30000)
-
-      // Cleanup on disconnect
-      stream.onAbort(() => {
-        clearInterval(keepAlive)
-        state.manifestClients.delete(sendUpdate)
-      })
-
-      // Keep stream open indefinitely
-      await new Promise(() => {})
-    })
   })
 
   // Page content - instant! Reads from filesystem
@@ -349,6 +322,152 @@ function createApp(config: RuntimeConfig) {
     }
 
     return c.json({ error: "Page not found" }, 404)
+  })
+
+  // ============================================
+  // Block Source API - for visual block editor
+  // ============================================
+
+  // Get block source code
+  app.get("/workbook/blocks/:blockId/source", async (c) => {
+    const blockId = c.req.param("blockId")
+    const blocksDir = join(config.workbookDir, "blocks")
+
+    for (const ext of [".tsx", ".ts"]) {
+      const filePath = join(blocksDir, blockId + ext)
+      if (existsSync(filePath)) {
+        const source = readFileSync(filePath, "utf-8")
+        return c.json({
+          success: true,
+          blockId,
+          filePath,
+          source,
+        })
+      }
+    }
+
+    return c.json({ error: "Block not found" }, 404)
+  })
+
+  // Save block source code
+  app.put("/workbook/blocks/:blockId/source", async (c) => {
+    const blockId = c.req.param("blockId")
+    const blocksDir = join(config.workbookDir, "blocks")
+    const { source } = await c.req.json<{ source: string }>()
+
+    if (!source || typeof source !== "string") {
+      return c.json({ error: "Missing source in request body" }, 400)
+    }
+
+    // Find existing file or use .tsx for new files
+    let filePath: string | null = null
+    for (const ext of [".tsx", ".ts"]) {
+      const path = join(blocksDir, blockId + ext)
+      if (existsSync(path)) {
+        filePath = path
+        break
+      }
+    }
+
+    // Default to .tsx for new blocks
+    if (!filePath) {
+      filePath = join(blocksDir, blockId + ".tsx")
+    }
+
+    try {
+      // Write the source
+      const { writeFileSync, mkdirSync } = await import("fs")
+
+      // Ensure blocks directory exists
+      if (!existsSync(blocksDir)) {
+        mkdirSync(blocksDir, { recursive: true })
+      }
+
+      writeFileSync(filePath, source, "utf-8")
+
+      state.lintResult = null
+
+      return c.json({
+        success: true,
+        blockId,
+        filePath,
+      })
+    } catch (err) {
+      return c.json({
+        error: `Failed to write block: ${err instanceof Error ? err.message : String(err)}`,
+      }, 500)
+    }
+  })
+
+  // Create new block
+  app.post("/workbook/blocks", async (c) => {
+    const { blockId, source } = await c.req.json<{ blockId: string; source?: string }>()
+
+    if (!blockId || typeof blockId !== "string") {
+      return c.json({ error: "Missing blockId" }, 400)
+    }
+
+    // Validate block ID (alphanumeric, dashes, underscores)
+    if (!/^[a-zA-Z][a-zA-Z0-9_-]*$/.test(blockId)) {
+      return c.json({ error: "Invalid blockId - must start with letter, contain only alphanumeric, dashes, underscores" }, 400)
+    }
+
+    const blocksDir = join(config.workbookDir, "blocks")
+    const filePath = join(blocksDir, blockId + ".tsx")
+
+    // Check if already exists
+    if (existsSync(filePath)) {
+      return c.json({ error: "Block already exists" }, 409)
+    }
+
+    // Generate default source if not provided
+    const defaultSource = source ?? generateDefaultBlockSource(blockId)
+
+    try {
+      const { writeFileSync, mkdirSync } = await import("fs")
+
+      // Ensure blocks directory exists
+      if (!existsSync(blocksDir)) {
+        mkdirSync(blocksDir, { recursive: true })
+      }
+
+      writeFileSync(filePath, defaultSource, "utf-8")
+      state.lintResult = null
+
+      return c.json({
+        success: true,
+        blockId,
+        filePath,
+      }, 201)
+    } catch (err) {
+      return c.json({
+        error: `Failed to create block: ${err instanceof Error ? err.message : String(err)}`,
+      }, 500)
+    }
+  })
+
+  // Delete block
+  app.delete("/workbook/blocks/:blockId", async (c) => {
+    const blockId = c.req.param("blockId")
+    const blocksDir = join(config.workbookDir, "blocks")
+
+    let deleted = false
+    for (const ext of [".tsx", ".ts"]) {
+      const filePath = join(blocksDir, blockId + ext)
+      if (existsSync(filePath)) {
+        const { unlinkSync } = await import("fs")
+        unlinkSync(filePath)
+        deleted = true
+        break
+      }
+    }
+
+    if (!deleted) {
+      return c.json({ error: "Block not found" }, 404)
+    }
+
+    state.lintResult = null
+    return c.json({ success: true, blockId })
   })
 
   // DB routes - require DB ready

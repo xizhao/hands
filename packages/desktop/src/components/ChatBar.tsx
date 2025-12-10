@@ -9,11 +9,10 @@ import {
 } from "@/hooks/useSession";
 import {
   useDevServerRoutes,
-  useDevServerStatus,
-  useStartDevServer,
   useWorkbook,
   useWorkbookDatabase,
 } from "@/hooks/useWorkbook";
+import { useRuntime } from "@/providers/RuntimeProvider";
 import { cn } from "@/lib/utils";
 import { useUIStore } from "@/stores/ui";
 import { ArrowUp, Hand, Loader2, Square, X, Paperclip, Blocks } from "lucide-react";
@@ -38,7 +37,6 @@ export function ChatBar({ expanded, onExpandChange }: ChatBarProps) {
     activeSessionId,
     activeWorkbookId,
     setActiveSession,
-    setRuntimePort,
     pendingAttachment,
     setPendingAttachment,
     autoSubmitPending,
@@ -54,35 +52,9 @@ export function ChatBar({ expanded, onExpandChange }: ChatBarProps) {
 
   // Workbook context
   const { data: activeWorkbook } = useWorkbook(activeWorkbookId);
-  const startDevServer = useStartDevServer();
-  const { data: devServerStatus } = useDevServerStatus(activeWorkbookId);
+  const { port: runtimePort, isReady: runtimeReady } = useRuntime();
   const { data: devServerRoutes } = useDevServerRoutes(activeWorkbookId);
   const { data: workbookDatabase } = useWorkbookDatabase(activeWorkbookId);
-
-  // Auto-start dev server when workbook changes
-  useEffect(() => {
-    if (
-      activeWorkbook &&
-      !devServerStatus?.runtime_port &&
-      !startDevServer.isPending
-    ) {
-      startDevServer.mutate({
-        workbookId: activeWorkbook.id,
-        directory: activeWorkbook.directory,
-      });
-    }
-  }, [
-    activeWorkbook?.id,
-    devServerStatus?.runtime_port,
-    startDevServer.isPending,
-  ]);
-
-  // Update UIStore with runtime port
-  useEffect(() => {
-    if (devServerStatus?.runtime_port) {
-      setRuntimePort(devServerStatus.runtime_port);
-    }
-  }, [devServerStatus?.runtime_port, setRuntimePort]);
 
   const status = activeSessionId ? sessionStatuses[activeSessionId] : null;
   const isBusy = status?.type === "busy" || status?.type === "running";
@@ -96,7 +68,7 @@ export function ChatBar({ expanded, onExpandChange }: ChatBarProps) {
       : "PostgreSQL (connecting...)";
 
     const serverInfo =
-      devServerStatus?.running && devServerRoutes?.url
+      runtimeReady && devServerRoutes?.url
         ? devServerRoutes.url
         : "Not running";
 

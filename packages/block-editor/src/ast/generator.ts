@@ -95,12 +95,13 @@ export class BlockGenerator {
     })
 
     function patchFunctionReturn(
-      func: recast.types.namedTypes.FunctionDeclaration | recast.types.namedTypes.ArrowFunctionExpression,
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      func: any,
       root: JsxNode
     ) {
       // For arrow functions with expression body
       if (func.type === "ArrowFunctionExpression" && func.body.type !== "BlockStatement") {
-        func.body = jsxNodeToAst(root) as recast.types.namedTypes.Expression
+        func.body = jsxNodeToAst(root)
         return
       }
 
@@ -110,7 +111,7 @@ export class BlockGenerator {
 
       for (const stmt of body.body) {
         if (stmt.type === "ReturnStatement" && stmt.argument) {
-          stmt.argument = jsxNodeToAst(root) as recast.types.namedTypes.Expression
+          stmt.argument = jsxNodeToAst(root)
           break
         }
       }

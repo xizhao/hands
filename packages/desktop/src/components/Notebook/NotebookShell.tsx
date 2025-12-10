@@ -18,7 +18,6 @@ import {
   useUpdateWorkbook,
   useDbSchema,
   useDevServerRoutes,
-  useDevServerStatus,
   useEvalResult,
   useCreatePage,
   useUpdatePageTitle,
@@ -92,7 +91,6 @@ export function NotebookShell({ children }: NotebookShellProps) {
   // Data for titlebar indicators and empty state detection
   const { data: dbSchema } = useDbSchema(activeWorkbookId);
   const { data: devServerRoutes } = useDevServerRoutes(activeWorkbookId);
-  const { data: devServerStatus, isLoading: isLoadingStatus } = useDevServerStatus(activeWorkbookId);
   const { data: evalResult } = useEvalResult(activeWorkbookId);
 
   // Get runtime state from centralized provider
@@ -118,10 +116,10 @@ export function NotebookShell({ children }: NotebookShellProps) {
   const alertWarnings = evalResult?.typescript?.warnings?.length ?? 0;
   const alertCount = alertErrors + alertWarnings;
 
-  // Show getting started when no data and no drafts
-  // Use manifest.tables (from SSE) which loads faster, fallback to dbSchema for titlebar
+  // Show getting started when manifest is loaded but empty (no tables, no pages)
+  // Don't show if manifest is null (still loading)
   const manifestTableCount = manifest?.tables?.length ?? 0;
-  const showGettingStarted = manifestTableCount === 0 && tableCount === 0 && draftCount === 0;
+  const showGettingStarted = manifest !== null && manifestTableCount === 0 && tableCount === 0 && draftCount === 0;
 
   // Current workbook
   const currentWorkbook = workbooks?.find((w) => w.id === activeWorkbookId);
@@ -427,7 +425,7 @@ export function NotebookShell({ children }: NotebookShellProps) {
         {/* Right: Panel toggles + Share */}
         <div className="flex items-center gap-1">
           {/* Loading shimmer when connecting to runtime */}
-          {isLoadingStatus && activeWorkbookId && (
+          {isConnecting && activeWorkbookId && (
             <div className="flex items-center gap-1 px-2 py-1">
               <div className="h-4 w-8 bg-muted/50 rounded animate-pulse" />
               <div className="h-4 w-8 bg-muted/50 rounded animate-pulse" />
@@ -435,14 +433,14 @@ export function NotebookShell({ children }: NotebookShellProps) {
           )}
 
           {/* Booting indicator - shows when runtime is starting */}
-          {isRuntimeBooting && !isLoadingStatus && (
+          {isRuntimeBooting && !isConnecting && (
             <div className="px-2 py-1" title="Starting...">
               <div className="h-1.5 w-1.5 rounded-full bg-yellow-500 animate-pulse" />
             </div>
           )}
 
           {/* Database - table browser */}
-          {!isLoadingStatus && (
+          {!isConnecting && (
             <Tooltip>
               <TooltipTrigger asChild>
                 <button
@@ -470,7 +468,7 @@ export function NotebookShell({ children }: NotebookShellProps) {
           )}
 
           {/* Runtime/Alerts */}
-          {!isLoadingStatus && (
+          {!isConnecting && (
             <Tooltip>
               <TooltipTrigger asChild>
                 <button
@@ -656,6 +654,15 @@ export function NotebookShell({ children }: NotebookShellProps) {
               </div>
             </main>
           </>
+        ) : manifest === null ? (
+          /* Loading state - manifest not yet loaded */
+          <div className="flex-1 flex items-center justify-center">
+            <div className="space-y-3 w-48">
+              <div className="h-3 bg-muted/50 rounded animate-pulse" />
+              <div className="h-3 bg-muted/50 rounded animate-pulse w-3/4" />
+              <div className="h-3 bg-muted/50 rounded animate-pulse w-1/2" />
+            </div>
+          </div>
         ) : (
           /* Index view: getting started or sidebar navigation */
           <div className="flex-1 flex items-start justify-center overflow-y-auto">

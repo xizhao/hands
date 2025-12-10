@@ -795,23 +795,31 @@ async fn start_runtime(
     workbook_id: String,
     directory: String,
 ) -> Result<DevServerStatus, String> {
-    let state_guard = state.lock().await;
+    println!("[tauri] start_runtime: {} at {}", workbook_id, directory);
 
-    // Check if already tracked in our state
-    if let Some(runtime) = state_guard.runtimes.get(&workbook_id) {
-        return Ok(DevServerStatus {
-            running: true,
-            workbook_id,
-            directory,
-            runtime_port: runtime.runtime_port,
-            postgres_port: runtime.postgres_port,
-            worker_port: runtime.worker_port,
-            message: "Runtime already running".to_string(),
-        });
+    // Stop ALL existing runtimes first (they share port 55000)
+    {
+        let mut state_guard = state.lock().await;
+        let existing_ids: Vec<String> = state_guard.runtimes.keys().cloned().collect();
+
+        for existing_id in existing_ids {
+            if let Some(mut runtime) = state_guard.runtimes.remove(&existing_id) {
+                println!("[tauri] Stopping existing runtime: {}", existing_id);
+                // Try graceful shutdown
+                let stop_url = format!("http://localhost:{}/stop", runtime.runtime_port);
+                let _ = reqwest::Client::new()
+                    .post(&stop_url)
+                    .timeout(Duration::from_secs(2))
+                    .send()
+                    .await;
+                // Force kill
+                let _ = runtime.child.kill().await;
+            }
+        }
     }
 
-    // Drop lock while spawning
-    drop(state_guard);
+    // Small delay to ensure port is released
+    tokio::time::sleep(Duration::from_millis(500)).await;
 
     let (child, runtime_port, postgres_port, worker_port) =
         spawn_runtime(&workbook_id, &directory).await?;

@@ -2,7 +2,14 @@ import { createRoute, Outlet, useNavigate } from "@tanstack/react-router";
 import { useEffect, useRef, useCallback } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { useUIStore } from "@/stores/ui";
-import { useWorkbooks, useCreateWorkbook, useOpenWorkbook, RuntimeStatus } from "@/hooks/useWorkbook";
+import { useWorkbooks, useCreateWorkbook, useOpenWorkbook } from "@/hooks/useWorkbook";
+
+// Tauri command response type (matches Rust backend)
+interface TauriRuntimeStatus {
+  workbook_id: string;
+  directory: string;
+  runtime_port: number;
+}
 import type { Workbook } from "@/lib/workbook";
 import { useSessions } from "@/hooks/useSession";
 import { startSSESync, setNavigateCallback } from "@/lib/sse";
@@ -56,7 +63,7 @@ function NotebookLayout() {
   // Start database change SSE subscription
   useDbSync(handleDbChange);
 
-  const { setActiveWorkbook, setActiveSession, activeSessionId } = useUIStore();
+  const { setActiveWorkbook, setActiveSession, activeSessionId, setRuntimePort } = useUIStore();
   const { data: sessions, isLoading: sessionsLoading } = useSessions();
   const { data: workbooks, isLoading: workbooksLoading } = useWorkbooks();
   const createWorkbook = useCreateWorkbook();
@@ -74,10 +81,11 @@ function NotebookLayout() {
 
     initializingRef.current = true;
 
-    invoke<RuntimeStatus | null>("get_active_runtime").then((active) => {
+    invoke<TauriRuntimeStatus | null>("get_active_runtime").then((active) => {
       if (active) {
-        console.log("[notebook] Tauri has active runtime:", active.workbook_id);
+        console.log("[notebook] Tauri has active runtime:", active.workbook_id, "on port", active.runtime_port);
         setActiveWorkbook(active.workbook_id, active.directory);
+        setRuntimePort(active.runtime_port);
         initialized.current = true;
         initializingRef.current = false;
         return;
@@ -131,11 +139,11 @@ function NotebookLayout() {
     }
   }, [sessions, sessionsLoading, activeSessionId, setActiveSession]);
 
-  // Get workbook ID for RuntimeProvider
-  const { activeWorkbookId } = useUIStore();
+  // Get workbook ID and runtime port for RuntimeProvider
+  const { activeWorkbookId, runtimePort } = useUIStore();
 
   return (
-    <RuntimeProvider workbookId={activeWorkbookId}>
+    <RuntimeProvider workbookId={activeWorkbookId} initialPort={runtimePort ?? undefined}>
       <NotebookShell>
         <Outlet />
       </NotebookShell>

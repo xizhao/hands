@@ -1,17 +1,16 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { invoke } from "@tauri-apps/api/core";
-import { useState, useEffect, useCallback } from "react";
 import type { Workbook } from "@/lib/workbook";
-import { PORTS } from "@/lib/ports";
 import { useUIStore } from "@/stores/ui";
+import { useRuntime, type WorkbookPage } from "@/providers/RuntimeProvider";
 
 interface CreateWorkbookRequest {
   name: string;
   description?: string;
 }
 
-// Runtime status from the runtime server
-export interface RuntimeStatus {
+// Tauri command response type (matches Rust backend)
+interface TauriRuntimeStatus {
   running: boolean;
   workbook_id: string;
   directory: string;
@@ -20,6 +19,7 @@ export interface RuntimeStatus {
   worker_port: number;
   message: string;
 }
+
 
 // Block reference error
 export interface BlockRefError {
@@ -149,6 +149,7 @@ export function useDeleteWorkbook() {
 export function useOpenWorkbook() {
   const updateWorkbook = useUpdateWorkbook();
   const queryClient = useQueryClient();
+  const setRuntimePort = useUIStore.getState().setRuntimePort;
 
   return useMutation({
     mutationKey: ["workbook", "open"],
@@ -161,30 +162,30 @@ export function useOpenWorkbook() {
       };
       await updateWorkbook.mutateAsync(updated);
 
-      // CRITICAL: Always set active workbook FIRST so OpenCode restarts with correct directory
-      // This must happen before runtime starts, and even if runtime fails
-      console.log("[runtime] Setting active workbook (restarts OpenCode with correct CWD)...");
+      // Start runtime FIRST - it's the priority (provides database, blocks, etc.)
+      // OpenCode can be restarted after with the database URL from runtime
+      let runtimePort: number | null = null;
       try {
-        await invoke("set_active_workbook", { workbookId: workbook.id });
-        console.log("[runtime] Active workbook set:", workbook.id);
-      } catch (err) {
-        console.error("[runtime] Failed to set active workbook:", err);
-        // Continue anyway - we want to at least try starting the runtime
-      }
-
-      // Start runtime for this workbook
-      try {
-        console.log("[runtime] Starting runtime for workbook:", workbook.id, "dir:", workbook.directory);
-        const status = await invoke<RuntimeStatus>("start_runtime", {
+        console.log("[useOpenWorkbook] Starting runtime for:", workbook.id);
+        const status = await invoke<TauriRuntimeStatus>("start_runtime", {
           workbookId: workbook.id,
           directory: workbook.directory,
         });
-        console.log("[runtime] Started:", JSON.stringify(status, null, 2));
+        console.log("[useOpenWorkbook] Runtime started:", status.runtime_port);
         queryClient.setQueryData(["runtime-status", workbook.id], status);
+        runtimePort = status.runtime_port;
+        setRuntimePort(status.runtime_port);
       } catch (err) {
-        console.error("[runtime] Failed to start runtime:", err);
-        // OpenCode is already restarted with correct directory, so AI features will work
-        // even if the runtime (postgres, worker) fails to start
+        console.error("[useOpenWorkbook] Failed to start runtime:", err);
+      }
+
+      // Now restart OpenCode with workbook directory (and runtime's database URL if available)
+      try {
+        console.log("[useOpenWorkbook] Setting active workbook (restarts OpenCode):", workbook.id);
+        await invoke("set_active_workbook", { workbookId: workbook.id });
+        console.log("[useOpenWorkbook] OpenCode restarted for:", workbook.id);
+      } catch (err) {
+        console.error("[useOpenWorkbook] Failed to set active workbook:", err);
       }
 
       return updated;
@@ -219,22 +220,6 @@ export function useRuntimeHealth(runtimePort: number | null) {
   });
 }
 
-// Get runtime status for a workbook - no caching, always fresh from Tauri
-export function useRuntimeStatus(workbookId: string | null) {
-  return useQuery({
-    queryKey: ["runtime-status", workbookId],
-    queryFn: async () => {
-      console.log("[runtime] Checking status for:", workbookId);
-      const status = await invoke<RuntimeStatus>("get_runtime_status", { workbookId: workbookId! });
-      console.log("[runtime] Status:", status.running ? "running" : "stopped", "ports:", status.runtime_port, status.postgres_port, status.worker_port);
-      return status;
-    },
-    enabled: !!workbookId,
-    refetchInterval: 5000,
-    staleTime: 0, // Always refetch
-    gcTime: 0, // Don't cache
-  });
-}
 
 // Start runtime
 export function useStartRuntime() {
@@ -248,7 +233,7 @@ export function useStartRuntime() {
     }: {
       workbookId: string;
       directory: string;
-    }) => invoke<RuntimeStatus>("start_runtime", { workbookId, directory }),
+    }) => invoke<TauriRuntimeStatus>("start_runtime", { workbookId, directory }),
     onSuccess: (status) => {
       queryClient.setQueryData(["runtime-status", status.workbook_id], status);
     },
@@ -262,7 +247,7 @@ export function useStopRuntime() {
   return useMutation({
     mutationKey: ["runtime", "stop"],
     mutationFn: (workbookId: string) =>
-      invoke<RuntimeStatus>("stop_runtime", { workbookId }),
+      invoke<TauriRuntimeStatus>("stop_runtime", { workbookId }),
     onSuccess: (status) => {
       queryClient.setQueryData(["runtime-status", status.workbook_id], status);
     },
@@ -306,10 +291,6 @@ export function useEvalResult(workbookId: string | null) {
   });
 }
 
-// Legacy aliases for backwards compatibility
-export const useDevServerStatus = useRuntimeStatus;
-export const useStartDevServer = useStartRuntime;
-export const useStopDevServer = useStopRuntime;
 
 // Dev server routes from eval result
 export interface DevRoute {
@@ -340,7 +321,7 @@ export interface DevServerOutputs {
 // Get dev server routes from runtime eval
 export function useDevServerRoutes(workbookId: string | null) {
   const evalResult = useEvalResult(workbookId);
-  const runtimeStatus = useRuntimeStatus(workbookId);
+  const { port } = useRuntime();
 
   return useQuery({
     queryKey: ["dev-server-routes", workbookId],
@@ -356,16 +337,15 @@ export function useDevServerRoutes(workbookId: string | null) {
       }
 
       const wrangler = evalResult.data.wrangler;
-      const workerPort = runtimeStatus.data?.worker_port ?? PORTS.WORKER;
 
       return {
         available: evalResult.data.services.worker.up,
-        url: `http://localhost:${workerPort}`,
+        url: `http://localhost:${port}`,
         routes: wrangler.routes.map((r) => ({
           method: r.method,
           path: r.path,
         })),
-        charts: [], // Charts would come from source parsing
+        charts: [],
         crons: wrangler.crons.map((c) => ({
           cron: c.schedule,
           description: c.handler,
@@ -388,16 +368,12 @@ export interface WorkbookDatabaseInfo {
 
 // Get database connection info for a workbook (from runtime)
 export function useWorkbookDatabase(workbookId: string | null) {
-  const runtimeStatus = useRuntimeStatus(workbookId);
+  const { port, isReady } = useRuntime();
 
   return useQuery({
-    queryKey: ["workbook-database", workbookId],
+    queryKey: ["workbook-database", workbookId, port],
     queryFn: async (): Promise<WorkbookDatabaseInfo | null> => {
-      // Return info if we have a valid postgres port, even if not fully "running" yet
-      const port = runtimeStatus.data?.postgres_port;
-      if (!port || port === 0) {
-        return null;
-      }
+      if (!port) return null;
 
       const dbName = `hands_${workbookId?.replace(/-/g, "_")}`;
 
@@ -410,7 +386,7 @@ export function useWorkbookDatabase(workbookId: string | null) {
         user: "hands",
       };
     },
-    enabled: !!workbookId && !!runtimeStatus.data?.postgres_port,
+    enabled: !!workbookId && !!port && isReady,
   });
 }
 
@@ -422,12 +398,11 @@ export interface TableSchema {
 
 // Get database schema for a workbook (from runtime)
 export function useDbSchema(workbookId: string | null) {
-  const runtimeStatus = useRuntimeStatus(workbookId);
+  const { port, isReady } = useRuntime();
 
   return useQuery({
-    queryKey: ["db-schema", workbookId],
+    queryKey: ["db-schema", workbookId, port],
     queryFn: async (): Promise<TableSchema[]> => {
-      const port = runtimeStatus.data?.runtime_port;
       if (!port) return [];
 
       const response = await fetch(`http://localhost:${port}/postgres/schema`);
@@ -435,168 +410,30 @@ export function useDbSchema(workbookId: string | null) {
 
       return response.json();
     },
-    enabled: !!workbookId && !!runtimeStatus.data?.runtime_port && runtimeStatus.data?.running,
-    staleTime: 30000, // Cache for 30 seconds
-    refetchInterval: 60000, // Refresh every minute
+    enabled: !!workbookId && !!port && isReady,
+    staleTime: 30000,
+    refetchInterval: 60000,
   });
 }
 
-// Legacy aliases
-export const useSstStatus = useRuntimeStatus;
-export const useSstOutputs = (directory: string | null) => {
-  return useQuery({
-    queryKey: ["sst-outputs", directory],
-    queryFn: () => Promise.resolve({ available: false, outputs: {}, routes: [] }),
-    enabled: false,
-  });
-};
 
-// ============================================================================
-// Workbook Manifest - Filesystem state as source of truth
-// ============================================================================
-
-export interface WorkbookPage {
-  id: string;
-  route: string;
-  title: string;
-  path: string;
-}
-
-export interface WorkbookBlock {
-  id: string;
-  title: string;
-  description?: string;
-  path: string;
-}
-
-export interface WorkbookSource {
-  name: string;
-  enabled: boolean;
-  schedule?: string;
-}
-
-export interface WorkbookManifest {
-  workbookId: string;
-  workbookDir: string;
-  pages: WorkbookPage[];
-  blocks: WorkbookBlock[];
-  sources: WorkbookSource[];
-  tables: string[];
-  isEmpty: boolean;
-}
-
-// Get workbook manifest (filesystem state) - SSE-based for real-time updates
-export function useWorkbookManifest(workbookId: string | null) {
-  const runtimeStatus = useRuntimeStatus(workbookId);
-  const queryClient = useQueryClient();
-  // Use runtime port from status - only connect when we have a valid port from Tauri
-  // Don't fall back to default port since runtime may be on a different port
-  const port = runtimeStatus.data?.runtime_port;
-  // Only connect when we have a valid port (non-zero) from the runtime status
-  const shouldConnect = !!workbookId && !!port && port > 0;
-
-  console.log("[manifest] useWorkbookManifest called:", {
-    workbookId,
-    port,
-    runtimeRunning: runtimeStatus.data?.running,
-    shouldConnect,
-  });
-
-  const [manifest, setManifest] = useState<WorkbookManifest | null>(null);
-  const [isConnected, setIsConnected] = useState(false);
-  const [error, setError] = useState<Error | null>(null);
-
-  useEffect(() => {
-    console.log("[manifest] useEffect running, shouldConnect:", shouldConnect, "port:", port);
-
-    if (!shouldConnect) {
-      console.log("[manifest] Not connecting - shouldConnect is false");
-      setManifest(null);
-      setIsConnected(false);
-      return;
-    }
-
-    const url = `http://localhost:${port}/workbook/manifest/watch`;
-    console.log("[manifest] Connecting to SSE:", url);
-    const eventSource = new EventSource(url);
-
-    eventSource.onopen = () => {
-      console.log("[manifest] SSE connection opened");
-      setIsConnected(true);
-      setError(null);
-    };
-
-    eventSource.onmessage = (event) => {
-      try {
-        const data = JSON.parse(event.data) as WorkbookManifest;
-        console.log("[manifest] SSE message received:", {
-          workbookId: data.workbookId,
-          pageCount: data.pages?.length ?? 0,
-          blockCount: data.blocks?.length ?? 0,
-          tableCount: data.tables?.length ?? 0,
-          pages: data.pages?.map(p => ({ id: p.id, title: p.title })),
-        });
-        setManifest(data);
-        // Update React Query cache for components using queryKey
-        queryClient.setQueryData(["workbook-manifest", workbookId], data);
-        // Invalidate page content queries - triggers refetch for any open pages
-        console.log("[manifest] Invalidating page-content and block queries");
-        queryClient.invalidateQueries({ queryKey: ["page-content"] });
-        // Invalidate block queries if blocks changed
-        queryClient.invalidateQueries({ queryKey: ["block"] });
-      } catch (err) {
-        console.error("[manifest] Failed to parse SSE data:", err);
-      }
-    };
-
-    eventSource.onerror = (err) => {
-      console.error("[manifest] SSE connection error:", err);
-      setIsConnected(false);
-      // EventSource will auto-reconnect
-    };
-
-    return () => {
-      console.log("[manifest] Closing SSE connection");
-      eventSource.close();
-      setIsConnected(false);
-    };
-  }, [shouldConnect, port, queryClient, workbookId]);
-
-  // Provide a refresh function for manual refresh (e.g., after mutations)
-  const refresh = useCallback(async () => {
-    if (!port) return null;
-    try {
-      const response = await fetch(`http://localhost:${port}/workbook/manifest`);
-      if (!response.ok) return null;
-      const data = await response.json();
-      setManifest(data);
-      queryClient.setQueryData(["workbook-manifest", workbookId], data);
-      return data;
-    } catch {
-      return null;
-    }
-  }, [port, workbookId, queryClient]);
-
-  return {
-    data: manifest,
-    isLoading: !manifest && shouldConnect,
-    isConnected,
-    error,
-    refetch: refresh,
-  };
-}
+// Re-export types from RuntimeProvider
+export type {
+  WorkbookPage,
+  WorkbookBlock,
+  WorkbookSource,
+  WorkbookManifest,
+} from "@/providers/RuntimeProvider";
 
 // Create a new page
 export function useCreatePage() {
-  const workbookId = useUIStore((s) => s.activeWorkbookId);
-  const runtimeStatus = useRuntimeStatus(workbookId);
+  const { port, isReady } = useRuntime();
   const queryClient = useQueryClient();
 
   return useMutation({
     mutationKey: ["page", "create"],
     mutationFn: async ({ title }: { title?: string }) => {
-      const port = runtimeStatus.data?.runtime_port;
-      if (!port || port <= 0) throw new Error("Runtime not connected");
+      if (!isReady || !port) throw new Error("Runtime not connected");
 
       const response = await fetch(`http://localhost:${port}/workbook/pages/create`, {
         method: "POST",
@@ -619,9 +456,7 @@ export function useCreatePage() {
 
 // Get page content (MDX) by pageId
 export function usePageContent(pageId: string | null) {
-  const workbookId = useUIStore((s) => s.activeWorkbookId);
-  const runtimeStatus = useRuntimeStatus(workbookId);
-  const port = runtimeStatus.data?.runtime_port;
+  const { port, isReady } = useRuntime();
 
   return useQuery({
     queryKey: ["page-content", pageId, port],
@@ -637,23 +472,21 @@ export function usePageContent(pageId: string | null) {
       const data = await response.json();
       return data.content;
     },
-    enabled: !!port && port > 0 && !!pageId,
-    staleTime: 0, // Always refetch when pageId changes
-    refetchInterval: 2000, // Poll every 2 seconds for external changes (hot reload)
+    enabled: isReady && !!port && !!pageId,
+    staleTime: 0,
+    refetchInterval: 2000,
   });
 }
 
 // Save page content (MDX)
 export function useSavePageContent() {
-  const workbookId = useUIStore((s) => s.activeWorkbookId);
-  const runtimeStatus = useRuntimeStatus(workbookId);
-  const port = runtimeStatus.data?.runtime_port;
+  const { port, isReady } = useRuntime();
   const queryClient = useQueryClient();
 
   return useMutation({
     mutationKey: ["page-content", "save"],
     mutationFn: async ({ pageId, content }: { pageId: string; content: string }) => {
-      if (!port || port <= 0) throw new Error("No runtime connected");
+      if (!isReady || !port) throw new Error("No runtime connected");
 
       const response = await fetch(`http://localhost:${port}/workbook/pages/${pageId}`, {
         method: "PUT",
@@ -677,15 +510,13 @@ export function useSavePageContent() {
 
 // Update page title (frontmatter only)
 export function useUpdatePageTitle() {
-  const workbookId = useUIStore((s) => s.activeWorkbookId);
-  const runtimeStatus = useRuntimeStatus(workbookId);
-  const port = runtimeStatus.data?.runtime_port;
+  const { port, isReady } = useRuntime();
   const queryClient = useQueryClient();
 
   return useMutation({
     mutationKey: ["page-title", "update"],
     mutationFn: async ({ pageId, title }: { pageId: string; title: string }) => {
-      if (!port || port <= 0) throw new Error("No runtime connected");
+      if (!isReady || !port) throw new Error("No runtime connected");
 
       const response = await fetch(`http://localhost:${port}/workbook/pages/${pageId}/title`, {
         method: "PATCH",
@@ -716,8 +547,7 @@ export interface AddSourceResult {
 }
 
 export function useAddSource() {
-  const workbookId = useUIStore((s) => s.activeWorkbookId);
-  const runtimeStatus = useRuntimeStatus(workbookId);
+  const { port, isReady } = useRuntime();
   const queryClient = useQueryClient();
 
   return useMutation({
@@ -729,8 +559,7 @@ export function useAddSource() {
       sourceName: string;
       schedule?: string;
     }) => {
-      const port = runtimeStatus.data?.runtime_port;
-      if (!port || port <= 0) throw new Error("Runtime not connected");
+      if (!isReady || !port) throw new Error("Runtime not connected");
 
       const response = await fetch(`http://localhost:${port}/workbook/sources/add`, {
         method: "POST",
@@ -762,14 +591,12 @@ export interface AvailableSource {
 }
 
 export function useAvailableSources() {
-  const workbookId = useUIStore((s) => s.activeWorkbookId);
-  const runtimeStatus = useRuntimeStatus(workbookId);
-  const port = runtimeStatus.data?.runtime_port;
+  const { port, isReady } = useRuntime();
 
   return useQuery({
     queryKey: ["available-sources", port],
     queryFn: async (): Promise<AvailableSource[]> => {
-      if (!port || port <= 0) return [];
+      if (!port) return [];
 
       const response = await fetch(`http://localhost:${port}/workbook/sources/available`);
       if (!response.ok) return [];
@@ -777,8 +604,8 @@ export function useAvailableSources() {
       const data = await response.json();
       return data.sources ?? [];
     },
-    enabled: !!port && port > 0,
-    staleTime: 60000, // Cache for 1 minute
+    enabled: isReady && !!port,
+    staleTime: 60000,
   });
 }
 
@@ -791,15 +618,13 @@ export interface ImportFileResult {
 }
 
 export function useImportFile() {
-  const workbookId = useUIStore((s) => s.activeWorkbookId);
-  const runtimeStatus = useRuntimeStatus(workbookId);
+  const { port, isReady } = useRuntime();
   const queryClient = useQueryClient();
 
   return useMutation({
     mutationKey: ["file", "import"],
     mutationFn: async ({ file }: { file: File }) => {
-      const port = runtimeStatus.data?.runtime_port;
-      if (!port || port <= 0) throw new Error("Runtime not connected");
+      if (!isReady || !port) throw new Error("Runtime not connected");
 
       const formData = new FormData();
       formData.append("file", file);

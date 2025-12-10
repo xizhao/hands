@@ -235,3 +235,166 @@ export function useBlockFetcher() {
   return { fetch, invalidate };
 }
 
+// ============================================
+// Block Source API - for visual block editor
+// ============================================
+
+export interface BlockSourceResult {
+  success: boolean;
+  blockId: string;
+  filePath?: string;
+  source?: string;
+  error?: string;
+}
+
+/**
+ * Fetch block source code
+ */
+export async function fetchBlockSource(
+  port: number,
+  blockId: string
+): Promise<BlockSourceResult> {
+  try {
+    const response = await fetch(`http://localhost:${port}/workbook/blocks/${blockId}/source`);
+    return await response.json();
+  } catch (error) {
+    return {
+      success: false,
+      blockId,
+      error: String(error),
+    };
+  }
+}
+
+/**
+ * Save block source code
+ */
+export async function saveBlockSource(
+  port: number,
+  blockId: string,
+  source: string
+): Promise<BlockSourceResult> {
+  try {
+    const response = await fetch(`http://localhost:${port}/workbook/blocks/${blockId}/source`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ source }),
+    });
+    return await response.json();
+  } catch (error) {
+    return {
+      success: false,
+      blockId,
+      error: String(error),
+    };
+  }
+}
+
+/**
+ * Create a new block
+ */
+export async function createBlock(
+  port: number,
+  blockId: string,
+  source?: string
+): Promise<BlockSourceResult> {
+  try {
+    const response = await fetch(`http://localhost:${port}/workbook/blocks`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ blockId, source }),
+    });
+    return await response.json();
+  } catch (error) {
+    return {
+      success: false,
+      blockId,
+      error: String(error),
+    };
+  }
+}
+
+/**
+ * Delete a block
+ */
+export async function deleteBlock(
+  port: number,
+  blockId: string
+): Promise<BlockSourceResult> {
+  try {
+    const response = await fetch(`http://localhost:${port}/workbook/blocks/${blockId}`, {
+      method: "DELETE",
+    });
+    return await response.json();
+  } catch (error) {
+    return {
+      success: false,
+      blockId,
+      error: String(error),
+    };
+  }
+}
+
+/**
+ * React hook for fetching block source code
+ */
+export function useBlockSource(blockId: string | null) {
+  const { port } = useRuntime();
+  const queryClient = useQueryClient();
+
+  const query = useQuery({
+    queryKey: ["blockSource", port, blockId],
+    queryFn: async () => {
+      if (!blockId || !port) {
+        return { success: false, blockId: blockId ?? "", error: "Not ready" };
+      }
+      return fetchBlockSource(port, blockId);
+    },
+    enabled: !!blockId && !!port,
+    staleTime: 5_000, // Shorter stale time for source code
+    refetchOnWindowFocus: false,
+  });
+
+  const save = useCallback(
+    async (source: string) => {
+      if (!blockId || !port) {
+        return { success: false, blockId: blockId ?? "", error: "Not ready" };
+      }
+
+      const result = await saveBlockSource(port, blockId, source);
+
+      if (result.success) {
+        // Update cache
+        queryClient.setQueryData(["blockSource", port, blockId], {
+          ...result,
+          source,
+        });
+
+        // Invalidate rendered block cache to refresh preview
+        queryClient.invalidateQueries({
+          queryKey: ["block", port, blockId],
+        });
+      }
+
+      return result;
+    },
+    [blockId, port, queryClient]
+  );
+
+  const invalidate = useCallback(() => {
+    if (blockId && port) {
+      queryClient.invalidateQueries({
+        queryKey: ["blockSource", port, blockId],
+      });
+    }
+  }, [blockId, port, queryClient]);
+
+  return {
+    ...query,
+    save,
+    invalidate,
+    source: query.data?.source,
+    filePath: query.data?.filePath,
+  };
+}
+

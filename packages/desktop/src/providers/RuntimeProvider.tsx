@@ -7,9 +7,9 @@
  * - Ready state
  *
  * Architecture:
- * - Directly connects to runtime (no Tauri polling middleman)
- * - Uses SSE for real-time manifest updates
- * - Clear state machine: idle → connecting → booting → ready → error
+ * - Polls runtime health and manifest every 1s
+ * - Simple polling instead of SSE (more reliable, no WebKit issues)
+ * - Clear state machine: idle → connecting → ready → error
  */
 
 import {
@@ -41,7 +41,7 @@ export interface WorkbookBlock {
 
 export interface WorkbookSource {
   name: string;
-  title: string;
+  title?: string;
   description?: string;
   enabled: boolean;
 }
@@ -51,15 +51,14 @@ export interface WorkbookManifest {
   workbookDir: string;
   pages: WorkbookPage[];
   blocks: WorkbookBlock[];
-  sources: WorkbookSource[];
-  tables: string[];
+  sources?: WorkbookSource[];
+  tables?: string[];
   isEmpty: boolean;
 }
 
 export type RuntimeState =
   | "idle" // No workbook selected
   | "connecting" // Trying to connect to runtime
-  | "booting" // Runtime starting up
   | "ready" // Runtime fully ready
   | "error"; // Connection failed
 
@@ -78,17 +77,18 @@ export interface RuntimeContextValue {
   connect: (port: number) => void;
   disconnect: () => void;
   invalidateManifest: () => void;
+  refetchManifest: () => Promise<void>;
 }
 
 const RuntimeContext = createContext<RuntimeContextValue | null>(null);
 
-// Default ports
+// Default port
 const DEFAULT_PORT = 55000;
+const POLL_INTERVAL = 1000; // 1 second
 
 interface RuntimeProviderProps {
   children: ReactNode;
   workbookId: string | null;
-  /** Optional initial port - if not provided, will try default port */
   initialPort?: number;
 }
 
@@ -103,31 +103,51 @@ export function RuntimeProvider({
   const [error, setError] = useState<string | null>(null);
 
   const queryClient = useQueryClient();
-  const eventSourceRef = useRef<EventSource | null>(null);
-  const healthCheckIntervalRef = useRef<NodeJS.Timeout | null>(null);
-  const retryTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const pollIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  const lastManifestRef = useRef<string>("");
 
   // Cleanup function
   const cleanup = useCallback(() => {
-    if (eventSourceRef.current) {
-      console.log("[runtime-provider] Closing SSE connection");
-      eventSourceRef.current.close();
-      eventSourceRef.current = null;
+    if (pollIntervalRef.current) {
+      clearInterval(pollIntervalRef.current);
+      pollIntervalRef.current = null;
     }
-    if (healthCheckIntervalRef.current) {
-      clearInterval(healthCheckIntervalRef.current);
-      healthCheckIntervalRef.current = null;
+  }, []);
+
+  // Fetch manifest from runtime
+  const fetchManifest = useCallback(async (runtimePort: number): Promise<WorkbookManifest | null> => {
+    try {
+      const response = await fetch(`http://localhost:${runtimePort}/workbook/manifest`, {
+        signal: AbortSignal.timeout(3000),
+      });
+      if (response.ok) {
+        return await response.json();
+      }
+    } catch {
+      // Silent fail - polling will retry
     }
-    if (retryTimeoutRef.current) {
-      clearTimeout(retryTimeoutRef.current);
-      retryTimeoutRef.current = null;
+    return null;
+  }, []);
+
+  // Check health
+  const checkHealth = useCallback(async (runtimePort: number): Promise<boolean> => {
+    try {
+      const response = await fetch(`http://localhost:${runtimePort}/health`, {
+        signal: AbortSignal.timeout(2000),
+      });
+      if (response.ok) {
+        const health = await response.json();
+        return health.status === "ready";
+      }
+    } catch {
+      // Silent fail
     }
+    return false;
   }, []);
 
   // Connect to runtime
   const connect = useCallback(
     (runtimePort: number) => {
-      console.log("[runtime-provider] Connecting to port:", runtimePort);
       cleanup();
       setPort(runtimePort);
       setState("connecting");
@@ -138,12 +158,12 @@ export function RuntimeProvider({
 
   // Disconnect
   const disconnect = useCallback(() => {
-    console.log("[runtime-provider] Disconnecting");
     cleanup();
     setState("idle");
     setPort(0);
     setManifest(null);
     setError(null);
+    lastManifestRef.current = "";
   }, [cleanup]);
 
   // Invalidate manifest queries
@@ -152,148 +172,73 @@ export function RuntimeProvider({
     queryClient.invalidateQueries({ queryKey: ["block"] });
   }, [queryClient]);
 
-  // Auto-discover runtime when workbook changes
+  // Refetch manifest manually
+  const refetchManifest = useCallback(async () => {
+    if (port > 0) {
+      const data = await fetchManifest(port);
+      if (data) {
+        setManifest(data);
+        invalidateManifest();
+      }
+    }
+  }, [port, fetchManifest, invalidateManifest]);
+
+  // Handle workbook changes - reset and start polling
   useEffect(() => {
     if (!workbookId) {
       disconnect();
       return;
     }
 
-    // Try to discover runtime port
-    const discoverRuntime = async () => {
-      setState("connecting");
+    // Reset state when workbook changes
+    setManifest(null);
+    setError(null);
+    lastManifestRef.current = "";
+    cleanup();
 
-      // Try the provided initial port or default
-      const portToTry = initialPort || DEFAULT_PORT;
+    const portToUse = initialPort || DEFAULT_PORT;
+    setPort(portToUse);
+    setState("connecting");
 
-      try {
-        const healthUrl = `http://localhost:${portToTry}/health`;
-        console.log("[runtime-provider] Checking health at:", healthUrl);
+    // Poll function - checks health and fetches manifest
+    const poll = async () => {
+      const isReady = await checkHealth(portToUse);
 
-        const response = await fetch(healthUrl, {
-          signal: AbortSignal.timeout(3000),
-        });
-
-        if (response.ok) {
-          const health = await response.json();
-          console.log("[runtime-provider] Health response:", health);
-
-          if (health.status === "ready") {
-            setPort(portToTry);
-            setState("ready");
-          } else if (health.status === "booting") {
-            setPort(portToTry);
-            setState("booting");
-          } else {
-            setPort(portToTry);
-            setState("connecting");
+      if (isReady) {
+        const data = await fetchManifest(portToUse);
+        if (data) {
+          // Only update if manifest changed
+          const manifestJson = JSON.stringify(data);
+          if (manifestJson !== lastManifestRef.current) {
+            lastManifestRef.current = manifestJson;
+            setManifest(data);
+            invalidateManifest();
           }
-          return;
+          setState("ready");
         }
-      } catch (e) {
-        console.log("[runtime-provider] Health check failed, will retry...", e);
-      }
-
-      // Retry after delay
-      retryTimeoutRef.current = setTimeout(() => {
-        if (workbookId) {
-          discoverRuntime();
-        }
-      }, 2000);
-    };
-
-    discoverRuntime();
-
-    return () => {
-      if (retryTimeoutRef.current) {
-        clearTimeout(retryTimeoutRef.current);
+      } else {
+        setState("connecting");
       }
     };
-  }, [workbookId, initialPort, disconnect]);
+
+    // Initial poll
+    poll();
+
+    // Start polling interval
+    pollIntervalRef.current = setInterval(poll, POLL_INTERVAL);
+
+    return cleanup;
+  }, [workbookId, initialPort]); // Only re-run when workbook or port changes
 
   // Sync port to UI store for backwards compatibility
   const setRuntimePort = useUIStore((s) => s.setRuntimePort);
   useEffect(() => {
     if (state === "ready" && port > 0) {
-      console.log("[runtime-provider] Syncing port to UI store:", port);
       setRuntimePort(port);
     } else if (state === "idle") {
       setRuntimePort(null);
     }
   }, [state, port, setRuntimePort]);
-
-  // Connect SSE when we have a port
-  useEffect(() => {
-    if (!port || state === "idle") {
-      return;
-    }
-
-    const sseUrl = `http://localhost:${port}/workbook/manifest/sse`;
-    console.log("[runtime-provider] Connecting to SSE:", sseUrl);
-
-    const eventSource = new EventSource(sseUrl);
-    eventSourceRef.current = eventSource;
-
-    eventSource.onopen = () => {
-      console.log("[runtime-provider] SSE connected");
-    };
-
-    eventSource.onmessage = (event) => {
-      try {
-        const data = JSON.parse(event.data) as WorkbookManifest;
-        console.log("[runtime-provider] Manifest received:", {
-          pages: data.pages?.length ?? 0,
-          blocks: data.blocks?.length ?? 0,
-          tables: data.tables?.length ?? 0,
-        });
-        setManifest(data);
-        setState("ready");
-        setError(null);
-
-        // Invalidate related queries when manifest changes
-        invalidateManifest();
-      } catch (e) {
-        console.error("[runtime-provider] Failed to parse manifest:", e);
-      }
-    };
-
-    eventSource.onerror = (e) => {
-      console.error("[runtime-provider] SSE error:", e);
-
-      // Don't immediately error - might be temporary
-      if (eventSource.readyState === EventSource.CLOSED) {
-        console.log("[runtime-provider] SSE connection closed, will retry");
-        setState("connecting");
-      }
-    };
-
-    // Periodic health check to update state
-    healthCheckIntervalRef.current = setInterval(async () => {
-      try {
-        const response = await fetch(`http://localhost:${port}/health`, {
-          signal: AbortSignal.timeout(3000),
-        });
-        if (response.ok) {
-          const health = await response.json();
-          if (health.status === "ready" && state !== "ready") {
-            setState("ready");
-          } else if (health.status === "booting" && state === "ready") {
-            setState("booting");
-          }
-        }
-      } catch {
-        // Ignore health check failures - SSE will reconnect
-      }
-    }, 5000);
-
-    return () => {
-      console.log("[runtime-provider] Cleaning up SSE");
-      eventSource.close();
-      if (healthCheckIntervalRef.current) {
-        clearInterval(healthCheckIntervalRef.current);
-      }
-    };
-  }, [port, state, invalidateManifest]);
 
   const value: RuntimeContextValue = {
     state,
@@ -301,10 +246,11 @@ export function RuntimeProvider({
     manifest,
     error,
     isReady: state === "ready",
-    isConnecting: state === "connecting" || state === "booting",
+    isConnecting: state === "connecting",
     connect,
     disconnect,
     invalidateManifest,
+    refetchManifest,
   };
 
   return (
@@ -312,7 +258,7 @@ export function RuntimeProvider({
   );
 }
 
-// Hook to access runtime context - THE ONLY HOOK YOU NEED
+// Hook to access runtime context
 export function useRuntime(): RuntimeContextValue {
   const context = useContext(RuntimeContext);
   if (!context) {

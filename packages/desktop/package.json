@@ -13,11 +13,14 @@
     "tauri": "tauri",
     "build:docs": "cd ../../docs && bun run build",
     "cleanup": "lsof -ti:1420,55300 | xargs kill -9 2>/dev/null || true",
-    "tauri:dev": "bun run cleanup && bun run build:docs && tauri dev",
+    "tauri:dev": "bun run cleanup && tauri dev",
     "tauri:build": "bun run build:docs && tauri build"
   },
   "dependencies": {
     "@ariakit/react": "^0.4.20",
+    "@craftjs/core": "^0.2.12",
+    "@craftjs/layers": "^0.2.7",
+    "@craftjs/utils": "^0.2.5",
     "@emoji-mart/data": "^1.2.1",
     "@hands/stdlib": "workspace:*",
     "@opencode-ai/sdk": "^1.0.134",

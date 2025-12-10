@@ -671,10 +671,10 @@ export class BlockParser {
       const interpolations: Array<{ index: number; expression: string }> = []
 
       if (Node.isNoSubstitutionTemplateLiteral(templateLiteral)) {
-        sql = templateLiteral.getLiteralValue()
+        sql = templateLiteral.getLiteralText()
       } else if (Node.isTemplateExpression(templateLiteral)) {
         // Has interpolations
-        sql = templateLiteral.getHead().getLiteralValue()
+        sql = templateLiteral.getHead().getLiteralText()
 
         const spans = templateLiteral.getTemplateSpans()
         for (let i = 0; i < spans.length; i++) {
@@ -684,7 +684,7 @@ export class BlockParser {
             expression: span.getExpression().getText(),
           })
           sql += `$${i + 1}` // Placeholder
-          sql += span.getLiteral().getLiteralValue()
+          sql += span.getLiteral().getLiteralText()
         }
       }
 
