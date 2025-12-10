@@ -83,12 +83,10 @@ export async function serveBlock(options: BlockServeOptions): Promise<BlockServe
 }
 
 /**
- * Render an error message as HTML
+ * Render an error message as HTML (inline, no container styling)
  */
 function renderError(message: string): string {
-  return `<div class="p-4 border border-red-200 bg-red-50 text-red-700 rounded-lg">
-  <strong>Block Error:</strong> ${escapeHtml(message)}
-</div>`
+  return `<span style="color:#dc2626">${escapeHtml(message)}</span>`
 }
 
 /**
@@ -103,26 +101,3 @@ function escapeHtml(text: string): string {
     .replace(/'/g, "&#039;")
 }
 
-/**
- * Wrap block HTML with a container
- */
-export function wrapBlockHtml(html: string, blockId: string): string {
-  return `<!DOCTYPE html>
-<html>
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <script src="https://cdn.tailwindcss.com"></script>
-  <style>
-    body {
-      font-family: system-ui, -apple-system, sans-serif;
-      margin: 0;
-      padding: 0;
-    }
-  </style>
-</head>
-<body class="bg-transparent" data-block-id="${blockId}">
-  ${html}
-</body>
-</html>`
-}

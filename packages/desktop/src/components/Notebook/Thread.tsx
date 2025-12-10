@@ -191,13 +191,7 @@ export function Thread({ expanded, onCollapse, onExpand }: ThreadProps) {
 
       {/* Messages - expand upward when thread is open */}
       {expanded && hasMessages && (
-        <div
-          className="mb-1.5"
-          style={{
-            maskImage: "linear-gradient(to bottom, transparent 0%, black 48px, black 100%)",
-            WebkitMaskImage: "linear-gradient(to bottom, transparent 0%, black 48px, black 100%)",
-          }}
-        >
+        <div className="mb-1.5">
           <ScrollArea className="max-h-[calc(100vh-12rem)]">
               <div className="space-y-1.5 px-1 pb-2">
                 {/* Messages (oldest to newest, bottom-aligned) */}

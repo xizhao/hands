@@ -41,19 +41,22 @@ export function BlockElement(props: PlateElementProps) {
   const loading = isLoading || isRefetching;
 
   return (
-    <PlateElement {...props}>
-      <div
+    <PlateElement {...props} className="inline">
+      <span
         contentEditable={false}
-        className="relative my-2 group"
+        className={cn(
+          "relative inline group rounded transition-colors duration-150",
+          isHovered && "ring-1 ring-border/50"
+        )}
         onMouseEnter={() => setIsHovered(true)}
         onMouseLeave={() => setIsHovered(false)}
       >
-        {/* Minimal refresh button - top right, shown on hover */}
+        {/* Refresh button - in gutter area, below drag handle */}
         <button
           onClick={handleRefresh}
           disabled={loading}
           className={cn(
-            'absolute -top-1 -right-1 z-10 p-1 rounded-full',
+            'absolute -left-8 top-6 z-10 p-1 rounded-full',
             'bg-muted/80 backdrop-blur-sm border border-border/50',
             'hover:bg-muted transition-all duration-150',
             isHovered || loading ? 'opacity-100' : 'opacity-0'
@@ -81,20 +84,17 @@ export function BlockElement(props: PlateElementProps) {
             {data.error}
           </span>
         ) : loading ? (
-          <div className="animate-pulse bg-muted/50 h-16 rounded" />
+          <span className="inline-block animate-pulse bg-muted/50 h-4 w-24 rounded align-middle" />
         ) : data?.html ? (
-          <div
+          <span
             dangerouslySetInnerHTML={{ __html: data.html }}
-            className="block-content [&>*:first-child]:!mt-0 [&>*:last-child]:!mb-0"
+            className="block-content"
           />
         ) : (
-          <span className="text-muted-foreground text-sm italic">
-            No content
-          </span>
+          <span className="text-muted-foreground text-sm italic">—</span>
         )}
-
         {children}
-      </div>
+      </span>
     </PlateElement>
   );
 }

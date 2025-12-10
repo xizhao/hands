@@ -109,24 +109,20 @@ export async function renderBlockById(
   blockId: string,
   props?: Record<string, unknown>
 ): Promise<BlockRenderResult> {
-  const url = `http://localhost:${port}/blocks/${blockId}`;
-  console.log("[blocks] Fetching block:", blockId, "from:", url);
+  // Build URL with props as query params if provided
+  const baseUrl = `http://localhost:${port}/blocks/${blockId}`;
+  const url = props && Object.keys(props).length > 0
+    ? `${baseUrl}?props=${encodeURIComponent(JSON.stringify(props))}`
+    : baseUrl;
 
   try {
-    const response = await fetch(url, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(props ?? {}),
-    });
-
-    console.log("[blocks] Response status:", response.status, response.statusText);
-    const html = await response.text();
-    console.log("[blocks] Response length:", html.length);
+    const response = await fetch(url);
 
     if (!response.ok) {
       return { html: "", error: `Render failed: ${response.statusText}` };
     }
 
+    const html = await response.text();
     return { html };
   } catch (error) {
     console.error("[blocks] Fetch error:", error);

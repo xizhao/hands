@@ -33,7 +33,7 @@ import { EmptyWorkbookState } from "./EmptyWorkbookState";
 import { pageRoute } from "@/routes/_notebook/page.$pageId";
 import { indexRoute } from "@/routes/_notebook/index";
 import { ChatBar } from "@/components/ChatBar";
-import { Thread } from "@/components/legacy/Thread";
+import { Thread } from "@/components/Notebook/Thread";
 import { FileDropOverlay } from "@/components/FileDropOverlay";
 import { RightPanel } from "./panels/RightPanel";
 import { NewWorkbookModal } from "@/components/NewWorkbookModal";

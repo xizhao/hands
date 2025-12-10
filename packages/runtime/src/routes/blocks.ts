@@ -31,13 +31,18 @@ export function registerBlocksRoutes(router: Router, getState: () => RuntimeStat
       body: req.method !== "GET" && req.method !== "HEAD" ? req.body : undefined,
     });
 
-    // Return the worker's response
-    return new Response(workerResponse.body, {
+    // Get the response body as text (this decompresses if needed)
+    const body = await workerResponse.text();
+
+    // Build response headers, excluding Content-Encoding to avoid double-encoding issues
+    const headers: Record<string, string> = {
+      "Content-Type": workerResponse.headers.get("Content-Type") || "text/html",
+      "Access-Control-Allow-Origin": "*",
+    };
+
+    return new Response(body, {
       status: workerResponse.status,
-      headers: {
-        ...Object.fromEntries(workerResponse.headers.entries()),
-        "Access-Control-Allow-Origin": "*",
-      },
+      headers,
     });
   });
 }
