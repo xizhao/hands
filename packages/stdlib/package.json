@@ -8,6 +8,7 @@
     ".": "./src/index.ts",
     "./static": "./src/components/static/index.ts",
     "./registry": "./src/registry.json",
+    "./sources/registry.json": "./src/sources/registry.json",
     "./components/*": "./src/components/*"
   },
   "scripts": {

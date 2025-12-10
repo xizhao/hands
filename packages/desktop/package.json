@@ -5,18 +5,16 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "dev:server": "bunx opencode-ai serve --port 55300",
-    "dev:all": "concurrently -n server,vite -c blue,green \"bun run dev:server\" \"bun run dev\"",
-    "build": "bun run bundle && tsc -b && vite build",
-    "bundle": "bun run scripts/bundle-plugin.ts",
-    "bundle:watch": "bun run scripts/bundle-plugin.ts --watch",
+    "dev:server": "bun run ../agent/src/index.ts",
+    "dev:all": "concurrently -n agent,vite -c blue,green \"bun run dev:server\" \"bun run dev\"",
+    "build": "tsc -b && vite build",
     "typecheck": "tsc --noEmit",
     "preview": "vite preview",
     "tauri": "tauri",
     "build:docs": "cd ../../docs && bun run build",
     "cleanup": "lsof -ti:1420,55300 | xargs kill -9 2>/dev/null || true",
-    "tauri:dev": "bun run cleanup && bun run build:docs && bun run bundle && concurrently -n bundle,tauri -c yellow,green -k \"bun run bundle:watch\" \"tauri dev\"",
-    "tauri:build": "bun run build:docs && bun run bundle && tauri build"
+    "tauri:dev": "bun run cleanup && bun run build:docs && tauri dev",
+    "tauri:build": "bun run build:docs && tauri build"
   },
   "dependencies": {
     "@ariakit/react": "^0.4.20",

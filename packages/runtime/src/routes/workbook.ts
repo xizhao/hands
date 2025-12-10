@@ -289,8 +289,15 @@ export function registerWorkbookRoutes(router: Router, getState: () => RuntimeSt
   // GET /workbook/sources/available - List available sources from registry
   router.get("/workbook/sources/available", async () => {
     try {
-      const { listSources } = await import("@hands/stdlib/cli");
-      const sources = listSources();
+      // Import registry JSON directly instead of using CLI
+      const registry = await import("@hands/stdlib/sources/registry.json");
+      const sources = (registry.items || []).map((item: any) => ({
+        name: item.name,
+        title: item.title,
+        description: item.description,
+        secrets: item.secrets || [],
+        streams: item.streams || [],
+      }));
       return json({ sources });
     } catch (error) {
       console.error("Failed to list sources:", error);

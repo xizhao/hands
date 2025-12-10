@@ -23,9 +23,9 @@ import {
   useRuntimeStatus,
   useWorkbookManifest,
   useCreatePage,
-  useImportFile,
   useUpdatePageTitle,
 } from "@/hooks/useWorkbook";
+import { useImportWithAgent } from "@/hooks/useSession";
 import { PORTS } from "@/lib/ports";
 import type { Workbook } from "@/lib/workbook";
 import { cn } from "@/lib/utils";
@@ -86,12 +86,11 @@ export function NotebookShell({ children }: NotebookShellProps) {
   const pageId = pageMatch?.[1];
   const isOnPage = !!pageId;
 
-  const { activeWorkbookId, rightPanel, toggleRightPanel } = useUIStore();
+  const { activeWorkbookId, rightPanel, toggleRightPanel, setActiveWorkbook, setActiveSession } = useUIStore();
   const { data: workbooks } = useWorkbooks();
   const createWorkbook = useCreateWorkbook();
   const openWorkbook = useOpenWorkbook();
   const updateWorkbook = useUpdateWorkbook();
-  const { setActiveWorkbook } = useUIStore();
 
   // Data for titlebar indicators and empty state detection
   const { data: dbSchema } = useDbSchema(activeWorkbookId);
@@ -109,7 +108,7 @@ export function NotebookShell({ children }: NotebookShellProps) {
 
   // Mutations for empty state actions
   const createPage = useCreatePage();
-  const importFile = useImportFile();
+  const importWithAgent = useImportWithAgent();
   const updatePageTitle = useUpdatePageTitle();
 
   const tableCount = dbSchema?.length ?? 0;
@@ -121,8 +120,10 @@ export function NotebookShell({ children }: NotebookShellProps) {
   const alertWarnings = evalResult?.typescript?.warnings?.length ?? 0;
   const alertCount = alertErrors + alertWarnings;
 
-  // Show getting started when no data in database (0 tables)
-  const showGettingStarted = tableCount === 0;
+  // Show getting started when no data - use manifest.tables (from SSE) which loads faster
+  // Fall back to dbSchema for titlebar button count (more detailed schema info)
+  const manifestTableCount = manifest?.tables?.length ?? 0;
+  const showGettingStarted = manifestTableCount === 0 && tableCount === 0;
 
   // Current workbook
   const currentWorkbook = workbooks?.find((w) => w.id === activeWorkbookId);
@@ -249,21 +250,22 @@ export function NotebookShell({ children }: NotebookShellProps) {
     if (!file) return;
 
     try {
-      const result = await importFile.mutateAsync({ runtimePort, file });
-      if (result.success) {
-        console.log(`Imported ${result.rowCount} rows to table: ${result.tableName}`);
-        // TODO: Show toast notification
-      } else {
-        console.error("Import failed:", result.error);
-      }
+      // Launch import agent - it will handle the import in the background
+      await importWithAgent.mutateAsync({
+        file,
+        onSessionCreated: (sessionId) => {
+          // Expand chat to show the import progress
+          setChatExpanded(true);
+          setActiveSession(sessionId);
+        },
+      });
     } catch (err) {
       console.error("Import error:", err);
-      // TODO: Show toast notification on failure
     }
 
     // Reset input so same file can be selected again
     e.target.value = "";
-  }, [runtimePort, importFile]);
+  }, [importWithAgent, setActiveSession]);
 
   const handleAddPage = useCallback(async () => {
     console.log("[handleAddPage] Creating page on port:", runtimePort);
@@ -289,19 +291,20 @@ export function NotebookShell({ children }: NotebookShellProps) {
 
   // File drop handler for external files
   const handleFileDrop = useCallback(async (file: File) => {
-    if (!runtimePort) return;
-
     try {
-      const result = await importFile.mutateAsync({ runtimePort, file });
-      if (result.success) {
-        console.log(`Imported ${result.rowCount} rows to table: ${result.tableName}`);
-      } else {
-        console.error("Import failed:", result.error);
-      }
+      // Launch import agent - it will handle the import in the background
+      await importWithAgent.mutateAsync({
+        file,
+        onSessionCreated: (sessionId) => {
+          // Expand chat to show the import progress
+          setChatExpanded(true);
+          setActiveSession(sessionId);
+        },
+      });
     } catch (err) {
       console.error("Import error:", err);
     }
-  }, [runtimePort, importFile]);
+  }, [importWithAgent, setActiveSession]);
 
   return (
     <TooltipProvider delayDuration={300}>

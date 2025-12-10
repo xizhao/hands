@@ -435,15 +435,18 @@ export interface WorkbookManifest {
 export function useWorkbookManifest(workbookId: string | null) {
   const runtimeStatus = useRuntimeStatus(workbookId);
   const queryClient = useQueryClient();
+  // Use runtime port from status, or fall back to default
   const port = runtimeStatus.data?.runtime_port || PORTS.RUNTIME;
-  const isRunning = runtimeStatus.data?.running ?? false;
+  // Be optimistic about runtime - try to connect even if status hasn't confirmed running
+  // The SSE connection will fail gracefully if runtime isn't actually available
+  const shouldConnect = !!workbookId && !!port;
 
   const [manifest, setManifest] = useState<WorkbookManifest | null>(null);
   const [isConnected, setIsConnected] = useState(false);
   const [error, setError] = useState<Error | null>(null);
 
   useEffect(() => {
-    if (!workbookId || !isRunning || !port) {
+    if (!shouldConnect) {
       setManifest(null);
       setIsConnected(false);
       return;
@@ -477,7 +480,7 @@ export function useWorkbookManifest(workbookId: string | null) {
       eventSource.close();
       setIsConnected(false);
     };
-  }, [workbookId, port, isRunning, queryClient]);
+  }, [shouldConnect, port, queryClient]);
 
   // Provide a refresh function for manual refresh (e.g., after mutations)
   const refresh = useCallback(async () => {
@@ -496,7 +499,7 @@ export function useWorkbookManifest(workbookId: string | null) {
 
   return {
     data: manifest,
-    isLoading: !manifest && isRunning,
+    isLoading: !manifest && shouldConnect,
     isConnected,
     error,
     refetch: refresh,

@@ -10,7 +10,7 @@ interface ChatToolbarProps {
 
 export function ChatToolbar({ expanded, onExpandChange }: ChatToolbarProps) {
   const [input, setInput] = useState("");
-  const inputRef = useRef<HTMLInputElement>(null);
+  const inputRef = useRef<HTMLTextAreaElement>(null);
 
   const { activeSessionId, setActiveSession } = useUIStore();
   const sendMessage = useSendMessage();
@@ -44,6 +44,11 @@ export function ChatToolbar({ expanded, onExpandChange }: ChatToolbarProps) {
 
     setInput("");
 
+    // Reset textarea height
+    if (inputRef.current) {
+      inputRef.current.style.height = "auto";
+    }
+
     try {
       await sendMessage.mutateAsync({
         sessionId,
@@ -54,7 +59,7 @@ export function ChatToolbar({ expanded, onExpandChange }: ChatToolbarProps) {
     }
   };
 
-  const handleKeyDown = (e: KeyboardEvent<HTMLInputElement>) => {
+  const handleKeyDown = (e: KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
       handleSubmit();
@@ -68,16 +73,21 @@ export function ChatToolbar({ expanded, onExpandChange }: ChatToolbarProps) {
   };
 
   return (
-    <div className="flex items-center gap-2 p-2">
-      <input
+    <div className="flex items-end gap-2 p-2">
+      <textarea
         ref={inputRef}
-        type="text"
         value={input}
-        onChange={(e) => setInput(e.target.value)}
+        onChange={(e) => {
+          setInput(e.target.value);
+          // Auto-resize textarea
+          e.target.style.height = "auto";
+          e.target.style.height = Math.min(e.target.scrollHeight, 120) + "px";
+        }}
         onKeyDown={handleKeyDown}
         onFocus={() => !expanded && onExpandChange(true)}
         placeholder="Ask anything..."
-        className="flex-1 bg-transparent text-sm placeholder:text-muted-foreground focus:outline-none px-2 py-1.5"
+        rows={1}
+        className="flex-1 bg-transparent text-sm placeholder:text-muted-foreground focus:outline-none px-2 py-1.5 resize-none overflow-y-auto max-h-[120px]"
       />
       {isBusy ? (
         <button

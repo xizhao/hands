@@ -1,12 +1,23 @@
-import { useState, useRef, useEffect } from "react";
-import { useSendMessage, useAbortSession, useSessionStatuses, useCreateSession } from "@/hooks/useSession";
-import { useServer } from "@/hooks/useServer";
-import { useUIStore } from "@/stores/ui";
-import { Button } from "@/components/ui/button";
-import { ArrowUp, Square, Loader2, Hand } from "lucide-react";
-import { cn } from "@/lib/utils";
-import { useWorkbook, useDevServerStatus, useDevServerRoutes, useWorkbookDatabase, useStartDevServer } from "@/hooks/useWorkbook";
 import { ChatSettings } from "@/components/ChatSettings";
+import { Button } from "@/components/ui/button";
+import { useServer } from "@/hooks/useServer";
+import {
+  useAbortSession,
+  useCreateSession,
+  useSendMessage,
+  useSessionStatuses,
+} from "@/hooks/useSession";
+import {
+  useDevServerRoutes,
+  useDevServerStatus,
+  useStartDevServer,
+  useWorkbook,
+  useWorkbookDatabase,
+} from "@/hooks/useWorkbook";
+import { cn } from "@/lib/utils";
+import { useUIStore } from "@/stores/ui";
+import { ArrowUp, Hand, Loader2, Square } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
 
 interface ChatBarProps {
   expanded: boolean;
@@ -15,8 +26,13 @@ interface ChatBarProps {
 
 export function ChatBar({ expanded, onExpandChange }: ChatBarProps) {
   const [input, setInput] = useState("");
-  const inputRef = useRef<HTMLInputElement>(null);
-  const { activeSessionId, activeWorkbookId, setActiveSession, setRuntimePort } = useUIStore();
+  const inputRef = useRef<HTMLTextAreaElement>(null);
+  const {
+    activeSessionId,
+    activeWorkbookId,
+    setActiveSession,
+    setRuntimePort,
+  } = useUIStore();
   const { data: sessionStatuses = {} } = useSessionStatuses();
   const sendMessage = useSendMessage();
   const abortSession = useAbortSession(activeSessionId);
@@ -34,13 +50,21 @@ export function ChatBar({ expanded, onExpandChange }: ChatBarProps) {
 
   // Auto-start dev server when workbook changes
   useEffect(() => {
-    if (activeWorkbook && !devServerStatus?.runtime_port && !startDevServer.isPending) {
+    if (
+      activeWorkbook &&
+      !devServerStatus?.runtime_port &&
+      !startDevServer.isPending
+    ) {
       startDevServer.mutate({
         workbookId: activeWorkbook.id,
         directory: activeWorkbook.directory,
       });
     }
-  }, [activeWorkbook?.id, devServerStatus?.runtime_port, startDevServer.isPending]);
+  }, [
+    activeWorkbook?.id,
+    devServerStatus?.runtime_port,
+    startDevServer.isPending,
+  ]);
 
   // Update UIStore with runtime port
   useEffect(() => {
@@ -52,36 +76,24 @@ export function ChatBar({ expanded, onExpandChange }: ChatBarProps) {
   const status = activeSessionId ? sessionStatuses[activeSessionId] : null;
   const isBusy = status?.type === "busy" || status?.type === "running";
 
-  // System prompt with workbook context
+  // Dynamic context for the current workbook session
   const getSystemPrompt = () => {
     if (!activeWorkbook) return undefined;
 
     const dbInfo = workbookDatabase
-      ? `Database: PostgreSQL on port ${workbookDatabase.port}, database "${workbookDatabase.database_name}"`
-      : "Database: PostgreSQL (connecting...)";
+      ? `PostgreSQL on port ${workbookDatabase.port}, database "${workbookDatabase.database_name}"`
+      : "PostgreSQL (connecting...)";
 
-    const serverInfo = devServerStatus?.running && devServerRoutes?.url
-      ? `Dev Server: ${devServerRoutes.url}`
-      : "Dev Server: Not running";
+    const serverInfo =
+      devServerStatus?.running && devServerRoutes?.url
+        ? devServerRoutes.url
+        : "Not running";
 
-    return `You are working in the "${activeWorkbook.name}" workbook.
-${activeWorkbook.description ? `Description: ${activeWorkbook.description}` : ""}
-
-## Environment
-- Working Directory: ${activeWorkbook.directory}
-- ${dbInfo}
-- ${serverInfo}
-
-## Project Structure
-- \`src/index.ts\` - Main worker with API routes (Hono framework)
-- \`charts/\` - Data visualizations (React + Recharts)
-- \`config/\` - Integration configurations
-
-## Guidelines
-- Use SchemaRead to view database tables and columns before writing queries
-- Use psql to execute SQL queries
-- Create API routes in src/index.ts
-- Create charts in charts/ directory`;
+    return `## Current Workbook Context
+- **Workbook**: ${activeWorkbook.name}${activeWorkbook.description ? ` - ${activeWorkbook.description}` : ""}
+- **Directory**: ${activeWorkbook.directory}
+- **Database**: ${dbInfo}
+- **Dev Server**: ${serverInfo}`;
   };
 
   const handleSubmit = async () => {
@@ -90,6 +102,11 @@ ${activeWorkbook.description ? `Description: ${activeWorkbook.description}` : ""
     const message = input.trim();
     setInput("");
 
+    // Reset textarea height
+    if (inputRef.current) {
+      inputRef.current.style.height = "auto";
+    }
+
     if (!expanded) {
       onExpandChange(true);
     }
@@ -97,16 +114,27 @@ ${activeWorkbook.description ? `Description: ${activeWorkbook.description}` : ""
     const system = getSystemPrompt();
 
     if (!activeSessionId) {
-      createSession.mutate({}, {
-        onSuccess: (newSession) => {
-          setActiveSession(newSession.id);
-          sendMessage.mutate({ sessionId: newSession.id, content: message, system });
+      createSession.mutate(
+        {},
+        {
+          onSuccess: (newSession) => {
+            setActiveSession(newSession.id);
+            sendMessage.mutate({
+              sessionId: newSession.id,
+              content: message,
+              system,
+            });
+          },
         }
-      });
+      );
       return;
     }
 
-    sendMessage.mutate({ sessionId: activeSessionId, content: message, system });
+    sendMessage.mutate({
+      sessionId: activeSessionId,
+      content: message,
+      system,
+    });
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
@@ -128,7 +156,7 @@ ${activeWorkbook.description ? `Description: ${activeWorkbook.description}` : ""
   return (
     <div
       data-chat-bar
-      className="flex items-center gap-2 px-2 py-2 rounded-xl border border-border/40 bg-background/80 backdrop-blur-sm"
+      className="flex items-end gap-2 px-2 py-2 rounded-xl border border-border/40 bg-background/80 backdrop-blur-sm overflow-visible"
     >
       {/* OpenCode settings button */}
       <ChatSettings>
@@ -144,18 +172,23 @@ ${activeWorkbook.description ? `Description: ${activeWorkbook.description}` : ""
         </Button>
       </ChatSettings>
 
-      {/* Input */}
-      <input
+      {/* Input - textarea for multiline with auto-resize and scroll */}
+      <textarea
         ref={inputRef}
-        type="text"
         value={input}
-        onChange={(e) => setInput(e.target.value)}
+        onChange={(e) => {
+          setInput(e.target.value);
+          // Auto-resize textarea
+          e.target.style.height = "auto";
+          e.target.style.height = Math.min(e.target.scrollHeight, 120) + "px";
+        }}
         onKeyDown={handleKeyDown}
         onFocus={() => {
           if (!expanded) onExpandChange(true);
         }}
         placeholder="Ask anything..."
-        className="flex-1 bg-transparent py-1 text-sm placeholder:text-muted-foreground/50 focus:outline-none"
+        rows={1}
+        className="flex-1 bg-transparent py-1 text-sm placeholder:text-muted-foreground/50 focus:outline-none resize-none overflow-y-auto max-h-[120px] scrollbar-thin"
       />
 
       {/* Submit/Abort button */}
@@ -174,9 +207,15 @@ ${activeWorkbook.description ? `Description: ${activeWorkbook.description}` : ""
           size="icon"
           className={cn(
             "h-7 w-7 shrink-0 rounded-lg transition-colors",
-            input.trim() && "bg-primary text-primary-foreground hover:bg-primary/90"
+            input.trim() &&
+              "bg-primary text-primary-foreground hover:bg-primary/90"
           )}
-          disabled={!input.trim() || !isConnected || sendMessage.isPending || createSession.isPending}
+          disabled={
+            !input.trim() ||
+            !isConnected ||
+            sendMessage.isPending ||
+            createSession.isPending
+          }
           onClick={handleSubmit}
         >
           {sendMessage.isPending || createSession.isPending ? (

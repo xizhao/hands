@@ -34,7 +34,7 @@ const DEFAULT_IGNORE = [
   ".",  // Hidden files
 ]
 
-const DEFAULT_EXTENSIONS = [".ts", ".tsx", ".js", ".jsx", ".json", ".toml", ".md"]
+const DEFAULT_EXTENSIONS = [".ts", ".tsx", ".js", ".jsx", ".json", ".toml", ".md", ".mdx"]
 
 export class FileWatcher {
   private watcher: FSWatcher | null = null

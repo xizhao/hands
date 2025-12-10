@@ -59,7 +59,7 @@ export function FloatingChat() {
         transition={{ type: "spring", damping: 25, stiffness: 300 }}
         className="fixed bottom-4 left-4 right-4 z-50 max-w-2xl mx-auto"
       >
-        <div className="bg-background/95 backdrop-blur-xl rounded-2xl border border-border shadow-2xl overflow-hidden">
+        <div className="bg-background/95 backdrop-blur-xl rounded-2xl border border-border shadow-2xl">
           {/* Header with minimize/close */}
           <div className="flex items-center justify-between px-3 py-2 border-b border-border/50 bg-muted/30">
             <div className="flex items-center gap-2 text-xs text-muted-foreground">

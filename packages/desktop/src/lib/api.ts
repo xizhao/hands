@@ -224,7 +224,7 @@ export const api = {
   prompt: async (
     sessionId: string,
     content: string,
-    options?: { model?: { providerID: string; modelID: string }; system?: string; directory?: string | null }
+    options?: { model?: { providerID: string; modelID: string }; system?: string; agent?: string; directory?: string | null }
   ): Promise<MessageWithParts> => {
     const client = getClient(options?.directory);
     const result = await client.session.prompt({
@@ -233,6 +233,7 @@ export const api = {
         parts: [{ type: "text", text: content }],
         model: options?.model,
         system: options?.system,
+        agent: options?.agent,
       },
     });
     return result.data as MessageWithParts;
@@ -241,7 +242,7 @@ export const api = {
   promptAsync: async (
     sessionId: string,
     content: string,
-    options?: { model?: { providerID: string; modelID: string }; system?: string; directory?: string | null }
+    options?: { model?: { providerID: string; modelID: string }; system?: string; agent?: string; directory?: string | null }
   ) => {
     const client = getClient(options?.directory);
     return client.session.promptAsync({
@@ -250,6 +251,7 @@ export const api = {
         parts: [{ type: "text", text: content }],
         model: options?.model,
         system: options?.system,
+        agent: options?.agent,
       },
     });
   },

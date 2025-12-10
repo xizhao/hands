@@ -259,7 +259,7 @@ export default WelcomeBlock
 "#, name);
     fs::write(workbook_dir.join("blocks/welcome.tsx"), welcome_block).map_err(|e| e.to_string())?;
 
-    // Create index page: pages/index.mdx
+    // Create index page: pages/index.md
     let index_page = format!(r#"---
 title: {}
 ---
@@ -270,7 +270,7 @@ title: {}
 
 Start by creating blocks in the `blocks/` directory.
 "#, name, name, name);
-    fs::write(workbook_dir.join("pages/index.mdx"), index_page).map_err(|e| e.to_string())?;
+    fs::write(workbook_dir.join("pages/index.md"), index_page).map_err(|e| e.to_string())?;
 
     // Create lib/db.ts helper
     let db_helper = r#"// Database helper - re-exported from context for convenience
@@ -1126,30 +1126,25 @@ async fn start_opencode_server(
     port: u16,
     model: Option<String>,
     env_vars: HashMap<String, String>,
-    config_dir: Option<String>,
     working_dir: Option<String>,
 ) -> Result<Child, String> {
     // Kill any existing process on this port first
     kill_process_on_port(port).await?;
 
-    let port_str = port.to_string();
-
     let mut all_env = env_vars.clone();
+
+    // Set port and model for the agent server
+    all_env.insert("HANDS_AGENT_PORT".to_string(), port.to_string());
     if let Some(ref m) = model {
-        let config = serde_json::json!({ "model": m });
-        all_env.insert("OPENCODE_CONFIG_CONTENT".to_string(), config.to_string());
+        all_env.insert("HANDS_MODEL".to_string(), m.clone());
     }
 
-    if let Some(ref dir) = config_dir {
-        all_env.insert("OPENCODE_CONFIG_DIR".to_string(), dir.clone());
-        println!("OpenCode config dir: {}", dir);
-    } else {
-        println!("WARNING: OpenCode config dir not found, using built-in agents only");
-    }
+    // Get the agent server script path (relative to CARGO_MANIFEST_DIR which is src-tauri)
+    let agent_script = format!("{}/../../agent/src/index.ts", env!("CARGO_MANIFEST_DIR"));
 
-    // Build command with optional working directory
-    let mut cmd = Command::new("bunx");
-    cmd.args(["opencode-ai", "serve", "--port", &port_str])
+    // Build command - run from the workbook directory if provided
+    let mut cmd = Command::new("bun");
+    cmd.args(["run", &agent_script])
         .envs(&all_env)
         .stdout(Stdio::inherit())
         .stderr(Stdio::inherit())
@@ -1157,26 +1152,13 @@ async fn start_opencode_server(
 
     if let Some(ref dir) = working_dir {
         cmd.current_dir(dir);
-        println!("OpenCode working directory: {}", dir);
+        println!("Hands agent working directory: {}", dir);
     }
 
-    let child = cmd.spawn().or_else(|_| {
-        let mut cmd = Command::new("npx");
-        cmd.args(["opencode-ai", "serve", "--port", &port_str])
-            .envs(&all_env)
-            .stdout(Stdio::inherit())
-            .stderr(Stdio::inherit())
-            .kill_on_drop(true);
+    let child = cmd.spawn()
+        .map_err(|e| format!("Failed to start Hands agent server: {}", e))?;
 
-        if let Some(ref dir) = working_dir {
-            cmd.current_dir(dir);
-        }
-
-        cmd.spawn()
-    })
-    .map_err(|e| format!("Failed to start opencode server: {}", e))?;
-
-    println!("OpenCode server starting on port {}{}", port, model.map(|m| format!(" with model {}", m)).unwrap_or_default());
+    println!("Hands agent server starting on port {}{}", port, model.map(|m| format!(" with model {}", m)).unwrap_or_default());
     Ok(child)
 }
 
@@ -1230,30 +1212,7 @@ async fn restart_server(
         }
     }
 
-    let config_dir = app.path().resource_dir()
-        .ok()
-        .map(|p| p.join("opencode"))
-        .filter(|p| p.exists())
-        .or_else(|| {
-            std::env::current_exe().ok().and_then(|exe| {
-                let dev_path = exe.parent()?.join("resources/opencode");
-                if dev_path.exists() {
-                    return Some(dev_path);
-                }
-                let mut path = exe;
-                for _ in 0..5 {
-                    path = path.parent()?.to_path_buf();
-                    let resources = path.join("src-tauri/resources/opencode");
-                    if resources.exists() {
-                        return Some(resources);
-                    }
-                }
-                None
-            })
-        })
-        .map(|p| p.to_string_lossy().to_string());
-
-    match start_opencode_server(PORT_OPENCODE, model, env_vars, config_dir, working_dir).await {
+    match start_opencode_server(PORT_OPENCODE, model, env_vars, working_dir).await {
         Ok(child) => {
             state_guard.server = Some(child);
 
@@ -1280,6 +1239,34 @@ async fn restart_server(
 pub struct CopyFilesResult {
     pub copied_files: Vec<String>,
     pub data_dir: String,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct FileData {
+    pub filename: String,
+    pub bytes: Vec<u8>,
+}
+
+/// Write file data to workbook's data directory
+#[tauri::command]
+async fn write_file_to_workbook(
+    workbook_id: String,
+    file_data: FileData,
+) -> Result<CopyFilesResult, String> {
+    let workbook_dir = get_workbook_dir(&workbook_id)?;
+    let data_dir = workbook_dir.join("data");
+
+    fs::create_dir_all(&data_dir)
+        .map_err(|e| format!("Failed to create data directory: {}", e))?;
+
+    let dest = data_dir.join(&file_data.filename);
+    fs::write(&dest, &file_data.bytes)
+        .map_err(|e| format!("Failed to write file: {}", e))?;
+
+    Ok(CopyFilesResult {
+        copied_files: vec![dest.to_string_lossy().to_string()],
+        data_dir: data_dir.to_string_lossy().to_string(),
+    })
 }
 
 #[tauri::command]
@@ -1469,6 +1456,7 @@ pub fn run() {
             runtime_query,
             runtime_eval,
             copy_files_to_workbook,
+            write_file_to_workbook,
             open_webview,
             open_db_browser,
             open_docs,
@@ -1489,33 +1477,10 @@ pub fn run() {
             let env_vars = get_api_keys_from_store(&app_handle);
             let model = get_model_from_store(&app_handle);
 
-            let config_dir = app_handle.path().resource_dir()
-                .ok()
-                .map(|p| p.join("opencode"))
-                .filter(|p| p.exists())
-                .or_else(|| {
-                    std::env::current_exe().ok().and_then(|exe| {
-                        let dev_path = exe.parent()?.join("resources/opencode");
-                        if dev_path.exists() {
-                            return Some(dev_path);
-                        }
-                        let mut path = exe;
-                        for _ in 0..5 {
-                            path = path.parent()?.to_path_buf();
-                            let resources = path.join("src-tauri/resources/opencode");
-                            if resources.exists() {
-                                return Some(resources);
-                            }
-                        }
-                        None
-                    })
-                })
-                .map(|p| p.to_string_lossy().to_string());
-
-            // Start OpenCode server only (no postgres - runtime manages it per workbook)
+            // Start Hands agent server (no postgres - runtime manages it per workbook)
             // No working directory at startup - will be set when workbook is activated
             tauri::async_runtime::spawn(async move {
-                match start_opencode_server(PORT_OPENCODE, model, env_vars, config_dir, None).await {
+                match start_opencode_server(PORT_OPENCODE, model, env_vars, None).await {
                     Ok(child) => {
                         let mut s = state.lock().await;
                         s.server = Some(child);

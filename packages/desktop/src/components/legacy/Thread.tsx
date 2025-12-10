@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useLayoutEffect } from "react";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { useMessages, useSessions, useSessionStatuses, useDeleteSession } from "@/hooks/useSession";
 import { useUIStore } from "@/stores/ui";
@@ -60,19 +60,31 @@ export function Thread({ expanded, onCollapse, onExpand }: ThreadProps) {
     return null;
   };
 
-  const scrollRef = useRef<HTMLDivElement>(null);
-  const prevMessagesLength = useRef(0);
+  const bottomRef = useRef<HTMLDivElement>(null);
+  const hasScrolledRef = useRef(false);
 
-  // Auto-scroll to bottom (newest messages)
+  // Scroll to bottom helper
+  const scrollToBottom = (behavior: ScrollBehavior = "smooth") => {
+    bottomRef.current?.scrollIntoView({ behavior, block: "end" });
+  };
+
+  // Auto-scroll to bottom on new messages
   useEffect(() => {
-    if (messages.length > prevMessagesLength.current && scrollRef.current) {
-      scrollRef.current.scrollTo({
-        top: scrollRef.current.scrollHeight,
-        behavior: "smooth",
-      });
+    if (messages.length > 0) {
+      scrollToBottom(hasScrolledRef.current ? "smooth" : "instant");
+      hasScrolledRef.current = true;
     }
-    prevMessagesLength.current = messages.length;
   }, [messages.length]);
+
+  // Scroll to bottom when expanded (after animation)
+  useLayoutEffect(() => {
+    if (expanded) {
+      const timer = setTimeout(() => {
+        scrollToBottom("instant");
+      }, 250);
+      return () => clearTimeout(timer);
+    }
+  }, [expanded]);
 
   const hasMessages = messages.length > 0;
 
@@ -183,7 +195,7 @@ export function Thread({ expanded, onCollapse, onExpand }: ThreadProps) {
             transition={{ duration: 0.2, ease: "easeOut" }}
             className="overflow-hidden"
           >
-            <ScrollArea className="max-h-[50vh] mb-1.5" ref={scrollRef}>
+            <ScrollArea className="max-h-[50vh] mb-1.5">
               <div className="space-y-1.5 px-1 pb-2">
                 {/* Messages (oldest to newest, bottom-aligned) */}
                 {messages.map((message, idx) => (
@@ -209,6 +221,8 @@ export function Thread({ expanded, onCollapse, onExpand }: ThreadProps) {
                     </div>
                   </motion.div>
                 )}
+                {/* Scroll anchor */}
+                <div ref={bottomRef} />
               </div>
             </ScrollArea>
           </motion.div>

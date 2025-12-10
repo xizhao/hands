@@ -1,12 +1,14 @@
 /**
  * Page Discovery
  *
- * Scans the pages/ directory to find all markdown files.
+ * Scans the pages/ directory to find all MDX files.
+ * Auto-formats .md files to .mdx with frontmatter.
  */
 
 import { existsSync } from "fs"
 import { readdir, readFile } from "fs/promises"
 import { join, basename, dirname } from "path"
+import { formatPages } from "./formatter"
 
 // Inline types to avoid stdlib dependency for build-time code
 export interface PageMeta {
@@ -35,12 +37,18 @@ export interface PageDiscoveryResult {
 /**
  * Discover pages in a directory
  *
- * Scans the pages/ directory for .md files, extracts frontmatter,
+ * Scans the pages/ directory for .mdx files, extracts frontmatter,
  * and returns a list of discovered pages with their routes.
  *
+ * Auto-formats .md files to .mdx and ensures frontmatter exists.
+ *
  * @param pagesDir - Path to the pages directory
+ * @param autoFormat - Whether to auto-format pages (default: true)
  */
-export async function discoverPages(pagesDir: string): Promise<PageDiscoveryResult> {
+export async function discoverPages(
+  pagesDir: string,
+  autoFormat: boolean = true
+): Promise<PageDiscoveryResult> {
   const pages: DiscoveredPage[] = []
   const errors: Array<{ file: string; error: string }> = []
 
@@ -49,7 +57,21 @@ export async function discoverPages(pagesDir: string): Promise<PageDiscoveryResu
     return { pages, errors }
   }
 
-  // Find all .md files recursively
+  // Auto-format pages (.md -> .mdx, ensure frontmatter)
+  if (autoFormat) {
+    const formatResult = await formatPages(pagesDir)
+    if (formatResult.renamed.length > 0) {
+      console.log(`[pages] Renamed: ${formatResult.renamed.join(", ")}`)
+    }
+    if (formatResult.updated.length > 0) {
+      console.log(`[pages] Updated: ${formatResult.updated.join(", ")}`)
+    }
+    for (const err of formatResult.errors) {
+      errors.push(err)
+    }
+  }
+
+  // Find all page files recursively
   const files = await findMarkdownFiles(pagesDir)
 
   for (const file of files) {
@@ -67,8 +89,8 @@ export async function discoverPages(pagesDir: string): Promise<PageDiscoveryResu
         route,
         path: file,
         meta: {
-          title: meta.title || titleFromPath(file),
-          description: meta.description,
+          title: (meta.title as string) || titleFromPath(file),
+          description: meta.description as string | undefined,
           ...meta,
         },
       })
@@ -100,7 +122,7 @@ export async function discoverPages(pagesDir: string): Promise<PageDiscoveryResu
 
 /**
  * Find page files recursively
- * Supports: .md (markdown), .plate.json (Plate documents)
+ * Supports: .mdx (preferred), .md (legacy, auto-converted), .plate.json (Plate documents)
  */
 async function findPageFiles(
   dir: string,
@@ -119,7 +141,11 @@ async function findPageFiles(
         relativePath
       )
       files.push(...subFiles)
-    } else if (entry.name.endsWith(".md") || entry.name.endsWith(".plate.json")) {
+    } else if (
+      entry.name.endsWith(".mdx") ||
+      entry.name.endsWith(".md") ||
+      entry.name.endsWith(".plate.json")
+    ) {
       files.push(relativePath)
     }
   }
@@ -135,15 +161,15 @@ async function findMarkdownFiles(dir: string, prefix: string = ""): Promise<stri
 /**
  * Convert a file path to a route
  *
- * - index.md -> /
- * - about.md -> /about
- * - docs/intro.md -> /docs/intro
- * - docs/index.md -> /docs
+ * - index.mdx -> /
+ * - about.mdx -> /about
+ * - docs/intro.mdx -> /docs/intro
+ * - docs/index.mdx -> /docs
  * - dashboard.plate.json -> /dashboard
  */
 function filePathToRoute(filePath: string): string {
-  // Remove extension (.md or .plate.json)
-  let route = "/" + filePath.replace(/\.(md|plate\.json)$/, "")
+  // Remove extension (.mdx, .md, or .plate.json)
+  let route = "/" + filePath.replace(/\.(mdx|md|plate\.json)$/, "")
 
   // Handle index files
   if (route.endsWith("/index")) {
@@ -161,6 +187,8 @@ function titleFromPath(filePath: string): string {
   let name = basename(filePath)
   if (name.endsWith(".plate.json")) {
     name = name.slice(0, -11)
+  } else if (name.endsWith(".mdx")) {
+    name = name.slice(0, -4)
   } else if (name.endsWith(".md")) {
     name = name.slice(0, -3)
   }

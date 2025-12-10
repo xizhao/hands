@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useLayoutEffect } from "react";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { useUIStore } from "@/stores/ui";
 import { useMessages } from "@/hooks/useSession";
@@ -11,14 +11,29 @@ interface ChatThreadProps {
 export function ChatThread({ onCollapse: _onCollapse }: ChatThreadProps) {
   const { activeSessionId } = useUIStore();
   const { data: messages = [], isLoading } = useMessages(activeSessionId);
-  const scrollRef = useRef<HTMLDivElement>(null);
+  const bottomRef = useRef<HTMLDivElement>(null);
+  const hasScrolledRef = useRef(false);
 
-  // Auto-scroll to bottom on new messages
+  // Scroll to bottom helper
+  const scrollToBottom = (behavior: ScrollBehavior = "smooth") => {
+    bottomRef.current?.scrollIntoView({ behavior, block: "end" });
+  };
+
+  // Scroll to bottom on new messages
   useEffect(() => {
-    if (scrollRef.current) {
-      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+    if (messages.length > 0) {
+      scrollToBottom(hasScrolledRef.current ? "smooth" : "instant");
+      hasScrolledRef.current = true;
     }
   }, [messages.length]);
+
+  // Scroll to bottom on mount (after animation settles)
+  useLayoutEffect(() => {
+    const timer = setTimeout(() => {
+      scrollToBottom("instant");
+    }, 250); // Wait for expand animation
+    return () => clearTimeout(timer);
+  }, []);
 
   if (!activeSessionId) {
     return (
@@ -36,21 +51,20 @@ export function ChatThread({ onCollapse: _onCollapse }: ChatThreadProps) {
     );
   }
 
-  // Reverse messages so newest is at bottom
-  const sortedMessages = [...messages].reverse();
-
   return (
-    <ScrollArea className="h-64" ref={scrollRef}>
+    <ScrollArea className="h-64">
       <div className="p-3 space-y-3">
-        {sortedMessages.length === 0 ? (
+        {messages.length === 0 ? (
           <div className="text-center text-muted-foreground text-sm py-8">
             No messages yet
           </div>
         ) : (
-          sortedMessages.map((message) => (
+          messages.map((message) => (
             <ChatMessage key={message.info.id} message={message} />
           ))
         )}
+        {/* Scroll anchor */}
+        <div ref={bottomRef} />
       </div>
     </ScrollArea>
   );

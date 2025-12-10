@@ -33,6 +33,8 @@ import {
   ListTodo,
   Glasses,
   File,
+  Circle,
+  CheckCircle2,
   type LucideIcon,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -292,6 +294,104 @@ const QueryResult = memo(({ output, query: _query }: { output: string; query?: s
 
 QueryResult.displayName = "QueryResult";
 
+// Todo item interface
+interface TodoItem {
+  content: string;
+  status: "pending" | "in_progress" | "completed";
+  activeForm?: string;
+}
+
+// TodoResult component - compact renderer for todowrite tool
+const TodoResult = memo(({ input }: { input: { todos?: TodoItem[] } }) => {
+  const [expanded, setExpanded] = useState(false);
+  const todos = input?.todos || [];
+
+  // If no todos, show "Plan completed"
+  if (todos.length === 0) {
+    return (
+      <div className="flex items-center gap-1.5 text-[11px] text-green-400/70">
+        <CheckCircle2 className="h-3 w-3" />
+        <span>Plan completed</span>
+      </div>
+    );
+  }
+
+  const completedCount = todos.filter(t => t.status === "completed").length;
+  const inProgressCount = todos.filter(t => t.status === "in_progress").length;
+  const pendingCount = todos.filter(t => t.status === "pending").length;
+
+  // All completed
+  if (completedCount === todos.length) {
+    return (
+      <div className="flex items-center gap-1.5 text-[11px] text-green-400/70">
+        <CheckCircle2 className="h-3 w-3" />
+        <span>All {completedCount} tasks completed</span>
+      </div>
+    );
+  }
+
+  // Summary line
+  const summaryParts: string[] = [];
+  if (inProgressCount > 0) summaryParts.push(`${inProgressCount} in progress`);
+  if (completedCount > 0) summaryParts.push(`${completedCount} done`);
+  if (pendingCount > 0) summaryParts.push(`${pendingCount} pending`);
+
+  return (
+    <div className="py-0.5">
+      <button
+        onClick={() => setExpanded(!expanded)}
+        className="flex items-center gap-1.5 text-[11px] text-muted-foreground/60 hover:text-muted-foreground"
+      >
+        {inProgressCount > 0 ? (
+          <Loader2 className="h-3 w-3 animate-spin text-blue-400" />
+        ) : (
+          <ListTodo className="h-3 w-3" />
+        )}
+        <span>{todos.length} tasks</span>
+        <span className="text-muted-foreground/40">· {summaryParts.join(", ")}</span>
+        {expanded ? <ChevronDown className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />}
+      </button>
+
+      <AnimatePresence>
+        {expanded && (
+          <motion.div
+            initial={{ height: 0, opacity: 0 }}
+            animate={{ height: "auto", opacity: 1 }}
+            exit={{ height: 0, opacity: 0 }}
+            className="overflow-hidden"
+          >
+            <div className="ml-2 mt-1.5 space-y-1 border-l border-border/30 pl-2">
+              {todos.map((todo, idx) => (
+                <div
+                  key={idx}
+                  className={cn(
+                    "flex items-start gap-1.5 text-[11px]",
+                    todo.status === "completed" && "text-muted-foreground/40",
+                    todo.status === "in_progress" && "text-blue-400"
+                  )}
+                >
+                  {todo.status === "completed" ? (
+                    <CheckCircle2 className="h-3 w-3 shrink-0 mt-0.5 text-green-400/70" />
+                  ) : todo.status === "in_progress" ? (
+                    <Loader2 className="h-3 w-3 shrink-0 mt-0.5 animate-spin" />
+                  ) : (
+                    <Circle className="h-3 w-3 shrink-0 mt-0.5 text-muted-foreground/40" />
+                  )}
+                  <span className={cn(todo.status === "completed" && "line-through")}>
+                    {todo.status === "in_progress" && todo.activeForm ? todo.activeForm : todo.content}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
+  );
+});
+
+TodoResult.displayName = "TodoResult";
+
 // Collapsible tool thread
 const ToolThread = memo(({ tools }: { tools: ToolPart[] }) => {
   const [expanded, setExpanded] = useState(false);
@@ -358,6 +458,9 @@ const ToolInvocation = memo(({ part }: { part: ToolPart }) => {
   const isRunning = state.status === "running" || state.status === "pending";
   const isError = state.status === "error";
 
+  // Check if this is the todowrite tool
+  const isTodoTool = toolName.toLowerCase() === "todowrite";
+
   // Check if this is a SQL tool with table output
   // Tool name could be "psql", "psqlTool", or prefixed like "hands_psql", "psql_psqlTool"
   const isPsqlTool = toolName.toLowerCase().endsWith("psql") ||
@@ -378,6 +481,11 @@ const ToolInvocation = memo(({ part }: { part: ToolPart }) => {
   }, [state, config]);
 
   const hasDetails = Boolean(state.input || (state.status === "completed" && state.output) || isError);
+
+  // For todowrite, use custom compact renderer
+  if (isTodoTool && state.input) {
+    return <TodoResult input={state.input as { todos?: TodoItem[] }} />;
+  }
 
   // For psql with table results, always show the result inline
   if (hasTableResult) {

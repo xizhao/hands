@@ -8,7 +8,9 @@
  */
 
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { invoke } from "@tauri-apps/api/core";
 import { useUIStore } from "@/stores/ui";
+import { useBackgroundStore, type BackgroundTask } from "@/stores/background";
 import { api, type Session, type PermissionResponse } from "@/lib/api";
 
 // ============ SESSION HOOKS ============
@@ -110,6 +112,7 @@ export function useMessages(sessionId: string | null) {
 
 /**
  * Send a message to a session
+ * Uses the "hands" agent by default
  */
 export function useSendMessage() {
   const directory = useUIStore((s) => s.activeWorkbookDirectory);
@@ -121,11 +124,13 @@ export function useSendMessage() {
       sessionId,
       content,
       system,
+      agent = "hands",
     }: {
       sessionId: string;
       content: string;
       system?: string;
-    }) => api.promptAsync(sessionId, content, { system, directory }),
+      agent?: string;
+    }) => api.promptAsync(sessionId, content, { system, agent, directory }),
     onSuccess: (_, { sessionId }) => {
       // Immediately refetch messages to show user message
       queryClient.invalidateQueries({ queryKey: ["messages", sessionId] });
@@ -210,6 +215,94 @@ export function useRespondToPermission(sessionId: string | null) {
     }) => {
       if (!sessionId) throw new Error("No session ID");
       return api.respondToPermission(sessionId, permissionId, response, directory);
+    },
+  });
+}
+
+// ============ IMPORT WITH AGENT ============
+
+interface CopyFilesResult {
+  copied_files: string[];
+  data_dir: string;
+}
+
+/**
+ * Import a file using the import agent
+ *
+ * This copies the file to the workbook's data directory,
+ * creates a session, and sends a prompt to the agent.
+ */
+export function useImportWithAgent() {
+  const directory = useUIStore((s) => s.activeWorkbookDirectory);
+  const activeWorkbookId = useUIStore((s) => s.activeWorkbookId);
+  const queryClient = useQueryClient();
+  const { addTask, updateTask } = useBackgroundStore();
+
+  return useMutation({
+    mutationKey: ["import", "agent"],
+    mutationFn: async ({
+      file,
+      onSessionCreated,
+    }: {
+      file: File;
+      onSessionCreated?: (sessionId: string) => void;
+    }) => {
+      if (!activeWorkbookId) {
+        throw new Error("No active workbook");
+      }
+
+      // 1. Write file to workbook's data directory via Tauri
+      const buffer = await file.arrayBuffer();
+      const bytes = Array.from(new Uint8Array(buffer));
+
+      const result = await invoke<CopyFilesResult>("write_file_to_workbook", {
+        workbookId: activeWorkbookId,
+        fileData: { filename: file.name, bytes },
+      });
+
+      const filePath = result.copied_files[0];
+      if (!filePath) {
+        throw new Error("Failed to copy file to workbook");
+      }
+
+      // 2. Create a new session for the import
+      const session = await api.sessions.create(
+        { title: `Import: ${file.name}` },
+        directory
+      );
+
+      // Notify caller of session ID for UI tracking
+      onSessionCreated?.(session.id);
+
+      // 3. Add background task
+      const task: BackgroundTask = {
+        id: session.id,
+        type: "import",
+        title: `Importing ${file.name}`,
+        status: "running",
+        progress: "Starting import...",
+        startedAt: Date.now(),
+      };
+      addTask(task);
+
+      // 4. Update sessions cache
+      queryClient.setQueryData<Session[]>(["sessions", directory], (old) =>
+        old ? [session, ...old] : [session]
+      );
+
+      // 5. Send prompt to the agent with file path
+      // System prompt already contains instructions for how to handle data imports
+      const prompt = `Import this data file and make it useful: ${filePath}`;
+
+      await api.promptAsync(session.id, prompt, { directory });
+
+      return { sessionId: session.id, filePath };
+    },
+    onSuccess: ({ sessionId }) => {
+      updateTask(sessionId, { progress: "Agent working..." });
+    },
+    onError: (error) => {
+      console.error("Import failed:", error);
     },
   });
 }
