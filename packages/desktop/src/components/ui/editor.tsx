@@ -1,17 +1,19 @@
 'use client';
 
-import * as React from 'react';
-
 import type { VariantProps } from 'class-variance-authority';
-import type { PlateContentProps, PlateViewProps } from 'platejs/react';
-
 import { cva } from 'class-variance-authority';
-import { PlateContainer, PlateContent, PlateView } from 'platejs/react';
+import {
+  PlateContainer,
+  PlateContent,
+  type PlateContentProps,
+  useEditorRef,
+} from 'platejs/react';
+import * as React from 'react';
 
 import { cn } from '@/lib/utils';
 
 const editorContainerVariants = cva(
-  'relative w-full cursor-text select-text overflow-y-auto overflow-x-visible caret-primary selection:bg-brand/25 focus-visible:outline-none [&_.slate-selection-area]:z-50 [&_.slate-selection-area]:border [&_.slate-selection-area]:border-brand/25 [&_.slate-selection-area]:bg-brand/15',
+  'relative w-full cursor-text overflow-y-auto font-[ui-sans-serif,_-apple-system,_BlinkMacSystemFont,_"Segoe_UI_Variable_Display",_"Segoe_UI",_Helvetica,_"Apple_Color_Emoji",_Arial,_sans-serif,_"Segoe_UI_Emoji",_"Segoe_UI_Symbol"] caret-primary selection:bg-brand/25 focus-visible:outline-hidden [&_.slate-selection-area]:bg-brand/15',
   {
     defaultVariants: {
       variant: 'default',
@@ -39,14 +41,30 @@ export function EditorContainer({
   className,
   variant,
   ...props
-}: React.ComponentProps<'div'> & VariantProps<typeof editorContainerVariants>) {
+}: React.HTMLAttributes<HTMLDivElement> &
+  VariantProps<typeof editorContainerVariants>) {
+  const editor = useEditorRef();
+
   return (
     <PlateContainer
+      id="scroll_container"
       className={cn(
         'ignore-click-outside/toolbar',
         editorContainerVariants({ variant }),
         className
       )}
+      onClick={(e) => {
+        if (variant === 'comment') {
+          e.preventDefault();
+          editor.tf.focus({ edge: 'endEditor' });
+        }
+      }}
+      onMouseDown={(e) => {
+        if (variant === 'comment') {
+          e.stopPropagation();
+          e.preventDefault();
+        }
+      }}
       {...props}
     />
   );
@@ -54,10 +72,10 @@ export function EditorContainer({
 
 const editorVariants = cva(
   cn(
-    'group/editor',
-    'relative w-full cursor-text select-text overflow-x-visible whitespace-pre-wrap break-words',
-    'rounded-md ring-offset-background focus-visible:outline-none',
-    '**:data-slate-placeholder:!top-1/2 **:data-slate-placeholder:-translate-y-1/2 placeholder:text-muted-foreground/80 **:data-slate-placeholder:text-muted-foreground/80 **:data-slate-placeholder:opacity-100!',
+    'group/editor pt-4',
+    'relative w-full overflow-x-hidden whitespace-pre-wrap break-words',
+    'rounded-md ring-offset-background placeholder:text-muted-foreground/80 focus-visible:outline-hidden',
+    '**:data-slate-placeholder:!top-1/2 **:data-slate-placeholder:-translate-y-1/2 **:data-slate-placeholder:text-muted-foreground/80 **:data-slate-placeholder:opacity-100!',
     '[&_strong]:font-bold'
   ),
   {
@@ -72,16 +90,17 @@ const editorVariants = cva(
         true: '',
       },
       variant: {
-        ai: 'w-full px-0 text-base md:text-sm',
+        ai: 'px-0 text-base md:text-sm',
         aiChat:
-          'max-h-[min(70vh,320px)] w-full max-w-[700px] overflow-y-auto px-3 py-2 text-base md:text-sm',
+          'max-h-[min(70vh,320px)] max-w-[700px] overflow-y-auto px-3 py-2 text-base md:text-sm',
         comment: cn('rounded-none border-none bg-transparent text-sm'),
         default:
-          'size-full px-16 pt-4 pb-72 text-base sm:px-[max(64px,calc(50%-350px))]',
-        demo: 'size-full px-16 pt-4 pb-72 text-base sm:px-[max(64px,calc(50%-350px))]',
-        fullWidth: 'size-full px-16 pt-4 pb-72 text-base sm:px-24',
-        none: '',
+          'min-h-full px-[100px] pb-72 text-base sm:px-[max(100px,calc(50%-350px))]',
+        demo: 'h-full px-[100px] pt-4 pb-72 text-base sm:px-[max(100px,calc(50%-350px))]',
+        fullWidth: 'min-h-full px-[100px] pb-72 text-base',
         select: 'px-3 py-2 text-base data-readonly:w-fit',
+        update: 'px-0 text-sm',
+        versionHistory: 'px-0 pb-[30vh] text-base',
       },
     },
   }
@@ -90,43 +109,42 @@ const editorVariants = cva(
 export type EditorProps = PlateContentProps &
   VariantProps<typeof editorVariants>;
 
-export const Editor = ({
+export function Editor({
   className,
   disabled,
   focused,
   variant,
-  ref,
+  onClick,
+  onMouseDown,
   ...props
-}: EditorProps & { ref?: React.RefObject<HTMLDivElement | null> }) => (
-  <PlateContent
-    ref={ref}
-    className={cn(
-      editorVariants({
-        disabled,
-        focused,
-        variant,
-      }),
-      className
-    )}
-    disabled={disabled}
-    disableDefaultStyles
-    {...props}
-  />
-);
-
-Editor.displayName = 'Editor';
-
-export function EditorView({
-  className,
-  variant,
-  ...props
-}: PlateViewProps & VariantProps<typeof editorVariants>) {
+}: PlateContentProps & VariantProps<typeof editorVariants>) {
   return (
-    <PlateView
+    <PlateContent
+      aria-label=""
+      className={cn(
+        editorVariants({
+          disabled,
+          focused,
+          variant,
+        }),
+        className
+      )}
+      disableDefaultStyles
+      onClick={(e) => {
+        if (variant === 'comment') {
+          e.stopPropagation();
+        }
+
+        onClick?.(e);
+      }}
+      onMouseDown={(e) => {
+        if (variant === 'comment') {
+          e.stopPropagation();
+        }
+
+        onMouseDown?.(e);
+      }}
       {...props}
-      className={cn(editorVariants({ variant }), className)}
     />
   );
 }
-
-EditorView.displayName = 'EditorView';

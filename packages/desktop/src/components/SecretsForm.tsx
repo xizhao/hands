@@ -248,7 +248,7 @@ export const SecretsForm = memo(({ output, onSaved }: SecretsFormProps) => {
         <Button
           type="submit"
           disabled={saving}
-          size="sm"
+          size="xs"
           className={cn(
             "w-full h-7 text-xs gap-1.5",
             "bg-blue-600 hover:bg-blue-700 text-white"

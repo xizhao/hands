@@ -1,18 +1,15 @@
 import { createRoute, Outlet, useNavigate } from "@tanstack/react-router";
-import { useEffect, useRef, useCallback } from "react";
+import { useEffect, useRef } from "react";
 import {
   useWorkbooks,
   useCreateWorkbook,
   useOpenWorkbook,
   useActiveRuntime,
-  useRuntimePort,
 } from "@/hooks/useWorkbook";
 import { useActiveSession } from "@/hooks/useNavState";
 import { useSessions } from "@/hooks/useSession";
 import { startSSESync, setNavigateCallback } from "@/lib/sse";
-import { useDbSync } from "@/hooks/useDbHooks";
 import { queryClient } from "@/App";
-import type { ChangeRecord } from "@/hooks/useDbHooks";
 
 import { NotebookShell } from "@/components/Notebook/NotebookShell";
 import { rootRoute } from "./__root";
@@ -31,7 +28,6 @@ export const notebookRoute = createRoute({
 
 function NotebookLayout() {
   const navigate = useNavigate();
-  const runtimePort = useRuntimePort();
   const { data: activeRuntime } = useActiveRuntime();
   const { sessionId: activeSessionId, setSession: setActiveSession } = useActiveSession();
 
@@ -48,24 +44,6 @@ function NotebookLayout() {
     const cleanup = startSSESync(queryClient);
     return cleanup;
   }, []);
-
-  // Track if DB browser has been opened for this session
-  const dbBrowserOpenedRef = useRef(false);
-
-  // Handle new database changes
-  const handleDbChange = useCallback(
-    (change: ChangeRecord) => {
-      if (dbBrowserOpenedRef.current) return;
-      if (runtimePort && activeRuntime?.workbook_id) {
-        console.log("[notebook] DB change:", change.op, change.table);
-        dbBrowserOpenedRef.current = true;
-      }
-    },
-    [runtimePort, activeRuntime?.workbook_id]
-  );
-
-  // Start database change SSE subscription
-  useDbSync(handleDbChange);
 
   const { data: sessions, isLoading: sessionsLoading } = useSessions();
   const { data: workbooks, isLoading: workbooksLoading } = useWorkbooks();

@@ -10,16 +10,19 @@
  * - Syncs h1 changes back to frontmatter on save
  */
 
-import { useMemo, useCallback, useState, useEffect, useRef } from "react";
-import { Plate, usePlateEditor } from "platejs/react";
-import { MarkdownPlugin } from "@platejs/markdown";
 import type { Value } from "platejs";
+import { Plate, usePlateEditor } from "platejs/react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
-import { EditorKit } from "@/registry/components/editor/editor-kit";
-import { Editor, EditorContainer } from "@/registry/ui/editor";
-import { usePageContent, useSavePageContent, useUpdatePageTitle } from "@/hooks/useWorkbook";
-import { pageRoute } from "@/routes/_notebook/page.$pageId";
+import { EditorKit } from "@/components/editor/editor-kit";
+import { Editor, EditorContainer } from "@/components/ui/editor";
+import {
+  usePageContent,
+  useSavePageContent,
+  useUpdatePageTitle,
+} from "@/hooks/useWorkbook";
 import { cn } from "@/lib/utils";
+import { pageRoute } from "@/routes/_notebook/page.$pageId";
 
 // Default empty document
 const EMPTY_DOCUMENT: Value = [
@@ -38,7 +41,11 @@ const EMPTY_DOCUMENT: Value = [
 /**
  * Parse frontmatter from MDX content
  */
-function parseFrontmatter(source: string): { title: string; content: string; rawFrontmatter: string } {
+function parseFrontmatter(source: string): {
+  title: string;
+  content: string;
+  rawFrontmatter: string;
+} {
   if (!source.startsWith("---")) {
     return { title: "Untitled", content: source, rawFrontmatter: "" };
   }
@@ -62,8 +69,10 @@ function parseFrontmatter(source: string): { title: string; content: string; raw
     if (key === "title") {
       let value = line.slice(colonIndex + 1).trim();
       // Remove quotes
-      if ((value.startsWith('"') && value.endsWith('"')) ||
-          (value.startsWith("'") && value.endsWith("'"))) {
+      if (
+        (value.startsWith('"') && value.endsWith('"')) ||
+        (value.startsWith("'") && value.endsWith("'"))
+      ) {
         value = value.slice(1, -1);
       }
       title = value;
@@ -77,14 +86,17 @@ function parseFrontmatter(source: string): { title: string; content: string; raw
 /**
  * Update title in frontmatter string
  */
-function updateFrontmatterTitle(rawFrontmatter: string, newTitle: string): string {
+function updateFrontmatterTitle(
+  rawFrontmatter: string,
+  newTitle: string
+): string {
   if (!rawFrontmatter) {
     return `---\ntitle: "${newTitle}"\n---`;
   }
 
   const lines = rawFrontmatter.slice(3, -3).trim().split("\n");
   let titleFound = false;
-  const updatedLines = lines.map(line => {
+  const updatedLines = lines.map((line) => {
     if (line.startsWith("title:")) {
       titleFound = true;
       return `title: "${newTitle}"`;
@@ -105,9 +117,7 @@ function updateFrontmatterTitle(rawFrontmatter: string, newTitle: string): strin
 function extractH1Title(value: Value): string | null {
   for (const node of value) {
     if (node.type === "h1" && Array.isArray(node.children)) {
-      const text = node.children
-        .map((child: any) => child.text || "")
-        .join("");
+      const text = node.children.map((child: any) => child.text || "").join("");
       return text || null;
     }
   }
@@ -119,22 +129,35 @@ interface WorkbookEditorProps {
   readOnly?: boolean;
 }
 
-export function WorkbookEditor({ className, readOnly = false }: WorkbookEditorProps) {
+export function WorkbookEditor({
+  className,
+  readOnly = false,
+}: WorkbookEditorProps) {
   // Get pageId from route params
   const { pageId } = pageRoute.useParams();
 
   // Load MDX content from runtime - refetch every 2 seconds to detect external changes
-  const { data: mdxContent, isLoading, error, dataUpdatedAt } = usePageContent(pageId);
+  const {
+    data: mdxContent,
+    isLoading,
+    error,
+    dataUpdatedAt,
+  } = usePageContent(pageId);
   const { mutate: savePage, isPending: isSaving } = useSavePageContent();
   const { mutate: updateTitle } = useUpdatePageTitle();
 
   // Track content state for detecting external changes
-  const [lastLoadedContent, setLastLoadedContent] = useState<string | null>(null);
+  const [lastLoadedContent, setLastLoadedContent] = useState<string | null>(
+    null
+  );
   const [lastSavedContent, setLastSavedContent] = useState<string | null>(null);
   const lastSaveTime = useRef<number>(0);
 
   // Track frontmatter state
-  const [frontmatter, setFrontmatter] = useState({ title: "Untitled", rawFrontmatter: "" });
+  const [frontmatter, setFrontmatter] = useState({
+    title: "Untitled",
+    rawFrontmatter: "",
+  });
   const lastSyncedTitle = useRef<string>("Untitled");
 
   // Create editor with full plugin kit
@@ -212,9 +235,16 @@ export function WorkbookEditor({ className, readOnly = false }: WorkbookEditorPr
           // Check if h1 title changed - if so, update frontmatter
           let updatedFrontmatter = frontmatter.rawFrontmatter;
           if (currentH1Title && currentH1Title !== lastSyncedTitle.current) {
-            updatedFrontmatter = updateFrontmatterTitle(frontmatter.rawFrontmatter, currentH1Title);
+            updatedFrontmatter = updateFrontmatterTitle(
+              frontmatter.rawFrontmatter,
+              currentH1Title
+            );
             lastSyncedTitle.current = currentH1Title;
-            setFrontmatter(prev => ({ ...prev, title: currentH1Title, rawFrontmatter: updatedFrontmatter }));
+            setFrontmatter((prev) => ({
+              ...prev,
+              title: currentH1Title,
+              rawFrontmatter: updatedFrontmatter,
+            }));
 
             // Also update title via API (updates manifest/sidebar)
             updateTitle({ pageId, title: currentH1Title });
@@ -245,7 +275,15 @@ export function WorkbookEditor({ className, readOnly = false }: WorkbookEditorPr
 
       return () => clearTimeout(timer);
     },
-    [readOnly, lastLoadedContent, pageId, frontmatter, lastSavedContent, savePage, updateTitle]
+    [
+      readOnly,
+      lastLoadedContent,
+      pageId,
+      frontmatter,
+      lastSavedContent,
+      savePage,
+      updateTitle,
+    ]
   );
 
   if (isLoading) {
@@ -280,11 +318,7 @@ export function WorkbookEditor({ className, readOnly = false }: WorkbookEditorPr
       )}
 
       {/* Plate editor */}
-      <Plate
-        editor={editor}
-        onChange={handleChange}
-        readOnly={readOnly}
-      >
+      <Plate editor={editor} onChange={handleChange} readOnly={readOnly}>
         <EditorContainer variant="default" className="bg-background">
           <Editor
             variant="default"

@@ -136,7 +136,7 @@ export function WorkbookPicker() {
           <h2 className="text-sm font-medium text-muted-foreground">Your Workbooks</h2>
           <Button
             variant="outline"
-            size="sm"
+            size="xs"
             onClick={() => setShowNewDialog(true)}
             disabled={createWorkbook.isPending}
           >

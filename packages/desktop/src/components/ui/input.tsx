@@ -1,23 +1,36 @@
-import * as React from "react";
-import { cn } from "@/lib/utils";
+'use client';
 
-export interface InputProps extends React.InputHTMLAttributes<HTMLInputElement> {}
+import { cva, type VariantProps } from 'class-variance-authority';
+import * as React from 'react';
 
-const Input = React.forwardRef<HTMLInputElement, InputProps>(
-  ({ className, type, ...props }, ref) => {
-    return (
-      <input
-        type={type}
-        className={cn(
-          "flex h-10 w-full rounded-lg border border-border bg-background px-3 py-2 text-sm shadow-sm transition-colors file:border-0 file:bg-transparent file:text-sm file:font-medium file:text-foreground placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:border-transparent disabled:cursor-not-allowed disabled:opacity-50",
-          className
-        )}
-        ref={ref}
-        {...props}
-      />
-    );
+import { cn } from '@/lib/utils';
+
+export const inputVariants = cva(
+  cn(
+    'flex w-full rounded-md text-base outline-hidden file:border-0 file:bg-transparent file:font-medium file:text-sm disabled:cursor-not-allowed disabled:opacity-50 md:text-sm',
+    'h-[28px] border-[1.5px] border-input bg-muted/80 px-1.5 placeholder:text-muted-foreground/80',
+    'read-only:ring-0 read-only:focus:border-input'
+  ),
+  {
+    defaultVariants: {
+      variant: 'default',
+    },
+    variants: {
+      variant: {
+        default: 'focus:border-brand/50 focus:ring-2 focus:ring-brand/30',
+        flat: '',
+        link: 'border-none bg-transparent',
+        search: 'border-none bg-transparent text-lg',
+      },
+    },
   }
 );
-Input.displayName = "Input";
 
-export { Input };
+export type InputProps = React.ComponentProps<'input'> &
+  VariantProps<typeof inputVariants>;
+
+export function Input({ className, variant, ...props }: InputProps) {
+  return (
+    <input className={cn(inputVariants({ variant }), className)} {...props} />
+  );
+}

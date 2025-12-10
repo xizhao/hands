@@ -72,7 +72,7 @@ export const PermissionDialog = memo(({ sessionId, permission }: PermissionDialo
       <div className="p-2 flex items-center gap-2 bg-muted/30">
         <Button
           variant="ghost"
-          size="sm"
+          size="xs"
           className={cn(
             "flex-1 h-8 text-xs gap-1.5",
             "text-red-600 hover:text-red-700 hover:bg-red-500/10"
@@ -85,7 +85,7 @@ export const PermissionDialog = memo(({ sessionId, permission }: PermissionDialo
         </Button>
         <Button
           variant="ghost"
-          size="sm"
+          size="xs"
           className={cn(
             "flex-1 h-8 text-xs gap-1.5",
             "text-blue-600 hover:text-blue-700 hover:bg-blue-500/10"
@@ -98,7 +98,7 @@ export const PermissionDialog = memo(({ sessionId, permission }: PermissionDialo
         </Button>
         <Button
           variant="ghost"
-          size="sm"
+          size="xs"
           className={cn(
             "flex-1 h-8 text-xs gap-1.5",
             "text-green-600 hover:text-green-700 hover:bg-green-500/10"

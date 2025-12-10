@@ -5,21 +5,24 @@
  * Uses the same styled primitives from @/registry/ui for consistency.
  */
 
-import type { JsxNode } from "../types";
 import { cn } from "@/lib/utils";
 import { useDrop } from "react-dnd";
-import type { DragItem } from "../types";
+import type { DragItem, JsxNode } from "../types";
 
 // Import Plate-style components
-import { Button } from "@/registry/ui/button";
-import { Input } from "@/registry/ui/input";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 
 interface VisualCanvasProps {
   root: JsxNode;
   selectedNodeId: string | null;
   onSelectNode: (nodeId: string | null) => void;
   onAddNode?: (nodeType: string) => void;
-  onMoveNode?: (nodeId: string, targetId: string, position: "before" | "after" | "inside") => void;
+  onMoveNode?: (
+    nodeId: string,
+    targetId: string,
+    position: "before" | "after" | "inside"
+  ) => void;
   onDeleteNode?: (nodeId: string) => void;
 }
 
@@ -49,7 +52,9 @@ export function VisualCanvas({
 
   return (
     <div
-      ref={(node) => { drop(node); }}
+      ref={(node) => {
+        drop(node);
+      }}
       className={cn(
         "min-h-full p-6 bg-background rounded-lg border transition-colors",
         isOver && "ring-2 ring-primary/50 bg-primary/5",
@@ -60,7 +65,9 @@ export function VisualCanvas({
       {isEmpty ? (
         <div className="text-center text-muted-foreground">
           <p className="text-sm">Drop components here to start building</p>
-          <p className="text-xs mt-1 opacity-70">or click items in the palette</p>
+          <p className="text-xs mt-1 opacity-70">
+            or click items in the palette
+          </p>
         </div>
       ) : (
         <div className="space-y-2">
@@ -172,10 +179,11 @@ function renderElement(
   const className = getPropValue(node.props?.className) as string | undefined;
 
   // Get text content from children
-  const textContent = node.children
-    ?.filter((c) => c.type === "text")
-    .map((c) => c.text)
-    .join("") || "";
+  const textContent =
+    node.children
+      ?.filter((c) => c.type === "text")
+      .map((c) => c.text)
+      .join("") || "";
 
   // Render children (non-text)
   const childElements = node.children
@@ -202,19 +210,29 @@ function renderElement(
     case "input":
       return (
         <Input
-          placeholder={getPropValue(node.props?.placeholder) as string || "Enter text..."}
-          type={getPropValue(node.props?.type) as string || "text"}
+          placeholder={
+            (getPropValue(node.props?.placeholder) as string) || "Enter text..."
+          }
+          type={(getPropValue(node.props?.type) as string) || "text"}
           readOnly
         />
       );
 
     // Headings
     case "h1":
-      return <h1 className={cn("text-2xl font-bold", className)}>{textContent}</h1>;
+      return (
+        <h1 className={cn("text-2xl font-bold", className)}>{textContent}</h1>
+      );
     case "h2":
-      return <h2 className={cn("text-xl font-semibold", className)}>{textContent}</h2>;
+      return (
+        <h2 className={cn("text-xl font-semibold", className)}>
+          {textContent}
+        </h2>
+      );
     case "h3":
-      return <h3 className={cn("text-lg font-medium", className)}>{textContent}</h3>;
+      return (
+        <h3 className={cn("text-lg font-medium", className)}>{textContent}</h3>
+      );
 
     // Text elements
     case "p":
@@ -243,7 +261,9 @@ function renderElement(
             <span className="text-sm">{textContent}</span>
           )}
           {!childElements?.length && !textContent && (
-            <span className="text-muted-foreground text-xs italic">Empty container</span>
+            <span className="text-muted-foreground text-xs italic">
+              Empty container
+            </span>
           )}
         </div>
       );
@@ -253,7 +273,9 @@ function renderElement(
       return (
         <div className="border rounded-lg overflow-hidden">
           <div className="bg-muted/50 px-3 py-2 border-b">
-            <span className="text-xs font-medium text-muted-foreground">DataTable</span>
+            <span className="text-xs font-medium text-muted-foreground">
+              DataTable
+            </span>
           </div>
           <div className="p-4 text-center text-muted-foreground text-sm">
             <div className="grid grid-cols-3 gap-2 mb-2">
@@ -295,7 +317,9 @@ function renderElement(
 /**
  * Extract value from PropValue
  */
-function getPropValue(prop: { type: string; value: unknown } | undefined): unknown {
+function getPropValue(
+  prop: { type: string; value: unknown } | undefined
+): unknown {
   if (!prop) return undefined;
   return prop.value;
 }
