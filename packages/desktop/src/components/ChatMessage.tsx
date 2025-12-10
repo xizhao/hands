@@ -36,6 +36,7 @@ import {
   Circle,
   CheckCircle2,
   Key,
+  Navigation,
   type LucideIcon,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -46,6 +47,7 @@ import {
 } from "@/components/ui/tooltip";
 import { Skeleton, ShimmerText } from "@/components/ui/thinking-indicator";
 import { SecretsForm, parseSecretsOutput } from "@/components/SecretsForm";
+import { NavigateCard, parseNavigateOutput } from "@/components/NavigateCard";
 
 interface ChatMessageProps {
   message: MessageWithParts;
@@ -153,6 +155,15 @@ const TOOL_REGISTRY: Record<string, ToolConfig> = {
       if (action === "list") return "listing";
       if (keys?.length) return keys.slice(0, 2).join(", ");
       return action || "";
+    },
+  },
+  navigate: {
+    icon: Navigation,
+    label: "Navigate",
+    getSubtitle: (input) => {
+      const title = input.title as string | undefined;
+      const page = input.page as string | undefined;
+      return title || page || "";
     },
   },
 };
@@ -533,6 +544,21 @@ const ToolInvocation = memo(({ part }: { part: ToolPart }) => {
           <span>Secrets</span>
         </div>
         <SecretsForm output={secretsRequest} />
+      </div>
+    );
+  }
+
+  // Check if this is the navigate tool with a navigation request
+  const isNavigateTool = toolName.toLowerCase().includes("navigate");
+  const navigateRequest = isNavigateTool &&
+    state.status === "completed" &&
+    state.output ? parseNavigateOutput(state.output) : null;
+
+  // For navigate with valid output, show the navigation card
+  if (navigateRequest) {
+    return (
+      <div className="py-1">
+        <NavigateCard output={navigateRequest} />
       </div>
     );
   }

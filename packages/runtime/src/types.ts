@@ -42,6 +42,12 @@ export interface ServiceStatus {
   buildErrors?: BuildError[];  // Parsed build errors for wrangler
 }
 
+export interface BlockRefError {
+  page: string;
+  src: string;
+  available: string[];
+}
+
 export interface EvalResult {
   timestamp: number;
   duration: number;
@@ -61,6 +67,10 @@ export interface EvalResult {
   unused: {
     exports: string[];
     files: string[];
+  };
+  blockRefs: {
+    errors: BlockRefError[];
+    availableBlocks: string[];
   };
 
   // Environment status

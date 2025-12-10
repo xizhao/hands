@@ -4,8 +4,11 @@
  * These are the default plugins that ship with the runtime.
  */
 
+import { join } from "node:path"
+import { readdir, readFile } from "node:fs/promises"
 import type { EvalPlugin, EvalContext, PluginResult } from "./plugins"
 import { parseWranglerConfig } from "../wrangler/parser"
+import { compilePage } from "../pages/mdx"
 import {
   checkTypescript,
   formatCode,
@@ -132,6 +135,106 @@ export const unusedPlugin: EvalPlugin = {
 }
 
 /**
+ * Block references validation plugin
+ * Order: 250 (validation - after typescript)
+ *
+ * Validates that all <Block src="..."> references in pages/
+ * point to existing blocks in blocks/
+ */
+export const blockRefsPlugin: EvalPlugin = {
+  name: "blockRefs",
+  order: 250,
+  parallel: true,
+  async eval(ctx: EvalContext): Promise<PluginResult> {
+    const pagesDir = join(ctx.workbookDir, "pages")
+    const blocksDir = join(ctx.workbookDir, "blocks")
+
+    // Get available blocks
+    let availableBlocks: Set<string>
+    try {
+      const blockFiles = await readdir(blocksDir)
+      availableBlocks = new Set(
+        blockFiles
+          .filter((f) => f.endsWith(".tsx") || f.endsWith(".ts"))
+          .filter((f) => !f.startsWith("_")) // Exclude private files
+          .map((f) => f.replace(/\.(tsx?|ts)$/, ""))
+      )
+    } catch {
+      // No blocks directory - nothing to validate against
+      return {
+        name: "blockRefs",
+        duration: 0,
+        ok: true,
+        errors: [],
+        warnings: [],
+        data: { references: [], missing: [] },
+      }
+    }
+
+    // Get all pages and their block references
+    let pageFiles: string[]
+    try {
+      pageFiles = (await readdir(pagesDir)).filter(
+        (f) => f.endsWith(".md") || f.endsWith(".mdx")
+      )
+    } catch {
+      // No pages directory
+      return {
+        name: "blockRefs",
+        duration: 0,
+        ok: true,
+        errors: [],
+        warnings: [],
+        data: { references: [], missing: [] },
+      }
+    }
+
+    const allRefs: Array<{ page: string; src: string; line?: number }> = []
+    const missingRefs: Array<{ page: string; src: string; available: string[] }> = []
+
+    for (const pageFile of pageFiles) {
+      try {
+        const content = await readFile(join(pagesDir, pageFile), "utf-8")
+        const compiled = compilePage(content)
+
+        for (const block of compiled.blocks) {
+          allRefs.push({ page: pageFile, src: block.id })
+
+          if (!availableBlocks.has(block.id)) {
+            missingRefs.push({
+              page: pageFile,
+              src: block.id,
+              available: Array.from(availableBlocks).slice(0, 5), // Suggest up to 5 blocks
+            })
+          }
+        }
+      } catch (err) {
+        // Skip pages that can't be parsed
+        continue
+      }
+    }
+
+    const errors = missingRefs.map((ref) => ({
+      file: `pages/${ref.page}`,
+      message: `Block "${ref.src}" not found. Available: ${ref.available.join(", ") || "(none)"}`,
+    }))
+
+    return {
+      name: "blockRefs",
+      duration: 0,
+      ok: errors.length === 0,
+      errors,
+      warnings: [],
+      data: {
+        references: allRefs,
+        missing: missingRefs,
+        availableBlocks: Array.from(availableBlocks),
+      },
+    }
+  },
+}
+
+/**
  * Get all built-in plugins
  */
 export function getBuiltinPlugins(): EvalPlugin[] {
@@ -139,6 +242,7 @@ export function getBuiltinPlugins(): EvalPlugin[] {
     wranglerPlugin,
     formatPlugin,
     typescriptPlugin,
+    blockRefsPlugin,
     unusedPlugin,
   ]
 }

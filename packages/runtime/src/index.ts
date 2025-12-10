@@ -141,7 +141,6 @@ async function main() {
   }
 
   // Run preflight checks before starting
-  console.log("Running preflight checks...");
   const preflightResult = await runPreflightChecks();
 
   if (!preflightResult.ok) {
@@ -149,21 +148,13 @@ async function main() {
     process.exit(1);
   }
 
-  // Print brief success message
-  console.log("Preflight checks passed\n");
-
   const { workbookId, workbookDir, port } = parseArgs();
-
-  console.log(`Starting Hands Runtime for workbook: ${workbookId}`);
-  console.log(`Workbook directory: ${workbookDir}`);
 
   // Find free ports using centralized port config
   const servicePorts = await findServicePorts();
   const runtimePort = port ?? servicePorts.runtime;
 
-  console.log(`Runtime port: ${runtimePort}`);
-  console.log(`Postgres port: ${servicePorts.postgres}`);
-  console.log(`Worker port: ${servicePorts.wrangler}`);
+  console.log(`[runtime] Starting: ${workbookId} on :${runtimePort}`);
 
   // Initialize runtime
   await initRuntime({
@@ -175,12 +166,10 @@ async function main() {
   });
 
   // Start postgres first (blocking - required for runtime to function)
-  console.log("Starting postgres...");
   await startPostgres();
 
   // Create HTTP server (before worker, so we can respond to health checks)
   const server = createServer(runtimePort);
-  console.log(`Runtime server listening on http://localhost:${runtimePort}`);
 
   // Output JSON for parent process to read (runtime is now usable)
   console.log(JSON.stringify({
@@ -191,9 +180,8 @@ async function main() {
   }));
 
   // Start worker in background (non-blocking - can be slow/fail without blocking runtime)
-  console.log("Starting worker...");
   startWorker().catch(err => {
-    console.error("Worker startup error:", err);
+    console.error("[runtime] Worker error:", err);
   });
 
   // Set up file watcher with race condition protection

@@ -86,7 +86,7 @@ my-workbook/
 ### Key Directories
 
 - **blocks/**: Contains RSC block functions. Each block exports a default async function and optional `meta` for title/description. Blocks are rendered via `/blocks/:id` routes.
-- **pages/**: Contains markdown files with YAML frontmatter. Pages can embed blocks using `<Block id="name" prop="value" />` syntax.
+- **pages/**: Contains markdown files with YAML frontmatter. Pages can embed blocks using `<Block src="name" prop="value" />` syntax.
 - **sources/**: Data connectors that run on cron schedules. Copied from the stdlib registry.
 - **lib/**: Shared utilities and helpers (not bundled as blocks).
 
@@ -262,8 +262,8 @@ import postgres from "postgres";
 
 // Page contents (embedded at build time)
 const PAGE_CONTENTS: Record<string, string> = {
-  "/": `---\ntitle: My Workbook\n---\n\n# My Workbook\n\n<Block id="welcome" />\n`,
-  "/dashboard": `---\ntitle: Dashboard\n---\n\n# Dashboard\n\n<Block id="chart" query="SELECT * FROM data" />\n`,
+  "/": `---\ntitle: My Workbook\n---\n\n# My Workbook\n\n<Block src="welcome" />\n`,
+  "/dashboard": `---\ntitle: Dashboard\n---\n\n# Dashboard\n\n<Block src="chart" query="SELECT * FROM data" />\n`,
 };
 
 const app = new Hono<{ Bindings: { DATABASE_URL: string } }>();

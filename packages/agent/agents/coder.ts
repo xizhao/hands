@@ -101,12 +101,12 @@ title: Dashboard
 
 # Sales Dashboard
 
-<Block id="sales-summary" />
+<Block src="sales-summary" />
 
-<Block id="sales-chart" period="6 months" />
+<Block src="sales-chart" period="6 months" />
 \`\`\`
 
-**Block props** are passed as attributes: \`<Block id="name" myProp="value" />\`
+**Block props** are passed as attributes: \`<Block src="name" myProp="value" />\`
 
 ## Workflow
 

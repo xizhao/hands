@@ -18,7 +18,7 @@ import type { BlockContext } from "./block.js"
  *
  * # Dashboard
  *
- * <Block id="metrics" />
+ * <Block src="metrics" />
  * ```
  */
 export interface PageMeta {
@@ -83,11 +83,11 @@ export interface PageRenderResult {
 /**
  * MDX Block component props
  *
- * Used in MDX pages: `<Block id="my-block" prop1="value" />`
+ * Used in MDX pages: `<Block src="my-block" prop1="value" />`
  */
 export interface MdxBlockProps {
-  /** Block ID (must match a block in blocks/) */
-  id: string
+  /** Block source (must match a block in blocks/, e.g., "welcome" for blocks/welcome.tsx) */
+  src: string
 
   /** Additional props passed to the block function */
   [key: string]: unknown

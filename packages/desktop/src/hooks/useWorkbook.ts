@@ -21,6 +21,13 @@ export interface RuntimeStatus {
   message: string;
 }
 
+// Block reference error
+export interface BlockRefError {
+  page: string;
+  src: string;
+  available: string[];
+}
+
 // Eval result from the runtime server
 export interface EvalResult {
   timestamp: number;
@@ -42,6 +49,10 @@ export interface EvalResult {
   unused: {
     exports: string[];
     files: string[];
+  };
+  blockRefs: {
+    errors: BlockRefError[];
+    availableBlocks: string[];
   };
   services: {
     postgres: ServiceStatus;
@@ -451,11 +462,11 @@ export interface WorkbookManifest {
 export function useWorkbookManifest(workbookId: string | null) {
   const runtimeStatus = useRuntimeStatus(workbookId);
   const queryClient = useQueryClient();
-  // Use runtime port from status, or fall back to default
-  const port = runtimeStatus.data?.runtime_port || PORTS.RUNTIME;
-  // Be optimistic about runtime - try to connect even if status hasn't confirmed running
-  // The SSE connection will fail gracefully if runtime isn't actually available
-  const shouldConnect = !!workbookId && !!port;
+  // Use runtime port from status - only connect when we have a valid port from Tauri
+  // Don't fall back to default port since runtime may be on a different port
+  const port = runtimeStatus.data?.runtime_port;
+  // Only connect when we have a valid port (non-zero) from the runtime status
+  const shouldConnect = !!workbookId && !!port && port > 0;
 
   const [manifest, setManifest] = useState<WorkbookManifest | null>(null);
   const [isConnected, setIsConnected] = useState(false);
@@ -568,6 +579,7 @@ export function usePageContent(pageId: string | null) {
     },
     enabled: !!port && !!pageId,
     staleTime: 0, // Always refetch when pageId changes
+    refetchInterval: 2000, // Poll every 2 seconds for external changes (hot reload)
   });
 }
 

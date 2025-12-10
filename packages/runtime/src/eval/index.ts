@@ -103,6 +103,7 @@ export async function runEval(options: EvalOptions): Promise<EvalResult> {
   const typescriptResult = results.get("typescript")
   const formatResult = results.get("format")
   const unusedResult = results.get("unused")
+  const blockRefsResult = results.get("blockRefs")
 
   return {
     timestamp: Date.now(),
@@ -119,6 +120,10 @@ export async function runEval(options: EvalOptions): Promise<EvalResult> {
     unused: {
       exports: (unusedResult?.data as any)?.exports ?? [],
       files: (unusedResult?.data as any)?.files ?? [],
+    },
+    blockRefs: {
+      errors: (blockRefsResult?.data as any)?.missing ?? [],
+      availableBlocks: (blockRefsResult?.data as any)?.availableBlocks ?? [],
     },
     services,
   }

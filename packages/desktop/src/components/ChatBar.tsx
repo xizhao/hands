@@ -182,7 +182,10 @@ export function ChatBar({ expanded, onExpandChange }: ChatBarProps) {
   useEffect(() => {
     if (autoSubmitPending && pendingAttachment && isConnected && !isBusy) {
       setAutoSubmitPending(false);
-      handleSubmit();
+      // Set default prompt for file drops
+      setInput("Import this data and make it useful");
+      // Submit on next tick after input is set
+      setTimeout(() => handleSubmit(), 0);
     }
   }, [autoSubmitPending, pendingAttachment, isConnected, isBusy, setAutoSubmitPending, handleSubmit]);
 

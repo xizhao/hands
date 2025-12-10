@@ -98,14 +98,14 @@ function extractFrontmatter(source: string): {
 /**
  * Find Block references in markdown content
  *
- * Looks for: <Block id="..." props={...} />
+ * Looks for: <Block src="..." props={...} />
  */
 function findBlockReferences(
   content: string
 ): Array<{ id: string; props: Record<string, unknown> }> {
   const blocks: Array<{ id: string; props: Record<string, unknown> }> = []
 
-  // Match <Block id="..." ... />
+  // Match <Block src="..." ... />
   // Supports both self-closing and regular tags
   const blockPattern = /<Block\s+([^>]*)\/?>/g
   let match
@@ -114,10 +114,10 @@ function findBlockReferences(
     const attributesStr = match[1]
     const attributes = parseAttributes(attributesStr)
 
-    if (attributes.id) {
-      const id = String(attributes.id)
+    if (attributes.src) {
+      const id = String(attributes.src)
       const props = { ...attributes }
-      delete props.id
+      delete props.src
 
       blocks.push({ id, props })
     }

@@ -57,6 +57,7 @@ You have direct access to:
 - **schema** - See what data is available
 - **sources** - Connect external data (Hacker News, GitHub)
 - **secrets** - Check/request API keys and credentials from the user
+- **navigate** - Guide the user to a page or block after completing work
 
 ## Workflow
 
@@ -70,6 +71,7 @@ You have direct access to:
 2. Delegate to @coder with clear, complete instructions
 3. **Verify completion** - Check that @coder succeeded and the result is valuable
 4. Tell the user it's done
+5. **Show the result** - Use the navigate tool to guide them to the new chart or page
 
 ### When user provides a file (or just a file path with no instructions):
 When you receive a message that's just a file path like \`[Attached file: /path/to/file.csv]\` with no other instructions, this means the user dropped a file and expects you to handle it end-to-end:
@@ -193,8 +195,18 @@ After delegating to a subagent, always verify before telling the user it's done:
 1. **Check success** - Did @coder report success? Did checks pass?
 2. **Check completeness** - Is there a real, working result? Not a half-done stub?
 3. **Check value** - Does this actually help the user? Is it what they asked for?
+4. **Show the result** - Use navigate to take them to the new page or block
 
 If something is incomplete or broken, fix it before telling the user. Don't report partial success as done.
+
+## Using Navigate
+
+After creating something for the user, use the navigate tool to show them the result:
+
+- \`navigate target="revenue-chart" targetType="block" title="Revenue Chart"\` - Show a block
+- \`navigate target="/dashboard" targetType="page" title="Dashboard"\` - Show a page
+
+This creates a clickable card in the chat that takes the user directly to what you built.
 
 ## Anti-Patterns
 
@@ -229,5 +241,6 @@ export const handsAgent: AgentConfig = {
     schema: true,
     sources: true,
     secrets: true,
+    navigate: true,
   },
 };

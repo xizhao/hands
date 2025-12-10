@@ -3,7 +3,7 @@ import { motion } from "framer-motion";
 import { Key, Eye, EyeOff, Check, Loader2, CheckCircle2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
-import { PORTS } from "@/lib/ports";
+import { useUIStore } from "@/stores/ui";
 
 interface SecretSpec {
   key: string;
@@ -104,6 +104,7 @@ SecretInput.displayName = "SecretInput";
  * SecretsForm component - renders when the secrets tool requests user input
  */
 export const SecretsForm = memo(({ output, onSaved }: SecretsFormProps) => {
+  const runtimePort = useUIStore((s) => s.runtimePort);
   const [values, setValues] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
@@ -120,6 +121,11 @@ export const SecretsForm = memo(({ output, onSaved }: SecretsFormProps) => {
   const handleSubmit = useCallback(async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
+
+    if (!runtimePort) {
+      setError("Runtime not connected");
+      return;
+    }
 
     // Filter out empty values (don't overwrite existing secrets with empty)
     const secretsToSave: Record<string, string> = {};
@@ -145,7 +151,7 @@ export const SecretsForm = memo(({ output, onSaved }: SecretsFormProps) => {
 
     setSaving(true);
     try {
-      const response = await fetch(`http://localhost:${PORTS.RUNTIME}/secrets`, {
+      const response = await fetch(`http://localhost:${runtimePort}/secrets`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ secrets: secretsToSave }),
@@ -163,7 +169,7 @@ export const SecretsForm = memo(({ output, onSaved }: SecretsFormProps) => {
     } finally {
       setSaving(false);
     }
-  }, [values, missingSecrets, onSaved]);
+  }, [values, missingSecrets, onSaved, runtimePort]);
 
   // Already saved state
   if (saved) {

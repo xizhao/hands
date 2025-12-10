@@ -90,7 +90,7 @@ Edit this page in \`pages/index.md\` or create new pages in the \`pages/\` direc
 
 You can embed blocks in your pages using MDX syntax:
 
-<Block id="example" message="Hello from a block!" />
+<Block src="example" message="Hello from a block!" />
 
 Edit blocks in the \`blocks/\` directory.
 `

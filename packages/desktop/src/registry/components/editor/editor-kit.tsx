@@ -6,6 +6,7 @@ import { type TPlateEditor, useEditorRef } from 'platejs/react';
 import { AIKit } from './plugins/ai-kit';
 import { AutoformatKit } from './plugins/autoformat-kit';
 import { BasicBlocksKit } from './plugins/basic-blocks-kit';
+import { BlockKit } from './plugins/block-kit';
 import { BasicMarksKit } from './plugins/basic-marks-kit';
 import { BlockMenuKit } from './plugins/block-menu-kit';
 import { BlockSelectionKit } from './plugins/block-selection-kit';
@@ -44,6 +45,7 @@ export const EditorKit = [
 
   // Elements
   ...BasicBlocksKit,
+  ...BlockKit,
   ...CodeBlockKit,
   ...TableKit,
   ...ToggleKit,

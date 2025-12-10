@@ -13,6 +13,12 @@ export interface BlockConfig {
   props: Record<string, unknown>;
 }
 
+// Simple block render request (for discovered blocks)
+export interface BlockRenderRequest {
+  id: string;
+  props?: Record<string, unknown>;
+}
+
 // Block render result
 export interface BlockRenderResult {
   html: string;
@@ -92,5 +98,57 @@ export function useBlockRenderer() {
   );
 
   return { render, invalidate };
+}
+
+/**
+ * Render a discovered block by ID
+ * This is simpler than BlockConfig - just pass the block ID and optional props
+ */
+export async function renderBlockById(
+  port: number,
+  blockId: string,
+  props?: Record<string, unknown>
+): Promise<BlockRenderResult> {
+  const url = `http://localhost:${port}/blocks/${blockId}`;
+  console.log("[blocks] Fetching block:", blockId, "from:", url);
+
+  try {
+    const response = await fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(props ?? {}),
+    });
+
+    console.log("[blocks] Response status:", response.status, response.statusText);
+    const html = await response.text();
+    console.log("[blocks] Response length:", html.length);
+
+    if (!response.ok) {
+      return { html: "", error: `Render failed: ${response.statusText}` };
+    }
+
+    return { html };
+  } catch (error) {
+    console.error("[blocks] Fetch error:", error);
+    return { html: "", error: String(error) };
+  }
+}
+
+/**
+ * React hook to render a discovered block by ID
+ */
+export function useBlockById(blockId: string | null, props?: Record<string, unknown>) {
+  const port = useUIStore((s) => s.runtimePort);
+
+  return useQuery({
+    queryKey: ["block", blockId, props],
+    queryFn: async () => {
+      if (!blockId || !port) return { html: "", error: "Not ready" };
+      return renderBlockById(port, blockId, props);
+    },
+    enabled: !!blockId && !!port,
+    staleTime: 30_000,
+    refetchOnWindowFocus: false,
+  });
 }
 

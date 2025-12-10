@@ -25,7 +25,6 @@ import {
   useCreatePage,
   useUpdatePageTitle,
 } from "@/hooks/useWorkbook";
-import { PORTS } from "@/lib/ports";
 import type { Workbook } from "@/lib/workbook";
 import { cn } from "@/lib/utils";
 
@@ -98,8 +97,8 @@ export function NotebookShell({ children }: NotebookShellProps) {
   const { data: evalResult } = useEvalResult(activeWorkbookId);
   const { data: runtimeStatus } = useRuntimeStatus(activeWorkbookId);
   const { data: manifest } = useWorkbookManifest(activeWorkbookId);
-  // Use Tauri-reported port, or fallback to default if runtime exists externally
-  const runtimePort = runtimeStatus?.runtime_port || PORTS.RUNTIME;
+  // Use Tauri-reported port - don't fallback to default since runtime may be on different port
+  const runtimePort = runtimeStatus?.runtime_port ?? 0;
 
   // Runtime connection status
   const runtimeConnected = devServerStatus?.running ?? false;

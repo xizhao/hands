@@ -30,7 +30,6 @@ function setupToolsSymlink(workingDir: string) {
   // Create .opencode directory if needed
   if (!existsSync(opencodeDir)) {
     mkdirSync(opencodeDir, { recursive: true });
-    console.log(`[hands-agent] Created ${opencodeDir}`);
   }
 
   // Remove existing symlink/dir if it exists
@@ -39,18 +38,13 @@ function setupToolsSymlink(workingDir: string) {
     if (stat.isSymbolicLink()) {
       unlinkSync(toolsTarget);
     } else {
-      console.log(
-        `[hands-agent] Warning: ${toolsTarget} exists and is not a symlink, skipping`
-      );
+      console.warn(`[agent] Warning: ${toolsTarget} exists and is not a symlink`);
       return;
     }
   }
 
   // Create symlink
   symlinkSync(TOOLS_SOURCE, toolsTarget, "dir");
-  console.log(
-    `[hands-agent] Symlinked tools: ${toolsTarget} -> ${TOOLS_SOURCE}`
-  );
 }
 
 // Build config
@@ -68,12 +62,8 @@ const config: Config = {
 };
 
 async function main() {
-  console.log(`[hands-agent] Starting server on port ${PORT}...`);
-  console.log(`[hands-agent] Model: ${MODEL}`);
-
   // Get working directory from env (set by Tauri) or use cwd
   const workingDir = process.env.HANDS_WORKBOOK_DIR || process.cwd();
-  console.log(`[hands-agent] Working directory: ${workingDir}`);
 
   // Setup tools symlink so OpenCode can discover our custom tools
   setupToolsSymlink(workingDir);
@@ -85,29 +75,26 @@ async function main() {
       config,
     });
 
-    console.log(`[hands-agent] Server running at ${server.url}`);
-
     // Verify agents loaded
     const agents = await client.app.agents();
-    console.log(`[hands-agent] Agents loaded:`, agents.data);
+    const agentNames = agents.data?.map((a: { name: string }) => a.name) ?? [];
+    console.log(`[agent] Ready on :${PORT} (${agentNames.join(", ")})`);
 
     // Output ready message for Tauri to detect
     console.log(JSON.stringify({ type: "ready", port: PORT, url: server.url }));
 
     // Handle shutdown
     process.on("SIGINT", () => {
-      console.log("[hands-agent] Shutting down...");
       server.close();
       process.exit(0);
     });
 
     process.on("SIGTERM", () => {
-      console.log("[hands-agent] Shutting down...");
       server.close();
       process.exit(0);
     });
   } catch (error) {
-    console.error("[hands-agent] Failed to start:", error);
+    console.error("[agent] Failed to start:", error);
     process.exit(1);
   }
 }

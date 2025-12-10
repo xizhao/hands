@@ -7,7 +7,7 @@ import { ChatMessage } from "@/components/ChatMessage";
 import { cn } from "@/lib/utils";
 import { X, Loader2 } from "lucide-react";
 import { ShimmerText } from "@/components/ui/thinking-indicator";
-import { motion, AnimatePresence } from "framer-motion";
+import { motion } from "framer-motion";
 
 interface ThreadProps {
   expanded: boolean;
@@ -189,17 +189,16 @@ export function Thread({ expanded, onCollapse, onExpand }: ThreadProps) {
         </div>
       )}
 
-      {/* Messages - expand upward when thread is open, angled down toward input */}
-      <AnimatePresence>
-        {expanded && hasMessages && (
-          <motion.div
-            initial={{ opacity: 0, height: 0 }}
-            animate={{ opacity: 1, height: "auto" }}
-            exit={{ opacity: 0, height: 0 }}
-            transition={{ duration: 0.2, ease: "easeOut" }}
-            className="overflow-hidden"
-          >
-            <ScrollArea className="max-h-[50vh] mb-1.5">
+      {/* Messages - expand upward when thread is open */}
+      {expanded && hasMessages && (
+        <div
+          className="mb-1.5"
+          style={{
+            maskImage: "linear-gradient(to bottom, transparent 0%, black 48px, black 100%)",
+            WebkitMaskImage: "linear-gradient(to bottom, transparent 0%, black 48px, black 100%)",
+          }}
+        >
+          <ScrollArea className="max-h-[calc(100vh-12rem)]">
               <div className="space-y-1.5 px-1 pb-2">
                 {/* Messages (oldest to newest, bottom-aligned) */}
                 {messages.map((message, idx) => (
@@ -229,9 +228,8 @@ export function Thread({ expanded, onCollapse, onExpand }: ThreadProps) {
                 <div ref={bottomRef} />
               </div>
             </ScrollArea>
-          </motion.div>
-        )}
-      </AnimatePresence>
+        </div>
+      )}
     </div>
   );
 }

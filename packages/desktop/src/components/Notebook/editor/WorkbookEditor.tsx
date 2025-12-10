@@ -3,16 +3,21 @@
  *
  * Loads MDX content from the runtime, deserializes it to Plate,
  * and serializes back to MDX on save.
+ *
+ * Frontmatter handling:
+ * - Parses frontmatter to extract page title
+ * - Ensures h1 in editor matches frontmatter title
+ * - Syncs h1 changes back to frontmatter on save
  */
 
-import { useMemo, useCallback, useState, useEffect } from "react";
+import { useMemo, useCallback, useState, useEffect, useRef } from "react";
 import { Plate, usePlateEditor } from "platejs/react";
 import { MarkdownPlugin } from "@platejs/markdown";
 import type { Value } from "platejs";
 
 import { EditorKit } from "@/registry/components/editor/editor-kit";
 import { Editor, EditorContainer } from "@/registry/ui/editor";
-import { usePageContent, useSavePageContent } from "@/hooks/useWorkbook";
+import { usePageContent, useSavePageContent, useUpdatePageTitle } from "@/hooks/useWorkbook";
 import { pageRoute } from "@/routes/_notebook/page.$pageId";
 import { cn } from "@/lib/utils";
 
@@ -30,6 +35,85 @@ const EMPTY_DOCUMENT: Value = [
   },
 ];
 
+/**
+ * Parse frontmatter from MDX content
+ */
+function parseFrontmatter(source: string): { title: string; content: string; rawFrontmatter: string } {
+  if (!source.startsWith("---")) {
+    return { title: "Untitled", content: source, rawFrontmatter: "" };
+  }
+
+  const endIndex = source.indexOf("---", 3);
+  if (endIndex === -1) {
+    return { title: "Untitled", content: source, rawFrontmatter: "" };
+  }
+
+  const frontmatterStr = source.slice(3, endIndex).trim();
+  const content = source.slice(endIndex + 3).trim();
+  const rawFrontmatter = source.slice(0, endIndex + 3);
+
+  // Parse title from frontmatter
+  let title = "Untitled";
+  for (const line of frontmatterStr.split("\n")) {
+    const colonIndex = line.indexOf(":");
+    if (colonIndex === -1) continue;
+
+    const key = line.slice(0, colonIndex).trim();
+    if (key === "title") {
+      let value = line.slice(colonIndex + 1).trim();
+      // Remove quotes
+      if ((value.startsWith('"') && value.endsWith('"')) ||
+          (value.startsWith("'") && value.endsWith("'"))) {
+        value = value.slice(1, -1);
+      }
+      title = value;
+      break;
+    }
+  }
+
+  return { title, content, rawFrontmatter };
+}
+
+/**
+ * Update title in frontmatter string
+ */
+function updateFrontmatterTitle(rawFrontmatter: string, newTitle: string): string {
+  if (!rawFrontmatter) {
+    return `---\ntitle: "${newTitle}"\n---`;
+  }
+
+  const lines = rawFrontmatter.slice(3, -3).trim().split("\n");
+  let titleFound = false;
+  const updatedLines = lines.map(line => {
+    if (line.startsWith("title:")) {
+      titleFound = true;
+      return `title: "${newTitle}"`;
+    }
+    return line;
+  });
+
+  if (!titleFound) {
+    updatedLines.unshift(`title: "${newTitle}"`);
+  }
+
+  return `---\n${updatedLines.join("\n")}\n---`;
+}
+
+/**
+ * Extract text from first h1 in editor value
+ */
+function extractH1Title(value: Value): string | null {
+  for (const node of value) {
+    if (node.type === "h1" && Array.isArray(node.children)) {
+      const text = node.children
+        .map((child: any) => child.text || "")
+        .join("");
+      return text || null;
+    }
+  }
+  return null;
+}
+
 interface WorkbookEditorProps {
   className?: string;
   readOnly?: boolean;
@@ -39,13 +123,19 @@ export function WorkbookEditor({ className, readOnly = false }: WorkbookEditorPr
   // Get pageId from route params
   const { pageId } = pageRoute.useParams();
 
-  // Load MDX content from runtime
-  const { data: mdxContent, isLoading, error } = usePageContent(pageId);
+  // Load MDX content from runtime - refetch every 2 seconds to detect external changes
+  const { data: mdxContent, isLoading, error, dataUpdatedAt } = usePageContent(pageId);
   const { mutate: savePage, isPending: isSaving } = useSavePageContent();
+  const { mutate: updateTitle } = useUpdatePageTitle();
 
-  // Track if we've initialized the editor with content
-  const [initialized, setInitialized] = useState(false);
+  // Track content state for detecting external changes
+  const [lastLoadedContent, setLastLoadedContent] = useState<string | null>(null);
   const [lastSavedContent, setLastSavedContent] = useState<string | null>(null);
+  const lastSaveTime = useRef<number>(0);
+
+  // Track frontmatter state
+  const [frontmatter, setFrontmatter] = useState({ title: "Untitled", rawFrontmatter: "" });
+  const lastSyncedTitle = useRef<string>("Untitled");
 
   // Create editor with full plugin kit
   const editor = usePlateEditor({
@@ -53,60 +143,87 @@ export function WorkbookEditor({ className, readOnly = false }: WorkbookEditorPr
     value: EMPTY_DOCUMENT,
   });
 
-  // Deserialize MDX to Plate Value when content loads
+  // Deserialize MDX to Plate Value when content loads or changes externally
   useEffect(() => {
-    if (!mdxContent || initialized) return;
+    if (!mdxContent) return;
+
+    // Skip if this is content we just saved (within last 3 seconds)
+    const timeSinceLastSave = Date.now() - lastSaveTime.current;
+    if (timeSinceLastSave < 3000 && mdxContent === lastSavedContent) {
+      return;
+    }
+
+    // Skip if content hasn't changed
+    if (mdxContent === lastLoadedContent) {
+      return;
+    }
 
     try {
-      // Strip frontmatter before deserializing
-      let content = mdxContent;
-      if (content.startsWith("---")) {
-        const endIndex = content.indexOf("---", 3);
-        if (endIndex !== -1) {
-          content = content.slice(endIndex + 3).trim();
-        }
-      }
+      // Parse frontmatter to extract title
+      const { title, content, rawFrontmatter } = parseFrontmatter(mdxContent);
+      setFrontmatter({ title, rawFrontmatter });
+      lastSyncedTitle.current = title;
 
-      // Use Plate's markdown API to deserialize
+      // Use Plate's markdown API to deserialize content (without frontmatter)
       const value = editor.api.markdown.deserialize(content);
       if (value && value.length > 0) {
+        // If content doesn't start with h1, prepend one with frontmatter title
+        const hasH1 = value.length > 0 && value[0].type === "h1";
+        if (!hasH1) {
+          value.unshift({
+            id: "title-h1",
+            type: "h1",
+            children: [{ text: title }],
+          });
+        }
         editor.tf.setValue(value);
       }
-      setInitialized(true);
+      setLastLoadedContent(mdxContent);
       setLastSavedContent(mdxContent);
     } catch (err) {
       console.error("[editor] Failed to deserialize MDX:", err);
-      setInitialized(true);
+      setLastLoadedContent(mdxContent);
     }
-  }, [mdxContent, initialized, editor]);
+  }, [mdxContent, lastLoadedContent, lastSavedContent, editor]);
 
-  // Reset initialized state when pageId changes
+  // Reset state when pageId changes
   useEffect(() => {
-    setInitialized(false);
+    setLastLoadedContent(null);
     setLastSavedContent(null);
+    setFrontmatter({ title: "Untitled", rawFrontmatter: "" });
+    lastSyncedTitle.current = "Untitled";
+    lastSaveTime.current = 0;
   }, [pageId]);
 
   // Auto-save with debounce
   const handleChange = useCallback(
     (options: { editor: typeof editor; value: Value }) => {
-      if (readOnly || !initialized || !pageId) return;
+      if (readOnly || !lastLoadedContent || !pageId) return;
 
       // Debounce save
       const timer = setTimeout(() => {
         try {
+          // Extract h1 title from current editor value
+          const currentH1Title = extractH1Title(options.value);
+
           // Serialize Plate Value to MDX
           const markdown = options.editor.api.markdown.serialize();
 
-          // Preserve frontmatter from original content
-          let frontmatter = "";
-          if (mdxContent?.startsWith("---")) {
-            const endIndex = mdxContent.indexOf("---", 3);
-            if (endIndex !== -1) {
-              frontmatter = mdxContent.slice(0, endIndex + 3) + "\n\n";
-            }
+          // Check if h1 title changed - if so, update frontmatter
+          let updatedFrontmatter = frontmatter.rawFrontmatter;
+          if (currentH1Title && currentH1Title !== lastSyncedTitle.current) {
+            updatedFrontmatter = updateFrontmatterTitle(frontmatter.rawFrontmatter, currentH1Title);
+            lastSyncedTitle.current = currentH1Title;
+            setFrontmatter(prev => ({ ...prev, title: currentH1Title, rawFrontmatter: updatedFrontmatter }));
+
+            // Also update title via API (updates manifest/sidebar)
+            updateTitle({ pageId, title: currentH1Title });
           }
 
-          const newContent = frontmatter + markdown;
+          // Build final content with frontmatter
+          const newContent = updatedFrontmatter
+            ? updatedFrontmatter + "\n\n" + markdown
+            : markdown;
 
           // Only save if content changed
           if (newContent !== lastSavedContent) {
@@ -114,7 +231,9 @@ export function WorkbookEditor({ className, readOnly = false }: WorkbookEditorPr
               { pageId, content: newContent },
               {
                 onSuccess: () => {
+                  lastSaveTime.current = Date.now();
                   setLastSavedContent(newContent);
+                  setLastLoadedContent(newContent);
                 },
               }
             );
@@ -126,7 +245,7 @@ export function WorkbookEditor({ className, readOnly = false }: WorkbookEditorPr
 
       return () => clearTimeout(timer);
     },
-    [readOnly, initialized, pageId, mdxContent, lastSavedContent, savePage]
+    [readOnly, lastLoadedContent, pageId, frontmatter, lastSavedContent, savePage, updateTitle]
   );
 
   if (isLoading) {
