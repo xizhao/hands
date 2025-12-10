@@ -1,12 +1,16 @@
 import { createRootRoute, Outlet } from "@tanstack/react-router";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
+import { listen } from "@tauri-apps/api/event";
 import { initTheme } from "@/lib/theme";
+import { SettingsModal } from "@/components/SettingsModal";
 
 export const Route = createRootRoute({
   component: RootComponent,
 });
 
 function RootComponent() {
+  const [settingsOpen, setSettingsOpen] = useState(false);
+
   // Initialize theme on mount
   useEffect(() => {
     initTheme();
@@ -21,5 +25,32 @@ function RootComponent() {
     return () => document.removeEventListener("contextmenu", handleContextMenu);
   }, []);
 
-  return <Outlet />;
+  // Listen for menu event from Tauri (Hands > Settings)
+  useEffect(() => {
+    const unlisten = listen("open-settings", () => {
+      setSettingsOpen(true);
+    });
+    return () => {
+      unlisten.then((fn) => fn());
+    };
+  }, []);
+
+  // Cmd+, to open settings (fallback for keyboard shortcut)
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.metaKey && e.key === ",") {
+        e.preventDefault();
+        setSettingsOpen(true);
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, []);
+
+  return (
+    <>
+      <Outlet />
+      <SettingsModal open={settingsOpen} onClose={() => setSettingsOpen(false)} />
+    </>
+  );
 }

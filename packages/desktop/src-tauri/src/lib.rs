@@ -5,7 +5,8 @@ use std::path::PathBuf;
 use std::process::Stdio;
 use std::sync::Arc;
 use std::time::Duration;
-use tauri::Manager;
+use tauri::menu::{MenuBuilder, MenuItemBuilder, SubmenuBuilder};
+use tauri::{Emitter, Manager};
 use tauri_plugin_store::StoreExt;
 use tokio::io::{AsyncBufReadExt, BufReader};
 use tokio::process::{Child, Command};
@@ -1488,6 +1489,78 @@ pub fn run() {
 
             // Start runtime monitor for auto-restart
             start_runtime_monitor(state.clone());
+
+            // Build the application menu
+            let app_handle = app.handle();
+
+            // Settings menu item with Cmd+,
+            let settings_item = MenuItemBuilder::new("Settings...")
+                .id("settings")
+                .accelerator("CmdOrCtrl+,")
+                .build(app_handle)?;
+
+            // App submenu (macOS shows this as the app name)
+            let app_submenu = SubmenuBuilder::new(app_handle, "Hands")
+                .about(None)
+                .separator()
+                .item(&settings_item)
+                .separator()
+                .services()
+                .separator()
+                .hide()
+                .hide_others()
+                .show_all()
+                .separator()
+                .quit()
+                .build()?;
+
+            // File submenu
+            let file_submenu = SubmenuBuilder::new(app_handle, "File")
+                .close_window()
+                .build()?;
+
+            // Edit submenu
+            let edit_submenu = SubmenuBuilder::new(app_handle, "Edit")
+                .undo()
+                .redo()
+                .separator()
+                .cut()
+                .copy()
+                .paste()
+                .select_all()
+                .build()?;
+
+            // View submenu
+            let view_submenu = SubmenuBuilder::new(app_handle, "View")
+                .fullscreen()
+                .build()?;
+
+            // Window submenu
+            let window_submenu = SubmenuBuilder::new(app_handle, "Window")
+                .minimize()
+                .separator()
+                .close_window()
+                .build()?;
+
+            let menu = MenuBuilder::new(app_handle)
+                .item(&app_submenu)
+                .item(&file_submenu)
+                .item(&edit_submenu)
+                .item(&view_submenu)
+                .item(&window_submenu)
+                .build()?;
+
+            app.set_menu(menu)?;
+
+            // Handle menu events
+            app.on_menu_event(move |app_handle, event| {
+                if event.id().as_ref() == "settings" {
+                    // Emit event to frontend to open settings modal
+                    if let Some(window) = app_handle.get_webview_window("main") {
+                        let _ = window.emit("open-settings", ());
+                    }
+                }
+            });
 
             let app_handle = app.handle().clone();
             let env_vars = get_api_keys_from_store(&app_handle);

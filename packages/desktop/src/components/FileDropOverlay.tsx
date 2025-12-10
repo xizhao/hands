@@ -10,7 +10,7 @@ import { FileArrowUp } from "@phosphor-icons/react";
 import { cn } from "@/lib/utils";
 
 interface FileDropOverlayProps {
-  onFileDrop: (file: File) => void;
+  onFileDrop: (file: File, dropTarget: Element | null) => void;
   accept?: string[]; // e.g. [".csv", ".json", ".parquet"]
   disabled?: boolean;
 }
@@ -84,9 +84,14 @@ export function FileDropOverlay({
       console.log("[FileDropOverlay] Files dropped:", files.map(f => f.name));
       const validFile = files.find(isValidFileType);
 
+      // Get the element under the drop point (not the overlay itself)
+      // Use elementFromPoint with the drop coordinates
+      const dropTarget = document.elementFromPoint(e.clientX, e.clientY);
+      console.log("[FileDropOverlay] Drop target:", dropTarget);
+
       if (validFile) {
         console.log("[FileDropOverlay] Valid file found, calling onFileDrop:", validFile.name);
-        onFileDrop(validFile);
+        onFileDrop(validFile, dropTarget);
       } else {
         console.log("[FileDropOverlay] No valid file type found. Accepted:", accept);
       }

@@ -1,4 +1,4 @@
-import { createRouter, createMemoryHistory } from "@tanstack/react-router";
+import { createRouter, createMemoryHistory, redirect } from "@tanstack/react-router";
 import { routeTree } from "./routeTree.gen";
 
 // Use memory history for Tauri desktop app
@@ -9,6 +9,11 @@ const memoryHistory = createMemoryHistory({
 export const router = createRouter({
   routeTree,
   history: memoryHistory,
+  defaultNotFoundComponent: () => {
+    // Redirect to home on 404
+    router.navigate({ to: "/" });
+    return null;
+  },
 });
 
 declare module "@tanstack/react-router" {

@@ -285,7 +285,7 @@ export const THEMES: Record<string, Theme> = {
 };
 
 const STORAGE_KEY = "hands-theme";
-const DEFAULT_THEME = "dark";
+const DEFAULT_THEME = "system";
 
 function applyTheme(theme: Theme) {
   const root = document.documentElement;
@@ -298,6 +298,37 @@ function applyTheme(theme: Theme) {
     const cssVar = key.replace(/([A-Z])/g, "-$1").toLowerCase();
     root.style.setProperty(`--${cssVar}`, value);
   });
+}
+
+/**
+ * Get the system's preferred color scheme
+ */
+function getSystemPreference(): "light" | "dark" {
+  if (typeof window !== "undefined" && window.matchMedia) {
+    return window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+  }
+  return "dark";
+}
+
+/**
+ * Resolve a theme mode to an actual theme
+ * - "system" -> follows OS preference (light or dark)
+ * - "light-mode" -> uses "light" theme
+ * - "dark-mode" -> uses "dark" theme
+ * - anything else -> uses that specific theme
+ */
+function resolveTheme(themeName: string): Theme {
+  if (themeName === "system") {
+    const systemPref = getSystemPreference();
+    return THEMES[systemPref] ?? THEMES.dark;
+  }
+  if (themeName === "light-mode") {
+    return THEMES.light;
+  }
+  if (themeName === "dark-mode") {
+    return THEMES.dark;
+  }
+  return THEMES[themeName] ?? THEMES.dark;
 }
 
 export function getTheme(): string {
@@ -314,17 +345,27 @@ export function getTheme(): string {
 }
 
 export function setTheme(themeName: string) {
-  const theme = THEMES[themeName];
-  if (theme) {
-    applyTheme(theme);
-    localStorage.setItem(STORAGE_KEY, JSON.stringify({ state: { currentTheme: themeName } }));
-  }
+  const theme = resolveTheme(themeName);
+  applyTheme(theme);
+  localStorage.setItem(STORAGE_KEY, JSON.stringify({ state: { currentTheme: themeName } }));
 }
 
 export function initTheme() {
   const themeName = getTheme();
-  const theme = THEMES[themeName] ?? THEMES[DEFAULT_THEME];
+  const theme = resolveTheme(themeName);
   applyTheme(theme);
+
+  // Listen for system preference changes if using system mode
+  if (themeName === "system" && typeof window !== "undefined" && window.matchMedia) {
+    const mediaQuery = window.matchMedia("(prefers-color-scheme: dark)");
+    mediaQuery.addEventListener("change", () => {
+      const currentTheme = getTheme();
+      if (currentTheme === "system") {
+        const newTheme = resolveTheme("system");
+        applyTheme(newTheme);
+      }
+    });
+  }
 }
 
 export function getThemeList() {
@@ -332,5 +373,12 @@ export function getThemeList() {
     id,
     name: theme.name,
     isDark: theme.isDark,
+    colors: {
+      background: theme.colors.background,
+      foreground: theme.colors.foreground,
+      primary: theme.colors.primary,
+      accent: theme.colors.accent,
+      muted: theme.colors.muted,
+    },
   }));
 }

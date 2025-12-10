@@ -25,6 +25,7 @@ import {
 } from "@/hooks/useWorkbook";
 import { useRightPanel, useActiveSession } from "@/hooks/useNavState";
 import { useChatState } from "@/hooks/useChatState";
+import { useImportWithAgent } from "@/hooks/useSession";
 import type { Workbook } from "@/lib/workbook";
 import { cn } from "@/lib/utils";
 
@@ -286,17 +287,38 @@ export function NotebookShell({ children }: NotebookShellProps) {
   // Chat state from hook
   const chatState = useChatState();
 
+  // Import with agent hook for workspace drops
+  const importWithAgent = useImportWithAgent();
+
   // New workbook modal state
   const [showNewWorkbookModal, setShowNewWorkbookModal] = useState(false);
 
-  // File drop handler for external files - set as pending attachment and auto-submit
-  const handleFileDrop = useCallback((file: File) => {
-    console.log("[handleFileDrop] File dropped, setting as attachment and auto-submitting:", file.name);
-    chatState.setPendingAttachment({ type: "file", file, name: file.name });
-    // Expand chat and trigger auto-submit
-    chatState.setChatExpanded(true);
-    chatState.setAutoSubmitPending(true);
-  }, []);
+  // File drop handler for external files
+  // - Dropped on chatbar: attach file, expand chat, no auto-submit
+  // - Dropped elsewhere (workspace): start background import with agent
+  const handleFileDrop = useCallback((file: File, dropTarget: Element | null) => {
+    // Check if the drop target is inside the chatbar (has data-chat-bar attribute)
+    const isOnChatbar = dropTarget?.closest("[data-chat-bar]") !== null;
+
+    if (isOnChatbar) {
+      // Chatbar drop: attach file, expand chat, but don't auto-submit
+      console.log("[handleFileDrop] File dropped on chatbar, attaching:", file.name);
+      chatState.setPendingAttachment({ type: "file", file, name: file.name });
+      chatState.setChatExpanded(true);
+      // Note: NOT setting autoSubmitPending - user must manually submit
+    } else {
+      // Workspace drop: start background import with agent (don't change focused thread)
+      console.log("[handleFileDrop] File dropped on workspace, starting background import:", file.name);
+      importWithAgent.mutate({
+        file,
+        // Don't set active session - let it run in background
+        onSessionCreated: (sessionId) => {
+          console.log("[handleFileDrop] Background import session created:", sessionId);
+          // Could show a toast notification here
+        },
+      });
+    }
+  }, [chatState, importWithAgent]);
 
   return (
     <TooltipProvider delayDuration={300}>
