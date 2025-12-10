@@ -4,11 +4,12 @@ import { motion, AnimatePresence } from "framer-motion";
 import { MessageSquare, Minus } from "lucide-react";
 import { ChatToolbar } from "./ChatToolbar";
 import { ChatThread } from "./ChatThread";
+import { useUIStore } from "@/stores/ui";
 
 export function FloatingChat() {
   const [isVisible, setIsVisible] = useState(true);
-  const [isExpanded, setIsExpanded] = useState(false);
   const [isMinimized, setIsMinimized] = useState(false);
+  const { chatExpanded: isExpanded, setChatExpanded: setIsExpanded } = useUIStore();
 
   // Track window focus
   useEffect(() => {
@@ -53,10 +54,10 @@ export function FloatingChat() {
   return (
     <AnimatePresence>
       <motion.div
-        initial={{ y: 100, opacity: 0 }}
+        initial={{ y: 20, opacity: 0 }}
         animate={{ y: 0, opacity: 1 }}
-        exit={{ y: 100, opacity: 0 }}
-        transition={{ type: "spring", damping: 25, stiffness: 300 }}
+        exit={{ y: 20, opacity: 0 }}
+        transition={{ duration: 0.15, ease: "easeOut" }}
         className="fixed bottom-4 left-4 right-4 z-50 max-w-2xl mx-auto"
       >
         <div className="bg-background/95 backdrop-blur-xl rounded-2xl border border-border shadow-2xl">
@@ -76,19 +77,16 @@ export function FloatingChat() {
             </div>
           </div>
 
-          {/* Chat thread (expanded) */}
-          <AnimatePresence>
-            {isExpanded && (
-              <motion.div
-                initial={{ height: 0, opacity: 0 }}
-                animate={{ height: "auto", opacity: 1 }}
-                exit={{ height: 0, opacity: 0 }}
-                transition={{ duration: 0.2 }}
-              >
-                <ChatThread onCollapse={() => setIsExpanded(false)} />
-              </motion.div>
-            )}
-          </AnimatePresence>
+          {/* Chat thread (expanded) - use CSS transitions for performance */}
+          <div
+            className={`grid transition-[grid-template-rows] duration-150 ease-out ${
+              isExpanded ? "grid-rows-[1fr]" : "grid-rows-[0fr]"
+            }`}
+          >
+            <div className="overflow-hidden">
+              <ChatThread onCollapse={() => setIsExpanded(false)} />
+            </div>
+          </div>
 
           {/* Input toolbar */}
           <ChatToolbar

@@ -14,6 +14,7 @@ import type { RuntimeState } from "../state";
 import { updateLockfile } from "../lockfile";
 import { PostgresPool, PostgresListener } from "../db";
 import { discoverPages } from "../pages/discovery";
+import { discoverBlocks } from "../blocks/discovery";
 import { getEventBus } from "../events";
 
 // Re-export types from state (canonical location)
@@ -345,6 +346,16 @@ async function buildManifest(state: RuntimeState): Promise<WorkbookManifest> {
     path: p.path,
   }));
 
+  // Discover blocks from blocks/ directory
+  const blocksDir = join(workbookDir, "blocks");
+  const blocksResult = await discoverBlocks(blocksDir);
+  const blocks = blocksResult.blocks.map((b) => ({
+    id: b.id,
+    title: b.meta.title,
+    description: b.meta.description,
+    path: b.path,
+  }));
+
   // Read sources from hands.json
   const sources: WorkbookSource[] = [];
   const handsJsonPath = join(workbookDir, "hands.json");
@@ -382,12 +393,13 @@ async function buildManifest(state: RuntimeState): Promise<WorkbookManifest> {
     console.error("Failed to get tables:", err);
   }
 
-  const isEmpty = pages.length === 0 && sources.length === 0 && tables.length === 0;
+  const isEmpty = pages.length === 0 && blocks.length === 0 && sources.length === 0 && tables.length === 0;
 
   return {
     workbookId,
     workbookDir,
     pages,
+    blocks,
     sources,
     tables,
     isEmpty,

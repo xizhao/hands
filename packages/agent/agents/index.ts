@@ -3,6 +3,5 @@
  */
 
 export { handsAgent } from "./hands";
+export { coderAgent } from "./coder";
 export { importAgent } from "./import";
-export { queryAgent } from "./query";
-export { blocksAgent } from "./blocks";

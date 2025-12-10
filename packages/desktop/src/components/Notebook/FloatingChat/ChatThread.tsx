@@ -37,7 +37,7 @@ export function ChatThread({ onCollapse: _onCollapse }: ChatThreadProps) {
 
   if (!activeSessionId) {
     return (
-      <div className="h-64 flex items-center justify-center text-muted-foreground text-sm">
+      <div className="h-32 flex items-center justify-center text-muted-foreground text-sm">
         Start a conversation
       </div>
     );
@@ -45,27 +45,37 @@ export function ChatThread({ onCollapse: _onCollapse }: ChatThreadProps) {
 
   if (isLoading) {
     return (
-      <div className="h-64 flex items-center justify-center text-muted-foreground text-sm">
+      <div className="h-32 flex items-center justify-center text-muted-foreground text-sm">
         Loading...
       </div>
     );
   }
 
+  // Max height: viewport - bottom offset (16px) - header (~40px) - toolbar (~56px) - extra padding (32px)
+  // Using calc to get: 100vh - ~144px, but cap at reasonable max
   return (
-    <ScrollArea className="h-64">
-      <div className="p-3 space-y-3">
-        {messages.length === 0 ? (
-          <div className="text-center text-muted-foreground text-sm py-8">
-            No messages yet
-          </div>
-        ) : (
-          messages.map((message) => (
-            <ChatMessage key={message.info.id} message={message} />
-          ))
-        )}
-        {/* Scroll anchor */}
-        <div ref={bottomRef} />
-      </div>
-    </ScrollArea>
+    <div
+      className="max-h-[calc(100vh-10rem)]"
+      style={{
+        maskImage: "linear-gradient(to bottom, transparent 0%, black 48px, black 100%)",
+        WebkitMaskImage: "linear-gradient(to bottom, transparent 0%, black 48px, black 100%)",
+      }}
+    >
+      <ScrollArea className="max-h-[calc(100vh-10rem)]">
+        <div className="p-3 pt-12 space-y-3">
+          {messages.length === 0 ? (
+            <div className="text-center text-muted-foreground text-sm py-8">
+              No messages yet
+            </div>
+          ) : (
+            messages.map((message) => (
+              <ChatMessage key={message.info.id} message={message} />
+            ))
+          )}
+          {/* Scroll anchor */}
+          <div ref={bottomRef} />
+        </div>
+      </ScrollArea>
+    </div>
   );
 }

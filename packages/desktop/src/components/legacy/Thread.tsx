@@ -18,10 +18,14 @@ interface ThreadProps {
 export function Thread({ expanded, onCollapse, onExpand }: ThreadProps) {
   const { activeSessionId, setActiveSession } = useUIStore();
   const { tasks: backgroundTasks, removeTask } = useBackgroundStore();
-  const { data: messages = [] } = useMessages(activeSessionId);
+  const { data: messages = [], isLoading, error } = useMessages(activeSessionId);
   const { data: sessions = [] } = useSessions();
   const { data: sessionStatuses = {} } = useSessionStatuses();
   const deleteSession = useDeleteSession();
+
+  // Debug logging
+  console.log("[Thread] render - activeSessionId:", activeSessionId, "expanded:", expanded);
+  console.log("[Thread] messages:", messages.length, "isLoading:", isLoading, "error:", error);
 
   // Background task IDs
   const backgroundTaskIds = new Set(Object.keys(backgroundTasks));

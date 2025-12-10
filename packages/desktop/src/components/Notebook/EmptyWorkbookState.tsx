@@ -163,7 +163,7 @@ export function EmptyWorkbookState({
   const [showSources, setShowSources] = useState(false);
   const [arrowCoords, setArrowCoords] = useState<{ startX: number; startY: number; endX: number; endY: number } | null>(null);
   const askHandsRef = useRef<HTMLDivElement>(null);
-  const { activeWorkbookId } = useUIStore();
+  const { activeWorkbookId, chatExpanded } = useUIStore();
   const { data: runtimeStatus } = useRuntimeStatus(activeWorkbookId);
   const runtimePort = runtimeStatus?.runtime_port ?? null;
 
@@ -222,7 +222,12 @@ export function EmptyWorkbookState({
 
   return (
     <>
-      <div className="flex flex-col items-center justify-center h-full py-16 px-8 max-w-2xl mx-auto">
+      <div
+        className={cn(
+          "flex flex-col items-center justify-center h-full pb-32 px-8 max-w-2xl mx-auto transition-opacity duration-300",
+          chatExpanded && "opacity-20 pointer-events-none"
+        )}
+      >
         <h2 className="text-xl font-semibold text-foreground tracking-tight mb-2">
           Get started
         </h2>
@@ -331,8 +336,8 @@ export function EmptyWorkbookState({
         </div>
       </div>
 
-      {/* Hand-drawn arrow pointing to chat bar - only show if there's enough vertical space */}
-      {arrowCoords && (arrowCoords.endY - arrowCoords.startY) > 5 && (
+      {/* Hand-drawn arrow pointing to chat bar - hide when chat is expanded */}
+      {arrowCoords && (arrowCoords.endY - arrowCoords.startY) > 5 && !chatExpanded && (
         <HandDrawnArrow
           startX={arrowCoords.startX}
           startY={arrowCoords.startY}

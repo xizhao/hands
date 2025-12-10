@@ -35,6 +35,7 @@ import {
   File,
   Circle,
   CheckCircle2,
+  Key,
   type LucideIcon,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -44,6 +45,7 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { Skeleton, ShimmerText } from "@/components/ui/thinking-indicator";
+import { SecretsForm, parseSecretsOutput } from "@/components/SecretsForm";
 
 interface ChatMessageProps {
   message: MessageWithParts;
@@ -141,6 +143,17 @@ const TOOL_REGISTRY: Record<string, ToolConfig> = {
     icon: Database,
     label: "Schema",
     getSubtitle: (input) => input.table ? String(input.table) : "all tables",
+  },
+  secrets: {
+    icon: Key,
+    label: "Secrets",
+    getSubtitle: (input) => {
+      const action = input.action as string;
+      const keys = input.keys as string[] | undefined;
+      if (action === "list") return "listing";
+      if (keys?.length) return keys.slice(0, 2).join(", ");
+      return action || "";
+    },
   },
 };
 
@@ -501,6 +514,25 @@ const ToolInvocation = memo(({ part }: { part: ToolPart }) => {
           output={state.output!}
           query={(state.input as Record<string, unknown>)?.query as string}
         />
+      </div>
+    );
+  }
+
+  // Check if this is the secrets tool with a form request
+  const isSecretsTool = toolName.toLowerCase().includes("secrets");
+  const secretsRequest = isSecretsTool &&
+    state.status === "completed" &&
+    state.output ? parseSecretsOutput(state.output) : null;
+
+  // For secrets with form request, show the form
+  if (secretsRequest) {
+    return (
+      <div className="py-1">
+        <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground/60 mb-1">
+          <Key className="h-2.5 w-2.5 text-blue-400" />
+          <span>Secrets</span>
+        </div>
+        <SecretsForm output={secretsRequest} />
       </div>
     );
   }
@@ -886,7 +918,7 @@ export const ChatMessage = memo(({ message, isStreaming = false, compact = false
 
   return (
     <motion.div
-      initial={{ opacity: 0, y: -20 }}
+      initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.25, ease: "easeOut" }}
       className={cn(

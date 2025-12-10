@@ -380,7 +380,7 @@ export const api = {
 // SSE subscription using SDK - matches opencode desktop implementation
 // Uses SDK's typed GlobalEvent which contains { directory, payload: Event }
 export function subscribeToEvents(
-  onEvent: (event: ServerEvent) => void,
+  onEvent: (event: ServerEvent, directory?: string) => void,
   onError?: (error: unknown) => void
 ): () => void {
   const client = getClient();
@@ -396,9 +396,10 @@ export function subscribeToEvents(
         // The payload is the typed Event union
         const globalEvent = event as SdkGlobalEvent;
         const typedEvent = globalEvent.payload;
+        const directory = globalEvent.directory;
 
-        console.log("SSE event:", typedEvent.type, "properties" in typedEvent ? typedEvent.properties : typedEvent);
-        onEvent(typedEvent);
+        console.log("SSE event:", typedEvent.type, "directory:", directory, "properties" in typedEvent ? typedEvent.properties : typedEvent);
+        onEvent(typedEvent, directory);
       }
     } catch (err) {
       if (!abortController.signal.aborted) {

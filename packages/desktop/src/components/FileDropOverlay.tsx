@@ -70,17 +70,25 @@ export function FileDropOverlay({
     };
 
     const handleDrop = (e: DragEvent) => {
+      console.log("[FileDropOverlay] handleDrop triggered");
       e.preventDefault();
       setIsDragging(false);
       setDragCounter(0);
 
-      if (!isExternalFileDrag(e)) return;
+      if (!isExternalFileDrag(e)) {
+        console.log("[FileDropOverlay] Not an external file drag, ignoring");
+        return;
+      }
 
       const files = Array.from(e.dataTransfer?.files ?? []);
+      console.log("[FileDropOverlay] Files dropped:", files.map(f => f.name));
       const validFile = files.find(isValidFileType);
 
       if (validFile) {
+        console.log("[FileDropOverlay] Valid file found, calling onFileDrop:", validFile.name);
         onFileDrop(validFile);
+      } else {
+        console.log("[FileDropOverlay] No valid file type found. Accepted:", accept);
       }
     };
 

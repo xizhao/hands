@@ -11,6 +11,7 @@ import { registerWorkerRoutes } from "./worker";
 import { registerSyncRoutes } from "./sync";
 import { registerBlocksRoutes } from "./blocks";
 import { registerWorkbookRoutes } from "./workbook";
+import { registerSecretsRoutes } from "./secrets";
 import { stopServices } from "../services";
 import { json } from "../router";
 
@@ -28,6 +29,7 @@ export function createRouter(getState: () => RuntimeState | null, port: number):
   registerSyncRoutes(router, getState);
   registerBlocksRoutes(router, getState);
   registerWorkbookRoutes(router, getState);
+  registerSecretsRoutes(router, getState);
 
   // POST /stop - Graceful shutdown
   router.post("/stop", async () => {
@@ -45,3 +47,4 @@ export * from "./worker";
 export * from "./sync";
 export * from "./blocks";
 export * from "./workbook";
+export * from "./secrets";

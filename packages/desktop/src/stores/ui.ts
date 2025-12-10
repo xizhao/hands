@@ -4,6 +4,12 @@ import { queryClient } from "@/App";
 type TabId = "sources" | "data" | "insights" | "preview";
 type RightPanelId = "sources" | "database" | "blocks" | "settings" | "alerts" | null;
 
+// Pending file attachment for chat
+export interface PendingAttachment {
+  file: File;
+  name: string;
+}
+
 interface UIState {
   // Active workbook context (not persisted - Tauri is source of truth)
   activeWorkbookId: string | null;
@@ -25,6 +31,15 @@ interface UIState {
   rightPanel: RightPanelId;
   setRightPanel: (panel: RightPanelId) => void;
   toggleRightPanel: (panel: Exclude<RightPanelId, null>) => void;
+  // Pending file attachment for chat
+  pendingAttachment: PendingAttachment | null;
+  setPendingAttachment: (attachment: PendingAttachment | null) => void;
+  // Auto-submit trigger for file drops
+  autoSubmitPending: boolean;
+  setAutoSubmitPending: (pending: boolean) => void;
+  // Chat thread expanded state
+  chatExpanded: boolean;
+  setChatExpanded: (expanded: boolean) => void;
 }
 
 export const useUIStore = create<UIState>()((set, get) => ({
@@ -52,4 +67,10 @@ export const useUIStore = create<UIState>()((set, get) => ({
   toggleRightPanel: (panel) => set((state) => ({
     rightPanel: state.rightPanel === panel ? null : panel
   })),
+  pendingAttachment: null,
+  setPendingAttachment: (attachment) => set({ pendingAttachment: attachment }),
+  autoSubmitPending: false,
+  setAutoSubmitPending: (pending) => set({ autoSubmitPending: pending }),
+  chatExpanded: false,
+  setChatExpanded: (expanded) => set({ chatExpanded: expanded }),
 }));

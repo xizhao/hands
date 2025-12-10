@@ -150,6 +150,17 @@ export function useOpenWorkbook() {
       };
       await updateWorkbook.mutateAsync(updated);
 
+      // CRITICAL: Always set active workbook FIRST so OpenCode restarts with correct directory
+      // This must happen before runtime starts, and even if runtime fails
+      console.log("[runtime] Setting active workbook (restarts OpenCode with correct CWD)...");
+      try {
+        await invoke("set_active_workbook", { workbookId: workbook.id });
+        console.log("[runtime] Active workbook set:", workbook.id);
+      } catch (err) {
+        console.error("[runtime] Failed to set active workbook:", err);
+        // Continue anyway - we want to at least try starting the runtime
+      }
+
       // Start runtime for this workbook
       try {
         console.log("[runtime] Starting runtime for workbook:", workbook.id, "dir:", workbook.directory);
@@ -159,13 +170,10 @@ export function useOpenWorkbook() {
         });
         console.log("[runtime] Started:", JSON.stringify(status, null, 2));
         queryClient.setQueryData(["runtime-status", workbook.id], status);
-
-        // Set this as the active workbook and restart OpenCode server with database URL
-        console.log("[runtime] Setting active workbook...");
-        await invoke("set_active_workbook", { workbookId: workbook.id });
-        console.log("[runtime] Active workbook set:", workbook.id);
       } catch (err) {
         console.error("[runtime] Failed to start runtime:", err);
+        // OpenCode is already restarted with correct directory, so AI features will work
+        // even if the runtime (postgres, worker) fails to start
       }
 
       return updated;
@@ -416,6 +424,13 @@ export interface WorkbookPage {
   path: string;
 }
 
+export interface WorkbookBlock {
+  id: string;
+  title: string;
+  description?: string;
+  path: string;
+}
+
 export interface WorkbookSource {
   name: string;
   enabled: boolean;
@@ -426,6 +441,7 @@ export interface WorkbookManifest {
   workbookId: string;
   workbookDir: string;
   pages: WorkbookPage[];
+  blocks: WorkbookBlock[];
   sources: WorkbookSource[];
   tables: string[];
   isEmpty: boolean;

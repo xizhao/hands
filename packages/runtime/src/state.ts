@@ -11,10 +11,18 @@ import type { PostgresManager, PostgresPool, PostgresListener, SyncManager } fro
 import type { WorkerManager } from "./worker";
 
 // Forward declaration for WorkbookManifest (defined in routes/workbook.ts)
+export interface WorkbookBlock {
+  id: string;
+  title: string;
+  description?: string;
+  path: string;
+}
+
 export interface WorkbookManifest {
   workbookId: string;
   workbookDir: string;
   pages: Array<{ id: string; route: string; title: string; path: string }>;
+  blocks: WorkbookBlock[];
   sources: Array<{ name: string; enabled: boolean; schedule?: string }>;
   tables: string[];
   isEmpty: boolean;

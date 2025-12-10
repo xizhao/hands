@@ -311,7 +311,7 @@ export function PagesSidebar({ collapsed = false, fullWidth = false, onAddPage }
   // Narrow sidebar layout (when not fullWidth)
   return (
     <TooltipProvider delayDuration={0}>
-      <div className="space-y-3 w-[140px]">
+      <div className="space-y-3 w-full">
         {/* Search Bar */}
         <div className="relative">
           <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-3 w-3 text-muted-foreground/70" />

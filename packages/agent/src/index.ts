@@ -9,7 +9,7 @@ import type { Config } from "@opencode-ai/sdk";
 import { createOpencode } from "@opencode-ai/sdk";
 import { existsSync, lstatSync, mkdirSync, symlinkSync, unlinkSync } from "fs";
 import { dirname, resolve } from "path";
-import { handsAgent, importAgent, queryAgent, blocksAgent } from "../agents";
+import { handsAgent, coderAgent, importAgent } from "../agents";
 
 // Configuration
 const PORT = parseInt(process.env.HANDS_AGENT_PORT || "55300", 10);
@@ -62,9 +62,8 @@ const config: Config = {
     build: { disable: true },
     // Custom agents
     hands: handsAgent,
+    coder: coderAgent,
     import: importAgent,
-    query: queryAgent,
-    blocks: blocksAgent,
   },
 };
 

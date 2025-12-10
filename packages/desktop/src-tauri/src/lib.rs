@@ -844,20 +844,30 @@ async fn start_runtime(
 }
 
 /// Set the active workbook and restart OpenCode server with new database URL
+/// This also restarts OpenCode with the workbook directory as CWD
 #[tauri::command]
 async fn set_active_workbook(
     app: tauri::AppHandle,
     state: tauri::State<'_, Arc<Mutex<AppState>>>,
     workbook_id: String,
 ) -> Result<HealthCheck, String> {
+    // Get the workbook directory FIRST (before acquiring state lock)
+    let workbook_dir = get_workbook_dir(&workbook_id)?;
+    let workbook_dir_str = workbook_dir.to_string_lossy().to_string();
+
+    if !workbook_dir.exists() {
+        return Err(format!("Workbook directory does not exist: {}", workbook_dir_str));
+    }
+
+    println!("Set active workbook to: {} (dir: {})", workbook_id, workbook_dir_str);
+
     {
         let mut state_guard = state.lock().await;
         state_guard.active_workbook_id = Some(workbook_id.clone());
-        println!("Set active workbook to: {}", workbook_id);
     }
 
-    // Restart server to pick up new database URL
-    restart_server(app, state).await
+    // Restart server to pick up new working directory and database URL
+    restart_server_with_dir(app, state, workbook_id, workbook_dir_str).await
 }
 
 /// Stop the runtime for a workbook
@@ -1139,6 +1149,12 @@ async fn start_opencode_server(
         all_env.insert("HANDS_MODEL".to_string(), m.clone());
     }
 
+    // CRITICAL: Set HANDS_WORKBOOK_DIR env var so the agent knows which directory it should use
+    // This is more reliable than just current_dir() because the agent explicitly reads this
+    if let Some(ref dir) = working_dir {
+        all_env.insert("HANDS_WORKBOOK_DIR".to_string(), dir.clone());
+    }
+
     // Get the agent server script path (relative to CARGO_MANIFEST_DIR which is src-tauri)
     let agent_script = format!("{}/../../agent/src/index.ts", env!("CARGO_MANIFEST_DIR"));
 
@@ -1153,6 +1169,8 @@ async fn start_opencode_server(
     if let Some(ref dir) = working_dir {
         cmd.current_dir(dir);
         println!("Hands agent working directory: {}", dir);
+    } else {
+        println!("WARNING: Starting Hands agent without a working directory - sessions will be isolated!");
     }
 
     let child = cmd.spawn()
@@ -1182,10 +1200,13 @@ async fn wait_for_server(port: u16, timeout_secs: u64) -> bool {
     false
 }
 
-#[tauri::command]
-async fn restart_server(
+/// Restart OpenCode server with explicit workbook directory
+/// This is the core function that ensures OpenCode runs in the correct directory
+async fn restart_server_with_dir(
     app: tauri::AppHandle,
     state: tauri::State<'_, Arc<Mutex<AppState>>>,
+    workbook_id: String,
+    workbook_dir: String,
 ) -> Result<HealthCheck, String> {
     let mut state_guard = state.lock().await;
 
@@ -1196,23 +1217,20 @@ async fn restart_server(
     let mut env_vars = get_api_keys_from_store(&app);
     let model = get_model_from_store(&app);
 
-    // Add database URL for active workbook and get working directory
-    let mut working_dir: Option<String> = None;
-    if let Some(ref workbook_id) = state_guard.active_workbook_id {
-        if let Some(runtime) = state_guard.runtimes.get(workbook_id) {
-            let db_name = format!("hands_{}", workbook_id.replace('-', "_"));
-            let db_url = format!(
-                "postgres://hands:hands@localhost:{}/{}",
-                runtime.postgres_port, db_name
-            );
-            env_vars.insert("HANDS_DATABASE_URL".to_string(), db_url.clone());
-            println!("Setting HANDS_DATABASE_URL for workbook {}: {}", workbook_id, db_url);
-            // Use workbook directory as working directory
-            working_dir = Some(runtime.directory.clone());
-        }
+    // Add database URL if runtime is available (optional - AI works without DB)
+    if let Some(runtime) = state_guard.runtimes.get(&workbook_id) {
+        let db_name = format!("hands_{}", workbook_id.replace('-', "_"));
+        let db_url = format!(
+            "postgres://hands:hands@localhost:{}/{}",
+            runtime.postgres_port, db_name
+        );
+        env_vars.insert("HANDS_DATABASE_URL".to_string(), db_url.clone());
+        println!("Setting HANDS_DATABASE_URL for workbook {}: {}", workbook_id, db_url);
     }
 
-    match start_opencode_server(PORT_OPENCODE, model, env_vars, working_dir).await {
+    println!("Restarting OpenCode server with working directory: {}", workbook_dir);
+
+    match start_opencode_server(PORT_OPENCODE, model, env_vars, Some(workbook_dir)).await {
         Ok(child) => {
             state_guard.server = Some(child);
 
@@ -1232,6 +1250,67 @@ async fn restart_server(
             healthy: false,
             message: e,
         }),
+    }
+}
+
+#[tauri::command]
+async fn restart_server(
+    app: tauri::AppHandle,
+    state: tauri::State<'_, Arc<Mutex<AppState>>>,
+) -> Result<HealthCheck, String> {
+    let state_guard = state.lock().await;
+
+    // Get active workbook info
+    let (workbook_id, workbook_dir) = if let Some(ref id) = state_guard.active_workbook_id {
+        // Try to get directory from runtime first, fall back to computing it
+        let dir = if let Some(runtime) = state_guard.runtimes.get(id) {
+            runtime.directory.clone()
+        } else {
+            get_workbook_dir(id)?.to_string_lossy().to_string()
+        };
+        (id.clone(), Some(dir))
+    } else {
+        (String::new(), None)
+    };
+
+    // Drop the lock before calling the inner function
+    drop(state_guard);
+
+    if let Some(dir) = workbook_dir {
+        restart_server_with_dir(app, state, workbook_id, dir).await
+    } else {
+        // No active workbook - start without a working directory (legacy behavior)
+        println!("WARNING: Restarting OpenCode without active workbook - sessions will be isolated");
+        let mut state_guard = state.lock().await;
+
+        if let Some(ref mut server) = state_guard.server {
+            let _ = server.kill().await;
+        }
+
+        let env_vars = get_api_keys_from_store(&app);
+        let model = get_model_from_store(&app);
+
+        match start_opencode_server(PORT_OPENCODE, model, env_vars, None).await {
+            Ok(child) => {
+                state_guard.server = Some(child);
+
+                if wait_for_server(PORT_OPENCODE, 30).await {
+                    Ok(HealthCheck {
+                        healthy: true,
+                        message: "Server restarted successfully (no workbook)".to_string(),
+                    })
+                } else {
+                    Ok(HealthCheck {
+                        healthy: false,
+                        message: "Server started but health check failed".to_string(),
+                    })
+                }
+            }
+            Err(e) => Ok(HealthCheck {
+                healthy: false,
+                message: e,
+            }),
+        }
     }
 }
 

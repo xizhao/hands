@@ -25,7 +25,6 @@ import {
   useCreatePage,
   useUpdatePageTitle,
 } from "@/hooks/useWorkbook";
-import { useImportWithAgent } from "@/hooks/useSession";
 import { PORTS } from "@/lib/ports";
 import type { Workbook } from "@/lib/workbook";
 import { cn } from "@/lib/utils";
@@ -108,7 +107,6 @@ export function NotebookShell({ children }: NotebookShellProps) {
 
   // Mutations for empty state actions
   const createPage = useCreatePage();
-  const importWithAgent = useImportWithAgent();
   const updatePageTitle = useUpdatePageTitle();
 
   const tableCount = dbSchema?.length ?? 0;
@@ -240,32 +238,26 @@ export function NotebookShell({ children }: NotebookShellProps) {
     toggleRightPanel("database");
   }, [toggleRightPanel]);
 
+  // Get setPendingAttachment and setAutoSubmitPending early so callbacks can use it
+  const { setPendingAttachment, setAutoSubmitPending } = useUIStore();
+
   const handleImportFile = useCallback(() => {
     // Trigger file input click
     fileInputRef.current?.click();
   }, []);
 
-  const handleFileSelected = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileSelected = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    try {
-      // Launch import agent - it will handle the import in the background
-      await importWithAgent.mutateAsync({
-        file,
-        onSessionCreated: (sessionId) => {
-          // Expand chat to show the import progress
-          setChatExpanded(true);
-          setActiveSession(sessionId);
-        },
-      });
-    } catch (err) {
-      console.error("Import error:", err);
-    }
+    // Set as pending attachment
+    setPendingAttachment({ file, name: file.name });
+    // Expand chat to show the attachment
+    setChatExpanded(true);
 
     // Reset input so same file can be selected again
     e.target.value = "";
-  }, [importWithAgent, setActiveSession]);
+  }, [setPendingAttachment]);
 
   const handleAddPage = useCallback(async () => {
     console.log("[handleAddPage] Creating page on port:", runtimePort);
@@ -289,22 +281,14 @@ export function NotebookShell({ children }: NotebookShellProps) {
   // New workbook modal state
   const [showNewWorkbookModal, setShowNewWorkbookModal] = useState(false);
 
-  // File drop handler for external files
-  const handleFileDrop = useCallback(async (file: File) => {
-    try {
-      // Launch import agent - it will handle the import in the background
-      await importWithAgent.mutateAsync({
-        file,
-        onSessionCreated: (sessionId) => {
-          // Expand chat to show the import progress
-          setChatExpanded(true);
-          setActiveSession(sessionId);
-        },
-      });
-    } catch (err) {
-      console.error("Import error:", err);
-    }
-  }, [importWithAgent, setActiveSession]);
+  // File drop handler for external files - set as pending attachment and auto-submit
+  const handleFileDrop = useCallback((file: File) => {
+    console.log("[handleFileDrop] File dropped, setting as attachment and auto-submitting:", file.name);
+    setPendingAttachment({ file, name: file.name });
+    // Expand chat and trigger auto-submit
+    setChatExpanded(true);
+    setAutoSubmitPending(true);
+  }, [setPendingAttachment, setAutoSubmitPending]);
 
   return (
     <TooltipProvider delayDuration={300}>

@@ -16,22 +16,33 @@ import {
 } from "@/hooks/useWorkbook";
 import { cn } from "@/lib/utils";
 import { useUIStore } from "@/stores/ui";
-import { ArrowUp, Hand, Loader2, Square } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import { ArrowUp, Hand, Loader2, Square, X, Paperclip } from "lucide-react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { invoke } from "@tauri-apps/api/core";
 
 interface ChatBarProps {
   expanded: boolean;
   onExpandChange: (expanded: boolean) => void;
 }
 
+interface CopyFilesResult {
+  copied_files: string[];
+  data_dir: string;
+}
+
 export function ChatBar({ expanded, onExpandChange }: ChatBarProps) {
   const [input, setInput] = useState("");
+  const [isUploadingFile, setIsUploadingFile] = useState(false);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const {
     activeSessionId,
     activeWorkbookId,
     setActiveSession,
     setRuntimePort,
+    pendingAttachment,
+    setPendingAttachment,
+    autoSubmitPending,
+    setAutoSubmitPending,
   } = useUIStore();
   const { data: sessionStatuses = {} } = useSessionStatuses();
   const sendMessage = useSendMessage();
@@ -96,11 +107,14 @@ export function ChatBar({ expanded, onExpandChange }: ChatBarProps) {
 - **Dev Server**: ${serverInfo}`;
   };
 
-  const handleSubmit = async () => {
-    if (!input.trim() || isBusy || !isConnected) return;
+  const handleSubmit = useCallback(async () => {
+    // Allow sending with just attachment (no text required)
+    const hasContent = input.trim() || pendingAttachment;
+    if (!hasContent || isBusy || !isConnected) return;
 
-    const message = input.trim();
+    const userText = input.trim();
     setInput("");
+    setIsUploadingFile(!!pendingAttachment);
 
     // Reset textarea height
     if (inputRef.current) {
@@ -113,6 +127,33 @@ export function ChatBar({ expanded, onExpandChange }: ChatBarProps) {
 
     const system = getSystemPrompt();
 
+    // Build message content - if there's an attachment, copy it and include the path
+    let finalMessage = userText;
+    if (pendingAttachment && activeWorkbookId) {
+      try {
+        // Copy file to workbook data directory
+        const buffer = await pendingAttachment.file.arrayBuffer();
+        const bytes = Array.from(new Uint8Array(buffer));
+        const result = await invoke<CopyFilesResult>("write_file_to_workbook", {
+          workbookId: activeWorkbookId,
+          fileData: { filename: pendingAttachment.name, bytes },
+        });
+
+        const filePath = result.copied_files[0];
+        if (filePath) {
+          // Append file reference to message - just include the file path, no instructions
+          finalMessage = userText
+            ? `${userText}\n\n[Attached file: ${filePath}]`
+            : `[Attached file: ${filePath}]`;
+        }
+      } catch (err) {
+        console.error("[ChatBar] Failed to copy attachment:", err);
+      }
+      // Clear attachment after processing
+      setPendingAttachment(null);
+    }
+    setIsUploadingFile(false);
+
     if (!activeSessionId) {
       createSession.mutate(
         {},
@@ -121,7 +162,7 @@ export function ChatBar({ expanded, onExpandChange }: ChatBarProps) {
             setActiveSession(newSession.id);
             sendMessage.mutate({
               sessionId: newSession.id,
-              content: message,
+              content: finalMessage,
               system,
             });
           },
@@ -132,10 +173,18 @@ export function ChatBar({ expanded, onExpandChange }: ChatBarProps) {
 
     sendMessage.mutate({
       sessionId: activeSessionId,
-      content: message,
+      content: finalMessage,
       system,
     });
-  };
+  }, [input, pendingAttachment, isBusy, isConnected, expanded, activeWorkbookId, activeSessionId, onExpandChange, getSystemPrompt, setPendingAttachment, createSession, setActiveSession, sendMessage]);
+
+  // Auto-submit when file is dropped (triggered by autoSubmitPending flag)
+  useEffect(() => {
+    if (autoSubmitPending && pendingAttachment && isConnected && !isBusy) {
+      setAutoSubmitPending(false);
+      handleSubmit();
+    }
+  }, [autoSubmitPending, pendingAttachment, isConnected, isBusy, setAutoSubmitPending, handleSubmit]);
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === "Enter" && !e.shiftKey) {
@@ -153,78 +202,100 @@ export function ChatBar({ expanded, onExpandChange }: ChatBarProps) {
     }
   };
 
+  const hasContent = input.trim() || pendingAttachment;
+
   return (
     <div
       data-chat-bar
-      className="flex items-end gap-2 px-2 py-2 rounded-xl border border-border/40 bg-background/80 backdrop-blur-sm overflow-visible"
+      className="flex flex-col gap-1 px-2 py-2 rounded-xl border border-border/40 bg-background/80 backdrop-blur-sm overflow-visible"
     >
-      {/* OpenCode settings button */}
-      <ChatSettings>
-        <Button
-          variant="ghost"
-          size="icon"
-          className={cn(
-            "h-8 w-8 shrink-0 rounded-lg",
-            !isConnected && "text-red-400"
-          )}
-        >
-          <Hand className="h-5 w-5" />
-        </Button>
-      </ChatSettings>
+      {/* Attachment chip - show when file is attached */}
+      {pendingAttachment && (
+        <div className="flex items-center gap-1 px-1">
+          <div className="flex items-center gap-1.5 px-2 py-1 rounded-md bg-accent/50 text-xs">
+            <Paperclip className="h-3 w-3 text-muted-foreground" />
+            <span className="max-w-[200px] truncate">{pendingAttachment.name}</span>
+            <button
+              onClick={() => setPendingAttachment(null)}
+              className="p-0.5 rounded hover:bg-accent transition-colors"
+            >
+              <X className="h-3 w-3 text-muted-foreground hover:text-foreground" />
+            </button>
+          </div>
+        </div>
+      )}
 
-      {/* Input - textarea for multiline with auto-resize and scroll */}
-      <textarea
-        ref={inputRef}
-        value={input}
-        onChange={(e) => {
-          setInput(e.target.value);
-          // Auto-resize textarea
-          e.target.style.height = "auto";
-          e.target.style.height = Math.min(e.target.scrollHeight, 120) + "px";
-        }}
-        onKeyDown={handleKeyDown}
-        onFocus={() => {
-          if (!expanded) onExpandChange(true);
-        }}
-        placeholder="Ask anything..."
-        rows={1}
-        className="flex-1 bg-transparent py-1 text-sm placeholder:text-muted-foreground/50 focus:outline-none resize-none overflow-y-auto max-h-[120px] scrollbar-thin"
-      />
+      {/* Input row */}
+      <div className="flex items-end gap-2">
+        {/* OpenCode settings button */}
+        <ChatSettings>
+          <Button
+            variant="ghost"
+            size="icon"
+            className={cn(
+              "h-8 w-8 shrink-0 rounded-lg",
+              !isConnected && "text-red-400"
+            )}
+          >
+            <Hand className="h-5 w-5" />
+          </Button>
+        </ChatSettings>
 
-      {/* Submit/Abort button */}
-      {isBusy ? (
-        <Button
-          variant="ghost"
-          size="icon"
-          className="h-7 w-7 shrink-0 rounded-lg"
-          onClick={handleAbort}
-        >
-          <Square className="h-3.5 w-3.5" />
-        </Button>
-      ) : (
-        <Button
-          variant="ghost"
-          size="icon"
-          className={cn(
-            "h-7 w-7 shrink-0 rounded-lg transition-colors",
-            input.trim() &&
-              "bg-primary text-primary-foreground hover:bg-primary/90"
-          )}
-          disabled={
-            !input.trim() ||
-            !isConnected ||
-            sendMessage.isPending ||
-            createSession.isPending
-          }
-          onClick={handleSubmit}
-        >
-          {sendMessage.isPending || createSession.isPending ? (
-            <Loader2 className="h-3.5 w-3.5 animate-spin" />
-          ) : (
-            <ArrowUp className="h-3.5 w-3.5" />
-          )}
+        {/* Input - textarea for multiline with auto-resize and scroll */}
+        <textarea
+          ref={inputRef}
+          value={input}
+          onChange={(e) => {
+            setInput(e.target.value);
+            // Auto-resize textarea
+            e.target.style.height = "auto";
+            e.target.style.height = Math.min(e.target.scrollHeight, 120) + "px";
+          }}
+          onKeyDown={handleKeyDown}
+          onFocus={() => {
+            if (!expanded) onExpandChange(true);
+          }}
+          placeholder={pendingAttachment ? "Add a message (optional)..." : "Ask anything..."}
+          rows={1}
+          className="flex-1 bg-transparent py-1 text-sm placeholder:text-muted-foreground/50 focus:outline-none resize-none overflow-y-auto max-h-[120px] scrollbar-thin"
+        />
+
+        {/* Submit/Abort button */}
+        {isBusy ? (
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-7 w-7 shrink-0 rounded-lg"
+            onClick={handleAbort}
+          >
+            <Square className="h-3.5 w-3.5" />
+          </Button>
+        ) : (
+          <Button
+            variant="ghost"
+            size="icon"
+            className={cn(
+              "h-7 w-7 shrink-0 rounded-lg transition-colors",
+              hasContent &&
+                "bg-primary text-primary-foreground hover:bg-primary/90"
+            )}
+            disabled={
+              !hasContent ||
+              !isConnected ||
+              sendMessage.isPending ||
+              createSession.isPending ||
+              isUploadingFile
+            }
+            onClick={handleSubmit}
+          >
+            {sendMessage.isPending || createSession.isPending || isUploadingFile ? (
+              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+            ) : (
+              <ArrowUp className="h-3.5 w-3.5" />
+            )}
         </Button>
       )}
+      </div>
     </div>
   );
 }
