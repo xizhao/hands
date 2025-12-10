@@ -3,14 +3,13 @@
  */
 
 import { useState } from "react";
-import { useUIStore } from "@/stores/ui";
-import { useDbSchema, useRuntimeQuery } from "@/hooks/useWorkbook";
+import { useDbSchema, useRuntimeQuery, useActiveWorkbookId } from "@/hooks/useWorkbook";
 import { Table, CaretRight, CaretDown, CircleNotch } from "@phosphor-icons/react";
 import { cn } from "@/lib/utils";
 import { ScrollArea } from "@/components/ui/scroll-area";
 
 export function DatabasePanel() {
-  const { activeWorkbookId } = useUIStore();
+  const activeWorkbookId = useActiveWorkbookId();
   const { data: schema, isLoading } = useDbSchema(activeWorkbookId);
   const [expandedTable, setExpandedTable] = useState<string | null>(null);
   const [tableData, setTableData] = useState<Record<string, unknown[] | null>>({});

@@ -1,18 +1,16 @@
 import { createRootRoute, Outlet } from "@tanstack/react-router";
 import { useEffect } from "react";
-import { useThemeStore } from "@/stores/theme";
+import { initTheme } from "@/lib/theme";
 
 export const rootRoute = createRootRoute({
   component: RootComponent,
 });
 
 function RootComponent() {
-  const { initTheme } = useThemeStore();
-
   // Initialize theme on mount
   useEffect(() => {
     initTheme();
-  }, [initTheme]);
+  }, []);
 
   // Disable right-click context menu
   useEffect(() => {

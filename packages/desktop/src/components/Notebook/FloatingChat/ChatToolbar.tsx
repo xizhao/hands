@@ -1,6 +1,6 @@
 import { useState, useRef, KeyboardEvent } from "react";
 import { Send, Loader2, Square } from "lucide-react";
-import { useUIStore } from "@/stores/ui";
+import { useActiveSession } from "@/hooks/useNavState";
 import { useSendMessage, useAbortSession, useCreateSession, useSessionStatus } from "@/hooks/useSession";
 
 interface ChatToolbarProps {
@@ -12,7 +12,7 @@ export function ChatToolbar({ expanded, onExpandChange }: ChatToolbarProps) {
   const [input, setInput] = useState("");
   const inputRef = useRef<HTMLTextAreaElement>(null);
 
-  const { activeSessionId, setActiveSession } = useUIStore();
+  const { sessionId: activeSessionId, setSession: setActiveSession } = useActiveSession();
   const sendMessage = useSendMessage();
   const abortSession = useAbortSession(activeSessionId);
   const createSession = useCreateSession();

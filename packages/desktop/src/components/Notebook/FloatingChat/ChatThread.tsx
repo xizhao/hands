@@ -1,6 +1,6 @@
 import { useEffect, useRef, useLayoutEffect } from "react";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { useUIStore } from "@/stores/ui";
+import { useActiveSession } from "@/hooks/useNavState";
 import { useMessages } from "@/hooks/useSession";
 import { ChatMessage } from "@/components/ChatMessage";
 
@@ -9,7 +9,7 @@ interface ChatThreadProps {
 }
 
 export function ChatThread({ onCollapse: _onCollapse }: ChatThreadProps) {
-  const { activeSessionId } = useUIStore();
+  const { sessionId: activeSessionId } = useActiveSession();
   const { data: messages = [], isLoading } = useMessages(activeSessionId);
   const bottomRef = useRef<HTMLDivElement>(null);
   const hasScrolledRef = useRef(false);

@@ -9,7 +9,6 @@ import { memo } from "react";
 import { useNavigate } from "@tanstack/react-router";
 import { ArrowRight } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { useUIStore } from "@/stores/ui";
 
 export interface NavigateOutput {
   type: "navigate";
@@ -42,11 +41,9 @@ interface NavigateCardProps {
 
 export const NavigateCard = memo(({ output }: NavigateCardProps) => {
   const navigate = useNavigate();
-  const { setActivePage } = useUIStore();
 
   const handleClick = () => {
     const pageId = output.page.replace(/^\//, "").replace(/\//g, "-") || "index";
-    setActivePage(pageId);
     navigate({ to: "/page/$pageId", params: { pageId } });
   };
 

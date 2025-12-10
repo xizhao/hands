@@ -6,7 +6,7 @@
  */
 
 import { createContext, useContext, useState, useEffect, type ReactNode } from "react";
-import { useUIStore } from "@/stores/ui";
+import { useRuntimePort as useRuntimePortFromWorkbook } from "@/hooks/useWorkbook";
 
 interface DbContextValue {
   runtimePort: number | null;
@@ -52,8 +52,8 @@ export function useRuntimePort(): number | null {
     return ctx.runtimePort;
   }
 
-  // Try UIStore (main app window)
-  const storePort = useUIStore((s) => s.runtimePort);
+  // Try useRuntimePort hook (main app window - from TanStack Query)
+  const storePort = useRuntimePortFromWorkbook();
   if (storePort) {
     return storePort;
   }

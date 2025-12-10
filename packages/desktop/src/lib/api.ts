@@ -291,7 +291,7 @@ export const api = {
     });
   },
 
-  // Prompt with a specific agent - used for background tasks
+  // Prompt with a specific agent
   promptWithAgent: async (
     sessionId: string,
     content: string,

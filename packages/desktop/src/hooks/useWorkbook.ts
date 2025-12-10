@@ -97,18 +97,6 @@ interface CreateWorkbookRequest {
   description?: string;
 }
 
-// Tauri command response type (matches Rust backend)
-interface TauriRuntimeStatus {
-  running: boolean;
-  workbook_id: string;
-  directory: string;
-  runtime_port: number;
-  postgres_port: number;
-  worker_port: number;
-  message: string;
-}
-
-
 // Block reference error
 export interface BlockRefError {
   page: string;
@@ -237,11 +225,23 @@ export function useDeleteWorkbook() {
 export function useOpenWorkbook() {
   const updateWorkbook = useUpdateWorkbook();
   const queryClient = useQueryClient();
-  const setRuntimePort = useUIStore.getState().setRuntimePort;
 
   return useMutation({
     mutationKey: ["workbook", "open"],
     mutationFn: async (workbook: Workbook) => {
+      // IMMEDIATELY clear active runtime to trigger loading states in UI
+      // This ensures consumers show loaders during workbook switch
+      queryClient.setQueryData(["active-runtime"], null);
+
+      // Clear workbook-specific caches to avoid showing stale data
+      queryClient.removeQueries({ queryKey: ["manifest"] });
+      queryClient.removeQueries({ queryKey: ["block"] });
+      queryClient.removeQueries({ queryKey: ["blockSource"] });
+      queryClient.removeQueries({ queryKey: ["runtime-eval"] });
+      queryClient.removeQueries({ queryKey: ["runtime-health"] });
+      queryClient.removeQueries({ queryKey: ["db-schema"] });
+      queryClient.removeQueries({ queryKey: ["page-content"] });
+
       // Update last opened timestamp
       const updated: Workbook = {
         ...workbook,
@@ -251,8 +251,6 @@ export function useOpenWorkbook() {
       await updateWorkbook.mutateAsync(updated);
 
       // Start runtime FIRST - it's the priority (provides database, blocks, etc.)
-      // OpenCode can be restarted after with the database URL from runtime
-      let runtimePort: number | null = null;
       try {
         console.log("[useOpenWorkbook] Starting runtime for:", workbook.id);
         const status = await invoke<TauriRuntimeStatus>("start_runtime", {
@@ -261,13 +259,13 @@ export function useOpenWorkbook() {
         });
         console.log("[useOpenWorkbook] Runtime started:", status.runtime_port);
         queryClient.setQueryData(["runtime-status", workbook.id], status);
-        runtimePort = status.runtime_port;
-        setRuntimePort(status.runtime_port);
+        // Update active-runtime query so useRuntimePort() etc. get the new value
+        queryClient.setQueryData(["active-runtime"], status);
       } catch (err) {
         console.error("[useOpenWorkbook] Failed to start runtime:", err);
       }
 
-      // Now restart OpenCode with workbook directory (and runtime's database URL if available)
+      // Now restart OpenCode with workbook directory
       try {
         console.log("[useOpenWorkbook] Setting active workbook (restarts OpenCode):", workbook.id);
         await invoke("set_active_workbook", { workbookId: workbook.id });
@@ -379,70 +377,6 @@ export function useEvalResult(workbookId: string | null) {
   });
 }
 
-
-// Dev server routes from eval result
-export interface DevRoute {
-  path: string;
-  method: string;
-}
-
-export interface ChartInfo {
-  id: string;
-  title: string;
-  chart_type: string;
-  description?: string;
-}
-
-export interface CronTrigger {
-  cron: string;
-  description?: string;
-}
-
-export interface DevServerOutputs {
-  available: boolean;
-  url: string;
-  routes: DevRoute[];
-  charts: ChartInfo[];
-  crons: CronTrigger[];
-}
-
-// Get dev server routes from runtime eval
-export function useDevServerRoutes(workbookId: string | null) {
-  const evalResult = useEvalResult(workbookId);
-  const port = useRuntimePort();
-
-  return useQuery({
-    queryKey: ["dev-server-routes", workbookId],
-    queryFn: async (): Promise<DevServerOutputs> => {
-      if (!evalResult.data?.wrangler) {
-        return {
-          available: false,
-          url: "",
-          routes: [],
-          charts: [],
-          crons: [],
-        };
-      }
-
-      const wrangler = evalResult.data.wrangler;
-
-      return {
-        available: evalResult.data.services.worker.up,
-        url: `http://localhost:${port}`,
-        routes: wrangler.routes.map((r) => ({
-          method: r.method,
-          path: r.path,
-        })),
-        charts: [],
-        crons: wrangler.crons.map((c) => ({
-          cron: c.schedule,
-          description: c.handler,
-        })),
-      };
-    },
-    enabled: !!workbookId && !!evalResult.data,
-  });
-}
 
 // Workbook database info - now derived from runtime status
 export interface WorkbookDatabaseInfo {

@@ -1,6 +1,5 @@
 import { useState } from "react";
 import { useWorkbooks, useCreateWorkbook, useDeleteWorkbook, useOpenWorkbook } from "@/hooks/useWorkbook";
-import { useUIStore } from "@/stores/ui";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import {
@@ -97,11 +96,9 @@ export function WorkbookPicker() {
   const createWorkbook = useCreateWorkbook();
   const deleteWorkbook = useDeleteWorkbook();
   const openWorkbook = useOpenWorkbook();
-  const { setActiveWorkbook } = useUIStore();
   const [showNewDialog, setShowNewDialog] = useState(false);
 
   const handleSelectWorkbook = (workbook: Workbook) => {
-    setActiveWorkbook(workbook.id, workbook.directory);
     openWorkbook.mutate(workbook);
   };
 
@@ -110,7 +107,6 @@ export function WorkbookPicker() {
       { name, description },
       {
         onSuccess: (workbook) => {
-          setActiveWorkbook(workbook.id, workbook.directory);
           openWorkbook.mutate(workbook);
           setShowNewDialog(false);
           // TODO: Apply template if templateId is provided

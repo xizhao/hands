@@ -4,12 +4,12 @@ import { motion, AnimatePresence } from "framer-motion";
 import { MessageSquare, Minus } from "lucide-react";
 import { ChatToolbar } from "./ChatToolbar";
 import { ChatThread } from "./ChatThread";
-import { useUIStore } from "@/stores/ui";
+import { useChatExpanded } from "@/hooks/useNavState";
 
 export function FloatingChat() {
   const [isVisible, setIsVisible] = useState(true);
   const [isMinimized, setIsMinimized] = useState(false);
-  const { chatExpanded: isExpanded, setChatExpanded: setIsExpanded } = useUIStore();
+  const { expanded: isExpanded, setExpanded: setIsExpanded } = useChatExpanded();
 
   // Track window focus
   useEffect(() => {

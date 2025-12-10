@@ -9,15 +9,14 @@
  * - Router-based navigation
  */
 
-import { useState, useCallback, useMemo } from "react";
+import { useState, useMemo, useCallback } from "react";
 import { useNavigate, useRouterState } from "@tanstack/react-router";
 import { pageRoute } from "@/routes/_notebook/page.$pageId";
 import { cn } from "@/lib/utils";
 import { FileText, Plus, ChevronDown, ChevronRight, Search, X } from "lucide-react";
 import { Table, TreeStructure, SquaresFour } from "@phosphor-icons/react";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import { useUIStore } from "@/stores/ui";
-import { useDbSchema, useDevServerRoutes, useManifest } from "@/hooks/useWorkbook";
+import { useDbSchema, useManifest, useActiveWorkbookId } from "@/hooks/useWorkbook";
 
 interface DraftsSidebarProps {
   collapsed?: boolean;
@@ -41,14 +40,14 @@ export function DraftsSidebar({ collapsed = false, fullWidth = false, onAddDraft
   const activePageId = pageMatch?.[1] ?? null;
 
   // Get all data from hooks (filesystem as source of truth via manifest)
-  const { activeWorkbookId } = useUIStore();
-  const { data: manifest } = useManifest();
+  const activeWorkbookId = useActiveWorkbookId();
+  const { data: manifest, isLoading: manifestLoading } = useManifest();
   const { data: schema, isLoading: sourcesLoading } = useDbSchema(activeWorkbookId);
-  const { data: devServerRoutes, isLoading: blocksLoading } = useDevServerRoutes(activeWorkbookId);
 
-  // Drafts from manifest (filesystem source of truth)
+  // All data from manifest (filesystem source of truth)
   const drafts: Draft[] = manifest?.pages ?? [];
-  const blocks = devServerRoutes?.charts ?? [];
+  const blocks = manifest?.blocks ?? [];
+  const blocksLoading = manifestLoading;
 
   const [hoveredIndex, setHoveredIndex] = useState<number | null>(null);
   const [draftsExpanded, setDraftsExpanded] = useState(true);

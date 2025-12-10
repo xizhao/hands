@@ -10,20 +10,21 @@
 
 import { useRef, useCallback, useState, useEffect, type ReactNode } from "react";
 import { useRouter, useRouterState } from "@tanstack/react-router";
-import { useUIStore } from "@/stores/ui";
 import {
   useWorkbooks,
   useCreateWorkbook,
   useOpenWorkbook,
   useUpdateWorkbook,
   useDbSchema,
-  useDevServerRoutes,
   useEvalResult,
   useCreatePage,
   useUpdatePageTitle,
   useRuntimePort,
   useManifest,
+  useActiveWorkbookId,
 } from "@/hooks/useWorkbook";
+import { useRightPanel, useActiveSession } from "@/hooks/useNavState";
+import { useChatState } from "@/hooks/useChatState";
 import type { Workbook } from "@/lib/workbook";
 import { cn } from "@/lib/utils";
 
@@ -83,7 +84,9 @@ export function NotebookShell({ children }: NotebookShellProps) {
   const pageId = pageMatch?.[1];
   const isOnPage = !!pageId;
 
-  const { activeWorkbookId, rightPanel, toggleRightPanel, setActiveWorkbook, setActiveSession } = useUIStore();
+  const activeWorkbookId = useActiveWorkbookId();
+  const { panel: rightPanel, togglePanel: toggleRightPanel } = useRightPanel();
+  const { setSession: setActiveSession } = useActiveSession();
   const { data: workbooks } = useWorkbooks();
   const createWorkbook = useCreateWorkbook();
   const openWorkbook = useOpenWorkbook();
@@ -91,7 +94,6 @@ export function NotebookShell({ children }: NotebookShellProps) {
 
   // Data for titlebar indicators and empty state detection
   const { data: dbSchema } = useDbSchema(activeWorkbookId);
-  const { data: devServerRoutes } = useDevServerRoutes(activeWorkbookId);
   const { data: evalResult } = useEvalResult(activeWorkbookId);
 
   // Get runtime state from hooks
@@ -111,7 +113,7 @@ export function NotebookShell({ children }: NotebookShellProps) {
   const updatePageTitle = useUpdatePageTitle();
 
   const tableCount = dbSchema?.length ?? 0;
-  const blockCount = devServerRoutes?.charts?.length ?? 0;
+  const blockCount = manifest?.blocks?.length ?? 0;
   const draftCount = manifest?.pages?.length ?? 0;
 
   // Compute alert counts from eval result
@@ -120,9 +122,9 @@ export function NotebookShell({ children }: NotebookShellProps) {
   const alertCount = alertErrors + alertWarnings;
 
   // Show getting started when manifest is loaded but empty (no tables, no pages)
-  // Don't show if manifest is null (still loading)
+  // Don't show if manifest is undefined (still loading) - React Query returns undefined, not null
   const manifestTableCount = manifest?.tables?.length ?? 0;
-  const showGettingStarted = manifest !== null && manifestTableCount === 0 && tableCount === 0 && draftCount === 0;
+  const showGettingStarted = manifest !== undefined && manifestTableCount === 0 && tableCount === 0 && draftCount === 0;
 
   // Current workbook
   const currentWorkbook = workbooks?.find((w) => w.id === activeWorkbookId);
@@ -194,10 +196,12 @@ export function NotebookShell({ children }: NotebookShellProps) {
   const titleInputRef = useRef<HTMLSpanElement>(null);
 
   // Handle workbook switch
-  const handleSwitchWorkbook = useCallback((workbook: { id: string; directory: string; name: string }) => {
-    setActiveWorkbook(workbook.id, workbook.directory);
-    openWorkbook.mutate(workbook as Workbook);
-  }, [setActiveWorkbook, openWorkbook]);
+  const handleSwitchWorkbook = useCallback(
+    (workbook: { id: string; directory: string; name: string }) => {
+      openWorkbook.mutate(workbook as Workbook);
+    },
+    [openWorkbook]
+  );
 
   // Handle create new workbook - opens modal
   const handleCreateWorkbook = useCallback(() => {
@@ -211,7 +215,6 @@ export function NotebookShell({ children }: NotebookShellProps) {
         { name, description },
         {
           onSuccess: (newWorkbook) => {
-            setActiveWorkbook(newWorkbook.id, newWorkbook.directory);
             openWorkbook.mutate(newWorkbook);
             setShowNewWorkbookModal(false);
             // TODO: Apply template if templateId is provided
@@ -222,7 +225,7 @@ export function NotebookShell({ children }: NotebookShellProps) {
         }
       );
     },
-    [createWorkbook, setActiveWorkbook, openWorkbook]
+    [createWorkbook, openWorkbook]
   );
 
   // Handle close page (navigate back to index)
@@ -239,8 +242,6 @@ export function NotebookShell({ children }: NotebookShellProps) {
     toggleRightPanel("database");
   }, [toggleRightPanel]);
 
-  // Get setPendingAttachment and setAutoSubmitPending early so callbacks can use it
-  const { setPendingAttachment, setAutoSubmitPending } = useUIStore();
 
   const handleImportFile = useCallback(() => {
     // Trigger file input click
@@ -252,13 +253,13 @@ export function NotebookShell({ children }: NotebookShellProps) {
     if (!file) return;
 
     // Set as pending attachment
-    setPendingAttachment({ type: "file", file, name: file.name });
+    chatState.setPendingAttachment({ type: "file", file, name: file.name });
     // Expand chat to show the attachment
-    setChatExpanded(true);
+    chatState.setChatExpanded(true);
 
     // Reset input so same file can be selected again
     e.target.value = "";
-  }, [setPendingAttachment]);
+  }, []);
 
   const handleAddPage = useCallback(async () => {
     console.log("[handleAddPage] Creating page...");
@@ -276,8 +277,8 @@ export function NotebookShell({ children }: NotebookShellProps) {
     }
   }, [createPage, router]);
 
-  // Chat state
-  const [chatExpanded, setChatExpanded] = useState(false);
+  // Chat state from hook
+  const chatState = useChatState();
 
   // New workbook modal state
   const [showNewWorkbookModal, setShowNewWorkbookModal] = useState(false);
@@ -285,11 +286,11 @@ export function NotebookShell({ children }: NotebookShellProps) {
   // File drop handler for external files - set as pending attachment and auto-submit
   const handleFileDrop = useCallback((file: File) => {
     console.log("[handleFileDrop] File dropped, setting as attachment and auto-submitting:", file.name);
-    setPendingAttachment({ type: "file", file, name: file.name });
+    chatState.setPendingAttachment({ type: "file", file, name: file.name });
     // Expand chat and trigger auto-submit
-    setChatExpanded(true);
-    setAutoSubmitPending(true);
-  }, [setPendingAttachment, setAutoSubmitPending]);
+    chatState.setChatExpanded(true);
+    chatState.setAutoSubmitPending(true);
+  }, []);
 
   return (
     <TooltipProvider delayDuration={300}>
@@ -650,8 +651,8 @@ export function NotebookShell({ children }: NotebookShellProps) {
               </div>
             </main>
           </>
-        ) : manifest === null ? (
-          /* Loading state - manifest not yet loaded */
+        ) : manifest === undefined ? (
+          /* Loading state - manifest not yet loaded (React Query returns undefined) */
           <div className="flex-1 flex items-center justify-center">
             <div className="space-y-3 w-48">
               <div className="h-3 bg-muted/50 rounded animate-pulse" />
@@ -665,6 +666,7 @@ export function NotebookShell({ children }: NotebookShellProps) {
             {showGettingStarted ? (
               <EmptyWorkbookState
                 onImportFile={handleImportFile}
+                chatExpanded={chatState.chatExpanded}
               />
             ) : (
               <div className="p-4 pt-8">
@@ -681,13 +683,17 @@ export function NotebookShell({ children }: NotebookShellProps) {
       {/* Floating chat - bottom-up layout */}
       <div className="fixed bottom-4 left-4 right-4 z-50 max-w-2xl mx-auto flex flex-col">
         <Thread
-          expanded={chatExpanded}
-          onCollapse={() => setChatExpanded(false)}
-          onExpand={() => setChatExpanded(true)}
+          expanded={chatState.chatExpanded}
+          onCollapse={() => chatState.setChatExpanded(false)}
+          onExpand={() => chatState.setChatExpanded(true)}
         />
         <ChatBar
-          expanded={chatExpanded}
-          onExpandChange={setChatExpanded}
+          expanded={chatState.chatExpanded}
+          onExpandChange={chatState.setChatExpanded}
+          pendingAttachment={chatState.pendingAttachment}
+          onPendingAttachmentChange={chatState.setPendingAttachment}
+          autoSubmitPending={chatState.autoSubmitPending}
+          onAutoSubmitPendingChange={chatState.setAutoSubmitPending}
         />
       </div>
 

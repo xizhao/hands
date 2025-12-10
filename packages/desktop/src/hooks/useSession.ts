@@ -9,8 +9,7 @@
 
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { invoke } from "@tauri-apps/api/core";
-import { useUIStore } from "@/stores/ui";
-import { useBackgroundStore, type BackgroundTask } from "@/stores/background";
+import { useActiveWorkbookDirectory, useActiveWorkbookId } from "@/hooks/useWorkbook";
 import { api, type Session, type PermissionResponse, type MessageWithParts } from "@/lib/api";
 
 // ============ SESSION HOOKS ============
@@ -19,7 +18,7 @@ import { api, type Session, type PermissionResponse, type MessageWithParts } fro
  * Get all sessions for the current workbook directory
  */
 export function useSessions() {
-  const directory = useUIStore((s) => s.activeWorkbookDirectory);
+  const directory = useActiveWorkbookDirectory();
 
   return useQuery({
     queryKey: ["sessions", directory],
@@ -34,7 +33,7 @@ export function useSessions() {
  * Get a single session by ID
  */
 export function useSession(sessionId: string | null) {
-  const directory = useUIStore((s) => s.activeWorkbookDirectory);
+  const directory = useActiveWorkbookDirectory();
 
   return useQuery({
     queryKey: ["session", sessionId, directory],
@@ -49,7 +48,7 @@ export function useSession(sessionId: string | null) {
  * Create a new session
  */
 export function useCreateSession() {
-  const directory = useUIStore((s) => s.activeWorkbookDirectory);
+  const directory = useActiveWorkbookDirectory();
   const queryClient = useQueryClient();
 
   return useMutation({
@@ -71,7 +70,7 @@ export function useCreateSession() {
  * Delete a session
  */
 export function useDeleteSession() {
-  const directory = useUIStore((s) => s.activeWorkbookDirectory);
+  const directory = useActiveWorkbookDirectory();
   const queryClient = useQueryClient();
 
   return useMutation({
@@ -96,7 +95,7 @@ export function useDeleteSession() {
  * Get messages for a session
  */
 export function useMessages(sessionId: string | null) {
-  const directory = useUIStore((s) => s.activeWorkbookDirectory);
+  const directory = useActiveWorkbookDirectory();
   const { data: statuses } = useSessionStatuses();
   const status = sessionId ? statuses?.[sessionId] : null;
   const isBusy = status?.type === "busy" || status?.type === "running";
@@ -124,7 +123,7 @@ export function useMessages(sessionId: string | null) {
  * Uses the "hands" agent by default
  */
 export function useSendMessage() {
-  const directory = useUIStore((s) => s.activeWorkbookDirectory);
+  const directory = useActiveWorkbookDirectory();
   const queryClient = useQueryClient();
 
   return useMutation({
@@ -200,7 +199,7 @@ export function useSendMessage() {
  * SSE events update this cache - no polling needed
  */
 export function useSessionStatuses() {
-  const directory = useUIStore((s) => s.activeWorkbookDirectory);
+  const directory = useActiveWorkbookDirectory();
 
   return useQuery({
     queryKey: ["session-statuses", directory],
@@ -222,7 +221,7 @@ export function useSessionStatus(sessionId: string | null) {
  * Abort a running session
  */
 export function useAbortSession(sessionId: string | null) {
-  const directory = useUIStore((s) => s.activeWorkbookDirectory);
+  const directory = useActiveWorkbookDirectory();
 
   return useMutation({
     mutationKey: ["session", "abort"],
@@ -239,7 +238,7 @@ export function useAbortSession(sessionId: string | null) {
  * Get todos for a session
  */
 export function useTodos(sessionId: string | null) {
-  const directory = useUIStore((s) => s.activeWorkbookDirectory);
+  const directory = useActiveWorkbookDirectory();
 
   return useQuery({
     queryKey: ["todos", sessionId, directory],
@@ -256,7 +255,7 @@ export function useTodos(sessionId: string | null) {
  * Respond to a permission request
  */
 export function useRespondToPermission(sessionId: string | null) {
-  const directory = useUIStore((s) => s.activeWorkbookDirectory);
+  const directory = useActiveWorkbookDirectory();
 
   return useMutation({
     mutationKey: ["permission", "respond"],
@@ -287,10 +286,9 @@ interface CopyFilesResult {
  * creates a session, and sends a prompt to the agent.
  */
 export function useImportWithAgent() {
-  const directory = useUIStore((s) => s.activeWorkbookDirectory);
-  const activeWorkbookId = useUIStore((s) => s.activeWorkbookId);
+  const directory = useActiveWorkbookDirectory();
+  const activeWorkbookId = useActiveWorkbookId();
   const queryClient = useQueryClient();
-  const { addTask, updateTask } = useBackgroundStore();
 
   return useMutation({
     mutationKey: ["import", "agent"],
@@ -337,36 +335,24 @@ export function useImportWithAgent() {
       console.log("[import] Calling onSessionCreated callback...");
       onSessionCreated?.(session.id);
 
-      // 3. Add background task
-      console.log("[import] Step 3: Adding background task...");
-      const task: BackgroundTask = {
-        id: session.id,
-        type: "import",
-        title: `Importing ${file.name}`,
-        status: "running",
-        progress: "Starting import...",
-        startedAt: Date.now(),
-      };
-      addTask(task);
-
-      // 4. Update sessions cache (check for duplicates since SSE may have already added it)
-      console.log("[import] Step 4: Updating sessions cache...");
+      // 3. Update sessions cache (check for duplicates since SSE may have already added it)
+      console.log("[import] Step 3: Updating sessions cache...");
       queryClient.setQueryData<Session[]>(["sessions", directory], (old) => {
         if (!old) return [session];
         if (old.some((s) => s.id === session.id)) return old;
         return [session, ...old];
       });
 
-      // 5. Optimistically set status to busy (for polling fallback)
-      console.log("[import] Step 5: Setting status to busy...");
+      // 4. Optimistically set status to busy (for polling fallback)
+      console.log("[import] Step 4: Setting status to busy...");
       queryClient.setQueryData<Record<string, { type: string }>>(
         ["session-statuses", directory],
         (old) => ({ ...old, [session.id]: { type: "busy" } })
       );
 
-      // 5b. CRITICAL: Initialize messages cache so SSE updates can find it
+      // 5. CRITICAL: Initialize messages cache so SSE updates can find it
       // This must happen BEFORE onSessionCreated triggers UI to fetch
-      console.log("[import] Step 5b: Initializing messages cache for session:", session.id);
+      console.log("[import] Step 5: Initializing messages cache for session:", session.id);
       const now = Date.now();
       const optimisticId = `optimistic-${now}`;
       const optimisticMessage = {
@@ -406,13 +392,6 @@ export function useImportWithAgent() {
 
       console.log("[import] Complete! Returning sessionId:", session.id);
       return { sessionId: session.id, filePath };
-    },
-    onSuccess: ({ sessionId }) => {
-      console.log("[import] onSuccess called for session:", sessionId);
-      updateTask(sessionId, { progress: "Agent working..." });
-    },
-    onError: (error) => {
-      console.error("[import] onError:", error);
     },
   });
 }

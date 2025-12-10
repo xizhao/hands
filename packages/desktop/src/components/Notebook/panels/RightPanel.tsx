@@ -3,7 +3,7 @@
  * Darkens the app and slides over on top of everything including chat
  */
 
-import { useUIStore } from "@/stores/ui";
+import { useRightPanel } from "@/hooks/useNavState";
 import { cn } from "@/lib/utils";
 import { X } from "@phosphor-icons/react";
 import { SourcesPanel } from "./SourcesPanel";
@@ -14,7 +14,7 @@ import { AlertsPanel } from "./AlertsPanel";
 import { AnimatePresence, motion } from "framer-motion";
 
 export function RightPanel() {
-  const { rightPanel, setRightPanel } = useUIStore();
+  const { panel: rightPanel, setPanel: setRightPanel } = useRightPanel();
 
   const panelTitle = rightPanel ? {
     sources: "Sources",

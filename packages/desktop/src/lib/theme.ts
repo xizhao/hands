@@ -1,7 +1,7 @@
-import { create } from "zustand";
-import { persist } from "zustand/middleware";
+/**
+ * Theme utilities - plain localStorage, no state library
+ */
 
-// Theme definitions inspired by opencode's 21 themes
 export interface ThemeColors {
   background: string;
   foreground: string;
@@ -30,10 +30,9 @@ export interface Theme {
   colors: ThemeColors;
 }
 
-// Popular themes from opencode and community
+// Theme definitions
 export const THEMES: Record<string, Theme> = {
-  // Light themes
-  "light": {
+  light: {
     name: "Light",
     isDark: false,
     colors: {
@@ -58,34 +57,7 @@ export const THEMES: Record<string, Theme> = {
       ring: "220 9% 12%",
     },
   },
-  "github-light": {
-    name: "GitHub Light",
-    isDark: false,
-    colors: {
-      background: "0 0% 100%",
-      foreground: "210 12% 16%",
-      card: "210 17% 98%",
-      cardForeground: "210 12% 16%",
-      popover: "0 0% 100%",
-      popoverForeground: "210 12% 16%",
-      primary: "212 92% 45%",
-      primaryForeground: "0 0% 100%",
-      secondary: "210 17% 95%",
-      secondaryForeground: "210 12% 16%",
-      muted: "210 17% 95%",
-      mutedForeground: "210 10% 40%",
-      accent: "212 92% 95%",
-      accentForeground: "212 92% 35%",
-      destructive: "0 72% 51%",
-      destructiveForeground: "0 0% 100%",
-      border: "210 18% 87%",
-      input: "210 18% 87%",
-      ring: "212 92% 45%",
-    },
-  },
-
-  // Dark themes
-  "dark": {
+  dark: {
     name: "Dark",
     isDark: true,
     colors: {
@@ -135,7 +107,7 @@ export const THEMES: Record<string, Theme> = {
       ring: "220 95% 76%",
     },
   },
-  "catppuccin": {
+  catppuccin: {
     name: "Catppuccin Mocha",
     isDark: true,
     colors: {
@@ -160,7 +132,7 @@ export const THEMES: Record<string, Theme> = {
       ring: "267 84% 81%",
     },
   },
-  "dracula": {
+  dracula: {
     name: "Dracula",
     isDark: true,
     colors: {
@@ -185,7 +157,7 @@ export const THEMES: Record<string, Theme> = {
       ring: "265 89% 78%",
     },
   },
-  "nord": {
+  nord: {
     name: "Nord",
     isDark: true,
     colors: {
@@ -210,7 +182,7 @@ export const THEMES: Record<string, Theme> = {
       ring: "213 32% 52%",
     },
   },
-  "gruvbox": {
+  gruvbox: {
     name: "Gruvbox Dark",
     isDark: true,
     colors: {
@@ -285,64 +257,80 @@ export const THEMES: Record<string, Theme> = {
       ring: "212 92% 55%",
     },
   },
+  "github-light": {
+    name: "GitHub Light",
+    isDark: false,
+    colors: {
+      background: "0 0% 100%",
+      foreground: "210 12% 16%",
+      card: "210 17% 98%",
+      cardForeground: "210 12% 16%",
+      popover: "0 0% 100%",
+      popoverForeground: "210 12% 16%",
+      primary: "212 92% 45%",
+      primaryForeground: "0 0% 100%",
+      secondary: "210 17% 95%",
+      secondaryForeground: "210 12% 16%",
+      muted: "210 17% 95%",
+      mutedForeground: "210 10% 40%",
+      accent: "212 92% 95%",
+      accentForeground: "212 92% 35%",
+      destructive: "0 72% 51%",
+      destructiveForeground: "0 0% 100%",
+      border: "210 18% 87%",
+      input: "210 18% 87%",
+      ring: "212 92% 45%",
+    },
+  },
 };
 
-// Apply theme to document
+const STORAGE_KEY = "hands-theme";
+const DEFAULT_THEME = "dark";
+
 function applyTheme(theme: Theme) {
   const root = document.documentElement;
-
-  // Set dark mode class
   if (theme.isDark) {
     root.classList.add("dark");
   } else {
     root.classList.remove("dark");
   }
-
-  // Apply CSS variables
   Object.entries(theme.colors).forEach(([key, value]) => {
-    // Convert camelCase to kebab-case
     const cssVar = key.replace(/([A-Z])/g, "-$1").toLowerCase();
     root.style.setProperty(`--${cssVar}`, value);
   });
 }
 
-interface ThemeState {
-  currentTheme: string;
-  setTheme: (themeName: string) => void;
-  initTheme: () => void;
+export function getTheme(): string {
+  try {
+    const stored = localStorage.getItem(STORAGE_KEY);
+    if (stored) {
+      const parsed = JSON.parse(stored);
+      return parsed.state?.currentTheme ?? DEFAULT_THEME;
+    }
+  } catch {
+    // ignore
+  }
+  return DEFAULT_THEME;
 }
 
-export const useThemeStore = create<ThemeState>()(
-  persist(
-    (set, get) => ({
-      currentTheme: "dark",
+export function setTheme(themeName: string) {
+  const theme = THEMES[themeName];
+  if (theme) {
+    applyTheme(theme);
+    localStorage.setItem(STORAGE_KEY, JSON.stringify({ state: { currentTheme: themeName } }));
+  }
+}
 
-      setTheme: (themeName: string) => {
-        const theme = THEMES[themeName];
-        if (theme) {
-          applyTheme(theme);
-          set({ currentTheme: themeName });
-        }
-      },
+export function initTheme() {
+  const themeName = getTheme();
+  const theme = THEMES[themeName] ?? THEMES[DEFAULT_THEME];
+  applyTheme(theme);
+}
 
-      initTheme: () => {
-        const { currentTheme } = get();
-        const theme = THEMES[currentTheme];
-        if (theme) {
-          applyTheme(theme);
-        }
-      },
-    }),
-    {
-      name: "hands-theme",
-    }
-  )
-);
-
-// Helper to get theme list for UI
-export const getThemeList = () =>
-  Object.entries(THEMES).map(([id, theme]) => ({
+export function getThemeList() {
+  return Object.entries(THEMES).map(([id, theme]) => ({
     id,
     name: theme.name,
     isDark: theme.isDark,
   }));
+}

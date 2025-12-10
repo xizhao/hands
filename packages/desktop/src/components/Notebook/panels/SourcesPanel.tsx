@@ -2,13 +2,12 @@
  * SourcesPanel - Shows database tables and data sources
  */
 
-import { useUIStore } from "@/stores/ui";
-import { useDbSchema } from "@/hooks/useWorkbook";
+import { useDbSchema, useActiveWorkbookId } from "@/hooks/useWorkbook";
 import { TreeStructure, Table, CaretRight } from "@phosphor-icons/react";
 import { cn } from "@/lib/utils";
 
 export function SourcesPanel() {
-  const { activeWorkbookId } = useUIStore();
+  const activeWorkbookId = useActiveWorkbookId();
   const { data: schema, isLoading } = useDbSchema(activeWorkbookId);
 
   if (isLoading) {

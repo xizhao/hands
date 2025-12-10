@@ -3,8 +3,7 @@
  */
 
 import { useState } from "react";
-import { useUIStore } from "@/stores/ui";
-import { useEvalResult, useRuntimeEval, useRuntimePort } from "@/hooks/useWorkbook";
+import { useEvalResult, useRuntimeEval, useRuntimePort, useActiveWorkbookId } from "@/hooks/useWorkbook";
 import { useServer } from "@/hooks/useServer";
 import { useIsMutating } from "@tanstack/react-query";
 import {
@@ -23,7 +22,7 @@ import { cn } from "@/lib/utils";
 type Category = "app" | "runtime" | "code";
 
 export function AlertsPanel() {
-  const { activeWorkbookId } = useUIStore();
+  const activeWorkbookId = useActiveWorkbookId();
   const { data: evalResult, isLoading } = useEvalResult(activeWorkbookId);
   const runtimePort = useRuntimePort();
   const runtimeRunning = !!runtimePort;

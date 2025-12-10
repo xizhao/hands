@@ -1,43 +1,47 @@
 import { createRoute, Outlet, useNavigate } from "@tanstack/react-router";
 import { useEffect, useRef, useCallback } from "react";
-import { invoke } from "@tauri-apps/api/core";
-import { useUIStore } from "@/stores/ui";
-import { useWorkbooks, useCreateWorkbook, useOpenWorkbook } from "@/hooks/useWorkbook";
-
-// Tauri command response type (matches Rust backend)
-interface TauriRuntimeStatus {
-  workbook_id: string;
-  directory: string;
-  runtime_port: number;
-}
-import type { Workbook } from "@/lib/workbook";
+import {
+  useWorkbooks,
+  useCreateWorkbook,
+  useOpenWorkbook,
+  useActiveRuntime,
+  useRuntimePort,
+} from "@/hooks/useWorkbook";
+import { useActiveSession } from "@/hooks/useNavState";
 import { useSessions } from "@/hooks/useSession";
 import { startSSESync, setNavigateCallback } from "@/lib/sse";
-import { useDbSync } from "@/store/db-hooks";
+import { useDbSync } from "@/hooks/useDbHooks";
 import { queryClient } from "@/App";
-import type { ChangeRecord } from "@/store/db-hooks";
+import type { ChangeRecord } from "@/hooks/useDbHooks";
 
 import { NotebookShell } from "@/components/Notebook/NotebookShell";
 import { rootRoute } from "./__root";
+import type { NavSearchParams } from "@/hooks/useNavState";
 
 export const notebookRoute = createRoute({
   getParentRoute: () => rootRoute,
   id: "_notebook",
   component: NotebookLayout,
+  validateSearch: (search: Record<string, unknown>): NavSearchParams => ({
+    panel: search.panel as NavSearchParams["panel"],
+    tab: search.tab as NavSearchParams["tab"],
+    session: search.session as string | undefined,
+  }),
 });
 
 function NotebookLayout() {
   const navigate = useNavigate();
-  const { setActivePage } = useUIStore();
+  const runtimePort = useRuntimePort();
+  const { data: activeRuntime } = useActiveRuntime();
+  const { sessionId: activeSessionId, setSession: setActiveSession } = useActiveSession();
 
   // Set up navigate callback for SSE
   useEffect(() => {
     setNavigateCallback((page: string) => {
       const pageId = page.replace(/^\//, "").replace(/\//g, "-") || "index";
-      setActivePage(pageId);
       navigate({ to: "/page/$pageId", params: { pageId } });
     });
-  }, [navigate, setActivePage]);
+  }, [navigate]);
 
   // Start SSE sync on mount
   useEffect(() => {
@@ -49,20 +53,20 @@ function NotebookLayout() {
   const dbBrowserOpenedRef = useRef(false);
 
   // Handle new database changes
-  const handleDbChange = useCallback((change: ChangeRecord) => {
-    if (dbBrowserOpenedRef.current) return;
-    const runtimePort = useUIStore.getState().runtimePort;
-    const workbookId = useUIStore.getState().activeWorkbookId;
-    if (runtimePort && workbookId) {
-      console.log("[notebook] DB change:", change.op, change.table);
-      dbBrowserOpenedRef.current = true;
-    }
-  }, []);
+  const handleDbChange = useCallback(
+    (change: ChangeRecord) => {
+      if (dbBrowserOpenedRef.current) return;
+      if (runtimePort && activeRuntime?.workbook_id) {
+        console.log("[notebook] DB change:", change.op, change.table);
+        dbBrowserOpenedRef.current = true;
+      }
+    },
+    [runtimePort, activeRuntime?.workbook_id]
+  );
 
   // Start database change SSE subscription
   useDbSync(handleDbChange);
 
-  const { setActiveWorkbook, setActiveSession, activeSessionId, setRuntimePort } = useUIStore();
   const { data: sessions, isLoading: sessionsLoading } = useSessions();
   const { data: workbooks, isLoading: workbooksLoading } = useWorkbooks();
   const createWorkbook = useCreateWorkbook();
@@ -72,68 +76,57 @@ function NotebookLayout() {
   const initialized = useRef(false);
   const initializingRef = useRef(false);
 
-  // On startup: check Tauri for active runtime, or start one
+  // On startup: if no active runtime, open most recent workbook or create one
   useEffect(() => {
     if (initialized.current || initializingRef.current) return;
     if (workbooksLoading || workbooks === undefined) return;
     if (createWorkbook.isPending || openWorkbook.isPending) return;
 
+    // If we already have an active runtime from Tauri, we're done
+    if (activeRuntime) {
+      console.log("[notebook] Already have active runtime:", activeRuntime.workbook_id);
+      initialized.current = true;
+      return;
+    }
+
     initializingRef.current = true;
+    console.log("[notebook] No active runtime, starting one...");
 
-    invoke<TauriRuntimeStatus | null>("get_active_runtime").then((active) => {
-      if (active) {
-        console.log("[notebook] Tauri has active runtime:", active.workbook_id, "on port", active.runtime_port);
-        setActiveWorkbook(active.workbook_id, active.directory);
-        setRuntimePort(active.runtime_port);
-        initialized.current = true;
-        initializingRef.current = false;
-        return;
-      }
-
-      console.log("[notebook] No active runtime, starting one...");
-
-      if (workbooks.length > 0) {
-        const mostRecent = workbooks[0];
-        console.log("[notebook] Opening most recent workbook:", mostRecent.id);
-        setActiveWorkbook(mostRecent.id, mostRecent.directory);
-        openWorkbook.mutate(mostRecent, {
-          onSettled: () => {
+    if (workbooks.length > 0) {
+      const mostRecent = workbooks[0];
+      console.log("[notebook] Opening most recent workbook:", mostRecent.id);
+      openWorkbook.mutate(mostRecent, {
+        onSettled: () => {
+          initialized.current = true;
+          initializingRef.current = false;
+        },
+      });
+    } else {
+      createWorkbook.mutate(
+        { name: "My Workbook" },
+        {
+          onSuccess: (workbook) => {
+            console.log("[notebook] Created new workbook:", workbook.id);
+            openWorkbook.mutate(workbook, {
+              onSettled: () => {
+                initialized.current = true;
+                initializingRef.current = false;
+              },
+            });
+          },
+          onError: () => {
             initialized.current = true;
             initializingRef.current = false;
-          }
-        });
-      } else {
-        createWorkbook.mutate(
-          { name: "My Workbook" },
-          {
-            onSuccess: (workbook) => {
-              console.log("[notebook] Created new workbook:", workbook.id);
-              setActiveWorkbook(workbook.id, workbook.directory);
-              openWorkbook.mutate(workbook, {
-                onSettled: () => {
-                  initialized.current = true;
-                  initializingRef.current = false;
-                }
-              });
-            },
-            onError: () => {
-              initialized.current = true;
-              initializingRef.current = false;
-            }
-          }
-        );
-      }
-    }).catch((err) => {
-      console.error("[notebook] Failed to check active runtime:", err);
-      initialized.current = true;
-      initializingRef.current = false;
-    });
-  }, [workbooks, workbooksLoading, setActiveWorkbook, createWorkbook, openWorkbook]);
+          },
+        }
+      );
+    }
+  }, [workbooks, workbooksLoading, activeRuntime, createWorkbook, openWorkbook]);
 
   // Clear activeSessionId if it points to a deleted session
   useEffect(() => {
     if (sessionsLoading || !sessions) return;
-    if (activeSessionId && !sessions.some(s => s.id === activeSessionId)) {
+    if (activeSessionId && !sessions.some((s) => s.id === activeSessionId)) {
       setActiveSession(null);
     }
   }, [sessions, sessionsLoading, activeSessionId, setActiveSession]);

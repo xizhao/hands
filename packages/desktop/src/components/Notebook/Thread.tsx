@@ -1,11 +1,10 @@
 import { useEffect, useRef, useLayoutEffect } from "react";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { useMessages, useSessions, useSessionStatuses, useDeleteSession } from "@/hooks/useSession";
-import { useUIStore } from "@/stores/ui";
-import { useBackgroundStore } from "@/stores/background";
+import { useActiveSession } from "@/hooks/useNavState";
 import { ChatMessage } from "@/components/ChatMessage";
 import { cn } from "@/lib/utils";
-import { X, Loader2 } from "lucide-react";
+import { X } from "lucide-react";
 import { ShimmerText } from "@/components/ui/thinking-indicator";
 import { motion } from "framer-motion";
 
@@ -16,8 +15,7 @@ interface ThreadProps {
 }
 
 export function Thread({ expanded, onCollapse, onExpand }: ThreadProps) {
-  const { activeSessionId, setActiveSession } = useUIStore();
-  const { tasks: backgroundTasks, removeTask } = useBackgroundStore();
+  const { sessionId: activeSessionId, setSession: setActiveSession } = useActiveSession();
   const { data: messages = [], isLoading, error } = useMessages(activeSessionId);
   const { data: sessions = [] } = useSessions();
   const { data: sessionStatuses = {} } = useSessionStatuses();
@@ -26,10 +24,6 @@ export function Thread({ expanded, onCollapse, onExpand }: ThreadProps) {
   // Debug logging
   console.log("[Thread] render - activeSessionId:", activeSessionId, "expanded:", expanded);
   console.log("[Thread] messages:", messages.length, "isLoading:", isLoading, "error:", error);
-
-  // Background task IDs
-  const backgroundTaskIds = new Set(Object.keys(backgroundTasks));
-  const backgroundTaskList = Object.values(backgroundTasks);
 
   // Current session status
   const currentStatus = activeSessionId ? sessionStatuses[activeSessionId] : null;
@@ -46,9 +40,7 @@ export function Thread({ expanded, onCollapse, onExpand }: ThreadProps) {
 
   // Session info
   const currentSession = sessions.find(s => s.id === activeSessionId);
-  const otherSessions = sessions.filter(s => s.id !== activeSessionId && s.title && !backgroundTaskIds.has(s.id));
-  const isCurrentBackground = activeSessionId ? backgroundTaskIds.has(activeSessionId) : false;
-  const currentBackgroundTask = activeSessionId ? backgroundTasks[activeSessionId] : null;
+  const otherSessions = sessions.filter(s => s.id !== activeSessionId && s.title);
   const currentHasTitle = Boolean(currentSession?.title);
 
   // Status helpers
@@ -100,33 +92,16 @@ export function Thread({ expanded, onCollapse, onExpand }: ThreadProps) {
   const handleDeleteThread = (sessionId: string, e: React.MouseEvent) => {
     e.stopPropagation();
     deleteSession.mutate(sessionId);
-    if (backgroundTaskIds.has(sessionId)) {
-      removeTask(sessionId);
-    }
   };
 
-  const handleSelectBackgroundTask = (taskId: string) => {
-    setActiveSession(taskId);
-    onExpand();
-  };
-
-  // All thread chips (current + others + background)
+  // All thread chips (current + others)
   const allChips = [
     // Current session chip
-    ...(currentHasTitle && activeSessionId && !isCurrentBackground ? [{
+    ...(currentHasTitle && activeSessionId ? [{
       id: activeSessionId,
       title: currentSession?.title || "",
       status: getSessionStatus(activeSessionId),
       isCurrent: true,
-      isBackground: false,
-    }] : []),
-    // Current background task chip
-    ...(isCurrentBackground && currentBackgroundTask ? [{
-      id: activeSessionId!,
-      title: currentBackgroundTask.title,
-      status: currentBackgroundTask.status === "running" ? "busy" as const : null,
-      isCurrent: true,
-      isBackground: true,
     }] : []),
     // Other sessions
     ...otherSessions.slice(0, 4).map(s => ({
@@ -134,15 +109,6 @@ export function Thread({ expanded, onCollapse, onExpand }: ThreadProps) {
       title: s.title || "",
       status: getSessionStatus(s.id),
       isCurrent: false,
-      isBackground: false,
-    })),
-    // Other background tasks
-    ...backgroundTaskList.filter(t => t.id !== activeSessionId).map(t => ({
-      id: t.id,
-      title: t.progress || t.title,
-      status: t.status === "running" ? "busy" as const : t.status === "error" ? "error" as const : null,
-      isCurrent: false,
-      isBackground: true,
     })),
   ];
 
@@ -159,8 +125,6 @@ export function Thread({ expanded, onCollapse, onExpand }: ThreadProps) {
                 onClick={() => {
                   if (chip.isCurrent) {
                     expanded ? onCollapse() : onExpand();
-                  } else if (chip.isBackground) {
-                    handleSelectBackgroundTask(chip.id);
                   } else {
                     handleSwitchThread(chip.id);
                   }
@@ -169,11 +133,10 @@ export function Thread({ expanded, onCollapse, onExpand }: ThreadProps) {
                   "flex items-center gap-1 px-2 py-0.5 text-[11px] rounded-md transition-colors",
                   chip.isCurrent
                     ? "bg-muted text-foreground"
-                    : "text-muted-foreground hover:text-foreground hover:bg-muted/50",
-                  chip.isBackground && "opacity-70"
+                    : "text-muted-foreground hover:text-foreground hover:bg-muted/50"
                 )}
               >
-                <StatusDot status={chip.status} isBackground={chip.isBackground} />
+                <StatusDot status={chip.status} />
                 <span className="max-w-[100px] truncate">{chip.title}</span>
               </button>
               {!chip.isCurrent && (
@@ -229,11 +192,9 @@ export function Thread({ expanded, onCollapse, onExpand }: ThreadProps) {
 }
 
 // Status dot component
-function StatusDot({ status, isBackground }: { status: "busy" | "error" | null; isBackground?: boolean }) {
+function StatusDot({ status }: { status: "busy" | "error" | null }) {
   if (status === "busy") {
-    return isBackground ? (
-      <Loader2 className="h-2.5 w-2.5 animate-spin text-muted-foreground" />
-    ) : (
+    return (
       <span className="relative flex h-2 w-2">
         <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75" />
         <span className="relative inline-flex rounded-full h-2 w-2 bg-green-500" />

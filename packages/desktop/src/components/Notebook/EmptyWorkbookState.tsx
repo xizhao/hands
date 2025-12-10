@@ -28,10 +28,10 @@ import {
   useAddSource,
   type AvailableSource,
 } from "@/hooks/useWorkbook";
-import { useUIStore } from "@/stores/ui";
 
 interface EmptyWorkbookStateProps {
   onImportFile: () => void;
+  chatExpanded?: boolean;
 }
 
 // Icon mapping for known sources
@@ -158,11 +158,11 @@ function HandDrawnArrow({ startX, startY, endX, endY }: { startX: number; startY
 
 export function EmptyWorkbookState({
   onImportFile,
+  chatExpanded = false,
 }: EmptyWorkbookStateProps) {
   const [showSources, setShowSources] = useState(false);
   const [arrowCoords, setArrowCoords] = useState<{ startX: number; startY: number; endX: number; endY: number } | null>(null);
   const askHandsRef = useRef<HTMLDivElement>(null);
-  const { chatExpanded } = useUIStore();
 
   const { data: availableSources = [] } = useAvailableSources();
   const addSource = useAddSource();

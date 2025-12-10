@@ -8,13 +8,13 @@ import {
   useSessionStatuses,
 } from "@/hooks/useSession";
 import {
-  useDevServerRoutes,
   useWorkbook,
   useWorkbookDatabase,
-  useRuntimePort,
+  useActiveWorkbookId,
 } from "@/hooks/useWorkbook";
+import { useActiveSession } from "@/hooks/useNavState";
+import type { PendingAttachment, PendingBlockAttachment } from "@/hooks/useChatState";
 import { cn } from "@/lib/utils";
-import { useUIStore } from "@/stores/ui";
 import { ArrowUp, Hand, Loader2, Square, X, Paperclip, Blocks } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
@@ -22,6 +22,10 @@ import { invoke } from "@tauri-apps/api/core";
 interface ChatBarProps {
   expanded: boolean;
   onExpandChange: (expanded: boolean) => void;
+  pendingAttachment?: PendingAttachment | PendingBlockAttachment | null;
+  onPendingAttachmentChange?: (attachment: PendingAttachment | PendingBlockAttachment | null) => void;
+  autoSubmitPending?: boolean;
+  onAutoSubmitPendingChange?: (pending: boolean) => void;
 }
 
 interface CopyFilesResult {
@@ -29,19 +33,21 @@ interface CopyFilesResult {
   data_dir: string;
 }
 
-export function ChatBar({ expanded, onExpandChange }: ChatBarProps) {
+export function ChatBar({
+  expanded,
+  onExpandChange,
+  pendingAttachment = null,
+  onPendingAttachmentChange,
+  autoSubmitPending = false,
+  onAutoSubmitPendingChange,
+}: ChatBarProps) {
   const [input, setInput] = useState("");
   const [isUploadingFile, setIsUploadingFile] = useState(false);
   const inputRef = useRef<HTMLTextAreaElement>(null);
-  const {
-    activeSessionId,
-    activeWorkbookId,
-    setActiveSession,
-    pendingAttachment,
-    setPendingAttachment,
-    autoSubmitPending,
-    setAutoSubmitPending,
-  } = useUIStore();
+  const { sessionId: activeSessionId, setSession: setActiveSession } = useActiveSession();
+  const activeWorkbookId = useActiveWorkbookId();
+  const setPendingAttachment = onPendingAttachmentChange ?? (() => {});
+  const setAutoSubmitPending = onAutoSubmitPendingChange ?? (() => {});
   const { data: sessionStatuses = {} } = useSessionStatuses();
   const sendMessage = useSendMessage();
   const abortSession = useAbortSession(activeSessionId);
@@ -52,9 +58,6 @@ export function ChatBar({ expanded, onExpandChange }: ChatBarProps) {
 
   // Workbook context
   const { data: activeWorkbook } = useWorkbook(activeWorkbookId);
-  const runtimePort = useRuntimePort();
-  const runtimeReady = !!runtimePort;
-  const { data: devServerRoutes } = useDevServerRoutes(activeWorkbookId);
   const { data: workbookDatabase } = useWorkbookDatabase(activeWorkbookId);
 
   const status = activeSessionId ? sessionStatuses[activeSessionId] : null;
@@ -68,16 +71,10 @@ export function ChatBar({ expanded, onExpandChange }: ChatBarProps) {
       ? `PostgreSQL on port ${workbookDatabase.port}, database "${workbookDatabase.database_name}"`
       : "PostgreSQL (connecting...)";
 
-    const serverInfo =
-      runtimeReady && devServerRoutes?.url
-        ? devServerRoutes.url
-        : "Not running";
-
     return `## Current Workbook Context
 - **Workbook**: ${activeWorkbook.name}${activeWorkbook.description ? ` - ${activeWorkbook.description}` : ""}
 - **Directory**: ${activeWorkbook.directory}
-- **Database**: ${dbInfo}
-- **Dev Server**: ${serverInfo}`;
+- **Database**: ${dbInfo}`;
   };
 
   const handleSubmit = useCallback(async () => {

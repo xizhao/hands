@@ -1,7 +1,7 @@
 import { memo } from "react";
 import type { Todo } from "@/lib/api";
 import { useTodos } from "@/hooks/useSession";
-import { useUIStore } from "@/stores/ui";
+import { useActiveSession } from "@/hooks/useNavState";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { CheckCircle2, Circle, Loader2, ListTodo } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -37,7 +37,7 @@ const TodoItem = memo(({ todo }: { todo: Todo }) => {
 TodoItem.displayName = "TodoItem";
 
 export const TodoPanel = memo(() => {
-  const { activeSessionId } = useUIStore();
+  const { sessionId: activeSessionId } = useActiveSession();
   const { data: todos = [], isLoading } = useTodos(activeSessionId);
 
   const completedCount = todos.filter((t) => t.status === "completed").length;

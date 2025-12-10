@@ -15,11 +15,11 @@ import {
   fetchTableColumns,
   fetchTableRows,
   type ChangeRecord,
-} from "./db-browser";
-import { useRuntimePort } from "./db-context";
+} from "./useDbBrowser";
+import { useRuntimePort } from "./useDbContext";
 
 // Re-export ChangeRecord for consumers
-export type { ChangeRecord } from "./db-browser";
+export type { ChangeRecord } from "./useDbBrowser";
 
 // ============ CHANGE HOOKS ============
 

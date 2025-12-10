@@ -3,8 +3,7 @@
  */
 
 import { useState } from "react";
-import { useUIStore } from "@/stores/ui";
-import { useWorkbook, useUpdateWorkbook } from "@/hooks/useWorkbook";
+import { useWorkbook, useUpdateWorkbook, useActiveWorkbookId } from "@/hooks/useWorkbook";
 import {
   Gear,
   Key,
@@ -21,7 +20,7 @@ import { cn } from "@/lib/utils";
 type SettingsSection = "general" | "secrets" | "database" | "deployment";
 
 export function SettingsPanel() {
-  const { activeWorkbookId } = useUIStore();
+  const activeWorkbookId = useActiveWorkbookId();
   const { data: _workbook } = useWorkbook(activeWorkbookId);
   const [activeSection, setActiveSection] = useState<SettingsSection | null>(null);
 
@@ -82,7 +81,7 @@ export function SettingsPanel() {
 }
 
 function GeneralSettings() {
-  const { activeWorkbookId } = useUIStore();
+  const activeWorkbookId = useActiveWorkbookId();
   const { data: workbook } = useWorkbook(activeWorkbookId);
   const updateWorkbook = useUpdateWorkbook();
 
