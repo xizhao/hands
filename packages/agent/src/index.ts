@@ -7,9 +7,9 @@
 
 import type { Config } from "@opencode-ai/sdk";
 import { createOpencode } from "@opencode-ai/sdk";
-import { HANDS_PROMPT, IMPORT_PROMPT } from "../prompts";
-import { existsSync, mkdirSync, symlinkSync, unlinkSync, lstatSync } from "fs";
-import { resolve, dirname } from "path";
+import { existsSync, lstatSync, mkdirSync, symlinkSync, unlinkSync } from "fs";
+import { dirname, resolve } from "path";
+import { handsAgent, importAgent, queryAgent, blocksAgent } from "../agents";
 
 // Configuration
 const PORT = parseInt(process.env.HANDS_AGENT_PORT || "55300", 10);
@@ -39,49 +39,32 @@ function setupToolsSymlink(workingDir: string) {
     if (stat.isSymbolicLink()) {
       unlinkSync(toolsTarget);
     } else {
-      console.log(`[hands-agent] Warning: ${toolsTarget} exists and is not a symlink, skipping`);
+      console.log(
+        `[hands-agent] Warning: ${toolsTarget} exists and is not a symlink, skipping`
+      );
       return;
     }
   }
 
   // Create symlink
   symlinkSync(TOOLS_SOURCE, toolsTarget, "dir");
-  console.log(`[hands-agent] Symlinked tools: ${toolsTarget} -> ${TOOLS_SOURCE}`);
+  console.log(
+    `[hands-agent] Symlinked tools: ${toolsTarget} -> ${TOOLS_SOURCE}`
+  );
 }
 
 // Build config
 const config: Config = {
   model: MODEL,
   agent: {
-    // Disable general, keep build/plan/explore
+    // Disable general and build, keep plan/explore
     general: { disable: true },
-    hands: {
-      description: "Primary agent for Hands data app builder",
-      mode: "primary",
-      prompt: HANDS_PROMPT,
-      tools: {
-        read: true,
-        write: true,
-        edit: true,
-        bash: true,
-      },
-    },
-    import: {
-      description: "Import and ingest files into PostgreSQL database",
-      mode: "subagent",
-      temperature: 0.1,
-      prompt: IMPORT_PROMPT,
-      tools: {
-        read: true,
-        write: true,
-        bash: true,
-        edit: true,
-      },
-      permission: {
-        bash: { "*": "allow" },
-        edit: "allow",
-      },
-    },
+    build: { disable: true },
+    // Custom agents
+    hands: handsAgent,
+    import: importAgent,
+    query: queryAgent,
+    blocks: blocksAgent,
   },
 };
 

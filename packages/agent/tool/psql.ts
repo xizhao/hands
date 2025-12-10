@@ -1,4 +1,4 @@
-import { tool, type ToolDefinition } from "@opencode-ai/plugin";
+import { tool } from "@opencode-ai/plugin";
 import { existsSync, readFileSync } from "fs";
 import { join } from "path";
 import postgres from "postgres";
@@ -107,7 +107,7 @@ function formatCsv(rows: Record<string, unknown>[]): string {
   return [headerRow, ...dataRows].join("\n");
 }
 
-export const psqlTool: ToolDefinition = tool({
+const psql = tool({
   description: `Execute SQL queries against the workbook's embedded Postgres database.
 
 Use this tool to:
@@ -206,3 +206,5 @@ Open a workbook in Hands to connect to its database.`;
     }
   },
 });
+
+export default psql;

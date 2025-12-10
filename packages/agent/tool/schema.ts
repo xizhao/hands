@@ -1,4 +1,4 @@
-import { tool, type ToolDefinition } from "@opencode-ai/plugin"
+import { tool } from "@opencode-ai/plugin"
 import postgres from "postgres"
 import { existsSync, readFileSync } from "fs"
 import { join } from "path"
@@ -63,8 +63,7 @@ interface TableInfo {
   row_count?: number
 }
 
-export const schemaReadTool: ToolDefinition = tool({
-  name: "SchemaRead",
+const schema = tool({
   description: `View the database schema - lists all tables and their columns.
 
 Use this tool BEFORE writing SQL queries to understand:
@@ -207,3 +206,5 @@ Open a workbook in Hands to connect to its database.`
     }
   },
 })
+
+export default schema
