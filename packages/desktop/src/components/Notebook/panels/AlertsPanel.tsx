@@ -4,8 +4,7 @@
 
 import { useState } from "react";
 import { useUIStore } from "@/stores/ui";
-import { useEvalResult, useRuntimeEval } from "@/hooks/useWorkbook";
-import { useRuntime } from "@/providers/RuntimeProvider";
+import { useEvalResult, useRuntimeEval, useRuntimePort } from "@/hooks/useWorkbook";
 import { useServer } from "@/hooks/useServer";
 import { useIsMutating } from "@tanstack/react-query";
 import {
@@ -26,7 +25,8 @@ type Category = "app" | "runtime" | "code";
 export function AlertsPanel() {
   const { activeWorkbookId } = useUIStore();
   const { data: evalResult, isLoading } = useEvalResult(activeWorkbookId);
-  const { isReady: runtimeRunning, port: runtimePort } = useRuntime();
+  const runtimePort = useRuntimePort();
+  const runtimeRunning = !!runtimePort;
   const { isConnected: agentConnected, isConnecting: agentConnecting } = useServer();
   const runtimeEval = useRuntimeEval();
 

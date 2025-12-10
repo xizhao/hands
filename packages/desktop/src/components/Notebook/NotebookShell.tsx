@@ -21,8 +21,9 @@ import {
   useEvalResult,
   useCreatePage,
   useUpdatePageTitle,
+  useRuntimePort,
+  useManifest,
 } from "@/hooks/useWorkbook";
-import { useRuntime } from "@/providers/RuntimeProvider";
 import type { Workbook } from "@/lib/workbook";
 import { cn } from "@/lib/utils";
 
@@ -93,15 +94,17 @@ export function NotebookShell({ children }: NotebookShellProps) {
   const { data: devServerRoutes } = useDevServerRoutes(activeWorkbookId);
   const { data: evalResult } = useEvalResult(activeWorkbookId);
 
-  // Get runtime state from centralized provider
-  const { state: runtimeState, port: runtimePort, isReady: isRuntimeReady, isConnecting, manifest } = useRuntime();
+  // Get runtime state from hooks
+  const runtimePort = useRuntimePort();
+  const { data: manifest, isLoading: isManifestLoading } = useManifest();
 
-  // Compute booting state from runtime state
-  const isRuntimeBooting = runtimeState === "booting" || runtimeState === "connecting";
+  // Derive connection state from port and manifest
+  const isRuntimeReady = !!runtimePort;
+  const isConnecting = isManifestLoading && !!runtimePort;
 
-  // Runtime connection status - use provider state as source of truth
+  // Runtime connection status
   const runtimeConnected = isRuntimeReady;
-  const dbConnected = runtimeConnected && runtimePort > 0;
+  const dbConnected = runtimeConnected && !!runtimePort;
 
   // Mutations for empty state actions
   const createPage = useCreatePage();
@@ -429,13 +432,6 @@ export function NotebookShell({ children }: NotebookShellProps) {
             <div className="flex items-center gap-1 px-2 py-1">
               <div className="h-4 w-8 bg-muted/50 rounded animate-pulse" />
               <div className="h-4 w-8 bg-muted/50 rounded animate-pulse" />
-            </div>
-          )}
-
-          {/* Booting indicator - shows when runtime is starting */}
-          {isRuntimeBooting && !isConnecting && (
-            <div className="px-2 py-1" title="Starting...">
-              <div className="h-1.5 w-1.5 rounded-full bg-yellow-500 animate-pulse" />
             </div>
           )}
 

@@ -6,7 +6,7 @@
 
 import { createRoute, Link } from "@tanstack/react-router";
 import { notebookRoute } from "../../_notebook";
-import { useRuntime } from "@/providers/RuntimeProvider";
+import { useManifest, useRuntimePort } from "@/hooks/useWorkbook";
 import { cn } from "@/lib/utils";
 import {
   Plus,
@@ -24,7 +24,9 @@ export const blocksIndexRoute = createRoute({
 });
 
 function BlocksListPage() {
-  const { manifest, isReady } = useRuntime();
+  const port = useRuntimePort();
+  const { data: manifest } = useManifest();
+  const isReady = !!port;
   const blocks = manifest?.blocks ?? [];
   const [search, setSearch] = useState("");
 

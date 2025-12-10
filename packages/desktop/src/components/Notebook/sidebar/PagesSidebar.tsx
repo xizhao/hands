@@ -17,8 +17,7 @@ import { FileText, Plus, ChevronDown, ChevronRight, Search, X } from "lucide-rea
 import { Table, TreeStructure, SquaresFour } from "@phosphor-icons/react";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { useUIStore } from "@/stores/ui";
-import { useDbSchema, useDevServerRoutes } from "@/hooks/useWorkbook";
-import { useRuntime } from "@/providers/RuntimeProvider";
+import { useDbSchema, useDevServerRoutes, useManifest } from "@/hooks/useWorkbook";
 
 interface DraftsSidebarProps {
   collapsed?: boolean;
@@ -43,7 +42,7 @@ export function DraftsSidebar({ collapsed = false, fullWidth = false, onAddDraft
 
   // Get all data from hooks (filesystem as source of truth via manifest)
   const { activeWorkbookId } = useUIStore();
-  const { manifest } = useRuntime();
+  const { data: manifest } = useManifest();
   const { data: schema, isLoading: sourcesLoading } = useDbSchema(activeWorkbookId);
   const { data: devServerRoutes, isLoading: blocksLoading } = useDevServerRoutes(activeWorkbookId);
 

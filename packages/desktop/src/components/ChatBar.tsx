@@ -11,8 +11,8 @@ import {
   useDevServerRoutes,
   useWorkbook,
   useWorkbookDatabase,
+  useRuntimePort,
 } from "@/hooks/useWorkbook";
-import { useRuntime } from "@/providers/RuntimeProvider";
 import { cn } from "@/lib/utils";
 import { useUIStore } from "@/stores/ui";
 import { ArrowUp, Hand, Loader2, Square, X, Paperclip, Blocks } from "lucide-react";
@@ -52,7 +52,8 @@ export function ChatBar({ expanded, onExpandChange }: ChatBarProps) {
 
   // Workbook context
   const { data: activeWorkbook } = useWorkbook(activeWorkbookId);
-  const { port: runtimePort, isReady: runtimeReady } = useRuntime();
+  const runtimePort = useRuntimePort();
+  const runtimeReady = !!runtimePort;
   const { data: devServerRoutes } = useDevServerRoutes(activeWorkbookId);
   const { data: workbookDatabase } = useWorkbookDatabase(activeWorkbookId);
 

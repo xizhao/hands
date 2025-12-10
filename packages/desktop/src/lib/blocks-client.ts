@@ -10,7 +10,7 @@
  * 3. Render React element with Suspense
  */
 
-import { useRuntime } from "@/providers/RuntimeProvider";
+import { useRuntimePort } from "@/hooks/useWorkbook";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useCallback, use } from "react";
 import type { ReactNode } from "react";
@@ -139,12 +139,12 @@ function getBlockPromise(
  * React hook for RSC block rendering
  * Returns a React element that can be rendered directly
  *
- * Uses RuntimeProvider for ready state - blocks won't fetch until runtime is ready.
+ * Uses useRuntimePort() for ready state - blocks won't fetch until runtime is ready.
  * This allows pages to load instantly while blocks show "waiting" state.
  */
 export function useBlock(blockId: string | null, props?: Record<string, unknown>) {
-  // Get port and ready state from centralized RuntimeProvider
-  const { port, isReady: runtimeReady } = useRuntime();
+  // Get port from store
+  const port = useRuntimePort();
   const queryClient = useQueryClient();
 
   const query = useQuery({
@@ -157,7 +157,7 @@ export function useBlock(blockId: string | null, props?: Record<string, unknown>
       return fetchBlock(port, blockId, props);
     },
     // Only fetch when runtime is ready
-    enabled: !!blockId && !!port && runtimeReady,
+    enabled: !!blockId && !!port && !!port,
     staleTime: 30_000,
     refetchOnWindowFocus: false,
   });
@@ -179,8 +179,8 @@ export function useBlock(blockId: string | null, props?: Record<string, unknown>
     ...query,
     invalidate,
     // Expose runtime readiness for UI to show different loading states
-    runtimeReady,
-    isWaitingForRuntime: !runtimeReady && !!blockId,
+    runtimeReady: !!port,
+    isWaitingForRuntime: !port && !!blockId,
   };
 }
 
@@ -189,7 +189,7 @@ export function useBlock(blockId: string | null, props?: Record<string, unknown>
  * Use this inside a Suspense boundary for streaming
  */
 export function useBlockSuspense(blockId: string, props?: Record<string, unknown>): ReactNode {
-  const { port } = useRuntime();
+  const port = useRuntimePort();
 
   if (!port) {
     throw new Error("Runtime not connected");
@@ -203,7 +203,7 @@ export function useBlockSuspense(blockId: string, props?: Record<string, unknown
  * Manual block fetching (for imperative use)
  */
 export function useBlockFetcher() {
-  const { port } = useRuntime();
+  const port = useRuntimePort();
   const queryClient = useQueryClient();
 
   const fetch = useCallback(
@@ -339,7 +339,7 @@ export async function deleteBlock(
  * React hook for fetching block source code
  */
 export function useBlockSource(blockId: string | null) {
-  const { port } = useRuntime();
+  const port = useRuntimePort();
   const queryClient = useQueryClient();
 
   const query = useQuery({

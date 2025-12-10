@@ -2,17 +2,17 @@
  * BlocksPanel - Shows blocks (charts and insights) via SSE manifest
  */
 
-import { useRuntime } from "@/providers/RuntimeProvider";
+import { useManifest } from "@/hooks/useWorkbook";
 import { SquaresFour, CaretRight, Sparkle, Plus, ArrowSquareOut } from "@phosphor-icons/react";
 import { cn } from "@/lib/utils";
 import { Link, useNavigate } from "@tanstack/react-router";
 
 export function BlocksPanel() {
-  const { manifest } = useRuntime();
+  const { data: manifest } = useManifest();
   const navigate = useNavigate();
   const blocks = manifest?.blocks ?? [];
 
-  // Loading handled by RuntimeProvider - manifest will be null initially
+  // Loading handled by useManifest - manifest will be undefined initially
   if (!manifest) {
     return (
       <div className="p-4 text-sm text-muted-foreground">

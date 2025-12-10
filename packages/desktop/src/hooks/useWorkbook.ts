@@ -1,8 +1,96 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { invoke } from "@tauri-apps/api/core";
 import type { Workbook } from "@/lib/workbook";
-import { useUIStore } from "@/stores/ui";
-import { useRuntime, type WorkbookPage } from "@/providers/RuntimeProvider";
+
+// Tauri command response type (matches Rust backend)
+interface TauriRuntimeStatus {
+  running: boolean;
+  workbook_id: string;
+  directory: string;
+  runtime_port: number;
+  postgres_port: number;
+  worker_port: number;
+  message: string;
+}
+
+/**
+ * useActiveRuntime - Source of truth for runtime state from Tauri
+ * Returns the active workbook ID, directory, and runtime port
+ */
+export function useActiveRuntime() {
+  return useQuery({
+    queryKey: ["active-runtime"],
+    queryFn: () => invoke<TauriRuntimeStatus | null>("get_active_runtime"),
+    staleTime: Infinity, // Only updates via mutations
+    refetchOnWindowFocus: false,
+  });
+}
+
+// Derived hooks for convenience
+export function useActiveWorkbookId() {
+  const { data } = useActiveRuntime();
+  return data?.workbook_id ?? null;
+}
+
+export function useActiveWorkbookDirectory() {
+  const { data } = useActiveRuntime();
+  return data?.directory ?? null;
+}
+
+// Types for manifest
+export interface WorkbookPage {
+  id: string;
+  title: string;
+  route?: string;
+  path?: string;
+}
+
+export interface WorkbookBlock {
+  id: string;
+  title: string;
+  path: string;
+  description?: string;
+}
+
+export interface WorkbookSource {
+  name: string;
+  title?: string;
+  description?: string;
+  enabled: boolean;
+}
+
+export interface WorkbookManifest {
+  workbookId: string;
+  workbookDir: string;
+  pages: WorkbookPage[];
+  blocks: WorkbookBlock[];
+  sources?: WorkbookSource[];
+  tables?: string[];
+  isEmpty: boolean;
+}
+
+// Simple hook to get runtime port from Tauri
+export function useRuntimePort() {
+  const { data } = useActiveRuntime();
+  return data?.runtime_port ?? null;
+}
+
+// Manifest hook - polls runtime for workbook manifest
+export function useManifest() {
+  const port = useRuntimePort();
+
+  return useQuery({
+    queryKey: ["manifest", port],
+    queryFn: async (): Promise<WorkbookManifest> => {
+      const res = await fetch(`http://localhost:${port}/workbook/manifest`);
+      if (!res.ok) throw new Error("Failed to fetch manifest");
+      return res.json();
+    },
+    enabled: !!port,
+    refetchInterval: 1000,
+    staleTime: 0,
+  });
+}
 
 interface CreateWorkbookRequest {
   name: string;
@@ -321,7 +409,7 @@ export interface DevServerOutputs {
 // Get dev server routes from runtime eval
 export function useDevServerRoutes(workbookId: string | null) {
   const evalResult = useEvalResult(workbookId);
-  const { port } = useRuntime();
+  const port = useRuntimePort();
 
   return useQuery({
     queryKey: ["dev-server-routes", workbookId],
@@ -368,7 +456,7 @@ export interface WorkbookDatabaseInfo {
 
 // Get database connection info for a workbook (from runtime)
 export function useWorkbookDatabase(workbookId: string | null) {
-  const { port, isReady } = useRuntime();
+  const port = useRuntimePort();
 
   return useQuery({
     queryKey: ["workbook-database", workbookId, port],
@@ -386,7 +474,7 @@ export function useWorkbookDatabase(workbookId: string | null) {
         user: "hands",
       };
     },
-    enabled: !!workbookId && !!port && isReady,
+    enabled: !!workbookId && !!port,
   });
 }
 
@@ -398,7 +486,7 @@ export interface TableSchema {
 
 // Get database schema for a workbook (from runtime)
 export function useDbSchema(workbookId: string | null) {
-  const { port, isReady } = useRuntime();
+  const port = useRuntimePort();
 
   return useQuery({
     queryKey: ["db-schema", workbookId, port],
@@ -410,30 +498,23 @@ export function useDbSchema(workbookId: string | null) {
 
       return response.json();
     },
-    enabled: !!workbookId && !!port && isReady,
+    enabled: !!workbookId && !!port,
     staleTime: 30000,
     refetchInterval: 60000,
   });
 }
 
 
-// Re-export types from RuntimeProvider
-export type {
-  WorkbookPage,
-  WorkbookBlock,
-  WorkbookSource,
-  WorkbookManifest,
-} from "@/providers/RuntimeProvider";
 
 // Create a new page
 export function useCreatePage() {
-  const { port, isReady } = useRuntime();
+  const port = useRuntimePort();
   const queryClient = useQueryClient();
 
   return useMutation({
     mutationKey: ["page", "create"],
     mutationFn: async ({ title }: { title?: string }) => {
-      if (!isReady || !port) throw new Error("Runtime not connected");
+      if (!port) throw new Error("Runtime not connected");
 
       const response = await fetch(`http://localhost:${port}/workbook/pages/create`, {
         method: "POST",
@@ -456,7 +537,7 @@ export function useCreatePage() {
 
 // Get page content (MDX) by pageId
 export function usePageContent(pageId: string | null) {
-  const { port, isReady } = useRuntime();
+  const port = useRuntimePort();
 
   return useQuery({
     queryKey: ["page-content", pageId, port],
@@ -472,7 +553,7 @@ export function usePageContent(pageId: string | null) {
       const data = await response.json();
       return data.content;
     },
-    enabled: isReady && !!port && !!pageId,
+    enabled: !!port && !!pageId,
     staleTime: 0,
     refetchInterval: 2000,
   });
@@ -480,13 +561,13 @@ export function usePageContent(pageId: string | null) {
 
 // Save page content (MDX)
 export function useSavePageContent() {
-  const { port, isReady } = useRuntime();
+  const port = useRuntimePort();
   const queryClient = useQueryClient();
 
   return useMutation({
     mutationKey: ["page-content", "save"],
     mutationFn: async ({ pageId, content }: { pageId: string; content: string }) => {
-      if (!isReady || !port) throw new Error("No runtime connected");
+      if (!port) throw new Error("No runtime connected");
 
       const response = await fetch(`http://localhost:${port}/workbook/pages/${pageId}`, {
         method: "PUT",
@@ -510,13 +591,13 @@ export function useSavePageContent() {
 
 // Update page title (frontmatter only)
 export function useUpdatePageTitle() {
-  const { port, isReady } = useRuntime();
+  const port = useRuntimePort();
   const queryClient = useQueryClient();
 
   return useMutation({
     mutationKey: ["page-title", "update"],
     mutationFn: async ({ pageId, title }: { pageId: string; title: string }) => {
-      if (!isReady || !port) throw new Error("No runtime connected");
+      if (!port) throw new Error("No runtime connected");
 
       const response = await fetch(`http://localhost:${port}/workbook/pages/${pageId}/title`, {
         method: "PATCH",
@@ -547,7 +628,7 @@ export interface AddSourceResult {
 }
 
 export function useAddSource() {
-  const { port, isReady } = useRuntime();
+  const port = useRuntimePort();
   const queryClient = useQueryClient();
 
   return useMutation({
@@ -559,7 +640,7 @@ export function useAddSource() {
       sourceName: string;
       schedule?: string;
     }) => {
-      if (!isReady || !port) throw new Error("Runtime not connected");
+      if (!port) throw new Error("Runtime not connected");
 
       const response = await fetch(`http://localhost:${port}/workbook/sources/add`, {
         method: "POST",
@@ -591,7 +672,7 @@ export interface AvailableSource {
 }
 
 export function useAvailableSources() {
-  const { port, isReady } = useRuntime();
+  const port = useRuntimePort();
 
   return useQuery({
     queryKey: ["available-sources", port],
@@ -604,7 +685,7 @@ export function useAvailableSources() {
       const data = await response.json();
       return data.sources ?? [];
     },
-    enabled: isReady && !!port,
+    enabled: !!port,
     staleTime: 60000,
   });
 }
@@ -618,13 +699,13 @@ export interface ImportFileResult {
 }
 
 export function useImportFile() {
-  const { port, isReady } = useRuntime();
+  const port = useRuntimePort();
   const queryClient = useQueryClient();
 
   return useMutation({
     mutationKey: ["file", "import"],
     mutationFn: async ({ file }: { file: File }) => {
-      if (!isReady || !port) throw new Error("Runtime not connected");
+      if (!port) throw new Error("Runtime not connected");
 
       const formData = new FormData();
       formData.append("file", file);
