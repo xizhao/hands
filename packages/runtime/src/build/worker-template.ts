@@ -65,6 +65,9 @@ import {
   CardFooter,
   Badge,
   MetricCard,
+  DataTable,
+  BarChart,
+  LineChart,
 } from "@hands/stdlib";
 
 ${blockImports}
@@ -143,9 +146,9 @@ app.get("/blocks", (c) => {
   });
 });
 
-app.get("/blocks/*", async (c) => {
-  // Extract block ID from wildcard path (e.g., "charts/bar-chart")
-  const blockId = c.req.path.replace("/blocks/", "");
+// Use :blockId{.+} for multi-segment path matching (e.g., "charts/bar-chart")
+app.get("/blocks/:blockId{.+}", async (c) => {
+  const blockId = c.req.param("blockId");
   const Block = BLOCKS[blockId];
 
   if (!Block) {
@@ -178,9 +181,8 @@ app.get("/blocks/*", async (c) => {
   }
 });
 
-app.post("/blocks/*/rsc", async (c) => {
-  // Extract block ID from wildcard path (e.g., "charts/bar-chart")
-  const blockId = c.req.path.replace("/blocks/", "").replace("/rsc", "");
+app.post("/blocks/:blockId{.+}/rsc", async (c) => {
+  const blockId = c.req.param("blockId");
   const Block = BLOCKS[blockId];
 
   if (!Block) {
@@ -227,6 +229,9 @@ const COMPONENTS: Record<string, React.FC<any>> = {
   CardFooter,
   Badge,
   MetricCard,
+  DataTable,
+  BarChart,
+  LineChart,
 };
 
 app.post("/rsc/component", async (c) => {

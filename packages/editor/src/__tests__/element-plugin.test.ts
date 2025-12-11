@@ -13,8 +13,8 @@ import {
   HTML_ELEMENTS,
   isCustomComponent,
   shouldBeVoid,
-} from '../../demo/plate/plugins/element-plugin'
-import { sourceToPlateValueSurgical } from '../../demo/plate/surgical-converters'
+} from '../plate/plugins/element-plugin'
+import { sourceToPlateValueSurgical } from '../plate/surgical-converters'
 
 // Helper to wrap JSX in block function format
 const wrapJsx = (jsx: string) => `

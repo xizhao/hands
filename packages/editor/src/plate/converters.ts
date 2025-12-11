@@ -5,9 +5,9 @@
  */
 
 import type { TElement, Value } from 'platejs'
-import { parseSource } from '../../src/ast/parser'
-import { generateBlockSource } from '../../src/ast/generator'
-import type { JsxNode, PropValue } from '../../src/types'
+import { parseSource } from '../ast/parser'
+import { generateBlockSource } from '../ast/generator'
+import type { JsxNode, PropValue } from '../types'
 import { isCustomComponent, isStdlibComponent } from './plugins/element-plugin'
 
 // Legacy constants for backward compatibility (stdlib-component-plugin was removed)

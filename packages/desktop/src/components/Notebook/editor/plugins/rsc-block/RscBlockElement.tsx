@@ -8,6 +8,7 @@ import { PlateElement, type PlateElementProps } from "platejs/react";
 import { useBlock } from "@/lib/blocks-client";
 import { RefreshCw, AlertCircle, Settings } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { RscErrorBoundary } from "@/components/ui/rsc-error-boundary";
 
 interface RscBlockElementData {
   type: "rsc_block";
@@ -106,11 +107,17 @@ export function RscBlockElement(props: PlateElementProps<RscBlockElementData>) {
             ) : loading ? (
               <div className="animate-pulse bg-muted h-24 rounded" />
             ) : data?.element ? (
-              <Suspense fallback={<div className="animate-pulse bg-muted h-24 rounded" />}>
-                <div className="[&>*]:!m-0">
-                  {data.element}
-                </div>
-              </Suspense>
+              <RscErrorBoundary
+                resetKey={blockElement.blockId}
+                onRetry={handleRefresh}
+                compact
+              >
+                <Suspense fallback={<div className="animate-pulse bg-muted h-24 rounded" />}>
+                  <div className="[&>*]:!m-0">
+                    {data.element}
+                  </div>
+                </Suspense>
+              </RscErrorBoundary>
             ) : (
               <div className="text-muted-foreground text-sm">
                 Configure this block to see content

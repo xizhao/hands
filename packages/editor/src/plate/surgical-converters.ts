@@ -11,12 +11,12 @@ import {
   parseSourceWithLocations,
   type EditableNode,
   type ParseResult,
-} from '../../src/ast/oxc-parser'
+} from '../ast/oxc-parser'
 import {
   applySurgicalMutations,
   type SurgicalMutation,
-} from '../../src/ast/surgical-mutations'
-import { generateMutationsFromPlateChange } from '../../src/ast/plate-diff'
+} from '../ast/surgical-mutations'
+import { generateMutationsFromPlateChange } from '../ast/plate-diff'
 // Stdlib plugin no longer needed - all components use generic JSX elements
 
 // ============================================================================

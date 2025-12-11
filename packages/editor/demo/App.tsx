@@ -1,151 +1,165 @@
-import React, { useState, useCallback, useRef, useEffect } from 'react'
-import { useEditor, type Mutation } from '../src'
+import React, { useState, useCallback, useRef } from 'react'
+import { useEditor, type Mutation, PlateVisualEditor } from '../src'
 import { simpleBlockSource, cardBlockSource, dataBlockSource } from './fixtures/simple-block'
-import { PlateVisualEditor } from './plate/PlateVisualEditor'
 import { CodeEditor } from './components/CodeEditor'
 import { OplogView } from './components/OplogView'
 import { PropsInspector } from './components/PropsInspector'
+import { cn } from './lib/utils'
 
 const FIXTURES = {
-  simple: simpleBlockSource,
-  card: cardBlockSource,
-  data: dataBlockSource,
+  simple: { label: 'Simple Block', source: simpleBlockSource },
+  card: { label: 'Card Block', source: cardBlockSource },
+  data: { label: 'Data Block', source: dataBlockSource },
 }
 
 export function App() {
   const [fixture, setFixture] = useState<keyof typeof FIXTURES>('simple')
-  const editor = useEditor(FIXTURES[fixture])
+  const editor = useEditor(FIXTURES[fixture].source)
 
-  // Track which side initiated the change to prevent loops
   const sourceRef = useRef<'plate' | 'code' | null>(null)
 
-  const handleFixtureChange = useCallback((e: React.ChangeEvent<HTMLSelectElement>) => {
-    const newFixture = e.target.value as keyof typeof FIXTURES
+  const handleFixtureChange = useCallback((newFixture: keyof typeof FIXTURES) => {
     setFixture(newFixture)
-    editor.setSource(FIXTURES[newFixture])
+    editor.setSource(FIXTURES[newFixture].source)
   }, [editor])
 
-  // Handle mutations from props inspector
   const handleMutation = useCallback((mutation: Mutation) => {
     editor.applyMutation(mutation)
   }, [editor])
 
-  // Handle selection
   const handleSelect = useCallback((path: (string | number)[] | null) => {
     editor.setSelected(path)
   }, [editor])
 
-  // Handle source change from Plate editor
   const handlePlateSourceChange = useCallback((newSource: string) => {
     if (sourceRef.current === 'code') return
     sourceRef.current = 'plate'
     editor.setSource(newSource)
-    // Reset after a tick
     setTimeout(() => { sourceRef.current = null }, 0)
   }, [editor])
 
-  // Handle source change from code editor
   const handleCodeSourceChange = useCallback((newSource: string) => {
     if (sourceRef.current === 'plate') return
     sourceRef.current = 'code'
     editor.setSource(newSource)
-    // Reset after a tick
     setTimeout(() => { sourceRef.current = null }, 0)
   }, [editor])
 
   return (
-    <div style={styles.container}>
-      {/* Header */}
-      <header style={styles.header}>
-        <h1 style={styles.title}>Oplog WYSIWYG Editor</h1>
-        <div style={styles.controls}>
-          <select
-            value={fixture}
-            onChange={handleFixtureChange}
-            style={styles.select}
-          >
-            <option value="simple">Simple Block</option>
-            <option value="card">Card Block</option>
-            <option value="data">Data Block</option>
-          </select>
+    <div className="dark flex h-screen bg-background text-foreground">
+      {/* Sidebar */}
+      <aside className="w-56 flex-shrink-0 border-r border-border bg-card flex flex-col">
+        {/* Logo */}
+        <div className="h-14 flex items-center px-4 border-b border-border">
+          <h1 className="text-lg font-semibold">Hands Editor</h1>
+        </div>
 
-          <div style={styles.buttonGroup}>
+        {/* Fixtures Nav */}
+        <nav className="flex-1 p-2 space-y-1">
+          <div className="px-2 py-1.5 text-xs font-medium text-muted-foreground uppercase tracking-wider">
+            Fixtures
+          </div>
+          {(Object.keys(FIXTURES) as Array<keyof typeof FIXTURES>).map((key) => (
+            <button
+              key={key}
+              onClick={() => handleFixtureChange(key)}
+              className={cn(
+                'w-full text-left px-3 py-2 rounded-md text-sm transition-colors',
+                fixture === key
+                  ? 'bg-accent text-accent-foreground font-medium'
+                  : 'text-muted-foreground hover:bg-accent/50 hover:text-foreground'
+              )}
+            >
+              {FIXTURES[key].label}
+            </button>
+          ))}
+        </nav>
+
+        {/* History Controls */}
+        <div className="p-3 border-t border-border space-y-2">
+          <div className="px-2 py-1 text-xs font-medium text-muted-foreground uppercase tracking-wider">
+            History
+          </div>
+          <div className="flex gap-1">
             <button
               onClick={editor.undo}
               disabled={!editor.canUndo}
-              style={{
-                ...styles.button,
-                opacity: editor.canUndo ? 1 : 0.5,
-              }}
+              className={cn(
+                'flex-1 px-3 py-1.5 rounded-md text-sm border border-border bg-secondary transition-colors',
+                editor.canUndo
+                  ? 'hover:bg-accent text-foreground'
+                  : 'opacity-50 cursor-not-allowed text-muted-foreground'
+              )}
             >
-              ⟲ Undo
+              ↶ Undo
             </button>
             <button
               onClick={editor.redo}
               disabled={!editor.canRedo}
-              style={{
-                ...styles.button,
-                opacity: editor.canRedo ? 1 : 0.5,
-              }}
+              className={cn(
+                'flex-1 px-3 py-1.5 rounded-md text-sm border border-border bg-secondary transition-colors',
+                editor.canRedo
+                  ? 'hover:bg-accent text-foreground'
+                  : 'opacity-50 cursor-not-allowed text-muted-foreground'
+              )}
             >
-              ⟳ Redo
-            </button>
-            <button onClick={editor.clearHistory} style={styles.button}>
-              ✕ Clear
+              ↷ Redo
             </button>
           </div>
-        </div>
-      </header>
-
-      {/* Error display */}
-      {editor.state.error && (
-        <div style={styles.error}>
-          Error: {editor.state.error}
-          <button onClick={editor.clearError} style={styles.dismissButton}>
-            ✕
+          <button
+            onClick={editor.clearHistory}
+            className="w-full px-3 py-1.5 rounded-md text-sm border border-border bg-secondary hover:bg-accent text-muted-foreground hover:text-foreground transition-colors"
+          >
+            Clear History
           </button>
         </div>
-      )}
+      </aside>
 
-      {/* Main content - 3 columns */}
-      <div style={styles.main}>
-        {/* Left: Plate Visual Editor */}
-        <div style={styles.panel}>
-          <div style={styles.panelHeader}>
-            <h2 style={styles.panelTitle}>Visual Editor</h2>
-            <span style={styles.badge}>Plate • real components</span>
+      {/* Main Content */}
+      <main className="flex-1 flex flex-col overflow-hidden">
+        {/* Error Banner */}
+        {editor.state.error && (
+          <div className="flex items-center justify-between px-4 py-2 bg-destructive/20 border-b border-destructive/30 text-destructive-foreground">
+            <span className="text-sm">Error: {editor.state.error}</span>
+            <button
+              onClick={editor.clearError}
+              className="text-sm hover:underline"
+            >
+              Dismiss
+            </button>
           </div>
-          <div style={styles.canvasContainer}>
-            <PlateVisualEditor
-              source={editor.state.source}
-              onSourceChange={handlePlateSourceChange}
-            />
-          </div>
-        </div>
+        )}
 
-        {/* Middle: Code Editor (now editable) */}
-        <div style={styles.panel}>
-          <div style={styles.panelHeader}>
-            <h2 style={styles.panelTitle}>Source Code</h2>
-            <span style={styles.badge}>editable • bidirectional sync</span>
+        {/* Panels */}
+        <div className="flex-1 grid grid-cols-[1fr_1fr_380px] divide-x divide-border overflow-hidden">
+          {/* Visual Editor Panel */}
+          <div className="flex flex-col overflow-hidden">
+            <PanelHeader title="Visual Editor" badge="Plate" />
+            <div className="flex-1 overflow-hidden bg-background">
+              <PlateVisualEditor
+                source={editor.state.source}
+                onSourceChange={handlePlateSourceChange}
+              />
+            </div>
           </div>
-          <div style={styles.codeContainer}>
-            <CodeEditor
-              source={editor.state.source}
-              onChange={handleCodeSourceChange}
-            />
-          </div>
-        </div>
 
-        {/* Right: Props Inspector + Oplog */}
-        <div style={styles.panel}>
-          <div style={styles.splitPanel}>
+          {/* Code Editor Panel */}
+          <div className="flex flex-col overflow-hidden">
+            <PanelHeader title="Source Code" badge="TypeScript" />
+            <div className="flex-1 overflow-hidden">
+              <CodeEditor
+                source={editor.state.source}
+                onChange={handleCodeSourceChange}
+              />
+            </div>
+          </div>
+
+          {/* Right Panel: Inspector + Oplog */}
+          <div className="flex flex-col overflow-hidden divide-y divide-border">
             {/* Props Inspector */}
-            <div style={styles.inspectorSection}>
-              <div style={styles.panelHeader}>
-                <h2 style={styles.panelTitle}>Props Inspector</h2>
-              </div>
-              <div style={styles.inspectorContent}>
+            <div className="flex-1 flex flex-col overflow-hidden">
+              <PanelHeader title="Props Inspector" />
+              <div className="flex-1 overflow-auto p-3">
                 <PropsInspector
                   ast={editor.state.ast}
                   selectedPath={editor.state.selectedPath}
@@ -155,158 +169,31 @@ export function App() {
             </div>
 
             {/* Oplog */}
-            <div style={styles.oplogSection}>
-              <div style={styles.panelHeader}>
-                <h2 style={styles.panelTitle}>Oplog</h2>
-                <span style={styles.badge}>
-                  {editor.state.oplog.cursor} / {editor.state.oplog.entries.length}
-                </span>
-              </div>
-              <div style={styles.oplogContent}>
+            <div className="h-52 flex-shrink-0 flex flex-col">
+              <PanelHeader
+                title="Oplog"
+                badge={`${editor.state.oplog.cursor} / ${editor.state.oplog.entries.length}`}
+              />
+              <div className="flex-1 overflow-auto p-3">
                 <OplogView oplog={editor.state.oplog} />
               </div>
             </div>
           </div>
         </div>
-      </div>
+      </main>
     </div>
   )
 }
 
-const styles: Record<string, React.CSSProperties> = {
-  container: {
-    display: 'flex',
-    flexDirection: 'column',
-    height: '100vh',
-    backgroundColor: '#1a1a1a',
-    color: '#e0e0e0',
-  },
-  header: {
-    display: 'flex',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    padding: '12px 16px',
-    borderBottom: '1px solid #333',
-    backgroundColor: '#252525',
-    flexShrink: 0,
-  },
-  title: {
-    margin: 0,
-    fontSize: '18px',
-    fontWeight: 600,
-  },
-  controls: {
-    display: 'flex',
-    gap: '16px',
-    alignItems: 'center',
-  },
-  select: {
-    padding: '6px 12px',
-    borderRadius: '4px',
-    border: '1px solid #444',
-    backgroundColor: '#2a2a2a',
-    color: '#e0e0e0',
-    fontSize: '14px',
-  },
-  buttonGroup: {
-    display: 'flex',
-    gap: '4px',
-  },
-  button: {
-    padding: '6px 12px',
-    borderRadius: '4px',
-    border: '1px solid #444',
-    backgroundColor: '#2a2a2a',
-    color: '#e0e0e0',
-    cursor: 'pointer',
-    fontSize: '14px',
-    transition: 'all 0.15s ease',
-  },
-  error: {
-    padding: '8px 16px',
-    backgroundColor: '#4a1515',
-    borderBottom: '1px solid #6a2525',
-    display: 'flex',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    flexShrink: 0,
-  },
-  dismissButton: {
-    background: 'none',
-    border: 'none',
-    color: '#e0e0e0',
-    cursor: 'pointer',
-    fontSize: '16px',
-  },
-  main: {
-    flex: 1,
-    display: 'grid',
-    gridTemplateColumns: '1fr 1fr 350px',
-    gap: '1px',
-    backgroundColor: '#333',
-    overflow: 'hidden',
-  },
-  panel: {
-    display: 'flex',
-    flexDirection: 'column',
-    backgroundColor: '#1a1a1a',
-    overflow: 'hidden',
-  },
-  splitPanel: {
-    display: 'flex',
-    flexDirection: 'column',
-    height: '100%',
-  },
-  panelHeader: {
-    display: 'flex',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    padding: '8px 12px',
-    borderBottom: '1px solid #333',
-    backgroundColor: '#222',
-    flexShrink: 0,
-  },
-  panelTitle: {
-    margin: 0,
-    fontSize: '14px',
-    fontWeight: 500,
-    color: '#888',
-  },
-  badge: {
-    fontSize: '11px',
-    padding: '2px 6px',
-    borderRadius: '4px',
-    backgroundColor: '#333',
-    color: '#888',
-  },
-  canvasContainer: {
-    flex: 1,
-    overflow: 'hidden',
-  },
-  codeContainer: {
-    flex: 1,
-    overflow: 'hidden',
-  },
-  inspectorSection: {
-    flex: 1,
-    display: 'flex',
-    flexDirection: 'column',
-    overflow: 'hidden',
-    borderBottom: '1px solid #333',
-  },
-  inspectorContent: {
-    flex: 1,
-    overflow: 'auto',
-  },
-  oplogSection: {
-    height: '200px',
-    display: 'flex',
-    flexDirection: 'column',
-    flexShrink: 0,
-  },
-  oplogContent: {
-    flex: 1,
-    overflow: 'auto',
-    padding: '12px',
-  },
+function PanelHeader({ title, badge }: { title: string; badge?: string }) {
+  return (
+    <div className="h-10 flex items-center justify-between px-3 border-b border-border bg-card flex-shrink-0">
+      <h2 className="text-sm font-medium text-muted-foreground">{title}</h2>
+      {badge && (
+        <span className="text-xs px-2 py-0.5 rounded bg-secondary text-muted-foreground">
+          {badge}
+        </span>
+      )}
+    </div>
+  )
 }

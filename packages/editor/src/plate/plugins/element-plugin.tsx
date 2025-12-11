@@ -11,18 +11,24 @@
 
 import * as React from 'react'
 import { useState, useEffect, useMemo } from 'react'
-import { createPlatePlugin, type PlateElementProps } from 'platejs/react'
+import { createPlatePlugin, useEditorRef } from 'platejs/react'
+import { ReactEditor } from 'slate-react'
 import type { RenderElementProps } from 'slate-react'
 import type { TElement } from 'platejs'
+import { DndPlugin, useDraggable, useDropLine } from '@platejs/dnd'
+import { BlockSelectionPlugin } from '@platejs/selection/react'
+import { GripVertical, PlusIcon } from 'lucide-react'
+import { PathApi } from 'platejs'
 import { cn } from '../../lib/utils'
-import { useRsc, useRscAvailable } from '../../../src/rsc'
+import { useRsc, useRscAvailable } from '../../rsc'
 import type { ComponentType } from 'react'
+import { Button as UIButton } from '../ui/button'
 // Import stdlib registry for component discovery
 import { listComponents, type ComponentMeta } from '@hands/stdlib/registry'
 
 // Direct imports for stdlib components
 import {
-  Button,
+  Button as StdlibButton,
   Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter,
   Badge,
   MetricCard,
@@ -156,7 +162,7 @@ export function isStdlibComponent(name: string): boolean {
  * Using direct imports since dynamic imports don't resolve package aliases at runtime
  */
 const STDLIB_COMPONENT_MAP: Record<string, ComponentType<any>> = {
-  Button,
+  Button: StdlibButton,
   Card,
   CardHeader,
   CardTitle,
@@ -215,6 +221,192 @@ function getDomProps(element: any): Record<string, unknown> {
   return props
 }
 
+// ============================================================================
+// Draggable Wrapper for Custom Components
+// ============================================================================
+
+/**
+ * DropLine component for drag and drop
+ */
+const DropLine = React.memo(function DropLine({
+  className,
+  ...props
+}: React.ComponentProps<'div'>) {
+  const { dropLine } = useDropLine()
+
+  if (!dropLine) return null
+
+  return (
+    <div
+      {...props}
+      className={cn(
+        'slate-dropLine',
+        'absolute inset-x-0 h-0.5 opacity-100 transition-opacity',
+        'bg-blue-500',
+        dropLine === 'top' && '-top-px',
+        dropLine === 'bottom' && '-bottom-px',
+        className
+      )}
+    />
+  )
+})
+
+/**
+ * Block selection overlay for custom components
+ * Shows a highlight when the block is selected via drag selection
+ */
+function ComponentBlockSelection({ element }: { element: TElement }) {
+  const editor = useEditorRef()
+  const isDragging = editor.getOption(DndPlugin, 'isDragging')
+
+  // Check if this element is in the block selection using the API
+  const blockSelectionApi = editor.getApi(BlockSelectionPlugin)?.blockSelection
+  const selectedIds = blockSelectionApi?.getNodes?.()?.map((entry: any) => entry[0]?.id) ?? []
+  const isSelected = selectedIds.includes((element as any).id)
+
+  if (!isSelected) return null
+
+  return (
+    <div
+      className={cn(
+        'pointer-events-none absolute inset-0 z-[1] rounded-[4px]',
+        'bg-blue-500/15',
+        'transition-opacity duration-200',
+        isDragging && 'opacity-0'
+      )}
+      data-slot="block-selection"
+    />
+  )
+}
+
+/**
+ * Trigger slash menu on next block
+ */
+function triggerSlashNextBlock(
+  editor: any,
+  triggerText: string,
+  at?: number[],
+  insertAbove = false
+) {
+  let _at: number[] | undefined
+
+  if (at) {
+    const slicedPath = at.slice(0, 1)
+    _at = insertAbove ? slicedPath : PathApi.next(slicedPath)
+  }
+
+  editor.tf.insertNodes(editor.api.create.block(), {
+    at: _at,
+    select: true,
+  })
+  editor.tf.insertText(triggerText)
+}
+
+/**
+ * Draggable wrapper for custom components
+ *
+ * This provides the same drag handle UI as native Plate elements,
+ * allowing custom components to be dragged and reordered.
+ */
+function DraggableComponentWrapper({
+  element,
+  children,
+}: {
+  element: TElement
+  children: React.ReactNode
+}) {
+  const editor = useEditorRef()
+
+  // Get the path of this element
+  const path = useMemo(() => {
+    try {
+      return ReactEditor.findPath(editor as any, element)
+    } catch {
+      return null
+    }
+  }, [editor, element])
+
+  // Only enable drag for top-level blocks
+  const isTopLevel = path && path.length === 1
+  const isReadOnly = editor.dom?.readOnly
+
+  const { isDragging, nodeRef, handleRef } = useDraggable({
+    element,
+    onDropHandler: (_, { dragItem }) => {
+      const id = (dragItem as { id: string[] | string }).id
+      const blockSelectionApi = editor.getApi(BlockSelectionPlugin)?.blockSelection
+      if (blockSelectionApi) {
+        blockSelectionApi.add(id)
+      }
+    },
+  })
+
+  // If not top-level or read-only, render without drag handles
+  if (!isTopLevel || isReadOnly) {
+    return <>{children}</>
+  }
+
+  return (
+    <div className={cn('group relative slate-selectable', isDragging && 'opacity-50')}>
+      {/* Gutter with drag handle - positioned to the left */}
+      <div
+        className={cn(
+          'absolute -left-12 top-0 z-50 flex h-full items-start pt-0.5',
+          'opacity-0 transition-opacity duration-150',
+          'group-hover:opacity-100'
+        )}
+        contentEditable={false}
+      >
+        <div className="flex items-center gap-0.5">
+          {/* Plus button to insert */}
+          <UIButton
+            className="size-6 p-0 opacity-0 group-hover:opacity-100"
+            onClick={(event) => {
+              event.stopPropagation()
+              event.preventDefault()
+              const at = editor.api.findPath(element)
+              triggerSlashNextBlock(editor, '/', at, event.altKey)
+            }}
+            onMouseDown={() => {
+              editor.tf.focus()
+              editor.getApi(BlockSelectionPlugin)?.blockSelection?.clear()
+            }}
+            tabIndex={-1}
+            variant="ghost"
+          >
+            <PlusIcon className="size-4 text-gray-500" />
+          </UIButton>
+
+          {/* Drag handle */}
+          <UIButton
+            className="size-6 p-0 cursor-grab active:cursor-grabbing"
+            data-plate-prevent-deselect
+            ref={handleRef}
+            variant="ghost"
+          >
+            <GripVertical className="size-4 text-gray-500" />
+          </UIButton>
+        </div>
+      </div>
+
+      {/* Block content wrapper */}
+      <div
+        className="slate-blockWrapper relative"
+        onContextMenu={(event) =>
+          editor
+            .getApi(BlockSelectionPlugin)
+            ?.blockSelection?.addOnContextMenu?.({ element, event })
+        }
+        ref={nodeRef}
+      >
+        {children}
+        <DropLine />
+        <ComponentBlockSelection element={element} />
+      </div>
+    </div>
+  )
+}
+
 /**
  * Unified Element Component
  *
@@ -249,9 +441,10 @@ function ElementRenderer(props: RenderElementProps) {
 /**
  * Custom Component Renderer
  *
- * 1. Check local registry
- * 2. Fall back to RSC
- * 3. Fall back to placeholder
+ * 1. Wrap with DraggableComponentWrapper for drag handles
+ * 2. Check local registry for component
+ * 3. Fall back to RSC
+ * 4. Fall back to placeholder
  */
 function CustomComponentRenderer({
   attributes,
@@ -271,100 +464,83 @@ function CustomComponentRenderer({
 
   if (LocalComponent) {
     return (
-      <LocalComponentRenderer
-        attributes={attributes}
-        componentName={componentName}
-        LocalComponent={LocalComponent}
-        props={props}
-        plateChildren={children}
-      />
+      <DraggableComponentWrapper element={element}>
+        <LocalComponentRenderer
+          attributes={attributes}
+          element={element}
+          componentName={componentName}
+          LocalComponent={LocalComponent}
+          props={props}
+          plateChildren={children}
+        />
+      </DraggableComponentWrapper>
     )
   }
 
   // Try RSC for unknown components
   return (
-    <RscComponentRenderer
-      attributes={attributes}
-      componentName={componentName}
-      props={props}
-      elementId={element.id}
-      plateChildren={children}
-    />
+    <DraggableComponentWrapper element={element}>
+      <RscComponentRenderer
+        attributes={attributes}
+        componentName={componentName}
+        props={props}
+        elementId={element.id}
+        plateChildren={children}
+      />
+    </DraggableComponentWrapper>
   )
 }
 
 /**
  * Local Component Renderer
+ *
+ * Renders stdlib components with proper Slate attributes.
+ * DnD drag handles are added by DraggableComponentWrapper.
+ *
+ * For void elements: component is non-editable, plateChildren is a hidden placeholder
+ * For non-void elements: plateChildren are rendered inside the component
  */
 function LocalComponentRenderer({
   attributes,
+  element,
   componentName,
   LocalComponent,
   props,
   plateChildren,
 }: {
   attributes: any
+  element: TElement
   componentName: string
   LocalComponent: ComponentType<any>
   props: Record<string, unknown>
   plateChildren: React.ReactNode
 }) {
-  const [isHovered, setIsHovered] = useState(false)
-  const [isSelected, setIsSelected] = useState(false)
+  const isVoid = shouldBeVoid(element)
 
   const mergedProps = useMemo(() => {
     const defaults = DEFAULT_PROPS[componentName] ?? {}
     return { ...defaults, ...props }
   }, [componentName, props])
 
-  return (
-    <div
-      {...attributes}
-      style={{
-        margin: '8px 0',
-        position: 'relative',
-        borderRadius: '8px',
-        ...(isSelected ? { boxShadow: '0 0 0 2px rgba(74, 158, 255, 0.5)' } : {}),
-      }}
-    >
-      <div
-        contentEditable={false}
-        style={{
-          position: 'relative',
-          borderRadius: '8px',
-          transition: 'all 0.15s ease',
-          ...(isHovered && !isSelected ? { boxShadow: '0 0 0 1px rgba(200, 200, 200, 0.3)' } : {}),
-        }}
-        onMouseEnter={() => setIsHovered(true)}
-        onMouseLeave={() => setIsHovered(false)}
-        onClick={() => setIsSelected(true)}
-        onBlur={() => setIsSelected(false)}
-      >
-        {/* Component type badge */}
-        <div
-          style={{
-            position: 'absolute',
-            left: '-8px',
-            top: '-8px',
-            zIndex: 10,
-            padding: '2px 6px',
-            borderRadius: '4px',
-            backgroundColor: 'rgba(240, 240, 240, 0.95)',
-            border: '1px solid rgba(200, 200, 200, 0.3)',
-            fontSize: '10px',
-            fontWeight: 500,
-            color: '#666',
-            opacity: isHovered || isSelected ? 1 : 0,
-            transition: 'opacity 0.15s ease',
-          }}
-        >
-          {componentName}
+  // Void elements: render component non-editable with hidden children placeholder
+  if (isVoid) {
+    return (
+      <div {...attributes} className="my-2">
+        <div contentEditable={false} className="rounded-lg">
+          <LocalComponent {...mergedProps} />
         </div>
-
-        <div style={{ padding: '4px' }}>
-          <LocalComponent {...mergedProps}>{plateChildren}</LocalComponent>
-        </div>
+        {/* Required hidden placeholder for Slate void element selection */}
+        {plateChildren}
       </div>
+    )
+  }
+
+  // Non-void elements: render component with editable children inside
+  return (
+    <div {...attributes} className="my-2">
+      <LocalComponent {...mergedProps}>
+        {plateChildren}
+      </LocalComponent>
     </div>
   )
 }
@@ -454,14 +630,7 @@ function RscComponentRenderer({
   }
 
   return (
-    <div
-      {...attributes}
-      className={cn(
-        'rsc-component my-2',
-        'rounded border border-transparent hover:border-blue-300/50',
-        'transition-colors'
-      )}
-    >
+    <div {...attributes} className="my-2">
       <div contentEditable={false}>{result.element}</div>
       {plateChildren}
     </div>
@@ -569,9 +738,11 @@ export function elementFallbackRenderer(props: RenderElementProps): React.ReactE
  * Single plugin that:
  * 1. Extends isElement/isVoid for dynamic element detection
  * 2. Provides elementFallbackRenderer for use with PlateContent
- * 
- * NOTE: We no longer pre-register types. Instead, use elementFallbackRenderer
- * as the renderElement prop on PlateContent to handle ALL element types dynamically.
+ * 3. Registers render.aboveNodes to handle custom component wrapping
+ *
+ * NOTE: We use elementFallbackRenderer as the renderElement prop on PlateContent
+ * to handle ALL element types dynamically. The DnD plugin's aboveNodes will
+ * still wrap these elements because it runs in the plugin pipeline.
  */
 export const ElementPlugin = createPlatePlugin({
   key: 'element',

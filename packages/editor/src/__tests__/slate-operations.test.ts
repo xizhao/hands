@@ -846,7 +846,7 @@ describe('multiple operations sequences', () => {
 // ============================================================================
 
 // Import surgical converters for roundtrip testing
-import { sourceToPlateValueSurgical } from '../../demo/plate/surgical-converters'
+import { sourceToPlateValueSurgical } from '../plate/surgical-converters'
 
 /**
  * Helper to compare AST structures (ignoring IDs and exact locations)

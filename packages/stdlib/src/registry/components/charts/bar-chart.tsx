@@ -4,8 +4,14 @@ import { cn } from "../../../lib/utils.js";
 
 export interface BarChartProps<T extends Record<string, unknown>> {
   data: T[];
-  x: keyof T;
-  y: keyof T;
+  /** X-axis key (alias: xKey) */
+  x?: keyof T;
+  /** Y-axis key (alias: yKey) */
+  y?: keyof T;
+  /** X-axis key (alias: x) */
+  xKey?: keyof T;
+  /** Y-axis key (alias: y) */
+  yKey?: keyof T;
   className?: string;
   height?: number;
   color?: string;
@@ -16,8 +22,10 @@ export interface BarChartProps<T extends Record<string, unknown>> {
 
 export function BarChart<T extends Record<string, unknown>>({
   data,
-  x,
-  y,
+  x: xProp,
+  y: yProp,
+  xKey,
+  yKey,
   className,
   height = 200,
   color = "hsl(var(--primary))",
@@ -25,6 +33,23 @@ export function BarChart<T extends Record<string, unknown>>({
   formatX = (v) => String(v),
   formatY = (v) => v.toLocaleString(),
 }: BarChartProps<T>) {
+  // Support both x/y and xKey/yKey prop names
+  const x = xProp ?? xKey;
+  const y = yProp ?? yKey;
+
+  if (!x || !y) {
+    return (
+      <div
+        className={cn(
+          "flex items-center justify-center text-muted-foreground",
+          className
+        )}
+        style={{ height }}
+      >
+        Missing x/y keys
+      </div>
+    );
+  }
   if (data.length === 0) {
     return (
       <div

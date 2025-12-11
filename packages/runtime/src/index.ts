@@ -436,12 +436,9 @@ function createApp(config: RuntimeConfig) {
   // ============================================
 
   // Get block source code
-  // Use wildcard to support nested paths: /workbook/blocks/ui/email-events/source
-  app.get("/workbook/blocks/*/source", async (c) => {
-    // Extract blockId from URL path (everything between /blocks/ and /source)
-    const url = new URL(c.req.url)
-    const match = url.pathname.match(/\/workbook\/blocks\/(.+)\/source$/)
-    const blockId = match ? match[1] : ""
+  // Use :blockId{.+} to support nested paths: /workbook/blocks/ui/email-events/source
+  app.get("/workbook/blocks/:blockId{.+}/source", async (c) => {
+    const blockId = c.req.param("blockId")
     const blocksDir = join(config.workbookDir, "blocks")
 
     for (const ext of [".tsx", ".ts"]) {
@@ -461,12 +458,9 @@ function createApp(config: RuntimeConfig) {
   })
 
   // Save block source code
-  // Use wildcard to support nested paths: /workbook/blocks/ui/email-events/source
-  app.put("/workbook/blocks/*/source", async (c) => {
-    // Extract blockId from URL path (everything between /blocks/ and /source)
-    const url = new URL(c.req.url)
-    const match = url.pathname.match(/\/workbook\/blocks\/(.+)\/source$/)
-    const blockId = match ? match[1] : ""
+  // Use :blockId{.+} to support nested paths: /workbook/blocks/ui/email-events/source
+  app.put("/workbook/blocks/:blockId{.+}/source", async (c) => {
+    const blockId = c.req.param("blockId")
     const blocksDir = join(config.workbookDir, "blocks")
     const { source } = await c.req.json<{ source: string }>()
 
@@ -570,12 +564,9 @@ function createApp(config: RuntimeConfig) {
   })
 
   // Delete block
-  // Use wildcard to support nested paths: /workbook/blocks/ui/email-events
-  app.delete("/workbook/blocks/*", async (c) => {
-    // Extract blockId from URL path (everything after /blocks/)
-    const url = new URL(c.req.url)
-    const match = url.pathname.match(/\/workbook\/blocks\/(.+)$/)
-    const blockId = match ? match[1] : ""
+  // Use :blockId{.+} to support nested paths: /workbook/blocks/ui/email-events
+  app.delete("/workbook/blocks/:blockId{.+}", async (c) => {
+    const blockId = c.req.param("blockId")
     const blocksDir = join(config.workbookDir, "blocks")
 
     let deleted = false

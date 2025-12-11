@@ -12,6 +12,7 @@ import { useState, useCallback, useEffect, useRef, Suspense } from "react";
 import { useBlock, useBlockSource } from "@/lib/blocks-client";
 import { cn } from "@/lib/utils";
 import { RefreshCw, Check, Save, FileCode } from "lucide-react";
+import { RscErrorBoundary } from "@/components/ui/rsc-error-boundary";
 
 export interface BlockEditorProps {
   blockId: string;
@@ -261,16 +262,18 @@ export function BlockEditor({ blockId, className, onSave }: BlockEditorProps) {
             <div className="h-32 bg-muted rounded" />
           </div>
         ) : blockData?.element ? (
-          <Suspense
-            fallback={
-              <div className="animate-pulse space-y-4">
-                <div className="h-8 bg-muted rounded w-1/3" />
-                <div className="h-32 bg-muted rounded" />
-              </div>
-            }
-          >
-            {blockData.element}
-          </Suspense>
+          <RscErrorBoundary resetKey={blockId} onRetry={handleRefresh}>
+            <Suspense
+              fallback={
+                <div className="animate-pulse space-y-4">
+                  <div className="h-8 bg-muted rounded w-1/3" />
+                  <div className="h-32 bg-muted rounded" />
+                </div>
+              }
+            >
+              {blockData.element}
+            </Suspense>
+          </RscErrorBoundary>
         ) : (
           <div className="flex items-center justify-center h-full text-muted-foreground">
             No content

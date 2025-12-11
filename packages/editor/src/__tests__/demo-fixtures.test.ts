@@ -6,7 +6,7 @@
  */
 
 import { describe, test, expect } from 'bun:test'
-import { sourceToPlateValueSurgical } from '../../demo/plate/surgical-converters'
+import { sourceToPlateValueSurgical } from '../plate/surgical-converters'
 import { simpleBlockSource, cardBlockSource, dataBlockSource } from '../../demo/fixtures/simple-block'
 
 describe('Demo Fixtures Parsing', () => {

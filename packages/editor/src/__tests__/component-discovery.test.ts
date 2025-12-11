@@ -9,7 +9,7 @@
 
 import { describe, test, expect } from 'bun:test'
 import { parseSourceWithLocations } from '../ast/oxc-parser'
-import { sourceToPlateValueSurgical } from '../../demo/plate/surgical-converters'
+import { sourceToPlateValueSurgical } from '../plate/surgical-converters'
 
 /**
  * Helper to wrap JSX in export default (required by parser)
