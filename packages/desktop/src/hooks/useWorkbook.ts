@@ -49,6 +49,7 @@ export interface WorkbookBlock {
   id: string;
   title: string;
   path: string;
+  parentDir: string; // Directory path (e.g., "ui" or "" for root)
   description?: string;
 }
 
@@ -439,6 +440,29 @@ export function useDbSchema(workbookId: string | null) {
     enabled: !!workbookId && !!port,
     staleTime: 30000,
     refetchInterval: 60000,
+  });
+}
+
+// Save database snapshot (dumps to db.tar.gz)
+export function useSaveDatabase() {
+  const port = useRuntimePort();
+
+  return useMutation({
+    mutationKey: ["db", "save"],
+    mutationFn: async () => {
+      if (!port) throw new Error("Runtime not connected");
+
+      const response = await fetch(`http://localhost:${port}/db/save`, {
+        method: "POST",
+      });
+
+      if (!response.ok) {
+        const error = await response.json().catch(() => ({ error: "Failed to save database" }));
+        throw new Error(error.error || "Failed to save database");
+      }
+
+      return response.json() as Promise<{ success: boolean }>;
+    },
   });
 }
 

@@ -110,7 +110,7 @@ export function NotebookSidebar({ collapsed = false, fullWidth = false, onAddDra
     const rootBlocks: typeof blocks = [];
 
     for (const block of blocks) {
-      const parentDir = (block as any).parentDir || "";
+      const parentDir = block.parentDir || "";
       if (!parentDir) {
         rootBlocks.push(block);
       } else {

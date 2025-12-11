@@ -62,6 +62,7 @@ import {
   CardTitle,
   CardDescription,
   CardContent,
+  CardFooter,
   Badge,
   MetricCard,
 } from "@hands/stdlib";
@@ -223,6 +224,7 @@ const COMPONENTS: Record<string, React.FC<any>> = {
   CardTitle,
   CardDescription,
   CardContent,
+  CardFooter,
   Badge,
   MetricCard,
 };

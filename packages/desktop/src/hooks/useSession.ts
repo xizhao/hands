@@ -11,6 +11,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { invoke } from "@tauri-apps/api/core";
 import { useActiveWorkbookDirectory, useActiveWorkbookId } from "@/hooks/useWorkbook";
 import { api, type Session, type PermissionResponse, type MessageWithParts } from "@/lib/api";
+import { fillTemplate } from "@/lib/prompts";
 
 // ============ SESSION HOOKS ============
 
@@ -376,6 +377,8 @@ export function useImportWithAgent() {
       console.log("[import] Step 5: Initializing messages cache for session:", session.id);
       const now = Date.now();
       const optimisticId = `optimistic-${now}`;
+      // Use template for UI display (will render as action chip)
+      const userMessage = fillTemplate("IMPORT_FILE", { filePath });
       const optimisticMessage = {
         info: {
           id: optimisticId,
@@ -386,7 +389,7 @@ export function useImportWithAgent() {
         parts: [{
           id: `optimistic-part-${now}`,
           type: "text",
-          text: `Import and integrate this data file: ${filePath}`,
+          text: userMessage,
           messageID: optimisticId,
           sessionID: session.id,
           time: { created: now, updated: now },
@@ -399,20 +402,12 @@ export function useImportWithAgent() {
       console.log("[import] Messages cache initialized with optimistic message");
 
       // 6. Send prompt to the agent with file path
-      // Use the main "hands" agent which will orchestrate @import + view integration
+      // Use the template message (matches what's shown in UI)
       console.log("[import] Step 6: Sending prompt to hands agent...");
-      const prompt = `Import and integrate this data file: ${filePath}
-
-Use @import to load the data into the database first. Once the data is in the database, integrate it into the app by either:
-- Creating a new dashboard/block to visualize the data
-- Adding it to an existing relevant block
-- Building an appropriate view based on the data type (charts for time series, tables for records, etc.)
-
-The import is only complete when the data is both in the database AND visible in the UI.`;
-      console.log("[import] Prompt:", prompt);
+      console.log("[import] Prompt:", userMessage);
 
       // Use main "hands" agent to orchestrate import + view integration
-      const promptResult = await api.promptAsync(session.id, prompt, { agent: "hands", directory });
+      const promptResult = await api.promptAsync(session.id, userMessage, { agent: "hands", directory });
       console.log("[import] promptAsync returned:", promptResult);
 
       // Immediately invalidate messages to trigger a fetch

@@ -22,6 +22,7 @@ import {
   useRuntimePort,
   useManifest,
   useActiveWorkbookId,
+  useSaveDatabase,
 } from "@/hooks/useWorkbook";
 import { useRightPanel, useActiveSession } from "@/hooks/useNavState";
 import { useChatState } from "@/hooks/useChatState";
@@ -54,6 +55,8 @@ import {
   Copy,
   X,
   Warning,
+  FloppyDisk,
+  CircleNotch,
 } from "@phosphor-icons/react";
 
 import {
@@ -68,6 +71,12 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
+
+import {
+  HoverCard,
+  HoverCardContent,
+  HoverCardTrigger,
+} from "@/components/ui/hover-card";
 
 interface NotebookShellProps {
   children: ReactNode;
@@ -119,6 +128,7 @@ export function NotebookShell({ children }: NotebookShellProps) {
   // Mutations for empty state actions
   const createPage = useCreatePage();
   const updatePageTitle = useUpdatePageTitle();
+  const saveDatabase = useSaveDatabase();
 
   const tableCount = dbSchema?.length ?? 0;
   const blockCount = manifest?.blocks?.length ?? 0;
@@ -547,10 +557,10 @@ export function NotebookShell({ children }: NotebookShellProps) {
             </div>
           )}
 
-          {/* Database - table browser */}
+          {/* Database - table browser with quick actions on hover when active */}
           {!isConnecting && (
-            <Tooltip>
-              <TooltipTrigger asChild>
+            <HoverCard openDelay={0} closeDelay={100}>
+              <HoverCardTrigger asChild>
                 <button
                   onClick={() => toggleRightPanel("database")}
                   className={cn(
@@ -568,11 +578,29 @@ export function NotebookShell({ children }: NotebookShellProps) {
                     dbConnected && tableCount > 0 ? "text-foreground" : "text-muted-foreground/70"
                   )}>{tableCount}</span>
                 </button>
-              </TooltipTrigger>
-              <TooltipContent side="bottom">
-                {dbConnected ? "Database" : "Database (not connected)"}
-              </TooltipContent>
-            </Tooltip>
+              </HoverCardTrigger>
+              <HoverCardContent side="bottom" align="center" className="w-auto p-1">
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    saveDatabase.mutate();
+                  }}
+                  disabled={saveDatabase.isPending || !dbConnected}
+                  className={cn(
+                    "flex items-center gap-1.5 px-2 py-1 rounded text-xs transition-colors",
+                    "hover:bg-accent text-muted-foreground hover:text-foreground",
+                    "disabled:opacity-50 disabled:cursor-not-allowed"
+                  )}
+                >
+                  {saveDatabase.isPending ? (
+                    <CircleNotch weight="bold" className="h-3 w-3 animate-spin" />
+                  ) : (
+                    <FloppyDisk weight="duotone" className="h-3 w-3" />
+                  )}
+                  <span>{saveDatabase.isPending ? "Saving..." : "Save"}</span>
+                </button>
+              </HoverCardContent>
+            </HoverCard>
           )}
 
           {/* Runtime/Alerts */}

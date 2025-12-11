@@ -107,8 +107,8 @@ export function TaskToolSummary({ part, sessionId, compact = false }: TaskToolSu
           {/* Status icon with pulsating indicator for running */}
           {isRunning ? (
             <span className="relative flex h-2.5 w-2.5">
-              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-75" />
-              <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-blue-500" />
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75" />
+              <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-green-500" />
             </span>
           ) : hasError ? (
             <AlertCircle className="h-2.5 w-2.5 text-destructive" />
@@ -121,7 +121,7 @@ export function TaskToolSummary({ part, sessionId, compact = false }: TaskToolSu
           {/* Description as header */}
           <span className={cn(
             "truncate max-w-[200px]",
-            isRunning && "text-blue-400"
+            isRunning && "text-green-400"
           )}>
             {description}
           </span>
@@ -161,7 +161,7 @@ export function TaskToolSummary({ part, sessionId, compact = false }: TaskToolSu
         <div className="ml-4 mt-0.5">
           <ShimmerText
             text={activeForm}
-            className={cn("text-blue-400/70", metaFont)}
+            className={cn("text-green-400/70", metaFont)}
           />
         </div>
       )}

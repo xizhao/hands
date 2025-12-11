@@ -586,43 +586,43 @@ function ComponentPlaceholder({
  * 2. Handles isVoid consistently (only HTML void tags + explicit isVoid)
  * 3. Handles isElement (any object with type + children)
  */
+/**
+ * Create a dynamic plugin for a specific element type
+ */
+function createElementTypePlugin(type: string) {
+  return createPlatePlugin({
+    key: type,
+    node: {
+      isElement: true,
+      isVoid: isCustomComponent(type), // Custom components are void by default
+      type,
+      component: ElementRenderer,
+    },
+  })
+}
+
+// Pre-register known stdlib components
+const KNOWN_COMPONENT_TYPES = [
+  'MetricCard', 'Button', 'Card', 'CardHeader', 'CardTitle', 'CardDescription',
+  'CardContent', 'CardFooter', 'Badge', 'DataTable', 'LineChart', 'BarChart',
+]
+
+// Pre-register common HTML elements
+const KNOWN_HTML_TYPES = [
+  'div', 'span', 'section', 'article', 'header', 'footer', 'main', 'nav',
+  'aside', 'figure', 'figcaption', 'ul', 'ol', 'li', 'table', 'thead',
+  'tbody', 'tr', 'td', 'th', 'form', 'label', 'textarea', 'select',
+  'button', 'a', 'img', 'video', 'audio', 'canvas', 'svg',
+]
+
 export const ElementPlugin = createPlatePlugin({
   key: 'element',
 
-  // Use parsers to catch ALL unknown element types
-  parsers: {
-    html: {},
-  },
-
-  // Render fallback for any element type not handled by specific plugins
-  render: {
-    // aboveNodes renders ABOVE the default element content
-    // This is key for void elements - we render the component here
-    aboveNodes: ((props) => {
-      const type = (props.element as any)?.type as string
-      if (!type) return undefined
-
-      // Only handle custom components (PascalCase or non-HTML)
-      if (isCustomComponent(type)) {
-        return (props) => <ElementRenderer {...props} />
-      }
-
-      return undefined
-    }) as RenderNodeWrapper,
-
-    // belowNodes for non-void elements
-    belowNodes: ((props) => {
-      const type = (props.element as any)?.type as string
-      if (!type) return undefined
-
-      // Only handle HTML elements (not custom components)
-      if (!isCustomComponent(type) && !HTML_VOID_TAGS.has(type)) {
-        return (props) => <ElementRenderer {...props} />
-      }
-
-      return undefined
-    }) as RenderNodeWrapper,
-  },
+  // Register plugins for all known types
+  plugins: [
+    ...KNOWN_COMPONENT_TYPES.map(createElementTypePlugin),
+    ...KNOWN_HTML_TYPES.map(createElementTypePlugin),
+  ],
 
   extendEditor: ({ editor }) => {
     const origIsElement = editor.isElement

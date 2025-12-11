@@ -18,8 +18,8 @@ function template<T extends string>(str: T): PromptTemplate<T> {
 
 // Standard prompt definitions
 export const PROMPTS = {
-  // File import
-  IMPORT_FILE: template("Import this data and make it useful"),
+  // File import - matches the first line of the import prompt
+  IMPORT_FILE: template("Import and integrate this data file: ${filePath}"),
 
   // Block error fix - has variable
   FIX_BLOCK_ERROR: template('Fix the error in block "${blockId}": ${errorContext}'),

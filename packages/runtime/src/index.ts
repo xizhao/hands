@@ -97,7 +97,7 @@ interface ManifestSource {
  */
 async function getManifest(workbookDir: string, workbookId: string) {
   const pages: Array<{ id: string; title: string; path: string }> = []
-  const blocks: Array<{ id: string; title: string; path: string }> = []
+  const blocks: Array<{ id: string; title: string; path: string; parentDir: string }> = []
   const sources: ManifestSource[] = []
 
   // Read pages from filesystem
@@ -113,18 +113,24 @@ async function getManifest(workbookDir: string, workbookId: string) {
     }
   }
 
-  // Read blocks from filesystem
+  // Read blocks from filesystem (recursive walk)
   const blocksDir = join(workbookDir, "blocks")
   if (existsSync(blocksDir)) {
-    for (const file of readdirSync(blocksDir)) {
-      if ((file.endsWith(".tsx") || file.endsWith(".ts")) && !file.startsWith("_")) {
-        const id = file.replace(/\.tsx?$/, "")
+    walkDirectory(blocksDir, blocksDir, (filePath, relativePath) => {
+      const filename = filePath.split("/").pop() || ""
+      if ((filename.endsWith(".tsx") || filename.endsWith(".ts")) && !filename.startsWith("_")) {
+        // ID is relative path without extension (e.g., "ui/email-events")
+        const id = relativePath.replace(/\.tsx?$/, "")
+        // parentDir is the directory portion (e.g., "ui" or "" for root)
+        const parentDir = relativePath.includes("/")
+          ? relativePath.substring(0, relativePath.lastIndexOf("/"))
+          : ""
         // Extract title from meta export
-        const content = readFileSync(join(blocksDir, file), "utf-8")
-        const title = extractBlockTitle(content) || id
-        blocks.push({ id, title, path: file })
+        const content = readFileSync(filePath, "utf-8")
+        const title = extractBlockTitle(content) || id.split("/").pop() || id
+        blocks.push({ id, title, path: relativePath, parentDir })
       }
-    }
+    })
   }
 
   // Read sources from filesystem - scan sources/ for directories with index.ts
@@ -192,6 +198,29 @@ async function getManifest(workbookDir: string, workbookId: string) {
     sources,
     config,
     isEmpty: pages.length === 0 && blocks.length === 0 && sources.length === 0,
+  }
+}
+
+/**
+ * Recursively walk a directory and call callback for each file
+ */
+function walkDirectory(
+  dir: string,
+  baseDir: string,
+  callback: (filePath: string, relativePath: string) => void
+) {
+  const entries = readdirSync(dir, { withFileTypes: true })
+  for (const entry of entries) {
+    const fullPath = join(dir, entry.name)
+    const relativePath = fullPath.substring(baseDir.length + 1) // +1 for leading slash
+    if (entry.isDirectory()) {
+      // Skip hidden directories and node_modules
+      if (!entry.name.startsWith(".") && entry.name !== "node_modules") {
+        walkDirectory(fullPath, baseDir, callback)
+      }
+    } else {
+      callback(fullPath, relativePath)
+    }
   }
 }
 
@@ -403,11 +432,16 @@ function createApp(config: RuntimeConfig) {
 
   // ============================================
   // Block Source API - for visual block editor
+  // Supports nested paths like "ui/email-events"
   // ============================================
 
   // Get block source code
-  app.get("/workbook/blocks/:blockId/source", async (c) => {
-    const blockId = c.req.param("blockId")
+  // Use wildcard to support nested paths: /workbook/blocks/ui/email-events/source
+  app.get("/workbook/blocks/*/source", async (c) => {
+    // Extract blockId from URL path (everything between /blocks/ and /source)
+    const url = new URL(c.req.url)
+    const match = url.pathname.match(/\/workbook\/blocks\/(.+)\/source$/)
+    const blockId = match ? match[1] : ""
     const blocksDir = join(config.workbookDir, "blocks")
 
     for (const ext of [".tsx", ".ts"]) {
@@ -427,8 +461,12 @@ function createApp(config: RuntimeConfig) {
   })
 
   // Save block source code
-  app.put("/workbook/blocks/:blockId/source", async (c) => {
-    const blockId = c.req.param("blockId")
+  // Use wildcard to support nested paths: /workbook/blocks/ui/email-events/source
+  app.put("/workbook/blocks/*/source", async (c) => {
+    // Extract blockId from URL path (everything between /blocks/ and /source)
+    const url = new URL(c.req.url)
+    const match = url.pathname.match(/\/workbook\/blocks\/(.+)\/source$/)
+    const blockId = match ? match[1] : ""
     const blocksDir = join(config.workbookDir, "blocks")
     const { source } = await c.req.json<{ source: string }>()
 
@@ -455,9 +493,10 @@ function createApp(config: RuntimeConfig) {
       // Write the source
       const { writeFileSync, mkdirSync } = await import("fs")
 
-      // Ensure blocks directory exists
-      if (!existsSync(blocksDir)) {
-        mkdirSync(blocksDir, { recursive: true })
+      // Ensure parent directories exist (for nested blocks like ui/email-events)
+      const parentDir = filePath.substring(0, filePath.lastIndexOf("/"))
+      if (!existsSync(parentDir)) {
+        mkdirSync(parentDir, { recursive: true })
       }
 
       writeFileSync(filePath, source, "utf-8")
@@ -477,6 +516,7 @@ function createApp(config: RuntimeConfig) {
   })
 
   // Create new block
+  // Supports nested paths like "ui/email-events"
   app.post("/workbook/blocks", async (c) => {
     const { blockId, source } = await c.req.json<{ blockId: string; source?: string }>()
 
@@ -484,9 +524,13 @@ function createApp(config: RuntimeConfig) {
       return c.json({ error: "Missing blockId" }, 400)
     }
 
-    // Validate block ID (alphanumeric, dashes, underscores)
-    if (!/^[a-zA-Z][a-zA-Z0-9_-]*$/.test(blockId)) {
-      return c.json({ error: "Invalid blockId - must start with letter, contain only alphanumeric, dashes, underscores" }, 400)
+    // Validate block ID - allow paths with slashes, each segment must be valid
+    // e.g., "ui/email-events" or "charts/sales/monthly"
+    const segments = blockId.split("/")
+    for (const segment of segments) {
+      if (!/^[a-zA-Z][a-zA-Z0-9_-]*$/.test(segment)) {
+        return c.json({ error: "Invalid blockId - each path segment must start with letter, contain only alphanumeric, dashes, underscores" }, 400)
+      }
     }
 
     const blocksDir = join(config.workbookDir, "blocks")
@@ -497,15 +541,17 @@ function createApp(config: RuntimeConfig) {
       return c.json({ error: "Block already exists" }, 409)
     }
 
-    // Generate default source if not provided
-    const defaultSource = source ?? generateDefaultBlockSource(blockId)
+    // Generate default source if not provided (use last segment for function name)
+    const blockName = segments[segments.length - 1]
+    const defaultSource = source ?? generateDefaultBlockSource(blockName)
 
     try {
       const { writeFileSync, mkdirSync } = await import("fs")
 
-      // Ensure blocks directory exists
-      if (!existsSync(blocksDir)) {
-        mkdirSync(blocksDir, { recursive: true })
+      // Ensure parent directories exist (for nested blocks)
+      const parentDir = filePath.substring(0, filePath.lastIndexOf("/"))
+      if (!existsSync(parentDir)) {
+        mkdirSync(parentDir, { recursive: true })
       }
 
       writeFileSync(filePath, defaultSource, "utf-8")
@@ -524,8 +570,12 @@ function createApp(config: RuntimeConfig) {
   })
 
   // Delete block
-  app.delete("/workbook/blocks/:blockId", async (c) => {
-    const blockId = c.req.param("blockId")
+  // Use wildcard to support nested paths: /workbook/blocks/ui/email-events
+  app.delete("/workbook/blocks/*", async (c) => {
+    // Extract blockId from URL path (everything after /blocks/)
+    const url = new URL(c.req.url)
+    const match = url.pathname.match(/\/workbook\/blocks\/(.+)$/)
+    const blockId = match ? match[1] : ""
     const blocksDir = join(config.workbookDir, "blocks")
 
     let deleted = false
