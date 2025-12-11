@@ -1,5 +1,4 @@
 import { useEffect, useRef, useLayoutEffect } from "react";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import { useMessages, useSessions, useSessionStatuses, useDeleteSession } from "@/hooks/useSession";
 import { useActiveSession } from "@/hooks/useNavState";
 import { ChatMessage } from "@/components/ChatMessage";
@@ -154,37 +153,35 @@ export function Thread({ expanded, onCollapse, onExpand }: ThreadProps) {
 
       {/* Messages - expand upward when thread is open */}
       {expanded && hasMessages && (
-        <div className="mb-1.5">
-          <ScrollArea className="max-h-[calc(100vh-12rem)]">
-              <div className="space-y-1 px-1 pb-2">
-                {/* Messages (oldest to newest, bottom-aligned) */}
-                {messages.map((message, idx) => (
-                  <ChatMessage
-                    key={message.info.id || idx}
-                    message={message}
-                    compact
-                  />
-                ))}
+        <div className="mb-1.5 max-h-[calc(100vh-12rem)] overflow-y-auto">
+          <div className="space-y-1 px-1 pb-2">
+            {/* Messages (oldest to newest, bottom-aligned) */}
+            {messages.map((message, idx) => (
+              <ChatMessage
+                key={message.info.id || idx}
+                message={message}
+                compact
+              />
+            ))}
 
-                {/* Loading indicator */}
-                {waitingForResponse && (
-                  <motion.div
-                    initial={{ opacity: 0, y: 5 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    className="flex w-full justify-start"
-                  >
-                    <div className="px-2.5 py-1.5 rounded-lg rounded-tl-sm bg-muted text-foreground">
-                      <ShimmerText
-                        text={activeForm || "Thinking..."}
-                        className="text-xs"
-                      />
-                    </div>
-                  </motion.div>
-                )}
-                {/* Scroll anchor */}
-                <div ref={bottomRef} />
-              </div>
-            </ScrollArea>
+            {/* Loading indicator */}
+            {waitingForResponse && (
+              <motion.div
+                initial={{ opacity: 0, y: 5 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="flex w-full justify-start"
+              >
+                <div className="px-2.5 py-1.5 rounded-lg rounded-tl-sm bg-muted text-foreground">
+                  <ShimmerText
+                    text={activeForm || "Thinking..."}
+                    className="text-xs"
+                  />
+                </div>
+              </motion.div>
+            )}
+            {/* Scroll anchor */}
+            <div ref={bottomRef} />
+          </div>
         </div>
       )}
     </div>
