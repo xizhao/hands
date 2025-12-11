@@ -13,9 +13,18 @@ import { useState, useMemo, useCallback } from "react";
 import { useNavigate, useRouterState, useRouter } from "@tanstack/react-router";
 import { cn } from "@/lib/utils";
 import { FileText, Plus, ChevronDown, ChevronRight, Search, X, Pin, PinOff, ChevronLeft } from "lucide-react";
-import { Table, TreeStructure, SquaresFour, CaretLeft, CaretRight } from "@phosphor-icons/react";
+import { Table, TreeStructure, SquaresFour, CaretLeft, CaretRight, Database, Newspaper, Code, Key, CircleNotch, ArrowsClockwise, Warning } from "@phosphor-icons/react";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { useDbSchema, useManifest, useActiveWorkbookId } from "@/hooks/useWorkbook";
+import { useSourceManagement, type AvailableSource } from "@/hooks/useSources";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogBody,
+  DialogTrigger,
+} from "@/components/ui/dialog";
 
 interface DraftsSidebarProps {
   collapsed?: boolean;
@@ -34,6 +43,17 @@ interface Draft {
   path?: string;
 }
 
+// Map icon names to Phosphor icons for sources
+const sourceIconMap: Record<string, React.ElementType> = {
+  newspaper: Newspaper,
+  code: Code,
+}
+
+function SourceIcon({ icon, className }: { icon?: string; className?: string }) {
+  const Icon = icon && sourceIconMap[icon] ? sourceIconMap[icon] : Database
+  return <Icon weight="duotone" className={className} />
+}
+
 export function DraftsSidebar({ collapsed = false, fullWidth = false, onAddDraft, pinned = false, onPinnedChange }: DraftsSidebarProps) {
   const navigate = useNavigate();
   const router = useRouter();
@@ -48,6 +68,17 @@ export function DraftsSidebar({ collapsed = false, fullWidth = false, onAddDraft
   const { data: manifest, isLoading: manifestLoading } = useManifest();
   const { data: schema, isLoading: sourcesLoading } = useDbSchema(activeWorkbookId);
 
+  // Source management hooks
+  const {
+    sources,
+    availableSources,
+    addSource,
+    isAdding,
+    syncSource,
+    isSyncing,
+    syncingSourceId,
+  } = useSourceManagement();
+
   // All data from manifest (filesystem source of truth)
   const drafts: Draft[] = manifest?.pages ?? [];
   const blocks = manifest?.blocks ?? [];
@@ -58,6 +89,21 @@ export function DraftsSidebar({ collapsed = false, fullWidth = false, onAddDraft
   const [sourcesExpanded, setSourcesExpanded] = useState(true);
   const [blocksExpanded, setBlocksExpanded] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
+  const [addSourceOpen, setAddSourceOpen] = useState(false);
+  const [selectedSource, setSelectedSource] = useState<string | null>(null);
+
+  // Get installed source names for filtering
+  const installedSourceNames = sources.map((s) => s.name);
+  const availableToAdd = availableSources.filter(
+    (s) => !installedSourceNames.includes(s.name)
+  );
+
+  const handleAddSource = async (sourceName: string) => {
+    setSelectedSource(sourceName);
+    await addSource(sourceName);
+    setSelectedSource(null);
+    setAddSourceOpen(false);
+  };
 
   // Filter drafts, sources, and blocks based on search query
   const filteredDrafts = useMemo(() => {
@@ -101,6 +147,12 @@ export function DraftsSidebar({ collapsed = false, fullWidth = false, onAddDraft
   const handleBlockClick = useCallback((blockId: string) => {
     console.log("[sidebar] navigating to block:", blockId);
     navigate({ to: "/blocks/$blockId", params: { blockId } });
+  }, [navigate]);
+
+  // Handle source click - navigate to source viewer
+  const handleSourceClick = useCallback((sourceId: string) => {
+    console.log("[sidebar] navigating to source:", sourceId);
+    navigate({ to: "/sources/$sourceId", params: { sourceId } });
   }, [navigate]);
 
   if (collapsed) {
@@ -258,25 +310,150 @@ export function DraftsSidebar({ collapsed = false, fullWidth = false, onAddDraft
 
             {/* Sources Column */}
             <div className="space-y-2">
-              <h3 className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
-                Sources
-              </h3>
-              <div className="space-y-0.5">
-                {sourcesLoading ? (
-                  <div className="text-sm text-muted-foreground/70 py-2">Loading...</div>
-                ) : filteredSources && filteredSources.length > 0 ? (
-                  filteredSources.map((table) => (
+              <div className="flex items-center justify-between">
+                <h3 className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                  Sources
+                </h3>
+                <Tooltip>
+                  <TooltipTrigger asChild>
                     <button
-                      key={table.table_name}
-                      className="w-full flex items-center gap-2 px-2 py-1.5 text-sm text-muted-foreground hover:text-foreground hover:bg-accent/50 rounded-md transition-colors"
+                      onClick={() => setAddSourceOpen(true)}
+                      className="p-1 text-muted-foreground/60 hover:text-muted-foreground hover:bg-accent rounded transition-colors"
                     >
-                      <Table weight="duotone" className="h-4 w-4 shrink-0" />
-                      <span className="flex-1 truncate text-left">{table.table_name}</span>
-                      <span className="text-xs text-muted-foreground/60">{table.columns?.length ?? 0} cols</span>
+                      <Plus className="h-3.5 w-3.5" />
                     </button>
-                  ))
-                ) : searchQuery && schema && schema.length > 0 ? (
-                  <div className="text-sm text-muted-foreground/70 py-2">No sources found</div>
+                  </TooltipTrigger>
+                  <TooltipContent>Add source</TooltipContent>
+                </Tooltip>
+                <Dialog open={addSourceOpen} onOpenChange={setAddSourceOpen}>
+                  <DialogContent size="md">
+                    <DialogHeader>
+                      <DialogTitle>Add Data Source</DialogTitle>
+                    </DialogHeader>
+                    <DialogBody>
+                      {/* Registry Sources */}
+                      {availableToAdd.length > 0 && (
+                        <div className="space-y-2">
+                          <div className="text-xs font-medium text-muted-foreground">
+                            From Registry
+                          </div>
+                          <div className="space-y-1">
+                            {availableToAdd.map((source) => {
+                              const isThisAdding = isAdding && selectedSource === source.name
+                              return (
+                                <button
+                                  key={source.name}
+                                  onClick={() => handleAddSource(source.name)}
+                                  disabled={isAdding}
+                                  className={cn(
+                                    "w-full flex items-start gap-3 p-3 rounded-lg border",
+                                    "hover:bg-accent hover:border-accent-foreground/20 transition-colors",
+                                    "text-left",
+                                    isAdding && "opacity-50 cursor-not-allowed"
+                                  )}
+                                >
+                                  <SourceIcon
+                                    icon={source.icon}
+                                    className="h-5 w-5 text-purple-400 shrink-0 mt-0.5"
+                                  />
+                                  <div className="flex-1 min-w-0">
+                                    <div className="font-medium">{source.title}</div>
+                                    <div className="text-xs text-muted-foreground mt-0.5">
+                                      {source.description}
+                                    </div>
+                                    {source.secrets.length > 0 && (
+                                      <div className="flex items-center gap-1 mt-1.5 text-xs text-amber-500">
+                                        <Key weight="fill" className="h-3 w-3" />
+                                        Requires: {source.secrets.join(", ")}
+                                      </div>
+                                    )}
+                                  </div>
+                                  {isThisAdding && (
+                                    <CircleNotch weight="bold" className="h-4 w-4 animate-spin shrink-0" />
+                                  )}
+                                </button>
+                              )
+                            })}
+                          </div>
+                        </div>
+                      )}
+
+                      {availableToAdd.length === 0 && availableSources.length > 0 && (
+                        <div className="text-center py-4 text-sm text-muted-foreground">
+                          All available sources are already installed
+                        </div>
+                      )}
+
+                      {/* Blank Source Option */}
+                      <div className="space-y-2 mt-4">
+                        <div className="text-xs font-medium text-muted-foreground">
+                          Custom
+                        </div>
+                        <button
+                          onClick={() => {
+                            // TODO: Navigate to create blank source
+                            setAddSourceOpen(false)
+                          }}
+                          className={cn(
+                            "w-full flex items-start gap-3 p-3 rounded-lg border border-dashed",
+                            "hover:bg-accent hover:border-accent-foreground/20 transition-colors",
+                            "text-left"
+                          )}
+                        >
+                          <Code weight="duotone" className="h-5 w-5 text-blue-400 shrink-0 mt-0.5" />
+                          <div className="flex-1 min-w-0">
+                            <div className="font-medium">Blank Source</div>
+                            <div className="text-xs text-muted-foreground mt-0.5">
+                              Create a custom source from scratch
+                            </div>
+                          </div>
+                        </button>
+                      </div>
+                    </DialogBody>
+                  </DialogContent>
+                </Dialog>
+              </div>
+              <div className="space-y-0.5">
+                {sources.length > 0 ? (
+                  sources.map((source) => {
+                    const isThisSyncing = isSyncing && syncingSourceId === source.id
+                    const hasMissingSecrets = source.missingSecrets.length > 0
+                    return (
+                      <div
+                        key={source.id}
+                        className="w-full flex items-center gap-2 px-2 py-1.5 text-sm text-muted-foreground hover:text-foreground hover:bg-accent/50 rounded-md transition-colors group"
+                      >
+                        <Database weight="duotone" className="h-4 w-4 shrink-0 text-purple-400" />
+                        <button
+                          onClick={() => handleSourceClick(source.id)}
+                          className="flex-1 truncate text-left hover:underline"
+                        >
+                          {source.title}
+                        </button>
+                        {hasMissingSecrets && (
+                          <Warning weight="fill" className="h-3.5 w-3.5 text-amber-500 shrink-0" />
+                        )}
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            syncSource(source.id);
+                          }}
+                          disabled={isThisSyncing || hasMissingSecrets}
+                          className={cn(
+                            "p-1 rounded opacity-0 group-hover:opacity-100 hover:bg-accent transition-all",
+                            (isThisSyncing || hasMissingSecrets) && "opacity-50 cursor-not-allowed"
+                          )}
+                          title={hasMissingSecrets ? "Configure secrets first" : "Sync now"}
+                        >
+                          {isThisSyncing ? (
+                            <CircleNotch weight="bold" className="h-3.5 w-3.5 animate-spin" />
+                          ) : (
+                            <ArrowsClockwise weight="bold" className="h-3.5 w-3.5" />
+                          )}
+                        </button>
+                      </div>
+                    )
+                  })
                 ) : (
                   <div className="flex items-center gap-2 py-2 text-sm text-muted-foreground/70">
                     <TreeStructure weight="duotone" className="h-4 w-4" />
@@ -447,41 +624,165 @@ export function DraftsSidebar({ collapsed = false, fullWidth = false, onAddDraft
 
         {/* Sources Section */}
         <div>
-          <button
-            onClick={() => setSourcesExpanded(!sourcesExpanded)}
-            className="flex items-center gap-1 text-[10px] font-medium text-muted-foreground/80 uppercase tracking-wider hover:text-muted-foreground transition-colors mb-1"
-          >
-            {sourcesExpanded ? (
-              <ChevronDown className="h-3 w-3" />
-            ) : (
-              <ChevronRight className="h-3 w-3" />
-            )}
-            Sources
-          </button>
+          <div className="flex items-center justify-between mb-1">
+            <button
+              onClick={() => setSourcesExpanded(!sourcesExpanded)}
+              className="flex items-center gap-1 text-[10px] font-medium text-muted-foreground/80 uppercase tracking-wider hover:text-muted-foreground transition-colors"
+            >
+              {sourcesExpanded ? (
+                <ChevronDown className="h-3 w-3" />
+              ) : (
+                <ChevronRight className="h-3 w-3" />
+              )}
+              Sources
+            </button>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <button
+                  onClick={() => setAddSourceOpen(true)}
+                  className="p-0.5 text-muted-foreground/60 hover:text-muted-foreground transition-colors"
+                >
+                  <Plus className="h-3 w-3" />
+                </button>
+              </TooltipTrigger>
+              <TooltipContent side="right">
+                <p>Add source</p>
+              </TooltipContent>
+            </Tooltip>
+            <Dialog open={addSourceOpen} onOpenChange={setAddSourceOpen}>
+              <DialogContent size="md">
+                <DialogHeader>
+                  <DialogTitle>Add Data Source</DialogTitle>
+                </DialogHeader>
+                <DialogBody>
+                  {/* Registry Sources */}
+                  {availableToAdd.length > 0 && (
+                    <div className="space-y-2">
+                      <div className="text-xs font-medium text-muted-foreground">
+                        From Registry
+                      </div>
+                      <div className="space-y-1">
+                        {availableToAdd.map((source) => {
+                          const isThisAdding = isAdding && selectedSource === source.name
+                          return (
+                            <button
+                              key={source.name}
+                              onClick={() => handleAddSource(source.name)}
+                              disabled={isAdding}
+                              className={cn(
+                                "w-full flex items-start gap-3 p-3 rounded-lg border",
+                                "hover:bg-accent hover:border-accent-foreground/20 transition-colors",
+                                "text-left",
+                                isAdding && "opacity-50 cursor-not-allowed"
+                              )}
+                            >
+                              <SourceIcon
+                                icon={source.icon}
+                                className="h-5 w-5 text-purple-400 shrink-0 mt-0.5"
+                              />
+                              <div className="flex-1 min-w-0">
+                                <div className="font-medium">{source.title}</div>
+                                <div className="text-xs text-muted-foreground mt-0.5">
+                                  {source.description}
+                                </div>
+                                {source.secrets.length > 0 && (
+                                  <div className="flex items-center gap-1 mt-1.5 text-xs text-amber-500">
+                                    <Key weight="fill" className="h-3 w-3" />
+                                    Requires: {source.secrets.join(", ")}
+                                  </div>
+                                )}
+                              </div>
+                              {isThisAdding && (
+                                <CircleNotch weight="bold" className="h-4 w-4 animate-spin shrink-0" />
+                              )}
+                            </button>
+                          )
+                        })}
+                      </div>
+                    </div>
+                  )}
+
+                  {availableToAdd.length === 0 && availableSources.length > 0 && (
+                    <div className="text-center py-4 text-sm text-muted-foreground">
+                      All available sources are already installed
+                    </div>
+                  )}
+
+                  {/* Blank Source Option */}
+                  <div className="space-y-2 mt-4">
+                    <div className="text-xs font-medium text-muted-foreground">
+                      Custom
+                    </div>
+                    <button
+                      onClick={() => {
+                        // TODO: Navigate to create blank source
+                        setAddSourceOpen(false)
+                      }}
+                      className={cn(
+                        "w-full flex items-start gap-3 p-3 rounded-lg border border-dashed",
+                        "hover:bg-accent hover:border-accent-foreground/20 transition-colors",
+                        "text-left"
+                      )}
+                    >
+                      <Code weight="duotone" className="h-5 w-5 text-blue-400 shrink-0 mt-0.5" />
+                      <div className="flex-1 min-w-0">
+                        <div className="font-medium">Blank Source</div>
+                        <div className="text-xs text-muted-foreground mt-0.5">
+                          Create a custom source from scratch
+                        </div>
+                      </div>
+                    </button>
+                  </div>
+                </DialogBody>
+              </DialogContent>
+            </Dialog>
+          </div>
 
           {sourcesExpanded && (
             <div className="space-y-0">
-              {sourcesLoading ? (
-                <div className="text-[11px] text-muted-foreground/70 py-1">
-                  Loading...
-                </div>
-              ) : filteredSources && filteredSources.length > 0 ? (
-                filteredSources.map((table) => (
-                  <button
-                    key={table.table_name}
-                    className={cn(
-                      "w-full flex items-center gap-2 py-0.5 text-[13px] transition-all duration-150 origin-left group",
-                      "text-muted-foreground hover:text-foreground"
-                    )}
-                  >
-                    <Table weight="duotone" className="h-3.5 w-3.5 shrink-0" />
-                    <span className="flex-1 truncate text-left">{table.table_name}</span>
-                  </button>
-                ))
-              ) : searchQuery && schema && schema.length > 0 ? (
-                <div className="text-[11px] text-muted-foreground/70 py-1">
-                  No sources found
-                </div>
+              {sources.length > 0 ? (
+                sources.map((source) => {
+                  const isThisSyncing = isSyncing && syncingSourceId === source.id
+                  const hasMissingSecrets = source.missingSecrets.length > 0
+                  return (
+                    <div
+                      key={source.id}
+                      className={cn(
+                        "w-full flex items-center gap-2 py-0.5 text-[13px] transition-all duration-150 origin-left group",
+                        "text-muted-foreground hover:text-foreground"
+                      )}
+                    >
+                      <Database weight="duotone" className="h-3.5 w-3.5 shrink-0 text-purple-400" />
+                      <button
+                        onClick={() => handleSourceClick(source.id)}
+                        className="flex-1 truncate text-left hover:underline"
+                      >
+                        {source.title}
+                      </button>
+                      {hasMissingSecrets && (
+                        <Warning weight="fill" className="h-3 w-3 text-amber-500 shrink-0" />
+                      )}
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          syncSource(source.id);
+                        }}
+                        disabled={isThisSyncing || hasMissingSecrets}
+                        className={cn(
+                          "p-0.5 rounded opacity-0 group-hover:opacity-100 hover:bg-accent transition-all",
+                          (isThisSyncing || hasMissingSecrets) && "opacity-50 cursor-not-allowed"
+                        )}
+                        title={hasMissingSecrets ? "Configure secrets first" : "Sync now"}
+                      >
+                        {isThisSyncing ? (
+                          <CircleNotch weight="bold" className="h-3 w-3 animate-spin" />
+                        ) : (
+                          <ArrowsClockwise weight="bold" className="h-3 w-3" />
+                        )}
+                      </button>
+                    </div>
+                  )
+                })
               ) : (
                 <div className="flex items-center gap-2 py-1 text-[11px] text-muted-foreground/70">
                   <TreeStructure weight="duotone" className="h-3.5 w-3.5" />

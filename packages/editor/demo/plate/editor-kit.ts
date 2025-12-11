@@ -22,7 +22,6 @@ import {
 import { ParagraphPlugin } from 'platejs/react'
 import { TrailingBlockPlugin } from 'platejs'
 
-import { StdlibComponentKit } from './stdlib-component-plugin'
 import {
   ParagraphElement,
   H1Element,
@@ -37,11 +36,17 @@ import { DndKit } from './plugins/dnd-kit'
 import { BlockSelectionKit } from './plugins/block-selection-kit'
 import { SlashKit } from './plugins/slash-kit'
 import { JsxElementPlugin } from './plugins/jsx-element-plugin'
+import { ComponentPlugin } from './plugins/component-plugin'
 
 export const EditorKit = [
-  // JSX Element Plugin - MUST be first to catch unknown types
+  // JSX Element Plugin - Catches HTML elements like div, span, etc.
   // This allows any JSX element to be editable
   JsxElementPlugin,
+
+  // Unified Component Plugin - Renders ALL PascalCase components
+  // 1. Looks up in local registry (Button, Card, etc.)
+  // 2. Falls back to RSC rendering for unknown components
+  ComponentPlugin,
 
   // Block Elements with real components
   ParagraphPlugin.withComponent(ParagraphElement),
@@ -61,9 +66,6 @@ export const EditorKit = [
     node: { component: BlockquoteElement },
   }),
   HorizontalRulePlugin.withComponent(HrElement),
-
-  // Stdlib Components
-  ...StdlibComponentKit,
 
   // Marks
   BoldPlugin,

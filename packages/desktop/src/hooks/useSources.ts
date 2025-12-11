@@ -8,7 +8,7 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
 import { useRuntimePort } from "@/hooks/useWorkbook"
 
-// Source from runtime API
+// Source from runtime API (installed)
 export interface Source {
   id: string
   name: string
@@ -19,6 +19,17 @@ export interface Source {
   missingSecrets: string[]
 }
 
+// Available source from registry
+export interface AvailableSource {
+  name: string
+  title: string
+  description: string
+  secrets: string[]
+  streams: string[]
+  schedule?: string
+  icon?: string
+}
+
 // Sync result from runtime
 export interface SyncResult {
   success: boolean
@@ -26,6 +37,14 @@ export interface SyncResult {
   error?: string
   missing?: string[]
   durationMs: number
+}
+
+// Add source result
+export interface AddSourceResult {
+  success: boolean
+  filesCreated: string[]
+  errors: string[]
+  nextSteps: string[]
 }
 
 /**
@@ -78,17 +97,70 @@ export function useSyncSource() {
 }
 
 /**
+ * List available sources from registry
+ */
+export function useAvailableSources() {
+  const port = useRuntimePort()
+
+  return useQuery({
+    queryKey: ["available-sources", port],
+    queryFn: async (): Promise<AvailableSource[]> => {
+      if (!port) return []
+      const res = await fetch(`http://localhost:${port}/workbook/sources/available`)
+      if (!res.ok) throw new Error(await res.text())
+      const data = await res.json()
+      return data.sources ?? []
+    },
+    enabled: !!port,
+    staleTime: 60000, // Registry doesn't change often
+  })
+}
+
+/**
+ * Add a source from registry to workbook
+ */
+export function useAddSource() {
+  const port = useRuntimePort()
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: async (sourceName: string): Promise<AddSourceResult> => {
+      if (!port) throw new Error("Runtime not available")
+
+      const res = await fetch(`http://localhost:${port}/workbook/sources/add`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ sourceName }),
+      })
+
+      const data = await res.json()
+      return data as AddSourceResult
+    },
+    onSuccess: () => {
+      // Refresh sources list
+      queryClient.invalidateQueries({ queryKey: ["sources"] })
+    },
+  })
+}
+
+/**
  * Combined hook for common source operations
  */
 export function useSourceManagement() {
   const sources = useSources()
   const syncMutation = useSyncSource()
+  const availableSources = useAvailableSources()
+  const addMutation = useAddSource()
 
   return {
-    // Data
+    // Installed sources
     sources: sources.data ?? [],
     isLoading: sources.isLoading,
     error: sources.error,
+
+    // Available sources from registry
+    availableSources: availableSources.data ?? [],
+    isLoadingAvailable: availableSources.isLoading,
 
     // Sync mutation
     syncSource: syncMutation.mutateAsync,
@@ -96,6 +168,12 @@ export function useSourceManagement() {
     syncingSourceId: syncMutation.variables,
     syncResult: syncMutation.data,
     syncError: syncMutation.error,
+
+    // Add mutation
+    addSource: addMutation.mutateAsync,
+    isAdding: addMutation.isPending,
+    addResult: addMutation.data,
+    addError: addMutation.error,
 
     // Refetch
     refresh: sources.refetch,

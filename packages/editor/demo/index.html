@@ -15,6 +15,24 @@
         color: #e0e0e0;
       }
     </style>
+    <!-- Webpack shims for react-server-dom-webpack Flight client -->
+    <script>
+      // Minimal webpack require shim for Flight wire format parsing
+      // These are needed by react-server-dom-webpack/client to resolve module references
+      globalThis.__webpack_require__ = function(id) {
+        // Return a minimal server component placeholder
+        // Real components are rendered server-side; this is just for reference resolution
+        return {
+          default: function ServerComponent(props) {
+            return props.children || null;
+          }
+        };
+      };
+      globalThis.__webpack_chunk_load__ = function(id) {
+        // Chunk loading is not needed for Flight parsing
+        return Promise.resolve();
+      };
+    </script>
   </head>
   <body>
     <div id="root"></div>

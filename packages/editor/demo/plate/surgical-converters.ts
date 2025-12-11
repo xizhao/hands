@@ -75,10 +75,20 @@ function editableNodeToPlateElement(node: EditableNode): TElement {
   }
 
   // Convert props to plain values
+  // IMPORTANT: Filter out reserved Plate keys to avoid conflicts
+  // e.g., <input type="text" /> has a "type" prop that would overwrite the element type
+  const reservedKeys = new Set(['type', 'id', 'children', 'isVoid'])
   const plateProps: Record<string, unknown> = {}
   for (const [key, prop] of Object.entries(node.props)) {
-    if (key !== '...spread') {
+    if (key !== '...spread' && !reservedKeys.has(key)) {
       plateProps[key] = prop.value
+    }
+  }
+  // Store original props under a namespaced key to preserve them
+  const jsxProps: Record<string, unknown> = {}
+  for (const [key, prop] of Object.entries(node.props)) {
+    if (key !== '...spread') {
+      jsxProps[key] = prop.value
     }
   }
 
@@ -114,6 +124,8 @@ function editableNodeToPlateElement(node: EditableNode): TElement {
     type,
     id: node.id,
     ...plateProps,
+    // Store all JSX props (including reserved ones) under jsxProps for serialization
+    jsxProps: Object.keys(jsxProps).length > 0 ? jsxProps : undefined,
     children,
     // Mark void elements so Plate knows they're not editable
     ...(isVoid ? { isVoid: true } : {}),

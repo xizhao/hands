@@ -667,6 +667,35 @@ function createApp(config: RuntimeConfig) {
     }
   })
 
+  // Proxy RSC component routes to Vite worker
+  // This allows the editor to render arbitrary components via Flight
+  app.all("/rsc/*", async (c) => {
+    if (!state.viteReady || !state.vitePort) {
+      return c.json({ error: "Vite not ready", booting: true }, 503)
+    }
+
+    const url = new URL(c.req.url)
+    url.host = `localhost:${state.vitePort}`
+
+    try {
+      const response = await fetch(url.toString(), {
+        method: c.req.method,
+        headers: c.req.raw.headers,
+        body: c.req.method !== "GET" ? await c.req.text() : undefined,
+      })
+
+      const headers = new Headers(response.headers)
+      headers.delete("transfer-encoding")
+
+      return new Response(response.body, {
+        status: response.status,
+        headers,
+      })
+    } catch (err) {
+      return c.json({ error: "Vite proxy failed: " + String(err) }, 502)
+    }
+  })
+
   return app
 }
 

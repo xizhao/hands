@@ -188,6 +188,86 @@ app.post("/blocks/:blockId/rsc", async (c) => {
   }
 });
 
+// === RSC Component Routes ===
+// Render arbitrary JSX components via RSC for the visual editor
+
+// Component registry - dynamically loaded from stdlib and user imports
+const COMPONENTS: Record<string, React.FC<any>> = {};
+
+// Register stdlib components
+async function registerStdlibComponents() {
+  try {
+    const stdlib = await import("@hands/stdlib");
+    if (stdlib.Button) COMPONENTS["Button"] = stdlib.Button;
+    if (stdlib.Card) COMPONENTS["Card"] = stdlib.Card;
+    if (stdlib.CardHeader) COMPONENTS["CardHeader"] = stdlib.CardHeader;
+    if (stdlib.CardTitle) COMPONENTS["CardTitle"] = stdlib.CardTitle;
+    if (stdlib.CardDescription) COMPONENTS["CardDescription"] = stdlib.CardDescription;
+    if (stdlib.CardContent) COMPONENTS["CardContent"] = stdlib.CardContent;
+    if (stdlib.Badge) COMPONENTS["Badge"] = stdlib.Badge;
+    if (stdlib.MetricCard) COMPONENTS["MetricCard"] = stdlib.MetricCard;
+    // Add more as needed
+  } catch {
+    // stdlib not available
+  }
+}
+
+// Initialize on startup
+registerStdlibComponents();
+
+app.post("/rsc/component", async (c) => {
+  const { tagName, props = {}, children, elementId } = await c.req.json<{
+    tagName: string;
+    props?: Record<string, unknown>;
+    children?: string;
+    elementId?: string;
+  }>();
+
+  if (!tagName) {
+    return c.json({ error: "tagName is required" }, 400);
+  }
+
+  // Look up component in registry
+  const Component = COMPONENTS[tagName];
+
+  if (!Component) {
+    // Component not found - return a placeholder element
+    // The editor will show this as "unknown component"
+    return c.json({
+      error: \`Component not found: \${tagName}. Available: \${Object.keys(COMPONENTS).join(", ")}\`
+    }, 404);
+  }
+
+  try {
+    // Build the element with props
+    const element = React.createElement(Component, {
+      ...props,
+      key: elementId,
+    });
+
+    const stream = renderToReadableStream(element);
+
+    return new Response(stream, {
+      headers: {
+        "Content-Type": "text/x-component",
+        "Cache-Control": "no-cache",
+      },
+    });
+  } catch (err) {
+    const error = err instanceof Error ? err.message : String(err);
+    console.error(\`[rsc] Component render error (\${tagName}):\`, error);
+    return c.json({ error }, 500);
+  }
+});
+
+// List available RSC components
+app.get("/rsc/components", (c) => {
+  return c.json({
+    components: Object.keys(COMPONENTS),
+    count: Object.keys(COMPONENTS).length,
+  });
+});
+
 // === Workbook Routes ===
 // Note: Postgres/DB routes are handled by runtime on RUNTIME_PORT
 

@@ -6,13 +6,64 @@ import type { DbContext } from "../types/block.js"
  * Sources are serverless-style functions that sync external data.
  * The function owns everything: fetching, transforming, writing to DB.
  *
- * Return type determines runtime behavior:
- * - any object/void: Just returns the result (current default)
+ * ## Return Types (determines runtime behavior)
  *
- * Future return types (not yet implemented):
- * - AsyncGenerator<SchemaRecord[]>: dlt-style auto-table creation + upsert
- * - StreamResult: Real-time sync via Electric-style shapes
- * - PipelineResult: Multi-step ETL with checkpoints
+ * ### Current (implemented)
+ * - `any object/void` - Just returns the result, source owns all DB writes
+ *
+ * ### Future Return Types (not yet implemented)
+ *
+ * **1. AsyncGenerator<SchemaRecord[]>** - dlt-style auto-table creation + upsert
+ * ```typescript
+ * async function* sync(ctx) {
+ *   for await (const page of fetchPages()) {
+ *     yield page.items.map(item => ({
+ *       _stream: "items",  // -> creates/upserts to `items` table
+ *       id: item.id,
+ *       ...item
+ *     }))
+ *   }
+ * }
+ * ```
+ * Runtime auto-creates tables from first batch schema, upserts by primaryKey.
+ *
+ * **2. ShapeResult** - Electric-style declarative shapes (inspired by ElectricSQL)
+ * ```typescript
+ * defineSource({
+ *   name: "hackernews",
+ *   shapes: {
+ *     // Static shape - sync all, runtime manages incremental
+ *     topStories: {
+ *       table: "hn_stories",
+ *       where: "type = 'top'",
+ *       schedule: "*/15 * * * *",
+ *     },
+ *     // Parameterized shape - sync on-demand when subscribed
+ *     storyComments: {
+ *       table: "hn_comments",
+ *       where: "story_id = $1",  // $1 provided by subscriber
+ *     },
+ *   },
+ *   // Producer function populates the shapes
+ *   sync: async (ctx) => { ... }
+ * })
+ * ```
+ * Consumer-oriented: UI subscribes to shapes, runtime syncs what's needed.
+ * Multiple shapes can be combined client-side for relations.
+ *
+ * **3. PipelineResult** - Multi-step ETL with checkpoints
+ * ```typescript
+ * definePipeline({
+ *   steps: [
+ *     { name: "extract", fn: extractFromAPI },
+ *     { name: "transform", fn: normalizeData },
+ *     { name: "load", fn: writeToDb },
+ *   ],
+ *   checkpoint: "step",  // Resume from last successful step
+ * })
+ * ```
+ *
+ * @see https://electric-sql.com/docs/guides/shapes for shape design inspiration
  */
 
 export interface SourceContext<TSecrets extends readonly string[] = readonly string[]> {

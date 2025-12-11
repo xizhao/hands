@@ -103,7 +103,7 @@ const dialogContentVariants = cva(
         ),
         modal: cn(
           'sm:rounded-lg md:w-full',
-          'data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-95 data-[state=open]:fade-in-0 data-[state=open]:zoom-in-95 duration-200 data-[state=closed]:animate-out data-[state=open]:animate-in',
+          'data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 duration-200 data-[state=closed]:animate-out data-[state=open]:animate-in',
           'max-w-[calc(100%-2rem)]'
         ),
       },
