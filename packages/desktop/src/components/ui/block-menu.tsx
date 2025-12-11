@@ -589,7 +589,7 @@ function TurnIntoMenuItem() {
         <MenuItem
           checked={value === item.value}
           icon={
-            <div className="flex size-5 items-center justify-center rounded-sm border border-foreground/15 bg-white p-0.5 text-subtle-foreground [&_svg]:size-3">
+            <div className="flex size-5 items-center justify-center rounded-sm border border-border bg-background p-0.5 text-subtle-foreground [&_svg]:size-3">
               {item.icon}
             </div>
           }

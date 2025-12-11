@@ -2,5 +2,21 @@
   "$schema": "https://hands.dev/schema/source-registry.json",
   "name": "hands-sources",
   "version": "0.1.0",
-  "items": []
+  "items": [
+    {
+      "name": "hackernews",
+      "type": "source",
+      "title": "Hacker News",
+      "description": "Sync top stories from Hacker News",
+      "files": [
+        { "path": "hackernews/index.ts", "target": "sources/hackernews/index.ts" }
+      ],
+      "dependencies": [],
+      "secrets": [],
+      "streams": ["stories"],
+      "tables": ["hackernews_stories"],
+      "schedule": "0 */6 * * *",
+      "icon": "newspaper"
+    }
+  ]
 }

@@ -99,7 +99,7 @@ export function LinkElement(props: PlateElementProps) {
             className={cn(
               'cursor-pointer border-b-1 font-medium text-primary/65',
               suggestionData?.type === 'remove' &&
-                'border-b-gray-300 bg-gray-300/25 text-gray-400 line-through',
+                'border-b-muted-foreground/50 bg-muted/50 text-muted-foreground line-through',
               suggestionData?.type === 'insert' &&
                 'border-b-brand/[.60] bg-brand/[.13]'
             )}

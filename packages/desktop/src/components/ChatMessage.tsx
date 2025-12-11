@@ -267,10 +267,10 @@ const QueryResult = memo(({ output, query: _query }: { output: string; query?: s
   return (
     <div className="mt-1">
       {/* Compact preview table */}
-      <div className="rounded-md overflow-hidden border border-border/30 bg-black/20">
+      <div className="rounded-md overflow-hidden border border-border/50 bg-background/30">
         <table className="w-full text-[10px] font-mono">
           <thead>
-            <tr className="bg-black/30">
+            <tr className="bg-background/50">
               {parsed.headers.map((h, i) => (
                 <th key={i} className="px-2 py-1 text-left text-muted-foreground/60 font-medium truncate max-w-[120px]">
                   {h}
@@ -280,7 +280,7 @@ const QueryResult = memo(({ output, query: _query }: { output: string; query?: s
           </thead>
           <tbody>
             {(expanded ? parsed.rows : previewRows).map((row, i) => (
-              <tr key={i} className="border-t border-border/20 hover:bg-white/5">
+              <tr key={i} className="border-t border-border/20 hover:bg-foreground/5">
                 {row.map((cell, j) => (
                   <td key={j} className="px-2 py-1 text-muted-foreground/80 truncate max-w-[120px]" title={cell}>
                     {cell || <span className="text-muted-foreground/30">null</span>}
@@ -433,7 +433,7 @@ const ToolThread = memo(({ tools }: { tools: ToolPart[] }) => {
         onClick={() => setExpanded(!expanded)}
         className={cn(
           "flex items-center gap-1.5 text-[11px] px-2 py-1 rounded-lg transition-colors",
-          "text-muted-foreground/60 hover:text-muted-foreground hover:bg-white/5"
+          "text-muted-foreground/60 hover:text-muted-foreground hover:bg-foreground/5"
         )}
       >
         {isRunning ? (
@@ -596,7 +596,7 @@ const ToolInvocation = memo(({ part }: { part: ToolPart }) => {
             exit={{ height: 0, opacity: 0 }}
             className="overflow-hidden"
           >
-            <div className="ml-4 mt-1 p-2 rounded-lg bg-black/20 text-[10px] font-mono space-y-1.5">
+            <div className="ml-4 mt-1 p-2 rounded-lg bg-background/30 text-[10px] font-mono space-y-1.5">
               {state.input && (
                 <div>
                   <span className="text-muted-foreground/40 uppercase text-[9px]">input: </span>
@@ -641,7 +641,7 @@ const TextContent = memo(({ text, isStreaming = false, darkText = false, compact
 
           if (inline) {
             return (
-              <code className="bg-black/20 px-1 py-0.5 rounded text-[12px] font-mono" {...props}>
+              <code className="bg-background/50 px-1 py-0.5 rounded text-[12px] font-mono" {...props}>
                 {children}
               </code>
             );
@@ -662,7 +662,7 @@ const TextContent = memo(({ text, isStreaming = false, darkText = false, compact
                   borderRadius: "0.5rem",
                   fontSize: "11px",
                   padding: "0.75rem",
-                  background: "rgba(0,0,0,0.3)",
+                  background: "hsl(var(--background) / 0.5)",
                 }}
               >
                 {String(children).replace(/\n$/, "")}
@@ -738,7 +738,7 @@ const FileChip = memo(({ path }: { path: string }) => {
   const filename = getFilename(path);
 
   return (
-    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-zinc-200 text-zinc-700 text-xs font-mono">
+    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-primary-foreground/20 text-primary-foreground text-xs font-mono">
       <File className="h-3 w-3 shrink-0" />
       <span className="truncate max-w-[200px]" title={path}>{filename}</span>
     </span>
@@ -942,10 +942,11 @@ export const ChatMessage = memo(({ message, isStreaming = false, compact = false
         isUser ? "justify-end" : "justify-start"
       )}
     >
-      {/* User message - on right, corner angled down toward input, white with zinc text */}
+      {/* User message - on right, corner angled down toward input */}
       {isUser && (
         <div className={cn(
-          "max-w-[85%] rounded-2xl rounded-br-sm bg-white text-zinc-800 shadow-lg",
+          "max-w-[85%] rounded-2xl rounded-br-sm shadow-sm",
+          "bg-primary text-primary-foreground",
           compact ? "px-2.5 py-1.5" : "px-3.5 py-2"
         )}>
           <div className={cn(
@@ -963,11 +964,12 @@ export const ChatMessage = memo(({ message, isStreaming = false, compact = false
         </div>
       )}
 
-      {/* Hands/Assistant message - on left, corner angled down toward input, dark zinc */}
+      {/* Hands/Assistant message - on left, corner angled down toward input */}
       {isAssistant && (
         <div className="group max-w-[90%] flex items-center gap-2">
           <div className={cn(
-            "rounded-2xl rounded-bl-sm bg-zinc-800 text-zinc-100 shadow-lg",
+            "rounded-2xl rounded-bl-sm shadow-sm",
+            "bg-muted text-foreground",
             compact ? "px-2.5 py-1.5" : "px-3.5 py-2"
           )}>
             <div className={cn("space-y-0.5", compact && "text-xs")}>

@@ -157,7 +157,7 @@ export function TurnIntoToolbarButton(props: DropdownMenuProps) {
                   key={itemValue}
                   value={itemValue}
                 >
-                  <div className="mr-2 flex size-5 items-center justify-center rounded-sm border border-foreground/15 bg-white p-0.5 text-subtle-foreground [&_svg]:size-3">
+                  <div className="mr-2 flex size-5 items-center justify-center rounded-sm border border-border bg-background p-0.5 text-subtle-foreground [&_svg]:size-3">
                     {icon}
                   </div>
                   {label}

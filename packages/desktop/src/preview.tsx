@@ -107,15 +107,15 @@ export function PreviewWindow() {
   };
 
   return (
-    <div className="h-screen w-screen flex flex-col bg-zinc-900 rounded-xl overflow-hidden border border-zinc-700/50">
+    <div className="h-screen w-screen flex flex-col bg-background rounded-xl overflow-hidden border border-border">
       {/* Custom titlebar - entire bar is draggable */}
-      <div className="h-10 flex items-center justify-between bg-zinc-800/80 backdrop-blur-sm border-b border-zinc-700/50 shrink-0">
+      <div className="h-10 flex items-center justify-between bg-card/80 backdrop-blur-sm border-b border-border shrink-0">
         {/* Drag region - takes up all space not used by buttons */}
         <div
           onMouseDown={handleDragStart}
           className="flex-1 h-full flex items-center px-3 cursor-grab active:cursor-grabbing select-none"
         >
-          <span className="text-sm text-zinc-300 truncate pointer-events-none">
+          <span className="text-sm text-foreground truncate pointer-events-none">
             {title}
           </span>
         </div>
@@ -125,7 +125,7 @@ export function PreviewWindow() {
           {/* Refresh */}
           <button
             onClick={handleRefresh}
-            className="p-1.5 rounded-md hover:bg-zinc-700/50 text-zinc-400 hover:text-zinc-200 transition-colors"
+            className="p-1.5 rounded-md hover:bg-accent text-muted-foreground hover:text-accent-foreground transition-colors"
             title="Refresh"
           >
             <RotateCw className={cn("h-3.5 w-3.5", isLoading && "animate-spin")} />
@@ -134,7 +134,7 @@ export function PreviewWindow() {
           {/* Open in browser */}
           <button
             onClick={handleOpenExternal}
-            className="p-1.5 rounded-md hover:bg-zinc-700/50 text-zinc-400 hover:text-zinc-200 transition-colors"
+            className="p-1.5 rounded-md hover:bg-accent text-muted-foreground hover:text-accent-foreground transition-colors"
             title="Open in browser"
           >
             <ExternalLink className="h-3.5 w-3.5" />
@@ -144,14 +144,14 @@ export function PreviewWindow() {
           <div className="flex items-center ml-1">
             <button
               onClick={handleMinimize}
-              className="p-1.5 rounded-md hover:bg-zinc-700/50 text-zinc-400 hover:text-zinc-200 transition-colors"
+              className="p-1.5 rounded-md hover:bg-accent text-muted-foreground hover:text-accent-foreground transition-colors"
               title="Minimize"
             >
               <Minus className="h-3.5 w-3.5" />
             </button>
             <button
               onClick={handleMaximize}
-              className="p-1.5 rounded-md hover:bg-zinc-700/50 text-zinc-400 hover:text-zinc-200 transition-colors"
+              className="p-1.5 rounded-md hover:bg-accent text-muted-foreground hover:text-accent-foreground transition-colors"
               title={isMaximized ? "Restore" : "Maximize"}
             >
               {isMaximized ? (
@@ -162,7 +162,7 @@ export function PreviewWindow() {
             </button>
             <button
               onClick={handleClose}
-              className="p-1.5 rounded-md hover:bg-red-500/80 text-zinc-400 hover:text-white transition-colors"
+              className="p-1.5 rounded-md hover:bg-destructive text-muted-foreground hover:text-destructive-foreground transition-colors"
               title="Close"
             >
               <X className="h-3.5 w-3.5" />
@@ -172,24 +172,24 @@ export function PreviewWindow() {
       </div>
 
       {/* Content area with iframe */}
-      <div className="flex-1 relative bg-white">
+      <div className="flex-1 relative bg-background">
         {isLoading && (
-          <div className="absolute inset-0 flex items-center justify-center bg-zinc-900 z-10">
+          <div className="absolute inset-0 flex items-center justify-center bg-background z-10">
             <div className="flex flex-col items-center gap-3">
-              <div className="h-8 w-8 border-2 border-zinc-600 border-t-zinc-300 rounded-full animate-spin" />
-              <span className="text-sm text-zinc-400">Loading preview...</span>
+              <div className="h-8 w-8 border-2 border-muted-foreground/30 border-t-foreground rounded-full animate-spin" />
+              <span className="text-sm text-muted-foreground">Loading preview...</span>
             </div>
           </div>
         )}
 
         {error && (
-          <div className="absolute inset-0 flex items-center justify-center bg-zinc-900 z-10">
+          <div className="absolute inset-0 flex items-center justify-center bg-background z-10">
             <div className="flex flex-col items-center gap-3 max-w-md px-4 text-center">
-              <div className="text-red-400 text-lg">Failed to load</div>
-              <p className="text-sm text-zinc-400">{error}</p>
+              <div className="text-destructive text-lg">Failed to load</div>
+              <p className="text-sm text-muted-foreground">{error}</p>
               <button
                 onClick={handleRefresh}
-                className="px-4 py-2 text-sm bg-zinc-700 hover:bg-zinc-600 rounded-lg text-zinc-200 transition-colors"
+                className="px-4 py-2 text-sm bg-secondary hover:bg-secondary/80 rounded-lg text-secondary-foreground transition-colors"
               >
                 Try again
               </button>
@@ -212,8 +212,8 @@ export function PreviewWindow() {
         )}
 
         {!url && !isLoading && (
-          <div className="absolute inset-0 flex items-center justify-center bg-zinc-900">
-            <span className="text-zinc-400">No URL provided</span>
+          <div className="absolute inset-0 flex items-center justify-center bg-background">
+            <span className="text-muted-foreground">No URL provided</span>
           </div>
         )}
       </div>

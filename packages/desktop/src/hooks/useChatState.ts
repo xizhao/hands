@@ -21,13 +21,29 @@ export interface PendingBlockAttachment {
   errorContext?: string;
 }
 
+export interface PendingPageAttachment {
+  type: "page";
+  pageId: string;
+  name: string;
+}
+
+// Combined attachment type
+export type AnyPendingAttachment = PendingAttachment | PendingBlockAttachment | PendingPageAttachment;
+
 // Module-level state
-let pendingAttachment: PendingAttachment | PendingBlockAttachment | null = null;
+let pendingAttachment: AnyPendingAttachment | null = null;
 let chatExpanded: boolean = false;
 let autoSubmitPending: boolean = false;
 
+// Snapshot type
+interface ChatStateSnapshot {
+  pendingAttachment: AnyPendingAttachment | null;
+  chatExpanded: boolean;
+  autoSubmitPending: boolean;
+}
+
 // Cached snapshot - only recreate when state changes
-let snapshot = { pendingAttachment, chatExpanded, autoSubmitPending };
+let snapshot: ChatStateSnapshot = { pendingAttachment, chatExpanded, autoSubmitPending };
 
 // Subscribers for useSyncExternalStore
 let listeners: Array<() => void> = [];
@@ -52,7 +68,7 @@ function emitChange() {
 }
 
 // Setters
-export function setPendingAttachment(attachment: PendingAttachment | PendingBlockAttachment | null) {
+export function setPendingAttachment(attachment: AnyPendingAttachment | null) {
   if (pendingAttachment === attachment) return;
   pendingAttachment = attachment;
   emitChange();

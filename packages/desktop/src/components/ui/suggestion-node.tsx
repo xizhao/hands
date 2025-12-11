@@ -32,11 +32,11 @@ const suggestionVariants = cva(
       },
       remove: {
         false: '',
-        true: 'border-b-gray-300 bg-gray-300/25 text-gray-400 line-through',
+        true: 'border-b-muted-foreground/50 bg-muted/50 text-muted-foreground line-through',
       },
       removeActive: {
         false: '',
-        true: 'border-b-gray-500 bg-gray-400/25 text-gray-500 no-underline',
+        true: 'border-b-muted-foreground bg-muted/75 text-muted-foreground no-underline',
       },
     },
   }
@@ -133,10 +133,10 @@ function SuggestionLineBreakContent({
                 (isActive || isHover) &&
                 'border-b-brand/[.60] bg-brand/[.13]',
               isRemove &&
-                'border-b-gray-300 bg-gray-300/25 text-gray-400 line-through',
+                'border-b-muted-foreground/50 bg-muted/50 text-muted-foreground line-through',
               isRemove &&
                 (isActive || isHover) &&
-                'border-b-gray-500 bg-gray-400/25 text-gray-500 no-underline'
+                'border-b-muted-foreground bg-muted/75 text-muted-foreground no-underline'
             )}
             contentEditable={false}
             ref={spanRef}

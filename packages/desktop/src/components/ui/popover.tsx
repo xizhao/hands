@@ -9,7 +9,7 @@ import { cn } from '@/lib/utils';
 const popoverVariants = cva(
   cn(
     'group/popover',
-    'z-50 max-w-[calc(100vw-24px)] animate-popover overflow-hidden rounded-md bg-popover text-popover-foreground shadow-floating outline-hidden'
+    'z-50 max-w-[calc(100vw-24px)] animate-popover overflow-hidden rounded-md bg-popover text-popover-foreground shadow-floating outline-hidden border border-border'
   ),
   {
     defaultVariants: {

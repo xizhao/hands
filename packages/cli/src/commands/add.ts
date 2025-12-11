@@ -104,6 +104,38 @@ export async function addCommand(name: string, options: AddOptions) {
     errors.push(`Failed to update hands.json: ${error}`)
   }
 
+  // Add dependencies to package.json
+  if (registryItem.dependencies.length > 0) {
+    try {
+      const pkgJsonPath = join(workbookDir, "package.json")
+      if (existsSync(pkgJsonPath)) {
+        const pkgJson = JSON.parse(await Bun.file(pkgJsonPath).text())
+        pkgJson.dependencies = pkgJson.dependencies || {}
+
+        let depsAdded = false
+        for (const dep of registryItem.dependencies) {
+          // Parse dependency string (e.g., "stripe@^17.0.0" or just "stripe")
+          const [pkgName, version] = dep.includes("@") && !dep.startsWith("@")
+            ? dep.split("@")
+            : [dep, "latest"]
+
+          if (!pkgJson.dependencies[pkgName]) {
+            pkgJson.dependencies[pkgName] = version
+            depsAdded = true
+            console.log(`  Added dependency: ${pkgName}@${version}`)
+          }
+        }
+
+        if (depsAdded) {
+          await Bun.write(pkgJsonPath, JSON.stringify(pkgJson, null, 2) + "\n")
+          console.log("  Updated: package.json")
+        }
+      }
+    } catch (error) {
+      errors.push(`Failed to update package.json: ${error}`)
+    }
+  }
+
   // Print errors if any
   if (errors.length > 0) {
     console.error()
@@ -118,15 +150,22 @@ export async function addCommand(name: string, options: AddOptions) {
   console.log()
   console.log("Next steps:")
 
-  if (registryItem.secrets.length > 0) {
-    console.log("  Set required secrets:")
-    for (const secret of registryItem.secrets) {
-      console.log(`    export ${secret}=<your-value>`)
-    }
+  if (registryItem.dependencies.length > 0) {
+    console.log("  Install dependencies:")
+    console.log("    bun install")
+    console.log()
   }
 
-  console.log("  Rebuild to include source:")
-  console.log("    hands build")
+  if (registryItem.secrets.length > 0) {
+    console.log("  Set required secrets in .env.local:")
+    for (const secret of registryItem.secrets) {
+      console.log(`    ${secret}=<your-value>`)
+    }
+    console.log()
+  }
+
+  console.log("  Start the runtime to sync data:")
+  console.log("    hands dev")
 }
 
 interface RegistryItem {
@@ -135,10 +174,12 @@ interface RegistryItem {
   title: string
   description: string
   files: Array<{ path: string; target: string }>
+  dependencies: string[]
   secrets: string[]
   streams: string[]
   tables?: string[]
   schedule?: string
+  icon?: string
 }
 
 interface Registry {

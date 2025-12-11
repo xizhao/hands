@@ -11,10 +11,12 @@ interface RegistryItem {
   title: string
   description: string
   files: Array<{ path: string; target: string }>
+  dependencies: string[]
   secrets: string[]
   streams: string[]
   tables?: string[]
   schedule?: string
+  icon?: string
 }
 
 interface Registry {
@@ -30,12 +32,21 @@ export async function sourcesCommand() {
   console.log("Available sources:")
   console.log()
 
+  if (registry.items.length === 0) {
+    console.log("No sources available in registry.")
+    return
+  }
+
   for (const item of registry.items) {
     console.log(`${item.name}`)
     console.log(`  ${item.title} - ${item.description}`)
 
     if (item.secrets.length > 0) {
       console.log(`  Secrets: ${item.secrets.join(", ")}`)
+    }
+
+    if (item.dependencies.length > 0) {
+      console.log(`  Dependencies: ${item.dependencies.join(", ")}`)
     }
 
     console.log(`  Streams: ${item.streams.join(", ")}`)

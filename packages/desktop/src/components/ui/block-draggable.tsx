@@ -158,9 +158,9 @@ function Draggable(props: PlateElementProps) {
                 style={{ top: `${dragButtonTop + 3}px` }}
                 tooltip={
                   <div className="text-center">
-                    Drag <span className="text-gray-400">to move</span>
+                    Drag <span className="text-muted-foreground">to move</span>
                     <br />
-                    Click <span className="text-gray-400">to open menu</span>
+                    Click <span className="text-muted-foreground">to open menu</span>
                   </div>
                 }
                 tooltipContentProps={{
@@ -394,9 +394,9 @@ const DraggableInsertHandle = () => {
       tabIndex={-1}
       tooltip={
         <div className="text-center">
-          Click <span className="text-gray-400">to add below</span>
+          Click <span className="text-muted-foreground">to add below</span>
           <br />
-          Option-click <span className="text-gray-400">to add above</span>
+          Option-click <span className="text-muted-foreground">to add above</span>
         </div>
       }
       tooltipContentProps={{

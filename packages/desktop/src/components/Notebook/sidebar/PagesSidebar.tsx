@@ -143,7 +143,7 @@ export function DraftsSidebar({ collapsed = false, fullWidth = false, onAddDraft
                 <Tooltip key={table.table_name}>
                   <TooltipTrigger asChild>
                     <button className="w-full flex items-center justify-center p-1.5 text-muted-foreground hover:text-foreground transition-all">
-                      <Table weight="duotone" className="h-3.5 w-3.5 text-blue-400" />
+                      <Table weight="duotone" className="h-3.5 w-3.5" />
                     </button>
                   </TooltipTrigger>
                   <TooltipContent side="right">
@@ -169,7 +169,7 @@ export function DraftsSidebar({ collapsed = false, fullWidth = false, onAddDraft
                       onClick={() => handleBlockClick(block.id)}
                       className="w-full flex items-center justify-center p-1.5 text-muted-foreground hover:text-foreground transition-all"
                     >
-                      <SquaresFour weight="duotone" className="h-3.5 w-3.5 text-amber-500" />
+                      <SquaresFour weight="duotone" className="h-3.5 w-3.5" />
                     </button>
                   </TooltipTrigger>
                   <TooltipContent side="right">
@@ -270,7 +270,7 @@ export function DraftsSidebar({ collapsed = false, fullWidth = false, onAddDraft
                       key={table.table_name}
                       className="w-full flex items-center gap-2 px-2 py-1.5 text-sm text-muted-foreground hover:text-foreground hover:bg-accent/50 rounded-md transition-colors"
                     >
-                      <Table weight="duotone" className="h-4 w-4 text-blue-400 shrink-0" />
+                      <Table weight="duotone" className="h-4 w-4 shrink-0" />
                       <span className="flex-1 truncate text-left">{table.table_name}</span>
                       <span className="text-xs text-muted-foreground/60">{table.columns?.length ?? 0} cols</span>
                     </button>
@@ -301,7 +301,7 @@ export function DraftsSidebar({ collapsed = false, fullWidth = false, onAddDraft
                       onClick={() => handleBlockClick(block.id)}
                       className="w-full flex items-center gap-2 px-2 py-1.5 text-sm text-muted-foreground hover:text-foreground hover:bg-accent/50 rounded-md transition-colors"
                     >
-                      <SquaresFour weight="duotone" className="h-4 w-4 text-amber-500 shrink-0" />
+                      <SquaresFour weight="duotone" className="h-4 w-4 shrink-0" />
                       <span className="flex-1 truncate text-left">{block.title || block.id}</span>
                     </button>
                   ))
@@ -474,7 +474,7 @@ export function DraftsSidebar({ collapsed = false, fullWidth = false, onAddDraft
                       "text-muted-foreground hover:text-foreground"
                     )}
                   >
-                    <Table weight="duotone" className="h-3.5 w-3.5 text-blue-400 shrink-0" />
+                    <Table weight="duotone" className="h-3.5 w-3.5 shrink-0" />
                     <span className="flex-1 truncate text-left">{table.table_name}</span>
                   </button>
                 ))
@@ -522,7 +522,7 @@ export function DraftsSidebar({ collapsed = false, fullWidth = false, onAddDraft
                       "text-muted-foreground hover:text-foreground"
                     )}
                   >
-                    <SquaresFour weight="duotone" className="h-3.5 w-3.5 text-amber-500 shrink-0" />
+                    <SquaresFour weight="duotone" className="h-3.5 w-3.5 shrink-0" />
                     <span className="flex-1 truncate text-left">{block.title || block.id}</span>
                   </button>
                 ))

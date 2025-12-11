@@ -6,6 +6,12 @@ export interface ComponentMeta {
   description: string;
   files: string[];
   dependencies: string[];
+  /** Plate KEYS value for block/inline types */
+  plateKey?: string;
+  /** Lucide icon name */
+  icon?: string;
+  /** Search keywords */
+  keywords?: string[];
 }
 
 export interface CategoryMeta {

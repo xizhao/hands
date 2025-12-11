@@ -1,23 +1,20 @@
 /**
- * FileDropOverlay - Full-screen overlay for importing external files
+ * FileDropOverlay - Minimal full-screen overlay for file drops
  *
  * Detects when files are dragged from outside the browser and shows
- * an overlay to capture the drop. This prevents conflicts with editor DnD.
+ * a subtle highlight. This prevents conflicts with editor DnD.
  */
 
 import { useState, useEffect, useCallback } from "react";
-import { FileArrowUp } from "@phosphor-icons/react";
 import { cn } from "@/lib/utils";
 
 interface FileDropOverlayProps {
   onFileDrop: (file: File, dropTarget: Element | null) => void;
-  accept?: string[]; // e.g. [".csv", ".json", ".parquet"]
   disabled?: boolean;
 }
 
 export function FileDropOverlay({
   onFileDrop,
-  accept = [".csv", ".json", ".parquet"],
   disabled = false,
 }: FileDropOverlayProps) {
   const [isDragging, setIsDragging] = useState(false);
@@ -27,15 +24,6 @@ export function FileDropOverlay({
     // External file drags have "Files" in dataTransfer.types
     return e.dataTransfer?.types.includes("Files") ?? false;
   }, []);
-
-  const isValidFileType = useCallback(
-    (file: File): boolean => {
-      if (accept.length === 0) return true;
-      const ext = `.${file.name.split(".").pop()?.toLowerCase()}`;
-      return accept.includes(ext);
-    },
-    [accept]
-  );
 
   useEffect(() => {
     if (disabled) return;
@@ -82,18 +70,18 @@ export function FileDropOverlay({
 
       const files = Array.from(e.dataTransfer?.files ?? []);
       console.log("[FileDropOverlay] Files dropped:", files.map(f => f.name));
-      const validFile = files.find(isValidFileType);
+      const file = files[0];
 
-      // Get the element under the drop point (not the overlay itself)
-      // Use elementFromPoint with the drop coordinates
+      // Get the element under the drop point by temporarily hiding all overlays
+      const overlays = document.querySelectorAll('[data-file-drop-overlay]');
+      overlays.forEach(el => (el as HTMLElement).style.pointerEvents = 'none');
       const dropTarget = document.elementFromPoint(e.clientX, e.clientY);
-      console.log("[FileDropOverlay] Drop target:", dropTarget);
+      overlays.forEach(el => (el as HTMLElement).style.pointerEvents = '');
+      console.log("[FileDropOverlay] Drop target (under overlay):", dropTarget);
 
-      if (validFile) {
-        console.log("[FileDropOverlay] Valid file found, calling onFileDrop:", validFile.name);
-        onFileDrop(validFile, dropTarget);
-      } else {
-        console.log("[FileDropOverlay] No valid file type found. Accepted:", accept);
+      if (file) {
+        console.log("[FileDropOverlay] File found, calling onFileDrop:", file.name);
+        onFileDrop(file, dropTarget);
       }
     };
 
@@ -108,30 +96,19 @@ export function FileDropOverlay({
       window.removeEventListener("dragover", handleDragOver);
       window.removeEventListener("drop", handleDrop);
     };
-  }, [disabled, isExternalFileDrag, isValidFileType, onFileDrop]);
+  }, [disabled, isExternalFileDrag, onFileDrop]);
 
   if (!isDragging) return null;
 
   return (
     <div
+      data-file-drop-overlay
       className={cn(
-        "fixed inset-0 z-[100] flex items-center justify-center",
-        "bg-background/80 backdrop-blur-sm",
-        "border-2 border-dashed border-primary/50",
-        "transition-opacity duration-150"
+        "fixed inset-0 z-[100]",
+        "bg-primary/5",
+        "border-2 border-primary/30",
+        "transition-opacity duration-100"
       )}
-    >
-      <div className="flex flex-col items-center gap-3 text-center">
-        <div className="p-4 rounded-full bg-primary/10">
-          <FileArrowUp weight="duotone" className="h-8 w-8 text-primary" />
-        </div>
-        <div>
-          <div className="text-lg font-medium">Drop to import</div>
-          <div className="text-sm text-muted-foreground">
-            CSV, JSON, or Parquet files
-          </div>
-        </div>
-      </div>
-    </div>
+    />
   );
 }

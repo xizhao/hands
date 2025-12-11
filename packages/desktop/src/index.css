@@ -123,16 +123,16 @@ svg [opacity="0.2"] {
 }
 
 .status-dot-active {
-  background: #22c55e;
+  @apply bg-green-500;
 }
 
 .status-dot-busy {
-  background: #f59e0b;
+  @apply bg-amber-500;
   animation: pulse 1.5s ease-in-out infinite;
 }
 
 .status-dot-error {
-  background: #ef4444;
+  @apply bg-red-500;
 }
 
 @keyframes pulse {

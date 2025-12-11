@@ -146,7 +146,7 @@ const InsertLinkCommand = ({ initialUrl }: { initialUrl: string }) => {
       />
 
       {count > 1 && (
-        <span className="mx-2 font-medium text-gray-500 text-sm">Recents</span>
+        <span className="mx-2 font-medium text-muted-foreground text-sm">Recents</span>
       )}
       <CommandList>
         {query.length === 0 &&
@@ -388,7 +388,7 @@ const OutsideLinkCommandItem = ({ query }: { query: string }) => {
       <LinkIcon className="mr-2 size-3.5 shrink-0" />
       <div className="flex flex-col">
         <span className="truncate font-medium text-sm">{query}</span>
-        <span className="text-gray-500 text-xs">
+        <span className="text-muted-foreground text-xs">
           {validateUrl(editor, query)
             ? 'Link to web page'
             : 'Type a complete URL to link'}

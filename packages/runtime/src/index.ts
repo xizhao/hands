@@ -23,6 +23,7 @@ import { PORTS } from "./ports.js"
 import { initWorkbookDb, type WorkbookDb } from "./db/index.js"
 import { lintBlockRefs, type BlockLintResult } from "./blocks/lint.js"
 import type { BlockContext } from "./ctx.js"
+import { registerSourceRoutes, discoverSources } from "./sources/index.js"
 
 interface RuntimeConfig {
   workbookId: string
@@ -627,6 +628,15 @@ function createApp(config: RuntimeConfig) {
     return c.json({ success: true })
   })
 
+  // ============================================
+  // Source Management Routes
+  // ============================================
+  registerSourceRoutes(app, {
+    workbookDir: config.workbookDir,
+    getDbContext: () => state.workbookDb?.ctx ?? null,
+    isDbReady: () => state.dbReady,
+  })
+
   // Proxy to Vite for RSC routes
   app.all("/blocks/*", async (c) => {
     if (!state.viteReady || !state.vitePort) {
@@ -671,6 +681,12 @@ async function bootPGlite(workbookDir: string) {
     state.workbookDb = await initWorkbookDb(workbookDir)
     state.dbReady = true
     console.log("[runtime] Database ready")
+
+    // Log discovered sources (no scheduler - orchestration handled by caller)
+    const sources = await discoverSources(workbookDir)
+    if (sources.length > 0) {
+      console.log(`[runtime] Found ${sources.length} source(s)`)
+    }
   } catch (err) {
     console.error("[runtime] Database failed:", err)
   }

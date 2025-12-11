@@ -19,6 +19,9 @@ import {
   type TElement,
 } from 'platejs';
 import type { PlateEditor } from 'platejs/react';
+import { STDLIB_COMPONENT_KEY } from '@/components/editor/plugins/stdlib-component-kit';
+import { getDefaultProps } from '@/components/BlockEditor/component-map';
+import type { StdlibComponentElement } from '@/components/editor/plate-types';
 
 const ACTION_THREE_COLUMNS = 'action_three_columns';
 
@@ -162,4 +165,34 @@ export const getBlockType = (block: TElement) => {
   }
 
   return block.type;
+};
+
+/**
+ * Insert a stdlib component as a block element
+ */
+export const insertStdlibComponent = (
+  editor: PlateEditor,
+  componentName: string
+) => {
+  editor.tf.withoutNormalizing(() => {
+    const block = editor.api.block();
+    if (!block) return;
+
+    const defaultProps = getDefaultProps(componentName);
+
+    const componentElement: StdlibComponentElement = {
+      type: STDLIB_COMPONENT_KEY,
+      componentName,
+      props: defaultProps,
+      children: [{ text: '' }],
+    };
+
+    editor.tf.insertNodes(componentElement, {
+      at: PathApi.next(block[1]),
+      select: true,
+    });
+
+    // Remove previous empty block if present
+    editor.tf.removeNodes({ previousEmptyBlock: true });
+  });
 };

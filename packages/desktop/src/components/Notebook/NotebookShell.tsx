@@ -287,6 +287,30 @@ export function NotebookShell({ children }: NotebookShellProps) {
   // Chat state from hook
   const chatState = useChatState();
 
+  // Auto-attach current page/block context when route changes
+  useEffect(() => {
+    if (isOnPage && pageId && currentPage) {
+      chatState.setPendingAttachment({
+        type: "page",
+        pageId,
+        name: currentPage.title || pageId,
+      });
+    } else if (isOnBlock && blockId && currentBlock) {
+      chatState.setPendingAttachment({
+        type: "block",
+        blockId,
+        name: currentBlock.title || blockId,
+      });
+    } else {
+      // Clear attachment when navigating to index or other routes
+      // Only clear if it's a page/block attachment (not a file)
+      const current = chatState.pendingAttachment;
+      if (current?.type === "page" || current?.type === "block") {
+        chatState.setPendingAttachment(null);
+      }
+    }
+  }, [isOnPage, isOnBlock, pageId, blockId, currentPage, currentBlock]);
+
   // Import with agent hook for workspace drops
   const importWithAgent = useImportWithAgent();
 
@@ -641,29 +665,56 @@ export function NotebookShell({ children }: NotebookShellProps) {
               onMouseLeave={handleMouseLeaveSidebar}
               style={{ width: sidebarShown || isResizing ? sidebarWidth : 24 }}
               className={cn(
-                "shrink-0 relative transition-[width] duration-200 ease-out",
+                "shrink-0 relative transition-[width] duration-200 ease-out border-r border-border/50",
                 isResizing && "transition-none"
               )}
             >
-              {/* Draft indicator dots (when collapsed) */}
+              {/* Spine indicators (when collapsed) - circles: pages, squares: blocks, triangles: sources */}
               <div
                 className={cn(
-                  "absolute inset-0 flex flex-col items-center gap-0.5 pt-4",
+                  "absolute inset-0 flex flex-col items-center pt-4",
                   "transition-opacity duration-200",
                   sidebarShown ? "opacity-0 pointer-events-none" : "opacity-100"
                 )}
               >
-                {Array.from({ length: Math.min(draftCount, 5) }).map((_, i) => (
-                  <div
-                    key={i}
-                    className={cn(
-                      "w-1 h-1 rounded-full transition-colors",
-                      manifest?.pages?.[i]?.id === pageId ? "bg-foreground/60" : "bg-foreground/15"
-                    )}
-                  />
-                ))}
-                {draftCount > 5 && (
-                  <span className="text-[8px] text-muted-foreground/80 mt-0.5">+{draftCount - 5}</span>
+                {/* Pages - circles */}
+                {manifest?.pages && manifest.pages.length > 0 && (
+                  <div className="flex flex-col items-center gap-1">
+                    {manifest.pages.slice(0, 4).map((page) => (
+                      <div
+                        key={`page-${page.id}`}
+                        className={cn(
+                          "w-1.5 h-1.5 rounded-full transition-colors",
+                          page.id === pageId ? "bg-foreground/60" : "bg-foreground/15"
+                        )}
+                      />
+                    ))}
+                  </div>
+                )}
+                {/* Blocks - squares */}
+                {manifest?.blocks && manifest.blocks.length > 0 && (
+                  <div className="flex flex-col items-center gap-1 mt-2">
+                    {manifest.blocks.slice(0, 3).map((block) => (
+                      <div
+                        key={`block-${block.id}`}
+                        className={cn(
+                          "w-1.5 h-1.5 transition-colors",
+                          block.id === blockId ? "bg-foreground/60" : "bg-foreground/15"
+                        )}
+                      />
+                    ))}
+                  </div>
+                )}
+                {/* Sources - triangles (CSS triangles via border) */}
+                {dbSchema && dbSchema.length > 0 && (
+                  <div className="flex flex-col items-center gap-1 mt-2">
+                    {dbSchema.slice(0, 3).map((table) => (
+                      <div
+                        key={`source-${table.table_name}`}
+                        className="w-0 h-0 border-l-[3px] border-r-[3px] border-b-[5px] border-l-transparent border-r-transparent border-b-foreground/15"
+                      />
+                    ))}
+                  </div>
                 )}
               </div>
 
@@ -702,7 +753,6 @@ export function NotebookShell({ children }: NotebookShellProps) {
             {/* Main content */}
             <main className="flex-1 flex flex-col min-w-0 bg-background">
               <div className="flex-1 relative">
-                <div className="absolute inset-0 pointer-events-none border border-black/[0.06] rounded-sm" />
                 {children}
               </div>
             </main>
@@ -747,7 +797,6 @@ export function NotebookShell({ children }: NotebookShellProps) {
       {/* File drop overlay for external drag & drop - disabled until runtime fully ready */}
       <FileDropOverlay
         onFileDrop={handleFileDrop}
-        accept={[".csv", ".json", ".parquet"]}
         disabled={!activeWorkbookId || !isRuntimeReady}
       />
 

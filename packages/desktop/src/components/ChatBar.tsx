@@ -13,17 +13,17 @@ import {
   useActiveWorkbookId,
 } from "@/hooks/useWorkbook";
 import { useActiveSession } from "@/hooks/useNavState";
-import type { PendingAttachment, PendingBlockAttachment } from "@/hooks/useChatState";
+import type { AnyPendingAttachment } from "@/hooks/useChatState";
 import { cn } from "@/lib/utils";
-import { ArrowUp, Hand, Loader2, Square, X, Paperclip, Blocks } from "lucide-react";
+import { ArrowUp, Hand, Loader2, Square, X, Paperclip, Blocks, FileText } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 
 interface ChatBarProps {
   expanded: boolean;
   onExpandChange: (expanded: boolean) => void;
-  pendingAttachment?: PendingAttachment | PendingBlockAttachment | null;
-  onPendingAttachmentChange?: (attachment: PendingAttachment | PendingBlockAttachment | null) => void;
+  pendingAttachment?: AnyPendingAttachment | null;
+  onPendingAttachmentChange?: (attachment: AnyPendingAttachment | null) => void;
   autoSubmitPending?: boolean;
   onAutoSubmitPendingChange?: (pending: boolean) => void;
 }
@@ -100,12 +100,19 @@ export function ChatBar({
     // Build message content based on attachment type
     let finalMessage = userText;
     if (pendingAttachment) {
-      if (pendingAttachment.type === "block") {
+      if (pendingAttachment.type === "page") {
+        // Page attachment - include page:// URI
+        const pageUri = `page://${pendingAttachment.pageId}`;
+        finalMessage = userText
+          ? `${userText}\n\n[Context: ${pageUri}]`
+          : `[Context: ${pageUri}]`;
+        setPendingAttachment(null);
+      } else if (pendingAttachment.type === "block") {
         // Block attachment - include block:// URI
         const blockUri = `block://${pendingAttachment.blockId}`;
         finalMessage = userText
-          ? `${userText}\n\n[Attached block: ${blockUri}]`
-          : `[Attached block: ${blockUri}]`;
+          ? `${userText}\n\n[Context: ${blockUri}]`
+          : `[Context: ${blockUri}]`;
         setPendingAttachment(null);
       } else if (pendingAttachment.type === "file" && activeWorkbookId) {
         // File attachment - copy to workbook and include path
@@ -205,6 +212,8 @@ export function ChatBar({
           <div className="flex items-center gap-1.5 px-2 py-1 rounded-md bg-accent/50 text-xs">
             {pendingAttachment.type === "block" ? (
               <Blocks className="h-3 w-3 text-muted-foreground" />
+            ) : pendingAttachment.type === "page" ? (
+              <FileText className="h-3 w-3 text-muted-foreground" />
             ) : (
               <Paperclip className="h-3 w-3 text-muted-foreground" />
             )}

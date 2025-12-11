@@ -137,6 +137,18 @@ export interface MyToggleElement extends MyTextBlockElement {
   type: typeof KEYS.toggle;
 }
 
+/** Stdlib Component Element - renders React components from @hands/stdlib */
+export interface StdlibComponentElement extends TElement {
+  type: 'stdlib-component';
+  /** Component name from stdlib registry (e.g., 'MetricCard', 'Button') */
+  componentName: string;
+  /** Props to pass to the component */
+  props: Record<string, unknown>;
+  children: [EmptyText];
+  /** Optional ID for the element */
+  id?: string;
+}
+
 export type MyValue = (
   | MyBlockquoteElement
   | MyCodeBlockElement
@@ -149,6 +161,7 @@ export type MyValue = (
   | MyParagraphElement
   | MyTableElement
   | MyToggleElement
+  | StdlibComponentElement
 )[];
 
 export interface RichText extends TBasicMarks, TCommentText, TFontMarks, TText {

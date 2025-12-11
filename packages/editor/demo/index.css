@@ -1,0 +1,89 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Dark theme base */
+body {
+  background-color: #1a1a1a;
+  color: #e0e0e0;
+}
+
+/* Plate editor overrides for dark theme */
+[data-slate-editor] {
+  color: #e0e0e0;
+}
+
+/* Animation for loading */
+@keyframes pulse {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.5;
+  }
+}
+
+.animate-pulse {
+  animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+/* Popover styles for slash menu */
+.bg-popover {
+  background-color: #2a2a2a;
+}
+
+/* Border styles */
+.border-border {
+  border-color: #3a3a3a;
+}
+
+/* Accent colors */
+.bg-accent {
+  background-color: rgba(59, 130, 246, 0.2);
+}
+
+.text-accent-foreground {
+  color: #e0e0e0;
+}
+
+.text-muted-foreground {
+  color: #888888;
+}
+
+/* Shadow for floating elements */
+.shadow-lg {
+  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.3), 0 4px 6px -2px rgba(0, 0, 0, 0.2);
+}
+
+/* Block gutter styling */
+.slate-gutterLeft {
+  left: -60px;
+  width: 60px;
+}
+
+/* Selectable blocks */
+.slate-selectable {
+  position: relative;
+}
+
+/* Drag handle hover state */
+.group:hover .slate-gutterLeft {
+  opacity: 1;
+}
+
+/* Block wrapper spacing */
+.slate-blockWrapper {
+  margin-top: 1px;
+  margin-bottom: 1px;
+}
+
+/* Transitions */
+.transition-bg-ease {
+  transition: background-color 0.15s ease;
+}
+
+/* Focus ring */
+.focus-ring:focus-visible {
+  outline: 2px solid rgba(59, 130, 246, 0.5);
+  outline-offset: 2px;
+}

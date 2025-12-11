@@ -1,29 +1,42 @@
 'use client';
 
+/**
+ * Slash Menu - Dynamic slash command menu
+ *
+ * Loads ALL components from @hands/stdlib registry.
+ * No hardcoded block types - everything comes from the registry.
+ */
+
 import { AIChatPlugin } from '@platejs/ai/react';
 import { BlockSelectionPlugin } from '@platejs/selection/react';
 import {
   AudioLinesIcon,
+  BarChart3Icon,
   CalendarIcon,
   ChevronDownIcon,
   Code2Icon,
+  Columns3Icon,
+  DatabaseIcon,
   FileUpIcon,
   FilmIcon,
   Heading1Icon,
   Heading2Icon,
   Heading3Icon,
   ImageIcon,
+  LayoutGridIcon,
   LightbulbIcon,
   ListIcon,
   ListOrderedIcon,
+  type LucideIcon,
   type LucideProps,
+  MinusIcon,
   PilcrowIcon,
   QuoteIcon,
   RadicalIcon,
-  RectangleVerticalIcon,
-  SquareIcon,
+  SquareCheckIcon,
   TableIcon,
   TableOfContentsIcon,
+  TrendingUpIcon,
 } from 'lucide-react';
 import { KEYS } from 'platejs';
 import type { PlateEditor, PlateElementProps } from 'platejs/react';
@@ -33,9 +46,11 @@ import * as React from 'react';
 import {
   insertBlock,
   insertInlineElement,
+  insertStdlibComponent,
   setBlockType,
 } from '@/components/editor/transforms';
 import { blockMenuItems } from '@/components/ui/block-menu';
+import { listComponents, listCategories, type ComponentMeta } from '@hands/stdlib/registry';
 
 import {
   backgroundColorItems,
@@ -88,8 +103,89 @@ function AIIcon(props: LucideProps) {
   );
 }
 
-const groups: Group[] = [
-  {
+// Map icon names from registry to Lucide components
+const iconMap: Record<string, LucideIcon> = {
+  'pilcrow': PilcrowIcon,
+  'heading-1': Heading1Icon,
+  'heading-2': Heading2Icon,
+  'heading-3': Heading3Icon,
+  'list': ListIcon,
+  'list-ordered': ListOrderedIcon,
+  'square-check': SquareCheckIcon,
+  'chevron-down': ChevronDownIcon,
+  'code': Code2Icon,
+  'table': TableIcon,
+  'quote': QuoteIcon,
+  'lightbulb': LightbulbIcon,
+  'minus': MinusIcon,
+  'image': ImageIcon,
+  'film': FilmIcon,
+  'audio-lines': AudioLinesIcon,
+  'file-up': FileUpIcon,
+  'radical': RadicalIcon,
+  'table-of-contents': TableOfContentsIcon,
+  'columns': Columns3Icon,
+  'calendar': CalendarIcon,
+  'layout-grid': LayoutGridIcon,
+  'database': DatabaseIcon,
+  'bar-chart-3': BarChart3Icon,
+  'trending-up': TrendingUpIcon,
+};
+
+function getIcon(iconName?: string, category?: string): React.ReactNode {
+  if (iconName && iconMap[iconName]) {
+    const Icon = iconMap[iconName];
+    return <Icon />;
+  }
+
+  // Fallback based on category
+  switch (category) {
+    case 'charts':
+      return <BarChart3Icon />;
+    case 'data':
+      return <DatabaseIcon />;
+    case 'ui':
+      return <LayoutGridIcon />;
+    default:
+      return <LayoutGridIcon />;
+  }
+}
+
+// Map plateKey to actual KEYS values
+const plateKeyMap: Record<string, string> = {
+  'p': KEYS.p,
+  'h1': KEYS.h1,
+  'h2': KEYS.h2,
+  'h3': KEYS.h3,
+  'ul': KEYS.ul,
+  'ol': KEYS.ol,
+  'action_item': KEYS.listTodo,
+  'toggle': KEYS.toggle,
+  'code_block': KEYS.codeBlock,
+  'table': KEYS.table,
+  'blockquote': KEYS.blockquote,
+  'callout': KEYS.callout,
+  'hr': KEYS.hr,
+  'img': KEYS.img,
+  'video': KEYS.video,
+  'audio': KEYS.audio,
+  'file': KEYS.file,
+  'equation': KEYS.equation,
+  'toc': KEYS.toc,
+  'action_three_columns': 'action_three_columns',
+  'inline_equation': KEYS.inlineEquation,
+  'date': KEYS.date,
+};
+
+/**
+ * Build slash menu groups from stdlib registry
+ */
+function buildGroups(): Group[] {
+  const categories = listCategories();
+  const components = listComponents();
+
+  // AI group (special, not from registry)
+  const aiGroup: Group = {
     group: 'AI',
     items: [
       {
@@ -103,197 +199,89 @@ const groups: Group[] = [
         },
       },
     ],
-  },
-  {
-    group: 'Basic blocks',
-    items: [
-      {
-        description: 'Plain text.',
-        icon: <PilcrowIcon />,
-        keywords: ['paragraph'],
-        label: 'Text',
-        value: KEYS.p,
-      },
-      {
-        description: 'Large section heading.',
-        icon: <Heading1Icon />,
-        keywords: ['title', 'h1'],
-        label: 'Heading 1',
-        value: KEYS.h1,
-      },
-      {
-        description: 'Medium section heading.',
-        icon: <Heading2Icon />,
-        keywords: ['subtitle', 'h2'],
-        label: 'Heading 2',
-        value: KEYS.h2,
-      },
-      {
-        description: 'Small section heading.',
-        icon: <Heading3Icon />,
-        keywords: ['subtitle', 'h3'],
-        label: 'Heading 3',
-        value: KEYS.h3,
-      },
-      {
-        description: 'Create a bulleted list.',
-        icon: <ListIcon />,
-        keywords: ['unordered', 'ul', '-'],
-        label: 'Bulleted list',
-        value: KEYS.ul,
-      },
-      {
-        description: 'Create a numbered list.',
-        icon: <ListOrderedIcon />,
-        keywords: ['ordered', 'ol', '1'],
-        label: 'Numbered list',
-        value: KEYS.ol,
-      },
-      {
-        description: 'Insert a checklist for tasks.',
-        icon: <SquareIcon />,
-        keywords: ['checklist', 'task', 'checkbox', '[]'],
-        label: 'To-do list',
-        value: KEYS.listTodo,
-      },
-      {
-        description: 'Insert a collapsible section.',
-        icon: <ChevronDownIcon />,
-        keywords: ['collapsible', 'expandable'],
-        label: 'Toggle',
-        value: KEYS.toggle,
-      },
-      {
-        description: 'Insert a block for code.',
-        icon: <Code2Icon />,
-        keywords: ['```'],
-        label: 'Code Block',
-        value: KEYS.codeBlock,
-      },
-      {
-        description: 'Create a table for data.',
-        icon: <TableIcon />,
-        label: 'Table',
-        value: KEYS.table,
-      },
-      {
-        description: 'Insert a quote for emphasis.',
-        icon: <QuoteIcon />,
-        keywords: ['citation', 'blockquote', 'quote', '>'],
-        label: 'Blockquote',
-        value: KEYS.blockquote,
-      },
-      {
-        description: 'Insert a highlighted block.',
-        icon: <LightbulbIcon />,
-        keywords: ['note'],
-        label: 'Callout',
-        value: KEYS.callout,
-      },
-    ].map((item) => ({
-      ...item,
-      onSelect: (editor, value) => {
-        insertBlock(editor, value);
-      },
-    })),
-  },
-  {
-    group: 'Media',
-    items: [
-      {
-        description: 'Upload or embed an image.',
-        icon: <ImageIcon />,
-        keywords: ['media', 'img', 'picture', 'photo'],
-        label: 'Image',
-        value: KEYS.img,
-      },
-      {
-        description: 'Upload or embed a video.',
-        icon: <FilmIcon />,
-        keywords: ['media', 'video', 'movie'],
-        label: 'Video',
-        value: KEYS.video,
-      },
-      {
-        description: 'Upload or embed audio.',
-        icon: <AudioLinesIcon />,
-        keywords: ['media', 'audio', 'sound'],
-        label: 'Audio',
-        value: KEYS.audio,
-      },
-      {
-        description: 'Upload or link any file type.',
-        icon: <FileUpIcon />,
-        keywords: ['media', 'file', 'document', 'attachment'],
-        label: 'File',
-        value: KEYS.file,
-      },
-    ].map((item) => ({
-      ...item,
-      focusEditor: false,
-      onSelect: (editor, value) => {
-        insertBlock(editor, value);
-      },
-    })),
-  },
-  {
-    group: 'Advanced blocks',
-    items: [
-      {
-        description: 'Generate a table of contents.',
-        icon: <TableOfContentsIcon />,
-        keywords: ['toc'],
-        label: 'Table of content',
-        value: KEYS.toc,
-      },
-      {
-        description: 'Insert a block for equations.',
-        focusEditor: false,
-        icon: <RadicalIcon />,
-        keywords: ['math', 'formula'],
-        label: 'Equation',
-        value: KEYS.equation,
-      },
-      {
-        description: 'Create 3 columns of blocks.',
-        icon: <RectangleVerticalIcon />,
-        label: '3 columns',
-        value: 'action_three_columns',
-      },
-    ].map((item) => ({
-      ...item,
-      onSelect: (editor, value) => {
-        insertBlock(editor, value);
-      },
-    })),
-  },
-  {
+  };
+
+  // Build groups from registry categories
+  const registryGroups: Group[] = categories
+    .filter((cat) => !['inline', 'layout'].includes(cat.key)) // Handle these specially
+    .map((category) => {
+      const categoryComponents = components.filter(
+        (comp) => comp.category === category.key
+      );
+
+      return {
+        group: category.name,
+        items: categoryComponents.map((comp) => {
+          const plateKey = comp.plateKey ? plateKeyMap[comp.plateKey] : null;
+          const isStdlibComponent = comp.files && comp.files.length > 0;
+
+          return {
+            description: comp.description,
+            icon: getIcon(comp.icon, comp.category),
+            keywords: comp.keywords || [comp.key, comp.category],
+            label: comp.name,
+            value: plateKey || `stdlib:${comp.name}`,
+            focusEditor: ['media', 'blocks'].includes(comp.category) ? undefined : false,
+            onSelect: (editor: PlateEditor) => {
+              if (isStdlibComponent) {
+                // Custom stdlib component (ui, data, charts)
+                insertStdlibComponent(editor, comp.name);
+              } else if (plateKey) {
+                // Plate block type
+                insertBlock(editor, plateKey);
+              }
+            },
+          };
+        }),
+      };
+    })
+    .filter((group) => group.items.length > 0);
+
+  // Layout group (special handling for columns)
+  const layoutComponents = components.filter((comp) => comp.category === 'layout');
+  const layoutGroup: Group | null = layoutComponents.length > 0 ? {
+    group: 'Layout',
+    items: layoutComponents.map((comp) => {
+      const plateKey = comp.plateKey ? plateKeyMap[comp.plateKey] : null;
+      return {
+        description: comp.description,
+        icon: getIcon(comp.icon, comp.category),
+        keywords: comp.keywords || [comp.key],
+        label: comp.name,
+        value: plateKey || comp.key,
+        onSelect: (editor: PlateEditor) => {
+          if (plateKey) {
+            insertBlock(editor, plateKey);
+          }
+        },
+      };
+    }),
+  } : null;
+
+  // Inline group (special handling for inline elements)
+  const inlineComponents = components.filter((comp) => comp.category === 'inline');
+  const inlineGroup: Group | null = inlineComponents.length > 0 ? {
     group: 'Inline',
-    items: [
-      {
-        description: 'Insert an inline math equation.',
-        focusEditor: false,
-        icon: <RadicalIcon />,
-        keywords: ['math', 'inline', 'formula'],
-        label: 'Inline Equation',
-        value: KEYS.inlineEquation,
-      },
-      {
-        description: 'Insert current or custom date.',
-        focusEditor: true,
-        icon: <CalendarIcon />,
-        keywords: ['time'],
-        label: 'Date',
-        value: KEYS.date,
-      },
-    ].map((item) => ({
-      ...item,
-      onSelect: (editor, value) => {
-        insertInlineElement(editor, value);
-      },
-    })),
-  },
-  {
+    items: inlineComponents.map((comp) => {
+      const plateKey = comp.plateKey ? plateKeyMap[comp.plateKey] : null;
+      return {
+        description: comp.description,
+        focusEditor: comp.plateKey === 'date' ? true : false,
+        icon: getIcon(comp.icon, comp.category),
+        keywords: comp.keywords || [comp.key],
+        label: comp.name,
+        value: plateKey || comp.key,
+        onSelect: (editor: PlateEditor) => {
+          if (plateKey) {
+            insertInlineElement(editor, plateKey);
+          }
+        },
+      };
+    }),
+  } : null;
+
+  // Turn into group
+  const turnIntoGroup: Group = {
     group: 'Turn into',
     items: turnIntoItems.map((item) => ({
       ...item,
@@ -301,8 +289,10 @@ const groups: Group[] = [
         setBlockType(editor, item.value);
       },
     })),
-  },
-  {
+  };
+
+  // Actions group
+  const actionsGroup: Group = {
     group: 'Actions',
     items: [
       {
@@ -318,8 +308,10 @@ const groups: Group[] = [
         },
       },
     ],
-  },
-  {
+  };
+
+  // Text color group
+  const textColorGroup: Group = {
     group: 'Text color',
     items: textColorItems.map((item) => ({
       ...item,
@@ -331,8 +323,10 @@ const groups: Group[] = [
         );
       },
     })),
-  },
-  {
+  };
+
+  // Background color group
+  const bgColorGroup: Group = {
     group: 'Background color',
     items: backgroundColorItems.map((item) => ({
       ...item,
@@ -344,8 +338,23 @@ const groups: Group[] = [
         );
       },
     })),
-  },
-];
+  };
+
+  // Combine all groups
+  return [
+    aiGroup,
+    ...registryGroups,
+    ...(layoutGroup ? [layoutGroup] : []),
+    ...(inlineGroup ? [inlineGroup] : []),
+    turnIntoGroup,
+    actionsGroup,
+    textColorGroup,
+    bgColorGroup,
+  ];
+}
+
+// Build groups once at module load
+const groups = buildGroups();
 
 export function SlashInputElement(props: PlateElementProps) {
   const { children, editor, element } = props;
@@ -382,7 +391,7 @@ export function SlashInputElement(props: PlateElementProps) {
                   >
                     {description ? (
                       <>
-                        <div className="flex size-11 items-center justify-center rounded border border-foreground/15 bg-white [&_svg]:size-5 [&_svg]:text-subtle-foreground">
+                        <div className="flex size-11 items-center justify-center rounded border border-border bg-background [&_svg]:size-5 [&_svg]:text-subtle-foreground">
                           {icon}
                         </div>
                         <div className="ml-3 flex flex-1 flex-col truncate">

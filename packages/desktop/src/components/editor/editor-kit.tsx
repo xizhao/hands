@@ -36,6 +36,7 @@ import { SuggestionKit } from './plugins/suggestion-kit';
 import { TableKit } from './plugins/table-kit';
 import { TocKit } from './plugins/toc-kit';
 import { ToggleKit } from './plugins/toggle-kit';
+import { StdlibComponentKit } from './plugins/stdlib-component-kit';
 
 export const EditorKit = [
   ...CopilotKit,
@@ -46,6 +47,7 @@ export const EditorKit = [
   // Elements
   ...BasicBlocksKit,
   ...BlockKit,
+  ...StdlibComponentKit, // Stdlib components for block editor
   ...CodeBlockKit,
   ...TableKit,
   ...ToggleKit,

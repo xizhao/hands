@@ -1,0 +1,54 @@
+{
+  "name": "@hands/editor",
+  "version": "0.0.1",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./oplog": "./src/oplog/index.ts",
+    "./ast": "./src/ast/index.ts",
+    "./scene": "./src/scene/index.ts",
+    "./components": "./src/components/index.ts"
+  },
+  "scripts": {
+    "dev": "vite",
+    "start": "vite",
+    "build": "tsc",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "@babel/generator": "^7.28.5",
+    "@babel/parser": "^7.28.5",
+    "@babel/types": "^7.28.5",
+    "@codemirror/lang-javascript": "^6.2.0",
+    "@codemirror/theme-one-dark": "^6.1.0",
+    "@hands/stdlib": "workspace:*",
+    "@platejs/basic-nodes": "^52.0.1",
+    "@platejs/combobox": "^52.0.1",
+    "@platejs/dnd": "^52.0.1",
+    "@platejs/selection": "^52.0.1",
+    "@platejs/slash-command": "^52.0.1",
+    "@uiw/react-codemirror": "^4.21.0",
+    "class-variance-authority": "^0.7.0",
+    "clsx": "^2.1.0",
+    "codemirror": "^6.0.0",
+    "lucide-react": "^0.468.0",
+    "platejs": "^52.0.8",
+    "react": "^19.0.0",
+    "react-dnd": "^16.0.1",
+    "react-dnd-html5-backend": "^16.0.1",
+    "react-dom": "^19.0.0",
+    "slate": "^0.112.0",
+    "slate-react": "^0.112.0",
+    "tailwind-merge": "^2.2.0"
+  },
+  "devDependencies": {
+    "@types/react": "^19.2.0",
+    "@types/react-dom": "^19.2.0",
+    "@vitejs/plugin-react": "^4.2.0",
+    "tailwindcss": "^3.4.0",
+    "autoprefixer": "^10.4.0",
+    "postcss": "^8.4.0",
+    "typescript": "^5.3.0",
+    "vite": "^5.0.0"
+  }
+}

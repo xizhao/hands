@@ -174,7 +174,7 @@ const ImagePlaceholder = ({ file }: { file?: File }) => {
   }, [objectUrl]);
 
   return (
-    <div className="relative h-full overflow-hidden bg-[rgb(247,246,245)] before:absolute before:inset-0 before:z-10 before:animate-shimmer before:bg-linear-to-r before:from-transparent before:via-gray-200/50 before:to-transparent">
+    <div className="relative h-full overflow-hidden bg-muted before:absolute before:inset-0 before:z-10 before:animate-shimmer before:bg-linear-to-r before:from-transparent before:via-foreground/10 before:to-transparent">
       {file && objectUrl && (
         <img
           alt={file.name}

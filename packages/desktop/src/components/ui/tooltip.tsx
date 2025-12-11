@@ -34,14 +34,16 @@ export function TooltipContent({
   ...props
 }: React.ComponentProps<typeof TooltipPrimitive.Content>) {
   return (
-    <TooltipPrimitive.Content
-      className={cn(
-        'z-9999 overflow-hidden rounded-md bg-primary px-2 py-1.5 font-semibold text-primary-foreground text-xs shadow-md',
-        className
-      )}
-      sideOffset={sideOffset}
-      {...props}
-    />
+    <TooltipPrimitive.Portal>
+      <TooltipPrimitive.Content
+        className={cn(
+          'z-[9999] overflow-hidden rounded-md bg-primary px-2 py-1.5 font-semibold text-primary-foreground text-xs shadow-md',
+          className
+        )}
+        sideOffset={sideOffset}
+        {...props}
+      />
+    </TooltipPrimitive.Portal>
   );
 }
 
@@ -127,7 +129,7 @@ export function withTooltip<T extends React.ElementType>(Component: T) {
               <TooltipContent {...tooltipContentProps}>
                 {tooltip}
                 {shortcut && (
-                  <div className="mt-px text-gray-400">{shortcut}</div>
+                  <div className="mt-px text-muted-foreground">{shortcut}</div>
                 )}
               </TooltipContent>
             </TooltipPortal>

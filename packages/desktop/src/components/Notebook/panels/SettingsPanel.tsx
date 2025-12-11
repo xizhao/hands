@@ -14,6 +14,7 @@ import {
   Eye,
   EyeSlash,
   Trash,
+  FolderOpen,
 } from "@phosphor-icons/react";
 import { cn } from "@/lib/utils";
 
@@ -85,6 +86,17 @@ function GeneralSettings() {
   const { data: workbook } = useWorkbook(activeWorkbookId);
   const updateWorkbook = useUpdateWorkbook();
 
+  const handleOpenInFinder = async () => {
+    if (workbook?.directory) {
+      try {
+        const { open } = await import("@tauri-apps/plugin-shell");
+        await open(workbook.directory);
+      } catch (err) {
+        console.error("Failed to open directory:", err);
+      }
+    }
+  };
+
   return (
     <div className="space-y-4">
       <div>
@@ -106,8 +118,23 @@ function GeneralSettings() {
       </div>
       <div>
         <label className="text-xs font-medium text-muted-foreground">Directory</label>
-        <div className="mt-1 px-2 py-1.5 text-sm text-muted-foreground bg-muted/50 rounded-md font-mono truncate">
-          {workbook?.directory ?? "—"}
+        <div className="mt-1 flex items-center gap-2">
+          <div className="flex-1 px-2 py-1.5 text-sm text-muted-foreground bg-muted/50 rounded-md font-mono truncate">
+            {workbook?.directory ?? "—"}
+          </div>
+          <button
+            onClick={handleOpenInFinder}
+            disabled={!workbook?.directory}
+            className={cn(
+              "p-1.5 rounded-md transition-colors",
+              workbook?.directory
+                ? "text-muted-foreground hover:text-foreground hover:bg-accent"
+                : "text-muted-foreground/30 cursor-not-allowed"
+            )}
+            title="Open in Finder"
+          >
+            <FolderOpen weight="duotone" className="h-4 w-4" />
+          </button>
         </div>
       </div>
     </div>

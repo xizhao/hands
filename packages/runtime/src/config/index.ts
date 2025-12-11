@@ -11,8 +11,15 @@ import { join } from "path"
 
 // Source configuration
 export const SourceConfigSchema = z.object({
+  /** Whether this source is enabled */
   enabled: z.boolean().default(true),
+  /** Cron schedule for automatic sync (e.g., "0 *\/6 * * *" for every 6 hours) */
   schedule: z.string().optional(),
+  /** Whether to sync automatically on schedule */
+  autoSync: z.boolean().default(true),
+  /** Whether to sync when runtime starts */
+  syncOnStart: z.boolean().default(false),
+  /** Source-specific options */
   options: z.record(z.unknown()).optional(),
 })
 
@@ -166,6 +173,7 @@ export async function initWorkbook(options: InitWorkbookOptions): Promise<void> 
   mkdirSync(join(directory, "pages"), { recursive: true })
   mkdirSync(join(directory, "migrations"), { recursive: true })
   mkdirSync(join(directory, "lib"), { recursive: true })
+  mkdirSync(join(directory, "sources"), { recursive: true })
 
   // Create hands.json
   const handsJson: HandsJson = {
