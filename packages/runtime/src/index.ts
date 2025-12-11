@@ -597,6 +597,87 @@ function createApp(config: RuntimeConfig) {
     return c.json({ success: true, blockId })
   })
 
+  // Move/rename block with automatic import updates
+  app.post("/workbook/blocks/move", async (c) => {
+    const { from, to } = await c.req.json<{ from: string; to: string }>()
+
+    if (!from || !to) {
+      return c.json({ error: "Missing 'from' or 'to' in request body" }, 400)
+    }
+
+    const blocksDir = join(config.workbookDir, "blocks")
+
+    // Find source file
+    let sourceExt: string | null = null
+    for (const ext of [".tsx", ".ts"]) {
+      if (existsSync(join(blocksDir, from + ext))) {
+        sourceExt = ext
+        break
+      }
+    }
+
+    if (!sourceExt) {
+      return c.json({ error: `Block not found: ${from}` }, 404)
+    }
+
+    const sourcePath = join(blocksDir, from + sourceExt)
+    const targetPath = join(blocksDir, to + sourceExt)
+
+    // Check target doesn't already exist
+    if (existsSync(targetPath)) {
+      return c.json({ error: `Target already exists: ${to}` }, 409)
+    }
+
+    try {
+      // Use ts-morph to move file and update all imports
+      const { Project } = await import("ts-morph")
+
+      // Check for tsconfig, create minimal one if missing
+      const tsconfigPath = join(config.workbookDir, "tsconfig.json")
+      let project: InstanceType<typeof Project>
+
+      if (existsSync(tsconfigPath)) {
+        project = new Project({ tsConfigFilePath: tsconfigPath })
+      } else {
+        // Create project without tsconfig, manually add source files
+        project = new Project({ useInMemoryFileSystem: false })
+        // Add all ts/tsx files in blocks directory
+        project.addSourceFilesAtPaths(join(blocksDir, "**/*.{ts,tsx}"))
+      }
+
+      const sourceFile = project.getSourceFile(sourcePath)
+      if (!sourceFile) {
+        return c.json({ error: "Could not parse source file" }, 500)
+      }
+
+      // Ensure target directory exists
+      const { mkdirSync } = await import("fs")
+      const targetDir = targetPath.substring(0, targetPath.lastIndexOf("/"))
+      if (!existsSync(targetDir)) {
+        mkdirSync(targetDir, { recursive: true })
+      }
+
+      // Move file - ts-morph updates all imports automatically
+      sourceFile.move(targetPath)
+
+      // Save all changes
+      await project.save()
+
+      state.lintResult = null
+
+      return c.json({
+        success: true,
+        from,
+        to,
+        message: "Block moved and imports updated",
+      })
+    } catch (err) {
+      return c.json({
+        error: `Failed to move block: ${err instanceof Error ? err.message : String(err)}`,
+      }, 500)
+    }
+  })
+
   // DB routes - require DB ready
   app.post("/db/query", async (c) => {
     if (!state.dbReady || !state.workbookDb) {

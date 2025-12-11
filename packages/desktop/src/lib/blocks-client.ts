@@ -336,6 +336,37 @@ export async function deleteBlock(
 }
 
 /**
+ * Move/rename a block (updates imports automatically)
+ */
+export interface MoveBlockResult {
+  success: boolean;
+  from?: string;
+  to?: string;
+  message?: string;
+  error?: string;
+}
+
+export async function moveBlock(
+  port: number,
+  from: string,
+  to: string
+): Promise<MoveBlockResult> {
+  try {
+    const response = await fetch(`http://localhost:${port}/workbook/blocks/move`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ from, to }),
+    });
+    return await response.json();
+  } catch (error) {
+    return {
+      success: false,
+      error: String(error),
+    };
+  }
+}
+
+/**
  * React hook for fetching block source code
  */
 export function useBlockSource(blockId: string | null) {
@@ -396,5 +427,36 @@ export function useBlockSource(blockId: string | null) {
     source: query.data?.source,
     filePath: query.data?.filePath,
   };
+}
+
+/**
+ * React hook for moving/renaming blocks
+ */
+export function useMoveBlock() {
+  const port = useRuntimePort();
+  const queryClient = useQueryClient();
+
+  const move = useCallback(
+    async (from: string, to: string): Promise<MoveBlockResult> => {
+      if (!port) {
+        return { success: false, error: "No runtime connected" };
+      }
+
+      const result = await moveBlock(port, from, to);
+
+      if (result.success) {
+        // Invalidate manifest to refresh block list
+        queryClient.invalidateQueries({ queryKey: ["manifest"] });
+        // Invalidate old block caches
+        queryClient.invalidateQueries({ queryKey: ["block", port, from] });
+        queryClient.invalidateQueries({ queryKey: ["blockSource", port, from] });
+      }
+
+      return result;
+    },
+    [port, queryClient]
+  );
+
+  return { move, isReady: !!port };
 }
 

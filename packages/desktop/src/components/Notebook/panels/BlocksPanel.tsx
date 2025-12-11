@@ -3,10 +3,11 @@
  * Groups blocks by folder (parentDir)
  */
 
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { useManifest, type WorkbookBlock } from "@/hooks/useWorkbook";
-import { SquaresFour, CaretRight, Sparkle, Plus, ArrowSquareOut, Folder } from "@phosphor-icons/react";
+import { SquaresFour, CaretRight, Sparkle, Plus, ArrowSquareOut } from "@phosphor-icons/react";
 import { cn } from "@/lib/utils";
+import { ChevronRight } from "lucide-react";
 import { useNavigate } from "@tanstack/react-router";
 
 // Group blocks by parentDir
@@ -35,9 +36,22 @@ export function BlocksPanel() {
   const { data: manifest } = useManifest();
   const navigate = useNavigate();
   const blocks = manifest?.blocks ?? [];
+  const [expandedDirs, setExpandedDirs] = useState<Set<string>>(new Set());
 
   // Group blocks by folder
   const groupedBlocks = useMemo(() => groupBlocksByFolder(blocks), [blocks]);
+
+  const toggleDir = (dir: string) => {
+    setExpandedDirs(prev => {
+      const next = new Set(prev);
+      if (next.has(dir)) {
+        next.delete(dir);
+      } else {
+        next.add(dir);
+      }
+      return next;
+    });
+  };
 
   // Loading handled by useManifest - manifest will be undefined initially
   if (!manifest) {
@@ -93,42 +107,77 @@ export function BlocksPanel() {
           </button>
         </div>
       ) : (
-        <div className="space-y-2">
-          {[...groupedBlocks.entries()].map(([folder, folderBlocks]) => (
-            <div key={folder || "__root__"}>
-              {/* Folder header (only show for non-root folders) */}
-              {folder && (
-                <div className="flex items-center gap-1.5 px-2 py-1 text-xs text-muted-foreground">
-                  <Folder weight="duotone" className="h-3.5 w-3.5" />
-                  <span>{folder}</span>
-                </div>
-              )}
-              {/* Blocks in this folder */}
-              <div className={cn("space-y-0.5", folder && "ml-2")}>
-                {folderBlocks.map((block) => (
-                  <button
-                    key={block.id}
-                    onClick={() => navigate({ to: "/blocks/$blockId", params: { blockId: block.id } })}
-                    className={cn(
-                      "w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-left",
-                      "text-sm text-foreground hover:bg-accent transition-colors"
+        <div className="space-y-0.5">
+          {[...groupedBlocks.entries()].map(([folder, folderBlocks]) => {
+            const isExpanded = expandedDirs.has(folder);
+
+            // Root blocks (no folder)
+            if (!folder) {
+              return folderBlocks.map((block) => (
+                <button
+                  key={block.id}
+                  onClick={() => navigate({ to: "/blocks/$blockId", params: { blockId: block.id } })}
+                  className={cn(
+                    "w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-left",
+                    "text-sm text-foreground hover:bg-accent transition-colors"
+                  )}
+                >
+                  <Sparkle weight="duotone" className="h-4 w-4 text-purple-400 shrink-0" />
+                  <div className="flex-1 min-w-0">
+                    <div className="truncate">{block.title}</div>
+                    {block.description && (
+                      <div className="text-xs text-muted-foreground truncate">
+                        {block.description}
+                      </div>
                     )}
-                  >
-                    <Sparkle weight="duotone" className="h-4 w-4 text-purple-400 shrink-0" />
-                    <div className="flex-1 min-w-0">
-                      <div className="truncate">{block.title}</div>
-                      {block.description && (
-                        <div className="text-xs text-muted-foreground truncate">
-                          {block.description}
+                  </div>
+                  <CaretRight weight="bold" className="h-3 w-3 text-muted-foreground/50 shrink-0" />
+                </button>
+              ));
+            }
+
+            // Folder with blocks
+            return (
+              <div key={folder}>
+                <button
+                  onClick={() => toggleDir(folder)}
+                  className="w-full flex items-center gap-1.5 px-2 py-1 text-sm text-muted-foreground/70 hover:text-foreground transition-colors"
+                >
+                  <ChevronRight className={cn(
+                    "h-3 w-3 shrink-0 transition-transform",
+                    isExpanded && "rotate-90"
+                  )} />
+                  <span className="flex-1 truncate text-left">{folder}</span>
+                  <span className="text-[10px] text-muted-foreground/40">{folderBlocks.length}</span>
+                </button>
+                {isExpanded && (
+                  <div className="ml-3 border-l border-border/30 pl-2">
+                    {folderBlocks.map((block) => (
+                      <button
+                        key={block.id}
+                        onClick={() => navigate({ to: "/blocks/$blockId", params: { blockId: block.id } })}
+                        className={cn(
+                          "w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-left",
+                          "text-sm text-foreground hover:bg-accent transition-colors"
+                        )}
+                      >
+                        <Sparkle weight="duotone" className="h-4 w-4 text-purple-400 shrink-0" />
+                        <div className="flex-1 min-w-0">
+                          <div className="truncate">{block.title}</div>
+                          {block.description && (
+                            <div className="text-xs text-muted-foreground truncate">
+                              {block.description}
+                            </div>
+                          )}
                         </div>
-                      )}
-                    </div>
-                    <CaretRight weight="bold" className="h-3 w-3 text-muted-foreground/50 shrink-0" />
-                  </button>
-                ))}
+                        <CaretRight weight="bold" className="h-3 w-3 text-muted-foreground/50 shrink-0" />
+                      </button>
+                    ))}
+                  </div>
+                )}
               </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       )}
     </div>

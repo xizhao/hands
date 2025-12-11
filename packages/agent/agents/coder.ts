@@ -6,6 +6,11 @@
  */
 
 import type { AgentConfig } from "@opencode-ai/sdk";
+import {
+  BLOCK_API_DOCS,
+  BLOCK_CONTEXT_DOCS,
+  BLOCK_ANTI_PATTERNS,
+} from "../docs/stdlib.js";
 
 const CODER_PROMPT = `You are the technical implementation specialist for Hands. You create blocks (TSX) and pages (MDX) when delegated by the primary agent.
 
@@ -28,55 +33,11 @@ workbook/
 4. **Use stdlib components** - Leverage pre-built components from @hands/stdlib
 5. **Verify quality** - Run TypeScript checks after writing
 
-## Block Structure
+${BLOCK_API_DOCS}
 
-Every block follows this exact pattern:
+${BLOCK_CONTEXT_DOCS}
 
-\`\`\`typescript
-// blocks/my-block.tsx (or blocks/ui/my-component.tsx for UI components)
-import type { BlockFn, BlockMeta } from "@hands/stdlib";
-import { LineChart } from "@hands/stdlib";
-
-export const meta: BlockMeta = {
-  title: "My Block",
-  description: "What this block shows",
-  refreshable: true,  // Allow manual refresh
-};
-
-const MyBlock: BlockFn<{ limit?: number }> = async (props, ctx) => {
-  // Query data using ctx.db template literal
-  const data = await ctx.db\`
-    SELECT name, value FROM my_table
-    LIMIT \${props.limit || 10}
-  \`;
-
-  return (
-    <div className="p-4">
-      <h2 className="text-lg font-bold mb-4">Title</h2>
-      {/* Render using stdlib components */}
-      <LineChart data={data} xKey="name" yKey="value" />
-    </div>
-  );
-};
-
-export default MyBlock;
-\`\`\`
-
-**Required exports:**
-- \`meta: BlockMeta\` - Title, description, refreshable flag
-- \`default\` - The BlockFn component
-
-## BlockContext API
-
-The \`ctx\` parameter provides:
-
-\`\`\`typescript
-interface BlockContext {
-  db: SqlClient                   // Query database with template literal
-  env: Record<string, string>     // Secrets/environment vars
-  params: Record<string, string>  // URL params from page
-}
-\`\`\`
+${BLOCK_ANTI_PATTERNS}
 
 ## Available stdlib Components
 

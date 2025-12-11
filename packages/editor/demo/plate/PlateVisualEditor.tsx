@@ -17,6 +17,7 @@ import { Plate, PlateContainer, PlateContent, usePlateEditor, createPlatePlugin 
 import type { Operation } from 'slate'
 
 import { EditorKit } from './editor-kit'
+import { elementFallbackRenderer } from './plugins/element-plugin'
 import { sourceToPlateValueSurgical } from './surgical-converters'
 import { parseSourceWithLocations, type ParseResult } from '../../src/ast/oxc-parser'
 import { applySlateOperations } from '../../src/ast/slate-operations'
@@ -172,6 +173,7 @@ export function PlateVisualEditor({
               '[&_.slate-selectable]:relative'
             )}
             placeholder="Type / to add blocks..."
+            renderElement={elementFallbackRenderer}
           />
         </PlateContainer>
       </Plate>

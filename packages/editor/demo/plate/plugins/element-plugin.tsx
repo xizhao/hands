@@ -10,14 +10,23 @@
  */
 
 import * as React from 'react'
-import { useState, useEffect, useMemo, Suspense, lazy, forwardRef } from 'react'
-import { createPlatePlugin, type PlateRenderElementProps, type RenderNodeWrapper } from 'platejs/react'
+import { useState, useEffect, useMemo } from 'react'
+import { createPlatePlugin, type PlateElementProps } from 'platejs/react'
+import type { RenderElementProps } from 'slate-react'
 import type { TElement } from 'platejs'
 import { cn } from '../../lib/utils'
 import { useRsc, useRscAvailable } from '../../../src/rsc'
 import type { ComponentType } from 'react'
 // Import stdlib registry for component discovery
 import { listComponents, type ComponentMeta } from '@hands/stdlib/registry'
+
+// Direct imports for stdlib components
+import {
+  Button,
+  Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter,
+  Badge,
+  MetricCard,
+} from '@hands/stdlib'
 
 // ============================================================================
 // Constants
@@ -61,7 +70,7 @@ export const HTML_ELEMENTS = new Set([
 /**
  * Reserved Plate keys - filter these out of DOM props
  */
-const RESERVED_KEYS = new Set(['type', 'id', 'children', 'isVoid'])
+const RESERVED_KEYS = new Set(['type', 'id', 'children', 'isVoid', 'jsxProps'])
 
 // ============================================================================
 // Element Classification
@@ -143,69 +152,26 @@ export function isStdlibComponent(name: string): boolean {
 }
 
 /**
- * Map component names to their import paths in @hands/stdlib
- * Format: componentName -> { path: import path, exportName: named export }
+ * Static component map - maps component names to their implementations
+ * Using direct imports since dynamic imports don't resolve package aliases at runtime
  */
-const COMPONENT_IMPORT_MAP: Record<string, { path: string; exportName: string }> = {
-  Button: { path: '@hands/stdlib/registry/components/ui/button', exportName: 'Button' },
-  Card: { path: '@hands/stdlib/registry/components/ui/card', exportName: 'Card' },
-  CardHeader: { path: '@hands/stdlib/registry/components/ui/card', exportName: 'CardHeader' },
-  CardTitle: { path: '@hands/stdlib/registry/components/ui/card', exportName: 'CardTitle' },
-  CardDescription: { path: '@hands/stdlib/registry/components/ui/card', exportName: 'CardDescription' },
-  CardContent: { path: '@hands/stdlib/registry/components/ui/card', exportName: 'CardContent' },
-  CardFooter: { path: '@hands/stdlib/registry/components/ui/card', exportName: 'CardFooter' },
-  Badge: { path: '@hands/stdlib/registry/components/ui/badge', exportName: 'Badge' },
-  MetricCard: { path: '@hands/stdlib/registry/components/data/metric-card', exportName: 'MetricCard' },
-  DataTable: { path: '@hands/stdlib/registry/components/data/data-table', exportName: 'DataTable' },
-  LineChart: { path: '@hands/stdlib/registry/components/charts/line-chart', exportName: 'LineChart' },
-  BarChart: { path: '@hands/stdlib/registry/components/charts/bar-chart', exportName: 'BarChart' },
-}
-
-// Cache for loaded components
-const componentCache = new Map<string, ComponentType<any>>()
-
-function createLazyComponent<P extends object>(
-  loader: () => Promise<{ default: ComponentType<P> } | { [key: string]: ComponentType<P> }>,
-  exportName: string
-): ComponentType<P> {
-  const LazyComponent = lazy(async () => {
-    const mod = await loader()
-    if (exportName in mod) {
-      return { default: (mod as Record<string, ComponentType<P>>)[exportName] }
-    }
-    return mod as { default: ComponentType<P> }
-  })
-
-  return forwardRef<unknown, P>((props, ref) => (
-    <Suspense fallback={<div className="animate-pulse bg-gray-200 h-8 rounded" />}>
-      <LazyComponent {...props} ref={ref} />
-    </Suspense>
-  )) as unknown as ComponentType<P>
+const STDLIB_COMPONENT_MAP: Record<string, ComponentType<any>> = {
+  Button,
+  Card,
+  CardHeader,
+  CardTitle,
+  CardDescription,
+  CardContent,
+  CardFooter,
+  Badge,
+  MetricCard,
 }
 
 /**
- * Get a stdlib component by name, lazily loaded
+ * Get a stdlib component by name
  */
 export function getStdlibComponent(name: string): ComponentType<any> | null {
-  // Check cache first
-  if (componentCache.has(name)) {
-    return componentCache.get(name)!
-  }
-
-  const importInfo = COMPONENT_IMPORT_MAP[name]
-  if (!importInfo) {
-    return null
-  }
-
-  // Create lazy component with dynamic import
-  // @ts-expect-error - Dynamic import paths
-  const LazyComp = createLazyComponent(
-    () => import(/* @vite-ignore */ importInfo.path),
-    importInfo.exportName
-  )
-
-  componentCache.set(name, LazyComp)
-  return LazyComp
+  return STDLIB_COMPONENT_MAP[name] ?? null
 }
 
 /**
@@ -254,7 +220,7 @@ function getDomProps(element: any): Record<string, unknown> {
  *
  * Renders any element - HTML or custom component
  */
-function ElementRenderer(props: PlateRenderElementProps) {
+function ElementRenderer(props: RenderElementProps) {
   const { attributes, children, element } = props
   const type = (element as any).type as string
   const domProps = getDomProps(element)
@@ -575,6 +541,25 @@ function ComponentPlaceholder({
 }
 
 // ============================================================================
+// Fallback Renderer for Unknown Types
+// ============================================================================
+
+/**
+ * Fallback element renderer for Plate.
+ * 
+ * This is passed to PlateContent's renderElement prop to handle any element
+ * types that don't have a registered plugin. Without this, unknown types
+ * render as empty void divs with data-slate-spacer.
+ * 
+ * Returns undefined for known types (letting Plate's plugin system handle them),
+ * and renders via ElementRenderer for unknown types.
+ */
+export function elementFallbackRenderer(props: RenderElementProps): React.ReactElement {
+  // Route all elements through ElementRenderer
+  return <ElementRenderer {...(props as any)} />
+}
+
+// ============================================================================
 // Plugin Definition
 // ============================================================================
 
@@ -582,47 +567,14 @@ function ComponentPlaceholder({
  * Unified Element Plugin
  *
  * Single plugin that:
- * 1. Renders ALL elements (HTML + custom components)
- * 2. Handles isVoid consistently (only HTML void tags + explicit isVoid)
- * 3. Handles isElement (any object with type + children)
+ * 1. Extends isElement/isVoid for dynamic element detection
+ * 2. Provides elementFallbackRenderer for use with PlateContent
+ * 
+ * NOTE: We no longer pre-register types. Instead, use elementFallbackRenderer
+ * as the renderElement prop on PlateContent to handle ALL element types dynamically.
  */
-/**
- * Create a dynamic plugin for a specific element type
- */
-function createElementTypePlugin(type: string) {
-  return createPlatePlugin({
-    key: type,
-    node: {
-      isElement: true,
-      isVoid: isCustomComponent(type), // Custom components are void by default
-      type,
-      component: ElementRenderer,
-    },
-  })
-}
-
-// Pre-register known stdlib components
-const KNOWN_COMPONENT_TYPES = [
-  'MetricCard', 'Button', 'Card', 'CardHeader', 'CardTitle', 'CardDescription',
-  'CardContent', 'CardFooter', 'Badge', 'DataTable', 'LineChart', 'BarChart',
-]
-
-// Pre-register common HTML elements
-const KNOWN_HTML_TYPES = [
-  'div', 'span', 'section', 'article', 'header', 'footer', 'main', 'nav',
-  'aside', 'figure', 'figcaption', 'ul', 'ol', 'li', 'table', 'thead',
-  'tbody', 'tr', 'td', 'th', 'form', 'label', 'textarea', 'select',
-  'button', 'a', 'img', 'video', 'audio', 'canvas', 'svg',
-]
-
 export const ElementPlugin = createPlatePlugin({
   key: 'element',
-
-  // Register plugins for all known types
-  plugins: [
-    ...KNOWN_COMPONENT_TYPES.map(createElementTypePlugin),
-    ...KNOWN_HTML_TYPES.map(createElementTypePlugin),
-  ],
 
   extendEditor: ({ editor }) => {
     const origIsElement = editor.isElement
