@@ -2,6 +2,7 @@
   "dependencies": {
     "class-variance-authority": "^0.7.0",
     "clsx": "^2.1.1",
+    "recharts": "^2.15.0",
     "tailwind-merge": "^2.5.2",
     "zod": "^3.23.8"
   },
@@ -21,9 +22,9 @@
     "createdAt": 1765069644297,
     "description": null,
     "id": "stdlib",
-    "lastOpenedAt": 1765069644297,
+    "lastOpenedAt": 1765492610204,
     "name": "stdlib",
-    "updatedAt": 1765069644297
+    "updatedAt": 1765492610204
   },
   "main": "./src/index.ts",
   "name": "@hands/stdlib",

@@ -111,6 +111,63 @@ export function ensureStdlibSymlink(): string {
 }
 
 /**
+ * Ensure the workbook's node_modules/@hands/stdlib symlink exists and is correct.
+ * This repairs broken or stale symlinks when loading a workbook.
+ */
+export function ensureWorkbookStdlibSymlink(workbookDir: string): void {
+  const nodeModulesDir = join(workbookDir, "node_modules", "@hands")
+  const symlinkPath = join(nodeModulesDir, "stdlib")
+  const targetPath = getStdlibSymlinkPath() // ~/.hands/stdlib
+
+  // Ensure the global stdlib symlink exists first
+  ensureStdlibSymlink()
+
+  // Ensure node_modules/@hands directory exists
+  if (!existsSync(nodeModulesDir)) {
+    mkdirSync(nodeModulesDir, { recursive: true })
+  }
+
+  // Check if symlink already exists (use lstat to detect broken symlinks too)
+  try {
+    const stat = lstatSync(symlinkPath)
+    if (stat.isSymbolicLink()) {
+      const currentTarget = readlinkSync(symlinkPath)
+      if (currentTarget === targetPath) {
+        // Symlink already correct
+        return
+      }
+      // Symlink points to wrong location, remove it
+      console.log(`[config] Fixing workbook stdlib symlink: ${currentTarget} -> ${targetPath}`)
+      unlinkSync(symlinkPath)
+    } else {
+      // It's a file or directory, remove it
+      unlinkSync(symlinkPath)
+    }
+  } catch (e) {
+    // ENOENT means nothing exists at path - that's fine, we'll create it
+    if ((e as NodeJS.ErrnoException).code !== "ENOENT") {
+      // Some other error, try to remove and recreate
+      try {
+        unlinkSync(symlinkPath)
+      } catch {
+        // Ignore errors
+      }
+    }
+  }
+
+  // Create symlink
+  try {
+    symlinkSync(targetPath, symlinkPath)
+    console.log(`[config] Created workbook stdlib symlink: ${symlinkPath} -> ${targetPath}`)
+  } catch (err) {
+    // Only log if it's not EEXIST (which means it already exists and is fine)
+    if ((err as NodeJS.ErrnoException).code !== "EEXIST") {
+      console.error(`[config] Failed to create workbook stdlib symlink:`, err)
+    }
+  }
+}
+
+/**
  * Get the path to use for @hands/stdlib in workbook package.json
  * Uses the ~/.hands/stdlib symlink for portability
  */

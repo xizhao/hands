@@ -26,7 +26,7 @@ import { lintBlockRefs, type BlockLintResult } from "./blocks/lint.js"
 import type { BlockContext } from "./ctx.js"
 import { registerSourceRoutes, checkMissingSecrets } from "./sources/index.js"
 import type { SourceDefinition } from "@hands/stdlib/sources"
-import { ensureStdlibSymlink } from "./config/index.js"
+import { ensureStdlibSymlink, ensureWorkbookStdlibSymlink } from "./config/index.js"
 
 interface RuntimeConfig {
   workbookId: string
@@ -1109,6 +1109,9 @@ async function main() {
 
   // Ensure stdlib symlink exists at ~/.hands/stdlib
   ensureStdlibSymlink()
+
+  // Repair workbook's node_modules/@hands/stdlib symlink if broken
+  ensureWorkbookStdlibSymlink(workbookDir)
 
   // Preflight: Check for hands.json before starting anything
   const handsJsonPath = join(workbookDir, "hands.json")

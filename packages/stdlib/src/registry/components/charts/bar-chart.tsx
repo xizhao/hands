@@ -1,23 +1,59 @@
 /** @jsxImportSource react */
-import * as React from "react";
-import { cn } from "../../../lib/utils.js";
+"use client"
+
+import * as React from "react"
+import { Bar, BarChart as RechartsBarChart, CartesianGrid, XAxis, YAxis } from "recharts"
+import { cn } from "../../../lib/utils.js"
+import {
+  ChartConfig,
+  ChartContainer,
+  ChartTooltip,
+  ChartTooltipContent,
+  ChartLegend,
+  ChartLegendContent,
+} from "../ui/chart.js"
 
 export interface BarChartProps<T extends Record<string, unknown>> {
-  data: T[];
-  /** X-axis key (alias: xKey) */
-  x?: keyof T;
-  /** Y-axis key (alias: yKey) */
-  y?: keyof T;
-  /** X-axis key (alias: x) */
-  xKey?: keyof T;
-  /** Y-axis key (alias: y) */
-  yKey?: keyof T;
-  className?: string;
-  height?: number;
-  color?: string;
-  horizontal?: boolean;
-  formatX?: (value: unknown) => string;
-  formatY?: (value: number) => string;
+  /** Data array to visualize */
+  data: T[]
+  /** X-axis key (category/label) */
+  x?: keyof T
+  /** Y-axis key(s) - can be single key or array for multi-series */
+  y?: keyof T | (keyof T)[]
+  /** Alias for x */
+  xKey?: keyof T
+  /** Alias for y */
+  yKey?: keyof T | (keyof T)[]
+  /** Additional CSS classes */
+  className?: string
+  /** Chart height in pixels */
+  height?: number
+  /** Primary color for single series */
+  color?: string
+  /** Colors for multiple series */
+  colors?: string[]
+  /** Horizontal bar chart */
+  horizontal?: boolean
+  /** Show grid lines */
+  showGrid?: boolean
+  /** Show X axis */
+  showXAxis?: boolean
+  /** Show Y axis */
+  showYAxis?: boolean
+  /** Show tooltip on hover */
+  showTooltip?: boolean
+  /** Show legend */
+  showLegend?: boolean
+  /** Bar radius for rounded corners */
+  radius?: number
+  /** Custom chart config for theming */
+  chartConfig?: ChartConfig
+  /** Format function for X axis labels */
+  formatX?: (value: unknown) => string
+  /** Format function for Y axis values */
+  formatY?: (value: number) => string
+  /** Chart title */
+  title?: string
 }
 
 export function BarChart<T extends Record<string, unknown>>({
@@ -27,167 +63,149 @@ export function BarChart<T extends Record<string, unknown>>({
   xKey,
   yKey,
   className,
-  height = 200,
+  height = 300,
   color = "hsl(var(--primary))",
+  colors = [
+    "hsl(var(--chart-1, var(--primary)))",
+    "hsl(var(--chart-2, 220 70% 50%))",
+    "hsl(var(--chart-3, 160 60% 45%))",
+    "hsl(var(--chart-4, 30 80% 55%))",
+    "hsl(var(--chart-5, 280 65% 60%))",
+  ],
   horizontal = false,
-  formatX = (v) => String(v),
-  formatY = (v) => v.toLocaleString(),
+  showGrid = true,
+  showXAxis = true,
+  showYAxis = true,
+  showTooltip = true,
+  showLegend = false,
+  radius = 4,
+  chartConfig: externalConfig,
+  formatX,
+  formatY,
+  title,
 }: BarChartProps<T>) {
   // Support both x/y and xKey/yKey prop names
-  const x = xProp ?? xKey;
-  const y = yProp ?? yKey;
+  const xAxisKey = (xProp ?? xKey ?? "x") as string
+  const yAxisKeys = React.useMemo(() => {
+    const yValue = yProp ?? yKey ?? "y"
+    return Array.isArray(yValue) ? yValue.map(String) : [String(yValue)]
+  }, [yProp, yKey])
 
-  if (!x || !y) {
+  // Build chart config from y keys
+  const chartConfig = React.useMemo<ChartConfig>(() => {
+    if (externalConfig) return externalConfig
+
+    const config: ChartConfig = {}
+    yAxisKeys.forEach((key, index) => {
+      config[key] = {
+        label: key.charAt(0).toUpperCase() + key.slice(1),
+        color: yAxisKeys.length === 1 ? color : colors[index % colors.length],
+      }
+    })
+    return config
+  }, [externalConfig, yAxisKeys, color, colors])
+
+  if (!data || data.length === 0) {
     return (
       <div
         className={cn(
-          "flex items-center justify-center text-muted-foreground",
+          "flex items-center justify-center text-muted-foreground rounded-lg border border-dashed",
           className
         )}
         style={{ height }}
       >
-        Missing x/y keys
+        No data available
       </div>
-    );
-  }
-  if (data.length === 0) {
-    return (
-      <div
-        className={cn(
-          "flex items-center justify-center text-muted-foreground",
-          className
-        )}
-        style={{ height }}
-      >
-        No data
-      </div>
-    );
-  }
-
-  const values = data.map((d) => Number(d[y]) || 0);
-  const max = Math.max(...values);
-
-  const padding = { top: 20, right: 20, bottom: 40, left: 50 };
-  const width = 400;
-  const chartWidth = width - padding.left - padding.right;
-  const chartHeight = height - padding.top - padding.bottom;
-
-  const barWidth = chartWidth / data.length * 0.7;
-  const barGap = chartWidth / data.length * 0.15;
-
-  const bars = data.map((d, i) => {
-    const value = Number(d[y]) || 0;
-    const barHeight = (value / max) * chartHeight;
-    return {
-      x: padding.left + i * (chartWidth / data.length) + barGap,
-      y: padding.top + chartHeight - barHeight,
-      width: barWidth,
-      height: barHeight,
-      label: formatX(d[x]),
-      value,
-    };
-  });
-
-  if (horizontal) {
-    return (
-      <svg
-        viewBox={`0 0 ${width} ${height}`}
-        className={cn("w-full", className)}
-        style={{ height }}
-      >
-        {bars.map((bar, i) => {
-          const barHeight = chartHeight / data.length * 0.7;
-          const barY = padding.top + i * (chartHeight / data.length) + chartHeight / data.length * 0.15;
-          const barWidth = (bar.value / max) * chartWidth;
-          return (
-            <g key={i}>
-              <rect
-                x={padding.left}
-                y={barY}
-                width={barWidth}
-                height={barHeight}
-                fill={color}
-                rx={2}
-              />
-              <text
-                x={padding.left - 8}
-                y={barY + barHeight / 2}
-                textAnchor="end"
-                dominantBaseline="middle"
-                className="fill-muted-foreground text-[10px]"
-              >
-                {bar.label}
-              </text>
-              <text
-                x={padding.left + barWidth + 4}
-                y={barY + barHeight / 2}
-                dominantBaseline="middle"
-                className="fill-foreground text-[10px]"
-              >
-                {formatY(bar.value)}
-              </text>
-            </g>
-          );
-        })}
-      </svg>
-    );
+    )
   }
 
   return (
-    <svg
-      viewBox={`0 0 ${width} ${height}`}
-      className={cn("w-full", className)}
-      style={{ height }}
-    >
-      {/* Y axis */}
-      <text
-        x={padding.left - 8}
-        y={padding.top}
-        textAnchor="end"
-        className="fill-muted-foreground text-[10px]"
-      >
-        {formatY(max)}
-      </text>
-      <text
-        x={padding.left - 8}
-        y={padding.top + chartHeight}
-        textAnchor="end"
-        className="fill-muted-foreground text-[10px]"
-      >
-        0
-      </text>
+    <div className={cn("w-full", className)}>
+      {title && (
+        <h3 className="text-sm font-medium mb-2 text-foreground">{title}</h3>
+      )}
+      <ChartContainer config={chartConfig} className={cn("min-h-[200px] w-full")} style={{ height }}>
+        <RechartsBarChart
+          data={data}
+          layout={horizontal ? "vertical" : "horizontal"}
+          margin={{ top: 10, right: 10, left: 10, bottom: 10 }}
+        >
+          {showGrid && (
+            <CartesianGrid
+              strokeDasharray="3 3"
+              vertical={!horizontal}
+              horizontal={horizontal || true}
+            />
+          )}
 
-      {/* Grid line */}
-      <line
-        x1={padding.left}
-        y1={padding.top + chartHeight}
-        x2={padding.left + chartWidth}
-        y2={padding.top + chartHeight}
-        stroke="currentColor"
-        strokeOpacity={0.1}
-      />
+          {horizontal ? (
+            <>
+              {showYAxis && (
+                <YAxis
+                  dataKey={xAxisKey}
+                  type="category"
+                  tickLine={false}
+                  axisLine={false}
+                  tickMargin={8}
+                  tickFormatter={formatX}
+                  width={80}
+                />
+              )}
+              {showXAxis && (
+                <XAxis
+                  type="number"
+                  tickLine={false}
+                  axisLine={false}
+                  tickMargin={8}
+                  tickFormatter={formatY}
+                />
+              )}
+            </>
+          ) : (
+            <>
+              {showXAxis && (
+                <XAxis
+                  dataKey={xAxisKey}
+                  tickLine={false}
+                  axisLine={false}
+                  tickMargin={8}
+                  tickFormatter={formatX}
+                />
+              )}
+              {showYAxis && (
+                <YAxis
+                  tickLine={false}
+                  axisLine={false}
+                  tickMargin={8}
+                  tickFormatter={formatY}
+                />
+              )}
+            </>
+          )}
 
-      {/* Bars */}
-      {bars.map((bar, i) => (
-        <g key={i}>
-          <rect
-            x={bar.x}
-            y={bar.y}
-            width={bar.width}
-            height={bar.height}
-            fill={color}
-            rx={2}
-          />
-          <text
-            x={bar.x + bar.width / 2}
-            y={height - 8}
-            textAnchor="middle"
-            className="fill-muted-foreground text-[10px]"
-          >
-            {bar.label}
-          </text>
-        </g>
-      ))}
-    </svg>
-  );
+          {showTooltip && (
+            <ChartTooltip
+              cursor={{ fill: "hsl(var(--muted))", opacity: 0.3 }}
+              content={<ChartTooltipContent />}
+            />
+          )}
+
+          {showLegend && (
+            <ChartLegend content={<ChartLegendContent />} />
+          )}
+
+          {yAxisKeys.map((key, index) => (
+            <Bar
+              key={key}
+              dataKey={key}
+              fill={chartConfig[key]?.color || colors[index % colors.length]}
+              radius={radius}
+            />
+          ))}
+        </RechartsBarChart>
+      </ChartContainer>
+    </div>
+  )
 }
+
+export default BarChart

@@ -55,20 +55,7 @@ import { renderToReadableStream } from "react-server-dom-webpack/server.edge";
 import { existsSync } from "node:fs";
 import { readFile, writeFile, readdir, mkdir } from "node:fs/promises";
 import { join } from "node:path";
-import {
-  Button,
-  Card,
-  CardHeader,
-  CardTitle,
-  CardDescription,
-  CardContent,
-  CardFooter,
-  Badge,
-  MetricCard,
-  DataTable,
-  BarChart,
-  LineChart,
-} from "@hands/stdlib";
+import { rscComponents } from "@hands/stdlib";
 
 ${blockImports}
 
@@ -218,21 +205,8 @@ app.post("/blocks/:blockId{.+}/rsc", async (c) => {
 // === RSC Component Routes ===
 // Render arbitrary JSX components via RSC for the visual editor
 
-// Component registry (imports at top of file)
-const COMPONENTS: Record<string, React.FC<any>> = {
-  Button,
-  Card,
-  CardHeader,
-  CardTitle,
-  CardDescription,
-  CardContent,
-  CardFooter,
-  Badge,
-  MetricCard,
-  DataTable,
-  BarChart,
-  LineChart,
-};
+// Component registry from stdlib (single source of truth)
+const COMPONENTS = rscComponents;
 
 app.post("/rsc/component", async (c) => {
   const { tagName, props = {}, children, elementId } = await c.req.json<{

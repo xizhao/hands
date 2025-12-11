@@ -32,6 +32,8 @@ import {
   Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter,
   Badge,
   MetricCard,
+  BarChart,
+  LineChart,
 } from '@hands/stdlib'
 
 // ============================================================================
@@ -171,6 +173,8 @@ const STDLIB_COMPONENT_MAP: Record<string, ComponentType<any>> = {
   CardFooter,
   Badge,
   MetricCard,
+  BarChart,
+  LineChart,
 }
 
 /**
@@ -203,6 +207,8 @@ const DEFAULT_PROPS: Record<string, Record<string, unknown>> = {
   CardDescription: { children: 'Card description' },
   Badge: { children: 'Badge', variant: 'default' },
   MetricCard: { title: 'Metric', value: 0, description: 'Description' },
+  BarChart: { data: [], x: 'x', y: 'y' },
+  LineChart: { data: [], x: 'x', y: 'y' },
 }
 
 // ============================================================================
@@ -316,19 +322,35 @@ function DraggableComponentWrapper({
   children: React.ReactNode
 }) {
   const editor = useEditorRef()
-
-  // Get the path of this element
-  const path = useMemo(() => {
-    try {
-      return ReactEditor.findPath(editor as any, element)
-    } catch {
-      return null
-    }
-  }, [editor, element])
-
-  // Only enable drag for top-level blocks
-  const isTopLevel = path && path.length === 1
   const isReadOnly = editor.dom?.readOnly
+
+  // Skip drag handles in read-only mode
+  if (isReadOnly) {
+    return <>{children}</>
+  }
+
+  // Render the draggable version
+  // Note: We always render drag handles for custom components since they're
+  // typically top-level blocks. The DnD plugin handles nested elements gracefully.
+  return (
+    <DraggableComponentInner element={element}>
+      {children}
+    </DraggableComponentInner>
+  )
+}
+
+/**
+ * Inner draggable component that uses DnD hooks
+ * Separated so hooks are only called when drag is enabled
+ */
+function DraggableComponentInner({
+  element,
+  children,
+}: {
+  element: TElement
+  children: React.ReactNode
+}) {
+  const editor = useEditorRef()
 
   const { isDragging, nodeRef, handleRef } = useDraggable({
     element,
@@ -341,26 +363,30 @@ function DraggableComponentWrapper({
     },
   })
 
-  // If not top-level or read-only, render without drag handles
-  if (!isTopLevel || isReadOnly) {
-    return <>{children}</>
-  }
+  const [isDirectHover, setIsDirectHover] = useState(false)
 
   return (
-    <div className={cn('group relative slate-selectable', isDragging && 'opacity-50')}>
+    <div
+      className={cn('group/block relative slate-selectable', isDragging && 'opacity-50')}
+      onMouseEnter={(e) => {
+        e.stopPropagation()
+        setIsDirectHover(true)
+      }}
+      onMouseLeave={() => setIsDirectHover(false)}
+    >
       {/* Gutter with drag handle - positioned to the left */}
       <div
         className={cn(
           'absolute -left-12 top-0 z-50 flex h-full items-start pt-0.5',
           'opacity-0 transition-opacity duration-150',
-          'group-hover:opacity-100'
+          isDirectHover && 'opacity-100'
         )}
         contentEditable={false}
       >
         <div className="flex items-center gap-0.5">
           {/* Plus button to insert */}
           <UIButton
-            className="size-6 p-0 opacity-0 group-hover:opacity-100"
+            className={cn('size-6 p-0', isDirectHover ? 'opacity-100' : 'opacity-0')}
             onClick={(event) => {
               event.stopPropagation()
               event.preventDefault()

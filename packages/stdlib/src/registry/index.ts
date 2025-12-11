@@ -1,5 +1,89 @@
 import registry from "../registry.json" with { type: "json" };
 
+// ============================================
+// Runtime Components - for RSC serialization
+// ============================================
+
+// UI Components
+import { Button } from "./components/ui/button.js";
+import {
+  Card,
+  CardHeader,
+  CardTitle,
+  CardDescription,
+  CardContent,
+  CardFooter,
+} from "./components/ui/card.js";
+import { Badge } from "./components/ui/badge.js";
+
+// Data Components
+import { MetricCard } from "./components/data/metric-card.js";
+import { DataTable } from "./components/data/data-table.js";
+
+// Chart Components
+import { BarChart } from "./components/charts/bar-chart.js";
+import { LineChart } from "./components/charts/line-chart.js";
+
+/**
+ * Runtime component registry for RSC serialization.
+ * The worker template imports this directly.
+ * Add new components here to make them available in blocks.
+ */
+export const rscComponents = {
+  // UI
+  Button,
+  Card,
+  CardHeader,
+  CardTitle,
+  CardDescription,
+  CardContent,
+  CardFooter,
+  Badge,
+  // Data
+  MetricCard,
+  DataTable,
+  // Charts
+  BarChart,
+  LineChart,
+} as const;
+
+// Re-export components for direct imports
+export {
+  Button,
+  Card,
+  CardHeader,
+  CardTitle,
+  CardDescription,
+  CardContent,
+  CardFooter,
+  Badge,
+  MetricCard,
+  DataTable,
+  BarChart,
+  LineChart,
+};
+
+// Re-export variant helpers and types
+export { buttonVariants } from "./components/ui/button.js";
+export { badgeVariants } from "./components/ui/badge.js";
+export type { BarChartProps } from "./components/charts/bar-chart.js";
+export type { LineChartProps } from "./components/charts/line-chart.js";
+export type { DataTableProps, DataTableColumn } from "./components/data/data-table.js";
+
+// Chart infrastructure (shadcn style)
+export {
+  ChartContainer,
+  ChartTooltip,
+  ChartTooltipContent,
+  ChartLegend,
+  ChartLegendContent,
+} from "./components/ui/chart.js";
+export type { ChartConfig } from "./components/ui/chart.js";
+
+// ============================================
+// Component Metadata Registry - for CLI
+// ============================================
+
 export interface ComponentMeta {
   name: string;
   category: string;

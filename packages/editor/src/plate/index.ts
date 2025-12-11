@@ -11,7 +11,7 @@ export { PlateVisualEditor } from './PlateVisualEditor'
 export { EditorKit } from './editor-kit'
 
 // Converters
-export { sourceToPlateValueSurgical, plateValueToSourceSurgical } from './surgical-converters'
+export { sourceToPlateValueSurgical, applyPlateChangesToSource, syncIdsFromSource } from './surgical-converters'
 export { sourceToPlateValue, plateValueToSource } from './converters'
 
 // Element components
@@ -26,7 +26,7 @@ export {
 
 // Plugins
 export { ElementPlugin, elementFallbackRenderer } from './plugins/element-plugin'
-export { SourceSyncPlugin, initSourceSync, updateSourceFromExternal } from './plugins/source-sync-plugin'
+export { SourceSyncPlugin, initSourceSync, updateSourceExternal } from './plugins/source-sync-plugin'
 export { DndKit } from './plugins/dnd-kit'
 export { BlockSelectionKit } from './plugins/block-selection-kit'
 export { SlashKit } from './plugins/slash-kit'
