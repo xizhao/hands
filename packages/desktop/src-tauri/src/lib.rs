@@ -79,31 +79,8 @@ fn get_hands_dir() -> Result<PathBuf, String> {
     Ok(hands_dir)
 }
 
-fn get_workbooks_index_path() -> Result<PathBuf, String> {
-    Ok(get_hands_dir()?.join("workbooks.json"))
-}
-
 fn get_workbook_dir(id: &str) -> Result<PathBuf, String> {
     Ok(get_hands_dir()?.join(id))
-}
-
-fn read_workbooks_index() -> Result<HashMap<String, Workbook>, String> {
-    let index_path = get_workbooks_index_path()?;
-    if !index_path.exists() {
-        return Ok(HashMap::new());
-    }
-    let content = fs::read_to_string(&index_path)
-        .map_err(|e| format!("Failed to read workbooks index: {}", e))?;
-    serde_json::from_str(&content)
-        .map_err(|e| format!("Failed to parse workbooks index: {}", e))
-}
-
-fn write_workbooks_index(index: &HashMap<String, Workbook>) -> Result<(), String> {
-    let index_path = get_workbooks_index_path()?;
-    let content = serde_json::to_string_pretty(index)
-        .map_err(|e| format!("Failed to serialize workbooks index: {}", e))?;
-    fs::write(&index_path, content)
-        .map_err(|e| format!("Failed to write workbooks index: {}", e))
 }
 
 fn save_workbook_config(workbook: &Workbook) -> Result<(), String> {
@@ -229,23 +206,17 @@ async fn create_workbook(
 
     save_workbook_config(&workbook)?;
 
-    let mut index = read_workbooks_index()?;
-    index.insert(id, workbook.clone());
-    write_workbooks_index(&index)?;
-
     Ok(workbook)
 }
 
+/// List all workbooks by scanning ~/.hands directories
 #[tauri::command]
 async fn list_workbooks() -> Result<Vec<Workbook>, String> {
     let hands_dir = get_hands_dir()?;
-    let mut index = read_workbooks_index().unwrap_or_default();
-    let mut changed = false;
+    let mut workbooks: Vec<Workbook> = Vec::new();
 
     let entries = fs::read_dir(&hands_dir)
         .map_err(|e| format!("Failed to read hands directory: {}", e))?;
-
-    let mut found_ids: Vec<String> = Vec::new();
 
     for entry in entries {
         let entry = entry.map_err(|e| e.to_string())?;
@@ -260,17 +231,16 @@ async fn list_workbooks() -> Result<Vec<Workbook>, String> {
             .unwrap_or("")
             .to_string();
 
+        // Skip hidden directories
         if dir_name.starts_with('.') {
             continue;
         }
 
-        if let Some(workbook_config) = read_workbook_config(&path) {
-            found_ids.push(workbook_config.id.clone());
-            if !index.contains_key(&workbook_config.id) {
-                index.insert(workbook_config.id.clone(), workbook_config);
-                changed = true;
-            }
+        // Try to read workbook config from package.json
+        if let Some(workbook) = read_workbook_config(&path) {
+            workbooks.push(workbook);
         } else {
+            // Create config for legacy/uninitialized directories
             let metadata = fs::metadata(&path).ok();
             let created = metadata.as_ref()
                 .and_then(|m| m.created().ok())
@@ -280,7 +250,7 @@ async fn list_workbooks() -> Result<Vec<Workbook>, String> {
 
             let workbook = Workbook {
                 id: dir_name.clone(),
-                name: dir_name.clone(),
+                name: dir_name,
                 description: None,
                 directory: path.to_string_lossy().to_string(),
                 created_at: created,
@@ -288,28 +258,13 @@ async fn list_workbooks() -> Result<Vec<Workbook>, String> {
                 last_opened_at: created,
             };
 
+            // Save config so it's recognized next time
             let _ = save_workbook_config(&workbook);
-            found_ids.push(dir_name.clone());
-            index.insert(dir_name, workbook);
-            changed = true;
+            workbooks.push(workbook);
         }
     }
 
-    let stale_ids: Vec<String> = index.keys()
-        .filter(|id| !found_ids.contains(id))
-        .cloned()
-        .collect();
-
-    for id in stale_ids {
-        index.remove(&id);
-        changed = true;
-    }
-
-    if changed {
-        let _ = write_workbooks_index(&index);
-    }
-
-    let mut workbooks: Vec<Workbook> = index.into_values().collect();
+    // Sort by last opened (most recent first)
     workbooks.sort_by(|a, b| b.last_opened_at.cmp(&a.last_opened_at));
 
     Ok(workbooks)
@@ -358,10 +313,6 @@ async fn update_workbook(workbook: Workbook) -> Result<Workbook, String> {
 
     save_workbook_config(&workbook)?;
 
-    let mut index = read_workbooks_index().unwrap_or_default();
-    index.insert(workbook.id.clone(), workbook.clone());
-    write_workbooks_index(&index)?;
-
     Ok(workbook)
 }
 
@@ -391,10 +342,6 @@ async fn delete_workbook(
         fs::remove_dir_all(&workbook_dir)
             .map_err(|e| format!("Failed to delete workbook: {}", e))?;
     }
-
-    let mut index = read_workbooks_index().unwrap_or_default();
-    index.remove(&id);
-    let _ = write_workbooks_index(&index);
 
     Ok(true)
 }

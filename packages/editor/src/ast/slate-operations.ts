@@ -4,6 +4,19 @@
  * Converts Slate's low-level operations directly to source text edits.
  * This is more precise than diffing values because we get exact operation types.
  *
+ * KEY ARCHITECTURE: Path-Based Operations
+ * ========================================
+ * Slate uses PATHS (not IDs) to identify nodes. A path is an array of indices:
+ * - [0] = first child of root
+ * - [1, 2] = third child of second child of root
+ *
+ * Our AST (EditableNode) has the same structure, so we can map:
+ * - Slate path [n] → parseResult.root.children[n] (for flattened docs)
+ * - Slate path [n, m] → parseResult.root.children[n].children[m]
+ *
+ * This is the SINGLE ID SYSTEM - paths are the canonical identifier.
+ * The `id` field on EditableNode is just for debugging.
+ *
  * Slate Operation Types:
  * - insert_node: Insert a node at a path
  * - remove_node: Remove a node at a path
@@ -25,17 +38,58 @@ import { getNodeById, parseSourceWithLocations } from './babel-parser'
 // ============================================================================
 
 /**
- * Convert a Slate path to our stable ID
- * Path like [0, 1, 2] becomes "tagname_0.1.2"
+ * Check if the root element should be "flattened" (div/span wrapper unwrapped)
+ * This matches the logic in sourceToPlateValueSurgical
  */
-function slatePathToStableId(path: Path, parseResult: ParseResult): string | null {
+function isFlattened(parseResult: ParseResult): boolean {
+  if (!parseResult.root) return false
+  const rootTag = parseResult.root.tagName.toLowerCase()
+
+  // Check if root is a div/span with block children
+  if ((rootTag === 'div' || rootTag === 'span') && parseResult.root.children.length > 0) {
+    // If children exist and aren't all text, we flattened
+    const hasBlockChildren = parseResult.root.children.some(c => !c.isText)
+    return hasBlockChildren
+  }
+
+  return false
+}
+
+/**
+ * Get the EditableNode at a Slate path
+ *
+ * Handles the flattening case where:
+ * - Plate has path [0] pointing to h1
+ * - Source has h1 at root.children[0]
+ *
+ * So Plate path [n] → Source path root.children[n]
+ */
+function getNodeAtPath(path: Path, parseResult: ParseResult): EditableNode | null {
   if (!parseResult.root) return null
 
-  // Navigate to the node at this path
-  let current: EditableNode | undefined = parseResult.root
   const pathParts = [...path]
 
-  // First element is root (index 0), skip it
+  // If flattened, first index in Plate is a child of root in source
+  if (isFlattened(parseResult)) {
+    // Plate [n, ...rest] → root.children[n] ...rest
+    let current: EditableNode | undefined = parseResult.root
+
+    for (const index of pathParts) {
+      if (!current || !current.children || index >= current.children.length) {
+        return null
+      }
+      current = current.children[index]
+    }
+
+    return current ?? null
+  }
+
+  // Not flattened - root element is the single top-level element
+  // Plate path [0] → root
+  // Plate path [0, n] → root.children[n]
+  let current: EditableNode | undefined = parseResult.root
+
+  // Skip first 0 if it's pointing to root
   if (pathParts[0] === 0) {
     pathParts.shift()
   }
@@ -47,16 +101,7 @@ function slatePathToStableId(path: Path, parseResult: ParseResult): string | nul
     current = current.children[index]
   }
 
-  return current?.id ?? null
-}
-
-/**
- * Get the EditableNode at a Slate path
- */
-function getNodeAtPath(path: Path, parseResult: ParseResult): EditableNode | null {
-  const id = slatePathToStableId(path, parseResult)
-  if (!id) return null
-  return getNodeById(parseResult.root, id)
+  return current ?? null
 }
 
 // ============================================================================
@@ -216,56 +261,158 @@ function handleRemoveNode(
 
 /**
  * Handle move_node operation
+ *
+ * IMPORTANT: For move within same parent (same-level move):
+ * - Slate's move_node uses the path BEFORE the move for 'path'
+ * - And the path AFTER deletion for 'newPath'
+ *
+ * Example: Moving item from index 0 to index 2 (3 items total)
+ * - path: [0] (h1 is at index 0)
+ * - newPath: [2] (after deleting h1, we want to insert at index 2, which is after what was button)
+ *
+ * This means Slate's newPath accounts for the removal already!
  */
 function handleMoveNode(
   op: Extract<Operation, { type: 'move_node' }>,
   source: string,
   parseResult: ParseResult
 ): SourceEdit[] | null {
+  const fromIndex = op.path[op.path.length - 1]
+  const toIndex = op.newPath[op.newPath.length - 1]
+
+  // For sibling moves (same parent), we handle specially
+  const fromParentPath = op.path.slice(0, -1)
+  const toParentPath = op.newPath.slice(0, -1)
+  const isSiblingMove = JSON.stringify(fromParentPath) === JSON.stringify(toParentPath)
+
+  // Get the node being moved using the source path
+  // For flattened documents, path [n] means root.children[n]
   const node = getNodeAtPath(op.path, parseResult)
   if (!node) {
     console.warn('[slate-ops] Cannot find node for move_node:', op.path)
     return null
   }
 
-  const newParentPath = op.newPath.slice(0, -1)
-  const newIndex = op.newPath[op.newPath.length - 1]
+  // Get the parent containing the children
+  const parent = fromParentPath.length === 0 && isFlattened(parseResult)
+    ? parseResult.root!
+    : getNodeAtPath(fromParentPath, parseResult)
 
-  const newParent = getNodeAtPath(newParentPath, parseResult)
-  if (!newParent || !newParent.childrenLoc) {
-    console.warn('[slate-ops] Cannot find new parent for move_node:', newParentPath)
+  if (!parent || !parent.childrenLoc) {
+    console.warn('[slate-ops] Cannot find parent for move_node')
     return null
   }
 
   // Get the JSX of the node being moved
   const nodeJsx = source.slice(node.loc.start, node.loc.end)
 
-  // Find insertion position in new parent
-  let insertPos: number
-  if (newIndex === 0 || newParent.children.length === 0) {
-    insertPos = newParent.childrenLoc.start
-  } else if (newIndex >= newParent.children.length) {
-    insertPos = newParent.childrenLoc.end
-  } else {
-    insertPos = newParent.children[newIndex].loc.start
+  // For sibling moves within same parent:
+  if (isSiblingMove) {
+    // Slate's newPath already accounts for removal, so we need to think about
+    // what the final position should be in the ORIGINAL document
+
+    // If moving forward (to higher index), the target in original is toIndex + 1
+    // Because Slate's newPath assumes the node is already removed
+    //
+    // Example: [h1, p, button] - move h1 to end
+    // - fromIndex = 0 (h1)
+    // - toIndex = 2 (Slate says insert at position 2 after removal)
+    // - In original doc with 3 items, position 2 after removal = after item at original index 2
+    // - So we insert AFTER children[2] (button)
+    //
+    // If moving backward, it's simpler - we just insert before children[toIndex]
+
+    let insertPos: number
+    let deleteStart: number
+    let deleteEnd: number
+
+    // Get the range to delete (including surrounding whitespace/newline)
+    deleteStart = node.loc.start
+    // Include leading spaces (but stop at newline)
+    while (deleteStart > 0 && source[deleteStart - 1] !== '\n' && /\s/.test(source[deleteStart - 1])) {
+      deleteStart--
+    }
+    // Also include the leading newline if there is one
+    if (deleteStart > 0 && source[deleteStart - 1] === '\n') {
+      deleteStart--
+    }
+
+    deleteEnd = node.loc.end
+    // Include trailing newline
+    if (source[deleteEnd] === '\n') deleteEnd++
+
+    // Determine insertion position
+    if (toIndex > fromIndex) {
+      // Moving forward - insert AFTER the element that's currently at toIndex
+      // (because Slate's toIndex already accounts for our removal)
+      const targetOriginalIndex = toIndex  // After our element is removed, this is where we go
+      // So in original we insert after what will become the item before us
+      // That's original index = toIndex (since our removal shifts everything down)
+      if (targetOriginalIndex >= parent.children.length) {
+        // Insert at end (after last child)
+        const lastChild = parent.children[parent.children.length - 1]
+        insertPos = lastChild.loc.end
+      } else {
+        // Insert after children[targetOriginalIndex]
+        const targetChild = parent.children[targetOriginalIndex]
+        insertPos = targetChild.loc.end
+      }
+    } else {
+      // Moving backward - insert BEFORE the element at toIndex
+      const targetChild = parent.children[toIndex]
+      insertPos = targetChild.loc.start
+      // Go back to include leading whitespace
+      while (insertPos > 0 && source[insertPos - 1] !== '\n' && /\s/.test(source[insertPos - 1])) {
+        insertPos--
+      }
+    }
+
+    // Build the insert replacement
+    // Preserve proper indentation
+    const indent = '    '  // TODO: detect from source
+    const insertText = toIndex > fromIndex
+      ? '\n' + indent + nodeJsx.trim()  // Insert after, add newline before
+      : indent + nodeJsx.trim() + '\n'  // Insert before, add newline after
+
+    // Return edits - they'll be applied in reverse position order
+    // which handles the position shifting correctly
+    return [
+      { start: deleteStart, end: deleteEnd, replacement: '' },
+      { start: insertPos, end: insertPos, replacement: insertText },
+    ]
   }
 
-  // Delete from old position
+  // Non-sibling move (different parents) - more complex
+  // For now, handle the simple case of moving to a different parent
+  const newParent = getNodeAtPath(toParentPath, parseResult)
+  if (!newParent || !newParent.childrenLoc) {
+    console.warn('[slate-ops] Cannot find new parent for move_node:', toParentPath)
+    return null
+  }
+
+  // Similar logic but between different parents
+  let insertPos: number
+  if (toIndex === 0 || newParent.children.length === 0) {
+    insertPos = newParent.childrenLoc.start
+  } else if (toIndex >= newParent.children.length) {
+    insertPos = newParent.childrenLoc.end
+  } else {
+    insertPos = newParent.children[toIndex].loc.start
+  }
+
   let deleteStart = node.loc.start
   while (deleteStart > 0 && source[deleteStart - 1] !== '\n' && /\s/.test(source[deleteStart - 1])) {
+    deleteStart--
+  }
+  if (deleteStart > 0 && source[deleteStart - 1] === '\n') {
     deleteStart--
   }
   let deleteEnd = node.loc.end
   if (source[deleteEnd] === '\n') deleteEnd++
 
-  // Adjust insertPos if it comes after deleteStart
-  if (insertPos > deleteStart) {
-    insertPos -= (deleteEnd - deleteStart)
-  }
-
   return [
     { start: deleteStart, end: deleteEnd, replacement: '' },
-    { start: insertPos, end: insertPos, replacement: '\n' + nodeJsx },
+    { start: insertPos, end: insertPos, replacement: '\n    ' + nodeJsx.trim() },
   ]
 }
 

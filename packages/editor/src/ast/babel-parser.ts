@@ -77,13 +77,21 @@ export interface ParseResult {
 /**
  * Generate a stable ID for a node based on its structural position.
  *
- * Strategy: path-based ID like "0.1.2" representing:
- * - Root element (index 0)
- * - Second child (index 1)
- * - Third child of that (index 2)
+ * IMPORTANT: These IDs are for debugging and display only!
  *
- * This is stable across edits that don't change structure.
- * For elements, we also include the tagName for readability.
+ * The ACTUAL "ID system" for operations is Slate's PATH system:
+ * - Slate operations use paths like [0], [1, 2] to identify nodes
+ * - Paths map directly to children indices in the AST
+ * - When we apply operations, we use paths NOT IDs
+ *
+ * These generated IDs are path-based (like "h1_0.1") for:
+ * - Human-readable debugging
+ * - Correlation when logging
+ * - Display in UI
+ *
+ * They are NOT used for:
+ * - Finding nodes for operations (use paths instead)
+ * - Tracking nodes across moves (paths change, IDs change too)
  */
 function generateStableId(path: number[], tagName: string): string {
   const pathStr = path.join('.')

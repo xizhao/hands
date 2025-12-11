@@ -17,17 +17,44 @@ import {
   type SurgicalMutation,
 } from '../../src/ast/surgical-mutations'
 import { generateMutationsFromPlateChange } from '../../src/ast/plate-diff'
-import { STDLIB_COMPONENT_KEY, isStdlibComponent, type StdlibComponentElement } from './stdlib-component-plugin'
+// Stdlib plugin no longer needed - all components use generic JSX elements
 
 // ============================================================================
 // Source → Plate Conversion
 // ============================================================================
 
 /**
+ * Check if a tag is a "void" element (no editable children)
+ * These are either self-closing HTML tags or complex components
+ */
+function isVoidElement(tagName: string): boolean {
+  const voidTags = new Set([
+    'img', 'br', 'hr', 'input', 'meta', 'link', 'area', 'base', 'col', 'embed',
+    'source', 'track', 'wbr',
+  ])
+  // PascalCase = React component, treat as potentially void
+  const isPascalCase = /^[A-Z]/.test(tagName)
+  return voidTags.has(tagName.toLowerCase()) || isPascalCase
+}
+
+/**
+ * Check if an element has only text children (inline content)
+ */
+function hasOnlyTextChildren(node: EditableNode): boolean {
+  return node.children.every(child => child.isText)
+}
+
+/**
  * Convert an EditableNode to a Plate element
+ *
+ * Every JSX element becomes a Plate block with:
+ * - type: the original tagName (preserved for round-trip)
+ * - id: stable ID for surgical updates
+ * - props: all JSX props
+ * - children: nested elements or text
  */
 function editableNodeToPlateElement(node: EditableNode): TElement {
-  // Handle text nodes
+  // Handle text nodes - wrap in paragraph
   if (node.isText) {
     return {
       type: 'p',
@@ -38,7 +65,6 @@ function editableNodeToPlateElement(node: EditableNode): TElement {
 
   // Handle fragments
   if (node.tagName === '#fragment') {
-    // Return children directly (will be flattened)
     return {
       type: 'fragment',
       id: node.id,
@@ -48,58 +74,39 @@ function editableNodeToPlateElement(node: EditableNode): TElement {
     } as unknown as TElement
   }
 
-  // Check for stdlib components
-  if (isStdlibComponent(node.tagName)) {
-    // Convert props to plain values
-    const props: Record<string, unknown> = {}
-    for (const [key, prop] of Object.entries(node.props)) {
-      props[key] = prop.value
-    }
-
-    return {
-      type: STDLIB_COMPONENT_KEY,
-      id: node.id,
-      componentName: node.tagName,
-      props,
-      children: [{ text: '' }],
-    } as StdlibComponentElement
-  }
-
-  // Map tag names to Plate types
-  const typeMap: Record<string, string> = {
-    p: 'p',
-    div: 'p',
-    span: 'p',
-    h1: 'h1',
-    h2: 'h2',
-    h3: 'h3',
-    blockquote: 'blockquote',
-    hr: 'hr',
-  }
-
-  const type = typeMap[node.tagName.toLowerCase()] || 'p'
-
-  // Convert children
-  const children: (TElement | { text: string })[] = []
-
-  for (const child of node.children) {
-    if (child.isText) {
-      children.push({ text: child.text || '' })
-    } else {
-      children.push(editableNodeToPlateElement(child))
-    }
-  }
-
-  // Ensure at least one text child
-  if (children.length === 0) {
-    children.push({ text: '' })
-  }
-
-  // Convert props
+  // Convert props to plain values
   const plateProps: Record<string, unknown> = {}
   for (const [key, prop] of Object.entries(node.props)) {
     if (key !== '...spread') {
       plateProps[key] = prop.value
+    }
+  }
+
+  // Use the actual tagName as the type
+  // This preserves the original element for round-trip editing
+  const type = node.tagName
+
+  // Check if this is a void/component element
+  const isVoid = isVoidElement(node.tagName)
+
+  // Convert children
+  const children: (TElement | { text: string })[] = []
+
+  if (isVoid) {
+    // Void elements get empty text child (Plate requirement)
+    children.push({ text: '' })
+  } else {
+    for (const child of node.children) {
+      if (child.isText) {
+        children.push({ text: child.text || '' })
+      } else {
+        children.push(editableNodeToPlateElement(child))
+      }
+    }
+
+    // Ensure at least one child
+    if (children.length === 0) {
+      children.push({ text: '' })
     }
   }
 
@@ -108,6 +115,8 @@ function editableNodeToPlateElement(node: EditableNode): TElement {
     id: node.id,
     ...plateProps,
     children,
+    // Mark void elements so Plate knows they're not editable
+    ...(isVoid ? { isVoid: true } : {}),
   }
 }
 

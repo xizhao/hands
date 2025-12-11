@@ -3,6 +3,8 @@
  *
  * Real Plate plugins with actual element components.
  * Includes DnD, Block Selection, and Slash Menu.
+ *
+ * Key design: Every JSX element is a Plate block, editable with its original tag name.
  */
 
 import {
@@ -34,8 +36,13 @@ import {
 import { DndKit } from './plugins/dnd-kit'
 import { BlockSelectionKit } from './plugins/block-selection-kit'
 import { SlashKit } from './plugins/slash-kit'
+import { JsxElementPlugin } from './plugins/jsx-element-plugin'
 
 export const EditorKit = [
+  // JSX Element Plugin - MUST be first to catch unknown types
+  // This allows any JSX element to be editable
+  JsxElementPlugin,
+
   // Block Elements with real components
   ParagraphPlugin.withComponent(ParagraphElement),
   H1Plugin.configure({
