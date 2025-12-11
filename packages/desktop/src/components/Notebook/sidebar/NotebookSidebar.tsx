@@ -1,9 +1,10 @@
 /**
- * DraftsSidebar - Navigation sidebar for notebook drafts and sources
+ * NotebookSidebar - Navigation sidebar for notebook drafts, sources, and blocks
  *
  * Features:
  * - Drafts section with list of notebook drafts
  * - Sources section with database tables
+ * - Blocks section with custom components
  * - Collapsible sections with headers
  * - Add new draft button
  * - Router-based navigation
@@ -26,7 +27,7 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 
-interface DraftsSidebarProps {
+interface NotebookSidebarProps {
   collapsed?: boolean;
   fullWidth?: boolean;
   onAddDraft?: () => void;
@@ -54,7 +55,7 @@ function SourceIcon({ icon, className }: { icon?: string; className?: string }) 
   return <Icon weight="duotone" className={className} />
 }
 
-export function DraftsSidebar({ collapsed = false, fullWidth = false, onAddDraft, pinned = false, onPinnedChange }: DraftsSidebarProps) {
+export function NotebookSidebar({ collapsed = false, fullWidth = false, onAddDraft, pinned = false, onPinnedChange }: NotebookSidebarProps) {
   const navigate = useNavigate();
   const router = useRouter();
   const routerState = useRouterState();
@@ -908,5 +909,3 @@ function DraftItem({
   );
 }
 
-// Legacy alias for backwards compatibility
-export const PagesSidebar = DraftsSidebar;

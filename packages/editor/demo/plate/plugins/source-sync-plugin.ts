@@ -8,8 +8,8 @@
 import { createPlatePlugin, type PlateEditor } from 'platejs/react'
 import type { Operation } from 'slate'
 import { applySlateOperations } from '../../../src/ast/slate-operations'
-import type { ParseResult } from '../../../src/ast/babel-parser'
-import { parseSourceWithLocations } from '../../../src/ast/babel-parser'
+import type { ParseResult } from '../../../src/ast/oxc-parser'
+import { parseSourceWithLocations } from '../../../src/ast/oxc-parser'
 
 /** State stored in the editor */
 interface SourceSyncState {

@@ -53,10 +53,14 @@ export interface WorkbookBlock {
 }
 
 export interface WorkbookSource {
+  id: string;
   name: string;
-  title?: string;
-  description?: string;
-  enabled: boolean;
+  title: string;
+  description: string;
+  schedule?: string;
+  secrets: string[];
+  missingSecrets: string[];
+  path: string;
 }
 
 export interface WorkbookManifest {

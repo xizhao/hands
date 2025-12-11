@@ -1,5 +1,5 @@
 import { createFileRoute, useRouter } from "@tanstack/react-router";
-import { DraftsSidebar } from "@/components/Notebook/sidebar/PagesSidebar";
+import { NotebookSidebar } from "@/components/Notebook/sidebar/NotebookSidebar";
 import { EmptyWorkbookState } from "@/components/Notebook/EmptyWorkbookState";
 import { useManifest, useDbSchema, useActiveWorkbookId, useCreatePage } from "@/hooks/useWorkbook";
 import { useChatState } from "@/hooks/useChatState";
@@ -65,7 +65,7 @@ function IndexPage() {
   return (
     <div className="flex-1 flex items-start justify-center overflow-y-auto">
       <div className="p-4 pt-8">
-        <DraftsSidebar collapsed={false} fullWidth onAddDraft={handleAddPage} />
+        <NotebookSidebar collapsed={false} fullWidth onAddDraft={handleAddPage} />
       </div>
     </div>
   );

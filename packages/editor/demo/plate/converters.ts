@@ -8,7 +8,18 @@ import type { TElement, Value } from 'platejs'
 import { parseSource } from '../../src/ast/parser'
 import { generateBlockSource } from '../../src/ast/generator'
 import type { JsxNode, PropValue } from '../../src/types'
-import { STDLIB_COMPONENT_KEY, isStdlibComponent, type StdlibComponentElement } from './stdlib-component-plugin'
+import { isCustomComponent, isStdlibComponent } from './plugins/element-plugin'
+
+// Legacy constants for backward compatibility (stdlib-component-plugin was removed)
+const STDLIB_COMPONENT_KEY = 'stdlib-component'
+
+// Legacy type for backward compatibility
+interface StdlibComponentElement extends TElement {
+  type: 'stdlib-component'
+  componentName: string
+  props: Record<string, unknown>
+  id?: string
+}
 
 // ============================================================================
 // Plate Value → TSX Source

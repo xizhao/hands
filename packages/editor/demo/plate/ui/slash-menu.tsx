@@ -29,8 +29,8 @@ import {
   InlineComboboxItem,
 } from './inline-combobox'
 
-// Import stdlib component insertion
-import { STDLIB_COMPONENT_KEY } from '../stdlib-component-plugin'
+// Component key for inserting components
+const STDLIB_COMPONENT_KEY = 'stdlib-component'
 
 type Group = {
   group: string

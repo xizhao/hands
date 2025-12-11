@@ -28,6 +28,7 @@ import {
 
 type EditorAction =
   | { type: 'SET_SOURCE'; source: string }
+  | { type: 'SET_SOURCE_KEEP_HISTORY'; source: string }  // Update source without clearing history
   | { type: 'APPLY_MUTATION'; mutation: Mutation }
   | { type: 'UNDO' }
   | { type: 'REDO' }
@@ -49,6 +50,27 @@ function editorReducer(state: EditorState, action: EditorAction): EditorState {
           error: null,
         }
       } catch (e) {
+        return {
+          ...state,
+          source: action.source,
+          error: e instanceof Error ? e.message : 'Parse error',
+        }
+      }
+    }
+
+    case 'SET_SOURCE_KEEP_HISTORY': {
+      // Update source without clearing history - used for Plate operations
+      try {
+        const ast = parseSource(action.source)
+        return {
+          ...state,
+          source: action.source,
+          ast,
+          error: null,
+          // Note: oplog is NOT cleared here
+        }
+      } catch (e) {
+        // On parse error, still update source but keep existing AST
         return {
           ...state,
           source: action.source,
@@ -206,6 +228,9 @@ export interface UseEditorReturn {
 
   /** Set source (resets history) */
   setSource: (source: string) => void
+
+  /** Update source without resetting history - for Plate operations */
+  updateSource: (source: string) => void
 
   /** Clear error */
   clearError: () => void

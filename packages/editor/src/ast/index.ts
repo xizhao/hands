@@ -7,8 +7,8 @@ export * from './apply'
 export * from './parser'
 export * from './generator'
 
-// New surgical mutation system
-export * from './babel-parser'
+// New surgical mutation system (OXC-based parser, ~100x faster than Babel)
+export * from './oxc-parser'
 export * from './surgical-mutations'
 export * from './plate-diff'
 export * from './slate-operations'

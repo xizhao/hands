@@ -15,7 +15,7 @@
  */
 
 import { describe, test, expect } from 'bun:test'
-import { parseSourceWithLocations } from '../ast/babel-parser'
+import { parseSourceWithLocations } from '../ast/oxc-parser'
 import { applySlateOperations, operationToSourceEdits } from '../ast/slate-operations'
 import type { Operation } from 'slate'
 

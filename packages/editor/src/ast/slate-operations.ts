@@ -30,8 +30,8 @@
  */
 
 import type { Operation, Node, Path } from 'slate'
-import type { EditableNode, SourceLocation, ParseResult } from './babel-parser'
-import { getNodeById, parseSourceWithLocations } from './babel-parser'
+import type { EditableNode, SourceLocation, ParseResult } from './oxc-parser'
+import { getNodeById, parseSourceWithLocations } from './oxc-parser'
 
 // ============================================================================
 // Path Utilities

@@ -18,7 +18,7 @@ import type { Operation } from 'slate'
 
 import { EditorKit } from './editor-kit'
 import { sourceToPlateValueSurgical } from './surgical-converters'
-import { parseSourceWithLocations, type ParseResult } from '../../src/ast/babel-parser'
+import { parseSourceWithLocations, type ParseResult } from '../../src/ast/oxc-parser'
 import { applySlateOperations } from '../../src/ast/slate-operations'
 import { cn } from '../lib/utils'
 

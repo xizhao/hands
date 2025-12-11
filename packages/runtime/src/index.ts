@@ -23,7 +23,8 @@ import { PORTS } from "./ports.js"
 import { initWorkbookDb, type WorkbookDb } from "./db/index.js"
 import { lintBlockRefs, type BlockLintResult } from "./blocks/lint.js"
 import type { BlockContext } from "./ctx.js"
-import { registerSourceRoutes, discoverSources } from "./sources/index.js"
+import { registerSourceRoutes, checkMissingSecrets } from "./sources/index.js"
+import type { SourceDefinition } from "@hands/stdlib/sources"
 
 interface RuntimeConfig {
   workbookId: string
@@ -76,12 +77,26 @@ function parseArgs(): RuntimeConfig {
   }
 }
 
+/** Source info for manifest */
+interface ManifestSource {
+  id: string
+  name: string
+  title: string
+  description: string
+  schedule?: string
+  secrets: string[]
+  missingSecrets: string[]
+  path: string
+}
+
 /**
  * Build manifest from filesystem (no DB needed - instant!)
+ * Single file walk discovers pages, blocks, and sources.
  */
-function getManifest(workbookDir: string, workbookId: string) {
+async function getManifest(workbookDir: string, workbookId: string) {
   const pages: Array<{ id: string; title: string; path: string }> = []
   const blocks: Array<{ id: string; title: string; path: string }> = []
+  const sources: ManifestSource[] = []
 
   // Read pages from filesystem
   const pagesDir = join(workbookDir, "pages")
@@ -110,8 +125,56 @@ function getManifest(workbookDir: string, workbookId: string) {
     }
   }
 
+  // Read sources from filesystem - scan sources/ for directories with index.ts
+  const sourcesDir = join(workbookDir, "sources")
+  if (existsSync(sourcesDir)) {
+    const entries = readdirSync(sourcesDir, { withFileTypes: true })
+    for (const entry of entries) {
+      if (!entry.isDirectory()) continue
+
+      // Look for index.ts or index.tsx
+      const sourceDir = join(sourcesDir, entry.name)
+      let indexPath: string | null = null
+
+      for (const filename of ["index.ts", "index.tsx"]) {
+        const path = join(sourceDir, filename)
+        if (existsSync(path)) {
+          indexPath = path
+          break
+        }
+      }
+
+      if (!indexPath) continue
+
+      try {
+        // Dynamic import - Bun will handle TypeScript
+        const mod = await import(indexPath)
+        const definition = mod.default as SourceDefinition<any, any> | undefined
+
+        // Validate it's a proper source definition
+        if (definition?.config && typeof definition?.sync === "function") {
+          const cfg = definition.config
+          const missing = checkMissingSecrets(workbookDir, cfg.secrets)
+
+          sources.push({
+            id: entry.name,
+            name: cfg.name,
+            title: cfg.title,
+            description: cfg.description,
+            schedule: cfg.schedule,
+            secrets: [...cfg.secrets],
+            missingSecrets: missing,
+            path: indexPath,
+          })
+        }
+      } catch (err) {
+        console.error(`[manifest] Failed to load source ${entry.name}:`, err)
+      }
+    }
+  }
+
   // Read config
-  let config = {}
+  let config: Record<string, any> = {}
   const handsJsonPath = join(workbookDir, "hands.json")
   if (existsSync(handsJsonPath)) {
     try {
@@ -124,8 +187,9 @@ function getManifest(workbookDir: string, workbookId: string) {
     workbookDir,
     pages,
     blocks,
+    sources,
     config,
-    isEmpty: pages.length === 0 && blocks.length === 0,
+    isEmpty: pages.length === 0 && blocks.length === 0 && sources.length === 0,
   }
 }
 
@@ -312,10 +376,10 @@ function createApp(config: RuntimeConfig) {
     })
   })
 
-  // Manifest - instant! Reads from filesystem only
+  // Manifest - reads from filesystem only
   // Clients poll this endpoint (every 1s) instead of using SSE
-  app.get("/workbook/manifest", (c) => {
-    const manifest = getManifest(config.workbookDir, config.workbookId)
+  app.get("/workbook/manifest", async (c) => {
+    const manifest = await getManifest(config.workbookDir, config.workbookId)
     return c.json(manifest)
   })
 
@@ -710,12 +774,6 @@ async function bootPGlite(workbookDir: string) {
     state.workbookDb = await initWorkbookDb(workbookDir)
     state.dbReady = true
     console.log("[runtime] Database ready")
-
-    // Log discovered sources (no scheduler - orchestration handled by caller)
-    const sources = await discoverSources(workbookDir)
-    if (sources.length > 0) {
-      console.log(`[runtime] Found ${sources.length} source(s)`)
-    }
   } catch (err) {
     console.error("[runtime] Database failed:", err)
   }
@@ -760,7 +818,7 @@ async function bootVite(config: RuntimeConfig) {
     if (!existsSync(nodeModules)) {
       console.log("[runtime] Installing dependencies...")
       await new Promise<void>((resolve, reject) => {
-        const proc = spawn("npm", ["install"], {
+        const proc = spawn("npm", ["install", "--legacy-peer-deps"], {
           cwd: handsDir,
           stdio: "inherit",
         })

@@ -7,7 +7,7 @@
 
 import type { TElement, Value } from 'platejs'
 import type { SurgicalMutation } from './surgical-mutations'
-import type { EditableNode } from './babel-parser'
+import type { EditableNode } from './oxc-parser'
 
 // ============================================================================
 // Types
@@ -30,7 +30,7 @@ interface PlateText {
 
 /**
  * Generate stable ID for a Plate node based on its position
- * Must match the strategy in babel-parser.ts
+ * Must match the strategy in oxc-parser.ts
  */
 function generatePlateNodeId(path: number[], element: TElement): string {
   const pathStr = path.join('.')
@@ -362,7 +362,7 @@ export function diffPlateValues(oldValue: Value, newValue: Value): SurgicalMutat
   const mutations: SurgicalMutation[] = []
 
   // Treat root as a virtual fragment
-  const virtualParentId = 'fragment_0' // Matches babel-parser root ID
+  const virtualParentId = 'fragment_0' // Matches oxc-parser root ID
 
   // Diff at the top level
   mutations.push(...diffChildren(

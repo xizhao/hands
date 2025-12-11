@@ -2,7 +2,7 @@
  * Surgical Converters
  *
  * New bidirectional converters that:
- * - Source → Plate: Uses babel parser with stable IDs
+ * - Source → Plate: Uses OXC parser with stable IDs (~100x faster than Babel)
  * - Plate → Source: Uses surgical mutations (character-level edits)
  */
 
@@ -11,7 +11,7 @@ import {
   parseSourceWithLocations,
   type EditableNode,
   type ParseResult,
-} from '../../src/ast/babel-parser'
+} from '../../src/ast/oxc-parser'
 import {
   applySurgicalMutations,
   type SurgicalMutation,
@@ -24,17 +24,35 @@ import { generateMutationsFromPlateChange } from '../../src/ast/plate-diff'
 // ============================================================================
 
 /**
- * Check if a tag is a "void" element (no editable children)
- * These are either self-closing HTML tags or complex components
+ * HTML void elements - these truly have no children
  */
-function isVoidElement(tagName: string): boolean {
-  const voidTags = new Set([
-    'img', 'br', 'hr', 'input', 'meta', 'link', 'area', 'base', 'col', 'embed',
-    'source', 'track', 'wbr',
-  ])
-  // PascalCase = React component, treat as potentially void
-  const isPascalCase = /^[A-Z]/.test(tagName)
-  return voidTags.has(tagName.toLowerCase()) || isPascalCase
+const HTML_VOID_TAGS = new Set([
+  'img', 'br', 'hr', 'input', 'meta', 'link', 'area', 'base', 'col', 'embed',
+  'source', 'track', 'wbr',
+])
+
+/**
+ * Check if an element should be void (no editable children)
+ *
+ * Void if:
+ * 1. HTML void tag (img, br, hr, etc.) - always void
+ * 2. Self-closing custom component (<MetricCard />) - void
+ *
+ * NOT void if:
+ * - Custom component with children (<Card>...</Card>)
+ */
+function shouldBeVoid(node: EditableNode): boolean {
+  // HTML void elements are always void
+  if (HTML_VOID_TAGS.has(node.tagName.toLowerCase())) {
+    return true
+  }
+
+  // Self-closing JSX elements are void (no editable children)
+  if (node.selfClosing) {
+    return true
+  }
+
+  return false
 }
 
 /**
@@ -96,28 +114,28 @@ function editableNodeToPlateElement(node: EditableNode): TElement {
   // This preserves the original element for round-trip editing
   const type = node.tagName
 
-  // Check if this is a void/component element
-  const isVoid = isVoidElement(node.tagName)
+  // Check if this element should be void (no editable children)
+  const isVoid = shouldBeVoid(node)
 
   // Convert children
+  // IMPORTANT: Even void elements preserve their children for structure/rendering
+  // The children aren't directly editable in Plate, but we keep them for display
   const children: (TElement | { text: string })[] = []
 
-  if (isVoid) {
-    // Void elements get empty text child (Plate requirement)
-    children.push({ text: '' })
-  } else {
-    for (const child of node.children) {
-      if (child.isText) {
-        children.push({ text: child.text || '' })
-      } else {
-        children.push(editableNodeToPlateElement(child))
+  for (const child of node.children) {
+    if (child.isText) {
+      // Only add non-empty text nodes, or one empty if needed
+      if (child.text && child.text.trim()) {
+        children.push({ text: child.text })
       }
+    } else {
+      children.push(editableNodeToPlateElement(child))
     }
+  }
 
-    // Ensure at least one child
-    if (children.length === 0) {
-      children.push({ text: '' })
-    }
+  // Ensure at least one child (Plate requirement)
+  if (children.length === 0) {
+    children.push({ text: '' })
   }
 
   return {

@@ -1,23 +1,15 @@
 /**
  * Sources Management Hook
  *
- * Simplified React Query hooks for sources.
+ * Sources come from manifest.sources[] - no separate endpoint needed.
  * Runtime only executes sync - no history/progress tracking here.
  */
 
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
-import { useRuntimePort } from "@/hooks/useWorkbook"
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
+import { useRuntimePort, useManifest, type WorkbookSource } from "@/hooks/useWorkbook"
 
-// Source from runtime API (installed)
-export interface Source {
-  id: string
-  name: string
-  title: string
-  description: string
-  schedule?: string
-  secrets: string[]
-  missingSecrets: string[]
-}
+// Re-export for convenience
+export type Source = WorkbookSource
 
 // Available source from registry
 export interface AvailableSource {
@@ -48,23 +40,12 @@ export interface AddSourceResult {
 }
 
 /**
- * List all installed sources
+ * Get sources from manifest
+ * Sources are discovered during manifest generation
  */
-export function useSources() {
-  const port = useRuntimePort()
-
-  return useQuery({
-    queryKey: ["sources", port],
-    queryFn: async (): Promise<Source[]> => {
-      if (!port) return []
-      const res = await fetch(`http://localhost:${port}/sources`)
-      if (!res.ok) throw new Error(await res.text())
-      const data = await res.json()
-      return data.sources ?? []
-    },
-    enabled: !!port,
-    staleTime: 5000,
-  })
+export function useSources(): Source[] {
+  const { data: manifest } = useManifest()
+  return (manifest?.sources as Source[]) ?? []
 }
 
 /**
@@ -89,8 +70,8 @@ export function useSyncSource() {
       return data as SyncResult
     },
     onSuccess: () => {
-      // Refresh sources list and db schema
-      queryClient.invalidateQueries({ queryKey: ["sources"] })
+      // Refresh manifest (includes sources) and db schema
+      queryClient.invalidateQueries({ queryKey: ["manifest"] })
       queryClient.invalidateQueries({ queryKey: ["db-schema"] })
     },
   })
@@ -137,8 +118,8 @@ export function useAddSource() {
       return data as AddSourceResult
     },
     onSuccess: () => {
-      // Refresh sources list
-      queryClient.invalidateQueries({ queryKey: ["sources"] })
+      // Refresh manifest (includes sources)
+      queryClient.invalidateQueries({ queryKey: ["manifest"] })
     },
   })
 }
@@ -147,16 +128,17 @@ export function useAddSource() {
  * Combined hook for common source operations
  */
 export function useSourceManagement() {
-  const sources = useSources()
+  const { data: manifest, isLoading, error, refetch } = useManifest()
+  const sources = (manifest?.sources as Source[]) ?? []
   const syncMutation = useSyncSource()
   const availableSources = useAvailableSources()
   const addMutation = useAddSource()
 
   return {
-    // Installed sources
-    sources: sources.data ?? [],
-    isLoading: sources.isLoading,
-    error: sources.error,
+    // Installed sources (from manifest)
+    sources,
+    isLoading,
+    error,
 
     // Available sources from registry
     availableSources: availableSources.data ?? [],
@@ -176,6 +158,6 @@ export function useSourceManagement() {
     addError: addMutation.error,
 
     // Refetch
-    refresh: sources.refetch,
+    refresh: refetch,
   }
 }

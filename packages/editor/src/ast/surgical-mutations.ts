@@ -5,8 +5,8 @@
  * This preserves all non-JSX code while making precise edits.
  */
 
-import type { EditableNode, EditableProp, SourceLocation } from './babel-parser'
-import { parseSourceWithLocations, getNodeById } from './babel-parser'
+import type { EditableNode, EditableProp, SourceLocation } from './oxc-parser'
+import { parseSourceWithLocations, getNodeById } from './oxc-parser'
 
 // ============================================================================
 // Mutation Types

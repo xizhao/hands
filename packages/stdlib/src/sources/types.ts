@@ -36,7 +36,7 @@ import type { DbContext } from "../types/block.js"
  *     topStories: {
  *       table: "hn_stories",
  *       where: "type = 'top'",
- *       schedule: "*/15 * * * *",
+ *       schedule: "0,15,30,45 * * * *",  // every 15 minutes
  *     },
  *     // Parameterized shape - sync on-demand when subscribed
  *     storyComments: {

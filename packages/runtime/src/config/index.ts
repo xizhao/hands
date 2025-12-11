@@ -7,7 +7,21 @@
 
 import { z } from "zod"
 import { existsSync, readFileSync, writeFileSync } from "fs"
-import { join } from "path"
+import { join, resolve } from "path"
+
+/**
+ * Get the absolute path to @hands/stdlib
+ * Works in both development (monorepo) and production
+ */
+function getStdlibPath(): string {
+  // In development, stdlib is a sibling package
+  const devPath = resolve(import.meta.dir, "../../stdlib")
+  if (existsSync(join(devPath, "package.json"))) {
+    return devPath
+  }
+  // Fallback to node_modules
+  return resolve(process.cwd(), "node_modules/@hands/stdlib")
+}
 
 // Source configuration
 export const SourceConfigSchema = z.object({
@@ -193,7 +207,8 @@ export async function initWorkbook(options: InitWorkbookOptions): Promise<void> 
     JSON.stringify(handsJson, null, 2) + "\n"
   )
 
-  // Create package.json
+  // Create package.json (using file: path for @hands/stdlib)
+  const stdlibPath = getStdlibPath()
   const packageJson = {
     name: `@hands/${slug}`,
     version: "0.0.1",
@@ -204,7 +219,7 @@ export async function initWorkbook(options: InitWorkbookOptions): Promise<void> 
       build: "hands build",
     },
     dependencies: {
-      "@hands/stdlib": "workspace:*",
+      "@hands/stdlib": `file:${stdlibPath}`,
     },
     devDependencies: {
       typescript: "^5",

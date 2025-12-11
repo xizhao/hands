@@ -35,18 +35,12 @@ import {
 import { DndKit } from './plugins/dnd-kit'
 import { BlockSelectionKit } from './plugins/block-selection-kit'
 import { SlashKit } from './plugins/slash-kit'
-import { JsxElementPlugin } from './plugins/jsx-element-plugin'
-import { ComponentPlugin } from './plugins/component-plugin'
+import { ElementPlugin } from './plugins/element-plugin'
 
 export const EditorKit = [
-  // JSX Element Plugin - Catches HTML elements like div, span, etc.
-  // This allows any JSX element to be editable
-  JsxElementPlugin,
-
-  // Unified Component Plugin - Renders ALL PascalCase components
-  // 1. Looks up in local registry (Button, Card, etc.)
-  // 2. Falls back to RSC rendering for unknown components
-  ComponentPlugin,
+  // Unified Element Plugin - Renders ALL elements (HTML + custom components)
+  // Single source of truth for isVoid logic
+  ElementPlugin,
 
   // Block Elements with real components
   ParagraphPlugin.withComponent(ParagraphElement),

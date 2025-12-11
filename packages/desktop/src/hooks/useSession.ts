@@ -365,7 +365,7 @@ export function useImportWithAgent() {
         parts: [{
           id: `optimistic-part-${now}`,
           type: "text",
-          text: `Import this data file and make it useful: ${filePath}`,
+          text: `Import and integrate this data file: ${filePath}`,
           messageID: optimisticId,
           sessionID: session.id,
           time: { created: now, updated: now },
@@ -378,12 +378,20 @@ export function useImportWithAgent() {
       console.log("[import] Messages cache initialized with optimistic message");
 
       // 6. Send prompt to the agent with file path
-      console.log("[import] Step 6: Sending prompt to agent...");
-      const prompt = `Import this data file and make it useful: ${filePath}`;
+      // Use the main "hands" agent which will orchestrate @import + view integration
+      console.log("[import] Step 6: Sending prompt to hands agent...");
+      const prompt = `Import and integrate this data file: ${filePath}
+
+Use @import to load the data into the database first. Once the data is in the database, integrate it into the app by either:
+- Creating a new dashboard/block to visualize the data
+- Adding it to an existing relevant block
+- Building an appropriate view based on the data type (charts for time series, tables for records, etc.)
+
+The import is only complete when the data is both in the database AND visible in the UI.`;
       console.log("[import] Prompt:", prompt);
 
-      // IMPORTANT: Must pass agent="import" (or "hands") so OpenCode knows how to handle the prompt
-      const promptResult = await api.promptAsync(session.id, prompt, { agent: "import", directory });
+      // Use main "hands" agent to orchestrate import + view integration
+      const promptResult = await api.promptAsync(session.id, prompt, { agent: "hands", directory });
       console.log("[import] promptAsync returned:", promptResult);
 
       // Immediately invalidate messages to trigger a fetch

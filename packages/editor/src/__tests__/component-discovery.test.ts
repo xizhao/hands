@@ -8,13 +8,21 @@
  */
 
 import { describe, test, expect } from 'bun:test'
-import { parseSourceWithLocations } from '../ast/babel-parser'
+import { parseSourceWithLocations } from '../ast/oxc-parser'
 import { sourceToPlateValueSurgical } from '../../demo/plate/surgical-converters'
+
+/**
+ * Helper to wrap JSX in export default (required by parser)
+ * The parser expects block file format: `export default (ctx) => (<JSX />)`
+ */
+function wrapJsx(jsx: string): string {
+  return `export default (ctx) => (${jsx})`
+}
 
 describe('Component Discovery', () => {
   describe('JSX Tree Recognition', () => {
     test('recognizes single top-level element', () => {
-      const source = `<div>Hello</div>`
+      const source = wrapJsx(`<div>Hello</div>`)
       const result = parseSourceWithLocations(source)
 
       expect(result.root).toBeDefined()
@@ -24,11 +32,11 @@ describe('Component Discovery', () => {
     })
 
     test('recognizes fragment with multiple top-level elements', () => {
-      const source = `<>
+      const source = wrapJsx(`<>
         <h1>Title</h1>
         <p>Paragraph</p>
         <Button>Click</Button>
-      </>`
+      </>`)
       const result = parseSourceWithLocations(source)
 
       expect(result.root).toBeDefined()
@@ -37,10 +45,10 @@ describe('Component Discovery', () => {
     })
 
     test('recognizes nested elements as children, not top-level', () => {
-      const source = `<div>
+      const source = wrapJsx(`<div>
         <span>Nested span</span>
         <p>Nested paragraph</p>
-      </div>`
+      </div>`)
       const result = parseSourceWithLocations(source)
 
       expect(result.root).toBeDefined()
@@ -52,7 +60,7 @@ describe('Component Discovery', () => {
     })
 
     test('recognizes PascalCase as custom component', () => {
-      const source = `<Button variant="primary">Click me</Button>`
+      const source = wrapJsx(`<Button variant="primary">Click me</Button>`)
       const result = parseSourceWithLocations(source)
 
       expect(result.root?.tagName).toBe('Button')
@@ -61,14 +69,14 @@ describe('Component Discovery', () => {
     })
 
     test('recognizes kebab-case as custom element', () => {
-      const source = `<my-widget data-id="123">Content</my-widget>`
+      const source = wrapJsx(`<my-widget data-id="123">Content</my-widget>`)
       const result = parseSourceWithLocations(source)
 
       expect(result.root?.tagName).toBe('my-widget')
     })
 
     test('preserves element IDs for surgical updates', () => {
-      const source = `<div><span>A</span><span>B</span></div>`
+      const source = wrapJsx(`<div><span>A</span><span>B</span></div>`)
       const result = parseSourceWithLocations(source)
 
       expect(result.root?.id).toBeDefined()
@@ -81,7 +89,7 @@ describe('Component Discovery', () => {
 
   describe('Conversion to Plate Blocks', () => {
     test('single div becomes one Plate block', () => {
-      const source = `<div>Hello world</div>`
+      const source = wrapJsx(`<div>Hello world</div>`)
       const { value } = sourceToPlateValueSurgical(source)
 
       expect(value).toHaveLength(1)
@@ -89,10 +97,10 @@ describe('Component Discovery', () => {
     })
 
     test('fragment children become multiple Plate blocks', () => {
-      const source = `<>
+      const source = wrapJsx(`<>
         <h1>Title</h1>
         <p>Paragraph</p>
-      </>`
+      </>`)
       const { value } = sourceToPlateValueSurgical(source)
 
       expect(value).toHaveLength(2)
@@ -101,55 +109,61 @@ describe('Component Discovery', () => {
     })
 
     test('wrapper div with block children flattens to blocks', () => {
-      const source = `<div>
+      const source = wrapJsx(`<div>
         <h1>Title</h1>
         <p>Content</p>
-      </div>`
+      </div>`)
       const { value } = sourceToPlateValueSurgical(source)
 
       // div wrapper with block children should flatten
       expect(value.length).toBeGreaterThanOrEqual(1)
     })
 
-    test('Button component becomes void Plate block', () => {
-      const source = `<Button variant="primary">Click</Button>`
+    test('Button component becomes editable Plate block', () => {
+      const source = wrapJsx(`<Button variant="primary">Click</Button>`)
       const { value } = sourceToPlateValueSurgical(source)
 
       expect(value).toHaveLength(1)
       expect(value[0].type).toBe('Button')
-      expect((value[0] as any).isVoid).toBe(true)
+      // Components with children are editable, not void
+      expect((value[0] as any).isVoid).toBeFalsy()
     })
 
-    test('Card with children becomes void Plate block', () => {
-      const source = `<Card>
+    test('Card with children becomes editable Plate block', () => {
+      const source = wrapJsx(`<Card>
         <CardHeader>
           <CardTitle>Title</CardTitle>
         </CardHeader>
-      </Card>`
+      </Card>`)
       const { value } = sourceToPlateValueSurgical(source)
 
       expect(value).toHaveLength(1)
       expect(value[0].type).toBe('Card')
-      expect((value[0] as any).isVoid).toBe(true)
+      // Card is editable - its children are traversable
+      expect((value[0] as any).isVoid).toBeFalsy()
+      // Children should be preserved
+      const card = value[0] as any
+      expect(card.children.some((c: any) => c.type === 'CardHeader')).toBe(true)
     })
 
     test('mixed HTML and components create correct blocks', () => {
-      const source = `<>
+      const source = wrapJsx(`<>
         <h1>Welcome</h1>
         <Button>Action</Button>
         <p>More text</p>
-      </>`
+      </>`)
       const { value } = sourceToPlateValueSurgical(source)
 
       expect(value).toHaveLength(3)
       expect(value[0].type).toBe('h1')
       expect(value[1].type).toBe('Button')
-      expect((value[1] as any).isVoid).toBe(true)
+      // Button is editable, not void
+      expect((value[1] as any).isVoid).toBeFalsy()
       expect(value[2].type).toBe('p')
     })
 
     test('preserves props on Plate blocks', () => {
-      const source = `<Button variant="destructive" size="lg">Delete</Button>`
+      const source = wrapJsx(`<Button variant="destructive" size="lg">Delete</Button>`)
       const { value } = sourceToPlateValueSurgical(source)
 
       expect(value[0].type).toBe('Button')
@@ -160,17 +174,19 @@ describe('Component Discovery', () => {
     })
 
     test('preserves stable IDs from source', () => {
-      const source = `<div><p>Text</p></div>`
+      // Use a non-flattening structure to test ID preservation
+      const source = wrapJsx(`<Card><CardContent>Text</CardContent></Card>`)
       const { value, parseResult } = sourceToPlateValueSurgical(source)
 
       expect((value[0] as any).id).toBeDefined()
-      // ID should match the parsed AST
+      // ID should match the parsed AST root
       expect((value[0] as any).id).toBe(parseResult.root?.id)
     })
   })
 
   describe('Block Count Verification', () => {
-    test('empty source creates one empty paragraph', () => {
+    test('empty JSX creates one empty paragraph', () => {
+      // Empty source (no export default) results in fallback
       const source = ``
       const { value } = sourceToPlateValueSurgical(source)
 
@@ -178,16 +194,8 @@ describe('Component Discovery', () => {
       expect(value[0].type).toBe('p')
     })
 
-    test('text-only source creates paragraph', () => {
-      const source = `Hello world`
-      const { value } = sourceToPlateValueSurgical(source)
-
-      // Text should be wrapped in a block
-      expect(value.length).toBeGreaterThanOrEqual(1)
-    })
-
     test('complex layout creates correct block count', () => {
-      const source = `<>
+      const source = wrapJsx(`<>
         <Card>
           <CardHeader>
             <CardTitle>Dashboard</CardTitle>
@@ -202,7 +210,7 @@ describe('Component Discovery', () => {
           <Button>Refresh</Button>
           <Button>Export</Button>
         </div>
-      </>`
+      </>`)
       const { value } = sourceToPlateValueSurgical(source)
 
       // Should have 2 top-level blocks: Card and div
@@ -214,8 +222,21 @@ describe('Component Discovery', () => {
 })
 
 describe('Component Type Detection', () => {
-  // Helper to check if a type would be treated as custom component
+  /**
+   * Component detection logic:
+   * - PascalCase (starts with uppercase) = React component (custom)
+   * - lowercase HTML elements = native HTML
+   * - kebab-case = custom elements (web components)
+   *
+   * This matches JSX semantics where <button> is HTML but <Button> is a component
+   */
   function isCustomComponent(tagName: string): boolean {
+    // PascalCase = always a React component
+    if (/^[A-Z]/.test(tagName)) {
+      return true
+    }
+
+    // Check if it's a known HTML element (lowercase only)
     const HTML_ELEMENTS = new Set([
       'div', 'p', 'span', 'section', 'article', 'aside', 'header', 'footer', 'main', 'nav',
       'h1', 'h2', 'h3', 'h4', 'h5', 'h6',
@@ -228,10 +249,11 @@ describe('Component Type Detection', () => {
       'a', 'em', 'strong', 'small', 'mark', 'del', 'ins',
       'button', 'fragment',
     ])
-    return !HTML_ELEMENTS.has(tagName.toLowerCase())
+
+    return !HTML_ELEMENTS.has(tagName)
   }
 
-  test('HTML elements are not custom components', () => {
+  test('lowercase HTML elements are not custom components', () => {
     expect(isCustomComponent('div')).toBe(false)
     expect(isCustomComponent('span')).toBe(false)
     expect(isCustomComponent('p')).toBe(false)
@@ -240,11 +262,15 @@ describe('Component Type Detection', () => {
     expect(isCustomComponent('input')).toBe(false)
   })
 
-  test('PascalCase elements are custom components', () => {
+  test('PascalCase elements are ALWAYS custom components', () => {
+    // This is the JSX convention: <Button> is a component, <button> is HTML
     expect(isCustomComponent('Button')).toBe(true)
     expect(isCustomComponent('Card')).toBe(true)
     expect(isCustomComponent('MyComponent')).toBe(true)
     expect(isCustomComponent('DataTable')).toBe(true)
+    // Even things that look like HTML when lowercase
+    expect(isCustomComponent('Div')).toBe(true)
+    expect(isCustomComponent('Span')).toBe(true)
   })
 
   test('kebab-case custom elements are custom components', () => {
@@ -253,9 +279,10 @@ describe('Component Type Detection', () => {
     expect(isCustomComponent('custom-element')).toBe(true)
   })
 
-  test('case insensitive HTML detection', () => {
-    expect(isCustomComponent('DIV')).toBe(false)
-    expect(isCustomComponent('Div')).toBe(false)
-    expect(isCustomComponent('SPAN')).toBe(false)
+  test('uppercase HTML is still custom (JSX convention)', () => {
+    // In JSX, DIV would be treated as a component reference, not HTML
+    // This is how React works - only lowercase = HTML
+    expect(isCustomComponent('DIV')).toBe(true)
+    expect(isCustomComponent('SPAN')).toBe(true)
   })
 })

@@ -1,14 +1,14 @@
 /**
- * Babel-based TSX Parser with Source Locations
+ * OXC-based TSX Parser with Source Locations
  *
+ * Uses OXC for ~100x faster parsing than Babel.
  * Parses TSX source and extracts only editable JSX nodes with:
  * - Stable IDs based on structural position
  * - Exact source locations (start/end character positions)
  * - Preserves non-JSX code untouched
  */
 
-import { parse } from '@babel/parser'
-import type * as t from '@babel/types'
+import { parseSync } from 'oxc-parser'
 
 // ============================================================================
 // Types
@@ -71,50 +71,116 @@ export interface ParseResult {
 }
 
 // ============================================================================
+// OXC AST Types (subset of what we need)
+// ============================================================================
+
+interface OxcNode {
+  type: string
+  start: number
+  end: number
+}
+
+interface OxcJSXIdentifier extends OxcNode {
+  type: 'JSXIdentifier'
+  name: string
+}
+
+interface OxcJSXMemberExpression extends OxcNode {
+  type: 'JSXMemberExpression'
+  object: OxcJSXIdentifier | OxcJSXMemberExpression
+  property: OxcJSXIdentifier
+}
+
+interface OxcJSXNamespacedName extends OxcNode {
+  type: 'JSXNamespacedName'
+  namespace: OxcJSXIdentifier
+  name: OxcJSXIdentifier
+}
+
+type OxcJSXElementName = OxcJSXIdentifier | OxcJSXMemberExpression | OxcJSXNamespacedName
+
+interface OxcJSXAttribute extends OxcNode {
+  type: 'JSXAttribute'
+  name: OxcJSXIdentifier | OxcJSXNamespacedName
+  value: OxcJSXAttributeValue | null
+}
+
+interface OxcJSXSpreadAttribute extends OxcNode {
+  type: 'JSXSpreadAttribute'
+  argument: OxcNode
+}
+
+type OxcJSXAttributeItem = OxcJSXAttribute | OxcJSXSpreadAttribute
+
+// OXC uses unified "Literal" type instead of separate StringLiteral/NumericLiteral/etc.
+interface OxcLiteral extends OxcNode {
+  type: 'Literal'
+  value: string | number | boolean | null
+  raw: string
+}
+
+interface OxcJSXExpressionContainer extends OxcNode {
+  type: 'JSXExpressionContainer'
+  expression: OxcNode
+}
+
+type OxcJSXAttributeValue = OxcLiteral | OxcJSXExpressionContainer | OxcJSXElement
+
+interface OxcJSXOpeningElement extends OxcNode {
+  type: 'JSXOpeningElement'
+  name: OxcJSXElementName
+  attributes: OxcJSXAttributeItem[]
+  selfClosing: boolean
+}
+
+interface OxcJSXClosingElement extends OxcNode {
+  type: 'JSXClosingElement'
+  name: OxcJSXElementName
+}
+
+interface OxcJSXText extends OxcNode {
+  type: 'JSXText'
+  value: string
+}
+
+interface OxcJSXElement extends OxcNode {
+  type: 'JSXElement'
+  openingElement: OxcJSXOpeningElement
+  closingElement: OxcJSXClosingElement | null
+  children: OxcJSXChild[]
+}
+
+interface OxcJSXFragment extends OxcNode {
+  type: 'JSXFragment'
+  openingFragment: OxcNode
+  closingFragment: OxcNode
+  children: OxcJSXChild[]
+}
+
+type OxcJSXChild = OxcJSXElement | OxcJSXFragment | OxcJSXText | OxcJSXExpressionContainer
+
+// ============================================================================
 // Stable ID Generation
 // ============================================================================
 
-/**
- * Generate a stable ID for a node based on its structural position.
- *
- * IMPORTANT: These IDs are for debugging and display only!
- *
- * The ACTUAL "ID system" for operations is Slate's PATH system:
- * - Slate operations use paths like [0], [1, 2] to identify nodes
- * - Paths map directly to children indices in the AST
- * - When we apply operations, we use paths NOT IDs
- *
- * These generated IDs are path-based (like "h1_0.1") for:
- * - Human-readable debugging
- * - Correlation when logging
- * - Display in UI
- *
- * They are NOT used for:
- * - Finding nodes for operations (use paths instead)
- * - Tracking nodes across moves (paths change, IDs change too)
- */
 function generateStableId(path: number[], tagName: string): string {
   const pathStr = path.join('.')
-  // Sanitize tagName (lowercase, remove special chars)
   const safeName = tagName.toLowerCase().replace(/[^a-z0-9]/g, '')
   return `${safeName}_${pathStr}`
 }
 
 // ============================================================================
-// Babel AST → EditableNode
+// OXC AST → EditableNode
 // ============================================================================
 
-/**
- * Convert a Babel JSX node to our EditableNode format
- */
-function babelJsxToEditableNode(
-  node: t.JSXElement | t.JSXFragment | t.JSXText | t.JSXExpressionContainer,
+function oxcJsxToEditableNode(
+  node: OxcJSXChild,
   source: string,
   path: number[]
 ): EditableNode | null {
   // Handle JSX Text
   if (node.type === 'JSXText') {
-    const text = node.value.trim()
+    const text = (node as OxcJSXText).value.trim()
     if (!text) return null // Skip whitespace-only text
 
     return {
@@ -125,37 +191,31 @@ function babelJsxToEditableNode(
       children: [],
       text,
       isText: true,
-      loc: {
-        start: node.start ?? 0,
-        end: node.end ?? 0,
-      },
-      openingTagLoc: {
-        start: node.start ?? 0,
-        end: node.end ?? 0,
-      },
+      loc: { start: node.start, end: node.end },
+      openingTagLoc: { start: node.start, end: node.end },
     }
   }
 
-  // Handle JSX Expression Container (skip for now - just get text if literal)
+  // Handle JSX Expression Container
   if (node.type === 'JSXExpressionContainer') {
-    // For simple string/number literals, treat as text
-    if (node.expression.type === 'StringLiteral') {
-      return {
-        id: generateStableId(path, 'text'),
-        tagName: '#text',
-        selfClosing: false,
-        props: {},
-        children: [],
-        text: node.expression.value,
-        isText: true,
-        loc: {
-          start: node.start ?? 0,
-          end: node.end ?? 0,
-        },
-        openingTagLoc: {
-          start: node.start ?? 0,
-          end: node.end ?? 0,
-        },
+    const expr = (node as OxcJSXExpressionContainer).expression
+    // For simple string literals, treat as text
+    // OXC uses unified "Literal" type
+    if (expr.type === 'Literal') {
+      const lit = expr as OxcLiteral
+      // Only treat string literals as text
+      if (typeof lit.value === 'string') {
+        return {
+          id: generateStableId(path, 'text'),
+          tagName: '#text',
+          selfClosing: false,
+          props: {},
+          children: [],
+          text: lit.value,
+          isText: true,
+          loc: { start: node.start, end: node.end },
+          openingTagLoc: { start: node.start, end: node.end },
+        }
       }
     }
     // Skip other expressions for now
@@ -164,36 +224,29 @@ function babelJsxToEditableNode(
 
   // Handle JSX Fragment
   if (node.type === 'JSXFragment') {
-    const children = extractChildren(node.children, source, path)
+    const frag = node as OxcJSXFragment
+    const children = extractChildren(frag.children, source, path)
     return {
       id: generateStableId(path, 'fragment'),
       tagName: '#fragment',
       selfClosing: false,
       props: {},
       children,
-      loc: {
-        start: node.start ?? 0,
-        end: node.end ?? 0,
-      },
-      openingTagLoc: {
-        start: node.openingFragment.start ?? 0,
-        end: node.openingFragment.end ?? 0,
-      },
+      loc: { start: node.start, end: node.end },
+      openingTagLoc: { start: frag.openingFragment.start, end: frag.openingFragment.end },
       childrenLoc: children.length > 0
-        ? {
-            start: node.openingFragment.end ?? 0,
-            end: node.closingFragment.start ?? 0,
-          }
+        ? { start: frag.openingFragment.end, end: frag.closingFragment.start }
         : undefined,
     }
   }
 
   // Handle JSX Element
   if (node.type === 'JSXElement') {
-    const opening = node.openingElement
+    const el = node as OxcJSXElement
+    const opening = el.openingElement
     const tagName = getTagName(opening.name)
     const props = extractProps(opening.attributes, source)
-    const children = extractChildren(node.children, source, path)
+    const children = extractChildren(el.children, source, path)
 
     return {
       id: generateStableId(path, tagName),
@@ -201,20 +254,11 @@ function babelJsxToEditableNode(
       selfClosing: opening.selfClosing,
       props,
       children,
-      loc: {
-        start: node.start ?? 0,
-        end: node.end ?? 0,
-      },
-      openingTagLoc: {
-        start: opening.start ?? 0,
-        end: opening.end ?? 0,
-      },
+      loc: { start: node.start, end: node.end },
+      openingTagLoc: { start: opening.start, end: opening.end },
       childrenLoc:
-        !opening.selfClosing && node.closingElement
-          ? {
-              start: opening.end ?? 0,
-              end: node.closingElement.start ?? 0,
-            }
+        !opening.selfClosing && el.closingElement
+          ? { start: opening.end, end: el.closingElement.start }
           : undefined,
     }
   }
@@ -222,15 +266,12 @@ function babelJsxToEditableNode(
   return null
 }
 
-/**
- * Get tag name from JSX identifier
- */
-function getTagName(name: t.JSXIdentifier | t.JSXMemberExpression | t.JSXNamespacedName): string {
+function getTagName(name: OxcJSXElementName): string {
   if (name.type === 'JSXIdentifier') {
     return name.name
   }
   if (name.type === 'JSXMemberExpression') {
-    return `${getTagName(name.object)}.${name.property.name}`
+    return `${getTagName(name.object as OxcJSXElementName)}.${name.property.name}`
   }
   if (name.type === 'JSXNamespacedName') {
     return `${name.namespace.name}:${name.name.name}`
@@ -238,80 +279,77 @@ function getTagName(name: t.JSXIdentifier | t.JSXMemberExpression | t.JSXNamespa
   return 'unknown'
 }
 
-/**
- * Extract props from JSX attributes
- */
 function extractProps(
-  attributes: (t.JSXAttribute | t.JSXSpreadAttribute)[],
+  attributes: OxcJSXAttributeItem[],
   source: string
 ): Record<string, EditableProp> {
   const props: Record<string, EditableProp> = {}
 
   for (const attr of attributes) {
     if (attr.type === 'JSXSpreadAttribute') {
-      // Handle spread: {...props}
-      const rawValue = source.slice(attr.start ?? 0, attr.end ?? 0)
+      const spread = attr as OxcJSXSpreadAttribute
+      const rawValue = source.slice(attr.start, attr.end)
       props['...spread'] = {
         name: '...spread',
         value: rawValue,
         rawValue,
         isExpression: true,
-        loc: { start: attr.start ?? 0, end: attr.end ?? 0 },
-        valueLoc: { start: attr.argument.start ?? 0, end: attr.argument.end ?? 0 },
+        loc: { start: attr.start, end: attr.end },
+        valueLoc: { start: spread.argument.start, end: spread.argument.end },
       }
       continue
     }
 
-    const name = attr.name.type === 'JSXIdentifier'
-      ? attr.name.name
-      : `${attr.name.namespace.name}:${attr.name.name.name}`
+    const jsxAttr = attr as OxcJSXAttribute
+    const name = jsxAttr.name.type === 'JSXIdentifier'
+      ? jsxAttr.name.name
+      : `${(jsxAttr.name as OxcJSXNamespacedName).namespace.name}:${(jsxAttr.name as OxcJSXNamespacedName).name.name}`
 
     // No value means boolean true: <Input disabled />
-    if (!attr.value) {
+    if (!jsxAttr.value) {
       props[name] = {
         name,
         value: true,
         rawValue: 'true',
         isExpression: false,
-        loc: { start: attr.start ?? 0, end: attr.end ?? 0 },
-        valueLoc: { start: attr.start ?? 0, end: attr.end ?? 0 },
+        loc: { start: attr.start, end: attr.end },
+        valueLoc: { start: attr.start, end: attr.end },
       }
       continue
     }
 
     // String literal: name="value"
-    if (attr.value.type === 'StringLiteral') {
+    // OXC uses 'Literal' type for string attribute values (not JSXExpressionContainer)
+    if (jsxAttr.value.type === 'Literal') {
+      const lit = jsxAttr.value as OxcLiteral
       props[name] = {
         name,
-        value: attr.value.value,
-        rawValue: `"${attr.value.value}"`,
+        value: lit.value,
+        rawValue: lit.raw,
         isExpression: false,
-        loc: { start: attr.start ?? 0, end: attr.end ?? 0 },
-        valueLoc: { start: attr.value.start ?? 0, end: attr.value.end ?? 0 },
+        loc: { start: attr.start, end: attr.end },
+        valueLoc: { start: jsxAttr.value.start, end: jsxAttr.value.end },
       }
       continue
     }
 
     // Expression: name={...}
-    if (attr.value.type === 'JSXExpressionContainer') {
-      const expr = attr.value.expression
-      const rawValue = source.slice(attr.value.start ?? 0, attr.value.end ?? 0)
+    if (jsxAttr.value.type === 'JSXExpressionContainer') {
+      const container = jsxAttr.value as OxcJSXExpressionContainer
+      const expr = container.expression
+      const rawValue = source.slice(jsxAttr.value.start, jsxAttr.value.end)
 
       let value: string | number | boolean | null | object = rawValue
 
       // Try to extract literal values
-      if (expr.type === 'NumericLiteral') {
-        value = expr.value
-      } else if (expr.type === 'StringLiteral') {
-        value = expr.value
-      } else if (expr.type === 'BooleanLiteral') {
-        value = expr.value
-      } else if (expr.type === 'NullLiteral') {
-        value = null
+      // OXC uses unified "Literal" type instead of separate NumericLiteral/StringLiteral/etc.
+      if (expr.type === 'Literal') {
+        // OxcLiteral has value: string | number | boolean | null
+        value = (expr as OxcLiteral).value
       } else if (expr.type === 'ObjectExpression' || expr.type === 'ArrayExpression') {
         // Try to parse as JSON
         try {
-          const innerSource = source.slice(expr.start ?? 0, expr.end ?? 0)
+          const innerSource = source.slice(expr.start, expr.end)
           value = JSON.parse(innerSource.replace(/'/g, '"'))
         } catch {
           value = rawValue
@@ -323,22 +361,22 @@ function extractProps(
         value,
         rawValue,
         isExpression: true,
-        loc: { start: attr.start ?? 0, end: attr.end ?? 0 },
-        valueLoc: { start: attr.value.start ?? 0, end: attr.value.end ?? 0 },
+        loc: { start: attr.start, end: attr.end },
+        valueLoc: { start: jsxAttr.value.start, end: jsxAttr.value.end },
       }
       continue
     }
 
     // JSX Element as prop value: name={<Element />}
-    if (attr.value.type === 'JSXElement') {
-      const rawValue = source.slice(attr.value.start ?? 0, attr.value.end ?? 0)
+    if (jsxAttr.value.type === 'JSXElement') {
+      const rawValue = source.slice(jsxAttr.value.start, jsxAttr.value.end)
       props[name] = {
         name,
         value: rawValue,
         rawValue,
         isExpression: true,
-        loc: { start: attr.start ?? 0, end: attr.end ?? 0 },
-        valueLoc: { start: attr.value.start ?? 0, end: attr.value.end ?? 0 },
+        loc: { start: attr.start, end: attr.end },
+        valueLoc: { start: jsxAttr.value.start, end: jsxAttr.value.end },
       }
     }
   }
@@ -346,11 +384,8 @@ function extractProps(
   return props
 }
 
-/**
- * Extract children from JSX children array
- */
 function extractChildren(
-  children: (t.JSXElement | t.JSXFragment | t.JSXText | t.JSXExpressionContainer | t.JSXSpreadChild)[],
+  children: OxcJSXChild[],
   source: string,
   parentPath: number[]
 ): EditableNode[] {
@@ -358,14 +393,7 @@ function extractChildren(
   let childIndex = 0
 
   for (const child of children) {
-    if (child.type === 'JSXSpreadChild') continue // Skip spread children
-
-    const node = babelJsxToEditableNode(
-      child as t.JSXElement | t.JSXFragment | t.JSXText | t.JSXExpressionContainer,
-      source,
-      [...parentPath, childIndex]
-    )
-
+    const node = oxcJsxToEditableNode(child, source, [...parentPath, childIndex])
     if (node) {
       result.push(node)
       childIndex++
@@ -379,10 +407,7 @@ function extractChildren(
 // Main Parser
 // ============================================================================
 
-/**
- * Recursively find JSX in any expression
- */
-function findJsxInExpression(node: t.Node): t.JSXElement | t.JSXFragment | null {
+function findJsxInExpression(node: any): OxcJSXElement | OxcJSXFragment | null {
   if (!node) return null
 
   // Direct JSX
@@ -392,15 +417,14 @@ function findJsxInExpression(node: t.Node): t.JSXElement | t.JSXFragment | null 
 
   // Parenthesized: (expr)
   if (node.type === 'ParenthesizedExpression') {
-    return findJsxInExpression((node as t.ParenthesizedExpression).expression)
+    return findJsxInExpression(node.expression)
   }
 
   // Arrow function body
   if (node.type === 'ArrowFunctionExpression') {
-    const arrow = node as t.ArrowFunctionExpression
-    if (arrow.body.type === 'BlockStatement') {
+    if (node.body.type === 'BlockStatement') {
       // Block body: look for return statement
-      for (const stmt of arrow.body.body) {
+      for (const stmt of node.body.body) {
         if (stmt.type === 'ReturnStatement' && stmt.argument) {
           const jsx = findJsxInExpression(stmt.argument)
           if (jsx) return jsx
@@ -408,14 +432,13 @@ function findJsxInExpression(node: t.Node): t.JSXElement | t.JSXFragment | null 
       }
     } else {
       // Expression body
-      return findJsxInExpression(arrow.body)
+      return findJsxInExpression(node.body)
     }
   }
 
   // Function expression body
   if (node.type === 'FunctionExpression' || node.type === 'FunctionDeclaration') {
-    const func = node as t.FunctionExpression | t.FunctionDeclaration
-    for (const stmt of func.body.body) {
+    for (const stmt of node.body.body) {
       if (stmt.type === 'ReturnStatement' && stmt.argument) {
         const jsx = findJsxInExpression(stmt.argument)
         if (jsx) return jsx
@@ -425,23 +448,22 @@ function findJsxInExpression(node: t.Node): t.JSXElement | t.JSXFragment | null 
 
   // TypeScript satisfies: expr satisfies Type
   if (node.type === 'TSSatisfiesExpression') {
-    return findJsxInExpression((node as any).expression)
+    return findJsxInExpression(node.expression)
   }
 
   // TypeScript as: expr as Type
   if (node.type === 'TSAsExpression') {
-    return findJsxInExpression((node as any).expression)
+    return findJsxInExpression(node.expression)
   }
 
   // Call expression: might be IIFE or wrapped
   if (node.type === 'CallExpression') {
-    const call = node as t.CallExpression
     // Check callee (for IIFE)
-    const calleeJsx = findJsxInExpression(call.callee as t.Node)
+    const calleeJsx = findJsxInExpression(node.callee)
     if (calleeJsx) return calleeJsx
     // Check arguments
-    for (const arg of call.arguments) {
-      const argJsx = findJsxInExpression(arg as t.Node)
+    for (const arg of node.arguments) {
+      const argJsx = findJsxInExpression(arg)
       if (argJsx) return argJsx
     }
   }
@@ -449,18 +471,15 @@ function findJsxInExpression(node: t.Node): t.JSXElement | t.JSXFragment | null 
   return null
 }
 
-/**
- * Find the JSX return expression in a parsed AST
- */
-function findJsxReturn(ast: t.File): { node: t.JSXElement | t.JSXFragment; loc: SourceLocation } | null {
+function findJsxReturn(program: any): { node: OxcJSXElement | OxcJSXFragment; loc: SourceLocation } | null {
   // Walk the AST to find export default with JSX return
-  for (const statement of ast.program.body) {
+  for (const statement of program.body) {
     if (statement.type === 'ExportDefaultDeclaration') {
       const jsx = findJsxInExpression(statement.declaration)
       if (jsx) {
         return {
           node: jsx,
-          loc: { start: jsx.start ?? 0, end: jsx.end ?? 0 },
+          loc: { start: jsx.start, end: jsx.end },
         }
       }
     }
@@ -470,28 +489,32 @@ function findJsxReturn(ast: t.File): { node: t.JSXElement | t.JSXFragment; loc: 
 }
 
 /**
- * Parse TSX source and extract editable JSX nodes
+ * Parse TSX source and extract editable JSX nodes using OXC
  */
 export function parseSourceWithLocations(source: string): ParseResult {
   const errors: string[] = []
 
   try {
-    const ast = parse(source, {
-      sourceType: 'module',
-      plugins: ['jsx', 'typescript'],
-    })
+    const result = parseSync('source.tsx', source, { sourceType: 'module' })
 
-    const jsxResult = findJsxReturn(ast)
+    // Check for parse errors
+    if (result.errors && result.errors.length > 0) {
+      for (const err of result.errors) {
+        errors.push(err.message || String(err))
+      }
+    }
+
+    const jsxResult = findJsxReturn(result.program)
     if (!jsxResult) {
       return {
         root: null,
         jsxLoc: null,
         source,
-        errors: ['No JSX return found in export default'],
+        errors: errors.length > 0 ? errors : ['No JSX return found in export default'],
       }
     }
 
-    const root = babelJsxToEditableNode(jsxResult.node, source, [0])
+    const root = oxcJsxToEditableNode(jsxResult.node, source, [0])
 
     return {
       root,

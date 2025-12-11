@@ -29,7 +29,7 @@ import { useImportWithAgent } from "@/hooks/useSession";
 import type { Workbook } from "@/lib/workbook";
 import { cn } from "@/lib/utils";
 
-import { DraftsSidebar } from "./sidebar/PagesSidebar";
+import { NotebookSidebar } from "./sidebar/NotebookSidebar";
 import { ChatBar } from "@/components/ChatBar";
 import { Thread } from "@/components/Notebook/Thread";
 import { FileDropOverlay } from "@/components/FileDropOverlay";
@@ -85,8 +85,12 @@ export function NotebookShell({ children }: NotebookShellProps) {
   const blockMatch = currentPath.match(/^\/blocks\/(.+)$/);
   const blockId = blockMatch?.[1];
   const isOnBlock = !!blockId;
-  // Check if we're on any content route (page or block) that needs the editor layout
-  const isOnContentRoute = isOnPage || isOnBlock;
+  // Check if we're on a source viewer route and extract sourceId
+  const sourceMatch = currentPath.match(/^\/sources\/(.+)$/);
+  const sourceId = sourceMatch?.[1];
+  const isOnSource = !!sourceId;
+  // Check if we're on any content route (page, block, or source) that needs the editor layout
+  const isOnContentRoute = isOnPage || isOnBlock || isOnSource;
 
   const activeWorkbookId = useActiveWorkbookId();
   const { panel: rightPanel, togglePanel: toggleRightPanel } = useRightPanel();
@@ -134,6 +138,9 @@ export function NotebookShell({ children }: NotebookShellProps) {
 
   // Current block (for breadcrumb)
   const currentBlock = manifest?.blocks?.find((b) => b.id === blockId);
+
+  // Current source (for breadcrumb) - from manifest
+  const currentSource = manifest?.sources?.find((s) => s.id === sourceId);
 
   // Sidebar hover state (invisible until hover on left edge) - only used when on a page
   const [sidebarVisible, setSidebarVisible] = useState(false);
@@ -499,6 +506,29 @@ export function NotebookShell({ children }: NotebookShellProps) {
               </Tooltip>
             </>
           )}
+          {isOnSource && (
+            <>
+              <span
+                className={cn(
+                  "px-1 py-0.5 text-sm text-muted-foreground bg-transparent rounded-sm",
+                  "hover:bg-accent/50 hover:text-foreground"
+                )}
+              >
+                {currentSource?.title || sourceId}
+              </span>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <button
+                    onClick={handleClosePage}
+                    className="ml-1 p-0.5 rounded-sm text-muted-foreground/70 hover:text-muted-foreground hover:bg-accent/50 transition-colors opacity-0 group-hover/titlebar:opacity-100"
+                  >
+                    <X weight="bold" className="h-3 w-3" />
+                  </button>
+                </TooltipTrigger>
+                <TooltipContent side="bottom">Close source</TooltipContent>
+              </Tooltip>
+            </>
+          )}
         </div>
 
         {/* Right: Panel toggles + Share */}
@@ -728,7 +758,7 @@ export function NotebookShell({ children }: NotebookShellProps) {
                     : "opacity-0 pointer-events-none"
                 )}
               >
-                <DraftsSidebar
+                <NotebookSidebar
                   collapsed={false}
                   onAddDraft={handleAddPage}
                   pinned={sidebarPinned}

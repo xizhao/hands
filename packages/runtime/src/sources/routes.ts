@@ -2,20 +2,21 @@
  * Source HTTP Routes
  *
  * Minimal API for sources - runtime executes, orchestrator tracks.
+ * Source discovery is handled by manifest endpoint.
  *
- * GET  /sources                    - List installed sources
  * POST /sources/:id/sync           - Execute sync, returns result
  * GET  /workbook/sources/available - List available sources from registry
  * POST /workbook/sources/add       - Add source from registry to workbook
  */
 
-import { existsSync, mkdirSync, copyFileSync, readFileSync, writeFileSync } from "fs"
+import { existsSync, mkdirSync, copyFileSync, readFileSync, writeFileSync, readdirSync } from "fs"
 import { join, dirname, resolve } from "path"
 import type { Hono } from "hono"
 import type { DbContext } from "@hands/stdlib"
-import { discoverSources, getSource } from "./discovery.js"
+import type { SourceDefinition } from "@hands/stdlib/sources"
 import { checkMissingSecrets } from "./secrets.js"
 import { executeSync } from "./executor.js"
+import type { DiscoveredSource } from "./types.js"
 
 // Registry types
 interface RegistryItem {
@@ -37,6 +38,30 @@ interface Registry {
   name: string
   version: string
   items: RegistryItem[]
+}
+
+/**
+ * Ensure @hands/stdlib is properly referenced in workbook package.json
+ * Updates from workspace:* or link: to file: path
+ */
+function ensureStdlibReference(workbookDir: string): void {
+  const pkgJsonPath = join(workbookDir, "package.json")
+  if (!existsSync(pkgJsonPath)) return
+
+  try {
+    const pkgJson = JSON.parse(readFileSync(pkgJsonPath, "utf-8"))
+    const stdlibRef = pkgJson.dependencies?.["@hands/stdlib"]
+    const stdlibPath = getStdlibPath()
+    const expectedRef = `file:${stdlibPath}`
+
+    // Update if using workspace:* or link: (old approaches)
+    if (stdlibRef && (stdlibRef === "workspace:*" || stdlibRef.startsWith("link:"))) {
+      pkgJson.dependencies["@hands/stdlib"] = expectedRef
+      writeFileSync(pkgJsonPath, JSON.stringify(pkgJson, null, 2) + "\n")
+    }
+  } catch (err) {
+    console.error("[sources] Failed to update stdlib reference:", err)
+  }
 }
 
 /**
@@ -81,37 +106,50 @@ interface SourceRoutesConfig {
 }
 
 /**
+ * Get a source by ID - local discovery for sync endpoint
+ */
+async function getSource(workbookDir: string, sourceId: string): Promise<DiscoveredSource | null> {
+  const sourcesDir = join(workbookDir, "sources")
+  if (!existsSync(sourcesDir)) return null
+
+  const sourceDir = join(sourcesDir, sourceId)
+  if (!existsSync(sourceDir)) return null
+
+  // Look for index.ts or index.tsx
+  let indexPath: string | null = null
+  for (const filename of ["index.ts", "index.tsx"]) {
+    const path = join(sourceDir, filename)
+    if (existsSync(path)) {
+      indexPath = path
+      break
+    }
+  }
+
+  if (!indexPath) return null
+
+  try {
+    const mod = await import(indexPath)
+    const definition = mod.default as SourceDefinition<any, any> | undefined
+
+    if (definition?.config && typeof definition?.sync === "function") {
+      return {
+        id: sourceId,
+        path: indexPath,
+        definition,
+      }
+    }
+  } catch (err) {
+    console.error(`[sources] Failed to load ${sourceId}:`, err)
+  }
+
+  return null
+}
+
+/**
  * Register source routes on a Hono app
  */
 export function registerSourceRoutes(app: Hono, config: SourceRoutesConfig) {
   const { workbookDir, getDbContext, isDbReady } = config
-
-  // List all installed sources
-  app.get("/sources", async (c) => {
-    try {
-      const discovered = await discoverSources(workbookDir)
-
-      const sources = discovered.map((s) => {
-        const cfg = s.definition.config
-        const missingSecrets = checkMissingSecrets(workbookDir, cfg.secrets)
-
-        return {
-          id: s.id,
-          name: cfg.name,
-          title: cfg.title,
-          description: cfg.description,
-          schedule: cfg.schedule,
-          secrets: [...cfg.secrets],
-          missingSecrets,
-        }
-      })
-
-      return c.json({ sources })
-    } catch (err) {
-      console.error("[sources] Error listing sources:", err)
-      return c.json({ sources: [], error: String(err) }, 500)
-    }
-  })
 
   // Execute sync - blocking, returns when complete
   app.post("/sources/:id/sync", async (c) => {
@@ -211,6 +249,9 @@ export function registerSourceRoutes(app: Hono, config: SourceRoutesConfig) {
     const stdlibPath = getStdlibPath()
     const filesCreated: string[] = []
     const errors: string[] = []
+
+    // Ensure @hands/stdlib is linked for source imports
+    ensureStdlibReference(workbookDir)
 
     // Copy each file from registry
     for (const file of registryItem.files) {
