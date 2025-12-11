@@ -6,21 +6,118 @@
  */
 
 import { z } from "zod"
-import { existsSync, readFileSync, writeFileSync } from "fs"
+import {
+  existsSync,
+  readFileSync,
+  writeFileSync,
+  symlinkSync,
+  lstatSync,
+  unlinkSync,
+  readlinkSync,
+  mkdirSync,
+  realpathSync,
+} from "fs"
 import { join, resolve } from "path"
+import { homedir } from "os"
 
 /**
- * Get the absolute path to @hands/stdlib
- * Works in both development (monorepo) and production
+ * Get the ~/.hands directory path
  */
-function getStdlibPath(): string {
+export function getHandsDir(): string {
+  return join(homedir(), ".hands")
+}
+
+/**
+ * Get the path to the stdlib symlink in ~/.hands/stdlib
+ */
+export function getStdlibSymlinkPath(): string {
+  return join(getHandsDir(), "stdlib")
+}
+
+/**
+ * Get the actual path to @hands/stdlib source
+ * Works in both development (monorepo) and production
+ * Resolves symlinks to get the real path
+ */
+export function getStdlibSourcePath(): string {
   // In development, stdlib is a sibling package
   const devPath = resolve(import.meta.dir, "../../stdlib")
   if (existsSync(join(devPath, "package.json"))) {
-    return devPath
+    // Resolve any symlinks to get the real absolute path
+    try {
+      return realpathSync(devPath)
+    } catch {
+      return devPath
+    }
   }
-  // Fallback to node_modules
-  return resolve(process.cwd(), "node_modules/@hands/stdlib")
+  // Fallback to node_modules - also resolve symlinks
+  const nodeModulesPath = resolve(process.cwd(), "node_modules/@hands/stdlib")
+  try {
+    return realpathSync(nodeModulesPath)
+  } catch {
+    return nodeModulesPath
+  }
+}
+
+/**
+ * Ensure the stdlib symlink exists at ~/.hands/stdlib
+ * Creates or updates it to point to the correct source
+ */
+export function ensureStdlibSymlink(): string {
+  const handsDir = getHandsDir()
+  const symlinkPath = getStdlibSymlinkPath()
+  const sourcePath = getStdlibSourcePath()
+
+  // Ensure ~/.hands directory exists
+  if (!existsSync(handsDir)) {
+    mkdirSync(handsDir, { recursive: true })
+  }
+
+  // Check if symlink already exists and points to correct target
+  if (existsSync(symlinkPath)) {
+    try {
+      const stat = lstatSync(symlinkPath)
+      if (stat.isSymbolicLink()) {
+        const currentTarget = readlinkSync(symlinkPath)
+        if (currentTarget === sourcePath) {
+          // Symlink already correct
+          return symlinkPath
+        }
+        // Symlink points to wrong location, remove it
+        unlinkSync(symlinkPath)
+      } else {
+        // It's a file or directory, remove it
+        unlinkSync(symlinkPath)
+      }
+    } catch {
+      // If we can't read it, try to remove and recreate
+      try {
+        unlinkSync(symlinkPath)
+      } catch {
+        // Ignore errors
+      }
+    }
+  }
+
+  // Create symlink
+  try {
+    symlinkSync(sourcePath, symlinkPath)
+    console.log(`[config] Created stdlib symlink: ${symlinkPath} -> ${sourcePath}`)
+  } catch (err) {
+    console.error(`[config] Failed to create stdlib symlink:`, err)
+  }
+
+  return symlinkPath
+}
+
+/**
+ * Get the path to use for @hands/stdlib in workbook package.json
+ * Uses the ~/.hands/stdlib symlink for portability
+ */
+function getStdlibPath(): string {
+  // Ensure symlink exists and is correct
+  ensureStdlibSymlink()
+  return getStdlibSymlinkPath()
 }
 
 // Source configuration

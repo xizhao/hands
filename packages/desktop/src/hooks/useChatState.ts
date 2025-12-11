@@ -27,8 +27,14 @@ export interface PendingPageAttachment {
   name: string;
 }
 
+export interface PendingSourceAttachment {
+  type: "source";
+  sourceId: string;
+  name: string;
+}
+
 // Combined attachment type
-export type AnyPendingAttachment = PendingAttachment | PendingBlockAttachment | PendingPageAttachment;
+export type AnyPendingAttachment = PendingAttachment | PendingBlockAttachment | PendingPageAttachment | PendingSourceAttachment;
 
 // Module-level state
 let pendingAttachment: AnyPendingAttachment | null = null;

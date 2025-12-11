@@ -163,6 +163,20 @@ The source file is sacred. The database is where data belongs.
 
 **Never give up.** If standard methods fail, write a processing script.
 
+## Evolving the Data Model
+
+As you import new data, look for opportunities to improve existing tables:
+
+- **Normalize where sensible** - If you see repeated values that should be a lookup table, suggest it
+- **Improve column names** - If existing columns have generic names (data, value, col1), rename them
+- **Add useful indexes** - If a column is commonly filtered on, consider adding an index
+- **Consolidate related tables** - If similar data is split across tables, consider merging
+
+When modifying existing schema, always:
+1. Back up data first: \`CREATE TABLE backup AS SELECT * FROM original\`
+2. Migrate incrementally, verify at each step
+3. Report any schema changes made
+
 ## Completion Report
 
 Always report:
@@ -172,6 +186,7 @@ Always report:
 - Column summary with types
 - Any rows skipped and why
 - Sample of loaded data (5 rows)
+- **Schema improvements made** (if any)
 
 ## Anti-Patterns
 

@@ -1,12 +1,13 @@
 /**
  * Block Discovery
  *
- * Scans the blocks/ directory to find all block files.
+ * Scans the blocks/ directory recursively to find all block files.
+ * Supports nested folders with path-based block IDs.
  */
 
 import { existsSync } from "fs"
 import { readdir } from "fs/promises"
-import { join, basename } from "path"
+import { join, basename, dirname } from "path"
 import type { BlockMeta, DiscoveredBlock } from "@hands/stdlib"
 import { validateBlockFile } from "./validate.js"
 
@@ -32,8 +33,8 @@ export interface DiscoverBlocksOptions {
 /**
  * Discover blocks in a directory
  *
- * Scans the blocks/ directory for .tsx files, validates them,
- * and returns a list of discovered blocks.
+ * Recursively scans the blocks/ directory for .tsx files, validates them,
+ * and returns a list of discovered blocks with path-based IDs.
  *
  * @param blocksDir - Path to the blocks directory
  * @param options - Discovery options
@@ -50,12 +51,15 @@ export async function discoverBlocks(
     return { blocks, errors }
   }
 
-  // Find all .tsx files (not in ui/)
-  const files = await findBlockFiles(blocksDir, options)
+  // Find all .tsx files recursively
+  const files = await findBlockFiles(blocksDir, "", options)
 
   for (const file of files) {
     const filePath = join(blocksDir, file)
-    const id = basename(file, ".tsx")
+    // ID is path without extension: "charts/bar-chart.tsx" -> "charts/bar-chart"
+    const id = file.replace(/\.tsx$/, "")
+    // Parent dir: "charts/bar-chart.tsx" -> "charts", "foo.tsx" -> ""
+    const parentDir = dirname(file) === "." ? "" : dirname(file)
 
     try {
       // Validate the file
@@ -75,10 +79,14 @@ export async function discoverBlocks(
         }
       }
 
+      // Use filename for title if not specified in meta
+      const filename = basename(file, ".tsx")
+
       blocks.push({
         id,
         path: file,
-        meta: validation.meta || { title: id },
+        parentDir,
+        meta: validation.meta || { title: filename },
         load,
       })
     } catch (err) {
@@ -93,33 +101,49 @@ export async function discoverBlocks(
 }
 
 /**
- * Find block files in a directory
+ * Recursively find block files in a directory
+ * @param baseDir - Root blocks directory
+ * @param subDir - Current subdirectory relative to baseDir
+ * @param options - Discovery options
  */
 async function findBlockFiles(
-  blocksDir: string,
+  baseDir: string,
+  subDir: string,
   options: DiscoverBlocksOptions
 ): Promise<string[]> {
   const files: string[] = []
-  const entries = await readdir(blocksDir, { withFileTypes: true })
+  const currentDir = subDir ? join(baseDir, subDir) : baseDir
+  const entries = await readdir(currentDir, { withFileTypes: true })
 
   for (const entry of entries) {
-    // Skip directories (including ui/)
-    if (entry.isDirectory()) continue
+    const relativePath = subDir ? `${subDir}/${entry.name}` : entry.name
+
+    // Recursively scan subdirectories (except excluded ones like ui/)
+    if (entry.isDirectory()) {
+      // Check if directory should be excluded
+      if (options.exclude?.some((pattern) => matchPattern(relativePath, pattern) || matchPattern(`${relativePath}/`, pattern))) {
+        continue
+      }
+      // Recurse into subdirectory
+      const subFiles = await findBlockFiles(baseDir, relativePath, options)
+      files.push(...subFiles)
+      continue
+    }
 
     // Only process .tsx files
     if (!entry.name.endsWith(".tsx")) continue
 
     // Check exclude patterns
-    if (options.exclude?.some((pattern) => matchPattern(entry.name, pattern))) {
+    if (options.exclude?.some((pattern) => matchPattern(relativePath, pattern))) {
       continue
     }
 
     // Check include patterns (if specified)
-    if (options.include && !options.include.some((pattern) => matchPattern(entry.name, pattern))) {
+    if (options.include && !options.include.some((pattern) => matchPattern(relativePath, pattern))) {
       continue
     }
 
-    files.push(entry.name)
+    files.push(relativePath)
   }
 
   return files.sort()

@@ -132,15 +132,21 @@ Don't stop at just importing data or just answering a question. Think:
 
 ## Data Sources
 
-External data connections (recurring sync):
-- **hackernews** - Hacker News stories
-- **github** - GitHub data (requires token)
+Sources are code-based data connectors that sync external data into the workbook database. They live in the \`sources/\` directory and run on a schedule.
 
-Use sources tool: \`sources action='add' name='hackernews'\`
+**Adding a source:**
+Use sources tool: \`sources action='add' name='stripe'\`
+
+This copies the source code to \`sources/stripe/\` and configures it in hands.json.
+
+**After adding a source:**
+1. User sets required secrets (e.g., API keys) via the secrets prompt
+2. Source syncs on schedule or manually triggered
+3. Data appears in the database for querying
 
 **Sources vs @import:**
-- Sources = recurring API sync (automatic updates)
-- @import = one-time file ingestion
+- Sources = code-based API sync (recurring, scheduled updates) in \`sources/\` directory
+- @import = one-time file ingestion (CSV, JSON, Excel)
 
 ## Delegation Instructions
 

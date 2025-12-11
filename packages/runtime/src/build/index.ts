@@ -59,5 +59,5 @@ export interface BuildResult {
   files: string[]
   errors: string[]
   pages?: Array<{ route: string; path: string }>
-  blocks?: Array<{ id: string; path: string }>
+  blocks?: Array<{ id: string; path: string; parentDir: string }>
 }

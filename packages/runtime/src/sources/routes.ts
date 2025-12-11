@@ -17,6 +17,11 @@ import type { SourceDefinition } from "@hands/stdlib/sources"
 import { checkMissingSecrets } from "./secrets.js"
 import { executeSync } from "./executor.js"
 import type { DiscoveredSource } from "./types.js"
+import {
+  ensureStdlibSymlink,
+  getStdlibSymlinkPath,
+  getStdlibSourcePath,
+} from "../config/index.js"
 
 // Registry types
 interface RegistryItem {
@@ -42,22 +47,26 @@ interface Registry {
 
 /**
  * Ensure @hands/stdlib is properly referenced in workbook package.json
- * Updates from workspace:* or link: to file: path
+ * Updates from workspace:* or link: to file: path (using ~/.hands/stdlib symlink)
  */
 function ensureStdlibReference(workbookDir: string): void {
   const pkgJsonPath = join(workbookDir, "package.json")
   if (!existsSync(pkgJsonPath)) return
 
   try {
+    // Ensure symlink exists
+    ensureStdlibSymlink()
+    const symlinkPath = getStdlibSymlinkPath()
+    const expectedRef = `file:${symlinkPath}`
+
     const pkgJson = JSON.parse(readFileSync(pkgJsonPath, "utf-8"))
     const stdlibRef = pkgJson.dependencies?.["@hands/stdlib"]
-    const stdlibPath = getStdlibPath()
-    const expectedRef = `file:${stdlibPath}`
 
-    // Update if using workspace:* or link: (old approaches)
-    if (stdlibRef && (stdlibRef === "workspace:*" || stdlibRef.startsWith("link:"))) {
+    // Update if using workspace:*, link:, or wrong file: path
+    if (stdlibRef && (stdlibRef === "workspace:*" || stdlibRef.startsWith("link:") || stdlibRef !== expectedRef)) {
       pkgJson.dependencies["@hands/stdlib"] = expectedRef
       writeFileSync(pkgJsonPath, JSON.stringify(pkgJson, null, 2) + "\n")
+      console.log(`[sources] Updated stdlib reference to ${expectedRef}`)
     }
   } catch (err) {
     console.error("[sources] Failed to update stdlib reference:", err)
@@ -65,23 +74,11 @@ function ensureStdlibReference(workbookDir: string): void {
 }
 
 /**
- * Get the path to the stdlib package
+ * Get the path to the stdlib package (actual source, not symlink)
+ * Used for loading registry files
  */
 function getStdlibPath(): string {
-  // Try workspace path (development) - relative to runtime/src/sources/
-  const devPath = resolve(import.meta.dir, "../../../stdlib")
-  if (existsSync(join(devPath, "src/registry/sources/registry.json"))) {
-    return devPath
-  }
-
-  // Try node_modules path
-  const nodeModulesPath = join(process.cwd(), "node_modules/@hands/stdlib")
-  if (existsSync(nodeModulesPath)) {
-    return nodeModulesPath
-  }
-
-  // Fall back to dev path
-  return devPath
+  return getStdlibSourcePath()
 }
 
 /**

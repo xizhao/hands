@@ -589,18 +589,38 @@ function ComponentPlaceholder({
 export const ElementPlugin = createPlatePlugin({
   key: 'element',
 
-  node: {
-    isElement: true,
-    component: ElementRenderer,
+  // Use parsers to catch ALL unknown element types
+  parsers: {
+    html: {},
   },
 
+  // Render fallback for any element type not handled by specific plugins
   render: {
-    node: ElementRenderer,
+    // aboveNodes renders ABOVE the default element content
+    // This is key for void elements - we render the component here
+    aboveNodes: ((props) => {
+      const type = (props.element as any)?.type as string
+      if (!type) return undefined
+
+      // Only handle custom components (PascalCase or non-HTML)
+      if (isCustomComponent(type)) {
+        return (props) => <ElementRenderer {...props} />
+      }
+
+      return undefined
+    }) as RenderNodeWrapper,
+
+    // belowNodes for non-void elements
     belowNodes: ((props) => {
       const type = (props.element as any)?.type as string
-      if (!type) return
-      // Return wrapper for all elements
-      return (props) => <ElementRenderer {...props} />
+      if (!type) return undefined
+
+      // Only handle HTML elements (not custom components)
+      if (!isCustomComponent(type) && !HTML_VOID_TAGS.has(type)) {
+        return (props) => <ElementRenderer {...props} />
+      }
+
+      return undefined
     }) as RenderNodeWrapper,
   },
 

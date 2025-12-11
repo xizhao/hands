@@ -25,23 +25,13 @@ interface TableInfo {
 }
 
 const schema = tool({
-  description: `View the database schema - lists all tables and their columns.
+  description: `View the full database schema - all tables with their columns, types, and constraints.
 
-Use this tool BEFORE writing SQL queries to understand:
-- What tables exist in the database
-- Column names and data types for each table
+Use this tool BEFORE writing SQL queries to understand what data is available.`,
 
-This is a read-only tool that helps you write correct queries.`,
+  args: {},
 
-  args: {
-    table: tool.schema
-      .string()
-      .optional()
-      .describe("Specific table name to get detailed info. If omitted, lists all tables."),
-  },
-
-  async execute(args, ctx) {
-    const { table } = args
+  async execute(_args, _ctx) {
     const port = getRuntimePort()
 
     try {
@@ -78,38 +68,22 @@ The database is empty. Use the hands_sql tool to create tables, or import data v
         })
       }
 
-      // If specific table requested
-      if (table) {
-        const tableInfo = tables.get(table)
-        if (!tableInfo) {
-          const available = Array.from(tables.keys()).join(", ")
-          return `Table "${table}" not found. Available tables: ${available}`
-        }
+      // Show full details for all tables
+      let output = `## Database Schema\n\n`
+      output += `${tables.size} table${tables.size === 1 ? "" : "s"}:\n\n`
 
-        let output = `## Table: ${table}\n\n`
-        output += `| Column | Type | Nullable | Default |\n`
-        output += `|--------|------|----------|--------|\n`
+      for (const [tableName, tableInfo] of tables) {
+        output += `### ${tableName}\n\n`
+        output += `| Column | Type | Nullable |\n`
+        output += `|--------|------|----------|\n`
 
         for (const col of tableInfo.columns) {
           const nullable = col.nullable ? "YES" : "NO"
-          const defaultVal = col.default ? String(col.default).slice(0, 20) : ""
-          output += `| ${col.name} | ${col.type} | ${nullable} | ${defaultVal} |\n`
+          output += `| ${col.name} | ${col.type} | ${nullable} |\n`
         }
-
-        return output
+        output += `\n`
       }
 
-      // List all tables
-      let output = `## Database Schema\n\n`
-      output += `Found ${tables.size} table${tables.size === 1 ? "" : "s"}:\n\n`
-
-      for (const [tableName, tableInfo] of tables) {
-        const colList = tableInfo.columns.map(c => `${c.name} (${c.type})`).join(", ")
-        output += `### ${tableName}\n`
-        output += `${colList}\n\n`
-      }
-
-      output += `---\nUse \`hands_schema\` with \`table: "tablename"\` to see detailed column info.`
       return output
 
     } catch (error) {

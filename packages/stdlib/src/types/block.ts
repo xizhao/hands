@@ -80,8 +80,12 @@ export interface BlockMeta {
  * Discovered block (used by runtime)
  */
 export interface DiscoveredBlock {
+  /** Block ID - path-based for nested blocks (e.g., "charts/bar-chart") */
   id: string
+  /** Relative path to the file from blocks dir (e.g., "charts/bar-chart.tsx") */
   path: string
+  /** Parent directory path (empty string for root, "charts" for charts/foo.tsx) */
+  parentDir: string
   meta: BlockMeta
   load: () => Promise<{ default: BlockFn; meta?: BlockMeta }>
 }

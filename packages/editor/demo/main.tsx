@@ -10,18 +10,17 @@ initFlightClient().then((success) => {
 })
 
 // RSC port configuration
-// Default: 55000 (Runtime API, which proxies to Vite worker at 55200)
+// Default: 56600 (Reserved port for editor demo, avoids main app conflicts)
 // The runtime handles the /rsc/* routes and forwards them to the Vite worker
 //
 // To start the runtime:
-//   cd packages/runtime && bun run dev -- --workbook-id=demo --workbook-dir=<path>
+//   cd packages/runtime && bun run dev -- --workbook-id=demo --workbook-dir=<path> --port=56600
 //
 // URL params:
-//   ?rscPort=55000 - Connect to runtime (default)
-//   ?rscPort=55200 - Connect directly to Vite worker (for debugging)
+//   ?rscPort=56600 - Connect to runtime (default)
 //   ?rsc=false     - Disable RSC entirely
 const params = new URLSearchParams(window.location.search)
-const rscPort = parseInt(params.get('rscPort') || '55000', 10)
+const rscPort = parseInt(params.get('rscPort') || '56600', 10)
 const rscEnabled = params.get('rsc') !== 'false'
 
 console.log(`[demo] RSC port: ${rscPort}, enabled: ${rscEnabled}`)

@@ -106,15 +106,36 @@ export function useMessages(sessionId: string | null) {
     queryKey: ["messages", sessionId, directory],
     queryFn: async () => {
       console.log("[useMessages] Fetching messages for session:", sessionId);
-      const result = await api.messages.list(sessionId!, directory);
-      console.log("[useMessages] Fetched", result.length, "messages");
-      return result;
+      try {
+        const result = await api.messages.list(sessionId!, directory);
+        console.log("[useMessages] Fetched", result.length, "messages");
+        return result;
+      } catch (err) {
+        // Handle "required following item" error during streaming/HMR
+        // This happens when fetching mid-stream messages after restart
+        const errorMsg = err instanceof Error ? err.message : String(err);
+        if (errorMsg.includes("required following item")) {
+          console.warn("[useMessages] Session has incomplete streaming data, returning empty until ready");
+          return [];
+        }
+        throw err;
+      }
     },
     enabled: !!sessionId,
     staleTime: 0, // Always fetch fresh
     refetchOnMount: true,
     // Poll while session is busy (fallback for SSE)
     refetchInterval: isBusy ? 1000 : false,
+    // Retry on transient errors (like mid-stream fetches)
+    retry: (failureCount, error) => {
+      const errorMsg = error instanceof Error ? error.message : String(error);
+      // Retry "required following item" errors a few times as stream may complete
+      if (errorMsg.includes("required following item")) {
+        return failureCount < 3;
+      }
+      return failureCount < 1;
+    },
+    retryDelay: 1000,
   });
 }
 

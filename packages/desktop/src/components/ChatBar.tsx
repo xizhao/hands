@@ -15,7 +15,8 @@ import {
 import { useActiveSession } from "@/hooks/useNavState";
 import type { AnyPendingAttachment } from "@/hooks/useChatState";
 import { cn } from "@/lib/utils";
-import { ArrowUp, Hand, Loader2, Square, X, Paperclip, Blocks, FileText } from "lucide-react";
+import { ArrowUp, Hand, Loader2, Square, X, Paperclip, Blocks, FileText, Database } from "lucide-react";
+import { PROMPTS, fillTemplate } from "@/lib/prompts";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 
@@ -114,6 +115,13 @@ export function ChatBar({
           ? `${userText}\n\n[Context: ${blockUri}]`
           : `[Context: ${blockUri}]`;
         setPendingAttachment(null);
+      } else if (pendingAttachment.type === "source") {
+        // Source attachment - include source:// URI
+        const sourceUri = `source://${pendingAttachment.sourceId}`;
+        finalMessage = userText
+          ? `${userText}\n\n[Context: ${sourceUri}]`
+          : `[Context: ${sourceUri}]`;
+        setPendingAttachment(null);
       } else if (pendingAttachment.type === "file" && activeWorkbookId) {
         // File attachment - copy to workbook and include path
         try {
@@ -169,10 +177,13 @@ export function ChatBar({
 
       if (pendingAttachment.type === "file") {
         // File drops: import prompt
-        setInput("Import this data and make it useful");
+        setInput(PROMPTS.IMPORT_FILE);
       } else if (pendingAttachment.type === "block" && pendingAttachment.errorContext) {
         // Block error fix: include block ID and error context in prompt
-        setInput(`Fix the error in block "${pendingAttachment.blockId}": ${pendingAttachment.errorContext}`);
+        setInput(fillTemplate("FIX_BLOCK_ERROR", {
+          blockId: pendingAttachment.blockId,
+          errorContext: pendingAttachment.errorContext,
+        }));
       } else {
         // Other cases: don't auto-submit
         return;
@@ -206,7 +217,7 @@ export function ChatBar({
       data-chat-bar
       className="flex flex-col gap-1 px-2 py-2 rounded-xl border border-border/40 bg-background/80 backdrop-blur-sm overflow-visible"
     >
-      {/* Attachment chip - show when file or block is attached */}
+      {/* Attachment chip - show when file, block, page, or source is attached */}
       {pendingAttachment && (
         <div className="flex items-center gap-1 px-1">
           <div className="flex items-center gap-1.5 px-2 py-1 rounded-md bg-accent/50 text-xs">
@@ -214,6 +225,8 @@ export function ChatBar({
               <Blocks className="h-3 w-3 text-muted-foreground" />
             ) : pendingAttachment.type === "page" ? (
               <FileText className="h-3 w-3 text-muted-foreground" />
+            ) : pendingAttachment.type === "source" ? (
+              <Database className="h-3 w-3 text-muted-foreground" />
             ) : (
               <Paperclip className="h-3 w-3 text-muted-foreground" />
             )}

@@ -10,6 +10,7 @@ import { join } from "path"
 import { discoverBlocks } from "../blocks/discovery.js"
 import type { HandsConfig, BuildResult, BuildOptions } from "./index.js"
 import { generateWorkerTemplate } from "./worker-template.js"
+import { getStdlibSourcePath } from "../config/index.js"
 
 export interface RSCBuildResult extends BuildResult {
   /** Path to generated vite.config.mts */
@@ -74,13 +75,16 @@ export async function buildRSC(
       }
     }
 
+    // Get stdlib path first (used by both package.json and vite.config)
+    const stdlibPath = getStdlibSourcePath()
+
     // Generate package.json
-    const packageJson = generatePackageJson(config)
+    const packageJson = generatePackageJson(config, stdlibPath)
     writeFileSync(join(outputDir, "package.json"), packageJson)
     files.push("package.json")
 
-    // Generate vite.config.mts
-    const viteConfig = generateViteConfig()
+    // Generate vite.config.mts (with resolved stdlib path)
+    const viteConfig = generateViteConfig(stdlibPath)
     writeFileSync(join(outputDir, "vite.config.mts"), viteConfig)
     files.push("vite.config.mts")
 
@@ -117,7 +121,7 @@ export async function buildRSC(
       outputDir,
       files,
       errors,
-      blocks: blocksResult.blocks.map((b) => ({ id: b.id, path: b.path })),
+      blocks: blocksResult.blocks.map((b) => ({ id: b.id, path: b.path, parentDir: b.parentDir })),
       viteConfig: join(outputDir, "vite.config.mts"),
       workerEntry: join(srcDir, "worker.tsx"),
     }
@@ -134,7 +138,7 @@ export async function buildRSC(
 /**
  * Generate package.json for the RSC workbook
  */
-function generatePackageJson(config: HandsConfig): string {
+function generatePackageJson(config: HandsConfig, stdlibPath: string): string {
   const pkg = {
     name: `@hands/${config.name || "workbook"}`,
     version: "1.0.0",
@@ -152,6 +156,7 @@ function generatePackageJson(config: HandsConfig): string {
       rwsdk: "1.0.0-beta.39",
       hono: "^4.7.0",
       "@electric-sql/pglite": "0.2.17",
+      "@hands/stdlib": `file:${stdlibPath}`,
     },
     devDependencies: {
       "@cloudflare/vite-plugin": "1.16.1",
@@ -167,16 +172,16 @@ function generatePackageJson(config: HandsConfig): string {
 }
 
 /**
- * Generate vite.config.mts
+ * Generate vite.config.mts with hardcoded stdlib path
  */
-function generateViteConfig(): string {
+function generateViteConfig(stdlibPath: string): string {
+  // Use absolute path directly in the config (no runtime resolution needed)
   return `import { defineConfig } from "vite";
 import { redwood } from "rwsdk/vite";
 import { cloudflare } from "@cloudflare/vite-plugin";
-import { join } from "path";
 
-// Get stdlib path from env (set by runtime) or fallback to monorepo location
-const stdlibPath = process.env.STDLIB_PATH || join(__dirname, "../../../stdlib");
+// Stdlib path resolved at build time
+const stdlibPath = "${stdlibPath}";
 
 export default defineConfig({
   plugins: [
@@ -188,7 +193,7 @@ export default defineConfig({
   resolve: {
     alias: {
       // Resolve @/ alias used in stdlib components
-      "@/": join(stdlibPath, "src") + "/",
+      "@/": stdlibPath + "/src/",
       // Also alias @hands/stdlib to the actual path
       "@hands/stdlib": stdlibPath,
     },

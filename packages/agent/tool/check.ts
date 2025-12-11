@@ -2,11 +2,11 @@ import { tool } from "@opencode-ai/plugin";
 import { spawn } from "child_process";
 
 /**
- * Execute a hands CLI command and return the output
+ * Execute a hands-runtime CLI command and return the output
  */
 function runHandsCommand(args: string[]): Promise<{ stdout: string; stderr: string; code: number }> {
   return new Promise((resolve) => {
-    const proc = spawn("hands", args, {
+    const proc = spawn("hands-runtime", args, {
       cwd: process.cwd(),
       env: process.env,
     });

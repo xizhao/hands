@@ -26,7 +26,7 @@ export default defineConfig({
     __webpack_require__: 'globalThis.__webpack_require__',
   },
   server: {
-    port: 5173,
+    port: 5166, // Use 5166 to avoid conflicts with main app
   },
   optimizeDeps: {
     include: [

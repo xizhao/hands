@@ -294,7 +294,7 @@ export function NotebookShell({ children }: NotebookShellProps) {
   // Chat state from hook
   const chatState = useChatState();
 
-  // Auto-attach current page/block context when route changes
+  // Auto-attach current page/block/source context when route changes
   useEffect(() => {
     if (isOnPage && pageId && currentPage) {
       chatState.setPendingAttachment({
@@ -308,15 +308,21 @@ export function NotebookShell({ children }: NotebookShellProps) {
         blockId,
         name: currentBlock.title || blockId,
       });
+    } else if (isOnSource && sourceId && currentSource) {
+      chatState.setPendingAttachment({
+        type: "source",
+        sourceId,
+        name: currentSource.title || sourceId,
+      });
     } else {
       // Clear attachment when navigating to index or other routes
-      // Only clear if it's a page/block attachment (not a file)
+      // Only clear if it's a page/block/source attachment (not a file)
       const current = chatState.pendingAttachment;
-      if (current?.type === "page" || current?.type === "block") {
+      if (current?.type === "page" || current?.type === "block" || current?.type === "source") {
         chatState.setPendingAttachment(null);
       }
     }
-  }, [isOnPage, isOnBlock, pageId, blockId, currentPage, currentBlock]);
+  }, [isOnPage, isOnBlock, isOnSource, pageId, blockId, sourceId, currentPage, currentBlock, currentSource]);
 
   // Import with agent hook for workspace drops
   const importWithAgent = useImportWithAgent();

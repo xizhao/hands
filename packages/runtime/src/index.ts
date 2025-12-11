@@ -4,6 +4,7 @@
  *
  * Usage:
  *   hands-runtime --workbook-id=<id> --workbook-dir=<dir> [--port=<port>]
+ *   hands-runtime check <workbook-dir> [--json] [--strict]
  *
  * Architecture:
  *   1. Immediately starts HTTP server (manifest available instantly)
@@ -25,6 +26,7 @@ import { lintBlockRefs, type BlockLintResult } from "./blocks/lint.js"
 import type { BlockContext } from "./ctx.js"
 import { registerSourceRoutes, checkMissingSecrets } from "./sources/index.js"
 import type { SourceDefinition } from "@hands/stdlib/sources"
+import { ensureStdlibSymlink } from "./config/index.js"
 
 interface RuntimeConfig {
   workbookId: string
@@ -878,13 +880,113 @@ async function bootVite(config: RuntimeConfig) {
 }
 
 /**
+ * Run the check command - diagnostics without starting server
+ *
+ * Usage: hands-runtime check <workbook-dir> [--json] [--strict] [--no-fix]
+ */
+async function runCheck() {
+  const args = process.argv.slice(2)
+  // Remove 'check' command
+  const restArgs = args.slice(1)
+
+  // Parse workbook dir (first positional arg or current directory)
+  let workbookDir = process.cwd()
+  const flags = {
+    json: false,
+    strict: false,
+    noFix: false,
+  }
+
+  for (const arg of restArgs) {
+    if (arg === "--json") {
+      flags.json = true
+    } else if (arg === "--strict") {
+      flags.strict = true
+    } else if (arg === "--no-fix") {
+      flags.noFix = true
+    } else if (!arg.startsWith("-")) {
+      workbookDir = arg
+    }
+  }
+
+  // Resolve relative paths
+  if (!workbookDir.startsWith("/")) {
+    workbookDir = join(process.cwd(), workbookDir)
+  }
+
+  // Check workbook exists
+  if (!existsSync(workbookDir)) {
+    const result = {
+      success: false,
+      error: `Workbook directory not found: ${workbookDir}`,
+    }
+    if (flags.json) {
+      console.log(JSON.stringify(result, null, 2))
+    } else {
+      console.error(`Error: ${result.error}`)
+    }
+    process.exit(1)
+  }
+
+  // Run block reference lint
+  const lintResult = lintBlockRefs(workbookDir)
+
+  // Build result
+  const result = {
+    success: lintResult.errors.length === 0,
+    workbookDir,
+    timestamp: Date.now(),
+    blockRefs: lintResult,
+    summary: {
+      errors: lintResult.errors.length,
+      availableBlocks: lintResult.availableBlocks.length,
+    },
+  }
+
+  // Output
+  if (flags.json) {
+    console.log(JSON.stringify(result, null, 2))
+  } else {
+    if (result.success) {
+      console.log("✓ All checks passed")
+      console.log(`  ${result.summary.availableBlocks} blocks available`)
+    } else {
+      console.log("✗ Checks failed\n")
+      console.log(`Block Reference Errors (${lintResult.errors.length}):`)
+      for (const err of lintResult.errors) {
+        console.log(`  ${err.page}:${err.line} - Block src="${err.src}" not found`)
+      }
+      console.log(`\nAvailable blocks: ${lintResult.availableBlocks.join(", ") || "(none)"}`)
+    }
+  }
+
+  // Exit code
+  if (flags.strict && !result.success) {
+    process.exit(1)
+  } else if (lintResult.errors.length > 0) {
+    process.exit(1)
+  }
+  process.exit(0)
+}
+
+/**
  * Main entry point
  */
 async function main() {
+  // Check for 'check' subcommand early
+  const firstArg = process.argv[2]
+  if (firstArg === "check") {
+    await runCheck()
+    return
+  }
+
   const config = parseArgs()
   const { workbookId, workbookDir, port } = config
 
   console.log(`[runtime] Starting workbook: ${workbookId}`)
+
+  // Ensure stdlib symlink exists at ~/.hands/stdlib
+  ensureStdlibSymlink()
 
   // Preflight: Check for hands.json before starting anything
   const handsJsonPath = join(workbookDir, "hands.json")

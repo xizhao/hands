@@ -7,8 +7,9 @@ import type {
   TextPart,
   ReasoningPart,
   AssistantMessage,
+  AgentPart,
 } from "@/lib/api";
-import { cn } from "@/lib/utils";
+import { cn, MSG_FONT } from "@/lib/utils";
 import ReactMarkdown from "react-markdown";
 import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
 import { oneDark } from "react-syntax-highlighter/dist/esm/styles/prism";
@@ -46,6 +47,9 @@ import {
 import { Skeleton, ShimmerText } from "@/components/ui/thinking-indicator";
 import { SecretsForm, parseSecretsOutput } from "@/components/SecretsForm";
 import { NavigateCard, parseNavigateOutput } from "@/components/NavigateCard";
+import { SubagentSummary } from "@/components/SubagentSummary";
+import { TaskToolSummary } from "@/components/TaskToolSummary";
+import { matchPrompt, type PromptMatch } from "@/lib/prompts";
 
 interface ChatMessageProps {
   message: MessageWithParts;
@@ -184,7 +188,8 @@ const getToolConfig = (toolName: string): ToolConfig => {
 const CopyButton = ({ text, className }: { text: string; className?: string }) => {
   const [copied, setCopied] = useState(false);
 
-  const handleCopy = async () => {
+  const handleCopy = async (e: React.MouseEvent) => {
+    e.stopPropagation();
     await navigator.clipboard.writeText(text);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
@@ -201,6 +206,119 @@ const CopyButton = ({ text, className }: { text: string; className?: string }) =
     </Button>
   );
 };
+
+// Collapsible code block - collapsed by default for large blocks
+const CODE_COLLAPSE_THRESHOLD = 8; // Lines above which code is collapsed
+
+const CollapsibleCodeBlock = memo(({
+  code,
+  language,
+  codeBlockFontSize,
+  metaFontSize,
+}: {
+  code: string;
+  language: string;
+  codeBlockFontSize: string;
+  metaFontSize: string;
+}) => {
+  const lines = code.split("\n");
+  const lineCount = lines.length;
+  const isLarge = lineCount > CODE_COLLAPSE_THRESHOLD;
+  const [expanded, setExpanded] = useState(!isLarge);
+
+  // Preview: first 3 lines
+  const previewCode = lines.slice(0, 3).join("\n") + (lineCount > 3 ? "\n..." : "");
+
+  return (
+    <div className="relative group rounded-lg overflow-hidden my-2">
+      {/* Header - clickable to expand/collapse for large blocks */}
+      <div
+        className={cn(
+          "flex items-center justify-between px-2 py-1 bg-background/60",
+          isLarge && "cursor-pointer hover:bg-background/70"
+        )}
+        onClick={() => isLarge && setExpanded(!expanded)}
+      >
+        <div className="flex items-center gap-2">
+          <span className={cn("text-muted-foreground/40 font-mono uppercase", metaFontSize)}>
+            {language}
+          </span>
+          {isLarge && (
+            <span className={cn("text-muted-foreground/30", metaFontSize)}>
+              {lineCount} lines
+            </span>
+          )}
+        </div>
+        <div className="flex items-center gap-1">
+          {isLarge && (
+            <span className={cn("text-muted-foreground/40 mr-1", metaFontSize)}>
+              {expanded ? "collapse" : "expand"}
+            </span>
+          )}
+          {isLarge && (
+            expanded ? <ChevronDown className="h-3 w-3 text-muted-foreground/40" /> : <ChevronRight className="h-3 w-3 text-muted-foreground/40" />
+          )}
+          <CopyButton text={code} />
+        </div>
+      </div>
+
+      {/* Code content */}
+      <AnimatePresence initial={false}>
+        {expanded ? (
+          <motion.div
+            initial={isLarge ? { height: 0, opacity: 0 } : false}
+            animate={{ height: "auto", opacity: 1 }}
+            exit={{ height: 0, opacity: 0 }}
+            transition={{ duration: 0.2 }}
+          >
+            <SyntaxHighlighter
+              style={oneDark}
+              language={language}
+              PreTag="div"
+              customStyle={{
+                margin: 0,
+                borderRadius: "0 0 0.5rem 0.5rem",
+                fontSize: codeBlockFontSize,
+                padding: "0.75rem",
+                background: "hsl(var(--background) / 0.5)",
+              }}
+            >
+              {code}
+            </SyntaxHighlighter>
+          </motion.div>
+        ) : (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="relative"
+          >
+            <SyntaxHighlighter
+              style={oneDark}
+              language={language}
+              PreTag="div"
+              customStyle={{
+                margin: 0,
+                borderRadius: "0 0 0.5rem 0.5rem",
+                fontSize: codeBlockFontSize,
+                padding: "0.75rem",
+                background: "hsl(var(--background) / 0.5)",
+                maxHeight: "5rem",
+                overflow: "hidden",
+              }}
+            >
+              {previewCode}
+            </SyntaxHighlighter>
+            {/* Fade overlay */}
+            <div className="absolute inset-x-0 bottom-0 h-8 bg-gradient-to-t from-background/80 to-transparent pointer-events-none" />
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
+  );
+});
+
+CollapsibleCodeBlock.displayName = "CollapsibleCodeBlock";
 
 // Parse psql table output into structured data
 interface ParsedTable {
@@ -248,14 +366,17 @@ const parsePsqlOutput = (output: string): ParsedTable | null => {
 };
 
 // QueryResult component - renders psql output as expandable DataTable
-const QueryResult = memo(({ output, query: _query }: { output: string; query?: string }) => {
+const QueryResult = memo(({ output, query: _query, compact = false }: { output: string; query?: string; compact?: boolean }) => {
   const [expanded, setExpanded] = useState(false);
   const parsed = useMemo(() => parsePsqlOutput(output), [output]);
+
+  const labelFont = compact ? MSG_FONT.labelCompact : MSG_FONT.label;
+  const metaFont = compact ? MSG_FONT.metaCompact : MSG_FONT.meta;
 
   // If not a table result, show as plain text
   if (!parsed || parsed.rows.length === 0) {
     return (
-      <div className="text-[11px] text-muted-foreground/70 font-mono">
+      <div className={cn("text-muted-foreground/70 font-mono", labelFont)}>
         {output.slice(0, 200)}{output.length > 200 && "..."}
       </div>
     );
@@ -268,7 +389,7 @@ const QueryResult = memo(({ output, query: _query }: { output: string; query?: s
     <div className="mt-1">
       {/* Compact preview table */}
       <div className="rounded-md overflow-hidden border border-border/50 bg-background/30">
-        <table className="w-full text-[10px] font-mono">
+        <table className={cn("w-full font-mono", metaFont)}>
           <thead>
             <tr className="bg-background/50">
               {parsed.headers.map((h, i) => (
@@ -294,13 +415,13 @@ const QueryResult = memo(({ output, query: _query }: { output: string; query?: s
 
       {/* Footer with expand/collapse and row count */}
       <div className="flex items-center justify-between mt-1 px-1">
-        <span className="text-[9px] text-muted-foreground/40">
+        <span className={cn("text-muted-foreground/40", metaFont)}>
           {parsed.rowCount} row{parsed.rowCount !== 1 && "s"}
         </span>
         {hasMore && (
           <button
             onClick={() => setExpanded(!expanded)}
-            className="text-[9px] text-blue-400/70 hover:text-blue-400 flex items-center gap-0.5"
+            className={cn("text-blue-400/70 hover:text-blue-400 flex items-center gap-0.5", metaFont)}
           >
             {expanded ? (
               <>Show less <ChevronDown className="h-2.5 w-2.5" /></>
@@ -324,14 +445,16 @@ interface TodoItem {
 }
 
 // TodoResult component - compact renderer for todowrite tool
-const TodoResult = memo(({ input }: { input: { todos?: TodoItem[] } }) => {
+const TodoResult = memo(({ input, compact = false }: { input: { todos?: TodoItem[] }; compact?: boolean }) => {
   const [expanded, setExpanded] = useState(false);
   const todos = input?.todos || [];
+
+  const labelFont = compact ? MSG_FONT.labelCompact : MSG_FONT.label;
 
   // If no todos, show "Plan completed"
   if (todos.length === 0) {
     return (
-      <div className="flex items-center gap-1.5 text-[11px] text-green-400/70">
+      <div className={cn("flex items-center gap-1.5 text-green-400/70", labelFont)}>
         <CheckCircle2 className="h-3 w-3" />
         <span>Plan completed</span>
       </div>
@@ -345,7 +468,7 @@ const TodoResult = memo(({ input }: { input: { todos?: TodoItem[] } }) => {
   // All completed
   if (completedCount === todos.length) {
     return (
-      <div className="flex items-center gap-1.5 text-[11px] text-green-400/70">
+      <div className={cn("flex items-center gap-1.5 text-green-400/70", labelFont)}>
         <CheckCircle2 className="h-3 w-3" />
         <span>All {completedCount} tasks completed</span>
       </div>
@@ -362,7 +485,7 @@ const TodoResult = memo(({ input }: { input: { todos?: TodoItem[] } }) => {
     <div className="py-0.5">
       <button
         onClick={() => setExpanded(!expanded)}
-        className="flex items-center gap-1.5 text-[11px] text-muted-foreground/60 hover:text-muted-foreground"
+        className={cn("flex items-center gap-1.5 text-muted-foreground/60 hover:text-muted-foreground", labelFont)}
       >
         {inProgressCount > 0 ? (
           <Loader2 className="h-3 w-3 animate-spin text-blue-400" />
@@ -387,7 +510,8 @@ const TodoResult = memo(({ input }: { input: { todos?: TodoItem[] } }) => {
                 <div
                   key={idx}
                   className={cn(
-                    "flex items-start gap-1.5 text-[11px]",
+                    "flex items-start gap-1.5",
+                    labelFont,
                     todo.status === "completed" && "text-muted-foreground/40",
                     todo.status === "in_progress" && "text-blue-400"
                   )}
@@ -415,8 +539,10 @@ const TodoResult = memo(({ input }: { input: { todos?: TodoItem[] } }) => {
 TodoResult.displayName = "TodoResult";
 
 // Collapsible tool thread
-const ToolThread = memo(({ tools }: { tools: ToolPart[] }) => {
+const ToolThread = memo(({ tools, compact = false }: { tools: ToolPart[]; compact?: boolean }) => {
   const [expanded, setExpanded] = useState(false);
+
+  const labelFont = compact ? MSG_FONT.labelCompact : MSG_FONT.label;
 
   const runningCount = tools.filter(t => t.state.status === "running" || t.state.status === "pending").length;
   const completedCount = tools.filter(t => t.state.status === "completed").length;
@@ -432,8 +558,9 @@ const ToolThread = memo(({ tools }: { tools: ToolPart[] }) => {
       <button
         onClick={() => setExpanded(!expanded)}
         className={cn(
-          "flex items-center gap-1.5 text-[11px] px-2 py-1 rounded-lg transition-colors",
-          "text-muted-foreground/60 hover:text-muted-foreground hover:bg-foreground/5"
+          "flex items-center gap-1.5 px-2 py-1 rounded-lg transition-colors",
+          "text-muted-foreground/60 hover:text-muted-foreground hover:bg-foreground/5",
+          labelFont
         )}
       >
         {isRunning ? (
@@ -458,7 +585,7 @@ const ToolThread = memo(({ tools }: { tools: ToolPart[] }) => {
           >
             <div className="ml-2 mt-1 space-y-0.5 border-l border-border/30 pl-2">
               {tools.map((tool) => (
-                <ToolInvocation key={tool.id} part={tool} />
+                <ToolInvocation key={tool.id} part={tool} compact={compact} />
               ))}
             </div>
           </motion.div>
@@ -471,11 +598,14 @@ const ToolThread = memo(({ tools }: { tools: ToolPart[] }) => {
 ToolThread.displayName = "ToolThread";
 
 // Compact inline tool display
-const ToolInvocation = memo(({ part }: { part: ToolPart }) => {
+const ToolInvocation = memo(({ part, compact = false }: { part: ToolPart; compact?: boolean }) => {
   const [expanded, setExpanded] = useState(false);
   const { state, tool: toolName } = part;
   const config = getToolConfig(toolName);
   const Icon = config.icon;
+
+  const labelFont = compact ? MSG_FONT.labelCompact : MSG_FONT.label;
+  const metaFont = compact ? MSG_FONT.metaCompact : MSG_FONT.meta;
 
   const isRunning = state.status === "running" || state.status === "pending";
   const isError = state.status === "error";
@@ -506,22 +636,42 @@ const ToolInvocation = memo(({ part }: { part: ToolPart }) => {
 
   // For todowrite, use custom compact renderer
   if (isTodoTool && state.input) {
-    return <TodoResult input={state.input as { todos?: TodoItem[] }} />;
+    return <TodoResult input={state.input as { todos?: TodoItem[] }} compact={compact} />;
+  }
+
+  // For schema tool, show simple non-expandable line (no input/output details)
+  const isSchemaTool = toolName.toLowerCase().endsWith("schema");
+  if (isSchemaTool) {
+    return (
+      <div className="py-0.5">
+        <div className={cn("flex items-center gap-1.5 text-muted-foreground/60", labelFont)}>
+          {isRunning ? (
+            <Loader2 className="h-2.5 w-2.5 animate-spin text-blue-400" />
+          ) : isError ? (
+            <AlertCircle className="h-2.5 w-2.5 text-red-400" />
+          ) : (
+            <Database className="h-2.5 w-2.5" />
+          )}
+          <span>{isRunning ? "Reading database schema..." : "Read database schema"}</span>
+        </div>
+      </div>
+    );
   }
 
   // For psql with table results, always show the result inline
   if (hasTableResult) {
     return (
       <div className="py-1">
-        <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground/60 mb-1">
+        <div className={cn("flex items-center gap-1.5 text-muted-foreground/60 mb-1", labelFont)}>
           <Database className="h-2.5 w-2.5 text-blue-400" />
-          <span className="font-mono text-[10px] text-muted-foreground/50 truncate max-w-[250px]">
+          <span className={cn("font-mono text-muted-foreground/50 truncate max-w-[250px]", metaFont)}>
             {(state.input as Record<string, unknown>)?.query as string}
           </span>
         </div>
         <QueryResult
           output={state.output!}
           query={(state.input as Record<string, unknown>)?.query as string}
+          compact={compact}
         />
       </div>
     );
@@ -537,7 +687,7 @@ const ToolInvocation = memo(({ part }: { part: ToolPart }) => {
   if (secretsRequest) {
     return (
       <div className="py-1">
-        <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground/60 mb-1">
+        <div className={cn("flex items-center gap-1.5 text-muted-foreground/60 mb-1", labelFont)}>
           <Key className="h-2.5 w-2.5 text-blue-400" />
           <span>Secrets</span>
         </div>
@@ -565,7 +715,8 @@ const ToolInvocation = memo(({ part }: { part: ToolPart }) => {
     <div className="py-0.5">
       <button
         className={cn(
-          "flex items-center gap-1.5 text-[11px] text-muted-foreground/60",
+          "flex items-center gap-1.5 text-muted-foreground/60",
+          labelFont,
           hasDetails && "cursor-pointer hover:text-muted-foreground"
         )}
         onClick={() => hasDetails && setExpanded(!expanded)}
@@ -579,7 +730,7 @@ const ToolInvocation = memo(({ part }: { part: ToolPart }) => {
         )}
         <span>{config.label}</span>
         {subtitle && (
-          <span className="text-muted-foreground/40 font-mono text-[10px] truncate max-w-[150px]">
+          <span className={cn("text-muted-foreground/40 font-mono truncate max-w-[150px]", metaFont)}>
             {subtitle}
           </span>
         )}
@@ -596,10 +747,10 @@ const ToolInvocation = memo(({ part }: { part: ToolPart }) => {
             exit={{ height: 0, opacity: 0 }}
             className="overflow-hidden"
           >
-            <div className="ml-4 mt-1 p-2 rounded-lg bg-background/30 text-[10px] font-mono space-y-1.5">
+            <div className={cn("ml-4 mt-1 p-2 rounded-lg bg-background/30 font-mono space-y-1.5", metaFont)}>
               {state.input && (
                 <div>
-                  <span className="text-muted-foreground/40 uppercase text-[9px]">input: </span>
+                  <span className={cn("text-muted-foreground/40 uppercase", metaFont)}>input: </span>
                   <span className="text-muted-foreground/70 break-all">
                     {JSON.stringify(state.input).slice(0, 300)}
                   </span>
@@ -610,7 +761,7 @@ const ToolInvocation = memo(({ part }: { part: ToolPart }) => {
               )}
               {state.status === "completed" && state.output && (
                 <div>
-                  <span className="text-muted-foreground/40 uppercase text-[9px]">output: </span>
+                  <span className={cn("text-muted-foreground/40 uppercase", metaFont)}>output: </span>
                   <span className="text-muted-foreground/70 break-all">
                     {state.output.slice(0, 300)}{state.output.length > 300 && "..."}
                   </span>
@@ -627,68 +778,65 @@ const ToolInvocation = memo(({ part }: { part: ToolPart }) => {
 ToolInvocation.displayName = "ToolInvocation";
 
 // Text content with markdown
-const TextContent = memo(({ text, isStreaming = false, darkText = false, compact = false }: { text: string; isStreaming?: boolean; darkText?: boolean; compact?: boolean }) => (
-  <div className={cn(
-    "prose max-w-none prose-p:my-0.5 prose-pre:my-1 prose-p:leading-relaxed",
-    compact ? "prose-xs text-xs" : "prose-sm text-sm",
-    darkText ? "prose-neutral" : "dark:prose-invert"
-  )}>
-    <ReactMarkdown
-      components={{
-        code({ className, children, ...props }) {
-          const match = /language-(\w+)/.exec(className || "");
-          const inline = !match;
+const TextContent = memo(({ text, isStreaming = false, darkText = false, compact = false }: { text: string; isStreaming?: boolean; darkText?: boolean; compact?: boolean }) => {
+  const fontSize = compact ? MSG_FONT.baseCompact : MSG_FONT.base;
+  const codeFontSize = compact ? MSG_FONT.codeCompact : MSG_FONT.code;
+  const codeBlockFontSize = compact ? MSG_FONT.codeBlockCompact : MSG_FONT.codeBlock;
+  const metaFontSize = compact ? MSG_FONT.metaCompact : MSG_FONT.meta;
 
-          if (inline) {
+  return (
+    <div className={cn(
+      "prose max-w-none prose-p:my-0.5 prose-pre:my-1 prose-p:leading-relaxed",
+      fontSize,
+      darkText ? "prose-neutral" : "dark:prose-invert"
+    )}>
+      <ReactMarkdown
+        components={{
+          code({ className, children, ...props }) {
+            const match = /language-(\w+)/.exec(className || "");
+            const inline = !match;
+
+            if (inline) {
+              return (
+                <code className={cn("bg-background/50 px-1 py-0.5 rounded font-mono", codeFontSize)} {...props}>
+                  {children}
+                </code>
+              );
+            }
+
+            // Use collapsible code block for fenced code
+            const code = String(children).replace(/\n$/, "");
             return (
-              <code className="bg-background/50 px-1 py-0.5 rounded text-[12px] font-mono" {...props}>
-                {children}
-              </code>
-            );
-          }
-
-          return (
-            <div className="relative group rounded-lg overflow-hidden my-2">
-              <div className="absolute top-1.5 right-1.5 z-10 flex items-center gap-1">
-                <span className="text-[9px] text-muted-foreground/40 font-mono uppercase">{match[1]}</span>
-                <CopyButton text={String(children)} />
-              </div>
-              <SyntaxHighlighter
-                style={oneDark}
+              <CollapsibleCodeBlock
+                code={code}
                 language={match[1]}
-                PreTag="div"
-                customStyle={{
-                  margin: 0,
-                  borderRadius: "0.5rem",
-                  fontSize: "11px",
-                  padding: "0.75rem",
-                  background: "hsl(var(--background) / 0.5)",
-                }}
-              >
-                {String(children).replace(/\n$/, "")}
-              </SyntaxHighlighter>
-            </div>
-          );
-        },
-      }}
-    >
-      {text}
-    </ReactMarkdown>
-    {isStreaming && (
-      <motion.span
-        className="inline-block w-0.5 h-4 bg-primary ml-0.5 align-middle"
-        animate={{ opacity: [1, 0] }}
-        transition={{ duration: 0.5, repeat: Infinity, repeatType: "reverse" }}
-      />
-    )}
-  </div>
-));
+                codeBlockFontSize={codeBlockFontSize}
+                metaFontSize={metaFontSize}
+              />
+            );
+          },
+        }}
+      >
+        {text}
+      </ReactMarkdown>
+      {isStreaming && (
+        <motion.span
+          className="inline-block w-0.5 h-4 bg-primary ml-0.5 align-middle"
+          animate={{ opacity: [1, 0] }}
+          transition={{ duration: 0.5, repeat: Infinity, repeatType: "reverse" }}
+        />
+      )}
+    </div>
+  );
+});
 
 TextContent.displayName = "TextContent";
 
 // Collapsible reasoning section
-const ReasoningContent = memo(({ part }: { part: ReasoningPart }) => {
+const ReasoningContent = memo(({ part, compact = false }: { part: ReasoningPart; compact?: boolean }) => {
   const [expanded, setExpanded] = useState(false);
+
+  const labelFont = compact ? MSG_FONT.labelCompact : MSG_FONT.label;
 
   // Don't render if no text
   if (!part.text || part.text.trim().length === 0) {
@@ -702,8 +850,9 @@ const ReasoningContent = memo(({ part }: { part: ReasoningPart }) => {
       <button
         onClick={() => setExpanded(!expanded)}
         className={cn(
-          "flex items-center gap-1.5 text-[11px] px-2 py-1 rounded-lg transition-colors",
-          "text-purple-400/70 hover:text-purple-400 hover:bg-purple-500/10"
+          "flex items-center gap-1.5 px-2 py-1 rounded-lg transition-colors",
+          "text-purple-400/70 hover:text-purple-400 hover:bg-purple-500/10",
+          labelFont
         )}
       >
         <Brain className="h-3 w-3" />
@@ -721,7 +870,7 @@ const ReasoningContent = memo(({ part }: { part: ReasoningPart }) => {
             exit={{ height: 0, opacity: 0 }}
             className="overflow-hidden"
           >
-            <pre className="mt-1 ml-2 p-2 rounded-lg bg-purple-500/10 text-[11px] font-mono text-purple-300/70 whitespace-pre-wrap max-h-48 overflow-auto">
+            <pre className={cn("mt-1 ml-2 p-2 rounded-lg bg-purple-500/10 font-mono text-purple-300/70 whitespace-pre-wrap max-h-48 overflow-auto", labelFont)}>
               {part.text}
             </pre>
           </motion.div>
@@ -734,11 +883,12 @@ const ReasoningContent = memo(({ part }: { part: ReasoningPart }) => {
 ReasoningContent.displayName = "ReasoningContent";
 
 // File chip for displaying file paths in user messages
-const FileChip = memo(({ path }: { path: string }) => {
+const FileChip = memo(({ path, compact = false }: { path: string; compact?: boolean }) => {
   const filename = getFilename(path);
+  const codeFont = compact ? MSG_FONT.codeCompact : MSG_FONT.code;
 
   return (
-    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-primary-foreground/20 text-primary-foreground text-xs font-mono">
+    <span className={cn("inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-primary-foreground/20 text-primary-foreground font-mono", codeFont)}>
       <File className="h-3 w-3 shrink-0" />
       <span className="truncate max-w-[200px]" title={path}>{filename}</span>
     </span>
@@ -747,11 +897,37 @@ const FileChip = memo(({ path }: { path: string }) => {
 
 FileChip.displayName = "FileChip";
 
+// Action chip for displaying standard prompts with icon
+const ActionChip = memo(({ match, compact = false }: { match: PromptMatch; compact?: boolean }) => {
+  const Icon = match.meta.icon;
+  const baseFont = compact ? MSG_FONT.baseCompact : MSG_FONT.base;
+
+  return (
+    <span className={cn(
+      "inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg",
+      "bg-primary-foreground/20 text-primary-foreground"
+    )}>
+      <Icon className={cn("h-3.5 w-3.5 shrink-0", match.meta.color)} />
+      <span className={cn("font-medium", baseFont)}>{match.meta.label}</span>
+    </span>
+  );
+});
+
+ActionChip.displayName = "ActionChip";
+
 // Parse text and render file paths as chips
 // Matches absolute paths like /Users/foo/bar.txt or relative paths starting with ./
 const FILE_PATH_REGEX = /((?:\/[\w.-]+)+(?:\.\w+)?|\.\/[\w./-]+)/g;
 
-const UserTextContent = memo(({ text }: { text: string }) => {
+const UserTextContent = memo(({ text, compact = false }: { text: string; compact?: boolean }) => {
+  // Check if this is a standard prompt first
+  const promptMatch = useMemo(() => matchPrompt(text), [text]);
+
+  // If it's a standard prompt, render as action chip
+  if (promptMatch) {
+    return <ActionChip match={promptMatch} compact={compact} />;
+  }
+
   const parts = useMemo(() => {
     const result: Array<{ type: "text" | "file"; content: string }> = [];
     let lastIndex = 0;
@@ -790,7 +966,7 @@ const UserTextContent = memo(({ text }: { text: string }) => {
     <span className="inline">
       {parts.map((part, idx) =>
         part.type === "file" ? (
-          <FileChip key={idx} path={part.content} />
+          <FileChip key={idx} path={part.content} compact={compact} />
         ) : (
           <span key={idx}>{part.content}</span>
         )
@@ -802,20 +978,21 @@ const UserTextContent = memo(({ text }: { text: string }) => {
 UserTextContent.displayName = "UserTextContent";
 
 // Cost indicator for assistant messages - shown to the left of the bubble with popover on hover
-const CostIndicator = memo(({ info }: { info: AssistantMessage }) => {
+const CostIndicator = memo(({ info, compact = false }: { info: AssistantMessage; compact?: boolean }) => {
   // Only show if there's a cost
   if (!info.cost || info.cost <= 0) return null;
 
+  const metaFont = compact ? MSG_FONT.metaCompact : MSG_FONT.meta;
   const tokens = info.tokens;
 
   return (
     <Tooltip>
       <TooltipTrigger asChild>
-        <span className="text-[9px] text-muted-foreground/30 font-mono opacity-0 group-hover:opacity-100 transition-opacity cursor-default">
+        <span className={cn("text-muted-foreground/30 font-mono opacity-0 group-hover:opacity-100 transition-opacity cursor-default", metaFont)}>
           ${info.cost.toFixed(4)}
         </span>
       </TooltipTrigger>
-      <TooltipContent side="right" className="text-xs font-mono bg-background/95 backdrop-blur-xl">
+      <TooltipContent side="right" className={cn("font-mono bg-background/95 backdrop-blur-xl", MSG_FONT.code)}>
         <div className="space-y-1">
           <div className="flex justify-between gap-4">
             <span className="text-muted-foreground">Model</span>
@@ -870,13 +1047,14 @@ interface MessageProgressProps {
   isThinking?: boolean;
 }
 
-export const MessageProgress = memo(({ tools, currentStatus, isThinking = false }: MessageProgressProps) => {
+export const MessageProgress = memo(({ tools, currentStatus, isThinking = false, compact = false }: MessageProgressProps & { compact?: boolean }) => {
   const runningTool = tools.find(t => t.status === "running" || t.status === "pending");
   const statusText = currentStatus || (runningTool ? getToolConfig(runningTool.name).label : isThinking ? "Thinking..." : "Working...");
+  const baseFont = compact ? MSG_FONT.baseCompact : MSG_FONT.base;
 
   return (
     <div className="py-3">
-      <ShimmerText text={statusText} className="text-sm font-medium" />
+      <ShimmerText text={statusText} className={cn("font-medium", baseFont)} />
     </div>
   );
 });
@@ -897,7 +1075,7 @@ export const ChatMessage = memo(({ message, isStreaming = false, compact = false
 
   // Group consecutive tools together for collapsible threads
   const groupedContent = useMemo(() => {
-    const groups: { type: "text" | "tools" | "reasoning" | "other"; items: Part[] }[] = [];
+    const groups: { type: "text" | "tools" | "reasoning" | "agent" | "other"; items: Part[] }[] = [];
     let currentTools: Part[] = [];
 
     const flushTools = () => {
@@ -916,6 +1094,9 @@ export const ChatMessage = memo(({ message, isStreaming = false, compact = false
       } else if (part.type === "reasoning") {
         flushTools();
         groups.push({ type: "reasoning", items: [part] });
+      } else if (part.type === "agent") {
+        flushTools();
+        groups.push({ type: "agent", items: [part] });
       } else if (part.type !== "step-start" && part.type !== "step-finish") {
         flushTools();
         groups.push({ type: "other", items: [part] });
@@ -951,12 +1132,12 @@ export const ChatMessage = memo(({ message, isStreaming = false, compact = false
         )}>
           <div className={cn(
             "leading-relaxed",
-            compact ? "text-xs" : "text-sm"
+            compact ? MSG_FONT.baseCompact : MSG_FONT.base
           )}>
             {groupedContent.map((group, idx) => {
               if (group.type === "text") {
                 const textPart = group.items[0] as TextPart;
-                return <UserTextContent key={idx} text={textPart.text} />;
+                return <UserTextContent key={idx} text={textPart.text} compact={compact} />;
               }
               return null;
             })}
@@ -972,7 +1153,7 @@ export const ChatMessage = memo(({ message, isStreaming = false, compact = false
             "bg-muted text-foreground",
             compact ? "px-2.5 py-1.5" : "px-3.5 py-2"
           )}>
-            <div className={cn("space-y-0.5", compact && "text-xs")}>
+            <div className="space-y-0.5">
               {groupedContent.map((group, idx) => {
                 if (group.type === "text") {
                   const textPart = group.items[0] as TextPart;
@@ -986,27 +1167,57 @@ export const ChatMessage = memo(({ message, isStreaming = false, compact = false
                   );
                 }
                 if (group.type === "tools") {
-                  // Show collapsible thread if 3+ tools, otherwise show inline
-                  if (group.items.length >= 3) {
-                    return <ToolThread key={idx} tools={group.items as ToolPart[]} />;
-                  }
+                  // Separate task tools from other tools
+                  const taskTools = group.items.filter(
+                    (p) => (p as ToolPart).tool.toLowerCase() === "task"
+                  ) as ToolPart[];
+                  const otherTools = group.items.filter(
+                    (p) => (p as ToolPart).tool.toLowerCase() !== "task"
+                  ) as ToolPart[];
+
                   return (
                     <div key={idx} className="space-y-0.5">
-                      {group.items.map((part) => (
-                        <ToolInvocation key={part.id} part={part as ToolPart} />
+                      {/* Render task tools with TaskToolSummary */}
+                      {taskTools.map((part) => (
+                        <TaskToolSummary
+                          key={part.id}
+                          part={part}
+                          sessionId={message.info.sessionID}
+                          compact={compact}
+                        />
                       ))}
+                      {/* Show collapsible thread if 3+ other tools, otherwise show inline */}
+                      {otherTools.length >= 3 ? (
+                        <ToolThread tools={otherTools} compact={compact} />
+                      ) : (
+                        otherTools.map((part) => (
+                          <ToolInvocation key={part.id} part={part} compact={compact} />
+                        ))
+                      )}
                     </div>
                   );
                 }
                 if (group.type === "reasoning") {
-                  return <ReasoningContent key={idx} part={group.items[0] as ReasoningPart} />;
+                  return <ReasoningContent key={idx} part={group.items[0] as ReasoningPart} compact={compact} />;
+                }
+                if (group.type === "agent") {
+                  const agentPart = group.items[0] as AgentPart;
+                  return (
+                    <SubagentSummary
+                      key={idx}
+                      agentName={agentPart.name}
+                      sessionId={message.info.sessionID}
+                      messageId={agentPart.messageID}
+                      compact={compact}
+                    />
+                  );
                 }
                 return null;
               })}
 
               {/* Error display */}
               {assistantInfo?.error && (
-                <div className="flex items-center gap-2 text-xs text-red-400 px-2 py-1 rounded-lg bg-red-500/10">
+                <div className={cn("flex items-center gap-2 text-red-400 px-2 py-1 rounded-lg bg-red-500/10", compact ? MSG_FONT.codeCompact : MSG_FONT.code)}>
                   <AlertCircle className="h-3 w-3" />
                   <span>{assistantInfo.error.data?.message as string || assistantInfo.error.name}</span>
                 </div>
@@ -1017,7 +1228,7 @@ export const ChatMessage = memo(({ message, isStreaming = false, compact = false
           {/* Cost indicator - shown to the right of the bubble on hover */}
           {assistantInfo && !isStreaming && (
             <div className="shrink-0">
-              <CostIndicator info={assistantInfo} />
+              <CostIndicator info={assistantInfo} compact={compact} />
             </div>
           )}
         </div>

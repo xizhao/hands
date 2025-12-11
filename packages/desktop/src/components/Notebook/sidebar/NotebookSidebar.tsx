@@ -14,7 +14,7 @@ import { useState, useMemo, useCallback } from "react";
 import { useNavigate, useRouterState, useRouter } from "@tanstack/react-router";
 import { cn } from "@/lib/utils";
 import { FileText, Plus, ChevronDown, ChevronRight, Search, X, Pin, PinOff, ChevronLeft } from "lucide-react";
-import { Table, TreeStructure, SquaresFour, CaretLeft, CaretRight, Database, Newspaper, Code, Key, CircleNotch, ArrowsClockwise, Warning } from "@phosphor-icons/react";
+import { Table, TreeStructure, SquaresFour, CaretLeft, CaretRight, Database, Newspaper, Code, Key, CircleNotch, ArrowsClockwise, Warning, Folder, FolderOpen } from "@phosphor-icons/react";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { useDbSchema, useManifest, useActiveWorkbookId } from "@/hooks/useWorkbook";
 import { useSourceManagement, type AvailableSource } from "@/hooks/useSources";
@@ -86,9 +86,43 @@ export function NotebookSidebar({ collapsed = false, fullWidth = false, onAddDra
   const blocksLoading = manifestLoading;
 
   const [hoveredIndex, setHoveredIndex] = useState<number | null>(null);
-  const [draftsExpanded, setDraftsExpanded] = useState(true);
+  const [draftsExpanded, setDraftsExpanded] = useState(false); // Collapsed by default
   const [sourcesExpanded, setSourcesExpanded] = useState(true);
   const [blocksExpanded, setBlocksExpanded] = useState(true);
+  const [expandedDirs, setExpandedDirs] = useState<Set<string>>(new Set()); // Track expanded directories
+
+  // Toggle directory expansion
+  const toggleDir = useCallback((dir: string) => {
+    setExpandedDirs(prev => {
+      const next = new Set(prev);
+      if (next.has(dir)) {
+        next.delete(dir);
+      } else {
+        next.add(dir);
+      }
+      return next;
+    });
+  }, []);
+
+  // Build tree structure from blocks with parentDir
+  const blockTree = useMemo(() => {
+    const tree: Map<string, typeof blocks> = new Map();
+    const rootBlocks: typeof blocks = [];
+
+    for (const block of blocks) {
+      const parentDir = (block as any).parentDir || "";
+      if (!parentDir) {
+        rootBlocks.push(block);
+      } else {
+        if (!tree.has(parentDir)) {
+          tree.set(parentDir, []);
+        }
+        tree.get(parentDir)!.push(block);
+      }
+    }
+
+    return { rootBlocks, directories: tree };
+  }, [blocks]);
   const [searchQuery, setSearchQuery] = useState("");
   const [addSourceOpen, setAddSourceOpen] = useState(false);
   const [selectedSource, setSelectedSource] = useState<string | null>(null);
@@ -571,52 +605,95 @@ export function NotebookSidebar({ collapsed = false, fullWidth = false, onAddDra
           )}
         </div>
 
-        {/* Drafts Section */}
+        {/* Blocks Section (with tree structure) */}
         <div>
-          <div className="flex items-center justify-between mb-1">
-            <button
-              onClick={() => setDraftsExpanded(!draftsExpanded)}
-              className="flex items-center gap-1 text-[10px] font-medium text-muted-foreground/80 uppercase tracking-wider hover:text-muted-foreground transition-colors"
-            >
-              {draftsExpanded ? (
-                <ChevronDown className="h-3 w-3" />
-              ) : (
-                <ChevronRight className="h-3 w-3" />
-              )}
-              Drafts
-            </button>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <button
-                  onClick={handleAddDraft}
-                  className="p-0.5 text-muted-foreground/60 hover:text-muted-foreground transition-colors"
-                >
-                  <Plus className="h-3 w-3" />
-                </button>
-              </TooltipTrigger>
-              <TooltipContent side="right">
-                <p>Add draft</p>
-              </TooltipContent>
-            </Tooltip>
-          </div>
+          <button
+            onClick={() => setBlocksExpanded(!blocksExpanded)}
+            className="flex items-center gap-1 text-[10px] font-medium text-muted-foreground/80 uppercase tracking-wider hover:text-muted-foreground transition-colors mb-1"
+          >
+            {blocksExpanded ? (
+              <ChevronDown className="h-3 w-3" />
+            ) : (
+              <ChevronRight className="h-3 w-3" />
+            )}
+            Blocks
+          </button>
 
-          {draftsExpanded && (
+          {blocksExpanded && (
             <div className="space-y-0">
-              {filteredDrafts.map((draft, index) => (
-                <DraftItem
-                  key={draft.id}
-                  draft={draft}
-                  active={activePageId === draft.id}
-                  scale={getScale(index)}
-                  collapsed={false}
-                  onClick={() => handleDraftClick(draft.id)}
-                  onMouseEnter={() => setHoveredIndex(index)}
-                  onMouseLeave={() => setHoveredIndex(null)}
-                />
-              ))}
-              {filteredDrafts.length === 0 && searchQuery && (
+              {blocksLoading ? (
                 <div className="text-[11px] text-muted-foreground/70 py-1">
-                  No drafts found
+                  Loading...
+                </div>
+              ) : blocks.length > 0 ? (
+                <>
+                  {/* Render directories first */}
+                  {Array.from(blockTree.directories.keys()).sort().map((dir) => {
+                    const isExpanded = expandedDirs.has(dir);
+                    const dirBlocks = blockTree.directories.get(dir) || [];
+                    const filteredDirBlocks = searchQuery
+                      ? dirBlocks.filter((b) => b.title.toLowerCase().includes(searchQuery.toLowerCase()))
+                      : dirBlocks;
+
+                    // Hide directory if searching and no matches
+                    if (searchQuery && filteredDirBlocks.length === 0) return null;
+
+                    return (
+                      <div key={dir}>
+                        <button
+                          onClick={() => toggleDir(dir)}
+                          className="w-full flex items-center gap-1.5 py-0.5 text-[13px] text-muted-foreground hover:text-foreground transition-colors"
+                        >
+                          {isExpanded ? (
+                            <FolderOpen weight="duotone" className="h-3.5 w-3.5 shrink-0 text-amber-500" />
+                          ) : (
+                            <Folder weight="duotone" className="h-3.5 w-3.5 shrink-0 text-amber-500" />
+                          )}
+                          <span className="flex-1 truncate text-left">{dir}</span>
+                          <span className="text-[10px] text-muted-foreground/60">{filteredDirBlocks.length}</span>
+                        </button>
+                        {(isExpanded || searchQuery) && (
+                          <div className="ml-3 border-l border-border/50 pl-2">
+                            {filteredDirBlocks.map((block) => (
+                              <button
+                                key={block.id}
+                                onClick={() => handleBlockClick(block.id)}
+                                className={cn(
+                                  "w-full flex items-center gap-2 py-0.5 text-[13px] transition-all duration-150 origin-left",
+                                  "text-muted-foreground hover:text-foreground"
+                                )}
+                              >
+                                <SquaresFour weight="duotone" className="h-3.5 w-3.5 shrink-0" />
+                                <span className="flex-1 truncate text-left">{block.title || block.id}</span>
+                              </button>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                  {/* Render root blocks (no parentDir) */}
+                  {(searchQuery
+                    ? blockTree.rootBlocks.filter((b) => b.title.toLowerCase().includes(searchQuery.toLowerCase()))
+                    : blockTree.rootBlocks
+                  ).map((block) => (
+                    <button
+                      key={block.id}
+                      onClick={() => handleBlockClick(block.id)}
+                      className={cn(
+                        "w-full flex items-center gap-2 py-0.5 text-[13px] transition-all duration-150 origin-left",
+                        "text-muted-foreground hover:text-foreground"
+                      )}
+                    >
+                      <SquaresFour weight="duotone" className="h-3.5 w-3.5 shrink-0" />
+                      <span className="flex-1 truncate text-left">{block.title || block.id}</span>
+                    </button>
+                  ))}
+                </>
+              ) : (
+                <div className="flex items-center gap-2 py-1 text-[11px] text-muted-foreground/70">
+                  <SquaresFour weight="duotone" className="h-3.5 w-3.5" />
+                  <span>No blocks</span>
                 </div>
               )}
             </div>
@@ -794,48 +871,55 @@ export function NotebookSidebar({ collapsed = false, fullWidth = false, onAddDra
           )}
         </div>
 
-        {/* Blocks Section */}
+        {/* Drafts Section (collapsed by default, at the bottom) */}
         <div>
-          <button
-            onClick={() => setBlocksExpanded(!blocksExpanded)}
-            className="flex items-center gap-1 text-[10px] font-medium text-muted-foreground/80 uppercase tracking-wider hover:text-muted-foreground transition-colors mb-1"
-          >
-            {blocksExpanded ? (
-              <ChevronDown className="h-3 w-3" />
-            ) : (
-              <ChevronRight className="h-3 w-3" />
-            )}
-            Blocks
-          </button>
-
-          {blocksExpanded && (
-            <div className="space-y-0">
-              {blocksLoading ? (
-                <div className="text-[11px] text-muted-foreground/70 py-1">
-                  Loading...
-                </div>
-              ) : filteredBlocks.length > 0 ? (
-                filteredBlocks.map((block) => (
-                  <button
-                    key={block.id}
-                    onClick={() => handleBlockClick(block.id)}
-                    className={cn(
-                      "w-full flex items-center gap-2 py-0.5 text-[13px] transition-all duration-150 origin-left group",
-                      "text-muted-foreground hover:text-foreground"
-                    )}
-                  >
-                    <SquaresFour weight="duotone" className="h-3.5 w-3.5 shrink-0" />
-                    <span className="flex-1 truncate text-left">{block.title || block.id}</span>
-                  </button>
-                ))
-              ) : searchQuery && blocks.length > 0 ? (
-                <div className="text-[11px] text-muted-foreground/70 py-1">
-                  No blocks found
-                </div>
+          <div className="flex items-center justify-between mb-1">
+            <button
+              onClick={() => setDraftsExpanded(!draftsExpanded)}
+              className="flex items-center gap-1 text-[10px] font-medium text-muted-foreground/80 uppercase tracking-wider hover:text-muted-foreground transition-colors"
+            >
+              {draftsExpanded ? (
+                <ChevronDown className="h-3 w-3" />
               ) : (
-                <div className="flex items-center gap-2 py-1 text-[11px] text-muted-foreground/70">
-                  <SquaresFour weight="duotone" className="h-3.5 w-3.5" />
-                  <span>No blocks</span>
+                <ChevronRight className="h-3 w-3" />
+              )}
+              Drafts
+              {!draftsExpanded && drafts.length > 0 && (
+                <span className="ml-1 text-muted-foreground/60">({drafts.length})</span>
+              )}
+            </button>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <button
+                  onClick={handleAddDraft}
+                  className="p-0.5 text-muted-foreground/60 hover:text-muted-foreground transition-colors"
+                >
+                  <Plus className="h-3 w-3" />
+                </button>
+              </TooltipTrigger>
+              <TooltipContent side="right">
+                <p>Add draft</p>
+              </TooltipContent>
+            </Tooltip>
+          </div>
+
+          {draftsExpanded && (
+            <div className="space-y-0">
+              {filteredDrafts.map((draft, index) => (
+                <DraftItem
+                  key={draft.id}
+                  draft={draft}
+                  active={activePageId === draft.id}
+                  scale={getScale(index)}
+                  collapsed={false}
+                  onClick={() => handleDraftClick(draft.id)}
+                  onMouseEnter={() => setHoveredIndex(index)}
+                  onMouseLeave={() => setHoveredIndex(null)}
+                />
+              ))}
+              {filteredDrafts.length === 0 && searchQuery && (
+                <div className="text-[11px] text-muted-foreground/70 py-1">
+                  No drafts found
                 </div>
               )}
             </div>
