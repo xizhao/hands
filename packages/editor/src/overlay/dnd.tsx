@@ -5,9 +5,9 @@
  * Uses react-dnd with HTML5 backend.
  */
 
-import { useState, useEffect, useRef, useCallback } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useDrag, useDrop, useDragLayer } from 'react-dnd'
-import { DotsSixVertical, Plus, Trash } from '@phosphor-icons/react'
+import { DotsSixVertical, Trash } from '@phosphor-icons/react'
 
 // DnD item type
 export const ELEMENT_TYPE = 'RSC_ELEMENT'
@@ -25,11 +25,13 @@ interface DragHandleProps {
   nodeId: string
   containerRef: React.RefObject<HTMLDivElement | null>
   onDelete: () => void
-  onInsert?: () => void
+  onHoverChange?: (isHovered: boolean) => void
 }
 
-export function DragHandle({ nodeId, containerRef, onDelete, onInsert }: DragHandleProps) {
+export function DragHandle({ nodeId, containerRef, onDelete, onHoverChange }: DragHandleProps) {
   const [rect, setRect] = useState<DOMRect | null>(null)
+  const [menuOpen, setMenuOpen] = useState(false)
+  const menuRef = useRef<HTMLDivElement>(null)
 
   // Set up drag
   const [{ isDragging }, dragRef] = useDrag(() => ({
@@ -73,46 +75,67 @@ export function DragHandle({ nodeId, containerRef, onDelete, onInsert }: DragHan
     }
   }, [nodeId, containerRef])
 
+  // Close menu when clicking outside
+  useEffect(() => {
+    if (!menuOpen) return
+
+    const handleClickOutside = (e: MouseEvent) => {
+      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
+        setMenuOpen(false)
+      }
+    }
+
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => document.removeEventListener('mousedown', handleClickOutside)
+  }, [menuOpen])
+
   if (!rect) return null
 
   return (
     <div
-      className="absolute flex items-start gap-0.5 z-50"
+      className="absolute flex items-start z-50 transition-opacity"
       style={{
-        left: rect.x - 56,
+        left: rect.x - 28,
         top: rect.y,
         opacity: isDragging ? 0.5 : 1,
       }}
+      onMouseEnter={() => onHoverChange?.(true)}
+      onMouseLeave={() => {
+        if (!menuOpen) {
+          onHoverChange?.(false)
+        }
+      }}
     >
-      {/* Plus button to insert */}
-      <button
-        className="size-6 p-0 flex items-center justify-center rounded hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
-        onClick={(e) => {
-          e.stopPropagation()
-          onInsert?.()
-        }}
-      >
-        <Plus className="size-4 text-gray-500" weight="bold" />
-      </button>
+      {/* Drag handle with click menu */}
+      <div className="relative" ref={menuRef}>
+        <button
+          ref={dragRef as any}
+          className="size-6 p-0 flex items-center justify-center rounded hover:bg-gray-100 dark:hover:bg-gray-800 cursor-grab active:cursor-grabbing transition-colors"
+          onClick={(e) => {
+            e.stopPropagation()
+            setMenuOpen(!menuOpen)
+          }}
+        >
+          <DotsSixVertical className="size-4 text-gray-400" weight="bold" />
+        </button>
 
-      {/* Drag handle */}
-      <button
-        ref={dragRef as any}
-        className="size-6 p-0 flex items-center justify-center rounded hover:bg-gray-100 dark:hover:bg-gray-800 cursor-grab active:cursor-grabbing transition-colors"
-      >
-        <DotsSixVertical className="size-4 text-gray-500" weight="bold" />
-      </button>
-
-      {/* Delete button */}
-      <button
-        className="size-6 p-0 flex items-center justify-center rounded hover:bg-red-100 dark:hover:bg-red-900/30 transition-colors"
-        onClick={(e) => {
-          e.stopPropagation()
-          onDelete()
-        }}
-      >
-        <Trash className="size-4 text-gray-500 hover:text-red-500" weight="bold" />
-      </button>
+        {/* Dropdown menu */}
+        {menuOpen && (
+          <div className="absolute left-0 top-full mt-1 bg-background border border-border rounded-md shadow-lg py-1 min-w-[120px] z-[100]">
+            <button
+              className="w-full px-3 py-1.5 text-left text-sm flex items-center gap-2 hover:bg-muted transition-colors text-red-500"
+              onClick={(e) => {
+                e.stopPropagation()
+                setMenuOpen(false)
+                onDelete()
+              }}
+            >
+              <Trash className="size-4" />
+              Delete
+            </button>
+          </div>
+        )}
+      </div>
     </div>
   )
 }
@@ -255,17 +278,13 @@ export function DropZone({ containerRef, onDrop }: DropZoneProps) {
 interface NodeHighlightProps {
   nodeId: string
   containerRef: React.RefObject<HTMLDivElement | null>
-  color?: string
-  opacity?: number
-  showLabel?: boolean
+  mode: 'hover' | 'select' | 'editing'
 }
 
 export function NodeHighlight({
   nodeId,
   containerRef,
-  color = 'blue',
-  opacity = 0.2,
-  showLabel = false,
+  mode,
 }: NodeHighlightProps) {
   const [rect, setRect] = useState<DOMRect | null>(null)
 
@@ -305,30 +324,51 @@ export function NodeHighlight({
 
   if (!rect) return null
 
-  return (
-    <>
+  if (mode === 'hover') {
+    // Subtle full overlay on hover
+    return (
       <div
-        className="absolute pointer-events-none border-2 rounded transition-all duration-100"
+        className="absolute pointer-events-none transition-all duration-75 rounded-sm"
         style={{
           left: rect.x,
           top: rect.y,
           width: rect.width,
           height: rect.height,
-          borderColor: color === 'blue' ? 'rgb(59, 130, 246)' : color,
-          backgroundColor: color === 'blue' ? `rgba(59, 130, 246, ${opacity})` : `${color}`,
+          backgroundColor: 'rgba(0, 0, 0, 0.03)',
         }}
       />
-      {showLabel && (
-        <div
-          className="absolute pointer-events-none text-xs bg-blue-500 text-white px-1.5 py-0.5 rounded-t font-mono"
-          style={{
-            left: rect.x,
-            top: rect.y - 20,
-          }}
-        >
-          {nodeId}
-        </div>
-      )}
-    </>
+    )
+  }
+
+  if (mode === 'editing') {
+    // Linear-style: subtle underline when editing text
+    return (
+      <div
+        className="absolute pointer-events-none transition-all duration-100"
+        style={{
+          left: rect.x,
+          top: rect.y + rect.height - 1,
+          width: rect.width,
+          height: 2,
+          backgroundColor: 'rgba(59, 130, 246, 0.4)',
+          borderRadius: 1,
+        }}
+      />
+    )
+  }
+
+  // Selection: small left border (Notion-style)
+  return (
+    <div
+      className="absolute pointer-events-none transition-all duration-100"
+      style={{
+        left: rect.x - 3,
+        top: rect.y,
+        width: 3,
+        height: rect.height,
+        backgroundColor: 'rgba(59, 130, 246, 0.6)',
+        borderRadius: 2,
+      }}
+    />
   )
 }

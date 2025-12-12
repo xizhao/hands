@@ -7,20 +7,19 @@
  * 3. Injects node IDs into DOM after render (matches AST)
  * 4. Overlay provides selection, drag handles, and editing
  * 5. Mutations save to runtime, await success, then refetch
+ * 6. Caches rendered HTML in localStorage for instant load & smooth transitions
  *
  * State Management:
  * - EditorContext: UI state (selection, hover, editing, menus, history, clipboard)
  * - useEditorSource: Source state (polling, mutations, version)
  */
 
-import { useEffect, useRef, useCallback, useMemo } from 'react'
+import { useEffect, useRef, useCallback, useMemo, useState } from 'react'
 import { DndProvider } from 'react-dnd'
 import { HTML5Backend } from 'react-dnd-html5-backend'
 import { renderBlockViaRsc, initFlightClient } from '../rsc/client'
 import { parseSourceWithLocations } from '../ast/oxc-parser'
 import type { EditableNode } from '../ast/oxc-parser'
-import { extractDataDependencies, getDataDependencySummary } from '../ast/sql-extractor'
-import type { DataDependencies } from '../ast/sql-extractor'
 import { DragHandle, DropZone, NodeHighlight } from './dnd'
 import {
   EditorProvider,
@@ -31,184 +30,9 @@ import {
   useEditorHistory,
 } from './EditorContext'
 import { useEditorSource } from './useEditorSource'
+import { useRscCache, useFlipAnimation } from './cache'
 import type { EditOperation } from './operations'
 
-// ============================================================================
-// Icons
-// ============================================================================
-
-function TableIcon({ className }: { className?: string }) {
-  return (
-    <svg
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth={2}
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      className={className}
-    >
-      <rect x="3" y="3" width="18" height="18" rx="2" />
-      <path d="M3 9h18" />
-      <path d="M3 15h18" />
-      <path d="M9 3v18" />
-    </svg>
-  )
-}
-
-function DatabaseIcon({ className }: { className?: string }) {
-  return (
-    <svg
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth={2}
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      className={className}
-    >
-      <ellipse cx="12" cy="5" rx="9" ry="3" />
-      <path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3" />
-      <path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5" />
-    </svg>
-  )
-}
-
-function XIcon({ className }: { className?: string }) {
-  return (
-    <svg
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth={2}
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      className={className}
-    >
-      <path d="M18 6L6 18" />
-      <path d="M6 6l12 12" />
-    </svg>
-  )
-}
-
-// ============================================================================
-// Data Dependencies Panel
-// ============================================================================
-
-interface DataDependenciesPanelProps {
-  dataDeps: DataDependencies
-  onClose: () => void
-}
-
-function DataDependenciesPanel({ dataDeps, onClose }: DataDependenciesPanelProps) {
-  return (
-    <div className="absolute top-2 left-2 w-72 bg-background/95 backdrop-blur border border-border rounded-lg shadow-lg overflow-hidden">
-      {/* Header */}
-      <div className="flex items-center justify-between px-3 py-2 border-b border-border bg-muted/30">
-        <div className="flex items-center gap-2 text-sm font-medium">
-          <DatabaseIcon className="w-4 h-4 text-blue-400" />
-          <span>Data Dependencies</span>
-        </div>
-        <button
-          onClick={onClose}
-          className="p-0.5 rounded hover:bg-muted-foreground/10 transition-colors"
-        >
-          <XIcon className="w-4 h-4 text-muted-foreground" />
-        </button>
-      </div>
-
-      {/* Content */}
-      <div className="p-3 space-y-3 max-h-80 overflow-y-auto">
-        {/* Tables */}
-        {dataDeps.allTables.length > 0 && (
-          <div>
-            <div className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-1.5">
-              Tables
-            </div>
-            <div className="flex flex-wrap gap-1.5">
-              {dataDeps.allTables.map((table) => (
-                <span
-                  key={table}
-                  className="inline-flex items-center gap-1 px-2 py-0.5 text-xs font-mono bg-blue-500/10 text-blue-400 rounded"
-                >
-                  <TableIcon className="w-3 h-3" />
-                  {table}
-                </span>
-              ))}
-            </div>
-          </div>
-        )}
-
-        {/* Queries */}
-        <div>
-          <div className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-1.5">
-            Queries ({dataDeps.queries.length})
-          </div>
-          <div className="space-y-2">
-            {dataDeps.queries.map((query, index) => (
-              <div
-                key={index}
-                className="text-xs bg-muted/30 rounded p-2 border border-border/50"
-              >
-                <div className="flex items-center gap-2 mb-1">
-                  <span
-                    className={`px-1.5 py-0.5 rounded text-[10px] font-semibold uppercase ${
-                      query.type === 'select'
-                        ? 'bg-green-500/20 text-green-400'
-                        : query.type === 'insert'
-                          ? 'bg-yellow-500/20 text-yellow-400'
-                          : query.type === 'update'
-                            ? 'bg-orange-500/20 text-orange-400'
-                            : query.type === 'delete'
-                              ? 'bg-red-500/20 text-red-400'
-                              : 'bg-purple-500/20 text-purple-400'
-                    }`}
-                  >
-                    {query.type}
-                  </span>
-                  {query.assignedTo && (
-                    <span className="text-muted-foreground">
-                      → <span className="font-mono text-foreground">{query.assignedTo}</span>
-                    </span>
-                  )}
-                </div>
-                <div className="font-mono text-muted-foreground whitespace-pre-wrap break-all leading-relaxed">
-                  {query.sql.length > 100 ? query.sql.slice(0, 100) + '...' : query.sql}
-                </div>
-                {query.tables.length > 0 && (
-                  <div className="mt-1.5 flex items-center gap-1 text-[10px] text-muted-foreground">
-                    Tables: {query.tables.join(', ')}
-                  </div>
-                )}
-              </div>
-            ))}
-          </div>
-        </div>
-
-        {/* Bindings (Data Flow) */}
-        {dataDeps.bindings.length > 0 && (
-          <div>
-            <div className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-1.5">
-              Data Flow
-            </div>
-            <div className="space-y-1">
-              {dataDeps.bindings.map((binding, index) => (
-                <div
-                  key={index}
-                  className="flex items-center gap-2 text-xs text-muted-foreground"
-                >
-                  <span className="font-mono text-foreground">{binding.variable}</span>
-                  <span>→</span>
-                  <span>{binding.usages.length} JSX usage{binding.usages.length !== 1 ? 's' : ''}</span>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-      </div>
-    </div>
-  )
-}
 
 // ============================================================================
 // Node ID Injection
@@ -292,8 +116,22 @@ function OverlayEditorInner({
   const [isLoading, setIsLoading] = React.useState(true)
   const [error, setError] = React.useState<string | null>(null)
 
+  // RSC cache for instant display during loads
+  const { cachedHtml, hasCachedContent, updateCache } = useRscCache({
+    blockId,
+    containerRef,
+  })
+  // Track if we're in a "refresh" (have cached content, loading new)
+  const isRefreshing = isLoading && hasCachedContent
+
+  // FLIP animations for element transitions
+  const { capturePositions, animateFromCapture } = useFlipAnimation(containerRef)
+
   // Original text for inline editing
   const originalTextRef = useRef<string>('')
+
+  // Track if mouse is on drag handle (to prevent hover clear)
+  const isOnDragHandleRef = useRef(false)
 
   // Source management
   const { source, isSaving, version, mutate } = useEditorSource({
@@ -306,14 +144,6 @@ function OverlayEditorInner({
   const parseResult = useMemo(() => {
     return parseSourceWithLocations(source)
   }, [source])
-
-  // Extract SQL data dependencies
-  const dataDeps = useMemo(() => {
-    return extractDataDependencies(source)
-  }, [source])
-
-  // Show/hide data dependencies panel
-  const [showDataDeps, setShowDataDeps] = React.useState(false)
 
   // Fetch RSC when source/version changes
   useEffect(() => {
@@ -348,20 +178,37 @@ function OverlayEditorInner({
     }
   }, [blockId, workerPort, version])
 
-  // Inject node IDs after RSC renders
+  // Cache rendered HTML after RSC settles
+  useEffect(() => {
+    if (isLoading || !containerRef.current || error) return
+
+    // Small delay to ensure React has finished rendering
+    const timeout = setTimeout(() => {
+      updateCache()
+    }, 100)
+
+    return () => clearTimeout(timeout)
+  }, [isLoading, rscElement, error, updateCache])
+
+  // Inject node IDs after RSC renders, then animate FLIP
   useEffect(() => {
     if (isLoading || !containerRef.current || !parseResult.root) return
 
     const timeout = setTimeout(() => {
       injectNodeIdsIntoDom(containerRef.current!, parseResult.root!)
+      // Animate elements from captured positions to new positions
+      animateFromCapture(200)
     }, 50)
 
     return () => clearTimeout(timeout)
-  }, [isLoading, rscElement, parseResult.root, containerRef])
+  }, [isLoading, rscElement, parseResult.root, containerRef, animateFromCapture])
 
-  // Apply operation with history
+  // Apply operation with history and FLIP animation
   const applyOperation = useCallback(
     async (operation: EditOperation): Promise<boolean> => {
+      // Capture positions BEFORE mutation for FLIP animation
+      capturePositions()
+
       // Push to history before mutation
       history.push({
         source,
@@ -376,7 +223,7 @@ function OverlayEditorInner({
       }
       return true
     },
-    [source, selectedNodeIds, history, mutate]
+    [source, selectedNodeIds, history, mutate, capturePositions]
   )
 
   // Operation handlers
@@ -403,54 +250,107 @@ function OverlayEditorInner({
     [applyOperation]
   )
 
+  // Text elements that support inline editing (Linear-style: click to edit)
+  const TEXT_ELEMENTS = ['p', 'span', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'li', 'a', 'label', 'td', 'th']
+
+  // Check if an element is editable text
+  const isTextElement = useCallback((el: HTMLElement): boolean => {
+    const tagName = el.tagName.toLowerCase()
+    if (TEXT_ELEMENTS.includes(tagName)) return true
+    // Div with only text content (no child elements with node-id)
+    if (tagName === 'div' && !el.querySelector('[data-node-id]') && el.textContent?.trim()) return true
+    return false
+  }, [])
+
+  // Start inline editing on an element
+  const startInlineEdit = useCallback((el: HTMLElement, nodeId: string, selectAll: boolean = true) => {
+    el.contentEditable = 'true'
+    el.focus()
+
+    if (selectAll) {
+      const selection = window.getSelection()
+      const range = document.createRange()
+      range.selectNodeContents(el)
+      selection?.removeAllRanges()
+      selection?.addRange(range)
+    }
+    // If not selectAll, browser will place cursor at click position
+
+    originalTextRef.current = el.textContent || ''
+    startEditing(nodeId)
+  }, [startEditing])
+
   // Event handlers
   const handleClick = useCallback(
     (e: React.MouseEvent) => {
       if (readOnly) return
 
-      // Commit editing if clicking outside
-      if (editingNodeId) {
-        const editingEl = containerRef.current?.querySelector(
+      const target = e.target as HTMLElement
+      const editableEl = target.closest('[data-node-id]') as HTMLElement
+      const nodeId = editableEl?.getAttribute('data-node-id')
+
+      // Commit editing if clicking outside current edit
+      if (editingNodeId && editingNodeId !== nodeId) {
+        const currentEditEl = containerRef.current?.querySelector(
           `[data-node-id="${editingNodeId}"]`
-        )
-        if (editingEl && !editingEl.contains(e.target as Node)) {
-          const newText = editingEl.textContent || ''
+        ) as HTMLElement
+        if (currentEditEl) {
+          const newText = currentEditEl.textContent || ''
           if (newText !== originalTextRef.current) {
             handleTextEdit(editingNodeId, newText)
           }
           stopEditing()
-          ;(editingEl as HTMLElement).contentEditable = 'false'
+          currentEditEl.contentEditable = 'false'
         }
       }
 
-      const target = e.target as HTMLElement
-      const nodeId = target.closest('[data-node-id]')?.getAttribute('data-node-id')
-      if (nodeId) {
+      // If clicking inside current edit, let it happen naturally
+      if (editingNodeId === nodeId) return
+
+      if (!nodeId || !editableEl) return
+
+      // Multi-select with modifier keys
+      if (e.metaKey || e.ctrlKey) {
         e.preventDefault()
         e.stopPropagation()
-
-        // Multi-select support
-        if (e.metaKey || e.ctrlKey) {
-          // Cmd/Ctrl+click: additive selection
-          select(nodeId, true)
-        } else if (e.shiftKey && focusedNodeId && containerRef.current) {
-          // Shift+click: range selection
-          const allIds = getAllNodeIds(containerRef.current)
-          dispatch({
-            type: 'SELECT_RANGE',
-            fromId: focusedNodeId,
-            toId: nodeId,
-            allNodeIds: allIds,
-          })
-        } else {
-          // Normal click: single selection
-          select(nodeId, false)
-        }
+        select(nodeId, true)
+        return
       }
+
+      if (e.shiftKey && focusedNodeId && containerRef.current) {
+        e.preventDefault()
+        e.stopPropagation()
+        const allIds = getAllNodeIds(containerRef.current)
+        dispatch({
+          type: 'SELECT_RANGE',
+          fromId: focusedNodeId,
+          toId: nodeId,
+          allNodeIds: allIds,
+        })
+        return
+      }
+
+      // Linear-style: single click on text elements starts editing immediately
+      if (isTextElement(editableEl)) {
+        e.preventDefault()
+        e.stopPropagation()
+        select(nodeId, false)
+        // Small delay so selection renders, then start editing
+        requestAnimationFrame(() => {
+          startInlineEdit(editableEl, nodeId, false)
+        })
+        return
+      }
+
+      // Non-text elements: just select
+      e.preventDefault()
+      e.stopPropagation()
+      select(nodeId, false)
     },
-    [readOnly, editingNodeId, focusedNodeId, containerRef, select, dispatch, handleTextEdit, stopEditing]
+    [readOnly, editingNodeId, focusedNodeId, containerRef, select, dispatch, handleTextEdit, stopEditing, isTextElement, startInlineEdit]
   )
 
+  // Double-click: select all text in element
   const handleDoubleClick = useCallback(
     (e: React.MouseEvent) => {
       if (readOnly) return
@@ -462,26 +362,25 @@ function OverlayEditorInner({
       const nodeId = editableEl.getAttribute('data-node-id')
       if (!nodeId) return
 
-      const tagName = editableEl.tagName.toLowerCase()
-      const textElements = ['p', 'span', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'div', 'li', 'a', 'label']
-      if (!textElements.includes(tagName)) return
+      if (!isTextElement(editableEl)) return
 
       e.preventDefault()
       e.stopPropagation()
 
-      editableEl.contentEditable = 'true'
-      editableEl.focus()
+      // If already editing, select all text (like double-click to select word, then all)
+      if (editingNodeId === nodeId) {
+        const selection = window.getSelection()
+        const range = document.createRange()
+        range.selectNodeContents(editableEl)
+        selection?.removeAllRanges()
+        selection?.addRange(range)
+        return
+      }
 
-      const selection = window.getSelection()
-      const range = document.createRange()
-      range.selectNodeContents(editableEl)
-      selection?.removeAllRanges()
-      selection?.addRange(range)
-
-      originalTextRef.current = editableEl.textContent || ''
-      startEditing(nodeId)
+      // Start editing with all text selected
+      startInlineEdit(editableEl, nodeId, true)
     },
-    [readOnly, startEditing]
+    [readOnly, editingNodeId, isTextElement, startInlineEdit]
   )
 
   const handleKeyDown = useCallback(
@@ -590,10 +489,17 @@ function OverlayEditorInner({
     [readOnly, setHover]
   )
 
-  const handleMouseLeave = useCallback(() => setHover(null), [setHover])
+  const handleMouseLeave = useCallback(() => {
+    // Small delay to allow mouse to reach drag handle
+    setTimeout(() => {
+      if (!isOnDragHandleRef.current) {
+        setHover(null)
+      }
+    }, 50)
+  }, [setHover])
 
-  // Loading state
-  if (isLoading) {
+  // Loading state (only show if no cached content)
+  if (isLoading && !hasCachedContent) {
     return (
       <div className="flex items-center justify-center h-full p-8">
         <div className="flex items-center gap-2 text-muted-foreground">
@@ -625,90 +531,57 @@ function OverlayEditorInner({
       {/* RSC content */}
       <div
         ref={containerRef}
-        className="overlay-content h-full overflow-auto p-4"
-        onClick={handleClick}
-        onDoubleClick={handleDoubleClick}
-        onMouseMove={handleMouseMove}
-        onMouseLeave={handleMouseLeave}
+        className={`overlay-content h-full overflow-auto p-4 transition-opacity duration-150 ${
+          isRefreshing ? 'opacity-60 pointer-events-none' : ''
+        }`}
+        onClick={!isRefreshing ? handleClick : undefined}
+        onDoubleClick={!isRefreshing ? handleDoubleClick : undefined}
+        onMouseMove={!isRefreshing ? handleMouseMove : undefined}
+        onMouseLeave={!isRefreshing ? handleMouseLeave : undefined}
       >
-        {rscElement}
+        {/* Show cached HTML during refresh, otherwise RSC element */}
+        {isRefreshing && cachedHtml ? (
+          <div dangerouslySetInnerHTML={{ __html: cachedHtml }} />
+        ) : (
+          rscElement
+        )}
       </div>
 
-      {/* Hover highlight */}
-      {hoveredNodeId && !selectedNodeIds.includes(hoveredNodeId) && (
-        <NodeHighlight
-          nodeId={hoveredNodeId}
-          containerRef={containerRef}
-          color="blue"
-          opacity={0.1}
-        />
-      )}
 
-      {/* Selection highlights for all selected nodes */}
-      {selectedNodeIds.map((nodeId, index) => (
+      {/* Selection/editing highlight */}
+      {selectedNodeIds.map((nodeId) => (
         <NodeHighlight
           key={nodeId}
           nodeId={nodeId}
           containerRef={containerRef}
-          color="blue"
-          opacity={0.2}
-          showLabel={index === 0} // Only show label on primary selection
+          mode={editingNodeId === nodeId ? 'editing' : 'select'}
         />
       ))}
 
-      {/* Drag handle for primary selection */}
-      {primarySelectedId && (
+      {/* Drag handle - show on hover OR when selected (always persistent when selected) */}
+      {(hoveredNodeId || primarySelectedId) && (
         <DragHandle
-          nodeId={primarySelectedId}
+          nodeId={hoveredNodeId || primarySelectedId!}
           containerRef={containerRef}
-          onDelete={() => handleDelete(primarySelectedId)}
+          onDelete={() => handleDelete(hoveredNodeId || primarySelectedId!)}
+          onHoverChange={(isHovered) => {
+            isOnDragHandleRef.current = isHovered
+            // Keep hover state when mouse enters handle area
+            if (isHovered && hoveredNodeId) {
+              setHover(hoveredNodeId)
+            }
+          }}
         />
       )}
 
       {/* Drop zone */}
       <DropZone containerRef={containerRef} onDrop={handleMove} />
-
-      {/* Data Dependencies Panel */}
-      {showDataDeps && dataDeps.queries.length > 0 && (
-        <DataDependenciesPanel dataDeps={dataDeps} onClose={() => setShowDataDeps(false)} />
-      )}
-
-      {/* Status bar */}
-      <div className="absolute bottom-2 right-2 text-xs text-muted-foreground bg-background/80 px-2 py-1 rounded flex items-center gap-2">
-        {isSaving && (
-          <div className="w-3 h-3 border border-muted-foreground/30 border-t-muted-foreground rounded-full animate-spin" />
-        )}
-        {/* Data deps toggle */}
-        {dataDeps.queries.length > 0 && (
-          <button
-            onClick={() => setShowDataDeps(!showDataDeps)}
-            className={`flex items-center gap-1 px-1.5 py-0.5 rounded transition-colors ${
-              showDataDeps
-                ? 'bg-blue-500/20 text-blue-400'
-                : 'hover:bg-muted-foreground/10'
-            }`}
-            title="Show data dependencies"
-          >
-            <TableIcon className="w-3 h-3" />
-            <span>{dataDeps.allTables.length}</span>
-          </button>
-        )}
-        <span className="border-l border-muted-foreground/20 pl-2">
-          {editingNodeId
-            ? `Editing (Enter to save, Esc to cancel)`
-            : selectedNodeIds.length > 1
-              ? `${selectedNodeIds.length} selected`
-              : selectedNodeIds.length === 1
-                ? `Selected: ${selectedNodeIds[0]}`
-                : 'Click to select'}
-        </span>
-      </div>
     </div>
     </div>
   )
 }
 
-// Need React import for useState
+// Need React import
 import React from 'react'
 
 // ============================================================================

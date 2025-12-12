@@ -10,6 +10,7 @@
  * - Multi-select with Cmd/Ctrl+click and Shift+click
  * - Undo/redo history
  * - Keyboard shortcuts
+ * - RSC cache for instant load & smooth transitions
  */
 
 // Main component
@@ -57,3 +58,14 @@ export {
   ELEMENT_TYPE,
   type DragItem,
 } from './dnd'
+
+// Cache & animation utilities
+export {
+  useRscCache,
+  getCachedRscHtml,
+  setCachedRscHtml,
+  invalidateCachedRscHtml,
+  useFlipAnimation,
+  captureElementPositions,
+  animateElementTransitions,
+} from './cache'
