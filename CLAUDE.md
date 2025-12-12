@@ -12,9 +12,6 @@ packages/
       stores/       # Zustand stores (ui, theme)
     src-tauri/      # Rust backend
 
-.opencode/
-  agent/       # Custom OpenCode subagents (e.g., import.md)
-  tool/        # Custom OpenCode tools
 ```
 
 ## Tech Stack
@@ -41,11 +38,12 @@ const agents = await client.app.agents();
 const config = await client.config.get();
 
 // Bad - never do this
-fetch("/session")
-fetch("/agent")
+fetch("/session");
+fetch("/agent");
 ```
 
 Available SDK methods:
+
 - `client.session.*` - sessions, messages, prompts, todos
 - `client.app.agents()` - list all agents
 - `client.provider.list()` - list providers/models
@@ -62,7 +60,7 @@ Custom agents go in `.opencode/agent/` as markdown files:
 ---
 description: What this agent does
 mode: subagent
-model: anthropic/claude-sonnet-4-20250514  # optional model override
+model: anthropic/claude-sonnet-4-20250514 # optional model override
 temperature: 0.1
 tools:
   write: true
@@ -71,6 +69,7 @@ permission:
   bash:
     "*": "allow"
 ---
+
 System prompt instructions here.
 ```
 
@@ -86,6 +85,7 @@ Invoke agents with `@agent-name` in prompts.
 ### Event Handling
 
 SSE events use SDK's typed `GlobalEvent` discriminated union:
+
 - `session.created/updated/deleted`
 - `session.status`
 - `message.updated/removed`
@@ -95,5 +95,6 @@ SSE events use SDK's typed `GlobalEvent` discriminated union:
 ### File Safety
 
 When ingesting files, the import agent must:
+
 - NEVER modify source files
 - Write temp files only to `/tmp/hands-ingest/`
