@@ -13,7 +13,7 @@ import '../rsc/shared-react'
 import { StrictMode, useEffect, useState, useCallback } from 'react'
 import { createRoot } from 'react-dom/client'
 import { RscProvider, initFlightClient, setRuntimePort } from '../rsc'
-import { RscEditor } from '../rsc-editor/RscEditor'
+import { OverlayEditor } from '../overlay'
 
 import './styles.css'
 
@@ -112,11 +112,11 @@ function SandboxApp() {
 
   return (
     <RscProvider port={workerPortNum!} enabled>
-      <RscEditor
+      <OverlayEditor
         blockId={blockId!}
-        source={source}
-        runtimePort={workerPortNum!}
-        onSourceChange={handleSave}
+        initialSource={source}
+        runtimePort={runtimePortNum!}
+        workerPort={workerPortNum!}
         readOnly={readOnly}
       />
     </RscProvider>
