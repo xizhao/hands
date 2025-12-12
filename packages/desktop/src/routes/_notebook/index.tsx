@@ -1,7 +1,7 @@
-import { createFileRoute, useRouter } from "@tanstack/react-router";
+import { createFileRoute } from "@tanstack/react-router";
 import { NotebookSidebar } from "@/components/Notebook/sidebar/NotebookSidebar";
 import { EmptyWorkbookState } from "@/components/Notebook/EmptyWorkbookState";
-import { useManifest, useDbSchema, useActiveWorkbookId, useCreatePage } from "@/hooks/useWorkbook";
+import { useManifest, useDbSchema, useActiveWorkbookId } from "@/hooks/useWorkbook";
 import { useChatState } from "@/hooks/useChatState";
 
 export const Route = createFileRoute("/_notebook/")({
@@ -9,30 +9,17 @@ export const Route = createFileRoute("/_notebook/")({
 });
 
 function IndexPage() {
-  const router = useRouter();
   const activeWorkbookId = useActiveWorkbookId();
   const { data: manifest } = useManifest();
   const { data: dbSchema } = useDbSchema(activeWorkbookId);
-  const createPage = useCreatePage();
   const chatState = useChatState();
 
   const tableCount = dbSchema?.length ?? 0;
-  const draftCount = manifest?.pages?.length ?? 0;
   const manifestTableCount = manifest?.tables?.length ?? 0;
+  const blockCount = manifest?.blocks?.length ?? 0;
 
-  // Show getting started when manifest is loaded but empty
-  const showGettingStarted = manifest !== undefined && manifestTableCount === 0 && tableCount === 0 && draftCount === 0;
-
-  const handleAddPage = async () => {
-    try {
-      const result = await createPage.mutateAsync({ title: "Untitled" });
-      if (result.success && result.page) {
-        router.navigate({ to: "/page/$pageId", params: { pageId: result.page.id } });
-      }
-    } catch (err) {
-      console.error("[IndexPage] Failed to create page:", err);
-    }
-  };
+  // Show getting started when manifest is loaded but empty (no tables or blocks)
+  const showGettingStarted = manifest !== undefined && manifestTableCount === 0 && tableCount === 0 && blockCount === 0;
 
   const handleImportFile = () => {
     // TODO: Trigger file input
@@ -65,7 +52,7 @@ function IndexPage() {
   return (
     <div className="flex-1 flex items-start justify-center overflow-y-auto">
       <div className="p-4 pt-8">
-        <NotebookSidebar collapsed={false} fullWidth onAddDraft={handleAddPage} />
+        <NotebookSidebar collapsed={false} fullWidth />
       </div>
     </div>
   );

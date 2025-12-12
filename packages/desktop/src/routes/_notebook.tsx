@@ -28,11 +28,11 @@ function NotebookLayout() {
   const { data: activeRuntime } = useActiveRuntime();
   const { sessionId: activeSessionId, setSession: setActiveSession } = useActiveSession();
 
-  // Set up navigate callback for SSE
+  // Set up navigate callback for SSE - navigates to blocks by ID
   useEffect(() => {
-    setNavigateCallback((page: string) => {
-      const pageId = page.replace(/^\//, "").replace(/\//g, "-") || "index";
-      navigate({ to: "/page/$pageId", params: { pageId } });
+    setNavigateCallback((blockId: string) => {
+      const cleanBlockId = blockId.replace(/^\//, "");
+      navigate({ to: "/blocks/$blockId", params: { blockId: cleanBlockId } });
     });
   }, [navigate]);
 

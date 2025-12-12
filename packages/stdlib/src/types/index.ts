@@ -3,7 +3,6 @@
  */
 
 export * from "./block.js"
-export * from "./page.js"
 export type {
   SourceConfig,
   SourceContext,

@@ -11,6 +11,7 @@ import { AlertTriangle, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useRuntimePort } from "@/hooks/useWorkbook";
 import { cn } from "@/lib/utils";
+import { getTheme } from "@/lib/theme";
 
 
 type SandboxState = "loading" | "ready" | "error";
@@ -35,9 +36,12 @@ export function EditorSandbox({
   // Runtime port for the editor to connect to
   const runtimePort = useRuntimePort();
 
-  // Build iframe URL with params
+  // Get current theme to pass to iframe
+  const theme = getTheme();
+
+  // Build iframe URL with params (including theme)
   const iframeSrc = runtimePort
-    ? `/editor/sandbox.html?blockId=${encodeURIComponent(blockId)}&runtimePort=${runtimePort}&readOnly=${readOnly}`
+    ? `/editor/sandbox.html?blockId=${encodeURIComponent(blockId)}&runtimePort=${runtimePort}&readOnly=${readOnly}&theme=${encodeURIComponent(theme)}`
     : null;
 
   // Handle iframe load
@@ -130,12 +134,15 @@ export function EditorSandbox({
         </div>
       )}
 
-      {/* Editor iframe */}
+      {/* Editor iframe - opacity 0 until ready to prevent white flash */}
       <iframe
         key={iframeKey.current}
         ref={iframeRef}
         src={iframeSrc!}
-        className="w-full h-full border-0"
+        className={cn(
+          "w-full h-full border-0 transition-opacity duration-150",
+          state === "ready" ? "opacity-100" : "opacity-0"
+        )}
         sandbox="allow-scripts allow-same-origin"
         onLoad={handleIframeLoad}
         onError={handleIframeError}

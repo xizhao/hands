@@ -17,8 +17,6 @@ import {
   useUpdateWorkbook,
   useDbSchema,
   useEvalResult,
-  useCreatePage,
-  useUpdatePageTitle,
   useRuntimePort,
   useManifest,
   useActiveWorkbookId,
@@ -84,12 +82,9 @@ interface NotebookShellProps {
 
 export function NotebookShell({ children }: NotebookShellProps) {
   const router = useRouter();
-  // Get pageId from current router state - use useRouterState for reactive updates
+  // Get route info from current router state - use useRouterState for reactive updates
   const routerState = useRouterState();
   const currentPath = routerState.location.pathname;
-  const pageMatch = currentPath.match(/^\/page\/(.+)$/);
-  const pageId = pageMatch?.[1];
-  const isOnPage = !!pageId;
   // Check if we're on a block editor route and extract blockId
   const blockMatch = currentPath.match(/^\/blocks\/(.+)$/);
   const blockId = blockMatch?.[1];
@@ -98,8 +93,8 @@ export function NotebookShell({ children }: NotebookShellProps) {
   const sourceMatch = currentPath.match(/^\/sources\/(.+)$/);
   const sourceId = sourceMatch?.[1];
   const isOnSource = !!sourceId;
-  // Check if we're on any content route (page, block, or source) that needs the editor layout
-  const isOnContentRoute = isOnPage || isOnBlock || isOnSource;
+  // Check if we're on any content route (block or source) that needs the editor layout
+  const isOnContentRoute = isOnBlock || isOnSource;
 
   const activeWorkbookId = useActiveWorkbookId();
   const { panel: rightPanel, togglePanel: toggleRightPanel } = useRightPanel();
@@ -126,13 +121,10 @@ export function NotebookShell({ children }: NotebookShellProps) {
   const dbConnected = runtimeConnected && !!runtimePort;
 
   // Mutations for empty state actions
-  const createPage = useCreatePage();
-  const updatePageTitle = useUpdatePageTitle();
   const saveDatabase = useSaveDatabase();
 
   const tableCount = dbSchema?.length ?? 0;
   const blockCount = manifest?.blocks?.length ?? 0;
-  const draftCount = manifest?.pages?.length ?? 0;
 
   // Compute alert counts from eval result
   const alertErrors = (evalResult?.typescript?.errors?.length ?? 0) + (evalResult?.format?.errors?.length ?? 0);
@@ -142,9 +134,6 @@ export function NotebookShell({ children }: NotebookShellProps) {
 
   // Current workbook
   const currentWorkbook = workbooks?.find((w) => w.id === activeWorkbookId);
-
-  // Current page (for breadcrumb) - from manifest (filesystem source of truth)
-  const currentPage = manifest?.pages?.find((p) => p.id === pageId);
 
   // Current block (for breadcrumb)
   const currentBlock = manifest?.blocks?.find((b) => b.id === blockId);
@@ -285,34 +274,12 @@ export function NotebookShell({ children }: NotebookShellProps) {
     e.target.value = "";
   }, []);
 
-  const handleAddPage = useCallback(async () => {
-    console.log("[handleAddPage] Creating page...");
-    try {
-      const result = await createPage.mutateAsync({ title: "Untitled" });
-      console.log("[handleAddPage] Create result:", result);
-      if (result.success && result.page) {
-        // Navigate to the new page
-        console.log("[handleAddPage] Navigating to page:", result.page.id);
-        router.navigate({ to: "/page/$pageId", params: { pageId: result.page.id } });
-      }
-    } catch (err) {
-      console.error("[handleAddPage] Failed to create page:", err);
-      // TODO: Show toast notification on failure
-    }
-  }, [createPage, router]);
-
   // Chat state from hook
   const chatState = useChatState();
 
-  // Auto-attach current page/block/source context when route changes
+  // Auto-attach current block/source context when route changes
   useEffect(() => {
-    if (isOnPage && pageId && currentPage) {
-      chatState.setPendingAttachment({
-        type: "page",
-        pageId,
-        name: currentPage.title || pageId,
-      });
-    } else if (isOnBlock && blockId && currentBlock) {
+    if (isOnBlock && blockId && currentBlock) {
       chatState.setPendingAttachment({
         type: "block",
         blockId,
@@ -326,13 +293,13 @@ export function NotebookShell({ children }: NotebookShellProps) {
       });
     } else {
       // Clear attachment when navigating to index or other routes
-      // Only clear if it's a page/block/source attachment (not a file)
+      // Only clear if it's a block/source attachment (not a file)
       const current = chatState.pendingAttachment;
-      if (current?.type === "page" || current?.type === "block" || current?.type === "source") {
+      if (current?.type === "block" || current?.type === "source") {
         chatState.setPendingAttachment(null);
       }
     }
-  }, [isOnPage, isOnBlock, isOnSource, pageId, blockId, sourceId, currentPage, currentBlock, currentSource]);
+  }, [isOnBlock, isOnSource, blockId, sourceId, currentBlock, currentSource]);
 
   // Import with agent hook for workspace drops
   const importWithAgent = useImportWithAgent();
@@ -455,50 +422,7 @@ export function NotebookShell({ children }: NotebookShellProps) {
             </DropdownMenu>
           </div>
 
-          {/* Breadcrumb - show for page or block routes */}
-          {isOnPage && currentPage && (
-            <>
-              <span
-                contentEditable
-                suppressContentEditableWarning
-                onBlur={(e) => {
-                  const newTitle = e.currentTarget.textContent?.trim() || "";
-                  if (pageId && newTitle && newTitle !== currentPage.title) {
-                    updatePageTitle.mutate({ pageId, title: newTitle });
-                  }
-                }}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter") {
-                    e.preventDefault();
-                    e.currentTarget.blur();
-                  } else if (e.key === "Escape") {
-                    e.currentTarget.textContent = currentPage.title;
-                    e.currentTarget.blur();
-                  }
-                }}
-                className={cn(
-                  "px-1 py-0.5 text-sm text-muted-foreground bg-transparent rounded-sm cursor-text",
-                  "outline-none",
-                  "hover:bg-accent/50 hover:text-foreground",
-                  "focus:bg-background focus:text-foreground focus:ring-1 focus:ring-ring/20"
-                )}
-                spellCheck={false}
-              >
-                {currentPage.title}
-              </span>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <button
-                    onClick={handleClosePage}
-                    className="ml-1 p-0.5 rounded-sm text-muted-foreground/70 hover:text-muted-foreground hover:bg-accent/50 transition-colors opacity-0 group-hover/titlebar:opacity-100"
-                  >
-                    <X weight="bold" className="h-3 w-3" />
-                  </button>
-                </TooltipTrigger>
-                <TooltipContent side="bottom">Close page</TooltipContent>
-              </Tooltip>
-            </>
-          )}
+          {/* Breadcrumb - show for block or source routes */}
           {isOnBlock && (
             <>
               <span
@@ -733,7 +657,7 @@ export function NotebookShell({ children }: NotebookShellProps) {
                 isResizing && "transition-none"
               )}
             >
-              {/* Spine indicators (when collapsed) - circles: pages, squares: blocks, triangles: sources */}
+              {/* Spine indicators (when collapsed) - squares: blocks, triangles: sources */}
               <div
                 className={cn(
                   "absolute inset-0 flex flex-col items-center pt-4",
@@ -741,23 +665,9 @@ export function NotebookShell({ children }: NotebookShellProps) {
                   sidebarShown ? "opacity-0 pointer-events-none" : "opacity-100"
                 )}
               >
-                {/* Pages - circles */}
-                {manifest?.pages && manifest.pages.length > 0 && (
-                  <div className="flex flex-col items-center gap-1">
-                    {manifest.pages.slice(0, 4).map((page) => (
-                      <div
-                        key={`page-${page.id}`}
-                        className={cn(
-                          "w-1.5 h-1.5 rounded-full transition-colors",
-                          page.id === pageId ? "bg-foreground/60" : "bg-foreground/15"
-                        )}
-                      />
-                    ))}
-                  </div>
-                )}
                 {/* Blocks - squares */}
                 {manifest?.blocks && manifest.blocks.length > 0 && (
-                  <div className="flex flex-col items-center gap-1 mt-2">
+                  <div className="flex flex-col items-center gap-1">
                     {manifest.blocks.slice(0, 3).map((block) => (
                       <div
                         key={`block-${block.id}`}
@@ -794,7 +704,6 @@ export function NotebookShell({ children }: NotebookShellProps) {
               >
                 <NotebookSidebar
                   collapsed={false}
-                  onAddDraft={handleAddPage}
                   pinned={sidebarPinned}
                   onPinnedChange={setSidebarPinned}
                 />

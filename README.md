@@ -6,7 +6,7 @@ This page summarizes core concepts and the ongoing development roadmap for Hands
 
 ---
 
-### Vision
+## Vision
 
 Almost all business process problems that can be solved by software can be modelled using SaaS primitives. Our goal is to put the power of these primitives of common SaaS workflows (standard ui, ETL jobs, etc...) and IDEs (coding agents, runtimes, type checkers, dbs) in the hands of everyday people.
 
@@ -20,121 +20,47 @@ Design Decisions:
 
 ---
 
-### Key Architecture & Components
+## Key Architecture & Components
 
-#### Workbooks
+### Workbooks
 
-- The central artifact, a block-based editor comprising a collection of _Pages_ (default landing page included).
-- Stored as a Git repository in `~/.hands/<workbookID>`, with full history and structure defined in a `hands.json`.
-- Compiled and deployable anywhere serverless functions can run (local, private cloud, or serverless platform). Default is Cloudflare workers.
+The central artifact, a block-based editor comprising a collection of `Blocks` and `Sources` connected to an isolated embedded Postgres instance (one per Workbook). Stored as a Git repository in `~/.hands/<workbookID>`, with full history and structure defined in a `hands.json`. Compiled and deployable anywhere serverless functions can run (local, private cloud, or serverless platform). Default is Cloudflare workers.
 
 #### Blocks
 
-- Serverless functions that query for data nad return RSC (React Server Components) Partials, refreshable and modular.
-- Handle both UI and data/query logic.
-- Typically installed from stdlib and shaped via AI agents.
+Serverless functions that query for data and return RSC (React Server Components) Partials. Refreshable and modular, they handle both UI and data/query logic. Typically installed from stdlib and shaped via AI agents.
 
 #### Sources
 
-- Define schemas, secret dependencies, transformation logic, and scheduling.
-- Support jobs—background or scheduled data processes.
-- Created by library install (`hands add source <name>`), customized via agent.
+Define schemas, secret dependencies, transformation logic, and scheduling. Support jobs—background or scheduled data processes. Created by library install (`hands add source <name>`), customized via agent.
 
 #### Database
 
-- Embedded Postgres per workbook (using PGlite).
-- Imports handled by agents; direct data writing supported.
+Embedded Postgres per workbook (using PGlite). Imports handled by agents; direct data writing supported.
+
+**Packages:**
+
+- [`@hands/runtime`](./packages/runtime/) — Dev server, build pipeline, PGlite database management, RSC build system, source/job scheduling, Cloudflare Workers deployment
+- [`@hands/cli`](./packages/cli/) — User-facing CLI (`hands dev`, `hands build`, `hands new`, `hands add source`)
+- [`@hands/editor`](./packages/editor/) — WYSIWYG structural editor with Plate.js, AST manipulation, surgical code mutations, RSC sandbox rendering
+- [`@hands/stdlib`](./packages/stdlib/) — Pre-built block templates, source definitions, 50+ Radix UI-based components
 
 ---
 
-### Runtime & Editor
+### AI Agents
 
-- **Dev Server**: Runs static checks, serves RSC functions, and manages job runners (`hands dev`).
-- **Builder**: Handles static builds for deployment (`hands build`).
-- **Stdlib**: Contains reusable UI components, source definitions.
-- **Editor**: Block-based UI for layout and resizing, view/edit switch, real-time updates via agent, and live rendering using RSC.
+OpenCode-based AI agents power workbook operations—clarifying intent, generating code, and managing imports.
+
+**Packages:**
+
+- [`@hands/agent`](./packages/agent/) — Agent server with `hands` (main), `coder`, and `import` agents. Tools for database queries, schema inspection, source management, component discovery, secrets, and navigation.
 
 ---
 
-### Packages Overview
+### Desktop App
 
-The Hands monorepo is organized into the following packages:
+Native desktop application for macOS/Windows/Linux with integrated editor, chat interface, and real-time RSC rendering.
 
-#### [`@hands/runtime`](./packages/runtime/)
+**Packages:**
 
-**Core runtime and build system**
-
-- **Purpose**: Dev server, build pipeline, and deployment infrastructure
-- **Key Features**:
-  - Instant HTTP server with progressive readiness (manifest → DB → RSC)
-  - Embedded PGlite database management per workbook
-  - Vite-based RSC build system for React Server Components
-  - Cloudflare Workers template generation for production builds
-  - Block registry and manifest generation from filesystem
-  - Source management and job scheduling
-- **Exports**: `buildRSC`, `buildProduction`, `initWorkbookDb`, configuration utilities
-- **Entry Points**: `hands-runtime` CLI, `hands-config` CLI
-
-#### [`@hands/cli`](./packages/cli/)
-
-**Command-line interface**
-
-- **Purpose**: User-facing CLI commands for workbook management
-- **Commands**:
-  - `hands dev` - Start development server
-  - `hands build` - Build workbook for production
-  - `hands new <name>` - Create a new workbook
-  - `hands add source <name>` - Add a source from registry
-  - `hands sources` - List available sources
-- **Dependencies**: `@hands/runtime` for build/dev operations
-
-#### [`@hands/desktop`](./packages/desktop/)
-
-**Desktop application (Tauri)**
-
-- **Purpose**: Native desktop app for macOS/Windows/Linux
-- **Key Features**:
-  - Tauri-based native window with Rust backend
-  - React-based UI with TanStack Router
-  - Integrated block editor (uses `@hands/editor`)
-  - Chat interface with AI agents
-  - Workbook management and navigation
-  - Real-time RSC rendering and hot reload
-- **Tech Stack**: React 19, Tauri 2, Plate.js, Radix UI, Tailwind CSS
-
-#### [`@hands/editor`](./packages/editor/)
-
-**Block-based visual editor**
-
-- **Purpose**: WYSIWYG structural editor for React Server Component blocks
-- **Key Features**:
-  - Plate.js-based rich text editor
-  - AST manipulation and code generation
-  - RSC component rendering via sandbox
-  - Surgical code mutations (preserves formatting)
-  - Slate operations for collaborative editing
-- **Exports**: `useEditor` hook, AST utilities, scene management, RSC client
-
-#### [`@hands/agent`](./packages/agent/)
-
-**AI agent server**
-
-- **Purpose**: OpenCode-based AI agents for workbook operations
-- **Agents**:
-  - `hands` - Main workbook manipulation agent
-  - `coder` - Code generation and editing
-  - `import` - Data import and transformation
-- **Tools**: Database queries, schema inspection, source management, component discovery, secrets management, navigation
-- **Integration**: Spawned as subprocess by desktop app
-
-#### [`@hands/stdlib`](./packages/stdlib/)
-
-**Standard library and component registry**
-
-- **Purpose**: Reusable UI components, source definitions, and type definitions
-- **Components**:
-  - **UI Components**: Button, Card, Badge, DataTable, Charts (Bar, Line), and 50+ Radix UI-based components
-  - **Blocks**: Pre-built block templates
-  - **Sources**: Source definitions (e.g., HackerNews)
-- **Exports**: Component registry, source types, RSC component server
-- **Structure**: Organized by category (ui/, charts/, data/, sources/)
+- [`@hands/desktop`](./packages/desktop/) — Tauri-based native app with React 19, TanStack Router, integrated `@hands/editor`, AI chat interface, hot reload

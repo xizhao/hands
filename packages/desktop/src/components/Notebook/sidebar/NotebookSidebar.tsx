@@ -1,19 +1,17 @@
 /**
- * NotebookSidebar - Navigation sidebar for notebook drafts, sources, and blocks
+ * NotebookSidebar - Navigation sidebar for sources and blocks
  *
  * Features:
- * - Drafts section with list of notebook drafts
  * - Sources section with database tables
  * - Blocks section with custom components
  * - Collapsible sections with headers
- * - Add new draft button
  * - Router-based navigation
  */
 
 import { useState, useMemo, useCallback } from "react";
-import { useNavigate, useRouterState, useRouter } from "@tanstack/react-router";
+import { useNavigate, useRouter } from "@tanstack/react-router";
 import { cn } from "@/lib/utils";
-import { FileText, Plus, ChevronDown, ChevronRight, Search, X, Pin, PinOff, ChevronLeft } from "lucide-react";
+import { Plus, ChevronDown, ChevronRight, Search, X, Pin, PinOff } from "lucide-react";
 import { Table, TreeStructure, SquaresFour, CaretLeft, CaretRight, Database, Newspaper, Code, Key, CircleNotch, ArrowsClockwise, Warning, Folder, FolderOpen } from "@phosphor-icons/react";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { useDbSchema, useManifest, useActiveWorkbookId } from "@/hooks/useWorkbook";
@@ -30,18 +28,10 @@ import {
 interface NotebookSidebarProps {
   collapsed?: boolean;
   fullWidth?: boolean;
-  onAddDraft?: () => void;
   /** Whether sidebar is pinned open */
   pinned?: boolean;
   /** Callback to toggle pinned state */
   onPinnedChange?: (pinned: boolean) => void;
-}
-
-interface Draft {
-  id: string;
-  title: string;
-  route?: string;
-  path?: string;
 }
 
 // Map icon names to Phosphor icons for sources
@@ -55,19 +45,14 @@ function SourceIcon({ icon, className }: { icon?: string; className?: string }) 
   return <Icon weight="duotone" className={className} />
 }
 
-export function NotebookSidebar({ collapsed = false, fullWidth = false, onAddDraft, pinned = false, onPinnedChange }: NotebookSidebarProps) {
+export function NotebookSidebar({ collapsed = false, fullWidth = false, pinned = false, onPinnedChange }: NotebookSidebarProps) {
   const navigate = useNavigate();
   const router = useRouter();
-  const routerState = useRouterState();
-  // Get activePageId by parsing the current URL path
-  const currentPath = routerState.location.pathname;
-  const pageMatch = currentPath.match(/^\/page\/(.+)$/);
-  const activePageId = pageMatch?.[1] ?? null;
 
   // Get all data from hooks (filesystem as source of truth via manifest)
   const activeWorkbookId = useActiveWorkbookId();
   const { data: manifest, isLoading: manifestLoading } = useManifest();
-  const { data: schema, isLoading: sourcesLoading } = useDbSchema(activeWorkbookId);
+  const { data: schema } = useDbSchema(activeWorkbookId);
 
   // Source management hooks
   const {
@@ -81,12 +66,9 @@ export function NotebookSidebar({ collapsed = false, fullWidth = false, onAddDra
   } = useSourceManagement();
 
   // All data from manifest (filesystem source of truth)
-  const drafts: Draft[] = manifest?.pages ?? [];
   const blocks = manifest?.blocks ?? [];
   const blocksLoading = manifestLoading;
 
-  const [hoveredIndex, setHoveredIndex] = useState<number | null>(null);
-  const [draftsExpanded, setDraftsExpanded] = useState(false); // Collapsed by default
   const [sourcesExpanded, setSourcesExpanded] = useState(true);
   const [blocksExpanded, setBlocksExpanded] = useState(true);
   const [expandedDirs, setExpandedDirs] = useState<Set<string>>(new Set()); // Track expanded directories
@@ -140,13 +122,7 @@ export function NotebookSidebar({ collapsed = false, fullWidth = false, onAddDra
     setAddSourceOpen(false);
   };
 
-  // Filter drafts, sources, and blocks based on search query
-  const filteredDrafts = useMemo(() => {
-    if (!searchQuery.trim()) return drafts;
-    const query = searchQuery.toLowerCase();
-    return drafts.filter((draft) => draft.title.toLowerCase().includes(query));
-  }, [drafts, searchQuery]);
-
+  // Filter sources and blocks based on search query
   const filteredSources = useMemo(() => {
     if (!searchQuery.trim() || !schema) return schema;
     const query = searchQuery.toLowerCase();
@@ -158,25 +134,6 @@ export function NotebookSidebar({ collapsed = false, fullWidth = false, onAddDra
     const query = searchQuery.toLowerCase();
     return blocks.filter((block) => block.title.toLowerCase().includes(query));
   }, [blocks, searchQuery]);
-
-  const handleAddDraft = () => {
-    onAddDraft?.();
-  };
-
-  // Calculate magnetic zoom scale based on distance from hovered item
-  const getScale = useCallback((index: number) => {
-    if (hoveredIndex === null) return 1;
-    const distance = Math.abs(index - hoveredIndex);
-    if (distance === 0) return 1.06; // Hovered item - subtle
-    if (distance === 1) return 1.02; // Adjacent items
-    return 1; // Far items
-  }, [hoveredIndex]);
-
-  // Handle draft click - navigate to page route
-  const handleDraftClick = useCallback((pageId: string) => {
-    console.log("[sidebar] navigating to draft:", pageId);
-    navigate({ to: "/page/$pageId", params: { pageId } });
-  }, [navigate]);
 
   // Handle block click - navigate to block editor
   const handleBlockClick = useCallback((blockId: string) => {
@@ -194,35 +151,6 @@ export function NotebookSidebar({ collapsed = false, fullWidth = false, onAddDra
     return (
       <TooltipProvider delayDuration={0}>
         <div className="space-y-4">
-          {/* Drafts section - collapsed */}
-          <div className="space-y-0.5">
-            {drafts.map((draft, index) => (
-              <DraftItem
-                key={draft.id}
-                draft={draft}
-                active={activePageId === draft.id}
-                scale={getScale(index)}
-                collapsed={true}
-                onClick={() => handleDraftClick(draft.id)}
-                onMouseEnter={() => setHoveredIndex(index)}
-                onMouseLeave={() => setHoveredIndex(null)}
-              />
-            ))}
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <button
-                  onClick={handleAddDraft}
-                  className="w-full flex items-center justify-center p-1.5 text-muted-foreground/60 hover:text-muted-foreground transition-all"
-                >
-                  <Plus className="h-3 w-3" />
-                </button>
-              </TooltipTrigger>
-              <TooltipContent side="right">
-                <p>Add draft</p>
-              </TooltipContent>
-            </Tooltip>
-          </div>
-
           {/* Sources section - collapsed */}
           {schema && schema.length > 0 && (
             <div className="space-y-0.5 pt-2 border-t border-border/50">
@@ -286,7 +214,7 @@ export function NotebookSidebar({ collapsed = false, fullWidth = false, onAddDra
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground/70" />
             <input
               type="text"
-              placeholder="Search pages, sources, blocks..."
+              placeholder="Search sources, blocks..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               className="w-full pl-10 pr-10 py-2 text-sm bg-muted/50 border border-border/70 rounded-lg placeholder:text-muted-foreground/60 focus:outline-none focus:border-border focus:ring-1 focus:ring-ring/20"
@@ -301,48 +229,8 @@ export function NotebookSidebar({ collapsed = false, fullWidth = false, onAddDra
             )}
           </div>
 
-          {/* Responsive grid - 3 columns on wide, 2 on medium, 1 on narrow */}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {/* Drafts Column */}
-            <div className="space-y-2">
-              <div className="flex items-center justify-between">
-                <h3 className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
-                  Drafts
-                </h3>
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <button
-                      onClick={handleAddDraft}
-                      className="p-1 text-muted-foreground/60 hover:text-muted-foreground hover:bg-accent rounded transition-colors"
-                    >
-                      <Plus className="h-3.5 w-3.5" />
-                    </button>
-                  </TooltipTrigger>
-                  <TooltipContent>Add draft</TooltipContent>
-                </Tooltip>
-              </div>
-              <div className="space-y-0.5">
-                {filteredDrafts.length > 0 ? (
-                  filteredDrafts.map((draft, index) => (
-                    <DraftItem
-                      key={draft.id}
-                      draft={draft}
-                      active={activePageId === draft.id}
-                      scale={getScale(index)}
-                      collapsed={false}
-                      onClick={() => handleDraftClick(draft.id)}
-                      onMouseEnter={() => setHoveredIndex(index)}
-                      onMouseLeave={() => setHoveredIndex(null)}
-                    />
-                  ))
-                ) : searchQuery ? (
-                  <div className="text-sm text-muted-foreground/70 py-2">No drafts found</div>
-                ) : (
-                  <div className="text-sm text-muted-foreground/70 py-2">No drafts yet</div>
-                )}
-              </div>
-            </div>
-
+          {/* Responsive grid - 2 columns on wide, 1 on narrow */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             {/* Sources Column */}
             <div className="space-y-2">
               <div className="flex items-center justify-between">
@@ -871,125 +759,8 @@ export function NotebookSidebar({ collapsed = false, fullWidth = false, onAddDra
           )}
         </div>
 
-        {/* Drafts Section (collapsed by default, at the bottom) */}
-        <div>
-          <div className="flex items-center justify-between mb-1">
-            <button
-              onClick={() => setDraftsExpanded(!draftsExpanded)}
-              className="flex items-center gap-1 text-[10px] font-medium text-muted-foreground/80 uppercase tracking-wider hover:text-muted-foreground transition-colors"
-            >
-              {draftsExpanded ? (
-                <ChevronDown className="h-3 w-3" />
-              ) : (
-                <ChevronRight className="h-3 w-3" />
-              )}
-              Drafts
-              {!draftsExpanded && drafts.length > 0 && (
-                <span className="ml-1 text-muted-foreground/60">({drafts.length})</span>
-              )}
-            </button>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <button
-                  onClick={handleAddDraft}
-                  className="p-0.5 text-muted-foreground/60 hover:text-muted-foreground transition-colors"
-                >
-                  <Plus className="h-3 w-3" />
-                </button>
-              </TooltipTrigger>
-              <TooltipContent side="right">
-                <p>Add draft</p>
-              </TooltipContent>
-            </Tooltip>
-          </div>
-
-          {draftsExpanded && (
-            <div className="space-y-0">
-              {filteredDrafts.map((draft, index) => (
-                <DraftItem
-                  key={draft.id}
-                  draft={draft}
-                  active={activePageId === draft.id}
-                  scale={getScale(index)}
-                  collapsed={false}
-                  onClick={() => handleDraftClick(draft.id)}
-                  onMouseEnter={() => setHoveredIndex(index)}
-                  onMouseLeave={() => setHoveredIndex(null)}
-                />
-              ))}
-              {filteredDrafts.length === 0 && searchQuery && (
-                <div className="text-[11px] text-muted-foreground/70 py-1">
-                  No drafts found
-                </div>
-              )}
-            </div>
-          )}
-        </div>
       </div>
     </TooltipProvider>
-  );
-}
-
-interface DraftItemProps {
-  draft: Draft;
-  active: boolean;
-  scale: number;
-  collapsed: boolean;
-  onClick: () => void;
-  onMouseEnter: () => void;
-  onMouseLeave: () => void;
-}
-
-function DraftItem({
-  draft,
-  active,
-  scale,
-  collapsed,
-  onClick,
-  onMouseEnter,
-  onMouseLeave,
-}: DraftItemProps) {
-  if (collapsed) {
-    return (
-      <Tooltip>
-        <TooltipTrigger asChild>
-          <button
-            onClick={onClick}
-            onMouseEnter={onMouseEnter}
-            onMouseLeave={onMouseLeave}
-            style={{ transform: `scale(${scale})` }}
-            className={cn(
-              "w-full flex items-center justify-center p-1.5 transition-all duration-150 origin-left",
-              active
-                ? "text-foreground"
-                : "text-muted-foreground hover:text-foreground"
-            )}
-          >
-            <FileText className="h-3.5 w-3.5" />
-          </button>
-        </TooltipTrigger>
-        <TooltipContent side="right">
-          <p>{draft.title}</p>
-        </TooltipContent>
-      </Tooltip>
-    );
-  }
-
-  return (
-    <button
-      onClick={onClick}
-      onMouseEnter={onMouseEnter}
-      onMouseLeave={onMouseLeave}
-      style={{ transform: `scale(${scale})` }}
-      className={cn(
-        "w-full flex items-center gap-2 py-0.5 text-[13px] transition-all duration-150 origin-left group",
-        active
-          ? "text-foreground font-medium"
-          : "text-muted-foreground hover:text-foreground"
-      )}
-    >
-      <span className="flex-1 truncate text-left">{draft.title}</span>
-    </button>
   );
 }
 

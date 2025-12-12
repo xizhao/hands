@@ -12,7 +12,7 @@ import { cn } from "@/lib/utils";
 
 export interface NavigateOutput {
   type: "navigate";
-  page: string;
+  blockId: string;
   title?: string;
   description?: string;
   anchor?: string;
@@ -25,7 +25,7 @@ export interface NavigateOutput {
 export function parseNavigateOutput(output: string): NavigateOutput | null {
   try {
     const parsed = JSON.parse(output);
-    if (parsed?.type === "navigate" && parsed.page) {
+    if (parsed?.type === "navigate" && parsed.blockId) {
       return parsed as NavigateOutput;
     }
   } catch {
@@ -43,8 +43,8 @@ export const NavigateCard = memo(({ output }: NavigateCardProps) => {
   const navigate = useNavigate();
 
   const handleClick = () => {
-    const pageId = output.page.replace(/^\//, "").replace(/\//g, "-") || "index";
-    navigate({ to: "/page/$pageId", params: { pageId } });
+    const blockId = output.blockId.replace(/^\//, "");
+    navigate({ to: "/blocks/$blockId", params: { blockId } });
   };
 
   // Minimal inline link
@@ -57,7 +57,7 @@ export const NavigateCard = memo(({ output }: NavigateCardProps) => {
         "hover:underline transition-colors"
       )}
     >
-      <span>{output.title || output.page}</span>
+      <span>{output.title || output.blockId}</span>
       <ArrowRight className="h-3 w-3" />
     </button>
   );

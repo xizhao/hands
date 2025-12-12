@@ -38,13 +38,6 @@ export function useActiveWorkbookDirectory() {
 }
 
 // Types for manifest
-export interface WorkbookPage {
-  id: string;
-  title: string;
-  route?: string;
-  path?: string;
-}
-
 export interface WorkbookBlock {
   id: string;
   title: string;
@@ -69,7 +62,6 @@ export interface WorkbookSource {
 export interface WorkbookManifest {
   workbookId: string;
   workbookDir: string;
-  pages: WorkbookPage[];
   blocks: WorkbookBlock[];
   sources?: WorkbookSource[];
   tables?: string[];
@@ -104,13 +96,6 @@ interface CreateWorkbookRequest {
   description?: string;
 }
 
-// Block reference error
-export interface BlockRefError {
-  page: string;
-  src: string;
-  available: string[];
-}
-
 // Eval result from the runtime server
 export interface EvalResult {
   timestamp: number;
@@ -132,10 +117,6 @@ export interface EvalResult {
   unused: {
     exports: string[];
     files: string[];
-  };
-  blockRefs: {
-    errors: BlockRefError[];
-    availableBlocks: string[];
   };
   services: {
     postgres: ServiceStatus;
@@ -247,7 +228,6 @@ export function useOpenWorkbook() {
       queryClient.removeQueries({ queryKey: ["runtime-eval"] });
       queryClient.removeQueries({ queryKey: ["runtime-health"] });
       queryClient.removeQueries({ queryKey: ["db-schema"] });
-      queryClient.removeQueries({ queryKey: ["page-content"] });
 
       // Update last opened timestamp
       const updated: Workbook = {
@@ -469,119 +449,6 @@ export function useSaveDatabase() {
 }
 
 
-
-// Create a new page
-export function useCreatePage() {
-  const port = useRuntimePort();
-  const queryClient = useQueryClient();
-
-  return useMutation({
-    mutationKey: ["page", "create"],
-    mutationFn: async ({ title }: { title?: string }) => {
-      if (!port) throw new Error("Runtime not connected");
-
-      const response = await fetch(`http://localhost:${port}/workbook/pages/create`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ title }),
-      });
-
-      if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.error || "Failed to create page");
-      }
-
-      return response.json() as Promise<{ success: boolean; page: WorkbookPage }>;
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["workbook-manifest"] });
-    },
-  });
-}
-
-// Get page content (MDX) by pageId
-export function usePageContent(pageId: string | null) {
-  const port = useRuntimePort();
-
-  return useQuery({
-    queryKey: ["page-content", pageId, port],
-    queryFn: async (): Promise<string> => {
-      if (!port || !pageId) throw new Error("Not ready");
-
-      const response = await fetch(`http://localhost:${port}/workbook/pages/${pageId}`);
-      if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.error || "Failed to load page");
-      }
-
-      const data = await response.json();
-      return data.content;
-    },
-    enabled: !!port && !!pageId,
-    staleTime: 0,
-    refetchInterval: 2000,
-  });
-}
-
-// Save page content (MDX)
-export function useSavePageContent() {
-  const port = useRuntimePort();
-  const queryClient = useQueryClient();
-
-  return useMutation({
-    mutationKey: ["page-content", "save"],
-    mutationFn: async ({ pageId, content }: { pageId: string; content: string }) => {
-      if (!port) throw new Error("No runtime connected");
-
-      const response = await fetch(`http://localhost:${port}/workbook/pages/${pageId}`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ content }),
-      });
-
-      if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.error || "Failed to save page");
-      }
-
-      return response.json();
-    },
-    onSuccess: (_, { pageId }) => {
-      queryClient.invalidateQueries({ queryKey: ["page-content", pageId] });
-      queryClient.invalidateQueries({ queryKey: ["workbook-manifest"] });
-    },
-  });
-}
-
-// Update page title (frontmatter only)
-export function useUpdatePageTitle() {
-  const port = useRuntimePort();
-  const queryClient = useQueryClient();
-
-  return useMutation({
-    mutationKey: ["page-title", "update"],
-    mutationFn: async ({ pageId, title }: { pageId: string; title: string }) => {
-      if (!port) throw new Error("No runtime connected");
-
-      const response = await fetch(`http://localhost:${port}/workbook/pages/${pageId}/title`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ title }),
-      });
-
-      if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.error || "Failed to update page title");
-      }
-
-      return response.json();
-    },
-    onSuccess: (_, { pageId }) => {
-      queryClient.invalidateQueries({ queryKey: ["page-content", pageId] });
-      queryClient.invalidateQueries({ queryKey: ["workbook-manifest"] });
-    },
-  });
-}
 
 // ============================================================================
 // Block Content Hooks

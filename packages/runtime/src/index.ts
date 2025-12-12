@@ -22,7 +22,6 @@ import { cors } from "hono/cors"
 import { buildRSC } from "./build/rsc.js"
 import { PORTS } from "./ports.js"
 import { initWorkbookDb, type WorkbookDb } from "./db/index.js"
-import { lintBlockRefs, type BlockLintResult } from "./blocks/lint.js"
 import type { BlockContext } from "./ctx.js"
 import { registerSourceRoutes, checkMissingSecrets } from "./sources/index.js"
 import type { SourceDefinition } from "@hands/stdlib/sources"
@@ -43,8 +42,6 @@ interface RuntimeState {
   fileWatchers: FSWatcher[]
   buildErrors: string[]
   viteError: string | null
-  // Cached lint results
-  lintResult: BlockLintResult | null
 }
 
 // Global state for progressive readiness
@@ -56,7 +53,6 @@ const state: RuntimeState = {
   viteProc: null,
   buildErrors: [],
   viteError: null,
-  lintResult: null,
   fileWatchers: [],
 }
 
@@ -99,25 +95,11 @@ interface ManifestSource {
 
 /**
  * Build manifest from filesystem (no DB needed - instant!)
- * Single file walk discovers pages, blocks, and sources.
+ * Single file walk discovers blocks and sources.
  */
 async function getManifest(workbookDir: string, workbookId: string) {
-  const pages: Array<{ id: string; title: string; path: string }> = []
   const blocks: Array<{ id: string; title: string; path: string; parentDir: string }> = []
   const sources: ManifestSource[] = []
-
-  // Read pages from filesystem
-  const pagesDir = join(workbookDir, "pages")
-  if (existsSync(pagesDir)) {
-    for (const file of readdirSync(pagesDir)) {
-      if (file.endsWith(".md") || file.endsWith(".mdx")) {
-        const id = file.replace(/\.(mdx?|md)$/, "")
-        const content = readFileSync(join(pagesDir, file), "utf-8")
-        const title = extractTitle(content) || id
-        pages.push({ id, title, path: file })
-      }
-    }
-  }
 
   // Read blocks from filesystem (recursive walk)
   const blocksDir = join(workbookDir, "blocks")
@@ -200,11 +182,10 @@ async function getManifest(workbookDir: string, workbookId: string) {
   return {
     workbookId,
     workbookDir,
-    pages,
     blocks,
     sources,
     config,
-    isEmpty: pages.length === 0 && blocks.length === 0 && sources.length === 0,
+    isEmpty: blocks.length === 0 && sources.length === 0,
   }
 }
 
@@ -229,19 +210,6 @@ function walkDirectory(
       callback(fullPath, relativePath)
     }
   }
-}
-
-function extractTitle(content: string): string | null {
-  // Try frontmatter
-  const frontmatterMatch = content.match(/^---\n([\s\S]*?)\n---/)
-  if (frontmatterMatch) {
-    const titleMatch = frontmatterMatch[1].match(/title:\s*["']?([^"'\n]+)["']?/)
-    if (titleMatch) return titleMatch[1]
-  }
-  // Try first heading
-  const headingMatch = content.match(/^#\s+(.+)$/m)
-  if (headingMatch) return headingMatch[1]
-  return null
 }
 
 function extractBlockTitle(content: string): string | null {
@@ -286,46 +254,19 @@ export const meta: BlockMeta = {
 }
 
 /**
- * Start watching pages/ and blocks/ directories for changes
+ * Start watching blocks/ directory for changes
  * Uses fs.watch for real-time updates (not polling)
  */
 function startFileWatcher(config: RuntimeConfig) {
-  const { workbookDir, workbookId } = config
-  const pagesDir = join(workbookDir, "pages")
+  const { workbookDir } = config
   const blocksDir = join(workbookDir, "blocks")
-
-  // Invalidate lint cache and re-run lint
-  const invalidateLint = () => {
-    state.lintResult = lintBlockRefs(workbookDir)
-    if (state.lintResult.errors.length > 0) {
-      console.log(`[lint] Found ${state.lintResult.errors.length} block reference error(s)`)
-      for (const err of state.lintResult.errors) {
-        console.log(`  ${err.page}:${err.line} - Block src="${err.src}" not found`)
-      }
-    }
-  }
-
-  // Watch pages directory
-  if (existsSync(pagesDir)) {
-    try {
-      const watcher = watch(pagesDir, { recursive: true }, (event, filename) => {
-        if (filename && (filename.endsWith(".md") || filename.endsWith(".mdx"))) {
-          invalidateLint()
-        }
-      })
-      state.fileWatchers.push(watcher)
-      console.log("[runtime] Watching pages/ for changes")
-    } catch (err) {
-      console.warn("[runtime] Could not watch pages/:", err)
-    }
-  }
 
   // Watch blocks directory
   if (existsSync(blocksDir)) {
     try {
       const watcher = watch(blocksDir, { recursive: true }, (event, filename) => {
         if (filename && (filename.endsWith(".ts") || filename.endsWith(".tsx"))) {
-          invalidateLint()
+          console.log(`[runtime] Block changed: ${filename}`)
         }
       })
       state.fileWatchers.push(watcher)
@@ -334,9 +275,6 @@ function startFileWatcher(config: RuntimeConfig) {
       console.warn("[runtime] Could not watch blocks/:", err)
     }
   }
-
-  // Run initial lint
-  invalidateLint()
 }
 
 /**
@@ -387,11 +325,6 @@ function createApp(config: RuntimeConfig) {
   // Eval - returns diagnostic info for AlertsPanel
   // Simplified version (no tsc/biome) - just service status
   app.post("/eval", (c) => {
-    // Run lint if not cached
-    if (!state.lintResult) {
-      state.lintResult = lintBlockRefs(config.workbookDir)
-    }
-
     return c.json({
       timestamp: Date.now(),
       duration: 0,
@@ -399,7 +332,6 @@ function createApp(config: RuntimeConfig) {
       typescript: { errors: [], warnings: [] },
       format: { fixed: [], errors: [] },
       unused: { exports: [], files: [] },
-      blockRefs: state.lintResult,
       services: {
         postgres: {
           up: state.dbReady,
@@ -420,22 +352,6 @@ function createApp(config: RuntimeConfig) {
   app.get("/workbook/manifest", async (c) => {
     const manifest = await getManifest(config.workbookDir, config.workbookId)
     return c.json(manifest)
-  })
-
-  // Page content - instant! Reads from filesystem
-  app.get("/workbook/pages/:pageId", async (c) => {
-    const pageId = c.req.param("pageId")
-    const pagesDir = join(config.workbookDir, "pages")
-
-    for (const ext of [".mdx", ".md"]) {
-      const path = join(pagesDir, pageId + ext)
-      if (existsSync(path)) {
-        const content = readFileSync(path, "utf-8")
-        return c.json({ success: true, pageId, content })
-      }
-    }
-
-    return c.json({ error: "Page not found" }, 404)
   })
 
   // ============================================
@@ -503,8 +419,6 @@ function createApp(config: RuntimeConfig) {
 
       writeFileSync(filePath, source, "utf-8")
 
-      state.lintResult = null
-
       return c.json({
         success: true,
         blockId,
@@ -557,7 +471,6 @@ function createApp(config: RuntimeConfig) {
       }
 
       writeFileSync(filePath, defaultSource, "utf-8")
-      state.lintResult = null
 
       return c.json({
         success: true,
@@ -592,7 +505,6 @@ function createApp(config: RuntimeConfig) {
       return c.json({ error: "Block not found" }, 404)
     }
 
-    state.lintResult = null
     return c.json({ success: true, blockId })
   })
 
@@ -661,8 +573,6 @@ function createApp(config: RuntimeConfig) {
 
       // Save all changes
       await project.save()
-
-      state.lintResult = null
 
       return c.json({
         success: true,
@@ -1342,7 +1252,7 @@ async function bootVite(config: RuntimeConfig) {
 /**
  * Run the check command - diagnostics without starting server
  *
- * Usage: hands-runtime check <workbook-dir> [--json] [--strict] [--no-fix]
+ * Usage: hands-runtime check <workbook-dir> [--json]
  */
 async function runCheck() {
   const args = process.argv.slice(2)
@@ -1351,19 +1261,11 @@ async function runCheck() {
 
   // Parse workbook dir (first positional arg or current directory)
   let workbookDir = process.cwd()
-  const flags = {
-    json: false,
-    strict: false,
-    noFix: false,
-  }
+  let jsonOutput = false
 
   for (const arg of restArgs) {
     if (arg === "--json") {
-      flags.json = true
-    } else if (arg === "--strict") {
-      flags.strict = true
-    } else if (arg === "--no-fix") {
-      flags.noFix = true
+      jsonOutput = true
     } else if (!arg.startsWith("-")) {
       workbookDir = arg
     }
@@ -1380,7 +1282,7 @@ async function runCheck() {
       success: false,
       error: `Workbook directory not found: ${workbookDir}`,
     }
-    if (flags.json) {
+    if (jsonOutput) {
       console.log(JSON.stringify(result, null, 2))
     } else {
       console.error(`Error: ${result.error}`)
@@ -1388,44 +1290,51 @@ async function runCheck() {
     process.exit(1)
   }
 
-  // Run block reference lint
-  const lintResult = lintBlockRefs(workbookDir)
+  // Check for hands.json
+  const handsJsonPath = join(workbookDir, "hands.json")
+  if (!existsSync(handsJsonPath)) {
+    const result = {
+      success: false,
+      error: `No hands.json found in ${workbookDir}`,
+    }
+    if (jsonOutput) {
+      console.log(JSON.stringify(result, null, 2))
+    } else {
+      console.error(`Error: ${result.error}`)
+    }
+    process.exit(1)
+  }
+
+  // Count blocks
+  const blocksDir = join(workbookDir, "blocks")
+  let blockCount = 0
+  if (existsSync(blocksDir)) {
+    walkDirectory(blocksDir, blocksDir, (filePath) => {
+      const filename = filePath.split("/").pop() || ""
+      if ((filename.endsWith(".tsx") || filename.endsWith(".ts")) && !filename.startsWith("_")) {
+        blockCount++
+      }
+    })
+  }
 
   // Build result
   const result = {
-    success: lintResult.errors.length === 0,
+    success: true,
     workbookDir,
     timestamp: Date.now(),
-    blockRefs: lintResult,
     summary: {
-      errors: lintResult.errors.length,
-      availableBlocks: lintResult.availableBlocks.length,
+      blocks: blockCount,
     },
   }
 
   // Output
-  if (flags.json) {
+  if (jsonOutput) {
     console.log(JSON.stringify(result, null, 2))
   } else {
-    if (result.success) {
-      console.log("✓ All checks passed")
-      console.log(`  ${result.summary.availableBlocks} blocks available`)
-    } else {
-      console.log("✗ Checks failed\n")
-      console.log(`Block Reference Errors (${lintResult.errors.length}):`)
-      for (const err of lintResult.errors) {
-        console.log(`  ${err.page}:${err.line} - Block src="${err.src}" not found`)
-      }
-      console.log(`\nAvailable blocks: ${lintResult.availableBlocks.join(", ") || "(none)"}`)
-    }
+    console.log("✓ Workbook structure valid")
+    console.log(`  ${blockCount} blocks available`)
   }
 
-  // Exit code
-  if (flags.strict && !result.success) {
-    process.exit(1)
-  } else if (lintResult.errors.length > 0) {
-    process.exit(1)
-  }
   process.exit(0)
 }
 

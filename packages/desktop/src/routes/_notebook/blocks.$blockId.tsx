@@ -7,6 +7,5 @@ export const Route = createFileRoute("/_notebook/blocks/$blockId")({
 
 function BlockView() {
   const { blockId } = Route.useParams();
-  // Use blockId as the pageId for the sandbox - blocks are just a type of page
-  return <EditorSandbox pageId={blockId} className="h-full" />;
+  return <EditorSandbox blockId={blockId} className="h-full" />;
 }

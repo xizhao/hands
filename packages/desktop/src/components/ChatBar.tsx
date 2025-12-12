@@ -101,14 +101,7 @@ export function ChatBar({
     // Build message content based on attachment type
     let finalMessage = userText;
     if (pendingAttachment) {
-      if (pendingAttachment.type === "page") {
-        // Page attachment - include page:// URI
-        const pageUri = `page://${pendingAttachment.pageId}`;
-        finalMessage = userText
-          ? `${userText}\n\n[Context: ${pageUri}]`
-          : `[Context: ${pageUri}]`;
-        setPendingAttachment(null);
-      } else if (pendingAttachment.type === "block") {
+      if (pendingAttachment.type === "block") {
         // Block attachment - include block:// URI
         const blockUri = `block://${pendingAttachment.blockId}`;
         finalMessage = userText
