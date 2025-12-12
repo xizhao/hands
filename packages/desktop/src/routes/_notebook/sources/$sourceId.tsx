@@ -1,22 +1,23 @@
 /**
- * Source Viewer Route - /sources/:sourceId
+ * Source Doc Route - /sources/:sourceId
  *
- * Shows source details, sync status, and allows manual sync.
+ * Minimalist document-editing experience for source specs.
+ * Feels like editing a doc with a small status toolbar.
  */
 
 import { createFileRoute } from "@tanstack/react-router";
-import { SourceViewer } from "@/components/SourceViewer";
+import { SourceDocEditor } from "@/components/SourceDocEditor";
 
 export const Route = createFileRoute("/_notebook/sources/$sourceId")({
-  component: SourceViewerPage,
+  component: SourceDocPage,
 });
 
-function SourceViewerPage() {
+function SourceDocPage() {
   const { sourceId } = Route.useParams();
 
   return (
     <div className="h-full flex flex-col bg-background">
-      <SourceViewer sourceId={sourceId} />
+      <SourceDocEditor sourceId={sourceId} />
     </div>
   );
 }

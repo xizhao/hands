@@ -3,6 +3,8 @@
  *
  * The sandbox is a minimal skeleton - we inject CSS from parent.
  * Editor handles all communication with runtime directly.
+ *
+ * If the editor isn't ready, we poll the runtime until it is (or timeout).
  */
 
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -12,7 +14,7 @@ import { useRuntimePort } from "@/hooks/useWorkbook";
 import { cn } from "@/lib/utils";
 
 
-type SandboxState = "loading" | "ready" | "error";
+type SandboxState = "loading" | "waiting" | "ready" | "error";
 
 interface EditorSandboxProps {
   blockId: string;
@@ -26,20 +28,61 @@ export function EditorSandbox({
   readOnly = false,
 }: EditorSandboxProps) {
   const iframeRef = useRef<HTMLIFrameElement>(null);
-  const [state, setState] = useState<SandboxState>("loading");
+  const [state, setState] = useState<SandboxState>("waiting");
   const [error, setError] = useState<string | null>(null);
   const [crashCount, setCrashCount] = useState(0);
+  const [editorReady, setEditorReady] = useState(false);
   const iframeKey = useRef(0);
 
   // Runtime port for the editor to connect to
   const runtimePort = useRuntimePort();
 
   // Editor runs on runtime port + 400 (e.g., 55000 -> 55400)
-  // Load directly from editor Vite for proper module resolution
   const editorPort = runtimePort ? runtimePort + 400 : null;
 
-  // Build iframe URL - editor served directly from its Vite dev server
-  const iframeSrc = editorPort
+  // Poll runtime to check if editor is ready before loading iframe
+  useEffect(() => {
+    if (!runtimePort || editorReady) return;
+
+    let cancelled = false;
+    const pollTimeout = 30000; // 30 second total timeout
+    const pollInterval = 500;
+    const startTime = Date.now();
+
+    const poll = async () => {
+      while (!cancelled && Date.now() - startTime < pollTimeout) {
+        try {
+          const res = await fetch(`http://localhost:${runtimePort}/status`, {
+            signal: AbortSignal.timeout(2000),
+          });
+          if (res.ok) {
+            const data = await res.json();
+            if (data.services?.editor?.ready) {
+              setEditorReady(true);
+              setState("loading");
+              return;
+            }
+          }
+        } catch {
+          // Runtime not ready yet, keep polling
+        }
+        await new Promise((resolve) => setTimeout(resolve, pollInterval));
+      }
+
+      // Timeout - show error
+      if (!cancelled) {
+        setState("error");
+        setError("Editor server took too long to start. Check the runtime logs.");
+      }
+    };
+
+    poll();
+    return () => { cancelled = true; };
+  }, [runtimePort, editorReady]);
+
+  // Build iframe URL - load directly from editor Vite for proper module resolution
+  // Vite needs to serve its own assets (/@vite, /src, /@react-refresh, etc.)
+  const iframeSrc = editorPort && editorReady
     ? `http://localhost:${editorPort}/sandbox.html?blockId=${encodeURIComponent(blockId)}&runtimePort=${runtimePort}&readOnly=${readOnly}`
     : null;
 
@@ -76,7 +119,7 @@ export function EditorSandbox({
     return `:root{${cssVars}}` +
       (isDark ? 'html{color-scheme:dark}' : 'html{color-scheme:light}') +
       'html,body{background:transparent}' +
-      '#root{padding-bottom:80px}'; // Room for floating chatbar
+      '#root{padding-bottom:80px}'; // Room for floating chatbar overlay
   }, []);
 
   // Send styles to iframe
@@ -153,7 +196,8 @@ export function EditorSandbox({
     }
 
     iframeKey.current += 1;
-    setState("loading");
+    setEditorReady(false); // Re-poll for editor readiness
+    setState("waiting");
     setError(null);
     setCrashCount((c) => c + 1);
   }, [crashCount]);
@@ -165,6 +209,18 @@ export function EditorSandbox({
         <div className="flex items-center gap-2 text-muted-foreground">
           <div className="w-4 h-4 border-2 border-muted-foreground/30 border-t-muted-foreground rounded-full animate-spin" />
           <span className="text-sm font-medium">Connecting to runtime...</span>
+        </div>
+      </div>
+    );
+  }
+
+  // Waiting for editor server to be ready
+  if (state === "waiting") {
+    return (
+      <div className={cn("flex items-center justify-center h-full bg-background", className)}>
+        <div className="flex items-center gap-2 text-muted-foreground">
+          <div className="w-4 h-4 border-2 border-muted-foreground/30 border-t-muted-foreground rounded-full animate-spin" />
+          <span className="text-sm font-medium">Waiting for editor server...</span>
         </div>
       </div>
     );

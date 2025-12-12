@@ -9,8 +9,8 @@
  * POST /workbook/sources/add       - Add source from registry to workbook
  */
 
-import { existsSync, mkdirSync, copyFileSync, readFileSync, writeFileSync, readdirSync, appendFileSync } from "fs"
-import { join, dirname, resolve } from "path"
+import { existsSync, mkdirSync, copyFileSync, readFileSync, writeFileSync, readdirSync, appendFileSync, statSync } from "fs"
+import { join, dirname, resolve, relative } from "path"
 import type { Hono } from "hono"
 import type { DbContext } from "@hands/stdlib"
 import type { SourceDefinition } from "@hands/stdlib/sources"
@@ -22,6 +22,194 @@ import {
   getStdlibSymlinkPath,
   getStdlibSourcePath,
 } from "../config/index.js"
+
+// Git sync status types
+interface GitSyncStatus {
+  status: "synced" | "spec-ahead" | "code-ahead" | "diverged" | "unknown" | "no-spec"
+  specModified: boolean
+  codeModified: boolean
+  specLastCommit: string | null
+  codeLastCommit: string | null
+  specMtime: number | null
+  codeMtime: number | null
+  message: string
+  // Diff stats (GitHub-style +/- counts)
+  diffStats: {
+    additions: number
+    deletions: number
+  } | null
+}
+
+/**
+ * Get git-based sync status between spec.md and source code
+ *
+ * Compares:
+ * 1. Git status (uncommitted changes)
+ * 2. Last commit times for spec vs code
+ * 3. File modification times as fallback
+ */
+async function getGitSyncStatus(
+  workbookDir: string,
+  sourceId: string,
+  specPath: string,
+  sourceDir: string
+): Promise<GitSyncStatus> {
+  const specExists = existsSync(specPath)
+
+  if (!specExists) {
+    return {
+      status: "no-spec",
+      specModified: false,
+      codeModified: false,
+      specLastCommit: null,
+      codeLastCommit: null,
+      specMtime: null,
+      codeMtime: null,
+      message: "No spec.md file exists",
+      diffStats: null,
+    }
+  }
+
+  // Get file modification times
+  const specMtime = statSync(specPath).mtimeMs
+  const indexPath = join(sourceDir, "index.ts")
+  const codeMtime = existsSync(indexPath) ? statSync(indexPath).mtimeMs : null
+
+  // Try to get git status
+  try {
+    const relSpecPath = relative(workbookDir, specPath)
+    const relSourceDir = relative(workbookDir, sourceDir)
+
+    // Check for uncommitted changes
+    const statusProc = Bun.spawn(
+      ["git", "status", "--porcelain", relSpecPath, relSourceDir],
+      { cwd: workbookDir, stdout: "pipe", stderr: "pipe" }
+    )
+    const statusOutput = await new Response(statusProc.stdout).text()
+    await statusProc.exited
+
+    const specModified = statusOutput.includes("spec.md")
+    const codeModified = statusOutput.split("\n").some(
+      (line) => line.includes(relSourceDir) && !line.includes("spec.md")
+    )
+
+    // Get last commit times for spec and code
+    const getLastCommit = async (path: string): Promise<string | null> => {
+      try {
+        const proc = Bun.spawn(
+          ["git", "log", "-1", "--format=%H %ci", "--", path],
+          { cwd: workbookDir, stdout: "pipe", stderr: "pipe" }
+        )
+        const output = await new Response(proc.stdout).text()
+        await proc.exited
+        return output.trim() || null
+      } catch {
+        return null
+      }
+    }
+
+    const specLastCommit = await getLastCommit(relSpecPath)
+    const codeLastCommit = await getLastCommit(`${relSourceDir}/index.ts`)
+
+    // Get diff stats for uncommitted changes
+    let diffStats: GitSyncStatus["diffStats"] = null
+    if (specModified || codeModified) {
+      try {
+        const diffProc = Bun.spawn(
+          ["git", "diff", "--numstat", relSpecPath, relSourceDir],
+          { cwd: workbookDir, stdout: "pipe", stderr: "pipe" }
+        )
+        const diffOutput = await new Response(diffProc.stdout).text()
+        await diffProc.exited
+
+        let additions = 0
+        let deletions = 0
+        for (const line of diffOutput.trim().split("\n")) {
+          if (!line) continue
+          const [add, del] = line.split("\t")
+          if (add !== "-") additions += parseInt(add, 10) || 0
+          if (del !== "-") deletions += parseInt(del, 10) || 0
+        }
+        diffStats = { additions, deletions }
+      } catch {
+        // Ignore diff errors
+      }
+    }
+
+    // Determine sync status
+    let status: GitSyncStatus["status"] = "synced"
+    let message = "Spec and code are in sync"
+
+    if (specModified && codeModified) {
+      status = "diverged"
+      message = "Both spec and code have uncommitted changes"
+    } else if (specModified) {
+      status = "spec-ahead"
+      message = "Spec has uncommitted changes - push to update code"
+    } else if (codeModified) {
+      status = "code-ahead"
+      message = "Code has uncommitted changes - pull to update spec"
+    } else if (specLastCommit && codeLastCommit) {
+      // Compare commit times if no uncommitted changes
+      const specTime = new Date(specLastCommit.split(" ").slice(1).join(" ")).getTime()
+      const codeTime = new Date(codeLastCommit.split(" ").slice(1).join(" ")).getTime()
+
+      // Allow 1 second tolerance
+      if (Math.abs(specTime - codeTime) > 1000) {
+        if (specTime > codeTime) {
+          status = "spec-ahead"
+          message = "Spec was updated more recently than code"
+        } else {
+          status = "code-ahead"
+          message = "Code was updated more recently than spec"
+        }
+      }
+    }
+
+    return {
+      status,
+      specModified,
+      codeModified,
+      specLastCommit: specLastCommit?.split(" ")[0] ?? null,
+      codeLastCommit: codeLastCommit?.split(" ")[0] ?? null,
+      specMtime,
+      codeMtime,
+      message,
+      diffStats,
+    }
+  } catch (err) {
+    // Fallback to mtime comparison if git fails
+    console.warn("[sources] Git not available, using mtime comparison")
+
+    let status: GitSyncStatus["status"] = "synced"
+    let message = "Spec and code appear in sync (based on file times)"
+
+    if (codeMtime && specMtime) {
+      const diff = Math.abs(specMtime - codeMtime)
+      if (diff > 60000) { // More than 1 minute difference
+        if (specMtime > codeMtime) {
+          status = "spec-ahead"
+          message = "Spec was modified more recently"
+        } else {
+          status = "code-ahead"
+          message = "Code was modified more recently"
+        }
+      }
+    }
+
+    return {
+      status,
+      specModified: false,
+      codeModified: false,
+      specLastCommit: null,
+      codeLastCommit: null,
+      specMtime,
+      codeMtime,
+      message,
+      diffStats: null,
+    }
+  }
+}
 
 // Registry types
 interface RegistryItem {
@@ -333,10 +521,42 @@ export function registerSourceRoutes(app: Hono, config: SourceRoutesConfig) {
   })
 
   // ============================================
-  // Source Spec Management
+  // Source Spec Management (spec.md file)
   // ============================================
 
-  // Update source spec (modifies the spec field in the source file)
+  // Get spec file path for a source
+  const getSpecPath = (sourceId: string) => join(workbookDir, "sources", sourceId, "spec.md")
+
+  // Read spec from spec.md file
+  app.get("/sources/:id/spec", async (c) => {
+    const sourceId = c.req.param("id")
+    const specPath = getSpecPath(sourceId)
+
+    if (!existsSync(specPath)) {
+      // Try to read from inline spec in source file as fallback
+      const source = await getSource(workbookDir, sourceId)
+      if (source?.definition.config.spec) {
+        return c.json({
+          spec: source.definition.config.spec,
+          source: "inline", // Indicates spec is inline, not in spec.md
+          path: null,
+        })
+      }
+      return c.json({ spec: null, source: null, path: specPath })
+    }
+
+    try {
+      const spec = readFileSync(specPath, "utf-8")
+      return c.json({ spec, source: "file", path: specPath })
+    } catch (err) {
+      return c.json({
+        success: false,
+        error: err instanceof Error ? err.message : "Failed to read spec",
+      }, 500)
+    }
+  })
+
+  // Update spec (writes to spec.md file)
   app.put("/sources/:id/spec", async (c) => {
     const sourceId = c.req.param("id")
     const { spec } = await c.req.json<{ spec: string }>()
@@ -345,47 +565,49 @@ export function registerSourceRoutes(app: Hono, config: SourceRoutesConfig) {
       return c.json({ success: false, error: "spec must be a string" }, 400)
     }
 
-    const source = await getSource(workbookDir, sourceId)
-    if (!source) {
+    const sourceDir = join(workbookDir, "sources", sourceId)
+    if (!existsSync(sourceDir)) {
       return c.json({ success: false, error: "Source not found" }, 404)
     }
 
+    const specPath = getSpecPath(sourceId)
+
     try {
-      // Read the source file
-      const sourceContent = readFileSync(source.path, "utf-8")
-
-      // Find and update the spec field in the config
-      // This is a simple approach - look for spec: ... in the config object
-      let updatedContent: string
-
-      // Escape the spec for use in a template literal
-      const escapedSpec = spec.replace(/`/g, "\\`").replace(/\$/g, "\\$")
-
-      if (sourceContent.includes("spec:")) {
-        // Replace existing spec - handles both single-line and multi-line template literals
-        updatedContent = sourceContent.replace(
-          /spec:\s*`[\s\S]*?`/,
-          `spec: \`${escapedSpec}\``
-        )
-      } else {
-        // Add spec field after description
-        // Look for description: "..." or description: '...' and add spec after
-        updatedContent = sourceContent.replace(
-          /(description:\s*["'][^"']*["'],?)/,
-          `$1\n  spec: \`${escapedSpec}\`,`
-        )
-      }
-
-      // Write back
-      writeFileSync(source.path, updatedContent)
-
-      return c.json({ success: true })
+      // Write spec to spec.md file
+      writeFileSync(specPath, spec)
+      return c.json({ success: true, path: specPath })
     } catch (err) {
       console.error("[sources] Failed to update spec:", err)
       return c.json({
         success: false,
         error: err instanceof Error ? err.message : "Failed to update spec",
       }, 500)
+    }
+  })
+
+  // Get git-based sync status for a source
+  // Compares spec.md changes vs code changes since last sync
+  app.get("/sources/:id/sync-status", async (c) => {
+    const sourceId = c.req.param("id")
+    const sourceDir = join(workbookDir, "sources", sourceId)
+
+    if (!existsSync(sourceDir)) {
+      return c.json({ error: "Source not found" }, 404)
+    }
+
+    const specPath = getSpecPath(sourceId)
+    const indexPath = join(sourceDir, "index.ts")
+
+    try {
+      // Get git status for spec.md and source files
+      const result = await getGitSyncStatus(workbookDir, sourceId, specPath, sourceDir)
+      return c.json(result)
+    } catch (err) {
+      console.error("[sources] Failed to get sync status:", err)
+      return c.json({
+        status: "unknown",
+        error: err instanceof Error ? err.message : "Failed to get sync status",
+      })
     }
   })
 

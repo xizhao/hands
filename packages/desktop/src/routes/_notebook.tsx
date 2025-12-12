@@ -5,6 +5,7 @@ import {
   useCreateWorkbook,
   useOpenWorkbook,
   useActiveRuntime,
+  usePrefetchRuntimeData,
 } from "@/hooks/useWorkbook";
 import { useActiveSession } from "@/hooks/useNavState";
 import { useSessions } from "@/hooks/useSession";
@@ -27,6 +28,9 @@ function NotebookLayout() {
   const navigate = useNavigate();
   const { data: activeRuntime } = useActiveRuntime();
   const { sessionId: activeSessionId, setSession: setActiveSession } = useActiveSession();
+
+  // Prefetch critical runtime data (schema, etc.) as soon as runtime connects
+  usePrefetchRuntimeData(activeRuntime?.workbook_id ?? null);
 
   // Set up navigate callback for SSE - navigates to blocks by ID
   useEffect(() => {

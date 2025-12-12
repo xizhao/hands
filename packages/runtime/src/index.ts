@@ -40,6 +40,8 @@ interface RuntimeState {
   editorReady: boolean
   editorPort: number | null
   editorProc: ChildProcess | null
+  editorRestartCount: number
+  editorConfig: RuntimeConfig | null
   workbookDb: WorkbookDb | null
   viteProc: ChildProcess | null
   fileWatchers: FSWatcher[]
@@ -55,12 +57,17 @@ const state: RuntimeState = {
   editorReady: false,
   editorPort: null,
   editorProc: null,
+  editorRestartCount: 0,
+  editorConfig: null,
   workbookDb: null,
   viteProc: null,
   buildErrors: [],
   viteError: null,
   fileWatchers: [],
 }
+
+// Max restarts before giving up
+const MAX_EDITOR_RESTARTS = 3
 
 /**
  * Format a block source file with Biome + TypeScript import organization
@@ -376,6 +383,7 @@ function createApp(config: RuntimeConfig) {
       services: {
         db: { ready: state.dbReady },
         vite: { ready: state.viteReady, port: state.vitePort, error: state.viteError },
+        editor: { ready: state.editorReady, port: state.editorPort, restartCount: state.editorRestartCount },
       },
       buildErrors: state.buildErrors,
     })
@@ -1200,9 +1208,37 @@ export const __SECRET_INTERNALS_DO_NOT_USE_OR_YOU_WILL_BE_FIRED = RD.__SECRET_IN
 
   // Proxy editor sandbox routes to editor Vite dev server
   // Desktop loads editor via /sandbox/sandbox.html
+  // If editor isn't ready, poll until it is (or timeout)
   app.all("/sandbox/*", async (c) => {
+    // If editor not ready, poll for up to 10 seconds
     if (!state.editorReady || !state.editorPort) {
-      return c.json({ error: "Editor not ready", booting: true }, 503)
+      const pollTimeout = 10000
+      const pollInterval = 250
+      const startTime = Date.now()
+
+      // If editor is down and we have config, try to restart it
+      if (!state.editorProc && state.editorConfig && state.editorRestartCount < MAX_EDITOR_RESTARTS) {
+        console.log("[runtime] Editor down on request, triggering restart...")
+        state.editorRestartCount++
+        bootEditor(state.editorConfig, true)
+      }
+
+      // Poll until ready or timeout
+      while (Date.now() - startTime < pollTimeout) {
+        if (state.editorReady && state.editorPort) {
+          break
+        }
+        await new Promise((resolve) => setTimeout(resolve, pollInterval))
+      }
+
+      // Final check after polling
+      if (!state.editorReady || !state.editorPort) {
+        return c.json({
+          error: "Editor not ready after timeout",
+          booting: !!state.editorProc,
+          restartCount: state.editorRestartCount,
+        }, 503)
+      }
     }
 
     // Rewrite /sandbox/foo to /foo on the editor server
@@ -1225,6 +1261,11 @@ export const __SECRET_INTERNALS_DO_NOT_USE_OR_YOU_WILL_BE_FIRED = RD.__SECRET_IN
         headers,
       })
     } catch (err) {
+      // If proxy fails, editor might have crashed - mark as not ready
+      if (state.editorReady) {
+        console.error("[runtime] Editor proxy failed, marking as not ready:", err)
+        state.editorReady = false
+      }
       return c.json({ error: "Editor proxy failed: " + String(err) }, 502)
     }
   })
@@ -1373,8 +1414,12 @@ async function bootVite(config: RuntimeConfig) {
 /**
  * Boot the editor sandbox Vite dev server
  * This serves the visual editor UI that runs inside the iframe
+ * Supports automatic restart on crash (up to MAX_EDITOR_RESTARTS times)
  */
-async function bootEditor(config: RuntimeConfig) {
+async function bootEditor(config: RuntimeConfig, isRestart = false) {
+  // Store config for potential restarts
+  state.editorConfig = config
+
   const editorPort = PORTS.EDITOR
   const editorPath = getEditorSourcePath()
 
@@ -1383,7 +1428,11 @@ async function bootEditor(config: RuntimeConfig) {
     return
   }
 
-  console.log(`[runtime] Starting editor sandbox on port ${editorPort}...`)
+  if (isRestart) {
+    console.log(`[runtime] Restarting editor sandbox (attempt ${state.editorRestartCount + 1}/${MAX_EDITOR_RESTARTS})...`)
+  } else {
+    console.log(`[runtime] Starting editor sandbox on port ${editorPort}...`)
+  }
 
   try {
     // Start Vite for the editor sandbox using bun to run the package script
@@ -1403,19 +1452,39 @@ async function bootEditor(config: RuntimeConfig) {
       },
     })
 
+    let stderrBuffer = ""
+
     // Forward output
     state.editorProc.stdout?.on("data", (data) => {
       process.stdout.write(`[editor] ${data}`)
     })
     state.editorProc.stderr?.on("data", (data) => {
-      process.stderr.write(`[editor] ${data}`)
+      const str = data.toString()
+      stderrBuffer += str
+      process.stderr.write(`[editor] ${str}`)
     })
 
     state.editorProc.on("exit", (code, signal) => {
-      if (state.editorReady) {
+      const wasReady = state.editorReady
+      state.editorReady = false
+      state.editorProc = null
+
+      if (wasReady) {
         console.error(`[runtime] Editor crashed (code=${code}, signal=${signal})`)
-        state.editorReady = false
-        state.editorProc = null
+        if (stderrBuffer) {
+          console.error(`[runtime] Editor stderr: ${stderrBuffer.slice(-500)}`)
+        }
+
+        // Attempt restart if under limit
+        if (state.editorRestartCount < MAX_EDITOR_RESTARTS && state.editorConfig) {
+          state.editorRestartCount++
+          console.log(`[runtime] Attempting editor restart in 1s...`)
+          setTimeout(() => {
+            bootEditor(state.editorConfig!, true)
+          }, 1000)
+        } else if (state.editorRestartCount >= MAX_EDITOR_RESTARTS) {
+          console.error(`[runtime] Editor exceeded max restarts (${MAX_EDITOR_RESTARTS}), giving up`)
+        }
       }
     })
 
@@ -1431,7 +1500,13 @@ async function bootEditor(config: RuntimeConfig) {
         if (response.ok) {
           state.editorPort = editorPort
           state.editorReady = true
-          console.log(`[runtime] Editor ready on port ${editorPort}`)
+          // Reset restart count on successful boot
+          if (isRestart) {
+            console.log(`[runtime] Editor recovered successfully on port ${editorPort}`)
+          } else {
+            console.log(`[runtime] Editor ready on port ${editorPort}`)
+          }
+          state.editorRestartCount = 0
           return
         }
       } catch {
@@ -1626,17 +1701,13 @@ async function main() {
     }))
   })
 
-  // 2. Boot PGlite in background (non-blocking)
+  // 2. Boot critical services in parallel (non-blocking)
+  // All three are independent and can start simultaneously
   bootPGlite(workbookDir)
+  bootVite(config)
+  bootEditor(config)
 
-  // 3. Build and start Vite in background (non-blocking)
-  // Editor boot is chained after RSC Vite to avoid race conditions
-  bootVite(config).then(() => {
-    // 4. Boot editor sandbox Vite after RSC Vite is ready
-    bootEditor(config)
-  })
-
-  // 5. Start file watcher for real-time manifest updates
+  // 3. Start file watcher for real-time manifest updates
   startFileWatcher(config)
 
   // Handle shutdown

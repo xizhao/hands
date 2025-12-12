@@ -78,6 +78,10 @@ export interface DataDependencies {
   allTables: string[]
   /** All columns used across all queries */
   allColumns: ColumnRef[]
+  /** JSX elements that use SQL data (for UI decoration) */
+  jsxDataUsages: JsxDataUsage[]
+  /** Variables derived from SQL query results (for tracking indirect data flow) */
+  derivedVariables: Map<string, string[]> // derived var -> source SQL vars
 }
 
 // ============================================================================
@@ -91,22 +95,25 @@ interface OxcNode {
   [key: string]: any
 }
 
-/** Check if a node is a ctx.db.sql member expression */
-function isCtxDbSql(node: OxcNode): boolean {
-  // Looking for: ctx.db.sql (MemberExpression chain)
+/** Check if a node is a ctx.sql or ctx.db.sql member expression */
+function isCtxSql(node: OxcNode): boolean {
+  // Looking for: ctx.sql or ctx.db.sql (MemberExpression chain)
   if (node.type !== 'MemberExpression') return false
 
   // Check for .sql
   if (node.property?.type !== 'Identifier' || node.property?.name !== 'sql') return false
 
-  // Check for ctx.db
   const obj = node.object
-  if (obj?.type !== 'MemberExpression') return false
-  if (obj.property?.type !== 'Identifier' || obj.property?.name !== 'db') return false
 
-  // Check for ctx (could be identifier or member of props)
-  const ctxObj = obj.object
-  if (ctxObj?.type === 'Identifier' && ctxObj?.name === 'ctx') return true
+  // Pattern 1: ctx.sql (direct)
+  if (obj?.type === 'Identifier' && obj?.name === 'ctx') return true
+
+  // Pattern 2: ctx.db.sql (with .db intermediary)
+  if (obj?.type === 'MemberExpression') {
+    if (obj.property?.type !== 'Identifier' || obj.property?.name !== 'db') return false
+    const ctxObj = obj.object
+    if (ctxObj?.type === 'Identifier' && ctxObj?.name === 'ctx') return true
+  }
 
   // Could also be props.ctx or destructured
   return false
@@ -278,6 +285,7 @@ function analyzeSql(sql: string): { tables: string[]; columns: ColumnRef[]; type
 export function extractDataDependencies(source: string): DataDependencies {
   const queries: SqlQuery[] = []
   const bindings: DataBinding[] = []
+  let derivedVariables = new Map<string, string[]>()
 
   try {
     const result = parseSync('source.tsx', source, { sourceType: 'module' })
@@ -285,7 +293,7 @@ export function extractDataDependencies(source: string): DataDependencies {
     // Find all ctx.db.sql tagged template expressions
     walkAst(result.program as OxcNode, (node, parent) => {
       if (node.type === 'TaggedTemplateExpression') {
-        if (isCtxDbSql(node.tag)) {
+        if (isCtxSql(node.tag)) {
           const { sql, rawSource } = extractTemplateLiteralSql(node.quasi, source)
           const { tables, columns, type } = analyzeSql(sql)
 
@@ -314,6 +322,7 @@ export function extractDataDependencies(source: string): DataDependencies {
     })
 
     // Second pass: find variable assignments for queries
+    const sqlVarNames = new Set<string>()
     walkAst(result.program as OxcNode, (node) => {
       if (node.type === 'VariableDeclarator' && node.id?.type === 'Identifier') {
         const varName = node.id.name
@@ -323,7 +332,7 @@ export function extractDataDependencies(source: string): DataDependencies {
         let queryLoc: SourceLocation | undefined
 
         walkAst(init, (innerNode) => {
-          if (innerNode.type === 'TaggedTemplateExpression' && isCtxDbSql(innerNode.tag)) {
+          if (innerNode.type === 'TaggedTemplateExpression' && isCtxSql(innerNode.tag)) {
             queryLoc = { start: innerNode.start, end: innerNode.end }
           }
         })
@@ -333,28 +342,108 @@ export function extractDataDependencies(source: string): DataDependencies {
           const query = queries.find((q) => q.loc.start === queryLoc!.start && q.loc.end === queryLoc!.end)
           if (query) {
             query.assignedTo = varName
+            sqlVarNames.add(varName)
             bindings.push({
               variable: varName,
               query,
-              usages: [], // TODO: find JSX usages
+              usages: [],
+              jsxElements: [],
             })
           }
         }
       }
     })
 
-    // Third pass: find JSX usages of bound variables
+    // 2.5 pass: find derived variables (vars that reference SQL vars in their initializer)
+    // e.g. const totalEmails = rows.length -> derived from 'rows'
+    derivedVariables = new Map<string, string[]>()
+    walkAst(result.program as OxcNode, (node) => {
+      if (node.type === 'VariableDeclarator' && node.id?.type === 'Identifier') {
+        const varName = node.id.name
+        // Skip if this is already a SQL var
+        if (sqlVarNames.has(varName)) return
+
+        const init = node.init
+        if (!init) return
+
+        // Get source text of initializer and check if any SQL var is referenced
+        const initSource = source.slice(init.start, init.end)
+        const referencedSqlVars: string[] = []
+        for (const sqlVar of sqlVarNames) {
+          // Use word boundary regex to avoid matching substrings
+          const regex = new RegExp(`\\b${sqlVar}\\b`)
+          if (regex.test(initSource)) {
+            referencedSqlVars.push(sqlVar)
+          }
+        }
+
+        if (referencedSqlVars.length > 0) {
+          derivedVariables.set(varName, referencedSqlVars)
+        }
+      }
+    })
+
+    // Build set of all variables to track (SQL vars + derived vars pointing to each SQL var)
+    const sqlVarToDerivedVars = new Map<string, Set<string>>()
+    for (const sqlVar of sqlVarNames) {
+      sqlVarToDerivedVars.set(sqlVar, new Set([sqlVar])) // Include the SQL var itself
+    }
+    for (const [derivedVar, sourceSqlVars] of derivedVariables.entries()) {
+      for (const sqlVar of sourceSqlVars) {
+        sqlVarToDerivedVars.get(sqlVar)?.add(derivedVar)
+      }
+    }
+
+    // Third pass: find JSX elements that use bound variables (direct or derived)
+    // We look for JSXElement nodes that contain JSXExpressionContainer referencing our vars
     for (const binding of bindings) {
+      // Get all variables to search for (SQL var + its derived vars)
+      const varsToSearch = sqlVarToDerivedVars.get(binding.variable) || new Set([binding.variable])
+
       walkAst(result.program as OxcNode, (node) => {
-        // Look for JSX expression containers that reference our variable
+        // Look for JSX expression containers that reference our variable (or derived)
         if (node.type === 'JSXExpressionContainer') {
           const exprSource = source.slice(node.start, node.end)
-          // Simple check: does this expression reference our variable?
-          if (exprSource.includes(binding.variable)) {
-            binding.usages.push({ start: node.start, end: node.end })
+          // Check if this expression references our variable or any derived variable
+          for (const varName of varsToSearch) {
+            const regex = new RegExp(`\\b${varName}\\b`)
+            if (regex.test(exprSource)) {
+              binding.usages.push({ start: node.start, end: node.end })
+              break // Only add once even if multiple vars match
+            }
           }
         }
       })
+
+      // Now find JSXElement parents for each usage
+      for (const usage of binding.usages) {
+        // Walk to find the closest JSXElement that contains this usage
+        walkAst(result.program as OxcNode, (node) => {
+          if (node.type === 'JSXElement') {
+            // Check if this element contains the usage (but is the tightest container)
+            if (node.start <= usage.start && node.end >= usage.end) {
+              // Check if there's a child JSXElement that also contains it
+              let hasChildContainer = false
+              walkAst(node, (child) => {
+                if (child !== node && child.type === 'JSXElement') {
+                  if (child.start <= usage.start && child.end >= usage.end) {
+                    hasChildContainer = true
+                  }
+                }
+              })
+
+              // Only add if this is the innermost JSXElement containing the usage
+              if (!hasChildContainer) {
+                const loc = { start: node.start, end: node.end }
+                // Avoid duplicates
+                if (!binding.jsxElements.some((e) => e.start === loc.start && e.end === loc.end)) {
+                  binding.jsxElements.push(loc)
+                }
+              }
+            }
+          }
+        })
+      }
     }
   } catch (err) {
     console.error('[sql-extractor] Failed to parse source:', err)
@@ -373,11 +462,43 @@ export function extractDataDependencies(source: string): DataDependencies {
     return true
   })
 
+  // Build jsxDataUsages from bindings
+  const jsxUsageMap = new Map<string, Set<string>>()
+  for (const binding of bindings) {
+    const tables = binding.query.tables
+    for (const jsxEl of binding.jsxElements) {
+      const key = `${jsxEl.start}:${jsxEl.end}`
+      if (!jsxUsageMap.has(key)) {
+        jsxUsageMap.set(key, new Set())
+      }
+      for (const table of tables) {
+        jsxUsageMap.get(key)!.add(table)
+      }
+    }
+  }
+
+  const jsxDataUsages: JsxDataUsage[] = []
+  for (const binding of bindings) {
+    for (const jsxEl of binding.jsxElements) {
+      const key = `${jsxEl.start}:${jsxEl.end}`
+      const tables = Array.from(jsxUsageMap.get(key) || [])
+      // Avoid duplicates
+      if (!jsxDataUsages.some((u) => u.elementLoc.start === jsxEl.start && u.elementLoc.end === jsxEl.end)) {
+        jsxDataUsages.push({
+          elementLoc: jsxEl,
+          tables,
+        })
+      }
+    }
+  }
+
   return {
     queries,
     bindings,
     allTables,
     allColumns: uniqueColumns,
+    jsxDataUsages,
+    derivedVariables,
   }
 }
 

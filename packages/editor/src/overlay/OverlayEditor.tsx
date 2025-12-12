@@ -17,12 +17,11 @@
 import { useEffect, useRef, useCallback, useMemo, useState } from 'react'
 import { DndProvider } from 'react-dnd'
 import { HTML5Backend } from 'react-dnd-html5-backend'
-import { Table } from '@phosphor-icons/react'
+import { Database } from '@phosphor-icons/react'
 import { renderBlockViaRsc, initFlightClient } from '../rsc/client'
 import { parseSourceWithLocations } from '../ast/oxc-parser'
 import type { EditableNode } from '../ast/oxc-parser'
 import { extractDataDependencies } from '../ast/sql-extractor'
-import type { DataBinding } from '../ast/sql-extractor'
 import { DragHandle, DropZone, NodeHighlight } from './dnd'
 import { DragSelect } from './DragSelect'
 import {
@@ -122,7 +121,7 @@ function DataDepChip({ nodeId, containerRef, tables }: DataDepChipProps) {
       }}
     >
       <div className="flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-blue-500/90 text-white text-[10px] font-medium shadow-sm backdrop-blur-sm">
-        <Table size={10} weight="bold" />
+        <Database size={10} weight="bold" />
         <span>{tables.join(', ')}</span>
       </div>
     </div>
@@ -166,7 +165,7 @@ function OverlayEditorInner({
 
   // RSC state
   const [rscElement, setRscElement] = React.useState<React.ReactNode>(null)
-  const [isLoading, setIsLoading] = React.useState(true)
+  const [isRscLoading, setIsRscLoading] = React.useState(true)
   const [error, setError] = React.useState<string | null>(null)
 
   // RSC cache for instant display during loads
@@ -174,21 +173,24 @@ function OverlayEditorInner({
     blockId,
     containerRef,
   })
-  // Track if we're in a "refresh" (have cached content, loading new)
-  const isRefreshing = isLoading && hasCachedContent
-
   // Original text for inline editing
   const originalTextRef = useRef<string>('')
 
   // Track if mouse is on drag handle (to prevent hover clear)
   const isOnDragHandleRef = useRef(false)
 
-  // Source management
-  const { source, isSaving, version, mutate, setSource } = useEditorSource({
+  // Source management (isLoading is set immediately on mutation, before network)
+  const { source, isSaving, isLoading: isMutationLoading, version, mutate, setSource } = useEditorSource({
     blockId,
     runtimePort,
     initialSource,
   })
+
+  // Combined loading state: either RSC is loading OR mutation triggered loading
+  const isLoading = isRscLoading || isMutationLoading
+
+  // Track if we're in a "refresh" (have cached content, loading new)
+  const isRefreshing = isLoading && hasCachedContent
 
   // Parse source for AST
   const parseResult = useMemo(() => {
@@ -200,30 +202,26 @@ function OverlayEditorInner({
     const deps = extractDataDependencies(source)
     const map = new Map<string, string[]>()
 
-    // For each binding, find which AST nodes contain the usages
-    if (parseResult.root) {
-      for (const binding of deps.bindings) {
-        const tables = binding.query.tables
-        if (tables.length === 0) continue
-
-        // Walk AST to find nodes that contain the usage locations
-        function walkNode(node: EditableNode) {
-          for (const usage of binding.usages) {
-            // Check if this node contains the usage
-            if (node.loc.start <= usage.start && node.loc.end >= usage.end) {
-              const existing = map.get(node.id) || []
-              const newTables = tables.filter((t) => !existing.includes(t))
-              if (newTables.length > 0) {
-                map.set(node.id, [...existing, ...newTables])
-              }
+    // Map JSX element locations from sql-extractor to AST node IDs
+    // The extractor walks forward from SQL variables to find JSX elements that display the data
+    if (parseResult.root && deps.jsxDataUsages.length > 0) {
+      // Walk AST to find nodes that match the JSX element locations
+      function walkNode(node: EditableNode) {
+        for (const usage of deps.jsxDataUsages) {
+          // Check if this node matches the JSX element location
+          if (node.loc.start === usage.elementLoc.start && node.loc.end === usage.elementLoc.end) {
+            const existing = map.get(node.id) || []
+            const newTables = usage.tables.filter((t) => !existing.includes(t))
+            if (newTables.length > 0) {
+              map.set(node.id, [...existing, ...newTables])
             }
           }
-          for (const child of node.children) {
-            walkNode(child)
-          }
         }
-        walkNode(parseResult.root)
+        for (const child of node.children) {
+          walkNode(child)
+        }
       }
+      walkNode(parseResult.root)
     }
 
     return { dataDeps: deps, nodeToTables: map }
@@ -234,7 +232,7 @@ function OverlayEditorInner({
     let mounted = true
 
     async function loadRsc() {
-      setIsLoading(true)
+      setIsRscLoading(true)
       setError(null)
 
       try {
@@ -252,7 +250,7 @@ function OverlayEditorInner({
         if (!mounted) return
         setError(err instanceof Error ? err.message : String(err))
       } finally {
-        if (mounted) setIsLoading(false)
+        if (mounted) setIsRscLoading(false)
       }
     }
 
@@ -405,14 +403,49 @@ function OverlayEditorInner({
   // Text elements that support inline editing (Linear-style: click to edit)
   const TEXT_ELEMENTS = ['p', 'span', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'li', 'a', 'label', 'td', 'th']
 
-  // Check if an element is editable text
-  const isTextElement = useCallback((el: HTMLElement): boolean => {
+  // Find AST node by ID
+  const findAstNode = useCallback((nodeId: string): EditableNode | null => {
+    if (!parseResult.root) return null
+
+    function walk(node: EditableNode): EditableNode | null {
+      if (node.id === nodeId) return node
+      for (const child of node.children) {
+        const found = walk(child)
+        if (found) return found
+      }
+      return null
+    }
+    return walk(parseResult.root)
+  }, [parseResult.root])
+
+  // Check if AST node has literal text children (not just expressions)
+  const hasLiteralTextChildren = useCallback((nodeId: string): boolean => {
+    const node = findAstNode(nodeId)
+    if (!node) return false
+    // Check if any child is a text node (literal text, not expression)
+    return node.children.some(child => child.isText && child.text?.trim())
+  }, [findAstNode])
+
+  // Check if a node is selectable (exists in AST as a real JSX element, not text)
+  const isSelectableNode = useCallback((nodeId: string): boolean => {
+    const node = findAstNode(nodeId)
+    // Must exist in AST and not be a text node (text nodes don't get data-node-ids anyway)
+    return node !== null && !node.isText
+  }, [findAstNode])
+
+  // Check if an element is editable text (must have literal text in AST, not expressions)
+  const isTextElement = useCallback((el: HTMLElement, nodeId: string): boolean => {
     const tagName = el.tagName.toLowerCase()
-    if (TEXT_ELEMENTS.includes(tagName)) return true
-    // Div with only text content (no child elements with node-id)
-    if (tagName === 'div' && !el.querySelector('[data-node-id]') && el.textContent?.trim()) return true
-    return false
-  }, [])
+
+    // First check if it's a text-type element
+    const isTextTag = TEXT_ELEMENTS.includes(tagName) ||
+      (tagName === 'div' && !el.querySelector('[data-node-id]') && el.textContent?.trim())
+
+    if (!isTextTag) return false
+
+    // Then verify it has literal text children in the AST (not just expressions like {data.name})
+    return hasLiteralTextChildren(nodeId)
+  }, [hasLiteralTextChildren])
 
   // Start inline editing on an element
   const startInlineEdit = useCallback((el: HTMLElement, nodeId: string, selectAll: boolean = true) => {
@@ -461,6 +494,9 @@ function OverlayEditorInner({
 
       if (!nodeId || !editableEl) return
 
+      // Verify node is selectable (exists in AST as a real JSX element)
+      if (!isSelectableNode(nodeId)) return
+
       // Multi-select with modifier keys
       if (e.metaKey || e.ctrlKey) {
         e.preventDefault()
@@ -483,7 +519,7 @@ function OverlayEditorInner({
       }
 
       // Linear-style: single click on text elements starts editing immediately
-      if (isTextElement(editableEl)) {
+      if (isTextElement(editableEl, nodeId)) {
         e.preventDefault()
         e.stopPropagation()
         select(nodeId, false)
@@ -499,7 +535,7 @@ function OverlayEditorInner({
       e.stopPropagation()
       select(nodeId, false)
     },
-    [readOnly, editingNodeId, focusedNodeId, containerRef, select, dispatch, handleTextEdit, stopEditing, isTextElement, startInlineEdit]
+    [readOnly, editingNodeId, focusedNodeId, containerRef, select, dispatch, handleTextEdit, stopEditing, isTextElement, isSelectableNode, startInlineEdit]
   )
 
   // Double-click: select all text in element
@@ -514,7 +550,7 @@ function OverlayEditorInner({
       const nodeId = editableEl.getAttribute('data-node-id')
       if (!nodeId) return
 
-      if (!isTextElement(editableEl)) return
+      if (!isTextElement(editableEl, nodeId)) return
 
       e.preventDefault()
       e.stopPropagation()
@@ -686,7 +722,7 @@ function OverlayEditorInner({
         const el = containerRef.current.querySelector(
           `[data-node-id="${focusedNodeId}"]`
         ) as HTMLElement
-        if (el && isTextElement(el)) {
+        if (el && isTextElement(el, focusedNodeId)) {
           e.preventDefault()
           startInlineEdit(el, focusedNodeId, true)
         }

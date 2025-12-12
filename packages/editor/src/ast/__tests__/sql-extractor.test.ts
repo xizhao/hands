@@ -144,4 +144,22 @@ describe('sql-extractor', () => {
     expect(deps.queries).toHaveLength(0)
     expect(getDataDependencySummary(deps)).toBe('No database queries')
   })
+
+  it('extracts ctx.sql direct pattern (without .db)', () => {
+    const source = `
+      const MyBlock = async ({ ctx }) => {
+        const rows = await ctx.sql\`SELECT email, count FROM users ORDER BY count DESC\`
+        return <div>{rows.map(r => <span>{r.email}</span>)}</div>
+      }
+      export default MyBlock
+    `
+
+    const deps = extractDataDependencies(source)
+
+    expect(deps.queries).toHaveLength(1)
+    expect(deps.queries[0].type).toBe('select')
+    expect(deps.queries[0].tables).toContain('users')
+    expect(deps.queries[0].assignedTo).toBe('rows')
+    expect(deps.allTables).toContain('users')
+  })
 })

@@ -1,5 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { invoke } from "@tauri-apps/api/core";
+import { useEffect, useRef } from "react";
 import type { Workbook } from "@/lib/workbook";
 
 // Tauri command response type (matches Rust backend)
@@ -423,6 +424,105 @@ export function useDbSchema(workbookId: string | null) {
     staleTime: 30000,
     refetchInterval: 60000,
   });
+}
+
+// Runtime service status - check if individual services are ready
+export interface RuntimeServiceStatus {
+  db: { ready: boolean };
+  vite: { ready: boolean; port?: number; error?: string };
+  editor: { ready: boolean; port?: number; restartCount?: number };
+}
+
+export interface RuntimeStatus {
+  port: number;
+  workbookId: string;
+  workbookDir: string;
+  services: RuntimeServiceStatus;
+}
+
+// Get runtime status including service readiness
+export function useRuntimeStatus() {
+  const port = useRuntimePort();
+
+  return useQuery({
+    queryKey: ["runtime-status-services", port],
+    queryFn: async (): Promise<RuntimeStatus | null> => {
+      if (!port) return null;
+
+      const response = await fetch(`http://localhost:${port}/status`);
+      if (!response.ok) return null;
+
+      return response.json();
+    },
+    enabled: !!port,
+    staleTime: 0,
+    refetchInterval: (query) => {
+      // Poll frequently until all services are ready, then slow down
+      const data = query.state.data;
+      const allReady = data?.services?.db?.ready && data?.services?.vite?.ready;
+      return allReady ? 10000 : 1000;
+    },
+  });
+}
+
+// Convenience hook for DB readiness
+export function useDbReady() {
+  const { data: status, isLoading } = useRuntimeStatus();
+  return {
+    isDbReady: status?.services?.db?.ready ?? false,
+    isLoading: isLoading || (!!status && !status.services?.db?.ready),
+  };
+}
+
+/**
+ * Prefetch critical data when runtime connects
+ * Call this once when runtime becomes available to eagerly load:
+ * - Database schema (tables)
+ * - Manifest (already polled, but ensures it's cached)
+ */
+export function usePrefetchRuntimeData(workbookId: string | null) {
+  const port = useRuntimePort();
+  const queryClient = useQueryClient();
+  const hasPrefetched = useRef(false);
+
+  useEffect(() => {
+    if (!port || !workbookId || hasPrefetched.current) return;
+
+    // Prefetch schema as soon as runtime is available
+    const prefetch = async () => {
+      try {
+        // Check if DB is ready first
+        const statusRes = await fetch(`http://localhost:${port}/status`);
+        if (!statusRes.ok) return;
+
+        const status = await statusRes.json();
+        if (!status.services?.db?.ready) {
+          // DB not ready, retry in 500ms
+          setTimeout(prefetch, 500);
+          return;
+        }
+
+        // DB is ready, prefetch schema
+        console.log("[usePrefetchRuntimeData] Prefetching database schema...");
+        await queryClient.prefetchQuery({
+          queryKey: ["db-schema", workbookId, port],
+          queryFn: async () => {
+            const response = await fetch(`http://localhost:${port}/postgres/schema`);
+            if (!response.ok) return [];
+            return response.json();
+          },
+          staleTime: 30000,
+        });
+
+        hasPrefetched.current = true;
+        console.log("[usePrefetchRuntimeData] Schema prefetched");
+      } catch (err) {
+        console.error("[usePrefetchRuntimeData] Failed to prefetch:", err);
+      }
+    };
+
+    prefetch();
+  }, [port, workbookId, queryClient]);
 }
 
 // Save database snapshot (dumps to db.tar.gz)

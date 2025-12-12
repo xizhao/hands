@@ -36,7 +36,7 @@ import {
   type TPlateEditor,
 } from 'platejs/react';
 import remarkGfm from 'remark-gfm';
-import { Code, Eye } from '@phosphor-icons/react';
+import { Code, Eye, TextB, TextItalic, TextStrikethrough, ListBullets, ListNumbers, Quotes, CodeBlock } from '@phosphor-icons/react';
 
 import { cn } from '@/lib/utils';
 import { BlockquoteElement } from '@/components/ui/blockquote-node';
@@ -52,6 +52,8 @@ import { CodeLeaf } from '@/components/ui/code-node';
 import { BlockList } from '@/components/ui/block-list';
 import { MermaidDiagram } from '@/components/MermaidDiagram';
 import { Button } from '@/components/ui/button';
+import { Toolbar, ToolbarGroup, ToolbarButton } from '@/components/ui/toolbar';
+import { MarkToolbarButton } from '@/components/ui/mark-toolbar-button';
 
 /**
  * Mermaid-aware code block element
@@ -194,81 +196,87 @@ const SpecEditorKit = [
 type SpecEditorType = TPlateEditor<Value, (typeof SpecEditorKit)[number]>;
 
 interface SpecEditorProps {
+  /** Unique identifier for this editor instance */
+  id?: string;
+  /** Markdown content to edit */
   value?: string;
+  /** Called when content changes (returns markdown string) */
   onChange?: (markdown: string) => void;
-  onSave?: (markdown: string) => void;
   placeholder?: string;
   className?: string;
   readOnly?: boolean;
+  /** Additional toolbar content to render on the left side (before formatting buttons) */
+  toolbarLeft?: React.ReactNode;
 }
 
 export function SpecEditor({
+  id = 'spec-editor',
   value = '',
   onChange,
-  onSave,
   placeholder = 'Write your spec here...',
   className,
   readOnly = false,
+  toolbarLeft,
 }: SpecEditorProps) {
-  const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  // Track if we've done initial load to avoid re-parsing on every render
+  const lastValueRef = useRef<string>(value);
+  const isInternalChange = useRef(false);
 
+  // Create editor with proper markdown deserialization
   const editor = usePlateEditor({
+    id,
     plugins: SpecEditorKit,
-    // Start with empty, we'll set value after deserializing
-    value: [{ type: 'p', children: [{ text: '' }] }],
+    // Initialize with deserialized markdown using getApi pattern
+    value: (editor) => {
+      if (!value) return [{ type: 'p', children: [{ text: '' }] }];
+      try {
+        const markdownApi = editor.getApi(MarkdownPlugin);
+        const parsed = markdownApi.markdown.deserialize(value);
+        return parsed && parsed.length > 0
+          ? parsed
+          : [{ type: 'p', children: [{ text: '' }] }];
+      } catch (err) {
+        console.error('Failed to parse markdown:', err);
+        return [{ type: 'p', children: [{ text: '' }] }];
+      }
+    },
   });
 
-  // Deserialize markdown to Plate value on mount
-  const initializedRef = useRef(false);
+  // Handle external value changes (e.g., after git pull)
   useEffect(() => {
-    if (initializedRef.current || !value) return;
-    initializedRef.current = true;
+    // Skip if this is an internal change or value hasn't changed
+    if (isInternalChange.current || value === lastValueRef.current) {
+      isInternalChange.current = false;
+      return;
+    }
+
+    lastValueRef.current = value;
 
     try {
-      const parsed = editor.api.markdown.deserialize(value);
+      const markdownApi = editor.getApi(MarkdownPlugin);
+      const parsed = markdownApi.markdown.deserialize(value);
       if (parsed && parsed.length > 0) {
         editor.tf.setValue(parsed);
       }
     } catch (err) {
-      console.error('Failed to parse markdown:', err);
+      console.error('Failed to parse markdown on update:', err);
     }
   }, [editor, value]);
 
-  // Serialize to markdown
-  const serializeToMarkdown = useCallback(() => {
-    try {
-      const md = editor.api.markdown.serialize();
-      return md;
-    } catch (err) {
-      console.error('Failed to serialize markdown:', err);
-      return '';
-    }
-  }, [editor]);
-
-  // Handle changes with debounced auto-save
+  // Handle changes - serialize to markdown and notify parent
   const handleChange = useCallback(() => {
     if (readOnly) return;
 
-    const md = serializeToMarkdown();
-    onChange?.(md);
-
-    // Debounce save
-    if (saveTimeoutRef.current) {
-      clearTimeout(saveTimeoutRef.current);
+    try {
+      const markdownApi = editor.getApi(MarkdownPlugin);
+      const md = markdownApi.markdown.serialize();
+      isInternalChange.current = true;
+      lastValueRef.current = md;
+      onChange?.(md);
+    } catch (err) {
+      console.error('Failed to serialize markdown:', err);
     }
-    saveTimeoutRef.current = setTimeout(() => {
-      onSave?.(md);
-    }, 1000);
-  }, [readOnly, serializeToMarkdown, onChange, onSave]);
-
-  // Cleanup timeout on unmount
-  useEffect(() => {
-    return () => {
-      if (saveTimeoutRef.current) {
-        clearTimeout(saveTimeoutRef.current);
-      }
-    };
-  }, []);
+  }, [editor, readOnly, onChange]);
 
   return (
     <Plate
@@ -277,14 +285,42 @@ export function SpecEditor({
     >
       <PlateContainer
         className={cn(
-          'relative w-full cursor-text overflow-y-auto rounded-lg border bg-background',
-          'focus-within:ring-2 focus-within:ring-purple-500/50',
+          'relative flex flex-col w-full h-full overflow-hidden',
+          // Premium card styling
+          'rounded-lg border border-border/50 bg-card shadow-sm',
           className
         )}
       >
+        {/* Embedded toolbar */}
+        {!readOnly && (
+          <Toolbar className="flex items-center gap-1 px-2 py-1.5 border-b border-border/30 bg-muted/30 shrink-0">
+            {/* Left side: custom content (status chip, save/push/pull) */}
+            {toolbarLeft}
+
+            <div className="flex-1" />
+
+            {/* Right side: formatting buttons */}
+            <ToolbarGroup>
+              <MarkToolbarButton nodeType="bold" tooltip="Bold (⌘B)">
+                <TextB weight="bold" className="h-4 w-4" />
+              </MarkToolbarButton>
+              <MarkToolbarButton nodeType="italic" tooltip="Italic (⌘I)">
+                <TextItalic weight="bold" className="h-4 w-4" />
+              </MarkToolbarButton>
+              <MarkToolbarButton nodeType="strikethrough" tooltip="Strikethrough">
+                <TextStrikethrough weight="bold" className="h-4 w-4" />
+              </MarkToolbarButton>
+              <MarkToolbarButton nodeType="code" tooltip="Inline code">
+                <Code weight="bold" className="h-4 w-4" />
+              </MarkToolbarButton>
+            </ToolbarGroup>
+          </Toolbar>
+        )}
+
+        {/* Editor content */}
         <PlateContent
           className={cn(
-            'min-h-[200px] px-4 py-3 text-sm',
+            'flex-1 overflow-y-auto px-4 py-3 text-sm',
             'outline-none',
             '[&_h1]:text-xl [&_h1]:font-semibold [&_h1]:mt-4 [&_h1]:mb-2',
             '[&_h2]:text-lg [&_h2]:font-semibold [&_h2]:mt-3 [&_h2]:mb-2',

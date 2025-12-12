@@ -29,6 +29,9 @@ export interface UseEditorSourceReturn {
   /** Whether a save is in progress */
   isSaving: boolean
 
+  /** Whether we're in a loading/mutation state (set immediately, before network) */
+  isLoading: boolean
+
   /** Version number (increments on changes, triggers RSC re-render) */
   version: number
 
@@ -63,6 +66,7 @@ export function useEditorSource({
 }: UseEditorSourceOptions): UseEditorSourceReturn {
   const [source, setSourceState] = useState(initialSource)
   const [isSaving, setIsSaving] = useState(false)
+  const [isLoading, setIsLoading] = useState(false)
   const [version, setVersion] = useState(0)
 
   // Track the source that's confirmed saved on server (only updated AFTER successful save)
@@ -122,12 +126,18 @@ export function useEditorSource({
 
   const saveSource = useCallback(
     async (newSource: string): Promise<boolean> => {
+      // Set loading state IMMEDIATELY (before any async work)
+      setIsLoading(true)
+
       // Mark as pending BEFORE any async work - blocks polling
       pendingSource.current = newSource
       setIsSaving(true)
 
       // Update local state immediately for fast feedback
       setSourceState(newSource)
+
+      // Increment version to trigger RSC re-render
+      setVersion((v) => v + 1)
 
       try {
         const res = await fetch(
@@ -142,8 +152,6 @@ export function useEditorSource({
         if (res.ok) {
           // Only update confirmed source AFTER server confirms
           confirmedServerSource.current = newSource
-          // Increment version to trigger RSC re-render
-          setVersion((v) => v + 1)
           console.log('[useEditorSource] Saved successfully')
           return true
         }
@@ -156,6 +164,7 @@ export function useEditorSource({
         // Clear pending - allows polling to resume
         pendingSource.current = null
         setIsSaving(false)
+        setIsLoading(false)
       }
     },
     [blockId, runtimePort]
@@ -252,6 +261,7 @@ export function useEditorSource({
   return {
     source,
     isSaving,
+    isLoading,
     version,
     mutate,
     mutateMany,

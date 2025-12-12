@@ -21,6 +21,7 @@ import {
   useManifest,
   useActiveWorkbookId,
   useSaveDatabase,
+  useDbReady,
 } from "@/hooks/useWorkbook";
 import { useRightPanel, useActiveSession } from "@/hooks/useNavState";
 import { useChatState } from "@/hooks/useChatState";
@@ -93,8 +94,12 @@ export function NotebookShell({ children }: NotebookShellProps) {
   const sourceMatch = currentPath.match(/^\/sources\/(.+)$/);
   const sourceId = sourceMatch?.[1];
   const isOnSource = !!sourceId;
-  // Check if we're on any content route (block or source) that needs the editor layout
-  const isOnContentRoute = isOnBlock || isOnSource;
+  // Check if we're on a table data route and extract tableId
+  const tableMatch = currentPath.match(/^\/tables\/(.+)$/);
+  const tableId = tableMatch?.[1];
+  const isOnTable = !!tableId;
+  // Check if we're on any content route (block, source, or table) that needs the editor layout
+  const isOnContentRoute = isOnBlock || isOnSource || isOnTable;
 
   const activeWorkbookId = useActiveWorkbookId();
   const { panel: rightPanel, togglePanel: toggleRightPanel } = useRightPanel();
@@ -107,6 +112,7 @@ export function NotebookShell({ children }: NotebookShellProps) {
   // Data for titlebar indicators and empty state detection
   const { data: dbSchema } = useDbSchema(activeWorkbookId);
   const { data: evalResult } = useEvalResult(activeWorkbookId);
+  const { isDbReady, isLoading: isDbLoading } = useDbReady();
 
   // Get runtime state from hooks
   const runtimePort = useRuntimePort();
@@ -140,6 +146,9 @@ export function NotebookShell({ children }: NotebookShellProps) {
 
   // Current source (for breadcrumb) - from manifest
   const currentSource = manifest?.sources?.find((s) => s.id === sourceId);
+
+  // Current table (for breadcrumb) - from schema
+  const currentTable = dbSchema?.find((t) => t.table_name === tableId);
 
   // Sidebar hover state (invisible until hover on left edge) - only used when on a page
   const [sidebarVisible, setSidebarVisible] = useState(false);
@@ -469,6 +478,29 @@ export function NotebookShell({ children }: NotebookShellProps) {
               </Tooltip>
             </>
           )}
+          {isOnTable && (
+            <>
+              <span
+                className={cn(
+                  "px-1 py-0.5 text-sm text-muted-foreground bg-transparent rounded-sm",
+                  "hover:bg-accent/50 hover:text-foreground"
+                )}
+              >
+                {currentTable?.table_name || tableId}
+              </span>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <button
+                    onClick={handleClosePage}
+                    className="ml-1 p-0.5 rounded-sm text-muted-foreground/70 hover:text-muted-foreground hover:bg-accent/50 transition-colors opacity-0 group-hover/titlebar:opacity-100"
+                  >
+                    <X weight="bold" className="h-3 w-3" />
+                  </button>
+                </TooltipTrigger>
+                <TooltipContent side="bottom">Close table</TooltipContent>
+              </Tooltip>
+            </>
+          )}
         </div>
 
         {/* Right: Panel toggles + Share */}
@@ -496,11 +528,15 @@ export function NotebookShell({ children }: NotebookShellProps) {
                         : "text-muted-foreground/70 hover:bg-accent/50 hover:text-muted-foreground"
                   )}
                 >
-                  <Database weight="duotone" className={cn("h-3.5 w-3.5", dbConnected && tableCount > 0 && "text-blue-500")} />
+                  {isDbLoading ? (
+                    <CircleNotch weight="bold" className="h-3.5 w-3.5 animate-spin text-muted-foreground" />
+                  ) : (
+                    <Database weight="duotone" className={cn("h-3.5 w-3.5", dbConnected && tableCount > 0 && "text-blue-500")} />
+                  )}
                   <span className={cn(
                     "tabular-nums",
-                    dbConnected && tableCount > 0 ? "text-foreground" : "text-muted-foreground/70"
-                  )}>{tableCount}</span>
+                    isDbLoading ? "text-muted-foreground/70" : dbConnected && tableCount > 0 ? "text-foreground" : "text-muted-foreground/70"
+                  )}>{isDbLoading ? "—" : tableCount}</span>
                 </button>
               </HoverCardTrigger>
               <HoverCardContent side="bottom" align="center" className="w-auto p-1">
@@ -509,7 +545,7 @@ export function NotebookShell({ children }: NotebookShellProps) {
                     e.stopPropagation();
                     saveDatabase.mutate();
                   }}
-                  disabled={saveDatabase.isPending || !dbConnected}
+                  disabled={saveDatabase.isPending || !dbConnected || isDbLoading}
                   className={cn(
                     "flex items-center gap-1.5 px-2 py-1 rounded text-xs transition-colors",
                     "hover:bg-accent text-muted-foreground hover:text-foreground",
@@ -680,12 +716,29 @@ export function NotebookShell({ children }: NotebookShellProps) {
                   </div>
                 )}
                 {/* Sources - triangles (CSS triangles via border) */}
+                {manifest?.sources && manifest.sources.length > 0 && (
+                  <div className="flex flex-col items-center gap-1 mt-2">
+                    {manifest.sources.slice(0, 3).map((source) => (
+                      <div
+                        key={`source-${source.id}`}
+                        className={cn(
+                          "w-0 h-0 border-l-[3px] border-r-[3px] border-b-[5px] border-l-transparent border-r-transparent transition-colors",
+                          source.id === sourceId ? "border-b-foreground/60" : "border-b-foreground/15"
+                        )}
+                      />
+                    ))}
+                  </div>
+                )}
+                {/* Data/Tables - circles */}
                 {dbSchema && dbSchema.length > 0 && (
                   <div className="flex flex-col items-center gap-1 mt-2">
                     {dbSchema.slice(0, 3).map((table) => (
                       <div
-                        key={`source-${table.table_name}`}
-                        className="w-0 h-0 border-l-[3px] border-r-[3px] border-b-[5px] border-l-transparent border-r-transparent border-b-foreground/15"
+                        key={`table-${table.table_name}`}
+                        className={cn(
+                          "w-1.5 h-1.5 rounded-full transition-colors",
+                          table.table_name === tableId ? "bg-foreground/60" : "bg-foreground/15"
+                        )}
                       />
                     ))}
                   </div>
