@@ -43,4 +43,6 @@ bun.lockb
 # Generated opencode resources (built from packages/agent)
 packages/desktop/src-tauri/resources/opencode/
 
+packages/desktop/src-tauri/target/.rustc_info.json
+
 .wrangler/
