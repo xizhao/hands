@@ -11,3 +11,6 @@ export * from './oxc-parser'
 export * from './surgical-mutations'
 export * from './plate-diff'
 export * from './slate-operations'
+
+// SQL data dependency extraction
+export * from './sql-extractor'

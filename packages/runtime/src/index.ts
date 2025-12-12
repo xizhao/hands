@@ -62,6 +62,59 @@ const state: RuntimeState = {
   fileWatchers: [],
 }
 
+/**
+ * Format a block source file with Biome + TypeScript import organization
+ * Runs silently - errors are logged but don't fail the operation
+ */
+async function formatBlockSource(filePath: string, workbookDir: string): Promise<boolean> {
+  try {
+    const blocksDir = join(workbookDir, "blocks")
+
+    // Step 1: TypeScript import organization via ts-morph
+    const { Project } = await import("ts-morph")
+    const tsconfigPath = join(workbookDir, "tsconfig.json")
+    let project: InstanceType<typeof Project>
+
+    if (existsSync(tsconfigPath)) {
+      project = new Project({ tsConfigFilePath: tsconfigPath })
+    } else {
+      project = new Project({ useInMemoryFileSystem: false })
+      project.addSourceFilesAtPaths(join(blocksDir, "**/*.{ts,tsx}"))
+    }
+
+    const sourceFile = project.getSourceFile(filePath)
+    if (sourceFile) {
+      sourceFile.organizeImports()
+      await sourceFile.save()
+    }
+
+    // Step 2: Biome format + lint fixes
+    const { spawnSync } = await import("child_process")
+    const biomePath = join(workbookDir, "node_modules", ".bin", "biome")
+    const globalBiomePath = join(import.meta.dirname, "..", "node_modules", ".bin", "biome")
+    const biomeCmd = existsSync(biomePath) ? biomePath : globalBiomePath
+
+    // Ensure biome config exists
+    const biomeConfigPath = join(workbookDir, "biome.json")
+    if (!existsSync(biomeConfigPath)) {
+      const { writeFileSync } = await import("fs")
+      writeFileSync(biomeConfigPath, JSON.stringify({
+        "$schema": "https://biomejs.dev/schemas/1.9.4/schema.json",
+        "organizeImports": { "enabled": true },
+        "linter": { "enabled": true },
+        "formatter": { "enabled": true, "indentStyle": "space", "indentWidth": 2 },
+        "javascript": { "formatter": { "semicolons": "asNeeded", "quoteStyle": "single" } }
+      }, null, 2))
+    }
+
+    spawnSync(biomeCmd, ["check", "--write", filePath], { cwd: workbookDir })
+    return true
+  } catch (err) {
+    console.error("[runtime] Format failed:", err)
+    return false
+  }
+}
+
 // Parse CLI args
 function parseArgs(): RuntimeConfig {
   const args: Record<string, string> = {}
@@ -415,7 +468,7 @@ function createApp(config: RuntimeConfig) {
 
     try {
       // Write the source
-      const { writeFileSync, mkdirSync } = await import("fs")
+      const { writeFileSync, mkdirSync, readFileSync } = await import("fs")
 
       // Ensure parent directories exist (for nested blocks like ui/email-events)
       const parentDir = filePath.substring(0, filePath.lastIndexOf("/"))
@@ -425,10 +478,17 @@ function createApp(config: RuntimeConfig) {
 
       writeFileSync(filePath, source, "utf-8")
 
+      // Auto-format after save (non-blocking, errors don't fail the save)
+      await formatBlockSource(filePath, config.workbookDir)
+
+      // Read back the formatted source
+      const formattedSource = readFileSync(filePath, "utf-8")
+
       return c.json({
         success: true,
         blockId,
         filePath,
+        source: formattedSource,
       })
     } catch (err) {
       return c.json({
@@ -591,6 +651,30 @@ function createApp(config: RuntimeConfig) {
         error: `Failed to move block: ${err instanceof Error ? err.message : String(err)}`,
       }, 500)
     }
+  })
+
+  // Format block source with Biome + TypeScript fixes
+  // POST /workbook/blocks/:blockId/fmt
+  app.post("/workbook/blocks/:blockId{.+}/fmt", async (c) => {
+    const blockId = c.req.param("blockId")
+    const blocksDir = join(config.workbookDir, "blocks")
+
+    // Find block file
+    let filePath: string | null = null
+    for (const ext of [".tsx", ".ts"]) {
+      const path = join(blocksDir, blockId + ext)
+      if (existsSync(path)) {
+        filePath = path
+        break
+      }
+    }
+
+    if (!filePath) {
+      return c.json({ success: false }, 404)
+    }
+
+    const success = await formatBlockSource(filePath, config.workbookDir)
+    return c.json({ success })
   })
 
   // DB routes - require DB ready

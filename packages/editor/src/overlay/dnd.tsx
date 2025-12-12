@@ -151,33 +151,46 @@ export function DropZone({ containerRef, onDrop }: DropZoneProps) {
       const containerRect = containerRef.current.getBoundingClientRect()
       const scrollTop = containerRef.current.scrollTop
 
-      // Find all elements with data-node-id
-      const elements = containerRef.current.querySelectorAll('[data-node-id]')
-      let closestElement: Element | null = null
-      let closestDistance = Infinity
-      let position: 'before' | 'after' = 'after'
+      // Raycast approach: get elements at cursor position in z-index order (top first)
+      const elementsAtPoint = document.elementsFromPoint(clientOffset.x, clientOffset.y)
 
-      elements.forEach((el) => {
-        const elRect = el.getBoundingClientRect()
-        const elMidY = elRect.top + elRect.height / 2
-
-        const distance = Math.abs(clientOffset.y - elMidY)
-        if (distance < closestDistance) {
-          closestDistance = distance
-          closestElement = el
-          position = clientOffset.y < elMidY ? 'before' : 'after'
+      // Find the topmost element with data-node-id that's inside our container
+      let targetElement: Element | null = null
+      for (const el of elementsAtPoint) {
+        if (containerRef.current.contains(el) && el.hasAttribute('data-node-id')) {
+          targetElement = el
+          break
         }
-      })
+      }
 
-      if (closestElement) {
-        const targetId = closestElement.getAttribute('data-node-id')!
+      // If cursor is not directly over an element, find closest by Y
+      if (!targetElement) {
+        const elements = containerRef.current.querySelectorAll('[data-node-id]')
+        let closestDistance = Infinity
+
+        elements.forEach((el) => {
+          const elRect = el.getBoundingClientRect()
+          const elMidY = elRect.top + elRect.height / 2
+          const distance = Math.abs(clientOffset.y - elMidY)
+          if (distance < closestDistance) {
+            closestDistance = distance
+            targetElement = el
+          }
+        })
+      }
+
+      if (targetElement) {
+        const targetId = targetElement.getAttribute('data-node-id')!
         // Don't allow dropping on self
         if (targetId === dragItem.nodeId) {
           setDropInfo(null)
           return
         }
 
-        const elRect = closestElement.getBoundingClientRect()
+        const elRect = targetElement.getBoundingClientRect()
+        const elMidY = elRect.top + elRect.height / 2
+        const position: 'before' | 'after' = clientOffset.y < elMidY ? 'before' : 'after'
+
         setDropInfo({
           targetId,
           position,

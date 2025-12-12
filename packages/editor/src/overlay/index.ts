@@ -7,10 +7,39 @@
  * - Drag and drop for element reordering
  * - Inline text editing with contentEditable
  * - Surgical source mutations via AST
+ * - Multi-select with Cmd/Ctrl+click and Shift+click
+ * - Undo/redo history
+ * - Keyboard shortcuts
  */
 
 // Main component
 export { OverlayEditor } from './OverlayEditor'
+
+// State management
+export {
+  EditorProvider,
+  useEditor,
+  useEditorSelection,
+  useEditorHover,
+  useEditorEditing,
+  useSlashMenu,
+  useEditorHistory,
+  useEditorClipboard,
+  type EditorUIState,
+  type EditorAction,
+  type HistoryEntry,
+  type InsertTarget,
+  type SlashMenuState,
+  type ClipboardState,
+} from './EditorContext'
+
+// Source management
+export {
+  useEditorSource,
+  type UseEditorSourceOptions,
+  type UseEditorSourceReturn,
+  type MutationResult,
+} from './useEditorSource'
 
 // Operations API
 export {
