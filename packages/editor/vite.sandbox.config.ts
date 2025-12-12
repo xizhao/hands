@@ -1,8 +1,10 @@
 /**
  * Vite config for the EditorSandbox entry point
  *
- * This serves the sandbox.html at the root, which loads the sandboxed editor.
- * Run with: vite --config vite.sandbox.config.ts
+ * Build: vite build --config vite.sandbox.config.ts
+ * Dev:   vite --config vite.sandbox.config.ts
+ *
+ * Outputs to ../desktop/dist/editor/ for Tauri to serve
  */
 
 import { defineConfig } from 'vite'
@@ -11,9 +13,11 @@ import { resolve } from 'path'
 
 export default defineConfig({
   plugins: [react()],
-  // No root override - serve from package root where sandbox.html lives
+  base: '/editor/', // Served from /editor/ path in desktop
   build: {
     target: 'esnext',
+    outDir: resolve(__dirname, '../desktop/dist/editor'),
+    emptyDirOnBuild: true,
     rollupOptions: {
       input: {
         sandbox: resolve(__dirname, 'sandbox.html'),

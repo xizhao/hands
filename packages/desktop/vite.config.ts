@@ -1,12 +1,45 @@
-import { defineConfig } from "vite";
+import { defineConfig, type Plugin } from "vite";
 import react from "@vitejs/plugin-react-swc";
 import { TanStackRouterVite } from "@tanstack/router-plugin/vite";
 import path from "path";
+import fs from "fs";
 
 const host = process.env.TAURI_DEV_HOST;
 
+// Plugin to serve pre-built editor sandbox from dist/editor/
+function serveEditorSandbox(): Plugin {
+  return {
+    name: "serve-editor-sandbox",
+    enforce: "pre",
+    configureServer(server) {
+      server.middlewares.use((req, res, next) => {
+        // Strip query string for file lookup
+        const urlPath = req.url?.split("?")[0] || "";
+        if (urlPath.startsWith("/editor/")) {
+          const filePath = path.join(__dirname, "dist", urlPath);
+          if (fs.existsSync(filePath)) {
+            const content = fs.readFileSync(filePath);
+            const ext = path.extname(filePath);
+            const mimeTypes: Record<string, string> = {
+              ".html": "text/html",
+              ".js": "application/javascript",
+              ".css": "text/css",
+              ".wasm": "application/wasm",
+            };
+            res.setHeader("Content-Type", mimeTypes[ext] || "application/octet-stream");
+            res.end(content);
+            return;
+          }
+        }
+        next();
+      });
+    },
+  };
+}
+
 export default defineConfig({
   plugins: [
+    serveEditorSandbox(),
     TanStackRouterVite({
       routesDirectory: "./src/routes",
       generatedRouteTree: "./src/routeTree.gen.ts",

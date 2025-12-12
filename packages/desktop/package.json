@@ -4,10 +4,11 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "vite",
+    "dev": "bun run build:editor && vite",
     "dev:server": "bun run ../agent/src/index.ts",
     "dev:all": "concurrently -n agent,vite -c blue,green \"bun run dev:server\" \"bun run dev\"",
-    "build": "tsc -b && vite build",
+    "build": "tsc -b && vite build && bun run build:editor",
+    "build:editor": "cd ../editor && bun run build:sandbox",
     "typecheck": "tsc --noEmit",
     "preview": "vite preview",
     "tauri": "tauri",

@@ -583,6 +583,68 @@ export function useUpdatePageTitle() {
   });
 }
 
+// ============================================================================
+// Block Content Hooks
+// ============================================================================
+
+// Get block source (TSX) by blockId
+export function useBlockContent(blockId: string | null) {
+  const port = useRuntimePort();
+
+  return useQuery({
+    queryKey: ["block-content", blockId, port],
+    queryFn: async (): Promise<string> => {
+      if (!port || !blockId) throw new Error("Not ready");
+
+      const response = await fetch(`http://localhost:${port}/workbook/blocks/${blockId}/source`);
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || "Failed to load block");
+      }
+
+      const data = await response.json();
+      return data.source;
+    },
+    enabled: !!port && !!blockId,
+    staleTime: 0,
+    refetchInterval: 2000,
+  });
+}
+
+// Save block source (TSX)
+export function useSaveBlockContent() {
+  const port = useRuntimePort();
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationKey: ["block-content", "save"],
+    mutationFn: async ({ blockId, source }: { blockId: string; source: string }) => {
+      if (!port) throw new Error("No runtime connected");
+
+      const response = await fetch(`http://localhost:${port}/workbook/blocks/${blockId}/source`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ source }),
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || "Failed to save block");
+      }
+
+      return response.json();
+    },
+    onSuccess: (_, { blockId }) => {
+      queryClient.invalidateQueries({ queryKey: ["block-content", blockId] });
+      queryClient.invalidateQueries({ queryKey: ["manifest"] });
+    },
+  });
+}
+
+// ============================================================================
+// Source Hooks
+// ============================================================================
+
 // Add source from registry
 export interface AddSourceResult {
   success: boolean;
