@@ -49,6 +49,12 @@ export function EditorSandbox({
     setState("ready");
   }, []);
 
+  // Send theme changes to iframe via postMessage
+  useEffect(() => {
+    if (state !== "ready" || !iframeRef.current?.contentWindow) return;
+    iframeRef.current.contentWindow.postMessage({ type: "theme", theme }, "*");
+  }, [theme, state]);
+
   // Handle iframe load error
   const handleIframeError = useCallback(() => {
     setState("error");
@@ -140,7 +146,7 @@ export function EditorSandbox({
         ref={iframeRef}
         src={iframeSrc!}
         className={cn(
-          "w-full h-full border-0 transition-opacity duration-150",
+          "w-full h-full border-0 transition-opacity duration-75",
           state === "ready" ? "opacity-100" : "opacity-0"
         )}
         sandbox="allow-scripts allow-same-origin"

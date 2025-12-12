@@ -9,6 +9,7 @@ import { StrictMode, useEffect, useState } from 'react'
 import { createRoot } from 'react-dom/client'
 import { PlateVisualEditor } from '../plate/PlateVisualEditor'
 import { RscProvider, setRuntimePort } from '../rsc'
+import { applyTheme } from './theme'
 
 import '../../demo/index.css'
 
@@ -16,9 +17,18 @@ const params = new URLSearchParams(window.location.search)
 const blockId = params.get('blockId')
 const runtimePort = params.get('runtimePort')
 const readOnly = params.get('readOnly') === 'true'
+const theme = params.get('theme') || 'system'
 
-// Add sandbox class for transparent background
+// Add sandbox class for transparent background and apply theme
 document.body.classList.add('sandbox')
+applyTheme(theme)
+
+// Listen for theme changes from parent
+window.addEventListener('message', (e) => {
+  if (e.data?.type === 'theme' && e.data.theme) {
+    applyTheme(e.data.theme)
+  }
+})
 
 function SandboxApp() {
   const [source, setSource] = useState<string | null>(null)
