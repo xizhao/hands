@@ -49,12 +49,15 @@ export function DragHandle({ nodeId, containerRef, onDelete, onHoverChange }: Dr
     if (!element) return
 
     const updateRect = () => {
-      const containerRect = containerRef.current!.getBoundingClientRect()
+      const container = containerRef.current!
+      const containerRect = container.getBoundingClientRect()
       const elementRect = element.getBoundingClientRect()
 
+      // Overlays are outside scroll container, positioned relative to outer wrapper (which has pl-10 = 40px)
+      // Container is 40px to the right of the outer wrapper, so add 40 to get correct position
       setRect(new DOMRect(
-        elementRect.left - containerRect.left + containerRef.current!.scrollLeft,
-        elementRect.top - containerRect.top + containerRef.current!.scrollTop,
+        elementRect.left - containerRect.left + 40,
+        elementRect.top - containerRect.top,
         elementRect.width,
         elementRect.height
       ))
@@ -65,7 +68,7 @@ export function DragHandle({ nodeId, containerRef, onDelete, onHoverChange }: Dr
     const observer = new ResizeObserver(updateRect)
     observer.observe(element)
 
-    // Also update on scroll
+    // Update on scroll to keep position accurate during scrolling
     const container = containerRef.current
     container.addEventListener('scroll', updateRect)
 
@@ -141,6 +144,20 @@ export function DragHandle({ nodeId, containerRef, onDelete, onHoverChange }: Dr
 }
 
 // ============================================================================
+// Helper: Check if target is descendant of source
+// ============================================================================
+
+function isDescendantOf(container: HTMLElement, sourceId: string, targetId: string): boolean {
+  const sourceEl = container.querySelector(`[data-node-id="${sourceId}"]`)
+  const targetEl = container.querySelector(`[data-node-id="${targetId}"]`)
+
+  if (!sourceEl || !targetEl) return false
+
+  // Check if target is inside source (source contains target)
+  return sourceEl.contains(targetEl)
+}
+
+// ============================================================================
 // Drop Zone
 // ============================================================================
 
@@ -172,7 +189,6 @@ export function DropZone({ containerRef, onDrop }: DropZoneProps) {
       if (!clientOffset) return
 
       const containerRect = containerRef.current.getBoundingClientRect()
-      const scrollTop = containerRef.current.scrollTop
 
       // Raycast approach: get elements at cursor position in z-index order (top first)
       const elementsAtPoint = document.elementsFromPoint(clientOffset.x, clientOffset.y)
@@ -204,8 +220,15 @@ export function DropZone({ containerRef, onDrop }: DropZoneProps) {
 
       if (targetElement) {
         const targetId = targetElement.getAttribute('data-node-id')!
+
         // Don't allow dropping on self
         if (targetId === dragItem.nodeId) {
+          setDropInfo(null)
+          return
+        }
+
+        // Don't allow dropping a parent into its own descendant (would create cycle)
+        if (isDescendantOf(containerRef.current, dragItem.nodeId, targetId)) {
           setDropInfo(null)
           return
         }
@@ -214,14 +237,15 @@ export function DropZone({ containerRef, onDrop }: DropZoneProps) {
         const elMidY = elRect.top + elRect.height / 2
         const position: 'before' | 'after' = clientOffset.y < elMidY ? 'before' : 'after'
 
+        // Overlays are outside scroll container, add 40px for pl-10 offset
         setDropInfo({
           targetId,
           position,
           rect: new DOMRect(
-            elRect.left - containerRect.left + containerRef.current!.scrollLeft,
+            elRect.left - containerRect.left + 40,
             position === 'before'
-              ? elRect.top - containerRect.top + scrollTop
-              : elRect.bottom - containerRect.top + scrollTop,
+              ? elRect.top - containerRect.top
+              : elRect.bottom - containerRect.top,
             elRect.width,
             2
           ),
@@ -295,13 +319,14 @@ export function NodeHighlight({
     if (!element) return
 
     const updateRect = () => {
-      const containerRect = containerRef.current!.getBoundingClientRect()
+      const container = containerRef.current!
+      const containerRect = container.getBoundingClientRect()
       const elementRect = element.getBoundingClientRect()
 
-      // Calculate position relative to container
+      // Overlays are outside scroll container, add 40px for pl-10 offset
       setRect(new DOMRect(
-        elementRect.left - containerRect.left + containerRef.current!.scrollLeft,
-        elementRect.top - containerRect.top + containerRef.current!.scrollTop,
+        elementRect.left - containerRect.left + 40,
+        elementRect.top - containerRect.top,
         elementRect.width,
         elementRect.height
       ))
@@ -309,7 +334,7 @@ export function NodeHighlight({
 
     updateRect()
 
-    // Update on scroll/resize
+    // Update on scroll/resize to keep position accurate
     const observer = new ResizeObserver(updateRect)
     observer.observe(element)
 
@@ -341,20 +366,8 @@ export function NodeHighlight({
   }
 
   if (mode === 'editing') {
-    // Linear-style: subtle underline when editing text
-    return (
-      <div
-        className="absolute pointer-events-none transition-all duration-100"
-        style={{
-          left: rect.x,
-          top: rect.y + rect.height - 1,
-          width: rect.width,
-          height: 2,
-          backgroundColor: 'rgba(59, 130, 246, 0.4)',
-          borderRadius: 1,
-        }}
-      />
-    )
+    // No visual indicator when editing - cursor in text is enough
+    return null
   }
 
   // Selection: small left border (Notion-style)

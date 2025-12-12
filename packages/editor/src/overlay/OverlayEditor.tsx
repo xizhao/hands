@@ -17,10 +17,14 @@
 import { useEffect, useRef, useCallback, useMemo, useState } from 'react'
 import { DndProvider } from 'react-dnd'
 import { HTML5Backend } from 'react-dnd-html5-backend'
+import { Table } from '@phosphor-icons/react'
 import { renderBlockViaRsc, initFlightClient } from '../rsc/client'
 import { parseSourceWithLocations } from '../ast/oxc-parser'
 import type { EditableNode } from '../ast/oxc-parser'
+import { extractDataDependencies } from '../ast/sql-extractor'
+import type { DataBinding } from '../ast/sql-extractor'
 import { DragHandle, DropZone, NodeHighlight } from './dnd'
+import { DragSelect } from './DragSelect'
 import {
   EditorProvider,
   useEditor,
@@ -28,9 +32,11 @@ import {
   useEditorHover,
   useEditorEditing,
   useEditorHistory,
+  useEditorClipboard,
 } from './EditorContext'
 import { useEditorSource } from './useEditorSource'
-import { useRscCache, useFlipAnimation } from './cache'
+import { useRscCache } from './cache'
+import { extractJsxForNodes, getNodeParentInfo } from './operations'
 import type { EditOperation } from './operations'
 
 
@@ -78,6 +84,52 @@ function getAllNodeIds(container: HTMLElement): string[] {
 }
 
 // ============================================================================
+// Data Dependency Chip
+// ============================================================================
+
+interface DataDepChipProps {
+  nodeId: string
+  containerRef: React.RefObject<HTMLDivElement | null>
+  tables: string[]
+}
+
+function DataDepChip({ nodeId, containerRef, tables }: DataDepChipProps) {
+  const [position, setPosition] = useState<{ top: number; right: number } | null>(null)
+
+  useEffect(() => {
+    if (!containerRef.current) return
+
+    const el = containerRef.current.querySelector(`[data-node-id="${nodeId}"]`)
+    if (!el) return
+
+    const containerRect = containerRef.current.getBoundingClientRect()
+    const elRect = el.getBoundingClientRect()
+
+    setPosition({
+      top: elRect.top - containerRect.top + containerRef.current.scrollTop,
+      right: containerRect.right - elRect.right + containerRef.current.scrollLeft,
+    })
+  }, [nodeId, containerRef])
+
+  if (!position || tables.length === 0) return null
+
+  return (
+    <div
+      className="absolute z-20 pointer-events-none"
+      style={{
+        top: position.top - 6,
+        right: position.right - 6,
+      }}
+    >
+      <div className="flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-blue-500/90 text-white text-[10px] font-medium shadow-sm backdrop-blur-sm">
+        <Table size={10} weight="bold" />
+        <span>{tables.join(', ')}</span>
+      </div>
+    </div>
+  )
+}
+
+// ============================================================================
 // Types
 // ============================================================================
 
@@ -106,10 +158,11 @@ function OverlayEditorInner({
   containerRef,
 }: OverlayEditorInnerProps) {
   const { state, dispatch } = useEditor()
-  const { selectedNodeIds, focusedNodeId, select, clearSelection } = useEditorSelection()
+  const { selectedNodeIds, focusedNodeId, select, selectMany, clearSelection } = useEditorSelection()
   const { hoveredNodeId, setHover } = useEditorHover()
   const { editingNodeId, startEditing, stopEditing } = useEditorEditing()
   const history = useEditorHistory()
+  const clipboard = useEditorClipboard()
 
   // RSC state
   const [rscElement, setRscElement] = React.useState<React.ReactNode>(null)
@@ -124,9 +177,6 @@ function OverlayEditorInner({
   // Track if we're in a "refresh" (have cached content, loading new)
   const isRefreshing = isLoading && hasCachedContent
 
-  // FLIP animations for element transitions
-  const { capturePositions, animateFromCapture } = useFlipAnimation(containerRef)
-
   // Original text for inline editing
   const originalTextRef = useRef<string>('')
 
@@ -134,7 +184,7 @@ function OverlayEditorInner({
   const isOnDragHandleRef = useRef(false)
 
   // Source management
-  const { source, isSaving, version, mutate } = useEditorSource({
+  const { source, isSaving, version, mutate, setSource } = useEditorSource({
     blockId,
     runtimePort,
     initialSource,
@@ -144,6 +194,40 @@ function OverlayEditorInner({
   const parseResult = useMemo(() => {
     return parseSourceWithLocations(source)
   }, [source])
+
+  // Extract SQL data dependencies and build node->tables map
+  const { dataDeps, nodeToTables } = useMemo(() => {
+    const deps = extractDataDependencies(source)
+    const map = new Map<string, string[]>()
+
+    // For each binding, find which AST nodes contain the usages
+    if (parseResult.root) {
+      for (const binding of deps.bindings) {
+        const tables = binding.query.tables
+        if (tables.length === 0) continue
+
+        // Walk AST to find nodes that contain the usage locations
+        function walkNode(node: EditableNode) {
+          for (const usage of binding.usages) {
+            // Check if this node contains the usage
+            if (node.loc.start <= usage.start && node.loc.end >= usage.end) {
+              const existing = map.get(node.id) || []
+              const newTables = tables.filter((t) => !existing.includes(t))
+              if (newTables.length > 0) {
+                map.set(node.id, [...existing, ...newTables])
+              }
+            }
+          }
+          for (const child of node.children) {
+            walkNode(child)
+          }
+        }
+        walkNode(parseResult.root)
+      }
+    }
+
+    return { dataDeps: deps, nodeToTables: map }
+  }, [source, parseResult.root])
 
   // Fetch RSC when source/version changes
   useEffect(() => {
@@ -190,25 +274,20 @@ function OverlayEditorInner({
     return () => clearTimeout(timeout)
   }, [isLoading, rscElement, error, updateCache])
 
-  // Inject node IDs after RSC renders, then animate FLIP
+  // Inject node IDs after RSC renders
   useEffect(() => {
     if (isLoading || !containerRef.current || !parseResult.root) return
 
     const timeout = setTimeout(() => {
       injectNodeIdsIntoDom(containerRef.current!, parseResult.root!)
-      // Animate elements from captured positions to new positions
-      animateFromCapture(200)
     }, 50)
 
     return () => clearTimeout(timeout)
-  }, [isLoading, rscElement, parseResult.root, containerRef, animateFromCapture])
+  }, [isLoading, rscElement, parseResult.root, containerRef])
 
-  // Apply operation with history and FLIP animation
+  // Apply operation with history
   const applyOperation = useCallback(
     async (operation: EditOperation): Promise<boolean> => {
-      // Capture positions BEFORE mutation for FLIP animation
-      capturePositions()
-
       // Push to history before mutation
       history.push({
         source,
@@ -223,7 +302,7 @@ function OverlayEditorInner({
       }
       return true
     },
-    [source, selectedNodeIds, history, mutate, capturePositions]
+    [source, selectedNodeIds, history, mutate]
   )
 
   // Operation handlers
@@ -242,6 +321,79 @@ function OverlayEditorInner({
     },
     [applyOperation, clearSelection]
   )
+
+  const handleDeleteMany = useCallback(
+    (nodeIds: string[]) => {
+      if (nodeIds.length === 0) return
+      if (nodeIds.length === 1) {
+        handleDelete(nodeIds[0])
+        return
+      }
+      applyOperation({ type: 'delete-many', nodeIds }).then((ok) => {
+        if (ok) clearSelection()
+      })
+    },
+    [applyOperation, handleDelete, clearSelection]
+  )
+
+  // Clipboard operations
+  const handleCopy = useCallback(() => {
+    if (selectedNodeIds.length === 0) return
+    const jsxStrings = extractJsxForNodes(source, selectedNodeIds)
+    if (jsxStrings.length > 0) {
+      clipboard.setClipboard(jsxStrings, 'copy')
+    }
+  }, [selectedNodeIds, source, clipboard])
+
+  const handleCut = useCallback(() => {
+    if (selectedNodeIds.length === 0) return
+    const jsxStrings = extractJsxForNodes(source, selectedNodeIds)
+    if (jsxStrings.length > 0) {
+      clipboard.setClipboard(jsxStrings, 'cut')
+      handleDeleteMany(selectedNodeIds)
+    }
+  }, [selectedNodeIds, source, clipboard, handleDeleteMany])
+
+  const handlePaste = useCallback(async () => {
+    if (!clipboard.clipboard) return
+
+    // Find where to paste - after focused node, or at end of root
+    let parentId: string
+    let insertIndex: number
+
+    if (focusedNodeId) {
+      const parentInfo = getNodeParentInfo(source, focusedNodeId)
+      if (parentInfo) {
+        parentId = parentInfo.parentId
+        insertIndex = parentInfo.index + 1
+      } else if (parseResult.root) {
+        parentId = parseResult.root.id
+        insertIndex = parseResult.root.children.length
+      } else {
+        return
+      }
+    } else if (parseResult.root) {
+      parentId = parseResult.root.id
+      insertIndex = parseResult.root.children.length
+    } else {
+      return
+    }
+
+    // Insert the clipboard content
+    const ok = await applyOperation({
+      type: 'insert-many',
+      parentId,
+      index: insertIndex,
+      jsxArray: clipboard.clipboard.jsx,
+    })
+
+    if (ok) {
+      // Clear clipboard if it was a cut operation
+      if (clipboard.clipboard?.operation === 'cut') {
+        clipboard.clearClipboard()
+      }
+    }
+  }, [clipboard, focusedNodeId, source, parseResult.root, applyOperation])
 
   const handleTextEdit = useCallback(
     (nodeId: string, text: string) => {
@@ -426,56 +578,141 @@ function OverlayEditorInner({
       // Delete selected nodes
       if ((e.key === 'Delete' || e.key === 'Backspace') && selectedNodeIds.length > 0) {
         e.preventDefault()
-        // Delete all selected nodes (in reverse order to preserve positions)
-        const nodesToDelete = [...selectedNodeIds].reverse()
-        for (const nodeId of nodesToDelete) {
-          handleDelete(nodeId)
-        }
+        handleDeleteMany(selectedNodeIds)
         return
       }
 
-      // Undo/Redo
-      if ((e.metaKey || e.ctrlKey) && e.key === 'z') {
+      // Select all (Cmd+A)
+      if ((e.metaKey || e.ctrlKey) && e.key === 'a' && containerRef.current) {
         e.preventDefault()
-        if (e.shiftKey) {
-          // Redo
-          if (history.canRedo) {
-            const entry = history.getRedoEntry()
-            if (entry) {
-              history.redo()
-              // TODO: Restore source from entry
-            }
-          }
-        } else {
-          // Undo
-          if (history.canUndo) {
-            const entry = history.getUndoEntry()
-            if (entry) {
-              history.undo()
-              // TODO: Restore source from entry
-            }
+        const allIds = getAllNodeIds(containerRef.current)
+        selectMany(allIds)
+        return
+      }
+
+      // Copy (Cmd+C)
+      if ((e.metaKey || e.ctrlKey) && e.key === 'c') {
+        e.preventDefault()
+        handleCopy()
+        return
+      }
+
+      // Cut (Cmd+X)
+      if ((e.metaKey || e.ctrlKey) && e.key === 'x') {
+        e.preventDefault()
+        handleCut()
+        return
+      }
+
+      // Paste (Cmd+V)
+      if ((e.metaKey || e.ctrlKey) && e.key === 'v') {
+        e.preventDefault()
+        handlePaste()
+        return
+      }
+
+      // Undo (Cmd+Z)
+      if ((e.metaKey || e.ctrlKey) && e.key === 'z' && !e.shiftKey) {
+        e.preventDefault()
+        if (history.canUndo) {
+          const entry = history.getUndoEntry()
+          if (entry) {
+            // Restore source from history
+            setSource(entry.source)
+            history.undo()
           }
         }
         return
       }
 
-      // Duplicate
+      // Redo (Cmd+Shift+Z)
+      if ((e.metaKey || e.ctrlKey) && e.key === 'z' && e.shiftKey) {
+        e.preventDefault()
+        if (history.canRedo) {
+          const entry = history.getRedoEntry()
+          if (entry) {
+            // Restore source from history
+            setSource(entry.source)
+            history.redo()
+          }
+        }
+        return
+      }
+
+      // Duplicate (Cmd+D)
       if ((e.metaKey || e.ctrlKey) && e.key === 'd' && selectedNodeIds.length > 0) {
         e.preventDefault()
-        applyOperation({ type: 'duplicate', nodeId: selectedNodeIds[0] })
+        if (selectedNodeIds.length === 1) {
+          applyOperation({ type: 'duplicate', nodeId: selectedNodeIds[0] })
+        } else {
+          applyOperation({ type: 'duplicate-many', nodeIds: selectedNodeIds })
+        }
+        return
+      }
+
+      // Arrow key navigation
+      if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
+        if (!containerRef.current) return
+        e.preventDefault()
+
+        const allIds = getAllNodeIds(containerRef.current)
+        if (allIds.length === 0) return
+
+        const currentIndex = focusedNodeId ? allIds.indexOf(focusedNodeId) : -1
+        let newIndex: number
+
+        if (e.key === 'ArrowUp') {
+          newIndex = currentIndex <= 0 ? allIds.length - 1 : currentIndex - 1
+        } else {
+          newIndex = currentIndex >= allIds.length - 1 ? 0 : currentIndex + 1
+        }
+
+        if (e.shiftKey && focusedNodeId) {
+          // Extend selection
+          dispatch({
+            type: 'SELECT_RANGE',
+            fromId: selectedNodeIds[0] || focusedNodeId,
+            toId: allIds[newIndex],
+            allNodeIds: allIds,
+          })
+        } else {
+          select(allIds[newIndex], false)
+        }
+        return
+      }
+
+      // Enter to start editing (if text element)
+      if (e.key === 'Enter' && focusedNodeId && containerRef.current) {
+        const el = containerRef.current.querySelector(
+          `[data-node-id="${focusedNodeId}"]`
+        ) as HTMLElement
+        if (el && isTextElement(el)) {
+          e.preventDefault()
+          startInlineEdit(el, focusedNodeId, true)
+        }
         return
       }
     },
     [
       editingNodeId,
       selectedNodeIds,
+      focusedNodeId,
       containerRef,
       handleTextEdit,
-      handleDelete,
+      handleDeleteMany,
+      handleCopy,
+      handleCut,
+      handlePaste,
       stopEditing,
       clearSelection,
+      selectMany,
+      select,
+      dispatch,
       history,
+      setSource,
       applyOperation,
+      isTextElement,
+      startInlineEdit,
     ]
   )
 
@@ -526,57 +763,93 @@ function OverlayEditorInner({
   const primarySelectedId = selectedNodeIds[0] ?? null
 
   return (
-    <div className="h-full pl-10">
-    <div className="overlay-editor relative h-full" onKeyDown={handleKeyDown} tabIndex={0}>
-      {/* RSC content */}
-      <div
-        ref={containerRef}
-        className={`overlay-content h-full overflow-auto p-4 transition-opacity duration-150 ${
-          isRefreshing ? 'opacity-60 pointer-events-none' : ''
-        }`}
-        onClick={!isRefreshing ? handleClick : undefined}
-        onDoubleClick={!isRefreshing ? handleDoubleClick : undefined}
-        onMouseMove={!isRefreshing ? handleMouseMove : undefined}
-        onMouseLeave={!isRefreshing ? handleMouseLeave : undefined}
-      >
-        {/* Show cached HTML during refresh, otherwise RSC element */}
-        {isRefreshing && cachedHtml ? (
-          <div dangerouslySetInnerHTML={{ __html: cachedHtml }} />
-        ) : (
-          rscElement
-        )}
-      </div>
+    <div className="h-full pl-10 relative">
+      {/* Overlays positioned relative to this outer wrapper (in pl-10 area) */}
 
+      {/* Selection highlight - only for non-editing elements */}
+      {selectedNodeIds
+        .filter((nodeId) => nodeId !== editingNodeId)
+        .map((nodeId) => (
+          <NodeHighlight
+            key={nodeId}
+            nodeId={nodeId}
+            containerRef={containerRef}
+            mode="select"
+          />
+        ))}
 
-      {/* Selection/editing highlight */}
-      {selectedNodeIds.map((nodeId) => (
-        <NodeHighlight
-          key={nodeId}
-          nodeId={nodeId}
-          containerRef={containerRef}
-          mode={editingNodeId === nodeId ? 'editing' : 'select'}
-        />
-      ))}
-
-      {/* Drag handle - show on hover OR when selected (always persistent when selected) */}
-      {(hoveredNodeId || primarySelectedId) && (
+      {/* Drag handle for selected element - always visible when selected */}
+      {primarySelectedId && (
         <DragHandle
-          nodeId={hoveredNodeId || primarySelectedId!}
+          nodeId={primarySelectedId}
           containerRef={containerRef}
-          onDelete={() => handleDelete(hoveredNodeId || primarySelectedId!)}
+          onDelete={() => handleDelete(primarySelectedId)}
           onHoverChange={(isHovered) => {
             isOnDragHandleRef.current = isHovered
-            // Keep hover state when mouse enters handle area
-            if (isHovered && hoveredNodeId) {
+          }}
+        />
+      )}
+
+      {/* Drag handle for hovered element - only show if different from selected */}
+      {hoveredNodeId && hoveredNodeId !== primarySelectedId && (
+        <DragHandle
+          nodeId={hoveredNodeId}
+          containerRef={containerRef}
+          onDelete={() => handleDelete(hoveredNodeId)}
+          onHoverChange={(isHovered) => {
+            isOnDragHandleRef.current = isHovered
+            if (isHovered) {
               setHover(hoveredNodeId)
             }
           }}
         />
       )}
 
+      {/* Data dependency chip - show on hover OR when selected if element has data deps */}
+      {(() => {
+        const nodeId = hoveredNodeId || primarySelectedId
+        if (!nodeId) return null
+        const tables = nodeToTables.get(nodeId)
+        if (!tables || tables.length === 0) return null
+        return (
+          <DataDepChip
+            nodeId={nodeId}
+            containerRef={containerRef}
+            tables={tables}
+          />
+        )
+      })()}
+
       {/* Drop zone */}
       <DropZone containerRef={containerRef} onDrop={handleMove} />
-    </div>
+
+      {/* Drag select (area selection) */}
+      <DragSelect
+        containerRef={containerRef}
+        onSelect={selectMany}
+        disabled={readOnly || isRefreshing || !!editingNodeId}
+      />
+
+      <div className="overlay-editor h-full" onKeyDown={handleKeyDown} tabIndex={0}>
+        {/* RSC content */}
+        <div
+          ref={containerRef}
+          className={`overlay-content h-full overflow-auto p-4 transition-opacity duration-150 ${
+            isRefreshing ? 'opacity-60 pointer-events-none' : ''
+          }`}
+          onClick={!isRefreshing ? handleClick : undefined}
+          onDoubleClick={!isRefreshing ? handleDoubleClick : undefined}
+          onMouseMove={!isRefreshing ? handleMouseMove : undefined}
+          onMouseLeave={!isRefreshing ? handleMouseLeave : undefined}
+        >
+          {/* Show cached HTML during refresh, otherwise RSC element */}
+          {isRefreshing && cachedHtml ? (
+            <div dangerouslySetInnerHTML={{ __html: cachedHtml }} />
+          ) : (
+            rscElement
+          )}
+        </div>
+      </div>
     </div>
   )
 }

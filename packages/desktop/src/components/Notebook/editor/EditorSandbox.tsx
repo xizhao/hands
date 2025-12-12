@@ -76,7 +76,7 @@ export function EditorSandbox({
     return `:root{${cssVars}}` +
       (isDark ? 'html{color-scheme:dark}' : 'html{color-scheme:light}') +
       'html,body{background:transparent}' +
-      '#root{padding-left:48px}'; // Room for Plate drag handles
+      '#root{padding-bottom:80px}'; // Room for floating chatbar
   }, []);
 
   // Send styles to iframe

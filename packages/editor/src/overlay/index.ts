@@ -7,9 +7,10 @@
  * - Drag and drop for element reordering
  * - Inline text editing with contentEditable
  * - Surgical source mutations via AST
- * - Multi-select with Cmd/Ctrl+click and Shift+click
- * - Undo/redo history
- * - Keyboard shortcuts
+ * - Multi-select with Cmd/Ctrl+click, Shift+click, and drag selection
+ * - Clipboard operations (copy/cut/paste)
+ * - Undo/redo history with full source restoration
+ * - Full keyboard shortcuts
  * - RSC cache for instant load & smooth transitions
  */
 
@@ -46,6 +47,8 @@ export {
 export {
   applyOperation,
   applyOperations,
+  extractJsxForNodes,
+  getNodeParentInfo,
   type EditOperation,
   type OperationResult,
 } from './operations'
@@ -59,13 +62,13 @@ export {
   type DragItem,
 } from './dnd'
 
-// Cache & animation utilities
+// Selection components
+export { DragSelect } from './DragSelect'
+
+// Cache utilities
 export {
   useRscCache,
   getCachedRscHtml,
   setCachedRscHtml,
   invalidateCachedRscHtml,
-  useFlipAnimation,
-  captureElementPositions,
-  animateElementTransitions,
 } from './cache'

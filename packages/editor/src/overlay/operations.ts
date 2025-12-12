@@ -16,11 +16,14 @@ import { applySurgicalMutation, applySurgicalMutations, type SurgicalMutation } 
 export type EditOperation =
   | { type: 'move'; nodeId: string; targetId: string; position: 'before' | 'after' | 'inside' }
   | { type: 'delete'; nodeId: string }
+  | { type: 'delete-many'; nodeIds: string[] }
   | { type: 'set-text'; nodeId: string; text: string }
   | { type: 'set-prop'; nodeId: string; propName: string; value: string | number | boolean | null }
   | { type: 'delete-prop'; nodeId: string; propName: string }
   | { type: 'insert'; parentId: string; index: number; jsx: string }
+  | { type: 'insert-many'; parentId: string; index: number; jsxArray: string[] }
   | { type: 'duplicate'; nodeId: string }
+  | { type: 'duplicate-many'; nodeIds: string[] }
   | { type: 'replace'; nodeId: string; jsx: string }
 
 // ============================================================================
@@ -266,6 +269,47 @@ function handleDuplicate(
 }
 
 // ============================================================================
+// JSX Extraction Helper
+// ============================================================================
+
+/**
+ * Extract JSX source code for given node IDs
+ * Returns array of JSX strings in the order provided
+ */
+export function extractJsxForNodes(source: string, nodeIds: string[]): string[] {
+  const parseResult = parseSourceWithLocations(source)
+  if (!parseResult.root) return []
+
+  const jsxStrings: string[] = []
+  for (const nodeId of nodeIds) {
+    const node = getNodeById(parseResult.root, nodeId)
+    if (node) {
+      jsxStrings.push(source.slice(node.loc.start, node.loc.end))
+    }
+  }
+  return jsxStrings
+}
+
+/**
+ * Get parent info for a node (for paste operations)
+ */
+export function getNodeParentInfo(
+  source: string,
+  nodeId: string
+): { parentId: string; index: number } | null {
+  const parseResult = parseSourceWithLocations(source)
+  if (!parseResult.root) return null
+
+  const parentInfo = findParentInfo(parseResult.root, nodeId)
+  if (!parentInfo) return null
+
+  return {
+    parentId: parentInfo.parent.id,
+    index: parentInfo.index,
+  }
+}
+
+// ============================================================================
 // Main Entry Point
 // ============================================================================
 
@@ -291,6 +335,66 @@ export function applyOperation(source: string, operation: EditOperation): Operat
 
     case 'duplicate':
       return handleDuplicate(source, parseResult, operation.nodeId)
+
+    case 'delete-many': {
+      // Delete nodes in reverse DOM order to preserve positions
+      // Sort by finding each node's path and comparing depths then indices
+      const nodeIds = [...operation.nodeIds]
+      const withPaths = nodeIds.map((id) => ({
+        id,
+        path: parseResult.root ? getPathById(parseResult.root, id) : null,
+      }))
+      // Sort in reverse order (later nodes first)
+      withPaths.sort((a, b) => {
+        if (!a.path || !b.path) return 0
+        // Compare path lengths (deeper first), then indices (larger first)
+        for (let i = 0; i < Math.min(a.path.length, b.path.length); i++) {
+          if (a.path[i] !== b.path[i]) return b.path[i] - a.path[i]
+        }
+        return b.path.length - a.path.length
+      })
+
+      let currentSource = source
+      for (const { id } of withPaths) {
+        const result = applyOperation(currentSource, { type: 'delete', nodeId: id })
+        if (!result.success) {
+          return { success: false, error: `Failed to delete node ${id}: ${result.error}` }
+        }
+        currentSource = result.newSource!
+      }
+      return { success: true, newSource: currentSource }
+    }
+
+    case 'duplicate-many': {
+      let currentSource = source
+      for (const nodeId of operation.nodeIds) {
+        const result = applyOperation(currentSource, { type: 'duplicate', nodeId })
+        if (!result.success) {
+          return { success: false, error: `Failed to duplicate node ${nodeId}: ${result.error}` }
+        }
+        currentSource = result.newSource!
+      }
+      return { success: true, newSource: currentSource }
+    }
+
+    case 'insert-many': {
+      let currentSource = source
+      let insertIndex = operation.index
+      for (const jsx of operation.jsxArray) {
+        const result = applyOperation(currentSource, {
+          type: 'insert',
+          parentId: operation.parentId,
+          index: insertIndex,
+          jsx,
+        })
+        if (!result.success) {
+          return { success: false, error: `Failed to insert JSX: ${result.error}` }
+        }
+        currentSource = result.newSource!
+        insertIndex++
+      }
+      return { success: true, newSource: currentSource }
+    }
 
     case 'set-prop': {
       const mutation: SurgicalMutation = {

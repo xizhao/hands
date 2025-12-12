@@ -48,14 +48,24 @@ export interface SqlQuery {
   loc: SourceLocation
 }
 
+/** A JSX element that uses SQL data */
+export interface JsxDataUsage {
+  /** Location of the JSX element (matches AST node location) */
+  elementLoc: SourceLocation
+  /** Tables this element depends on */
+  tables: string[]
+}
+
 /** Data flow from SQL query to JSX */
 export interface DataBinding {
   /** Variable holding query result */
   variable: string
   /** SQL query that produced it */
   query: SqlQuery
-  /** JSX locations where this variable is used */
+  /** JSX expression locations where this variable is used */
   usages: SourceLocation[]
+  /** JSX element locations that contain usages (for UI decoration) */
+  jsxElements: SourceLocation[]
 }
 
 /** Complete data dependency analysis result */
