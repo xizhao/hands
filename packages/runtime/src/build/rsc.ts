@@ -83,8 +83,8 @@ export async function buildRSC(
     writeFileSync(join(outputDir, "package.json"), packageJson)
     files.push("package.json")
 
-    // Generate vite.config.mts (with resolved stdlib path)
-    const viteConfig = generateViteConfig(stdlibPath)
+    // Generate vite.config.mts
+    const viteConfig = generateViteConfig()
     writeFileSync(join(outputDir, "vite.config.mts"), viteConfig)
     files.push("vite.config.mts")
 
@@ -172,16 +172,13 @@ function generatePackageJson(config: HandsConfig, stdlibPath: string): string {
 }
 
 /**
- * Generate vite.config.mts with hardcoded stdlib path
+ * Generate vite.config.mts
+ * No aliases needed - @hands/stdlib resolves via node_modules symlink
  */
-function generateViteConfig(stdlibPath: string): string {
-  // Use absolute path directly in the config (no runtime resolution needed)
+function generateViteConfig(): string {
   return `import { defineConfig } from "vite";
 import { redwood } from "rwsdk/vite";
 import { cloudflare } from "@cloudflare/vite-plugin";
-
-// Stdlib path resolved at build time
-const stdlibPath = "${stdlibPath}";
 
 export default defineConfig({
   plugins: [
@@ -190,14 +187,6 @@ export default defineConfig({
     }),
     redwood(),
   ],
-  resolve: {
-    alias: {
-      // Resolve @/ alias used in stdlib components
-      "@/": stdlibPath + "/src/",
-      // Also alias @hands/stdlib to the actual path
-      "@hands/stdlib": stdlibPath,
-    },
-  },
   optimizeDeps: {
     exclude: ["bun"],
   },

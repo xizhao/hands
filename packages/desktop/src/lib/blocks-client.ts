@@ -12,8 +12,9 @@
 
 import { useRuntimePort } from "@/hooks/useWorkbook";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { useCallback, use } from "react";
+import { useCallback, use, useEffect } from "react";
 import type { ReactNode } from "react";
+import { setRuntimePort, clearModuleCache } from "./rsc-webpack-shim";
 
 // @ts-ignore - react-server-dom-webpack/client lacks type definitions
 import { createFromReadableStream } from "react-server-dom-webpack/client";
@@ -147,6 +148,13 @@ export function useBlock(blockId: string | null, props?: Record<string, unknown>
   const port = useRuntimePort();
   const queryClient = useQueryClient();
 
+  // Sync runtime port to webpack shim for "use client" component loading
+  useEffect(() => {
+    if (port) {
+      setRuntimePort(port);
+    }
+  }, [port]);
+
   const query = useQuery({
     // Include port in cache key to avoid stale data when switching notebooks
     queryKey: ["block", port, blockId, props],
@@ -190,6 +198,13 @@ export function useBlock(blockId: string | null, props?: Record<string, unknown>
  */
 export function useBlockSuspense(blockId: string, props?: Record<string, unknown>): ReactNode {
   const port = useRuntimePort();
+
+  // Sync runtime port to webpack shim for "use client" component loading
+  useEffect(() => {
+    if (port) {
+      setRuntimePort(port);
+    }
+  }, [port]);
 
   if (!port) {
     throw new Error("Runtime not connected");

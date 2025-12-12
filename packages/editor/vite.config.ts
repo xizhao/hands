@@ -4,7 +4,7 @@ import { resolve } from 'path'
 
 export default defineConfig({
   plugins: [react()],
-  root: resolve(__dirname, 'demo'),
+  root: 'demo', // Demo app is in demo/
   build: {
     target: 'esnext', // Support top-level await
   },
@@ -20,11 +20,6 @@ export default defineConfig({
       '@oxc-parser/binding-wasm32-wasi': resolve(__dirname, '../../node_modules/@oxc-parser+binding-wasm32-wasi'),
     },
   },
-  define: {
-    // Webpack shims for react-server-dom-webpack
-    // These allow the Flight client to work in a Vite environment
-    __webpack_require__: 'globalThis.__webpack_require__',
-  },
   server: {
     port: 5166, // Use 5166 to avoid conflicts with main app
   },
@@ -32,7 +27,6 @@ export default defineConfig({
     include: [
       '@codemirror/lang-javascript',
       '@uiw/react-codemirror',
-      'react-server-dom-webpack/client',
     ],
     // Exclude oxc-parser from optimization - WASM needs top-level await
     exclude: ['oxc-parser', '@oxc-parser/binding-wasm32-wasi'],

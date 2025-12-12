@@ -41,7 +41,6 @@ export { Button } from './ui/button'
 export {
   isCustomComponent,
   isStdlibComponent,
-  getStdlibComponent,
   shouldBeVoid,
   HTML_VOID_TAGS,
   HTML_ELEMENTS,

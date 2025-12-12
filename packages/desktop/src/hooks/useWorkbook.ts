@@ -62,6 +62,8 @@ export interface WorkbookSource {
   secrets: string[];
   missingSecrets: string[];
   path: string;
+  /** Markdown spec describing the source's intent and behavior */
+  spec?: string;
 }
 
 export interface WorkbookManifest {

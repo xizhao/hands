@@ -11,39 +11,7 @@
         background: #0a0a0a !important;
       }
     </style>
-    <script>
-      // Webpack shim for react-server-dom-webpack/client (used for Flight stream consumption)
-      // This provides minimal compatibility for Vite-based apps consuming RSC output
-      globalThis.__webpack_module_cache__ = {};
-      globalThis.__webpack_require__ = function(id) {
-        // Check cache first
-        if (globalThis.__webpack_module_cache__[id]) {
-          return globalThis.__webpack_module_cache__[id];
-        }
-        // Flight client uses this to resolve client component references
-        // Since our blocks are server-only, we return a placeholder component
-        console.debug('[webpack shim] Requested module:', id);
-        // Return a component that renders children or nothing
-        // This handles server-rendered content that doesn't need client hydration
-        var Placeholder = function ServerComponent(props) {
-          return props.children !== undefined ? props.children : null;
-        };
-        Placeholder.displayName = 'RSCPlaceholder(' + id + ')';
-        var module = { default: Placeholder, __esModule: true };
-        // Cache the module
-        globalThis.__webpack_module_cache__[id] = module;
-        return module;
-      };
-      // Required by react-server-dom-webpack for async module loading
-      globalThis.__webpack_require__.u = function(chunkId) {
-        return chunkId + '.js';
-      };
-      globalThis.__webpack_require__.p = '/';
-      globalThis.__webpack_chunk_load__ = function(chunkId) {
-        console.debug('[webpack shim] Chunk load:', chunkId);
-        return Promise.resolve();
-      };
-    </script>
+    <!-- RSC webpack shim is now in src/lib/rsc-webpack-shim.ts, imported before React -->
   </head>
   <body>
     <div id="root"></div>

@@ -11,8 +11,13 @@
  * 2. Instead of showing a placeholder, fetches Flight stream from runtime
  * 3. Runtime renders the component server-side with full React
  * 4. Flight stream parsed into React elements for display
+ *
+ * For "use client" support:
+ * - Client components are loaded dynamically from the runtime dev server
+ * - Call setRuntimePort(port) before consuming RSC streams
  */
 
 export * from './client'
-export * from './context.js'
+export * from './context'
 export * from './types'
+export { setRuntimePort, getRuntimePort, clearModuleCache } from './webpack-shim'

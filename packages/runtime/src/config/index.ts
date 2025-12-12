@@ -40,8 +40,9 @@ export function getStdlibSymlinkPath(): string {
  * Resolves symlinks to get the real path
  */
 export function getStdlibSourcePath(): string {
-  // In development, stdlib is a sibling package
-  const devPath = resolve(import.meta.dir, "../../stdlib")
+  // In development, stdlib is a sibling package in packages/stdlib
+  // From src/config/index.ts -> ../../../stdlib = packages/stdlib
+  const devPath = resolve(import.meta.dir, "../../../stdlib")
   if (existsSync(join(devPath, "package.json"))) {
     // Resolve any symlinks to get the real absolute path
     try {
@@ -50,8 +51,18 @@ export function getStdlibSourcePath(): string {
       return devPath
     }
   }
-  // Fallback to node_modules - also resolve symlinks
-  const nodeModulesPath = resolve(process.cwd(), "node_modules/@hands/stdlib")
+  // Fallback: check relative to runtime package root
+  const runtimeRoot = resolve(import.meta.dir, "../..")
+  const altDevPath = resolve(runtimeRoot, "../stdlib")
+  if (existsSync(join(altDevPath, "package.json"))) {
+    try {
+      return realpathSync(altDevPath)
+    } catch {
+      return altDevPath
+    }
+  }
+  // Last resort: node_modules (but use import.meta.dir, not cwd)
+  const nodeModulesPath = resolve(import.meta.dir, "../../node_modules/@hands/stdlib")
   try {
     return realpathSync(nodeModulesPath)
   } catch {
@@ -73,24 +84,25 @@ export function ensureStdlibSymlink(): string {
     mkdirSync(handsDir, { recursive: true })
   }
 
-  // Check if symlink already exists and points to correct target
-  if (existsSync(symlinkPath)) {
-    try {
-      const stat = lstatSync(symlinkPath)
-      if (stat.isSymbolicLink()) {
-        const currentTarget = readlinkSync(symlinkPath)
-        if (currentTarget === sourcePath) {
-          // Symlink already correct
-          return symlinkPath
-        }
-        // Symlink points to wrong location, remove it
-        unlinkSync(symlinkPath)
-      } else {
-        // It's a file or directory, remove it
-        unlinkSync(symlinkPath)
+  // Check if symlink already exists (use lstat to detect broken symlinks too)
+  try {
+    const stat = lstatSync(symlinkPath)
+    if (stat.isSymbolicLink()) {
+      const currentTarget = readlinkSync(symlinkPath)
+      if (currentTarget === sourcePath) {
+        // Symlink already correct
+        return symlinkPath
       }
-    } catch {
-      // If we can't read it, try to remove and recreate
+      // Symlink points to wrong location, remove it
+      unlinkSync(symlinkPath)
+    } else {
+      // It's a file or directory, remove it
+      unlinkSync(symlinkPath)
+    }
+  } catch (e) {
+    // ENOENT means nothing exists at path - that's fine, we'll create it
+    if ((e as NodeJS.ErrnoException).code !== "ENOENT") {
+      // Some other error, try to remove and recreate
       try {
         unlinkSync(symlinkPath)
       } catch {

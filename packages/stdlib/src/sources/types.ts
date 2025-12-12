@@ -83,6 +83,21 @@ export interface SourceConfig<TSecrets extends readonly string[] = readonly stri
   schedule?: string
   /** Required secret names (env var keys) */
   secrets: TSecrets
+  /**
+   * Spec - Markdown documentation describing the source's intent, tables, and behavior.
+   * Used for documentation and AI-assisted code generation.
+   *
+   * @example
+   * ```markdown
+   * ## Intent
+   * Sync Stripe customers and their subscription status
+   *
+   * ## Tables
+   * - stripe_customers: id, email, name, created_at
+   * - stripe_subscriptions: id, customer_id, status, plan
+   * ```
+   */
+  spec?: string
 }
 
 /** Source handler - just a function that gets context, returns anything */

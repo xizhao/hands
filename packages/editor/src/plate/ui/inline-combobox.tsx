@@ -192,15 +192,15 @@ function InlineComboboxInput({
 }
 
 const comboboxVariants = cva(
-  'z-[500] mt-1 h-full max-h-[40vh] min-w-[180px] max-w-[calc(100vw-24px)] overflow-y-auto rounded-lg bg-popover shadow-lg border border-border',
+  'z-[500] mt-1 min-w-[180px] max-w-[calc(100vw-24px)] overflow-y-auto overflow-x-hidden rounded-lg bg-popover shadow-lg border border-border',
   {
     defaultVariants: {
       variant: 'default',
     },
     variants: {
       variant: {
-        default: '',
-        slash: 'w-[320px]',
+        default: 'max-h-[40vh]',
+        slash: 'w-[340px] max-h-[60vh]',
       },
     },
   }

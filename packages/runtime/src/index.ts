@@ -41,6 +41,8 @@ interface RuntimeState {
   workbookDb: WorkbookDb | null
   viteProc: ChildProcess | null
   fileWatchers: FSWatcher[]
+  buildErrors: string[]
+  viteError: string | null
   // Cached lint results
   lintResult: BlockLintResult | null
 }
@@ -52,6 +54,8 @@ const state: RuntimeState = {
   vitePort: null,
   workbookDb: null,
   viteProc: null,
+  buildErrors: [],
+  viteError: null,
   lintResult: null,
   fileWatchers: [],
 }
@@ -89,6 +93,8 @@ interface ManifestSource {
   secrets: string[]
   missingSecrets: string[]
   path: string
+  /** Markdown spec describing the source's intent and behavior */
+  spec?: string
 }
 
 /**
@@ -173,6 +179,7 @@ async function getManifest(workbookDir: string, workbookId: string) {
             secrets: [...cfg.secrets],
             missingSecrets: missing,
             path: indexPath,
+            spec: cfg.spec,
           })
         }
       } catch (err) {
@@ -371,8 +378,9 @@ function createApp(config: RuntimeConfig) {
       workbookDir: config.workbookDir,
       services: {
         db: { ready: state.dbReady },
-        vite: { ready: state.viteReady, port: state.vitePort },
+        vite: { ready: state.viteReady, port: state.vitePort, error: state.viteError },
       },
+      buildErrors: state.buildErrors,
     })
   })
 
@@ -825,6 +833,126 @@ function createApp(config: RuntimeConfig) {
     isDbReady: () => state.dbReady,
   })
 
+  // Serve client modules for RSC hydration
+  // These are "use client" components that need to be loaded client-side
+  // Path format: /client-modules/ui/counter-button.tsx -> blocks/ui/counter-button.tsx
+  app.get("/client-modules/*", async (c) => {
+    if (!state.viteReady || !state.vitePort) {
+      return c.json({ error: "Vite not ready", booting: true }, 503)
+    }
+
+    // Extract the module path from the request
+    const modulePath = c.req.path.replace("/client-modules", "")
+
+    // Request this module from Vite using the fs prefix for absolute paths
+    // Vite's dev server can serve files outside the root using /@fs/ prefix
+    const blocksDir = join(config.workbookDir, "blocks")
+    const absolutePath = join(blocksDir, modulePath)
+    const viteUrl = `http://localhost:${state.vitePort}/@fs${absolutePath}`
+
+    try {
+      const response = await fetch(viteUrl, {
+        headers: {
+          // Vite needs these headers to know we want ESM
+          "Accept": "application/javascript, */*",
+        },
+      })
+
+      if (!response.ok) {
+        console.error(`[runtime] Failed to fetch client module: ${viteUrl} -> ${response.status}`)
+        return c.json({ error: `Module not found: ${modulePath}` }, 404)
+      }
+
+      // Get the module content as text so we can rewrite imports
+      let content = await response.text()
+
+      // Rewrite imports to be absolute URLs pointing to this runtime
+      // This is necessary because the module will be loaded from a different origin (editor)
+      const runtimeOrigin = `http://localhost:${config.port}`
+
+      // Rewrite Vite's special paths to go through our proxy
+      // /@vite/client, /@react-refresh, /node_modules/.vite/deps/*, etc.
+      // Include query strings like ?v=xxx
+      content = content.replace(/from\s+["'](\/[^"']+)["']/g, (match, path) => {
+        return `from "${runtimeOrigin}/vite-proxy${path}"`
+      })
+      content = content.replace(/import\s+["'](\/[^"']+)["']/g, (match, path) => {
+        return `import "${runtimeOrigin}/vite-proxy${path}"`
+      })
+      // Also handle import() calls
+      content = content.replace(/import\(["'](\/[^"']+)["']\)/g, (match, path) => {
+        return `import("${runtimeOrigin}/vite-proxy${path}")`
+      })
+
+      // Return transformed JavaScript module
+      const headers = new Headers()
+      // Set correct content type for ES module
+      headers.set("Content-Type", "application/javascript; charset=utf-8")
+      // Allow CORS for cross-origin module loading
+      headers.set("Access-Control-Allow-Origin", "*")
+
+      return new Response(content, {
+        status: response.status,
+        headers,
+      })
+    } catch (err) {
+      console.error(`[runtime] Client module proxy failed:`, err)
+      return c.json({ error: "Module proxy failed: " + String(err) }, 502)
+    }
+  })
+
+  // Proxy Vite internal routes for client module dependencies
+  // Handles: /@vite/client, /@react-refresh, /node_modules/.vite/deps/*
+  app.get("/vite-proxy/*", async (c) => {
+    if (!state.viteReady || !state.vitePort) {
+      return c.json({ error: "Vite not ready", booting: true }, 503)
+    }
+
+    // Extract the path after /vite-proxy
+    const vitePath = c.req.path.replace("/vite-proxy", "")
+    const viteUrl = `http://localhost:${state.vitePort}${vitePath}`
+
+    try {
+      const response = await fetch(viteUrl, {
+        headers: {
+          "Accept": "application/javascript, */*",
+        },
+      })
+
+      if (!response.ok) {
+        console.error(`[runtime] Failed to fetch vite dep: ${viteUrl} -> ${response.status}`)
+        return c.json({ error: `Vite dependency not found: ${vitePath}` }, 404)
+      }
+
+      // Get the content as text to potentially rewrite nested imports
+      let content = await response.text()
+
+      // Rewrite any nested imports in Vite deps
+      const runtimeOrigin = `http://localhost:${config.port}`
+      content = content.replace(/from\s+["'](\/[^"']+)["']/g, (match, path) => {
+        return `from "${runtimeOrigin}/vite-proxy${path}"`
+      })
+      content = content.replace(/import\s+["'](\/[^"']+)["']/g, (match, path) => {
+        return `import "${runtimeOrigin}/vite-proxy${path}"`
+      })
+      content = content.replace(/import\(["'](\/[^"']+)["']\)/g, (match, path) => {
+        return `import("${runtimeOrigin}/vite-proxy${path}")`
+      })
+
+      const headers = new Headers()
+      headers.set("Content-Type", "application/javascript; charset=utf-8")
+      headers.set("Access-Control-Allow-Origin", "*")
+
+      return new Response(content, {
+        status: response.status,
+        headers,
+      })
+    } catch (err) {
+      console.error(`[runtime] Vite proxy failed:`, err)
+      return c.json({ error: "Vite proxy failed: " + String(err) }, 502)
+    }
+  })
+
   // Proxy to Vite for RSC routes
   app.all("/blocks/*", async (c) => {
     if (!state.viteReady || !state.vitePort) {
@@ -929,9 +1057,14 @@ async function bootVite(config: RuntimeConfig) {
   try {
     const buildResult = await buildRSC(workbookDir, { verbose: true })
 
+    // Log errors but continue - fail open in dev mode
     if (!buildResult.success) {
-      console.error("[runtime] Build failed:", buildResult.errors)
-      return
+      console.warn("[runtime] Build has errors (will start Vite anyway):")
+      for (const err of buildResult.errors) {
+        console.warn(`  - ${err}`)
+      }
+      // Store errors for status endpoint
+      state.buildErrors = buildResult.errors
     }
 
     const handsDir = buildResult.outputDir
@@ -967,11 +1100,29 @@ async function bootVite(config: RuntimeConfig) {
     })
 
     // Forward Vite output but ignore EPIPE errors on shutdown
+    // Capture stderr for error reporting
+    let stderrBuffer = ""
     state.viteProc.stdout?.on("data", (data) => {
       process.stdout.write(data, () => {})
     })
     state.viteProc.stderr?.on("data", (data) => {
+      const str = data.toString()
+      stderrBuffer += str
+      // Keep only last 2000 chars
+      if (stderrBuffer.length > 2000) {
+        stderrBuffer = stderrBuffer.slice(-2000)
+      }
       process.stderr.write(data, () => {})
+    })
+
+    // Monitor for crashes - reset viteReady if process exits
+    state.viteProc.on("exit", (code, signal) => {
+      if (state.viteReady) {
+        console.error(`[runtime] Vite crashed (code=${code}, signal=${signal})`)
+        state.viteReady = false
+        state.viteError = stderrBuffer || `Vite exited with code ${code}`
+        state.viteProc = null
+      }
     })
 
     // Wait for Vite to be ready
@@ -986,6 +1137,7 @@ async function bootVite(config: RuntimeConfig) {
         if (response.ok) {
           state.vitePort = vitePort
           state.viteReady = true
+          state.viteError = null // Clear any previous error
           console.log(`[runtime] Vite ready on port ${vitePort}`)
           return
         }

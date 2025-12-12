@@ -1,3 +1,6 @@
+// Initialize webpack shim for RSC client BEFORE any React imports
+import "./lib/rsc-webpack-shim";
+
 import React from "react";
 import ReactDOM from "react-dom/client";
 import App from "./App";

@@ -3,38 +3,36 @@
  *
  * A single plugin that handles ALL element rendering:
  * 1. HTML elements (div, span, button, etc.) - rendered via React.createElement
- * 2. Custom components (Button, Card, etc.) - rendered via local registry or RSC
+ * 2. Custom components (Button, Card, etc.) - rendered via RSC (React Server Components)
  *
- * This consolidates jsx-element-plugin, component-plugin, and rsc-component-plugin
- * into ONE plugin with ONE isVoid logic.
+ * ALL custom components go through RSC. This makes the editor truly dynamic -
+ * it doesn't need to know what components exist ahead of time. The RSC server
+ * is the single source of truth for component rendering.
  */
 
 import * as React from 'react'
-import { useState, useEffect, useMemo } from 'react'
-import { createPlatePlugin, useEditorRef } from 'platejs/react'
-import { ReactEditor } from 'slate-react'
+import { useState, useEffect } from 'react'
+import {
+  createPlatePlugin,
+  useEditorRef,
+  ElementProvider,
+} from 'platejs/react'
 import type { RenderElementProps } from 'slate-react'
 import type { TElement } from 'platejs'
 import { DndPlugin, useDraggable, useDropLine } from '@platejs/dnd'
-import { BlockSelectionPlugin } from '@platejs/selection/react'
+import { BlockSelectionPlugin, useBlockSelected } from '@platejs/selection/react'
 import { GripVertical, PlusIcon } from 'lucide-react'
 import { PathApi } from 'platejs'
 import { cn } from '../../lib/utils'
 import { useRsc, useRscAvailable } from '../../rsc'
-import type { ComponentType } from 'react'
 import { Button as UIButton } from '../ui/button'
-// Import stdlib registry for component discovery
-import { listComponents, type ComponentMeta } from '@hands/stdlib/registry'
+// Import stdlib registry for component discovery (UI hints only)
+import { listComponents } from '@hands/stdlib/registry'
 
-// Direct imports for stdlib components
-import {
-  Button as StdlibButton,
-  Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter,
-  Badge,
-  MetricCard,
-  BarChart,
-  LineChart,
-} from '@hands/stdlib'
+// NOTE: No direct stdlib component imports here.
+// ALL custom components (stdlib or user-defined) go through RSC.
+// This makes the editor truly dynamic - it doesn't need to know
+// what components exist ahead of time.
 
 // ============================================================================
 // Constants
@@ -119,27 +117,25 @@ export function shouldBeVoid(element: TElement): boolean {
 }
 
 // ============================================================================
-// Component Registry (built from stdlib registry)
+// Component Discovery (from stdlib registry, for UI hints only)
 // ============================================================================
 
 /**
  * Build the set of known stdlib component names from the registry.
- * Components with `files` entries are stdlib components with actual implementations.
+ * This is used for UI hints (e.g., autocomplete) - NOT for rendering.
+ * ALL component rendering goes through RSC.
  */
 function buildStdlibComponentSet(): Set<string> {
   const components = listComponents()
   const names = new Set<string>()
 
   for (const comp of components) {
-    // Only include components that have actual file implementations
     if (comp.files && comp.files.length > 0) {
-      // Use the `name` field which is PascalCase (e.g., "Button", "Card", "MetricCard")
       names.add(comp.name)
     }
   }
 
-  // Add sub-components not in registry (Card exports multiple components)
-  // These are discovered from the file but not individually registered
+  // Add sub-components not individually registered
   names.add('CardHeader')
   names.add('CardTitle')
   names.add('CardDescription')
@@ -149,7 +145,7 @@ function buildStdlibComponentSet(): Set<string> {
   return names
 }
 
-/** Set of known stdlib component names */
+/** Set of known stdlib component names (for UI hints) */
 export const STDLIB_COMPONENTS = buildStdlibComponentSet()
 
 /**
@@ -157,58 +153,6 @@ export const STDLIB_COMPONENTS = buildStdlibComponentSet()
  */
 export function isStdlibComponent(name: string): boolean {
   return STDLIB_COMPONENTS.has(name)
-}
-
-/**
- * Static component map - maps component names to their implementations
- * Using direct imports since dynamic imports don't resolve package aliases at runtime
- */
-const STDLIB_COMPONENT_MAP: Record<string, ComponentType<any>> = {
-  Button: StdlibButton,
-  Card,
-  CardHeader,
-  CardTitle,
-  CardDescription,
-  CardContent,
-  CardFooter,
-  Badge,
-  MetricCard,
-  BarChart,
-  LineChart,
-}
-
-/**
- * Get a stdlib component by name
- */
-export function getStdlibComponent(name: string): ComponentType<any> | null {
-  return STDLIB_COMPONENT_MAP[name] ?? null
-}
-
-/**
- * Local component registry - for backward compatibility
- * @deprecated Use getStdlibComponent() instead
- */
-export const COMPONENT_MAP: Record<string, ComponentType<any>> = new Proxy({} as Record<string, ComponentType<any>>, {
-  get(_, prop: string) {
-    return getStdlibComponent(prop)
-  },
-  has(_, prop: string) {
-    return isStdlibComponent(prop)
-  },
-})
-
-/**
- * Default props for components
- */
-const DEFAULT_PROPS: Record<string, Record<string, unknown>> = {
-  Button: { children: 'Button', variant: 'default' },
-  Card: {},
-  CardTitle: { children: 'Card Title' },
-  CardDescription: { children: 'Card description' },
-  Badge: { children: 'Badge', variant: 'default' },
-  MetricCard: { title: 'Metric', value: 0, description: 'Description' },
-  BarChart: { data: [], x: 'x', y: 'y' },
-  LineChart: { data: [], x: 'x', y: 'y' },
 }
 
 // ============================================================================
@@ -259,18 +203,14 @@ const DropLine = React.memo(function DropLine({
 
 /**
  * Block selection overlay for custom components
- * Shows a highlight when the block is selected via drag selection
+ * Uses Plate's useBlockSelected hook for proper reactivity
  */
-function ComponentBlockSelection({ element }: { element: TElement }) {
+function ComponentBlockSelection() {
   const editor = useEditorRef()
+  const isBlockSelected = useBlockSelected()
   const isDragging = editor.getOption(DndPlugin, 'isDragging')
 
-  // Check if this element is in the block selection using the API
-  const blockSelectionApi = editor.getApi(BlockSelectionPlugin)?.blockSelection
-  const selectedIds = blockSelectionApi?.getNodes?.()?.map((entry: any) => entry[0]?.id) ?? []
-  const isSelected = selectedIds.includes((element as any).id)
-
-  if (!isSelected) return null
+  if (!isBlockSelected) return null
 
   return (
     <div
@@ -409,6 +349,21 @@ function DraggableComponentInner({
             data-plate-prevent-deselect
             ref={handleRef}
             variant="ghost"
+            onClick={(event) => {
+              event.stopPropagation()
+              const blockSelectionApi = editor.getApi(BlockSelectionPlugin)?.blockSelection
+              if (blockSelectionApi) {
+                // Toggle selection: if already selected, clear; otherwise select this block
+                const elementId = (element as any).id
+                const selectedIds = blockSelectionApi.getNodes?.()?.map((entry: any) => entry[0]?.id) ?? []
+                if (selectedIds.includes(elementId)) {
+                  blockSelectionApi.clear?.()
+                } else {
+                  blockSelectionApi.clear?.()
+                  blockSelectionApi.add?.(elementId)
+                }
+              }
+            }}
           >
             <GripVertical className="size-4 text-gray-500" />
           </UIButton>
@@ -427,7 +382,7 @@ function DraggableComponentInner({
       >
         {children}
         <DropLine />
-        <ComponentBlockSelection element={element} />
+        <ComponentBlockSelection />
       </div>
     </div>
   )
@@ -467,10 +422,13 @@ function ElementRenderer(props: RenderElementProps) {
 /**
  * Custom Component Renderer
  *
- * 1. Wrap with DraggableComponentWrapper for drag handles
- * 2. Check local registry for component
- * 3. Fall back to RSC
- * 4. Fall back to placeholder
+ * ALL custom components go through RSC. This makes the editor truly dynamic -
+ * it doesn't need to know what components exist ahead of time.
+ *
+ * The RSC server is the single source of truth for:
+ * - stdlib components (Button, Card, MetricCard, etc.)
+ * - user-defined components
+ * - any React component registered in the workbook
  */
 function CustomComponentRenderer({
   attributes,
@@ -485,25 +443,6 @@ function CustomComponentRenderer({
   componentName: string
   props: Record<string, unknown>
 }) {
-  // Try stdlib component first
-  const LocalComponent = getStdlibComponent(componentName)
-
-  if (LocalComponent) {
-    return (
-      <DraggableComponentWrapper element={element}>
-        <LocalComponentRenderer
-          attributes={attributes}
-          element={element}
-          componentName={componentName}
-          LocalComponent={LocalComponent}
-          props={props}
-          plateChildren={children}
-        />
-      </DraggableComponentWrapper>
-    )
-  }
-
-  // Try RSC for unknown components
   return (
     <DraggableComponentWrapper element={element}>
       <RscComponentRenderer
@@ -514,60 +453,6 @@ function CustomComponentRenderer({
         plateChildren={children}
       />
     </DraggableComponentWrapper>
-  )
-}
-
-/**
- * Local Component Renderer
- *
- * Renders stdlib components with proper Slate attributes.
- * DnD drag handles are added by DraggableComponentWrapper.
- *
- * For void elements: component is non-editable, plateChildren is a hidden placeholder
- * For non-void elements: plateChildren are rendered inside the component
- */
-function LocalComponentRenderer({
-  attributes,
-  element,
-  componentName,
-  LocalComponent,
-  props,
-  plateChildren,
-}: {
-  attributes: any
-  element: TElement
-  componentName: string
-  LocalComponent: ComponentType<any>
-  props: Record<string, unknown>
-  plateChildren: React.ReactNode
-}) {
-  const isVoid = shouldBeVoid(element)
-
-  const mergedProps = useMemo(() => {
-    const defaults = DEFAULT_PROPS[componentName] ?? {}
-    return { ...defaults, ...props }
-  }, [componentName, props])
-
-  // Void elements: render component non-editable with hidden children placeholder
-  if (isVoid) {
-    return (
-      <div {...attributes} className="my-2">
-        <div contentEditable={false} className="rounded-lg">
-          <LocalComponent {...mergedProps} />
-        </div>
-        {/* Required hidden placeholder for Slate void element selection */}
-        {plateChildren}
-      </div>
-    )
-  }
-
-  // Non-void elements: render component with editable children inside
-  return (
-    <div {...attributes} className="my-2">
-      <LocalComponent {...mergedProps}>
-        {plateChildren}
-      </LocalComponent>
-    </div>
   )
 }
 
@@ -741,17 +626,26 @@ function ComponentPlaceholder({
 
 /**
  * Fallback element renderer for Plate.
- * 
+ *
  * This is passed to PlateContent's renderElement prop to handle any element
- * types that don't have a registered plugin. Without this, unknown types
- * render as empty void divs with data-slate-spacer.
- * 
- * Returns undefined for known types (letting Plate's plugin system handle them),
- * and renders via ElementRenderer for unknown types.
+ * types that don't have a registered plugin.
+ *
+ * Wraps elements with ElementProvider to enable Plate hooks like useBlockSelected.
  */
-export function elementFallbackRenderer(props: RenderElementProps): React.ReactElement {
-  // Route all elements through ElementRenderer
-  return <ElementRenderer {...(props as any)} />
+export function elementFallbackRenderer(props: RenderElementProps & { path?: number[] }): React.ReactElement {
+  const { element, path = [] } = props
+
+  // Wrap with ElementProvider so hooks like useBlockSelected work
+  return (
+    <ElementProvider
+      element={element}
+      entry={[element, path]}
+      path={path}
+      scope={(element as any).type ?? 'default'}
+    >
+      <ElementRenderer {...(props as any)} />
+    </ElementProvider>
+  )
 }
 
 // ============================================================================

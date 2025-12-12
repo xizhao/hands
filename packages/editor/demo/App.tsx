@@ -1,6 +1,7 @@
-import React, { useState, useCallback, useRef } from 'react'
+import React, { useState, useCallback, useRef, useEffect } from 'react'
 import { useEditor, type Mutation, PlateVisualEditor } from '../src'
-import { simpleBlockSource, cardBlockSource, dataBlockSource } from './fixtures/simple-block'
+import { useRsc } from '../src/rsc'
+import { simpleBlockSource, cardBlockSource, dataBlockSource, chartBlockSource } from './fixtures/simple-block'
 import { CodeEditor } from './components/CodeEditor'
 import { OplogView } from './components/OplogView'
 import { PropsInspector } from './components/PropsInspector'
@@ -10,11 +11,20 @@ const FIXTURES = {
   simple: { label: 'Simple Block', source: simpleBlockSource },
   card: { label: 'Card Block', source: cardBlockSource },
   data: { label: 'Data Block', source: dataBlockSource },
+  chart: { label: 'Chart Block', source: chartBlockSource },
 }
 
 export function App() {
   const [fixture, setFixture] = useState<keyof typeof FIXTURES>('simple')
   const editor = useEditor(FIXTURES[fixture].source)
+  const { init, ready } = useRsc()
+
+  // Initialize RSC on mount
+  useEffect(() => {
+    init().then((success) => {
+      console.log('[App] RSC context initialized:', success)
+    })
+  }, [init])
 
   const sourceRef = useRef<'plate' | 'code' | null>(null)
 

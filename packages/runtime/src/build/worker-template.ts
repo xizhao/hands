@@ -52,10 +52,40 @@ import { Hono } from "hono";
 import { cors } from "hono/cors";
 import * as React from "react";
 import { renderToReadableStream } from "react-server-dom-webpack/server.edge";
+import { runWithRequestInfo } from "rwsdk/worker";
 import { existsSync } from "node:fs";
 import { readFile, writeFile, readdir, mkdir } from "node:fs/promises";
 import { join } from "node:path";
-import { rscComponents } from "@hands/stdlib";
+import { rscComponents } from "@hands/stdlib/server";
+
+// Client manifest for RSC serialization
+// This Proxy handles "use client" component references without needing webpack infrastructure
+const createClientManifest = () => new Proxy({}, {
+  get(_, key) {
+    return { id: key, name: key, chunks: [] };
+  },
+});
+
+// Create RSC request context for "use client" serialization
+// rwsdk transforms add scriptsToBeLoaded tracking to client modules
+function createRscRequestContext(request: Request) {
+  return {
+    request,
+    params: {},
+    ctx: {},
+    cf: {},
+    response: {},
+    rw: {
+      scriptsToBeLoaded: new Set<string>(),
+      entryScripts: new Set<string>(),
+      inlineScripts: new Set<string>(),
+      databases: new Map(),
+      nonce: "",
+      rscPayload: true,
+      ssr: false,
+    },
+  };
+}
 
 ${blockImports}
 
@@ -152,8 +182,13 @@ app.get("/blocks/:blockId{.+}", async (c) => {
   };
 
   try {
-    const stream = renderToReadableStream(
-      React.createElement(Block, { ...props, ctx })
+    // Wrap rendering with rwsdk request context for "use client" support
+    const rscContext = createRscRequestContext(c.req.raw);
+    const stream = runWithRequestInfo(rscContext, () =>
+      renderToReadableStream(
+        React.createElement(Block, { ...props, ctx }),
+        createClientManifest()
+      )
     );
 
     return new Response(stream, {
@@ -186,8 +221,13 @@ app.post("/blocks/:blockId{.+}/rsc", async (c) => {
   };
 
   try {
-    const stream = renderToReadableStream(
-      React.createElement(Block, { ...props, ctx })
+    // Wrap rendering with rwsdk request context for "use client" support
+    const rscContext = createRscRequestContext(c.req.raw);
+    const stream = runWithRequestInfo(rscContext, () =>
+      renderToReadableStream(
+        React.createElement(Block, { ...props, ctx }),
+        createClientManifest()
+      )
     );
 
     return new Response(stream, {
@@ -238,7 +278,11 @@ app.post("/rsc/component", async (c) => {
       key: elementId,
     });
 
-    const stream = renderToReadableStream(element);
+    // Wrap rendering with rwsdk request context for "use client" support
+    const rscContext = createRscRequestContext(c.req.raw);
+    const stream = runWithRequestInfo(rscContext, () =>
+      renderToReadableStream(element, createClientManifest())
+    );
 
     return new Response(stream, {
       headers: {

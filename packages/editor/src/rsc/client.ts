@@ -5,6 +5,9 @@
  * to render arbitrary React components in the editor.
  */
 
+// Initialize webpack shim BEFORE any react-server-dom-webpack imports
+import { setRuntimePort } from './webpack-shim'
+
 import type { ReactNode } from 'react'
 import type { RscRenderResult, RscComponentRequest } from './types'
 
@@ -47,6 +50,9 @@ export async function renderComponentViaRsc(
       return { element: null, error: 'Flight client not available' }
     }
   }
+
+  // Set runtime port for loading "use client" modules
+  setRuntimePort(port)
 
   const { tagName, props, children, elementId } = request
 
@@ -116,6 +122,9 @@ export async function renderBlockViaRsc(
       return { element: null, error: 'Flight client not available' }
     }
   }
+
+  // Set runtime port for loading "use client" modules
+  setRuntimePort(port)
 
   // Build URL with props as query params
   const searchParams = new URLSearchParams()
