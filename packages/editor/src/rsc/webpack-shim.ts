@@ -4,10 +4,10 @@
  * Sets up globalThis.__webpack_require__ for react-server-dom-webpack/client
  * This must be imported BEFORE any react-server-dom-webpack imports.
  *
- * This shim dynamically loads "use client" modules from the workbook's
- * runtime dev server. When the Flight stream references a client component
- * like `/src/MyButton.tsx#default`, we fetch that module from the runtime
- * server's Vite and hydrate it properly.
+ * When the Flight stream references a "use client" component, RWSDK generates
+ * absolute file paths as module IDs. We load these via Vite's /@fs/ endpoint.
+ *
+ * The runtime's Vite server has server.fs.allow: ["/"] so it can serve any file.
  */
 
 import React from 'react'
@@ -33,30 +33,30 @@ export function getRuntimePort(): number | null {
 }
 
 /**
- * Convert absolute file path to client-modules path
- * e.g. /Users/kevin/.hands/workbook/blocks/ui/button.tsx -> /client-modules/ui/button.tsx
+ * Convert file path to Vite-loadable URL via runtime proxy
+ * Absolute paths use /vite-proxy/@fs/, relative paths use /client-modules/
  *
- * The runtime serves these at /client-modules/* which proxies to Vite's /@fs/ endpoint
+ * All paths go through the runtime API, which proxies to Vite.
+ * This allows the editor to use a single port for everything.
  */
-function normalizeModulePath(file: string): string {
-  // Extract the blocks/ portion and convert to client-modules path
-  const blocksMatch = file.match(/\/blocks\/(.+)$/)
-  if (blocksMatch) {
-    return `/client-modules/${blocksMatch[1]}`
+function toViteUrl(file: string): string {
+  // Absolute paths - use runtime's /vite-proxy which forwards to Vite's /@fs/
+  if (file.startsWith('/')) {
+    return `/vite-proxy/@fs${file}`
   }
 
-  // Fallback: if it's already a relative path, convert
-  if (file.startsWith('/blocks/')) {
-    return file.replace('/blocks/', '/client-modules/')
+  // Relative paths from blocks/ - use client-modules proxy
+  if (file.startsWith('blocks/')) {
+    return `/client-modules/${file.replace('blocks/', '')}`
   }
 
-  // Last resort: return original
-  console.warn('[rsc-shim] Could not normalize module path:', file)
+  // Fallback
+  console.warn('[rsc-shim] Unexpected module path format:', file)
   return file
 }
 
 /**
- * Load a module from the runtime dev server
+ * Load a module from the runtime dev server via Vite
  */
 async function loadModuleFromRuntime(
   file: string
@@ -65,14 +65,11 @@ async function loadModuleFromRuntime(
     throw new Error('[rsc-shim] Runtime port not configured')
   }
 
-  // Normalize absolute paths to Vite-resolvable paths
-  const modulePath = normalizeModulePath(file)
+  // Convert to Vite-loadable URL (/@fs/ for absolute paths)
+  const vitePath = toViteUrl(file)
+  const moduleUrl = `http://localhost:${currentRuntimePort}${vitePath}`
 
-  // The runtime dev server (Vite) serves modules at their path
-  // We need to import the ESM module directly
-  const moduleUrl = `http://localhost:${currentRuntimePort}${modulePath}`
-
-  console.debug('[rsc-shim] Loading module from runtime:', moduleUrl)
+  console.debug('[rsc-shim] Loading module:', file, '->', moduleUrl)
 
   try {
     // Use dynamic import with @vite-ignore to fetch from the runtime server

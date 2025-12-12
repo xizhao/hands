@@ -1066,3 +1066,376 @@ export default (async (ctx) => (
     expect(newH1.children[0].text).toBe('NEW First Heading')
   })
 })
+
+// ============================================================================
+// Cross-Parent Move Operations
+// ============================================================================
+
+describe('cross-parent move operations', () => {
+  test('moves element from section to footer (cross-parent)', () => {
+    // Using NESTED_SOURCE:
+    // - section [0] has h1 [0,0] and p [0,1]
+    // - footer [1] has span [1,0]
+    // Move h1 from section to footer as second child
+    const moveOp: Operation = {
+      type: 'move_node',
+      path: [0, 0],      // h1 inside section
+      newPath: [1, 1],   // after span inside footer
+    }
+
+    const result = applySlateOperations(NESTED_SOURCE, [moveOp])
+
+    expect(result).not.toBeNull()
+    if (result) {
+      const parsed = parseSourceWithLocations(result)
+      expect(parsed.errors).toHaveLength(0)
+
+      // Section should now have only 1 child (p)
+      const section = parsed.root!.children[0]
+      expect(section.children).toHaveLength(1)
+      expect(section.children[0].tagName).toBe('p')
+
+      // Footer should now have 2 children (span, h1)
+      const footer = parsed.root!.children[1]
+      expect(footer.children).toHaveLength(2)
+      expect(footer.children[0].tagName).toBe('span')
+      expect(footer.children[1].tagName).toBe('h1')
+    }
+  })
+
+  test('moves element from footer to section (cross-parent reverse)', () => {
+    // Move span from footer to section as first child
+    const moveOp: Operation = {
+      type: 'move_node',
+      path: [1, 0],      // span inside footer
+      newPath: [0, 0],   // before h1 inside section
+    }
+
+    const result = applySlateOperations(NESTED_SOURCE, [moveOp])
+
+    expect(result).not.toBeNull()
+    if (result) {
+      const parsed = parseSourceWithLocations(result)
+      expect(parsed.errors).toHaveLength(0)
+
+      // Section should now have 3 children (span, h1, p)
+      const section = parsed.root!.children[0]
+      expect(section.children).toHaveLength(3)
+      expect(section.children[0].tagName).toBe('span')
+      expect(section.children[1].tagName).toBe('h1')
+      expect(section.children[2].tagName).toBe('p')
+
+      // Footer should now have 0 children
+      const footer = parsed.root!.children[1]
+      expect(footer.children).toHaveLength(0)
+    }
+  })
+
+  test('moves element between parents preserving text content', () => {
+    // Move h1 "Nested Heading" from section to footer
+    const moveOp: Operation = {
+      type: 'move_node',
+      path: [0, 0],
+      newPath: [1, 0],   // before span in footer
+    }
+
+    const result = applySlateOperations(NESTED_SOURCE, [moveOp])
+
+    expect(result).not.toBeNull()
+    if (result) {
+      expect(result).toContain('Nested Heading')
+      expect(result).toContain('<footer>')
+
+      const parsed = parseSourceWithLocations(result)
+      const footer = parsed.root!.children[1]
+      expect(footer.children[0].tagName).toBe('h1')
+    }
+  })
+})
+
+// ============================================================================
+// Un-nesting Operations (nested → root level)
+// ============================================================================
+
+describe('un-nesting operations', () => {
+  test('moves nested element to root level (un-nest)', () => {
+    // Move h1 from inside section [0,0] to root level [2] (after footer)
+    const moveOp: Operation = {
+      type: 'move_node',
+      path: [0, 0],      // h1 inside section
+      newPath: [2],      // at root level, after footer
+    }
+
+    const result = applySlateOperations(NESTED_SOURCE, [moveOp])
+
+    expect(result).not.toBeNull()
+    if (result) {
+      const parsed = parseSourceWithLocations(result)
+      expect(parsed.errors).toHaveLength(0)
+
+      // Root should now have 3 children: section, footer, h1
+      expect(parsed.root!.children).toHaveLength(3)
+      expect(parsed.root!.children[0].tagName).toBe('section')
+      expect(parsed.root!.children[1].tagName).toBe('footer')
+      expect(parsed.root!.children[2].tagName).toBe('h1')
+
+      // Section should have only 1 child (p)
+      expect(parsed.root!.children[0].children).toHaveLength(1)
+      expect(parsed.root!.children[0].children[0].tagName).toBe('p')
+    }
+  })
+
+  test('moves deeply nested element to root level', () => {
+    // Move span from inside footer [1,0] to root level [0] (before section)
+    const moveOp: Operation = {
+      type: 'move_node',
+      path: [1, 0],      // span inside footer
+      newPath: [0],      // at root level, before section
+    }
+
+    const result = applySlateOperations(NESTED_SOURCE, [moveOp])
+
+    expect(result).not.toBeNull()
+    if (result) {
+      const parsed = parseSourceWithLocations(result)
+      expect(parsed.errors).toHaveLength(0)
+
+      // Root should now have 3 children: span, section, footer
+      expect(parsed.root!.children).toHaveLength(3)
+      expect(parsed.root!.children[0].tagName).toBe('span')
+      expect(parsed.root!.children[1].tagName).toBe('section')
+      expect(parsed.root!.children[2].tagName).toBe('footer')
+
+      // Footer should be empty
+      expect(parsed.root!.children[2].children).toHaveLength(0)
+    }
+  })
+})
+
+// ============================================================================
+// Nesting Operations (root level → into container)
+// ============================================================================
+
+// Fixture with flat structure for nesting tests
+const FLAT_SOURCE = `import type { BlockFn } from '@hands/stdlib'
+
+export default (async (ctx) => (
+  <div className="container">
+    <section></section>
+    <h1>Orphan Heading</h1>
+    <p>Orphan paragraph</p>
+  </div>
+)) satisfies BlockFn
+`
+
+describe('nesting operations', () => {
+  test('moves root element into empty container (nest)', () => {
+    // Move h1 from root [1] into section [0] as first child
+    const moveOp: Operation = {
+      type: 'move_node',
+      path: [1],         // h1 at root level
+      newPath: [0, 0],   // inside section as first child
+    }
+
+    const result = applySlateOperations(FLAT_SOURCE, [moveOp])
+
+    expect(result).not.toBeNull()
+    if (result) {
+      const parsed = parseSourceWithLocations(result)
+      expect(parsed.errors).toHaveLength(0)
+
+      // Root should now have 2 children: section, p
+      expect(parsed.root!.children).toHaveLength(2)
+      expect(parsed.root!.children[0].tagName).toBe('section')
+      expect(parsed.root!.children[1].tagName).toBe('p')
+
+      // Section should have 1 child (h1)
+      const section = parsed.root!.children[0]
+      expect(section.children).toHaveLength(1)
+      expect(section.children[0].tagName).toBe('h1')
+    }
+  })
+
+  test('moves multiple elements into container sequentially', () => {
+    // First move h1 into section
+    const ops: Operation[] = [
+      {
+        type: 'move_node',
+        path: [1],         // h1
+        newPath: [0, 0],   // into section
+      },
+      // After first move: section[h1], p
+      // Now move p into section (p is now at [1], section is [0])
+      {
+        type: 'move_node',
+        path: [1],         // p (shifted after first move)
+        newPath: [0, 1],   // into section after h1
+      },
+    ]
+
+    const result = applySlateOperations(FLAT_SOURCE, ops)
+
+    expect(result).not.toBeNull()
+    if (result) {
+      const parsed = parseSourceWithLocations(result)
+      expect(parsed.errors).toHaveLength(0)
+
+      // Root should now have 1 child: section
+      expect(parsed.root!.children).toHaveLength(1)
+      expect(parsed.root!.children[0].tagName).toBe('section')
+
+      // Section should have 2 children (h1, p)
+      const section = parsed.root!.children[0]
+      expect(section.children).toHaveLength(2)
+      expect(section.children[0].tagName).toBe('h1')
+      expect(section.children[1].tagName).toBe('p')
+    }
+  })
+})
+
+// ============================================================================
+// Swap Operations (two elements exchanging positions)
+// ============================================================================
+
+describe('swap operations', () => {
+  test('swaps two sibling elements', () => {
+    // Swap h1 and button in SIMPLE_SOURCE
+    // h1 [0] → [2], button [2] → [0]
+    // Note: After first move, paths shift, so we need to calculate correctly
+    const ops: Operation[] = [
+      // Move h1 from [0] to [3] (after button)
+      // This shifts p to [0], button to [1]
+      {
+        type: 'move_node',
+        path: [0],
+        newPath: [3],
+      },
+      // Now h1 is at [2], button at [1], p at [0]
+      // Move button from [1] to [0]
+      {
+        type: 'move_node',
+        path: [1],
+        newPath: [0],
+      },
+    ]
+
+    const result = applySlateOperations(SIMPLE_SOURCE, ops)
+
+    expect(result).not.toBeNull()
+    if (result) {
+      const parsed = parseSourceWithLocations(result)
+      expect(parsed.errors).toHaveLength(0)
+
+      // Order should be: button, p, h1
+      expect(parsed.root!.children).toHaveLength(3)
+      expect(parsed.root!.children[0].tagName).toBe('button')
+      expect(parsed.root!.children[1].tagName).toBe('p')
+      expect(parsed.root!.children[2].tagName).toBe('h1')
+    }
+  })
+
+  test('swaps first and last elements', () => {
+    // Swap h1 [0] and button [2]
+    const ops: Operation[] = [
+      // Move h1 to end
+      {
+        type: 'move_node',
+        path: [0],
+        newPath: [2],
+      },
+      // Now: p [0], button [1], h1 [2]
+      // Move button to start
+      {
+        type: 'move_node',
+        path: [1],
+        newPath: [0],
+      },
+    ]
+
+    const result = applySlateOperations(SIMPLE_SOURCE, ops)
+
+    expect(result).not.toBeNull()
+    if (result) {
+      const parsed = parseSourceWithLocations(result)
+      expect(parsed.errors).toHaveLength(0)
+
+      // Order should be: button, p, h1
+      expect(parsed.root!.children).toHaveLength(3)
+      expect(parsed.root!.children[0].tagName).toBe('button')
+      expect(parsed.root!.children[1].tagName).toBe('p')
+      expect(parsed.root!.children[2].tagName).toBe('h1')
+    }
+  })
+
+  test('swaps nested elements across parents', () => {
+    // Swap h1 in section [0,0] with span in footer [1,0]
+    const ops: Operation[] = [
+      // Move h1 to footer [1,0]
+      {
+        type: 'move_node',
+        path: [0, 0],
+        newPath: [1, 0],
+      },
+      // Now section has [p], footer has [h1, span]
+      // Move span to section [0,0]
+      {
+        type: 'move_node',
+        path: [1, 1],   // span is now at [1,1]
+        newPath: [0, 0],
+      },
+    ]
+
+    const result = applySlateOperations(NESTED_SOURCE, ops)
+
+    expect(result).not.toBeNull()
+    if (result) {
+      const parsed = parseSourceWithLocations(result)
+      expect(parsed.errors).toHaveLength(0)
+
+      // Section should have: span, p
+      const section = parsed.root!.children[0]
+      expect(section.children).toHaveLength(2)
+      expect(section.children[0].tagName).toBe('span')
+      expect(section.children[1].tagName).toBe('p')
+
+      // Footer should have: h1
+      const footer = parsed.root!.children[1]
+      expect(footer.children).toHaveLength(1)
+      expect(footer.children[0].tagName).toBe('h1')
+    }
+  })
+
+  test('reverse element order (3 elements)', () => {
+    // Original: h1 [0], p [1], button [2]
+    // Target: button [0], p [1], h1 [2]
+    const ops: Operation[] = [
+      // Move button to front
+      {
+        type: 'move_node',
+        path: [2],
+        newPath: [0],
+      },
+      // Now: button [0], h1 [1], p [2]
+      // Move h1 to end
+      {
+        type: 'move_node',
+        path: [1],
+        newPath: [3],
+      },
+    ]
+
+    const result = applySlateOperations(SIMPLE_SOURCE, ops)
+
+    expect(result).not.toBeNull()
+    if (result) {
+      const parsed = parseSourceWithLocations(result)
+      expect(parsed.errors).toHaveLength(0)
+
+      // Order should be: button, p, h1
+      expect(parsed.root!.children).toHaveLength(3)
+      expect(parsed.root!.children[0].tagName).toBe('button')
+      expect(parsed.root!.children[1].tagName).toBe('p')
+      expect(parsed.root!.children[2].tagName).toBe('h1')
+    }
+  })
+})

@@ -1,10 +1,8 @@
 import React, { useState, useCallback, useRef, useEffect } from 'react'
-import { useEditor, type Mutation, PlateVisualEditor } from '../src'
+import { useEditor, PlateVisualEditor } from '../src'
 import { useRsc } from '../src/rsc'
 import { simpleBlockSource, cardBlockSource, dataBlockSource, chartBlockSource } from './fixtures/simple-block'
 import { CodeEditor } from './components/CodeEditor'
-import { OplogView } from './components/OplogView'
-import { PropsInspector } from './components/PropsInspector'
 import { cn } from './lib/utils'
 
 const FIXTURES = {
@@ -31,14 +29,6 @@ export function App() {
   const handleFixtureChange = useCallback((newFixture: keyof typeof FIXTURES) => {
     setFixture(newFixture)
     editor.setSource(FIXTURES[newFixture].source)
-  }, [editor])
-
-  const handleMutation = useCallback((mutation: Mutation) => {
-    editor.applyMutation(mutation)
-  }, [editor])
-
-  const handleSelect = useCallback((path: (string | number)[] | null) => {
-    editor.setSelected(path)
   }, [editor])
 
   const handlePlateSourceChange = useCallback((newSource: string) => {
@@ -85,44 +75,6 @@ export function App() {
           ))}
         </nav>
 
-        {/* History Controls */}
-        <div className="p-3 border-t border-border space-y-2">
-          <div className="px-2 py-1 text-xs font-medium text-muted-foreground uppercase tracking-wider">
-            History
-          </div>
-          <div className="flex gap-1">
-            <button
-              onClick={editor.undo}
-              disabled={!editor.canUndo}
-              className={cn(
-                'flex-1 px-3 py-1.5 rounded-md text-sm border border-border bg-secondary transition-colors',
-                editor.canUndo
-                  ? 'hover:bg-accent text-foreground'
-                  : 'opacity-50 cursor-not-allowed text-muted-foreground'
-              )}
-            >
-              ↶ Undo
-            </button>
-            <button
-              onClick={editor.redo}
-              disabled={!editor.canRedo}
-              className={cn(
-                'flex-1 px-3 py-1.5 rounded-md text-sm border border-border bg-secondary transition-colors',
-                editor.canRedo
-                  ? 'hover:bg-accent text-foreground'
-                  : 'opacity-50 cursor-not-allowed text-muted-foreground'
-              )}
-            >
-              ↷ Redo
-            </button>
-          </div>
-          <button
-            onClick={editor.clearHistory}
-            className="w-full px-3 py-1.5 rounded-md text-sm border border-border bg-secondary hover:bg-accent text-muted-foreground hover:text-foreground transition-colors"
-          >
-            Clear History
-          </button>
-        </div>
       </aside>
 
       {/* Main Content */}
@@ -141,7 +93,7 @@ export function App() {
         )}
 
         {/* Panels */}
-        <div className="flex-1 grid grid-cols-[1fr_1fr_380px] divide-x divide-border overflow-hidden">
+        <div className="flex-1 grid grid-cols-2 divide-x divide-border overflow-hidden">
           {/* Visual Editor Panel */}
           <div className="flex flex-col overflow-hidden">
             <PanelHeader title="Visual Editor" badge="Plate" />
@@ -161,32 +113,6 @@ export function App() {
                 source={editor.state.source}
                 onChange={handleCodeSourceChange}
               />
-            </div>
-          </div>
-
-          {/* Right Panel: Inspector + Oplog */}
-          <div className="flex flex-col overflow-hidden divide-y divide-border">
-            {/* Props Inspector */}
-            <div className="flex-1 flex flex-col overflow-hidden">
-              <PanelHeader title="Props Inspector" />
-              <div className="flex-1 overflow-auto p-3">
-                <PropsInspector
-                  ast={editor.state.ast}
-                  selectedPath={editor.state.selectedPath}
-                  onMutation={handleMutation}
-                />
-              </div>
-            </div>
-
-            {/* Oplog */}
-            <div className="h-52 flex-shrink-0 flex flex-col">
-              <PanelHeader
-                title="Oplog"
-                badge={`${editor.state.oplog.cursor} / ${editor.state.oplog.entries.length}`}
-              />
-              <div className="flex-1 overflow-auto p-3">
-                <OplogView oplog={editor.state.oplog} />
-              </div>
             </div>
           </div>
         </div>

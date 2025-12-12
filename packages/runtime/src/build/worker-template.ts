@@ -56,7 +56,8 @@ import { runWithRequestInfo } from "rwsdk/worker";
 import { existsSync } from "node:fs";
 import { readFile, writeFile, readdir, mkdir } from "node:fs/promises";
 import { join } from "node:path";
-import { rscComponents } from "@hands/stdlib/server";
+// Import all components from stdlib registry - they work with RSC even with "use client"
+import * as StdlibComponents from "@hands/stdlib/registry";
 
 // Client manifest for RSC serialization
 // This Proxy handles "use client" component references without needing webpack infrastructure
@@ -245,8 +246,13 @@ app.post("/blocks/:blockId{.+}/rsc", async (c) => {
 // === RSC Component Routes ===
 // Render arbitrary JSX components via RSC for the visual editor
 
-// Component registry from stdlib (single source of truth)
-const COMPONENTS = rscComponents;
+// Component registry - filter to only React components from stdlib exports
+// Note: forwardRef components have typeof "object" with a render property
+const COMPONENTS: Record<string, React.ComponentType<any>> = Object.fromEntries(
+  Object.entries(StdlibComponents).filter(([_, v]) =>
+    typeof v === "function" || (typeof v === "object" && v !== null && "render" in v)
+  )
+);
 
 app.post("/rsc/component", async (c) => {
   const { tagName, props = {}, children, elementId } = await c.req.json<{

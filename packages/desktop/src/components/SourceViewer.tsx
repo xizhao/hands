@@ -231,7 +231,7 @@ Describe what this source does...
         </div>
 
         {/* Secrets Configuration */}
-        {sourceSecrets.length > 0 && (
+        {source.secrets.length > 0 && (
           <div className="rounded-lg border">
             {/* Secrets header */}
             <button

@@ -71,15 +71,6 @@ export { LineChart } from "./components/charts/line-chart.js";
 export type { BarChartProps } from "./components/charts/bar-chart.js";
 export type { LineChartProps } from "./components/charts/line-chart.js";
 
-/**
- * Runtime component registry for RSC serialization.
- * The worker template imports this directly.
- * Add new components here to make them available in blocks.
- */
-// Note: rscComponents is deprecated - components are now auto-discovered via exports
-// Keeping for backwards compatibility
-export const rscComponents = {} as const;
-
 // ============================================
 // Component Metadata Registry - for CLI
 // ============================================

@@ -11,7 +11,7 @@
  */
 
 import * as React from 'react'
-import { useState, useEffect } from 'react'
+import { useState, useEffect, Component } from 'react'
 import {
   createPlatePlugin,
   useEditorRef,
@@ -439,7 +439,7 @@ function CustomComponentRenderer({
 }: {
   attributes: any
   children: React.ReactNode
-  element: any
+  element: TElement
   componentName: string
   props: Record<string, unknown>
 }) {
@@ -449,8 +449,9 @@ function CustomComponentRenderer({
         attributes={attributes}
         componentName={componentName}
         props={props}
-        elementId={element.id}
+        elementId={(element as any).id}
         plateChildren={children}
+        element={element}
       />
     </DraggableComponentWrapper>
   )
@@ -465,12 +466,14 @@ function RscComponentRenderer({
   props,
   elementId,
   plateChildren,
+  element,
 }: {
   attributes: any
   componentName: string
   props: Record<string, unknown>
   elementId?: string
   plateChildren: React.ReactNode
+  element: TElement
 }) {
   const rscAvailable = useRscAvailable()
   const { renderComponent } = useRsc()
@@ -520,7 +523,7 @@ function RscComponentRenderer({
       <ComponentPlaceholder
         attributes={attributes}
         componentName={componentName}
-        props={props}
+        element={element}
         status="loading"
         plateChildren={plateChildren}
       />
@@ -532,7 +535,7 @@ function RscComponentRenderer({
       <ComponentPlaceholder
         attributes={attributes}
         componentName={componentName}
-        props={props}
+        element={element}
         status={result.error ? 'error' : 'unknown'}
         error={result.error}
         plateChildren={plateChildren}
@@ -542,8 +545,337 @@ function RscComponentRenderer({
 
   return (
     <div {...attributes} className="my-2">
-      <div contentEditable={false}>{result.element}</div>
+      <div contentEditable={false}>
+        <RscErrorBoundary componentName={componentName}>
+          {result.element}
+        </RscErrorBoundary>
+      </div>
       {plateChildren}
+    </div>
+  )
+}
+
+// Error boundary for RSC-rendered components
+interface RscErrorBoundaryProps {
+  componentName: string
+  children: React.ReactNode
+}
+
+interface RscErrorBoundaryState {
+  hasError: boolean
+  error: Error | null
+}
+
+class RscErrorBoundary extends Component<RscErrorBoundaryProps, RscErrorBoundaryState> {
+  state: RscErrorBoundaryState = { hasError: false, error: null }
+
+  static getDerivedStateFromError(error: Error): RscErrorBoundaryState {
+    return { hasError: true, error }
+  }
+
+  componentDidCatch(error: Error, info: React.ErrorInfo) {
+    console.error(`[RSC Error] Component "${this.props.componentName}" crashed:`, error, info)
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div className="p-4 border border-red-500/50 bg-red-500/10 rounded-md text-sm">
+          <div className="font-medium text-red-600 dark:text-red-400">
+            Error in {this.props.componentName}
+          </div>
+          <div className="text-red-500/80 mt-1 font-mono text-xs">
+            {this.state.error?.message || 'Unknown error'}
+          </div>
+        </div>
+      )
+    }
+    return this.props.children
+  }
+}
+
+// ============================================================================
+// Skeleton Components for Loading States
+// ============================================================================
+
+/**
+ * Shimmer animation keyframes (injected via style tag)
+ * Theme-aware with subtle, polished animation
+ */
+const shimmerStyles = `
+@keyframes skeleton-shimmer {
+  0% { transform: translateX(-100%); }
+  100% { transform: translateX(100%); }
+}
+.skeleton-block {
+  background: hsl(var(--muted, 240 5% 96%));
+  position: relative;
+  overflow: hidden;
+}
+.skeleton-block::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  transform: translateX(-100%);
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    hsl(var(--muted-foreground, 240 4% 46%) / 0.08) 40%,
+    hsl(var(--muted-foreground, 240 4% 46%) / 0.12) 50%,
+    hsl(var(--muted-foreground, 240 4% 46%) / 0.08) 60%,
+    transparent 100%
+  );
+  animation: skeleton-shimmer 2s ease-in-out infinite;
+}
+.dark .skeleton-block {
+  background: hsl(240 4% 16%);
+}
+.dark .skeleton-block::after {
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    hsl(0 0% 100% / 0.04) 40%,
+    hsl(0 0% 100% / 0.08) 50%,
+    hsl(0 0% 100% / 0.04) 60%,
+    transparent 100%
+  );
+}
+`
+
+// Inject shimmer styles once
+if (typeof document !== 'undefined') {
+  const styleId = 'skeleton-shimmer-styles'
+  if (!document.getElementById(styleId)) {
+    const style = document.createElement('style')
+    style.id = styleId
+    style.textContent = shimmerStyles
+    document.head.appendChild(style)
+  }
+}
+
+/**
+ * Single skeleton block with polished shimmer
+ */
+function SkeletonBlock({
+  width = '100%',
+  height = '1rem',
+  className,
+  rounded = 'md',
+}: {
+  width?: string | number
+  height?: string | number
+  className?: string
+  rounded?: 'sm' | 'md' | 'lg' | 'full'
+}) {
+  const roundedClass = {
+    sm: 'rounded-sm',
+    md: 'rounded-md',
+    lg: 'rounded-lg',
+    full: 'rounded-full',
+  }[rounded]
+
+  return (
+    <div
+      className={cn('skeleton-block', roundedClass, className)}
+      style={{
+        width: typeof width === 'number' ? `${width}px` : width,
+        height: typeof height === 'number' ? `${height}px` : height,
+      }}
+    />
+  )
+}
+
+/**
+ * Generate skeleton for a text node (leaf)
+ * Estimates width based on text length
+ */
+function TextSkeleton({ text }: { text: string }) {
+  // Estimate width based on character count (rough approximation)
+  const charWidth = 8 // ~8px per character average
+  const estimatedWidth = Math.min(text.length * charWidth, 400)
+  // Vary width slightly for visual interest
+  const width = Math.max(estimatedWidth, 40)
+
+  return <SkeletonBlock width={width} height={16} className="inline-block" />
+}
+
+/**
+ * Generate skeleton for an element node recursively
+ * This creates a skeleton that mirrors the component tree structure
+ */
+function ElementSkeleton({ element, depth = 0 }: { element: any; depth?: number }) {
+  const type = element?.type as string
+  const children = element?.children || []
+
+  // For void elements or leaf-like elements, render a simple block
+  if (shouldBeVoid(element) || children.length === 0) {
+    return (
+      <SkeletonBlock
+        width="100%"
+        height={32}
+        className="rounded-md"
+      />
+    )
+  }
+
+  // Check if all children are text nodes (leaf element)
+  const isLeafLike = children.every((child: any) => 'text' in child)
+
+  if (isLeafLike) {
+    // Render inline skeleton for text content
+    const textContent = children.map((c: any) => c.text || '').join('')
+    if (textContent.trim()) {
+      return <TextSkeleton text={textContent} />
+    }
+    return <SkeletonBlock width="60%" height={16} />
+  }
+
+  // Determine layout hints from element type
+  const isFlexRow = type.toLowerCase().includes('row') ||
+                    type.toLowerCase().includes('header') ||
+                    type.toLowerCase().includes('footer') ||
+                    (element as any).className?.includes('flex-row') ||
+                    (element as any).className?.includes('flex ')
+
+  const isGrid = type.toLowerCase().includes('grid')
+
+  // Render children recursively
+  const childSkeletons = children
+    .filter((child: any) => !('text' in child)) // Skip text nodes, handled above
+    .map((child: any, index: number) => (
+      <ElementSkeleton
+        key={child.id || index}
+        element={child as TElement}
+        depth={depth + 1}
+      />
+    ))
+
+  // For nested custom components, render with appropriate layout
+  if (isCustomComponent(type)) {
+    return (
+      <div className={cn(
+        'rounded-lg border border-border/40 bg-card/30 p-3',
+        depth > 0 && 'border-border/20'
+      )}>
+        <div className={cn(
+          isFlexRow && 'flex items-center gap-3',
+          isGrid && 'grid grid-cols-2 gap-3',
+          !isFlexRow && !isGrid && 'space-y-2'
+        )}>
+          {childSkeletons.length > 0 ? childSkeletons : (
+            // Default content skeleton if no children
+            <>
+              <SkeletonBlock width="50%" height={18} />
+              <SkeletonBlock width="80%" height={14} />
+            </>
+          )}
+        </div>
+      </div>
+    )
+  }
+
+  // For HTML containers, just render children with layout
+  return (
+    <div className={cn(
+      isFlexRow && 'flex items-center gap-2',
+      isGrid && 'grid grid-cols-2 gap-2',
+      !isFlexRow && !isGrid && 'space-y-1.5'
+    )}>
+      {childSkeletons.length > 0 ? childSkeletons : (
+        <SkeletonBlock width="100%" height={14} />
+      )}
+    </div>
+  )
+}
+
+/**
+ * Dynamic skeleton generator based on component tree structure
+ * Analyzes the actual Plate element tree to create matching skeletons
+ */
+function ComponentSkeleton({
+  element,
+}: {
+  element: any
+}) {
+  const children = element?.children || []
+
+  // If no meaningful children, render a generic card skeleton
+  const hasStructure = children.some((child: any) =>
+    !('text' in child) || (child.text && child.text.trim())
+  )
+
+  if (!hasStructure) {
+    // Generic skeleton for components without tree structure
+    return (
+      <div className="rounded-lg border border-border/50 bg-card/50 p-4 space-y-3">
+        <SkeletonBlock width="45%" height={20} />
+        <div className="space-y-2">
+          <SkeletonBlock width="100%" height={14} />
+          <SkeletonBlock width="85%" height={14} />
+        </div>
+      </div>
+    )
+  }
+
+  // Render skeleton based on actual tree structure
+  return (
+    <div className="rounded-lg border border-border/50 bg-card/50 p-4">
+      <div className="space-y-3">
+        {children.map((child: any, index: number) => {
+          if ('text' in child) {
+            if (child.text && child.text.trim()) {
+              return <TextSkeleton key={index} text={child.text} />
+            }
+            return null
+          }
+          return (
+            <ElementSkeleton
+              key={child.id || index}
+              element={child as TElement}
+            />
+          )
+        })}
+      </div>
+    </div>
+  )
+}
+
+// ============================================================================
+// Error Display Component
+// ============================================================================
+
+/**
+ * Polished error state for failed component renders
+ */
+function ComponentError({
+  componentName,
+  error,
+}: {
+  componentName: string
+  error?: string
+}) {
+  return (
+    <div className="rounded-lg border border-red-200 bg-red-50/50 p-4">
+      <div className="flex items-start gap-3">
+        <div className="flex-shrink-0 w-8 h-8 rounded-full bg-red-100 flex items-center justify-center">
+          <svg className="w-4 h-4 text-red-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+          </svg>
+        </div>
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2">
+            <span className="font-medium text-red-800">Failed to render</span>
+            <code className="px-1.5 py-0.5 text-xs bg-red-100 text-red-700 rounded font-mono">
+              &lt;{componentName}&gt;
+            </code>
+          </div>
+          {error && (
+            <p className="mt-1 text-sm text-red-600 break-words">
+              {error}
+            </p>
+          )}
+        </div>
+      </div>
     </div>
   )
 }
@@ -554,64 +886,45 @@ function RscComponentRenderer({
 function ComponentPlaceholder({
   attributes,
   componentName,
-  props,
+  element,
   status,
   error,
   plateChildren,
 }: {
   attributes: any
   componentName: string
-  props: Record<string, unknown>
+  element: any
   status: 'loading' | 'error' | 'unknown'
   error?: string
   plateChildren: React.ReactNode
 }) {
-  const statusStyles = {
-    loading: 'border-blue-300 bg-blue-50/50',
-    error: 'border-red-300 bg-red-50/50',
-    unknown: 'border-gray-300 bg-gray-50',
-  }
-
   return (
-    <div
-      {...attributes}
-      className={cn(
-        'component-placeholder my-1',
-        'rounded border border-dashed p-3',
-        statusStyles[status]
-      )}
-    >
+    <div {...attributes} className="my-2">
       <div contentEditable={false}>
-        <div className="flex items-center gap-2 mb-2">
-          {status === 'loading' && (
-            <div className="animate-spin h-3 w-3 border border-blue-400 border-t-transparent rounded-full" />
-          )}
-          {status === 'error' && <span className="text-red-500">!</span>}
-          {status === 'unknown' && <span className="text-gray-400">?</span>}
-          <span className="font-mono text-sm font-medium text-gray-700">
-            &lt;{componentName}&gt;
-          </span>
-          {status === 'unknown' && (
-            <span className="text-xs text-gray-500">(not found)</span>
-          )}
-        </div>
-
-        {Object.keys(props).length > 0 && (
-          <div className="flex flex-wrap gap-1 mb-2">
-            {Object.entries(props).map(([key, value]) => (
-              <span key={key} className="text-xs px-1.5 py-0.5 bg-white rounded border">
-                <span className="text-blue-600">{key}</span>=
-                <span className="text-green-600">
-                  {typeof value === 'string' ? `"${value}"` : JSON.stringify(value)}
-                </span>
-              </span>
-            ))}
-          </div>
+        {status === 'loading' && (
+          <ComponentSkeleton element={element} />
         )}
-
-        {status === 'error' && error && (
-          <div className="text-xs text-red-600 bg-red-100 px-2 py-1 rounded">
-            {error}
+        {status === 'error' && (
+          <ComponentError componentName={componentName} error={error} />
+        )}
+        {status === 'unknown' && (
+          <div className="rounded-lg border border-amber-200 bg-amber-50/50 p-4">
+            <div className="flex items-center gap-3">
+              <div className="flex-shrink-0 w-8 h-8 rounded-full bg-amber-100 flex items-center justify-center">
+                <span className="text-amber-600 text-lg">?</span>
+              </div>
+              <div>
+                <div className="flex items-center gap-2">
+                  <span className="font-medium text-amber-800">Unknown component</span>
+                  <code className="px-1.5 py-0.5 text-xs bg-amber-100 text-amber-700 rounded font-mono">
+                    &lt;{componentName}&gt;
+                  </code>
+                </div>
+                <p className="mt-0.5 text-sm text-amber-600">
+                  This component is not registered in the current workspace
+                </p>
+              </div>
+            </div>
           </div>
         )}
       </div>

@@ -47,117 +47,6 @@ export interface JsxNode {
 export type NodePath = (string | number)[]
 
 // ============================================================================
-// Mutation Types (Oplog Operations)
-// ============================================================================
-
-export interface InsertNodeMutation {
-  type: 'insert-node'
-  /** Path to parent node */
-  path: NodePath
-  /** Index to insert at */
-  index: number
-  /** Node to insert */
-  node: JsxNode
-}
-
-export interface DeleteNodeMutation {
-  type: 'delete-node'
-  /** Path to node to delete */
-  path: NodePath
-}
-
-export interface MoveNodeMutation {
-  type: 'move-node'
-  /** Current path of node */
-  fromPath: NodePath
-  /** New parent path */
-  toPath: NodePath
-  /** Index in new parent */
-  toIndex: number
-}
-
-export interface SetPropMutation {
-  type: 'set-prop'
-  /** Path to element node */
-  path: NodePath
-  /** Prop name */
-  prop: string
-  /** New value */
-  value: PropValue
-}
-
-export interface DeletePropMutation {
-  type: 'delete-prop'
-  /** Path to element node */
-  path: NodePath
-  /** Prop name to delete */
-  prop: string
-}
-
-export interface SetTextMutation {
-  type: 'set-text'
-  /** Path to text node */
-  path: NodePath
-  /** New text content */
-  text: string
-}
-
-export interface WrapNodeMutation {
-  type: 'wrap-node'
-  /** Path to node to wrap */
-  path: NodePath
-  /** Wrapper element (children will be set to wrapped node) */
-  wrapper: JsxNode
-}
-
-export interface UnwrapNodeMutation {
-  type: 'unwrap-node'
-  /** Path to wrapper element to remove */
-  path: NodePath
-}
-
-/**
- * All possible mutations
- */
-export type Mutation =
-  | InsertNodeMutation
-  | DeleteNodeMutation
-  | MoveNodeMutation
-  | SetPropMutation
-  | DeletePropMutation
-  | SetTextMutation
-  | WrapNodeMutation
-  | UnwrapNodeMutation
-
-// ============================================================================
-// Oplog Types
-// ============================================================================
-
-/**
- * Entry in the operation log
- */
-export interface OplogEntry {
-  /** Unique ID */
-  id: string
-  /** When this was applied */
-  timestamp: number
-  /** The mutation that was applied */
-  mutation: Mutation
-  /** Inverse mutation for undo */
-  inverse: Mutation
-}
-
-/**
- * The full operation log with undo/redo cursor
- */
-export interface Oplog {
-  /** All entries */
-  entries: OplogEntry[]
-  /** Current position (entries after cursor are redo-able) */
-  cursor: number
-}
-
-// ============================================================================
 // Scene Types (Rendered Output)
 // ============================================================================
 
@@ -225,8 +114,6 @@ export interface EditorState {
   mockData: Record<string, unknown>
   /** Currently selected node path */
   selectedPath: NodePath | null
-  /** Operation log */
-  oplog: Oplog
   /** Is there an error? */
   error: string | null
 }
@@ -240,13 +127,6 @@ export interface EditorState {
  */
 export function generateId(): string {
   return `${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 7)}`
-}
-
-/**
- * Create an empty oplog
- */
-export function createEmptyOplog(): Oplog {
-  return { entries: [], cursor: 0 }
 }
 
 /**

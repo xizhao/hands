@@ -4,6 +4,19 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Editor Demo - Oplog WYSIWYG</title>
+    <!-- Import map for React singleton - ensures all React imports (including cross-origin 
+         RSC client components from runtime) use the same React instance -->
+    <script type="importmap">
+    {
+      "imports": {
+        "react": "/demo/shared-react.ts",
+        "react-dom": "/demo/shared-react.ts",
+        "react-dom/client": "/demo/shared-react.ts",
+        "react/jsx-runtime": "/demo/shared-react.ts",
+        "react/jsx-dev-runtime": "/demo/shared-react.ts"
+      }
+    }
+    </script>
     <style>
       * {
         box-sizing: border-box;

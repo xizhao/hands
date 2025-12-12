@@ -15,6 +15,7 @@
   },
   "workspaces": ["packages/*"],
   "devDependencies": {
+    "@module-federation/vite": "^1.9.3",
     "@opencode-ai/plugin": "^1.0.134",
     "@opencode-ai/sdk": "^1.0.138",
     "@oxc-parser/binding-wasm32-wasi": "0.102.0",

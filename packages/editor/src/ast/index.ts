@@ -3,7 +3,6 @@
  */
 export * from './types'
 export * from './path'
-export * from './apply'
 export * from './parser'
 export * from './generator'
 

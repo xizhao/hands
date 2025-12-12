@@ -18,7 +18,6 @@ import * as React from 'react';
 import { cn } from '@/lib/utils';
 import { useCopyToClipboard } from '@/hooks/ui';
 
-import { BlockActionButton } from './block-context-menu';
 import { Button } from './button';
 import {
   Command,
@@ -83,11 +82,6 @@ export function CodeBlockElement(props: PlateElementProps) {
           <FilesIcon className="!size-3.5" />
           Copy
         </Button>
-
-        <BlockActionButton
-          defaultStyles={false}
-          variant="blockActionSecondary"
-        />
       </div>
     </PlateElement>
   );

@@ -8,10 +8,12 @@
     "./ast": "./src/ast/index.ts",
     "./scene": "./src/scene/index.ts",
     "./components": "./src/components/index.ts",
-    "./rsc": "./src/rsc/index.ts"
+    "./rsc": "./src/rsc/index.ts",
+    "./sandbox/protocol": "./src/sandbox/protocol.ts"
   },
   "scripts": {
     "dev": "vite",
+    "dev:sandbox": "vite --config vite.sandbox.config.ts",
     "start": "vite",
     "build": "tsc",
     "preview": "vite preview",

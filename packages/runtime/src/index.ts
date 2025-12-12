@@ -902,7 +902,7 @@ function createApp(config: RuntimeConfig) {
   })
 
   // Proxy Vite internal routes for client module dependencies
-  // Handles: /@vite/client, /@react-refresh, /node_modules/.vite/deps/*
+  // Handles: /@vite/client, /@react-refresh, /node_modules/.vite/deps/*, /@fs/*
   app.get("/vite-proxy/*", async (c) => {
     if (!state.viteReady || !state.vitePort) {
       return c.json({ error: "Vite not ready", booting: true }, 503)
@@ -910,6 +910,98 @@ function createApp(config: RuntimeConfig) {
 
     // Extract the path after /vite-proxy
     const vitePath = c.req.path.replace("/vite-proxy", "")
+
+    // CRITICAL: Intercept React deps and return shims that use window.__HANDS_REACT__
+    // This prevents "multiple React copies" errors when loading client components cross-origin.
+    // The editor must expose window.__HANDS_REACT__ with { React, ReactDOM, ReactJSXRuntime }
+    const reactShims: Record<string, string> = {
+      // Main React export - re-export all from window.__HANDS_REACT__.React
+      "react.js": `
+const R = window.__HANDS_REACT__?.React;
+if (!R) throw new Error("[hands-runtime] window.__HANDS_REACT__.React not found - editor must expose React");
+export default R;
+export const useState = R.useState;
+export const useEffect = R.useEffect;
+export const useCallback = R.useCallback;
+export const useMemo = R.useMemo;
+export const useRef = R.useRef;
+export const useContext = R.useContext;
+export const useReducer = R.useReducer;
+export const useLayoutEffect = R.useLayoutEffect;
+export const useImperativeHandle = R.useImperativeHandle;
+export const useDebugValue = R.useDebugValue;
+export const useDeferredValue = R.useDeferredValue;
+export const useTransition = R.useTransition;
+export const useId = R.useId;
+export const useSyncExternalStore = R.useSyncExternalStore;
+export const useInsertionEffect = R.useInsertionEffect;
+export const createContext = R.createContext;
+export const createElement = R.createElement;
+export const cloneElement = R.cloneElement;
+export const isValidElement = R.isValidElement;
+export const Children = R.Children;
+export const Fragment = R.Fragment;
+export const StrictMode = R.StrictMode;
+export const Suspense = R.Suspense;
+export const lazy = R.lazy;
+export const memo = R.memo;
+export const forwardRef = R.forwardRef;
+export const startTransition = R.startTransition;
+export const Component = R.Component;
+export const PureComponent = R.PureComponent;
+export const createRef = R.createRef;
+export const use = R.use;
+export const useOptimistic = R.useOptimistic;
+export const useActionState = R.useActionState;
+export const cache = R.cache;
+`,
+      // react-dom
+      "react-dom.js": `
+const RD = window.__HANDS_REACT__?.ReactDOM;
+if (!RD) throw new Error("[hands-runtime] window.__HANDS_REACT__.ReactDOM not found");
+export default RD;
+export const createRoot = RD.createRoot;
+export const hydrateRoot = RD.hydrateRoot;
+export const createPortal = RD.createPortal;
+export const flushSync = RD.flushSync;
+export const unstable_batchedUpdates = RD.unstable_batchedUpdates;
+`,
+      // JSX runtime
+      "react_jsx-runtime.js": `
+const JSX = window.__HANDS_REACT__?.ReactJSXRuntime;
+if (!JSX) throw new Error("[hands-runtime] window.__HANDS_REACT__.ReactJSXRuntime not found");
+export default JSX;
+export const jsx = JSX.jsx;
+export const jsxs = JSX.jsxs;
+export const Fragment = JSX.Fragment;
+`,
+      // JSX dev runtime - uses ReactJSXDevRuntime which has jsxDEV
+      "react_jsx-dev-runtime.js": `
+const JSX = window.__HANDS_REACT__?.ReactJSXDevRuntime;
+if (!JSX) throw new Error("[hands-runtime] window.__HANDS_REACT__.ReactJSXDevRuntime not found");
+export default JSX;
+export const jsx = JSX.jsx;
+export const jsxs = JSX.jsxs;
+export const jsxDEV = JSX.jsxDEV;
+export const Fragment = JSX.Fragment;
+`,
+    }
+
+    // Check if this is a React dep request
+    const depMatch = vitePath.match(/\/node_modules\/\.vite\/deps\/(react[^?]*)/)
+    if (depMatch) {
+      const depName = depMatch[1]
+      const shim = reactShims[depName]
+      if (shim) {
+        console.debug(`[runtime] Serving React shim for: ${depName}`)
+        const headers = new Headers()
+        headers.set("Content-Type", "application/javascript; charset=utf-8")
+        headers.set("Access-Control-Allow-Origin", "*")
+        headers.set("Cache-Control", "no-cache")
+        return new Response(shim.trim(), { status: 200, headers })
+      }
+    }
+
     const viteUrl = `http://localhost:${state.vitePort}${vitePath}`
 
     try {
@@ -927,7 +1019,101 @@ function createApp(config: RuntimeConfig) {
       // Get the content as text to potentially rewrite nested imports
       let content = await response.text()
 
-      // Rewrite any nested imports in Vite deps
+      // CRITICAL: If this chunk contains React or ReactDOM internals, replace with shim
+      // to avoid "multiple copies of React" errors.
+      if (vitePath.includes("chunk-")) {
+        const isReactChunk = content.includes("node_modules/react/cjs/react.development.js") ||
+                             content.includes("node_modules/react/cjs/react.production")
+        const isReactDOMChunk = content.includes("node_modules/react-dom/cjs/react-dom.development.js") ||
+                                content.includes("node_modules/react-dom/cjs/react-dom.production")
+
+        if (isReactChunk) {
+          console.debug(`[runtime] Detected React chunk, replacing with shim: ${vitePath}`)
+          const shimContent = `
+// Shim: React chunk -> window.__HANDS_REACT__
+const R = window.__HANDS_REACT__?.React;
+if (!R) throw new Error("[hands-runtime] React chunk requires window.__HANDS_REACT__");
+
+// esbuild CJS interop - other chunks import require_react from this chunk
+export function require_react() { return R; }
+
+export { R as exports };
+export default R;
+export const useState = R.useState;
+export const useEffect = R.useEffect;
+export const useCallback = R.useCallback;
+export const useMemo = R.useMemo;
+export const useRef = R.useRef;
+export const useContext = R.useContext;
+export const useReducer = R.useReducer;
+export const useLayoutEffect = R.useLayoutEffect;
+export const useImperativeHandle = R.useImperativeHandle;
+export const useDebugValue = R.useDebugValue;
+export const useDeferredValue = R.useDeferredValue;
+export const useTransition = R.useTransition;
+export const useId = R.useId;
+export const useSyncExternalStore = R.useSyncExternalStore;
+export const useInsertionEffect = R.useInsertionEffect;
+export const createContext = R.createContext;
+export const createElement = R.createElement;
+export const cloneElement = R.cloneElement;
+export const isValidElement = R.isValidElement;
+export const Children = R.Children;
+export const Fragment = R.Fragment;
+export const StrictMode = R.StrictMode;
+export const Suspense = R.Suspense;
+export const lazy = R.lazy;
+export const memo = R.memo;
+export const forwardRef = R.forwardRef;
+export const startTransition = R.startTransition;
+export const Component = R.Component;
+export const PureComponent = R.PureComponent;
+export const createRef = R.createRef;
+export const use = R.use;
+export const useOptimistic = R.useOptimistic;
+export const useActionState = R.useActionState;
+export const cache = R.cache;
+export const __SECRET_INTERNALS_DO_NOT_USE_OR_YOU_WILL_BE_FIRED = R.__SECRET_INTERNALS_DO_NOT_USE_OR_YOU_WILL_BE_FIRED;
+`
+          const headers = new Headers()
+          headers.set("Content-Type", "application/javascript; charset=utf-8")
+          headers.set("Access-Control-Allow-Origin", "*")
+          headers.set("Cache-Control", "no-cache")
+          return new Response(shimContent.trim(), { status: 200, headers })
+        }
+
+        if (isReactDOMChunk) {
+          console.debug(`[runtime] Detected ReactDOM chunk, replacing with shim: ${vitePath}`)
+          const shimContent = `
+// Shim: ReactDOM chunk -> window.__HANDS_REACT__
+const R = window.__HANDS_REACT__?.React;
+const RD = window.__HANDS_REACT__?.ReactDOM;
+if (!RD) throw new Error("[hands-runtime] ReactDOM chunk requires window.__HANDS_REACT__");
+
+// esbuild CJS interop - other chunks import these from this chunk
+export function require_react() { return R; }
+export function require_react_dom() { return RD; }
+export function require_react_dom_development() { return RD; }
+
+export { RD as exports };
+export default RD;
+export const createRoot = RD.createRoot;
+export const hydrateRoot = RD.hydrateRoot;
+export const createPortal = RD.createPortal;
+export const flushSync = RD.flushSync;
+export const unstable_batchedUpdates = RD.unstable_batchedUpdates;
+export const version = RD.version;
+export const __SECRET_INTERNALS_DO_NOT_USE_OR_YOU_WILL_BE_FIRED = RD.__SECRET_INTERNALS_DO_NOT_USE_OR_YOU_WILL_BE_FIRED;
+`
+          const headers = new Headers()
+          headers.set("Content-Type", "application/javascript; charset=utf-8")
+          headers.set("Access-Control-Allow-Origin", "*")
+          headers.set("Cache-Control", "no-cache")
+          return new Response(shimContent.trim(), { status: 200, headers })
+        }
+      }
+
+      // Rewrite any nested imports in Vite deps to go through our proxy
       const runtimeOrigin = `http://localhost:${config.port}`
       content = content.replace(/from\s+["'](\/[^"']+)["']/g, (match, path) => {
         return `from "${runtimeOrigin}/vite-proxy${path}"`

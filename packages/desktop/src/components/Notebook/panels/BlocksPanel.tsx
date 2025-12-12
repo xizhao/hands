@@ -5,7 +5,7 @@
 
 import { useMemo, useState } from "react";
 import { useManifest, type WorkbookBlock } from "@/hooks/useWorkbook";
-import { SquaresFour, CaretRight, Sparkle, Plus, ArrowSquareOut } from "@phosphor-icons/react";
+import { SquaresFour, CaretRight, Sparkle } from "@phosphor-icons/react";
 import { cn } from "@/lib/utils";
 import { ChevronRight } from "lucide-react";
 import { useNavigate } from "@tanstack/react-router";
@@ -53,6 +53,10 @@ export function BlocksPanel() {
     });
   };
 
+  const handleBlockClick = (blockId: string) => {
+    navigate({ to: "/blocks/$blockId", params: { blockId } });
+  };
+
   // Loading handled by useManifest - manifest will be undefined initially
   if (!manifest) {
     return (
@@ -64,27 +68,11 @@ export function BlocksPanel() {
 
   return (
     <div className="p-2">
-      {/* Header with actions */}
+      {/* Header */}
       <div className="flex items-center justify-between px-2 py-1 mb-2">
         <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
           Blocks
         </span>
-        <div className="flex items-center gap-1">
-          <button
-            onClick={() => navigate({ to: "/blocks" })}
-            className="p-1 rounded hover:bg-accent text-muted-foreground hover:text-foreground transition-colors"
-            title="View all blocks"
-          >
-            <ArrowSquareOut weight="bold" className="h-3.5 w-3.5" />
-          </button>
-          <button
-            onClick={() => navigate({ to: "/blocks/$blockId", params: { blockId: "new" } })}
-            className="p-1 rounded hover:bg-accent text-muted-foreground hover:text-foreground transition-colors"
-            title="Create new block"
-          >
-            <Plus weight="bold" className="h-3.5 w-3.5" />
-          </button>
-        </div>
       </div>
 
       {blocks.length === 0 ? (
@@ -94,17 +82,6 @@ export function BlocksPanel() {
           <p className="text-xs text-muted-foreground/70 mt-1">
             Create charts and insights in your workbook
           </p>
-          <button
-            onClick={() => navigate({ to: "/blocks/$blockId", params: { blockId: "new" } })}
-            className={cn(
-              "mt-3 flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs",
-              "bg-primary text-primary-foreground hover:bg-primary/90",
-              "transition-colors"
-            )}
-          >
-            <Plus weight="bold" className="h-3 w-3" />
-            Create Block
-          </button>
         </div>
       ) : (
         <div className="space-y-0.5">
@@ -116,7 +93,7 @@ export function BlocksPanel() {
               return folderBlocks.map((block) => (
                 <button
                   key={block.id}
-                  onClick={() => navigate({ to: "/blocks/$blockId", params: { blockId: block.id } })}
+                  onClick={() => handleBlockClick(block.id)}
                   className={cn(
                     "w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-left",
                     "text-sm text-foreground hover:bg-accent transition-colors"
@@ -155,7 +132,7 @@ export function BlocksPanel() {
                     {folderBlocks.map((block) => (
                       <button
                         key={block.id}
-                        onClick={() => navigate({ to: "/blocks/$blockId", params: { blockId: block.id } })}
+                        onClick={() => handleBlockClick(block.id)}
                         className={cn(
                           "w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-left",
                           "text-sm text-foreground hover:bg-accent transition-colors"

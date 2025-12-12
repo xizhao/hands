@@ -52,10 +52,10 @@
   },
   "exports": {
     ".": "./src/index.ts",
-    "./server": "./src/server.ts",
     "./registry": "./src/registry/index.ts",
     "./registry/*": "./src/registry/*",
     "./registry/json": "./src/registry.json",
+    "./server": "./src/server.ts",
     "./sources": "./src/sources/index.ts",
     "./types": "./src/types/index.ts"
   },
@@ -63,9 +63,9 @@
     "createdAt": 1765069644297,
     "description": null,
     "id": "stdlib",
-    "lastOpenedAt": 1765492610204,
+    "lastOpenedAt": 1765520677639,
     "name": "stdlib",
-    "updatedAt": 1765492610204
+    "updatedAt": 1765520677639
   },
   "main": "./src/index.ts",
   "name": "@hands/stdlib",

@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Hands Editor Sandbox</title>
+    <style>
+      * {
+        box-sizing: border-box;
+      }
+      html, body, #root {
+        margin: 0;
+        padding: 0;
+        height: 100%;
+        width: 100%;
+        overflow: hidden;
+      }
+      body {
+        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+      }
+    </style>
+    <!-- Webpack shims for react-server-dom-webpack Flight client -->
+    <script>
+      globalThis.__webpack_require__ = function(id) {
+        return {
+          default: function ServerComponent(props) {
+            return props.children || null;
+          }
+        };
+      };
+      globalThis.__webpack_chunk_load__ = function(id) {
+        return Promise.resolve();
+      };
+    </script>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/sandbox/index.tsx"></script>
+  </body>
+</html>

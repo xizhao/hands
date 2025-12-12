@@ -4,6 +4,13 @@ import { App } from './App'
 import { RscProvider, initFlightClient } from '../src/rsc'
 import './index.css'
 
+// Import the shared React module to ensure window.__HANDS_REACT__ is initialized.
+// The import map in index.html redirects all React imports to this module,
+// ensuring both editor and runtime client components use the same React instance.
+import './shared-react'
+
+console.log('[editor] React singleton initialized via shared-react.ts')
+
 // Initialize Flight client on startup
 initFlightClient().then((success) => {
   console.log('[rsc] Flight client initialized:', success)

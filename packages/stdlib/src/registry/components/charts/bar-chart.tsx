@@ -105,7 +105,23 @@ export function BarChart<T extends Record<string, unknown>>({
     return config
   }, [externalConfig, yAxisKeys, color, colors])
 
-  if (!data || data.length === 0) {
+  // Defensive check - data must be an array
+  if (!Array.isArray(data)) {
+    console.warn('[BarChart] data prop is not an array:', typeof data, data)
+    return (
+      <div
+        className={cn(
+          "flex items-center justify-center text-muted-foreground rounded-lg border border-dashed",
+          className
+        )}
+        style={{ height }}
+      >
+        Invalid data: expected array, got {typeof data}
+      </div>
+    )
+  }
+
+  if (data.length === 0) {
     return (
       <div
         className={cn(
