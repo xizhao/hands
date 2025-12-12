@@ -52,6 +52,9 @@
   },
   "exports": {
     ".": "./src/index.ts",
+    "./ui/*": "./src/registry/components/ui/*",
+    "./data/*": "./src/registry/components/data/*",
+    "./charts/*": "./src/registry/components/charts/*",
     "./registry": "./src/registry/index.ts",
     "./registry/*": "./src/registry/*",
     "./registry/json": "./src/registry.json",

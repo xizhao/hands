@@ -133,3 +133,26 @@ export function useRscAvailable(): boolean {
   const ctx = useContext(RscContext)
   return ctx?.ready ?? false
 }
+
+// ============================================================================
+// RSC Block Context - provides the rendered block to Plate nodes
+// ============================================================================
+
+interface RscBlockContextValue {
+  /** The RSC-rendered block element */
+  rscElement: ReactNode | null
+  /** Whether RSC is loading */
+  isLoading: boolean
+  /** Block ID being rendered */
+  blockId: string
+}
+
+export const RscBlockContext = createContext<RscBlockContextValue | null>(null)
+
+/**
+ * Hook to access the RSC block content
+ * Used by Plate element renderers to portal in RSC content
+ */
+export function useRscBlock(): RscBlockContextValue | null {
+  return useContext(RscBlockContext)
+}

@@ -25,7 +25,7 @@ import { initWorkbookDb, type WorkbookDb } from "./db/index.js"
 import type { BlockContext } from "./ctx.js"
 import { registerSourceRoutes, checkMissingSecrets } from "./sources/index.js"
 import type { SourceDefinition } from "@hands/stdlib/sources"
-import { ensureStdlibSymlink, ensureWorkbookStdlibSymlink } from "./config/index.js"
+import { ensureStdlibSymlink, ensureWorkbookStdlibSymlink, getEditorSourcePath } from "./config/index.js"
 
 interface RuntimeConfig {
   workbookId: string
@@ -37,6 +37,9 @@ interface RuntimeState {
   dbReady: boolean
   viteReady: boolean
   vitePort: number | null
+  editorReady: boolean
+  editorPort: number | null
+  editorProc: ChildProcess | null
   workbookDb: WorkbookDb | null
   viteProc: ChildProcess | null
   fileWatchers: FSWatcher[]
@@ -49,6 +52,9 @@ const state: RuntimeState = {
   dbReady: false,
   viteReady: false,
   vitePort: null,
+  editorReady: false,
+  editorPort: null,
+  editorProc: null,
   workbookDb: null,
   viteProc: null,
   buildErrors: [],
@@ -1108,6 +1114,37 @@ export const __SECRET_INTERNALS_DO_NOT_USE_OR_YOU_WILL_BE_FIRED = RD.__SECRET_IN
     }
   })
 
+  // Proxy editor sandbox routes to editor Vite dev server
+  // Desktop loads editor via /sandbox/sandbox.html
+  app.all("/sandbox/*", async (c) => {
+    if (!state.editorReady || !state.editorPort) {
+      return c.json({ error: "Editor not ready", booting: true }, 503)
+    }
+
+    // Rewrite /sandbox/foo to /foo on the editor server
+    const url = new URL(c.req.url)
+    url.host = `localhost:${state.editorPort}`
+    url.pathname = url.pathname.replace(/^\/sandbox/, "")
+
+    try {
+      const response = await fetch(url.toString(), {
+        method: c.req.method,
+        headers: c.req.raw.headers,
+        body: c.req.method !== "GET" ? await c.req.text() : undefined,
+      })
+
+      const headers = new Headers(response.headers)
+      headers.delete("transfer-encoding")
+
+      return new Response(response.body, {
+        status: response.status,
+        headers,
+      })
+    } catch (err) {
+      return c.json({ error: "Editor proxy failed: " + String(err) }, 502)
+    }
+  })
+
   return app
 }
 
@@ -1246,6 +1283,82 @@ async function bootVite(config: RuntimeConfig) {
     console.error("[runtime] Vite failed to start within timeout")
   } catch (err) {
     console.error("[runtime] Vite boot failed:", err)
+  }
+}
+
+/**
+ * Boot the editor sandbox Vite dev server
+ * This serves the visual editor UI that runs inside the iframe
+ */
+async function bootEditor(config: RuntimeConfig) {
+  const editorPort = PORTS.EDITOR
+  const editorPath = getEditorSourcePath()
+
+  if (!existsSync(editorPath)) {
+    console.warn(`[runtime] Editor package not found at ${editorPath}, skipping editor server`)
+    return
+  }
+
+  console.log(`[runtime] Starting editor sandbox on port ${editorPort}...`)
+
+  try {
+    // Start Vite for the editor sandbox using bun to run the package script
+    // This ensures we use the package's local vite version
+    state.editorProc = spawn("bun", [
+      "run", "vite",
+      "--config", "vite.sandbox.config.ts",
+      "--port", String(editorPort),
+      "--host", "127.0.0.1",
+    ], {
+      cwd: editorPath,
+      stdio: ["ignore", "pipe", "pipe"],
+      env: {
+        ...process.env,
+        // Pass runtime port so editor knows where to fetch RSC/API
+        RUNTIME_PORT: String(config.port),
+      },
+    })
+
+    // Forward output
+    state.editorProc.stdout?.on("data", (data) => {
+      process.stdout.write(`[editor] ${data}`)
+    })
+    state.editorProc.stderr?.on("data", (data) => {
+      process.stderr.write(`[editor] ${data}`)
+    })
+
+    state.editorProc.on("exit", (code, signal) => {
+      if (state.editorReady) {
+        console.error(`[runtime] Editor crashed (code=${code}, signal=${signal})`)
+        state.editorReady = false
+        state.editorProc = null
+      }
+    })
+
+    // Wait for editor to be ready
+    const timeout = 30000
+    const startTime = Date.now()
+
+    while (Date.now() - startTime < timeout) {
+      try {
+        const response = await fetch(`http://localhost:${editorPort}/sandbox.html`, {
+          signal: AbortSignal.timeout(1000),
+        })
+        if (response.ok) {
+          state.editorPort = editorPort
+          state.editorReady = true
+          console.log(`[runtime] Editor ready on port ${editorPort}`)
+          return
+        }
+      } catch {
+        // Not ready yet
+      }
+      await new Promise((resolve) => setTimeout(resolve, 500))
+    }
+
+    console.error("[runtime] Editor failed to start within timeout")
+  } catch (err) {
+    console.error("[runtime] Editor boot failed:", err)
   }
 }
 
@@ -1433,9 +1546,13 @@ async function main() {
   bootPGlite(workbookDir)
 
   // 3. Build and start Vite in background (non-blocking)
-  bootVite(config)
+  // Editor boot is chained after RSC Vite to avoid race conditions
+  bootVite(config).then(() => {
+    // 4. Boot editor sandbox Vite after RSC Vite is ready
+    bootEditor(config)
+  })
 
-  // 4. Start file watcher for real-time manifest updates
+  // 5. Start file watcher for real-time manifest updates
   startFileWatcher(config)
 
   // Handle shutdown
@@ -1446,6 +1563,7 @@ async function main() {
       watcher.close()
     }
     if (state.viteProc) state.viteProc.kill()
+    if (state.editorProc) state.editorProc.kill()
     if (state.workbookDb) {
       await state.workbookDb.save()
       await state.workbookDb.close()

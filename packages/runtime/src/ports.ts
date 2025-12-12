@@ -36,6 +36,9 @@ export const PORTS = {
 
   /** OpenCode AI server (default: 55300) */
   OPENCODE: getPort(300),
+
+  /** Editor sandbox Vite dev server (default: 55400) */
+  EDITOR: getPort(400),
 } as const;
 
 /**

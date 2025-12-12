@@ -2,8 +2,8 @@
  * Shared React module for cross-origin RSC client components
  *
  * This module is the single source of truth for React in the editor.
- * The import map in index.html redirects all React imports to this module,
- * ensuring both editor and runtime client components use the same React instance.
+ * It sets up window.__HANDS_REACT__ so RSC client components use the same
+ * React instance as the editor, avoiding "multiple React instances" errors.
  */
 import React from 'react'
 import * as ReactDOMFull from 'react-dom'

@@ -59,6 +59,99 @@ import { join } from "node:path";
 // Import all components from stdlib registry - they work with RSC even with "use client"
 import * as StdlibComponents from "@hands/stdlib/registry";
 
+// ============================================================================
+// Node ID Injection (inlined to avoid module resolution issues in Vite worker)
+// ============================================================================
+
+/**
+ * Generate a stable node ID matching OXC parser format
+ * Format: {tagname}_{path} where path is dot-separated indices
+ */
+function generateNodeId(tagName: string, path: number[]): string {
+  const safeName = tagName.toLowerCase().replace(/[^a-z0-9]/g, "");
+  const pathStr = path.join(".");
+  return \`\${safeName}_\${pathStr}\`;
+}
+
+/**
+ * Recursively traverse React elements and inject node IDs
+ */
+function NodeIdTraverser({
+  element,
+  path,
+}: {
+  element: React.ReactNode;
+  path: number[];
+}): React.ReactElement | null {
+  if (element == null) return null;
+
+  if (Array.isArray(element)) {
+    return React.createElement(
+      React.Fragment,
+      null,
+      element.map((child, idx) =>
+        React.createElement(NodeIdTraverser, {
+          key: idx,
+          element: child,
+          path: [...path.slice(0, -1), idx],
+        })
+      )
+    );
+  }
+
+  if (typeof element === "string" || typeof element === "number" || typeof element === "boolean") {
+    return React.createElement(React.Fragment, null, element);
+  }
+
+  if (React.isValidElement(element)) {
+    const { type, props } = element;
+    const children = (props as any).children;
+
+    if (typeof type === "string") {
+      const nodeId = generateNodeId(type, path);
+      let childCounter = 0;
+      const processedChildren = React.Children.map(children, (child) => {
+        const childPath = [...path, childCounter++];
+        return React.createElement(NodeIdTraverser, { element: child, path: childPath });
+      });
+      return React.cloneElement(element, { ...props, "data-node-id": nodeId } as any, processedChildren);
+    }
+
+    if (typeof type === "function") {
+      let childCounter = 0;
+      const processedChildren = React.Children.map(children, (child) => {
+        const childPath = [...path, childCounter++];
+        return React.createElement(NodeIdTraverser, { element: child, path: childPath });
+      });
+      return React.cloneElement(element, props, processedChildren);
+    }
+
+    let childCounter = 0;
+    const processedChildren = React.Children.map(children, (child) => {
+      const childPath = [...path, childCounter++];
+      return React.createElement(NodeIdTraverser, { element: child, path: childPath });
+    });
+    return React.cloneElement(element, props, processedChildren);
+  }
+
+  return React.createElement(React.Fragment, null, element);
+}
+
+/**
+ * HOC that wraps a Block component to inject node IDs
+ */
+function wrapWithNodeIdInjection<P extends Record<string, unknown>>(
+  Block: React.ComponentType<P>,
+  blockId: string
+): React.ComponentType<P> {
+  function WrappedBlock(props: P) {
+    const element = React.createElement(Block, props);
+    return React.createElement(NodeIdTraverser, { element, path: [0] });
+  }
+  WrappedBlock.displayName = \`WithNodeIds(\${(Block as any).displayName || (Block as any).name || blockId})\`;
+  return WrappedBlock;
+}
+
 // Client manifest for RSC serialization
 // This Proxy handles "use client" component references without needing webpack infrastructure
 const createClientManifest = () => new Proxy({}, {
@@ -124,8 +217,12 @@ const app = new Hono<{ Bindings: Bindings; Variables: Variables }>();
 app.use("/*", cors());
 
 // Initialize context
+// Runtime port defaults to 55100 for local dev
+// In production, this would come from wrangler bindings
+const DEFAULT_RUNTIME_PORT = 55100;
+
 app.use("/*", async (c, next) => {
-  const runtimePort = parseInt(c.env.RUNTIME_PORT || "55000", 10);
+  const runtimePort = parseInt(c.env.RUNTIME_PORT, 10) || DEFAULT_RUNTIME_PORT;
   const db = createDbProxy(runtimePort);
   c.set("db", db);
   c.set("runtimePort", runtimePort);
@@ -173,7 +270,13 @@ app.get("/blocks/:blockId{.+}", async (c) => {
     return c.json({ error: \`Block not found: \${blockId}\` }, 404);
   }
 
-  const props = Object.fromEntries(new URL(c.req.url).searchParams);
+  const url = new URL(c.req.url);
+  const props = Object.fromEntries(url.searchParams);
+  const editMode = url.searchParams.get("edit") === "true";
+
+  // Remove edit param from props passed to component
+  delete props.edit;
+
   const db = c.get("db");
   const ctx = {
     db,
@@ -183,11 +286,17 @@ app.get("/blocks/:blockId{.+}", async (c) => {
   };
 
   try {
+    // TODO: Node ID injection needs a different approach for async components
+    // The HOC wrapper doesn't work because it intercepts before async execution
+    // Options: 1) JSX transform plugin, 2) Custom renderer, 3) Post-render DOM injection
+    // For now, render without node IDs - we'll add them client-side via DOM observation
+    const BlockToRender = Block;
+
     // Wrap rendering with rwsdk request context for "use client" support
     const rscContext = createRscRequestContext(c.req.raw);
     const stream = runWithRequestInfo(rscContext, () =>
       renderToReadableStream(
-        React.createElement(Block, { ...props, ctx }),
+        React.createElement(BlockToRender, { ...props, ctx }),
         createClientManifest()
       )
     );
@@ -241,74 +350,6 @@ app.post("/blocks/:blockId{.+}/rsc", async (c) => {
     const error = err instanceof Error ? err.message : String(err);
     return c.json({ error }, 500);
   }
-});
-
-// === RSC Component Routes ===
-// Render arbitrary JSX components via RSC for the visual editor
-
-// Component registry - filter to only React components from stdlib exports
-// Note: forwardRef components have typeof "object" with a render property
-const COMPONENTS: Record<string, React.ComponentType<any>> = Object.fromEntries(
-  Object.entries(StdlibComponents).filter(([_, v]) =>
-    typeof v === "function" || (typeof v === "object" && v !== null && "render" in v)
-  )
-);
-
-app.post("/rsc/component", async (c) => {
-  const { tagName, props = {}, children, elementId } = await c.req.json<{
-    tagName: string;
-    props?: Record<string, unknown>;
-    children?: string;
-    elementId?: string;
-  }>();
-
-  if (!tagName) {
-    return c.json({ error: "tagName is required" }, 400);
-  }
-
-  // Look up component in registry
-  const Component = COMPONENTS[tagName];
-
-  if (!Component) {
-    // Component not found - return a placeholder element
-    // The editor will show this as "unknown component"
-    return c.json({
-      error: \`Component not found: \${tagName}. Available: \${Object.keys(COMPONENTS).join(", ")}\`
-    }, 404);
-  }
-
-  try {
-    // Build the element with props
-    const element = React.createElement(Component, {
-      ...props,
-      key: elementId,
-    });
-
-    // Wrap rendering with rwsdk request context for "use client" support
-    const rscContext = createRscRequestContext(c.req.raw);
-    const stream = runWithRequestInfo(rscContext, () =>
-      renderToReadableStream(element, createClientManifest())
-    );
-
-    return new Response(stream, {
-      headers: {
-        "Content-Type": "text/x-component",
-        "Cache-Control": "no-cache",
-      },
-    });
-  } catch (err) {
-    const error = err instanceof Error ? err.message : String(err);
-    console.error(\`[rsc] Component render error (\${tagName}):\`, error);
-    return c.json({ error }, 500);
-  }
-});
-
-// List available RSC components
-app.get("/rsc/components", (c) => {
-  return c.json({
-    components: Object.keys(COMPONENTS),
-    count: Object.keys(COMPONENTS).length,
-  });
 });
 
 // === Workbook Routes ===

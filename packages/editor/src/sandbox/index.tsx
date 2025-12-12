@@ -1,87 +1,123 @@
 /**
- * Sandbox Entry Point
+ * Sandbox Entry Point - RSC-First Block Editor
  *
- * Reads blockId and runtimePort from URL params.
- * Fetches block source from runtime, saves on changes.
+ * Uses the new RSC-first editor architecture:
+ * - RSC renders the live block output
+ * - Edit overlay provides selection and interaction
+ * - No Plate - direct AST ↔ DOM mapping
  */
 
-import { StrictMode, useEffect, useState } from 'react'
-import { createRoot } from 'react-dom/client'
-import { PlateVisualEditor } from '../plate/PlateVisualEditor'
-import { RscProvider, setRuntimePort } from '../rsc'
-import { applyTheme } from './theme'
+// MUST BE FIRST: Initialize shared React for RSC client components
+import '../rsc/shared-react'
 
-import '../../demo/index.css'
+import { StrictMode, useEffect, useState, useCallback } from 'react'
+import { createRoot } from 'react-dom/client'
+import { RscProvider, initFlightClient, setRuntimePort } from '../rsc'
+import { RscEditor } from '../rsc-editor/RscEditor'
+
+import './styles.css'
 
 const params = new URLSearchParams(window.location.search)
 const blockId = params.get('blockId')
+// runtimePort is the main API port (55100) for /workbook/* endpoints
 const runtimePort = params.get('runtimePort')
+const runtimePortNum = runtimePort ? parseInt(runtimePort, 10) : null
+// workerPort is the Vite worker port (55200+) for RSC /blocks/* endpoints
+const workerPort = params.get('workerPort')
+const workerPortNum = workerPort ? parseInt(workerPort, 10) : runtimePortNum
 const readOnly = params.get('readOnly') === 'true'
-const theme = params.get('theme') || 'system'
 
-// Add sandbox class for transparent background and apply theme
-document.body.classList.add('sandbox')
-applyTheme(theme)
-
-// Listen for theme changes from parent
+// Listen for styles from parent
 window.addEventListener('message', (e) => {
-  if (e.data?.type === 'theme' && e.data.theme) {
-    applyTheme(e.data.theme)
+  if (e.data?.type === 'styles') {
+    let style = document.getElementById('parent-styles') as HTMLStyleElement
+    if (!style) {
+      style = document.createElement('style')
+      style.id = 'parent-styles'
+      document.head.appendChild(style)
+    }
+    style.textContent = e.data.css
+
+    if (e.data.css.includes('color-scheme:dark')) {
+      document.documentElement.classList.add('dark')
+    } else {
+      document.documentElement.classList.remove('dark')
+    }
   }
 })
+
+// Tell parent we're ready
+window.parent.postMessage({ type: 'sandbox-ready' }, '*')
+
+// Set runtime port for RSC client module loading (vite-proxy is on main runtime port)
+if (runtimePortNum) {
+  setRuntimePort(runtimePortNum)
+}
 
 function SandboxApp() {
   const [source, setSource] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [rscReady, setRscReady] = useState(false)
 
-  // Fetch block source on mount
+  // Initialize RSC Flight client
   useEffect(() => {
-    if (!blockId || !runtimePort) {
-      setError('Missing blockId or runtimePort in URL params')
+    initFlightClient().then((success) => {
+      console.log('[Sandbox] RSC initialized:', success)
+      setRscReady(success)
+    })
+  }, [])
+
+  // Fetch block source
+  useEffect(() => {
+    if (!blockId || !runtimePortNum) {
+      setError('Missing blockId or runtimePort')
       return
     }
 
-    setRuntimePort(parseInt(runtimePort, 10))
-
-    fetch(`http://localhost:${runtimePort}/workbook/blocks/${blockId}/source`)
-      .then(res => res.ok ? res.json() : res.json().then(d => Promise.reject(d.error)))
+    fetch(`http://localhost:${runtimePortNum}/workbook/blocks/${blockId}/source`)
+      .then(res => res.ok ? res.json() : Promise.reject('Failed to load'))
       .then(data => setSource(data.source))
       .catch(err => setError(String(err)))
   }, [])
 
-  const handleSourceChange = (newSource: string) => {
-    setSource(newSource)
-    if (readOnly || !blockId || !runtimePort) return
+  // Save source changes
+  const handleSave = useCallback((newSource: string) => {
+    if (readOnly || !blockId || !runtimePortNum) return
 
-    fetch(`http://localhost:${runtimePort}/workbook/blocks/${blockId}/source`, {
+    fetch(`http://localhost:${runtimePortNum}/workbook/blocks/${blockId}/source`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ source: newSource }),
     }).catch(console.error)
-  }
+  }, [])
 
   if (error) {
     return (
       <div className="flex items-center justify-center h-screen text-red-500">
-        <p>{error}</p>
+        {error}
       </div>
     )
   }
 
-  if (source === null) {
+  if (!rscReady || source === null) {
     return (
-      <div className="flex items-center justify-center h-screen text-gray-500">
-        Loading...
+      <div className="flex items-center justify-center h-screen text-muted-foreground">
+        <div className="flex items-center gap-2">
+          <div className="w-4 h-4 border-2 border-muted-foreground/30 border-t-muted-foreground rounded-full animate-spin" />
+          <span className="text-sm">Loading...</span>
+        </div>
       </div>
     )
   }
 
   return (
-    <RscProvider port={parseInt(runtimePort!, 10)} enabled={!!runtimePort}>
-      <PlateVisualEditor
+    <RscProvider port={workerPortNum!} enabled>
+      <RscEditor
+        blockId={blockId!}
         source={source}
-        onSourceChange={handleSourceChange}
-        className="h-screen"
+        runtimePort={workerPortNum!}
+        onSourceChange={handleSave}
+        readOnly={readOnly}
       />
     </RscProvider>
   )

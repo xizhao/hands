@@ -51,8 +51,8 @@ export async function renderComponentViaRsc(
     }
   }
 
-  // Set runtime port for loading "use client" modules
-  setRuntimePort(port)
+  // NOTE: setRuntimePort should be called ONCE at app startup
+  // setRuntimePort(port) -- don't override here
 
   const { tagName, props, children, elementId } = request
 
@@ -123,8 +123,9 @@ export async function renderBlockViaRsc(
     }
   }
 
-  // Set runtime port for loading "use client" modules
-  setRuntimePort(port)
+  // NOTE: setRuntimePort should be called ONCE at app startup, not here.
+  // The runtime port (for vite-proxy) may differ from the worker port (for RSC blocks).
+  // setRuntimePort(port) -- don't override here
 
   // Build URL with props as query params
   const searchParams = new URLSearchParams()

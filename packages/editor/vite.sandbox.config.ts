@@ -4,16 +4,21 @@
  * Build: vite build --config vite.sandbox.config.ts
  * Dev:   vite --config vite.sandbox.config.ts
  *
- * Outputs to ../desktop/dist/editor/ for Tauri to serve
+ * In dev mode: Runtime proxies /sandbox/* to this server
+ * In prod mode: Outputs to ../desktop/dist/editor/ for Tauri to serve
  */
 
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 import { resolve } from 'path'
 
+const isDev = process.env.NODE_ENV !== 'production'
+
 export default defineConfig({
   plugins: [react()],
-  base: '/editor/', // Served from /editor/ path in desktop
+  // In dev: no base (runtime proxies /sandbox/* -> /)
+  // In prod: /editor/ for Tauri asset serving
+  base: isDev ? '/' : '/editor/',
   build: {
     target: 'esnext',
     outDir: resolve(__dirname, '../desktop/dist/editor'),
@@ -35,7 +40,9 @@ export default defineConfig({
     },
   },
   server: {
-    port: 5167, // Different port from demo (5166)
+    // Port is set via CLI when started by runtime (--port 55400)
+    // Default to 5167 for standalone dev
+    port: 5167,
     cors: true,
     headers: {
       'Access-Control-Allow-Origin': '*',

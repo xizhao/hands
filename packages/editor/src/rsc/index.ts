@@ -21,3 +21,8 @@ export * from './client'
 export * from './context'
 export * from './types'
 export { setRuntimePort, getRuntimePort, clearModuleCache } from './webpack-shim'
+
+// RSC-First Editor components
+export * from './skeleton-generator'
+export * from './HotSwapContainer'
+export * from './useRSCRender'

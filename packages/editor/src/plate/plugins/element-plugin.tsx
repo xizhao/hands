@@ -8,10 +8,15 @@
  * ALL custom components go through RSC. This makes the editor truly dynamic -
  * it doesn't need to know what components exist ahead of time. The RSC server
  * is the single source of truth for component rendering.
+ *
+ * RSC INTEGRATION:
+ * When RscBlockContext is available, custom components portal in RSC-rendered
+ * content instead of showing placeholders. The RSC element tree is searched
+ * for matching elements by component type.
  */
 
 import * as React from 'react'
-import { useState, useEffect, Component } from 'react'
+import { useState, useMemo } from 'react'
 import {
   createPlatePlugin,
   useEditorRef,
@@ -24,10 +29,11 @@ import { BlockSelectionPlugin, useBlockSelected } from '@platejs/selection/react
 import { GripVertical, PlusIcon } from 'lucide-react'
 import { PathApi } from 'platejs'
 import { cn } from '../../lib/utils'
-import { useRsc, useRscAvailable } from '../../rsc'
 import { Button as UIButton } from '../ui/button'
 // Import stdlib registry for component discovery (UI hints only)
 import { listComponents } from '@hands/stdlib/registry'
+// RSC context for portaling in rendered content
+import { useRscBlock } from '../../rsc/context'
 
 // NOTE: No direct stdlib component imports here.
 // ALL custom components (stdlib or user-defined) go through RSC.
@@ -391,14 +397,35 @@ function DraggableComponentInner({
 /**
  * Unified Element Component
  *
- * Renders any element - HTML or custom component
+ * Renders any element - HTML or custom component.
+ * For root-level elements, uses RSC content if available (regardless of type).
+ * For nested elements, renders normally (they're part of RSC output).
  */
 function ElementRenderer(props: RenderElementProps) {
   const { attributes, children, element } = props
   const type = (element as any).type as string
   const domProps = getDomProps(element)
+  const editor = useEditorRef()
+  const rscBlock = useRscBlock()
 
-  // Custom component (PascalCase or non-HTML)
+  // Get element path to check if root-level
+  const path = editor.api.findPath(element)
+  const isRootLevel = path && path.length === 1
+
+  // For root-level elements with RSC available, show RSC content
+  // This covers both HTML roots and custom component roots
+  if (isRootLevel && rscBlock?.rscElement && !rscBlock.isLoading) {
+    return (
+      <RootRscPortal
+        attributes={attributes}
+        rscElement={rscBlock.rscElement}
+        plateChildren={children}
+        element={element}
+      />
+    )
+  }
+
+  // Custom component (PascalCase or non-HTML) - show placeholder when nested or loading
   if (isCustomComponent(type)) {
     return (
       <CustomComponentRenderer
@@ -422,13 +449,10 @@ function ElementRenderer(props: RenderElementProps) {
 /**
  * Custom Component Renderer
  *
- * ALL custom components go through RSC. This makes the editor truly dynamic -
- * it doesn't need to know what components exist ahead of time.
- *
- * The RSC server is the single source of truth for:
- * - stdlib components (Button, Card, MetricCard, etc.)
- * - user-defined components
- * - any React component registered in the workbook
+ * Renders custom components with structural placeholder.
+ * Root-level RSC rendering is handled by ElementRenderer.
+ * Nested custom components show placeholders since they're
+ * already rendered as part of the parent's RSC output.
  */
 function CustomComponentRenderer({
   attributes,
@@ -443,488 +467,124 @@ function CustomComponentRenderer({
   componentName: string
   props: Record<string, unknown>
 }) {
+  const rscBlock = useRscBlock()
+
   return (
     <DraggableComponentWrapper element={element}>
-      <RscComponentRenderer
+      <StructuralComponentRenderer
         attributes={attributes}
         componentName={componentName}
         props={props}
-        elementId={(element as any).id}
         plateChildren={children}
         element={element}
+        isLoading={rscBlock?.isLoading}
       />
     </DraggableComponentWrapper>
   )
 }
 
 /**
- * RSC Component Renderer
+ * Root RSC Portal
+ *
+ * Renders RSC content for the root-level element with Plate's editing affordances.
+ * The RSC content is the visual source of truth for the entire block.
+ * Plate children are hidden since they're part of the RSC output.
  */
-function RscComponentRenderer({
+function RootRscPortal({
+  attributes,
+  rscElement,
+  plateChildren,
+  element,
+}: {
+  attributes: any
+  rscElement: React.ReactNode
+  plateChildren: React.ReactNode
+  element: TElement
+}) {
+  // The RSC element is the full rendered output from the server
+  // We wrap it with Plate's attributes for selection/editing support
+  return (
+    <div {...attributes} className="rsc-root-portal">
+      {/* RSC-rendered content - this is the visual output */}
+      <div contentEditable={false} className="rsc-content">
+        {rscElement}
+      </div>
+      {/* Hidden Plate children - required for Slate document structure */}
+      <div className="sr-only" aria-hidden="true">
+        {plateChildren}
+      </div>
+    </div>
+  )
+}
+
+/**
+ * Structural Component Placeholder
+ *
+ * Shown when RSC is loading or unavailable.
+ * Displays component structure with props preview.
+ */
+function StructuralComponentRenderer({
   attributes,
   componentName,
   props,
-  elementId,
   plateChildren,
   element,
+  isLoading,
 }: {
   attributes: any
   componentName: string
   props: Record<string, unknown>
-  elementId?: string
   plateChildren: React.ReactNode
   element: TElement
+  isLoading?: boolean
 }) {
-  const rscAvailable = useRscAvailable()
-  const { renderComponent } = useRsc()
-
-  const [result, setResult] = useState<{
-    element: React.ReactNode | null
-    error?: string
-    loading: boolean
-  }>({ element: null, loading: true })
-
-  useEffect(() => {
-    if (!rscAvailable) {
-      setResult({ element: null, loading: false, error: 'RSC not connected' })
-      return
-    }
-
-    let cancelled = false
-
-    async function render() {
-      try {
-        const res = await renderComponent({
-          tagName: componentName,
-          props,
-          elementId,
-        })
-
-        if (!cancelled) {
-          setResult({ element: res.element, error: res.error, loading: false })
-        }
-      } catch (err) {
-        if (!cancelled) {
-          setResult({
-            element: null,
-            error: err instanceof Error ? err.message : String(err),
-            loading: false,
-          })
-        }
-      }
-    }
-
-    render()
-    return () => { cancelled = true }
-  }, [componentName, props, elementId, renderComponent, rscAvailable])
-
-  if (result.loading) {
-    return (
-      <ComponentPlaceholder
-        attributes={attributes}
-        componentName={componentName}
-        element={element}
-        status="loading"
-        plateChildren={plateChildren}
-      />
-    )
-  }
-
-  if (result.error || !result.element) {
-    return (
-      <ComponentPlaceholder
-        attributes={attributes}
-        componentName={componentName}
-        element={element}
-        status={result.error ? 'error' : 'unknown'}
-        error={result.error}
-        plateChildren={plateChildren}
-      />
-    )
-  }
-
+  // In structural view, show a styled placeholder that indicates the component
   return (
     <div {...attributes} className="my-2">
-      <div contentEditable={false}>
-        <RscErrorBoundary componentName={componentName}>
-          {result.element}
-        </RscErrorBoundary>
-      </div>
-      {plateChildren}
-    </div>
-  )
-}
-
-// Error boundary for RSC-rendered components
-interface RscErrorBoundaryProps {
-  componentName: string
-  children: React.ReactNode
-}
-
-interface RscErrorBoundaryState {
-  hasError: boolean
-  error: Error | null
-}
-
-class RscErrorBoundary extends Component<RscErrorBoundaryProps, RscErrorBoundaryState> {
-  state: RscErrorBoundaryState = { hasError: false, error: null }
-
-  static getDerivedStateFromError(error: Error): RscErrorBoundaryState {
-    return { hasError: true, error }
-  }
-
-  componentDidCatch(error: Error, info: React.ErrorInfo) {
-    console.error(`[RSC Error] Component "${this.props.componentName}" crashed:`, error, info)
-  }
-
-  render() {
-    if (this.state.hasError) {
-      return (
-        <div className="p-4 border border-red-500/50 bg-red-500/10 rounded-md text-sm">
-          <div className="font-medium text-red-600 dark:text-red-400">
-            Error in {this.props.componentName}
+      <div
+        contentEditable={false}
+        className={cn(
+          "rounded-lg border border-border/50 bg-card/30 p-3",
+          isLoading && "animate-pulse"
+        )}
+      >
+        {/* Component header */}
+        <div className="flex items-center gap-2 mb-2 pb-2 border-b border-border/30">
+          <div className="w-5 h-5 rounded bg-primary/20 flex items-center justify-center">
+            <span className="text-xs font-bold text-primary/70">
+              {componentName.charAt(0)}
+            </span>
           </div>
-          <div className="text-red-500/80 mt-1 font-mono text-xs">
-            {this.state.error?.message || 'Unknown error'}
-          </div>
-        </div>
-      )
-    }
-    return this.props.children
-  }
-}
-
-// ============================================================================
-// Skeleton Components for Loading States
-// ============================================================================
-
-/**
- * Shimmer animation keyframes (injected via style tag)
- * Theme-aware with subtle, polished animation
- */
-const shimmerStyles = `
-@keyframes skeleton-shimmer {
-  0% { transform: translateX(-100%); }
-  100% { transform: translateX(100%); }
-}
-.skeleton-block {
-  background: hsl(var(--muted, 240 5% 96%));
-  position: relative;
-  overflow: hidden;
-}
-.skeleton-block::after {
-  content: '';
-  position: absolute;
-  inset: 0;
-  transform: translateX(-100%);
-  background: linear-gradient(
-    90deg,
-    transparent 0%,
-    hsl(var(--muted-foreground, 240 4% 46%) / 0.08) 40%,
-    hsl(var(--muted-foreground, 240 4% 46%) / 0.12) 50%,
-    hsl(var(--muted-foreground, 240 4% 46%) / 0.08) 60%,
-    transparent 100%
-  );
-  animation: skeleton-shimmer 2s ease-in-out infinite;
-}
-.dark .skeleton-block {
-  background: hsl(240 4% 16%);
-}
-.dark .skeleton-block::after {
-  background: linear-gradient(
-    90deg,
-    transparent 0%,
-    hsl(0 0% 100% / 0.04) 40%,
-    hsl(0 0% 100% / 0.08) 50%,
-    hsl(0 0% 100% / 0.04) 60%,
-    transparent 100%
-  );
-}
-`
-
-// Inject shimmer styles once
-if (typeof document !== 'undefined') {
-  const styleId = 'skeleton-shimmer-styles'
-  if (!document.getElementById(styleId)) {
-    const style = document.createElement('style')
-    style.id = styleId
-    style.textContent = shimmerStyles
-    document.head.appendChild(style)
-  }
-}
-
-/**
- * Single skeleton block with polished shimmer
- */
-function SkeletonBlock({
-  width = '100%',
-  height = '1rem',
-  className,
-  rounded = 'md',
-}: {
-  width?: string | number
-  height?: string | number
-  className?: string
-  rounded?: 'sm' | 'md' | 'lg' | 'full'
-}) {
-  const roundedClass = {
-    sm: 'rounded-sm',
-    md: 'rounded-md',
-    lg: 'rounded-lg',
-    full: 'rounded-full',
-  }[rounded]
-
-  return (
-    <div
-      className={cn('skeleton-block', roundedClass, className)}
-      style={{
-        width: typeof width === 'number' ? `${width}px` : width,
-        height: typeof height === 'number' ? `${height}px` : height,
-      }}
-    />
-  )
-}
-
-/**
- * Generate skeleton for a text node (leaf)
- * Estimates width based on text length
- */
-function TextSkeleton({ text }: { text: string }) {
-  // Estimate width based on character count (rough approximation)
-  const charWidth = 8 // ~8px per character average
-  const estimatedWidth = Math.min(text.length * charWidth, 400)
-  // Vary width slightly for visual interest
-  const width = Math.max(estimatedWidth, 40)
-
-  return <SkeletonBlock width={width} height={16} className="inline-block" />
-}
-
-/**
- * Generate skeleton for an element node recursively
- * This creates a skeleton that mirrors the component tree structure
- */
-function ElementSkeleton({ element, depth = 0 }: { element: any; depth?: number }) {
-  const type = element?.type as string
-  const children = element?.children || []
-
-  // For void elements or leaf-like elements, render a simple block
-  if (shouldBeVoid(element) || children.length === 0) {
-    return (
-      <SkeletonBlock
-        width="100%"
-        height={32}
-        className="rounded-md"
-      />
-    )
-  }
-
-  // Check if all children are text nodes (leaf element)
-  const isLeafLike = children.every((child: any) => 'text' in child)
-
-  if (isLeafLike) {
-    // Render inline skeleton for text content
-    const textContent = children.map((c: any) => c.text || '').join('')
-    if (textContent.trim()) {
-      return <TextSkeleton text={textContent} />
-    }
-    return <SkeletonBlock width="60%" height={16} />
-  }
-
-  // Determine layout hints from element type
-  const isFlexRow = type.toLowerCase().includes('row') ||
-                    type.toLowerCase().includes('header') ||
-                    type.toLowerCase().includes('footer') ||
-                    (element as any).className?.includes('flex-row') ||
-                    (element as any).className?.includes('flex ')
-
-  const isGrid = type.toLowerCase().includes('grid')
-
-  // Render children recursively
-  const childSkeletons = children
-    .filter((child: any) => !('text' in child)) // Skip text nodes, handled above
-    .map((child: any, index: number) => (
-      <ElementSkeleton
-        key={child.id || index}
-        element={child as TElement}
-        depth={depth + 1}
-      />
-    ))
-
-  // For nested custom components, render with appropriate layout
-  if (isCustomComponent(type)) {
-    return (
-      <div className={cn(
-        'rounded-lg border border-border/40 bg-card/30 p-3',
-        depth > 0 && 'border-border/20'
-      )}>
-        <div className={cn(
-          isFlexRow && 'flex items-center gap-3',
-          isGrid && 'grid grid-cols-2 gap-3',
-          !isFlexRow && !isGrid && 'space-y-2'
-        )}>
-          {childSkeletons.length > 0 ? childSkeletons : (
-            // Default content skeleton if no children
-            <>
-              <SkeletonBlock width="50%" height={18} />
-              <SkeletonBlock width="80%" height={14} />
-            </>
+          <code className="text-xs font-mono text-muted-foreground">
+            &lt;{componentName}&gt;
+          </code>
+          {isLoading && (
+            <span className="text-xs text-muted-foreground/50 ml-auto">
+              Loading...
+            </span>
+          )}
+          {!isLoading && Object.keys(props).length > 0 && (
+            <span className="text-xs text-muted-foreground/50">
+              {Object.keys(props).length} props
+            </span>
           )}
         </div>
-      </div>
-    )
-  }
-
-  // For HTML containers, just render children with layout
-  return (
-    <div className={cn(
-      isFlexRow && 'flex items-center gap-2',
-      isGrid && 'grid grid-cols-2 gap-2',
-      !isFlexRow && !isGrid && 'space-y-1.5'
-    )}>
-      {childSkeletons.length > 0 ? childSkeletons : (
-        <SkeletonBlock width="100%" height={14} />
-      )}
-    </div>
-  )
-}
-
-/**
- * Dynamic skeleton generator based on component tree structure
- * Analyzes the actual Plate element tree to create matching skeletons
- */
-function ComponentSkeleton({
-  element,
-}: {
-  element: any
-}) {
-  const children = element?.children || []
-
-  // If no meaningful children, render a generic card skeleton
-  const hasStructure = children.some((child: any) =>
-    !('text' in child) || (child.text && child.text.trim())
-  )
-
-  if (!hasStructure) {
-    // Generic skeleton for components without tree structure
-    return (
-      <div className="rounded-lg border border-border/50 bg-card/50 p-4 space-y-3">
-        <SkeletonBlock width="45%" height={20} />
-        <div className="space-y-2">
-          <SkeletonBlock width="100%" height={14} />
-          <SkeletonBlock width="85%" height={14} />
-        </div>
-      </div>
-    )
-  }
-
-  // Render skeleton based on actual tree structure
-  return (
-    <div className="rounded-lg border border-border/50 bg-card/50 p-4">
-      <div className="space-y-3">
-        {children.map((child: any, index: number) => {
-          if ('text' in child) {
-            if (child.text && child.text.trim()) {
-              return <TextSkeleton key={index} text={child.text} />
-            }
-            return null
-          }
-          return (
-            <ElementSkeleton
-              key={child.id || index}
-              element={child as TElement}
-            />
-          )
-        })}
-      </div>
-    </div>
-  )
-}
-
-// ============================================================================
-// Error Display Component
-// ============================================================================
-
-/**
- * Polished error state for failed component renders
- */
-function ComponentError({
-  componentName,
-  error,
-}: {
-  componentName: string
-  error?: string
-}) {
-  return (
-    <div className="rounded-lg border border-red-200 bg-red-50/50 p-4">
-      <div className="flex items-start gap-3">
-        <div className="flex-shrink-0 w-8 h-8 rounded-full bg-red-100 flex items-center justify-center">
-          <svg className="w-4 h-4 text-red-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-          </svg>
-        </div>
-        <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2">
-            <span className="font-medium text-red-800">Failed to render</span>
-            <code className="px-1.5 py-0.5 text-xs bg-red-100 text-red-700 rounded font-mono">
-              &lt;{componentName}&gt;
-            </code>
-          </div>
-          {error && (
-            <p className="mt-1 text-sm text-red-600 break-words">
-              {error}
-            </p>
-          )}
-        </div>
-      </div>
-    </div>
-  )
-}
-
-/**
- * Placeholder for unknown/loading/error components
- */
-function ComponentPlaceholder({
-  attributes,
-  componentName,
-  element,
-  status,
-  error,
-  plateChildren,
-}: {
-  attributes: any
-  componentName: string
-  element: any
-  status: 'loading' | 'error' | 'unknown'
-  error?: string
-  plateChildren: React.ReactNode
-}) {
-  return (
-    <div {...attributes} className="my-2">
-      <div contentEditable={false}>
-        {status === 'loading' && (
-          <ComponentSkeleton element={element} />
-        )}
-        {status === 'error' && (
-          <ComponentError componentName={componentName} error={error} />
-        )}
-        {status === 'unknown' && (
-          <div className="rounded-lg border border-amber-200 bg-amber-50/50 p-4">
-            <div className="flex items-center gap-3">
-              <div className="flex-shrink-0 w-8 h-8 rounded-full bg-amber-100 flex items-center justify-center">
-                <span className="text-amber-600 text-lg">?</span>
+        {/* Show props preview when not loading */}
+        {!isLoading && Object.keys(props).length > 0 && (
+          <div className="space-y-1">
+            {Object.entries(props).slice(0, 3).map(([key, value]) => (
+              <div key={key} className="flex items-center gap-2 text-xs">
+                <span className="text-muted-foreground/60">{key}:</span>
+                <span className="font-mono text-muted-foreground truncate max-w-[200px]">
+                  {typeof value === 'string' ? `"${value}"` : String(value)}
+                </span>
               </div>
-              <div>
-                <div className="flex items-center gap-2">
-                  <span className="font-medium text-amber-800">Unknown component</span>
-                  <code className="px-1.5 py-0.5 text-xs bg-amber-100 text-amber-700 rounded font-mono">
-                    &lt;{componentName}&gt;
-                  </code>
-                </div>
-                <p className="mt-0.5 text-sm text-amber-600">
-                  This component is not registered in the current workspace
-                </p>
-              </div>
-            </div>
+            ))}
+            {Object.keys(props).length > 3 && (
+              <span className="text-xs text-muted-foreground/40">
+                +{Object.keys(props).length - 3} more
+              </span>
+            )}
           </div>
         )}
       </div>

@@ -10,7 +10,8 @@
     "./config": "./src/config/index.ts",
     "./ctx": "./src/ctx.ts",
     "./db": "./src/db/index.ts",
-    "./types": "./src/types.ts"
+    "./types": "./src/types.ts",
+    "./rsc/node-id-injector": "./src/rsc/node-id-injector.tsx"
   },
   "bin": {
     "hands-runtime": "./src/index.ts",
@@ -25,7 +26,6 @@
     "@cloudflare/vite-plugin": "1.16.1",
     "@electric-sql/pglite": "0.2.17",
     "@hands/stdlib": "workspace:*",
-    "esbuild": "^0.24.0",
     "hono": "^4.7.0",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
