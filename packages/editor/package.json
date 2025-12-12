@@ -4,12 +4,9 @@
   "type": "module",
   "exports": {
     ".": "./src/index.ts",
-    "./oplog": "./src/oplog/index.ts",
     "./ast": "./src/ast/index.ts",
     "./scene": "./src/scene/index.ts",
-    "./components": "./src/components/index.ts",
-    "./rsc": "./src/rsc/index.ts",
-    "./sandbox/protocol": "./src/sandbox/protocol.ts"
+    "./rsc": "./src/rsc/index.ts"
   },
   "scripts": {
     "dev": "vite",

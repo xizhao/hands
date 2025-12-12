@@ -56,6 +56,13 @@
   body {
     @apply bg-background text-foreground;
   }
+  /* Sandbox mode - transparent background for iframe embedding */
+  body.sandbox {
+    background: transparent;
+  }
+  body.sandbox #root {
+    background: transparent;
+  }
 }
 
 /* Plate editor overrides */

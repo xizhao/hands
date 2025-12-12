@@ -17,6 +17,9 @@ const blockId = params.get('blockId')
 const runtimePort = params.get('runtimePort')
 const readOnly = params.get('readOnly') === 'true'
 
+// Add sandbox class for transparent background
+document.body.classList.add('sandbox')
+
 function SandboxApp() {
   const [source, setSource] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
