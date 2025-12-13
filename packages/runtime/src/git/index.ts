@@ -182,9 +182,7 @@ function generateCommitMessage(status: {
   const hasBlockChanges = uniqueFiles.some((f) => f.startsWith("blocks/"));
   const hasSourceChanges = uniqueFiles.some((f) => f.startsWith("sources/"));
   const hasActionChanges = uniqueFiles.some((f) => f.startsWith("actions/"));
-  const hasConfigChanges = uniqueFiles.some(
-    (f) => f === "package.json" || f === "hands.json",
-  );
+  const hasConfigChanges = uniqueFiles.some((f) => f === "package.json" || f === "hands.json");
 
   // Build message parts
   const parts: string[] = [];
@@ -270,10 +268,7 @@ export async function commit(
 /**
  * Get commit history
  */
-export async function getHistory(
-  workbookDir: string,
-  limit = 50,
-): Promise<GitCommit[]> {
+export async function getHistory(workbookDir: string, limit = 50): Promise<GitCommit[]> {
   const isRepo = await isGitRepo(workbookDir);
   if (!isRepo) {
     return [];
@@ -519,7 +514,7 @@ export async function getDiffStats(workbookDir: string): Promise<GitDiffStats> {
   // Get diff stats excluding db.tar.gz (binary file would skew stats)
   let insertions = 0;
   let deletions = 0;
-  let filesChanged = uniqueFiles.filter((f) => !f.endsWith("db.tar.gz")).length;
+  const filesChanged = uniqueFiles.filter((f) => !f.endsWith("db.tar.gz")).length;
 
   try {
     // Get numstat for tracked files (excluding db.tar.gz)

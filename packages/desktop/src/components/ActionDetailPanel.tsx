@@ -8,17 +8,8 @@
  * - Live status for running actions
  */
 
-import {
-  Check,
-  CircleNotch,
-  Clock,
-  Code,
-  Globe,
-  Play,
-  Warning,
-  X,
-} from "@phosphor-icons/react";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { Check, CircleNotch, Clock, Code, Globe, Play, Warning, X } from "@phosphor-icons/react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { formatDistanceToNow } from "date-fns";
 import { ChevronDown, ChevronRight, ExternalLink } from "lucide-react";
 import { useState } from "react";
@@ -77,7 +68,9 @@ export function ActionDetailPanel({ actionId }: ActionDetailPanelProps) {
     queryKey: ["action", actionId, port],
     queryFn: async (): Promise<DiscoveredAction | null> => {
       if (!port) return null;
-      const res = await fetch(`http://localhost:${port}/trpc/actions.get?input=${encodeURIComponent(JSON.stringify({ id: actionId }))}`);
+      const res = await fetch(
+        `http://localhost:${port}/trpc/actions.get?input=${encodeURIComponent(JSON.stringify({ id: actionId }))}`,
+      );
       if (!res.ok) return null;
       const json = await res.json();
       return json.result?.data ?? null;
@@ -90,7 +83,9 @@ export function ActionDetailPanel({ actionId }: ActionDetailPanelProps) {
     queryKey: ["action-stats", actionId, port],
     queryFn: async (): Promise<ActionStats | null> => {
       if (!port) return null;
-      const res = await fetch(`http://localhost:${port}/trpc/actions.stats?input=${encodeURIComponent(JSON.stringify({ actionId }))}`);
+      const res = await fetch(
+        `http://localhost:${port}/trpc/actions.stats?input=${encodeURIComponent(JSON.stringify({ actionId }))}`,
+      );
       if (!res.ok) return null;
       const json = await res.json();
       return json.result?.data ?? null;
@@ -103,7 +98,9 @@ export function ActionDetailPanel({ actionId }: ActionDetailPanelProps) {
     queryKey: ["action-runs", actionId, port],
     queryFn: async (): Promise<ActionRun[]> => {
       if (!port) return [];
-      const res = await fetch(`http://localhost:${port}/trpc/actions.runs?input=${encodeURIComponent(JSON.stringify({ actionId, limit: 50 }))}`);
+      const res = await fetch(
+        `http://localhost:${port}/trpc/actions.runs?input=${encodeURIComponent(JSON.stringify({ actionId, limit: 50 }))}`,
+      );
       if (!res.ok) return [];
       const json = await res.json();
       return json.result?.data ?? [];
@@ -184,7 +181,9 @@ export function ActionDetailPanel({ actionId }: ActionDetailPanelProps) {
             <div className="flex-1 min-w-0">
               <h1 className="text-lg font-semibold truncate">{action.definition.name}</h1>
               {action.definition.description && (
-                <p className="text-sm text-muted-foreground mt-0.5">{action.definition.description}</p>
+                <p className="text-sm text-muted-foreground mt-0.5">
+                  {action.definition.description}
+                </p>
               )}
             </div>
             <Button
@@ -279,7 +278,10 @@ export function ActionDetailPanel({ actionId }: ActionDetailPanelProps) {
             <div className="p-4 space-y-2">
               {runsLoading ? (
                 <div className="flex items-center justify-center py-8">
-                  <CircleNotch weight="bold" className="h-5 w-5 animate-spin text-muted-foreground" />
+                  <CircleNotch
+                    weight="bold"
+                    className="h-5 w-5 animate-spin text-muted-foreground"
+                  />
                 </div>
               ) : runs && runs.length > 0 ? (
                 runs.map((run) => {
@@ -304,19 +306,19 @@ export function ActionDetailPanel({ actionId }: ActionDetailPanelProps) {
                             <span className="text-sm font-medium">
                               {formatDistanceToNow(new Date(run.startedAt), { addSuffix: true })}
                             </span>
-                            <span className={cn(
-                              "text-xs px-1.5 py-0.5 rounded",
-                              run.trigger === "manual" && "bg-blue-500/10 text-blue-500",
-                              run.trigger === "cron" && "bg-purple-500/10 text-purple-500",
-                              run.trigger === "webhook" && "bg-amber-500/10 text-amber-500",
-                            )}>
+                            <span
+                              className={cn(
+                                "text-xs px-1.5 py-0.5 rounded",
+                                run.trigger === "manual" && "bg-blue-500/10 text-blue-500",
+                                run.trigger === "cron" && "bg-purple-500/10 text-purple-500",
+                                run.trigger === "webhook" && "bg-amber-500/10 text-amber-500",
+                              )}
+                            >
                               {run.trigger}
                             </span>
                           </div>
                           <div className="text-xs text-muted-foreground">
-                            {run.durationMs !== undefined && (
-                              <span>{run.durationMs}ms</span>
-                            )}
+                            {run.durationMs !== undefined && <span>{run.durationMs}ms</span>}
                             {run.status === "running" && <span>In progress...</span>}
                           </div>
                         </div>
@@ -326,12 +328,16 @@ export function ActionDetailPanel({ actionId }: ActionDetailPanelProps) {
                           {run.error && (
                             <div className="p-2 rounded bg-red-500/10 border border-red-500/20">
                               <p className="text-xs font-medium text-red-500 mb-1">Error</p>
-                              <pre className="text-xs text-red-400 whitespace-pre-wrap font-mono">{run.error}</pre>
+                              <pre className="text-xs text-red-400 whitespace-pre-wrap font-mono">
+                                {run.error}
+                              </pre>
                             </div>
                           )}
                           {run.input !== undefined && (
                             <div>
-                              <p className="text-xs font-medium text-muted-foreground mb-1">Input</p>
+                              <p className="text-xs font-medium text-muted-foreground mb-1">
+                                Input
+                              </p>
                               <pre className="text-xs bg-muted p-2 rounded overflow-auto max-h-32 font-mono">
                                 {JSON.stringify(run.input, null, 2)}
                               </pre>
@@ -339,7 +345,9 @@ export function ActionDetailPanel({ actionId }: ActionDetailPanelProps) {
                           )}
                           {run.output !== undefined && (
                             <div>
-                              <p className="text-xs font-medium text-muted-foreground mb-1">Output</p>
+                              <p className="text-xs font-medium text-muted-foreground mb-1">
+                                Output
+                              </p>
                               <pre className="text-xs bg-muted p-2 rounded overflow-auto max-h-32 font-mono">
                                 {JSON.stringify(run.output, null, 2)}
                               </pre>

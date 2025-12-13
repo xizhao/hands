@@ -6,13 +6,19 @@
  * Supports Cmd+S to save.
  */
 
-import { cn } from "@/lib/utils";
-import { useGitDiffStats, useGitHistory, useGitRevert, useGitSave, useGitStatus } from "@/hooks/useGit";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { CircleNotch, ClockCounterClockwise, Database } from "@phosphor-icons/react";
 import { formatDistanceToNow } from "date-fns";
 import { useEffect, useState } from "react";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import {
+  useGitDiffStats,
+  useGitHistory,
+  useGitRevert,
+  useGitSave,
+  useGitStatus,
+} from "@/hooks/useGit";
+import { cn } from "@/lib/utils";
 
 /**
  * Format bytes as a human-readable size string
@@ -155,11 +161,7 @@ export function SaveStatusIndicator() {
         </TooltipContent>
       </Tooltip>
 
-      <PopoverContent
-        side="bottom"
-        align="start"
-        className="w-[240px] p-0"
-      >
+      <PopoverContent side="bottom" align="start" className="w-[240px] p-0">
         {/* Header with status and save button */}
         <div className="flex items-center justify-between px-2.5 py-2 border-b border-border/50">
           <div className="flex items-center gap-1.5">
@@ -172,11 +174,7 @@ export function SaveStatusIndicator() {
                     ? `Saved ${lastSaveTime}`
                     : "All changes saved"}
             </span>
-            {showBranch && (
-              <span className="text-[10px] text-muted-foreground/50">
-                ({branch})
-              </span>
-            )}
+            {showBranch && <span className="text-[10px] text-muted-foreground/50">({branch})</span>}
           </div>
           {hasChanges && (
             <button
@@ -213,10 +211,14 @@ export function SaveStatusIndicator() {
                 </div>
               )}
               {/* Git diff stats for non-db files */}
-              {(diffStats.filesChanged > 0 || diffStats.insertions > 0 || diffStats.deletions > 0) && (
+              {(diffStats.filesChanged > 0 ||
+                diffStats.insertions > 0 ||
+                diffStats.deletions > 0) && (
                 <div className="flex items-center gap-2 text-muted-foreground">
                   {diffStats.filesChanged > 0 && (
-                    <span>{diffStats.filesChanged} file{diffStats.filesChanged !== 1 ? "s" : ""}</span>
+                    <span>
+                      {diffStats.filesChanged} file{diffStats.filesChanged !== 1 ? "s" : ""}
+                    </span>
                   )}
                   {diffStats.insertions > 0 && (
                     <span className="text-green-500 tabular-nums">+{diffStats.insertions}</span>
@@ -244,24 +246,27 @@ export function SaveStatusIndicator() {
                     onClick={() => canRevert && handleRevert(commit.hash)}
                     className={cn(
                       "px-2.5 py-1 flex items-center gap-2 group",
-                      canRevert
-                        ? "hover:bg-accent/50 cursor-pointer"
-                        : "cursor-default",
+                      canRevert ? "hover:bg-accent/50 cursor-pointer" : "cursor-default",
                       i === 0 && "bg-accent/20",
                     )}
                   >
                     <span className="text-[10px] text-muted-foreground/50 tabular-nums shrink-0 w-[24px]">
                       {formatCompactTime(commit.timestamp)}
                     </span>
-                    <span className={cn(
-                      "text-[11px] truncate flex-1",
-                      i === 0 ? "text-foreground" : "text-muted-foreground",
-                    )}>
+                    <span
+                      className={cn(
+                        "text-[11px] truncate flex-1",
+                        i === 0 ? "text-foreground" : "text-muted-foreground",
+                      )}
+                    >
                       {commit.message}
                     </span>
                     {/* Revert indicator */}
                     {isReverting ? (
-                      <CircleNotch weight="bold" className="h-3 w-3 text-muted-foreground animate-spin shrink-0" />
+                      <CircleNotch
+                        weight="bold"
+                        className="h-3 w-3 text-muted-foreground animate-spin shrink-0"
+                      />
                     ) : canRevert ? (
                       <ClockCounterClockwise
                         weight="bold"

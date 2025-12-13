@@ -47,8 +47,12 @@ export function parseNavigateOutput(output: string): NavigateOutput | null {
  * Build route path from navigate output
  */
 export function buildRoutePath(output: NavigateOutput): string {
-  const prefix = output.routeType === "block" ? "/blocks" :
-                 output.routeType === "table" ? "/tables" : "/actions";
+  const prefix =
+    output.routeType === "block"
+      ? "/blocks"
+      : output.routeType === "table"
+        ? "/tables"
+        : "/actions";
   return `${prefix}/${output.id}`;
 }
 
@@ -65,7 +69,7 @@ export const NavigateCard = memo(({ output }: NavigateCardProps) => {
     if (config) {
       navigate({
         to: config.path as any,
-        params: { [config.param]: output.id } as any
+        params: { [config.param]: output.id } as any,
       });
     }
   };

@@ -24,8 +24,8 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
-import { type AvailableSource, type Source, useSourceManagement } from "@/hooks/useSources";
 import { useRuntimeState } from "@/hooks/useRuntimeState";
+import { type AvailableSource, type Source, useSourceManagement } from "@/hooks/useSources";
 import { cn } from "@/lib/utils";
 
 // Map icon names to Phosphor icons

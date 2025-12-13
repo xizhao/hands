@@ -18,14 +18,18 @@ function IndexPage() {
   const sourceCount = manifest?.sources?.length ?? 0;
 
   // Still loading: no manifest yet OR db still booting (unless we have blocks to show)
-  const isLoading = !manifest || (isStarting || isDbBooting);
+  const isLoading = !manifest || isStarting || isDbBooting;
 
   // Has content: blocks or sources exist (can show sidebar even if db loading)
   const hasContent = blockCount > 0 || sourceCount > 0;
 
   // Show getting started ONLY when fully ready AND everything is empty
   const showGettingStarted =
-    isFullyReady && manifestTableCount === 0 && tableCount === 0 && blockCount === 0 && sourceCount === 0;
+    isFullyReady &&
+    manifestTableCount === 0 &&
+    tableCount === 0 &&
+    blockCount === 0 &&
+    sourceCount === 0;
 
   const handleImportFile = () => {
     // TODO: Trigger file input

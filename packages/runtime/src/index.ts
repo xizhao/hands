@@ -28,13 +28,13 @@ import {
   startScheduler,
   stopScheduler,
 } from "./actions/index.js";
-import { discoverSources } from "./sources/discovery.js";
 import { buildRSC } from "./build/rsc.js";
 import { getEditorSourcePath } from "./config/index.js";
 import type { BlockContext } from "./ctx.js";
 import { initWorkbookDb, type WorkbookDb } from "./db/index.js";
 import { createPgTypedRunner, type PgTypedRunner } from "./db/pgtyped/index.js";
 import { PORTS, waitForPortFree } from "./ports.js";
+import { discoverSources } from "./sources/discovery.js";
 import { registerSourceRoutes } from "./sources/index.js";
 import { registerTRPCRoutes } from "./trpc/index.js";
 
@@ -85,7 +85,6 @@ const state: RuntimeState = {
 
 // Max restarts before giving up
 const MAX_EDITOR_RESTARTS = 3;
-
 
 /**
  * Format a block source file with Biome + TypeScript import organization
@@ -189,7 +188,13 @@ interface ManifestSource {
  * Single file walk discovers blocks and sources.
  */
 async function getManifest(workbookDir: string, workbookId: string) {
-  const blocks: Array<{ id: string; title: string; path: string; parentDir: string; uninitialized?: boolean }> = [];
+  const blocks: Array<{
+    id: string;
+    title: string;
+    path: string;
+    parentDir: string;
+    uninitialized?: boolean;
+  }> = [];
   const sources: ManifestSource[] = [];
 
   // Read blocks from filesystem (recursive walk)
@@ -209,7 +214,13 @@ async function getManifest(workbookDir: string, workbookId: string) {
         const title = extractBlockTitle(content) || id.split("/").pop() || id;
         // Check if block has the uninitialized marker (fast string check)
         const uninitialized = content.includes("@hands:uninitialized");
-        blocks.push({ id, title, path: relativePath, parentDir, uninitialized: uninitialized || undefined });
+        blocks.push({
+          id,
+          title,
+          path: relativePath,
+          parentDir,
+          uninitialized: uninitialized || undefined,
+        });
       }
     });
   }

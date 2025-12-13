@@ -19,15 +19,14 @@
  */
 "use client";
 
-import * as React from "react";
-import { DeckGL } from "@deck.gl/react";
 import { HeatmapLayer } from "@deck.gl/aggregation-layers";
+import { DeckGL } from "@deck.gl/react";
+import * as React from "react";
 import { Map } from "react-map-gl/maplibre";
 import "maplibre-gl/dist/maplibre-gl.css";
 import { cn } from "../../../lib/utils.js";
 
-const DEFAULT_MAP_STYLE =
-  "https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json";
+const DEFAULT_MAP_STYLE = "https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json";
 
 export interface HeatmapMapProps<T extends Record<string, unknown>> {
   /** Array of data points to display */
@@ -129,7 +128,7 @@ export function HeatmapMap<T extends Record<string, unknown>>({
       <div
         className={cn(
           "flex items-center justify-center text-muted-foreground rounded-lg border border-dashed",
-          className
+          className,
         )}
         style={{ height }}
       >
@@ -139,10 +138,7 @@ export function HeatmapMap<T extends Record<string, unknown>>({
   }
 
   return (
-    <div
-      className={cn("relative w-full rounded-lg overflow-hidden", className)}
-      style={{ height }}
-    >
+    <div className={cn("relative w-full rounded-lg overflow-hidden", className)} style={{ height }}>
       <DeckGL initialViewState={calculatedViewState} controller layers={layers}>
         <Map mapStyle={mapStyle} />
       </DeckGL>

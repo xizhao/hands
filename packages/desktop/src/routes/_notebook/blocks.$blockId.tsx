@@ -1,8 +1,8 @@
-import { createFileRoute } from "@tanstack/react-router";
-import { EditorSandbox } from "@/components/Notebook/editor/EditorSandbox";
-import { EmptyBlockView } from "@/components/Notebook/EmptyBlockView";
-import { useBlockContent } from "@/hooks/useWorkbook";
 import { useQueryClient } from "@tanstack/react-query";
+import { createFileRoute } from "@tanstack/react-router";
+import { EmptyBlockView } from "@/components/Notebook/EmptyBlockView";
+import { EditorSandbox } from "@/components/Notebook/editor/EditorSandbox";
+import { useBlockContent } from "@/hooks/useWorkbook";
 
 export const Route = createFileRoute("/_notebook/blocks/$blockId")({
   component: BlockView,
@@ -43,7 +43,8 @@ function BlockView() {
   }
 
   // Empty or uninitialized block - show template picker
-  const isUninitialized = !source || source.trim() === "" || source.includes("@hands:uninitialized");
+  const isUninitialized =
+    !source || source.trim() === "" || source.includes("@hands:uninitialized");
   if (isUninitialized) {
     return <EmptyBlockView blockId={blockId} onInitialized={handleInitialized} />;
   }

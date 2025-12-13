@@ -65,8 +65,8 @@ function blendWithBackground(colorVar: string, bgVar: string, opacity: number): 
 
 import {
   ArrowDown,
-  ArrowUp,
   ArrowsDownUp,
+  ArrowUp,
   Broadcast,
   CircleNotch,
   DotsThreeVertical,
@@ -197,9 +197,7 @@ export function DataBrowser({ source, table, className, editable = false }: Data
   const orderedColumns = useMemo(() => {
     if (!columnOrder) return columns;
     // Map order indices back to columns, filtering out invalid indices
-    return columnOrder
-      .filter((i) => i >= 0 && i < columns.length)
-      .map((i) => columns[i]);
+    return columnOrder.filter((i) => i >= 0 && i < columns.length).map((i) => columns[i]);
   }, [columns, columnOrder]);
 
   // Custom header icons for glide-data-grid
@@ -517,16 +515,13 @@ export function DataBrowser({ source, table, className, editable = false }: Data
   );
 
   // Handle column resize
-  const onColumnResize = useCallback(
-    (column: GridColumn, newSize: number) => {
-      setColumnWidths((prev) => {
-        const next = new Map(prev);
-        next.set(column.id as string, newSize);
-        return next;
-      });
-    },
-    [],
-  );
+  const onColumnResize = useCallback((column: GridColumn, newSize: number) => {
+    setColumnWidths((prev) => {
+      const next = new Map(prev);
+      next.set(column.id as string, newSize);
+      return next;
+    });
+  }, []);
 
   // Handle header menu click (for sort/filter dropdown)
   const onHeaderMenuClick = useCallback(
@@ -726,10 +721,7 @@ export function DataBrowser({ source, table, className, editable = false }: Data
             />
             {/* Column header menu dropdown */}
             {menuPosition && menuColumnIndex !== null && (
-              <div
-                className="fixed z-50"
-                style={{ left: menuPosition.x, top: menuPosition.y }}
-              >
+              <div className="fixed z-50" style={{ left: menuPosition.x, top: menuPosition.y }}>
                 <div
                   className="absolute inset-0 fixed"
                   onClick={closeMenu}
@@ -750,7 +742,7 @@ export function DataBrowser({ source, table, className, editable = false }: Data
                           "flex items-center gap-1 px-2 py-1 text-xs rounded hover:bg-accent",
                           sortColumn === columnNames[menuColumnIndex] &&
                             sortDirection === "asc" &&
-                            "bg-accent text-primary"
+                            "bg-accent text-primary",
                         )}
                       >
                         <ArrowUp weight="bold" className="h-3 w-3" />
@@ -763,7 +755,7 @@ export function DataBrowser({ source, table, className, editable = false }: Data
                           "flex items-center gap-1 px-2 py-1 text-xs rounded hover:bg-accent",
                           sortColumn === columnNames[menuColumnIndex] &&
                             sortDirection === "desc" &&
-                            "bg-accent text-primary"
+                            "bg-accent text-primary",
                         )}
                       >
                         <ArrowDown weight="bold" className="h-3 w-3" />

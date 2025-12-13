@@ -29,18 +29,12 @@ export function registerWebhookRoutes(app: Hono, config: WebhookConfig): void {
 
     // Check DB is ready
     if (!isDbReady()) {
-      return c.json(
-        { error: "Database not ready", code: "DB_NOT_READY" },
-        503,
-      );
+      return c.json({ error: "Database not ready", code: "DB_NOT_READY" }, 503);
     }
 
     const db = getDb();
     if (!db) {
-      return c.json(
-        { error: "Database not available", code: "DB_NOT_AVAILABLE" },
-        503,
-      );
+      return c.json({ error: "Database not available", code: "DB_NOT_AVAILABLE" }, 503);
     }
 
     // Discover actions and find the one we want
@@ -48,10 +42,7 @@ export function registerWebhookRoutes(app: Hono, config: WebhookConfig): void {
     const action = actions.find((a) => a.id === actionId);
 
     if (!action) {
-      return c.json(
-        { error: `Action not found: ${actionId}`, code: "ACTION_NOT_FOUND" },
-        404,
-      );
+      return c.json({ error: `Action not found: ${actionId}`, code: "ACTION_NOT_FOUND" }, 404);
     }
 
     // Check if action supports webhook trigger
@@ -126,18 +117,12 @@ export function registerWebhookRoutes(app: Hono, config: WebhookConfig): void {
 
     // Check DB is ready
     if (!isDbReady()) {
-      return c.json(
-        { error: "Database not ready", code: "DB_NOT_READY" },
-        503,
-      );
+      return c.json({ error: "Database not ready", code: "DB_NOT_READY" }, 503);
     }
 
     const db = getDb();
     if (!db) {
-      return c.json(
-        { error: "Database not available", code: "DB_NOT_AVAILABLE" },
-        503,
-      );
+      return c.json({ error: "Database not available", code: "DB_NOT_AVAILABLE" }, 503);
     }
 
     // Discover actions and find matching one
@@ -154,9 +139,7 @@ export function registerWebhookRoutes(app: Hono, config: WebhookConfig): void {
     // Fall back to just action ID
     if (!action) {
       action = actions.find(
-        (a) =>
-          a.id === actionId &&
-          (a.definition.triggers ?? ["manual"]).includes("webhook"),
+        (a) => a.id === actionId && (a.definition.triggers ?? ["manual"]).includes("webhook"),
       );
     }
 
@@ -234,11 +217,7 @@ export function registerWebhookRoutes(app: Hono, config: WebhookConfig): void {
 /**
  * Get webhook URL for an action
  */
-export function getWebhookUrl(
-  baseUrl: string,
-  actionId: string,
-  customPath?: string,
-): string {
+export function getWebhookUrl(baseUrl: string, actionId: string, customPath?: string): string {
   if (customPath) {
     return `${baseUrl}/webhook/${actionId}/${customPath}`;
   }

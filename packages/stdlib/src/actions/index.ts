@@ -51,7 +51,7 @@ import type { ActionDefinition } from "./types.js";
  * ```
  */
 export function defineAction<TInput, TOutput>(
-  config: ActionDefinition<TInput, TOutput>
+  config: ActionDefinition<TInput, TOutput>,
 ): ActionDefinition<TInput, TOutput> {
   return config;
 }

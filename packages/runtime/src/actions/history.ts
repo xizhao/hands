@@ -99,14 +99,8 @@ export async function updateActionRun(db: PGlite, run: ActionRun): Promise<void>
 /**
  * Get a single run by ID
  */
-export async function getActionRun(
-  db: PGlite,
-  runId: string,
-): Promise<ActionRun | null> {
-  const result = await db.query<ActionRunRow>(
-    `SELECT * FROM ${RUNS_TABLE} WHERE id = $1`,
-    [runId],
-  );
+export async function getActionRun(db: PGlite, runId: string): Promise<ActionRun | null> {
+  const result = await db.query<ActionRunRow>(`SELECT * FROM ${RUNS_TABLE} WHERE id = $1`, [runId]);
 
   if (result.rows.length === 0) {
     return null;
@@ -158,10 +152,7 @@ export async function queryActionRuns(
 /**
  * Get the most recent run for an action
  */
-export async function getLastActionRun(
-  db: PGlite,
-  actionId: string,
-): Promise<ActionRun | null> {
+export async function getLastActionRun(db: PGlite, actionId: string): Promise<ActionRun | null> {
   const result = await db.query<ActionRunRow>(
     `SELECT * FROM ${RUNS_TABLE}
      WHERE action_id = $1
@@ -188,10 +179,7 @@ export interface ActionRunStats {
   lastRunAt: string | null;
 }
 
-export async function getActionRunStats(
-  db: PGlite,
-  actionId: string,
-): Promise<ActionRunStats> {
+export async function getActionRunStats(db: PGlite, actionId: string): Promise<ActionRunStats> {
   const result = await db.query<{
     total_runs: string;
     success_count: string;
@@ -215,9 +203,7 @@ export async function getActionRunStats(
     totalRuns: parseInt(row.total_runs, 10),
     successCount: parseInt(row.success_count, 10),
     failedCount: parseInt(row.failed_count, 10),
-    averageDurationMs: row.avg_duration_ms
-      ? parseFloat(row.avg_duration_ms)
-      : null,
+    averageDurationMs: row.avg_duration_ms ? parseFloat(row.avg_duration_ms) : null,
     lastRunAt: row.last_run_at,
   };
 }
@@ -225,10 +211,7 @@ export async function getActionRunStats(
 /**
  * Delete old runs (retention policy)
  */
-export async function cleanupOldRuns(
-  db: PGlite,
-  retentionDays: number = 30,
-): Promise<number> {
+export async function cleanupOldRuns(db: PGlite, retentionDays: number = 30): Promise<number> {
   const result = await db.query(
     `DELETE FROM ${RUNS_TABLE}
      WHERE started_at < NOW() - INTERVAL '${retentionDays} days'`,

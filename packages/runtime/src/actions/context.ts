@@ -137,9 +137,7 @@ function buildTableClient<T = Record<string, unknown>>(
       const entries = Object.entries(data as Record<string, unknown>);
       if (entries.length === 0) return [];
 
-      const setClauses = entries.map(
-        ([col], i) => `${escapeIdentifier(col)} = $${i + 1}`,
-      );
+      const setClauses = entries.map(([col], i) => `${escapeIdentifier(col)} = $${i + 1}`);
       const values = entries.map(([, val]) => val);
 
       const query = `UPDATE ${escapedTable} SET ${setClauses.join(", ")} WHERE ${where} RETURNING *`;

@@ -307,7 +307,10 @@ function handlePartUpdated(part: SdkPart, queryClient: QueryClient, directory?: 
 
           // If refresh is requested, invalidate relevant queries before navigation
           if (parsed.refresh) {
-            console.log("[sse] Refresh requested, invalidating queries for routeType:", parsed.routeType);
+            console.log(
+              "[sse] Refresh requested, invalidating queries for routeType:",
+              parsed.routeType,
+            );
             if (parsed.routeType === "table") {
               queryClient.invalidateQueries({ queryKey: ["postgres", "tables"] });
               queryClient.invalidateQueries({ queryKey: ["postgres", "query"] });

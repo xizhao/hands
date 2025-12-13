@@ -10,6 +10,9 @@ import { initTRPC, TRPCError } from "@trpc/server";
 import { z } from "zod";
 import {
   commit,
+  type GitCommit,
+  type GitDiffStats,
+  type GitStatus,
   getDiffStats,
   getGitStatus,
   getHistory,
@@ -20,9 +23,6 @@ import {
   revertToCommit,
   saveAndCommit,
   setRemote,
-  type GitCommit,
-  type GitDiffStats,
-  type GitStatus,
 } from "./index.js";
 
 // ============================================================================
@@ -141,27 +141,25 @@ export const gitRouter = t.router({
   /** Save database and commit all changes (main save operation) */
   save: publicProcedure
     .input(commitInput)
-    .mutation(
-      async ({ ctx, input }): Promise<{ hash: string; message: string } | null> => {
-        // First ensure repo is initialized
-        const isRepo = await isGitRepo(ctx.workbookDir);
-        if (!isRepo) {
-          await initRepo(ctx.workbookDir);
-        }
+    .mutation(async ({ ctx, input }): Promise<{ hash: string; message: string } | null> => {
+      // First ensure repo is initialized
+      const isRepo = await isGitRepo(ctx.workbookDir);
+      if (!isRepo) {
+        await initRepo(ctx.workbookDir);
+      }
 
-        // Save db and commit
-        const result = await saveAndCommit(ctx.workbookDir, ctx.saveDb);
+      // Save db and commit
+      const result = await saveAndCommit(ctx.workbookDir, ctx.saveDb);
 
-        // If custom message provided but saveAndCommit returned null (no changes),
-        // or if we want to use custom message, handle appropriately
-        if (result && input.message) {
-          // Result already committed with auto message, could amend but for simplicity
-          // we'll just return what we have
-        }
+      // If custom message provided but saveAndCommit returned null (no changes),
+      // or if we want to use custom message, handle appropriately
+      if (result && input.message) {
+        // Result already committed with auto message, could amend but for simplicity
+        // we'll just return what we have
+      }
 
-        return result;
-      },
-    ),
+      return result;
+    }),
 
   // ==================
   // Remote Operations

@@ -4,13 +4,9 @@ import { queryClient } from "@/App";
 import { NotebookShell } from "@/components/Notebook/NotebookShell";
 import type { NavSearchParams } from "@/hooks/useNavState";
 import { useActiveSession } from "@/hooks/useNavState";
+import { usePrefetchOnDbReady, useRuntimeState } from "@/hooks/useRuntimeState";
 import { useSessions } from "@/hooks/useSession";
-import {
-  useCreateWorkbook,
-  useOpenWorkbook,
-  useWorkbooks,
-} from "@/hooks/useWorkbook";
-import { useRuntimeState, usePrefetchOnDbReady } from "@/hooks/useRuntimeState";
+import { useCreateWorkbook, useOpenWorkbook, useWorkbooks } from "@/hooks/useWorkbook";
 import { setNavigateCallback, startSSESync } from "@/lib/sse";
 
 export const Route = createFileRoute("/_notebook")({

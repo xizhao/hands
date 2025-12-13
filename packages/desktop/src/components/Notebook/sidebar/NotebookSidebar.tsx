@@ -12,8 +12,8 @@
  */
 
 import {
-  ArrowsClockwise,
   ArrowSquareOut,
+  ArrowsClockwise,
   CaretLeft,
   CaretRight,
   CircleNotch,
@@ -50,7 +50,6 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { useCreateBlock } from "@/hooks/useWorkbook";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -59,8 +58,9 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import { useRuntimePort, useRuntimeState } from "@/hooks/useRuntimeState";
 import { useSourceManagement } from "@/hooks/useSources";
-import { useRuntimeState, useRuntimePort } from "@/hooks/useRuntimeState";
+import { useCreateBlock } from "@/hooks/useWorkbook";
 import { cn } from "@/lib/utils";
 
 interface NotebookSidebarProps {
@@ -124,7 +124,11 @@ function DataIcon({
   className,
   empty,
   colored = true,
-}: { className?: string; empty?: boolean; colored?: boolean }) {
+}: {
+  className?: string;
+  empty?: boolean;
+  colored?: boolean;
+}) {
   return (
     <Table
       weight="duotone"
@@ -710,7 +714,7 @@ export default function Placeholder() {
                       key={block.id}
                       className={cn(
                         "text-[8px] leading-none",
-                        block.uninitialized ? "text-muted-foreground/40" : "text-blue-400/70"
+                        block.uninitialized ? "text-muted-foreground/40" : "text-blue-400/70",
                       )}
                     >
                       {block.uninitialized ? "\u25A1" : "\u25A0"}
@@ -719,13 +723,15 @@ export default function Placeholder() {
                 </div>
               </TooltipTrigger>
               <TooltipContent side="right">
-                <p>{blocks.length} block{blocks.length !== 1 ? "s" : ""}</p>
+                <p>
+                  {blocks.length} block{blocks.length !== 1 ? "s" : ""}
+                </p>
               </TooltipContent>
             </Tooltip>
           )}
 
           {/* Data section - collapsed: show all tables as compact icons */}
-          {(schema && schema.length > 0) && (
+          {schema && schema.length > 0 && (
             <Tooltip>
               <TooltipTrigger asChild>
                 <div className="flex flex-wrap gap-0.5 justify-center pt-2 border-t border-border/50 cursor-default">
@@ -740,7 +746,9 @@ export default function Placeholder() {
                 </div>
               </TooltipTrigger>
               <TooltipContent side="right">
-                <p>{schema.length} table{schema.length !== 1 ? "s" : ""}</p>
+                <p>
+                  {schema.length} table{schema.length !== 1 ? "s" : ""}
+                </p>
               </TooltipContent>
             </Tooltip>
           )}
@@ -751,17 +759,16 @@ export default function Placeholder() {
               <TooltipTrigger asChild>
                 <div className="flex flex-wrap gap-0.5 justify-center pt-2 border-t border-border/50 cursor-default">
                   {actions.map((action) => (
-                    <span
-                      key={action.id}
-                      className="text-[8px] leading-none text-orange-400/70"
-                    >
+                    <span key={action.id} className="text-[8px] leading-none text-orange-400/70">
                       &#x25B6;
                     </span>
                   ))}
                 </div>
               </TooltipTrigger>
               <TooltipContent side="right">
-                <p>{actions.length} action{actions.length !== 1 ? "s" : ""}</p>
+                <p>
+                  {actions.length} action{actions.length !== 1 ? "s" : ""}
+                </p>
               </TooltipContent>
             </Tooltip>
           ) : (
@@ -898,7 +905,10 @@ export default function Placeholder() {
                       className="flex-1 bg-transparent border-none outline-none text-sm placeholder:text-muted-foreground/50"
                     />
                     {isCreatingBlock && (
-                      <CircleNotch weight="bold" className="h-3 w-3 animate-spin text-muted-foreground" />
+                      <CircleNotch
+                        weight="bold"
+                        className="h-3 w-3 animate-spin text-muted-foreground"
+                      />
                     )}
                   </div>
                 )}
@@ -1117,97 +1127,103 @@ export default function Placeholder() {
                 ) : (
                   <>
                     {/* Sources with their tables */}
-                    {sources.length > 0 ? (
-                      sources.map((source) => {
-                        const isThisSyncing = isSyncing && syncingSourceId === source.id;
-                        const hasMissingSecrets = source.missingSecrets.length > 0;
-                        const isSourceExpanded = expandedSources.has(source.id);
-                        const sourceTables = sourceTableMap.get(source.id) || [];
-                        const filteredSourceTables = searchQuery
-                          ? sourceTables.filter((t) =>
-                              t.toLowerCase().includes(searchQuery.toLowerCase()),
-                            )
-                          : sourceTables;
+                    {sources.length > 0
+                      ? sources.map((source) => {
+                          const isThisSyncing = isSyncing && syncingSourceId === source.id;
+                          const hasMissingSecrets = source.missingSecrets.length > 0;
+                          const isSourceExpanded = expandedSources.has(source.id);
+                          const sourceTables = sourceTableMap.get(source.id) || [];
+                          const filteredSourceTables = searchQuery
+                            ? sourceTables.filter((t) =>
+                                t.toLowerCase().includes(searchQuery.toLowerCase()),
+                              )
+                            : sourceTables;
 
-                        return (
-                          <div key={source.id}>
-                            <div className={listItemStyles}>
-                              <button onClick={() => toggleSource(source.id)} className="shrink-0">
-                                {isSourceExpanded ? (
-                                  <ChevronDown className="h-3 w-3" />
-                                ) : (
-                                  <ChevronRight className="h-3 w-3" />
+                          return (
+                            <div key={source.id}>
+                              <div className={listItemStyles}>
+                                <button
+                                  onClick={() => toggleSource(source.id)}
+                                  className="shrink-0"
+                                >
+                                  {isSourceExpanded ? (
+                                    <ChevronDown className="h-3 w-3" />
+                                  ) : (
+                                    <ChevronRight className="h-3 w-3" />
+                                  )}
+                                </button>
+                                <SourceItemIcon />
+                                <button
+                                  onClick={() => handleSourceClick(source.id)}
+                                  className="flex-1 truncate text-left hover:underline"
+                                >
+                                  {source.title}
+                                </button>
+                                {sourceTables.length > 0 && (
+                                  <span className="text-xs text-muted-foreground/60">
+                                    {sourceTables.length}
+                                  </span>
                                 )}
-                              </button>
-                              <SourceItemIcon />
-                              <button
-                                onClick={() => handleSourceClick(source.id)}
-                                className="flex-1 truncate text-left hover:underline"
-                              >
-                                {source.title}
-                              </button>
-                              {sourceTables.length > 0 && (
-                                <span className="text-xs text-muted-foreground/60">
-                                  {sourceTables.length}
-                                </span>
-                              )}
-                              {hasMissingSecrets && (
-                                <Warning
-                                  weight="fill"
-                                  className="h-3.5 w-3.5 text-amber-500 shrink-0"
+                                {hasMissingSecrets && (
+                                  <Warning
+                                    weight="fill"
+                                    className="h-3.5 w-3.5 text-amber-500 shrink-0"
+                                  />
+                                )}
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    syncSource(source.id);
+                                  }}
+                                  disabled={isThisSyncing || hasMissingSecrets}
+                                  className={cn(
+                                    "p-0.5 rounded opacity-0 group-hover:opacity-100 hover:bg-accent transition-all",
+                                    (isThisSyncing || hasMissingSecrets) &&
+                                      "opacity-50 cursor-not-allowed",
+                                  )}
+                                  title={hasMissingSecrets ? "Configure secrets first" : "Sync now"}
+                                >
+                                  {isThisSyncing ? (
+                                    <CircleNotch
+                                      weight="bold"
+                                      className="h-3.5 w-3.5 animate-spin"
+                                    />
+                                  ) : (
+                                    <ArrowsClockwise weight="bold" className="h-3.5 w-3.5" />
+                                  )}
+                                </button>
+                                <ItemActions
+                                  onCopy={() => handleCopySource(source.id)}
+                                  onDelete={() => handleDeleteSource(source.id)}
+                                  onOpenChange={onMenuOpenChange}
                                 />
-                              )}
-                              <button
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  syncSource(source.id);
-                                }}
-                                disabled={isThisSyncing || hasMissingSecrets}
-                                className={cn(
-                                  "p-0.5 rounded opacity-0 group-hover:opacity-100 hover:bg-accent transition-all",
-                                  (isThisSyncing || hasMissingSecrets) &&
-                                    "opacity-50 cursor-not-allowed",
+                              </div>
+                              {/* Source's tables */}
+                              {(isSourceExpanded || searchQuery) &&
+                                filteredSourceTables.length > 0 && (
+                                  <div className="ml-6 border-l border-border/50 pl-2">
+                                    {filteredSourceTables.map((tableName) => (
+                                      <div key={tableName} className={listItemStyles}>
+                                        <DataIcon />
+                                        <button
+                                          onClick={() => handleTableClick(tableName)}
+                                          className="flex-1 truncate text-left hover:underline"
+                                        >
+                                          {tableName}
+                                        </button>
+                                        <ItemActions
+                                          onDelete={() => handleDeleteTable(tableName)}
+                                          deleteLabel="Drop table"
+                                          onOpenChange={onMenuOpenChange}
+                                        />
+                                      </div>
+                                    ))}
+                                  </div>
                                 )}
-                                title={hasMissingSecrets ? "Configure secrets first" : "Sync now"}
-                              >
-                                {isThisSyncing ? (
-                                  <CircleNotch weight="bold" className="h-3.5 w-3.5 animate-spin" />
-                                ) : (
-                                  <ArrowsClockwise weight="bold" className="h-3.5 w-3.5" />
-                                )}
-                              </button>
-                              <ItemActions
-                                onCopy={() => handleCopySource(source.id)}
-                                onDelete={() => handleDeleteSource(source.id)}
-                                onOpenChange={onMenuOpenChange}
-                              />
                             </div>
-                            {/* Source's tables */}
-                            {(isSourceExpanded || searchQuery) &&
-                              filteredSourceTables.length > 0 && (
-                                <div className="ml-6 border-l border-border/50 pl-2">
-                                  {filteredSourceTables.map((tableName) => (
-                                    <div key={tableName} className={listItemStyles}>
-                                      <DataIcon />
-                                      <button
-                                        onClick={() => handleTableClick(tableName)}
-                                        className="flex-1 truncate text-left hover:underline"
-                                      >
-                                        {tableName}
-                                      </button>
-                                      <ItemActions
-                                        onDelete={() => handleDeleteTable(tableName)}
-                                        deleteLabel="Drop table"
-                                        onOpenChange={onMenuOpenChange}
-                                      />
-                                    </div>
-                                  ))}
-                                </div>
-                              )}
-                          </div>
-                        );
-                      })
-                    ) : null}
+                          );
+                        })
+                      : null}
 
                     {/* Unassigned tables (flat list, no folder) */}
                     {(searchQuery
@@ -1273,14 +1289,16 @@ export default function Placeholder() {
               </Tooltip>
             </div>
 
-            {actionsExpanded && (
-              (manifest?.actions ?? []).length > 0 ? (
+            {actionsExpanded &&
+              ((manifest?.actions ?? []).length > 0 ? (
                 <div className="space-y-0">
                   {(manifest?.actions ?? []).map((action) => (
                     <ActionListItem
                       key={action.id}
                       action={action}
-                      onSelect={() => navigate({ to: "/actions/$actionId", params: { actionId: action.id } })}
+                      onSelect={() =>
+                        navigate({ to: "/actions/$actionId", params: { actionId: action.id } })
+                      }
                       runtimePort={runtimePort}
                     />
                   ))}
@@ -1290,8 +1308,7 @@ export default function Placeholder() {
                   <ActionIcon empty />
                   <span>No actions</span>
                 </div>
-              )
-            )}
+              ))}
           </div>
         </div>
       </div>

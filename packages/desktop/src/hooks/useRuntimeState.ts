@@ -33,7 +33,14 @@ interface TauriRuntimeStatus {
 export interface WorkbookManifest {
   workbookId: string;
   workbookDir: string;
-  blocks: Array<{ id: string; title: string; path: string; parentDir: string; description?: string; uninitialized?: boolean }>;
+  blocks: Array<{
+    id: string;
+    title: string;
+    path: string;
+    parentDir: string;
+    description?: string;
+    uninitialized?: boolean;
+  }>;
   sources?: Array<{
     id: string;
     name: string;
@@ -274,7 +281,13 @@ export function useRuntimeState(): RuntimeState {
       manifest,
       schema: schemaQuery.data,
     };
-  }, [tauriQuery.data, statusQuery.data, manifestQuery.data, schemaQuery.data, schemaQuery.isPending]);
+  }, [
+    tauriQuery.data,
+    statusQuery.data,
+    manifestQuery.data,
+    schemaQuery.data,
+    schemaQuery.isPending,
+  ]);
 
   // Build flattened state with stable loading flags
   return useMemo(
@@ -287,9 +300,7 @@ export function useRuntimeState(): RuntimeState {
       schema: "schema" in currentPhase ? currentPhase.schema : [],
       isStarting: currentPhase.phase === "starting",
       isDbBooting: currentPhase.phase === "db-booting",
-      isDbReady:
-        currentPhase.phase === "db-ready" ||
-        currentPhase.phase === "fully-ready",
+      isDbReady: currentPhase.phase === "db-ready" || currentPhase.phase === "fully-ready",
       isFullyReady: currentPhase.phase === "fully-ready",
       error: currentPhase.phase === "error" ? currentPhase.error : null,
     }),
@@ -328,9 +339,7 @@ export function usePrefetchOnDbReady() {
         await queryClient.prefetchQuery({
           queryKey: ["db-schema", workbookId, port],
           queryFn: async () => {
-            const response = await fetch(
-              `http://localhost:${port}/postgres/schema`,
-            );
+            const response = await fetch(`http://localhost:${port}/postgres/schema`);
             if (!response.ok) {
               throw new Error(`Schema fetch failed: ${response.status}`);
             }

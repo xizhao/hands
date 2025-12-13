@@ -9,8 +9,8 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useCallback } from "react";
 import { toast } from "sonner";
 import { useBackgroundTask } from "@/hooks/useBackgroundTask";
-import type { Source } from "@/hooks/useSources";
 import { useRuntimePort } from "@/hooks/useRuntimeState";
+import type { Source } from "@/hooks/useSources";
 
 // Git sync status from runtime
 export interface GitSyncStatus {

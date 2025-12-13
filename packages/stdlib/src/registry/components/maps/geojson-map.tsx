@@ -22,15 +22,14 @@
  */
 "use client";
 
-import * as React from "react";
-import { DeckGL } from "@deck.gl/react";
 import { GeoJsonLayer } from "@deck.gl/layers";
+import { DeckGL } from "@deck.gl/react";
+import * as React from "react";
 import { Map } from "react-map-gl/maplibre";
 import "maplibre-gl/dist/maplibre-gl.css";
 import { cn } from "../../../lib/utils.js";
 
-const DEFAULT_MAP_STYLE =
-  "https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json";
+const DEFAULT_MAP_STYLE = "https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json";
 
 // GeoJSON types
 interface GeoJsonGeometry {
@@ -156,8 +155,7 @@ export function GeoJsonMap({
   }, [data, initialViewState, extruded]);
 
   const layers = React.useMemo(() => {
-    const features =
-      data.type === "FeatureCollection" ? data.features : [data];
+    const features = data.type === "FeatureCollection" ? data.features : [data];
 
     if (features.length === 0) return [];
 
@@ -191,20 +189,29 @@ export function GeoJsonMap({
           : undefined,
       }),
     ];
-  }, [data, fillColor, lineColor, lineWidth, pointRadius, extruded, elevationScale, elevationKey, fillColorKey, onClick]);
+  }, [
+    data,
+    fillColor,
+    lineColor,
+    lineWidth,
+    pointRadius,
+    extruded,
+    elevationScale,
+    elevationKey,
+    fillColorKey,
+    onClick,
+  ]);
 
   // Empty state - check for empty feature collection
   const hasFeatures =
-    data.type === "FeatureCollection"
-      ? data.features.length > 0
-      : data.type === "Feature";
+    data.type === "FeatureCollection" ? data.features.length > 0 : data.type === "Feature";
 
   if (!hasFeatures) {
     return (
       <div
         className={cn(
           "flex items-center justify-center text-muted-foreground rounded-lg border border-dashed",
-          className
+          className,
         )}
         style={{ height }}
       >
@@ -214,10 +221,7 @@ export function GeoJsonMap({
   }
 
   return (
-    <div
-      className={cn("relative w-full rounded-lg overflow-hidden", className)}
-      style={{ height }}
-    >
+    <div className={cn("relative w-full rounded-lg overflow-hidden", className)} style={{ height }}>
       <DeckGL initialViewState={calculatedViewState} controller layers={layers}>
         <Map mapStyle={mapStyle} />
       </DeckGL>

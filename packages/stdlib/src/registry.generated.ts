@@ -6,1227 +6,719 @@ export const registry = {
   name: "@hands/stdlib",
   version: "0.1.0",
   components: {
-  "heatmap-map": {
-    "name": "Heatmap Map",
-    "category": "maps",
-    "description": "Display density visualization on an interactive map using heatmap rendering.",
-    "icon": "flame",
-    "keywords": [
-      "map",
-      "heatmap",
-      "density",
-      "heat",
-      "geospatial",
-      "location",
-      "intensity"
-    ],
-    "example": "<HeatmapMap\n  data={[\n    { lat: 37.7749, lng: -122.4194, weight: 10 },\n    { lat: 37.7849, lng: -122.4094, weight: 20 },\n  ]}\n  latKey=\"lat\"\n  lngKey=\"lng\"\n  weightKey=\"weight\"\n  height={400}\n/>",
-    "files": [
-      "registry/components/maps/heatmap-map.tsx"
-    ],
-    "dependencies": [
-      "@deck.gl/react",
-      "@deck.gl/aggregation-layers",
-      "react-map-gl"
-    ]
+    "heatmap-map": {
+      name: "Heatmap Map",
+      category: "maps",
+      description: "Display density visualization on an interactive map using heatmap rendering.",
+      icon: "flame",
+      keywords: ["map", "heatmap", "density", "heat", "geospatial", "location", "intensity"],
+      example:
+        '<HeatmapMap\n  data={[\n    { lat: 37.7749, lng: -122.4194, weight: 10 },\n    { lat: 37.7849, lng: -122.4094, weight: 20 },\n  ]}\n  latKey="lat"\n  lngKey="lng"\n  weightKey="weight"\n  height={400}\n/>',
+      files: ["registry/components/maps/heatmap-map.tsx"],
+      dependencies: ["@deck.gl/react", "@deck.gl/aggregation-layers", "react-map-gl"],
+    },
+    "scatterplot-map": {
+      name: "Scatterplot Map",
+      category: "maps",
+      description: "Display point data on an interactive map with scatterplot visualization.",
+      icon: "map-pin",
+      keywords: ["map", "scatter", "points", "geospatial", "location", "coordinates"],
+      example:
+        '<ScatterplotMap\n  data={[\n    { lat: 37.7749, lng: -122.4194, value: 100 },\n    { lat: 34.0522, lng: -118.2437, value: 200 },\n  ]}\n  latKey="lat"\n  lngKey="lng"\n  radiusKey="value"\n  height={400}\n/>',
+      files: ["registry/components/maps/scatterplot-map.tsx"],
+      dependencies: ["@deck.gl/react", "@deck.gl/layers", "react-map-gl"],
+    },
+    "hexagon-map": {
+      name: "Hexagon Map",
+      category: "maps",
+      description: "Display aggregated point data on an interactive map using 3D hexagonal bins.",
+      icon: "hexagon",
+      keywords: ["map", "hexagon", "hexbin", "aggregation", "3d", "geospatial", "location", "bins"],
+      example:
+        '<HexagonMap\n  data={[\n    { lat: 37.7749, lng: -122.4194 },\n    { lat: 37.7849, lng: -122.4094 },\n    { lat: 37.7649, lng: -122.4294 },\n  ]}\n  latKey="lat"\n  lngKey="lng"\n  height={400}\n/>',
+      files: ["registry/components/maps/hexagon-map.tsx"],
+      dependencies: ["@deck.gl/react", "@deck.gl/aggregation-layers", "react-map-gl"],
+    },
+    "geojson-map": {
+      name: "GeoJSON Map",
+      category: "maps",
+      description: "Display GeoJSON features on an interactive map with customizable styling.",
+      icon: "map",
+      keywords: [
+        "map",
+        "geojson",
+        "features",
+        "polygons",
+        "lines",
+        "shapes",
+        "geospatial",
+        "boundaries",
+      ],
+      example:
+        '<GeoJsonMap\n  data={{\n    type: "FeatureCollection",\n    features: [\n      {\n        type: "Feature",\n        geometry: { type: "Point", coordinates: [-122.4194, 37.7749] },\n        properties: { name: "San Francisco" }\n      }\n    ]\n  }}\n  height={400}\n/>',
+      files: ["registry/components/maps/geojson-map.tsx"],
+      dependencies: ["@deck.gl/react", "@deck.gl/layers", "react-map-gl"],
+    },
+    "aspect-ratio": {
+      name: "Aspect Ratio",
+      category: "ui-layout",
+      description: "Keep content at a specific width-to-height ratio.",
+      icon: "ratio",
+      keywords: ["aspect", "ratio", "responsive"],
+      example:
+        '<AspectRatio ratio={16 / 9}>\n  <img src="photo.jpg" alt="Photo" />\n</AspectRatio>',
+      files: ["registry/components/ui/aspect-ratio.tsx"],
+      dependencies: ["@radix-ui/react-aspect-ratio"],
+    },
+    "alert-dialog": {
+      name: "Alert Dialog",
+      category: "ui-overlay",
+      description: "Display important confirmations that require user action.",
+      icon: "alert-triangle",
+      keywords: ["dialog", "modal", "confirm", "alert"],
+      example:
+        "<AlertDialog>\n  <AlertDialogTrigger>Delete</AlertDialogTrigger>\n  <AlertDialogContent>\n    <AlertDialogTitle>Are you sure?</AlertDialogTitle>\n    <AlertDialogDescription>This action cannot be undone.</AlertDialogDescription>\n    <AlertDialogAction>Continue</AlertDialogAction>\n  </AlertDialogContent>\n</AlertDialog>",
+      files: ["registry/components/ui/alert-dialog.tsx"],
+      dependencies: ["@radix-ui/react-alert-dialog"],
+    },
+    pagination: {
+      name: "Pagination",
+      category: "ui-navigation",
+      description: "Navigation controls for paginated content with previous and next buttons.",
+      icon: "more-horizontal",
+      keywords: ["pagination", "pages", "navigation"],
+      example:
+        '<Pagination>\n  <PaginationContent>\n    <PaginationItem><PaginationPrevious href="#" /></PaginationItem>\n    <PaginationItem><PaginationLink href="#">1</PaginationLink></PaginationItem>\n    <PaginationItem><PaginationNext href="#" /></PaginationItem>\n  </PaginationContent>\n</Pagination>',
+      files: ["registry/components/ui/pagination.tsx"],
+      dependencies: ["lucide-react"],
+    },
+    tabs: {
+      name: "Tabs",
+      category: "ui-navigation",
+      description: "Switch between different views using clickable tabs.",
+      icon: "layout-panel-top",
+      keywords: ["tabs", "navigation", "panels", "switch", "toggle"],
+      example:
+        '<Tabs defaultValue="account">\n  <TabsList>\n    <TabsTrigger value="account">Account</TabsTrigger>\n    <TabsTrigger value="password">Password</TabsTrigger>\n  </TabsList>\n  <TabsContent value="account">\n    Account settings here.\n  </TabsContent>\n  <TabsContent value="password">\n    Password settings here.\n  </TabsContent>\n</Tabs>',
+      files: ["registry/components/ui/tabs.tsx"],
+      dependencies: ["@radix-ui/react-tabs"],
+    },
+    "button-group": {
+      name: "Button Group",
+      category: "ui-input",
+      description: "Combine related buttons into a connected group.",
+      icon: "layout-grid",
+      keywords: ["button", "group", "toolbar"],
+      example:
+        "<ButtonGroup>\n  <Button>Left</Button>\n  <Button>Center</Button>\n  <Button>Right</Button>\n</ButtonGroup>",
+      files: ["registry/components/ui/button-group.tsx"],
+      dependencies: ["@radix-ui/react-slot", "class-variance-authority"],
+    },
+    card: {
+      name: "Card",
+      category: "ui-layout",
+      description: "Container for grouping related content with optional header and footer.",
+      icon: "square",
+      keywords: ["card", "container", "panel"],
+      example:
+        "<Card>\n  <CardHeader>\n    <CardTitle>Project Overview</CardTitle>\n    <CardDescription>Summary of your current project status</CardDescription>\n  </CardHeader>\n  <CardContent>\n    <p>Your project is on track with 85% completion.</p>\n  </CardContent>\n</Card>",
+      files: ["registry/components/ui/card.tsx"],
+      dependencies: [],
+    },
+    slider: {
+      name: "Slider",
+      category: "ui-input",
+      description: "Choose a number by dragging along a track.",
+      icon: "sliders-horizontal",
+      keywords: ["slider", "range", "input", "track", "number"],
+      example: "<Slider\n  defaultValue={[50]}\n  max={100}\n  step={1}\n/>",
+      files: ["registry/components/ui/slider.tsx"],
+      dependencies: ["@radix-ui/react-slider"],
+    },
+    "input-group": {
+      name: "Input Group",
+      category: "ui-input",
+      description: "Groups inputs with additional elements like icons, buttons, or text labels.",
+      icon: "layout-list",
+      keywords: ["input", "group", "addon"],
+      example:
+        '<InputGroup>\n  <InputGroupText>@</InputGroupText>\n  <InputGroupInput placeholder="Username" />\n</InputGroup>',
+      files: ["registry/components/ui/input-group.tsx"],
+      dependencies: ["class-variance-authority"],
+    },
+    popover: {
+      name: "Popover",
+      category: "ui-overlay",
+      description: "A floating content panel triggered by a button or other element.",
+      icon: "message-square",
+      keywords: ["popover", "popup", "tooltip"],
+      example:
+        "<Popover>\n  <PopoverTrigger>Open</PopoverTrigger>\n  <PopoverContent>\n    Content goes here\n  </PopoverContent>\n</Popover>",
+      files: ["registry/components/ui/popover.tsx"],
+      dependencies: ["@radix-ui/react-popover"],
+    },
+    progress: {
+      name: "Progress",
+      category: "ui-feedback",
+      description: "Shows progress toward a goal with an animated bar.",
+      icon: "loader",
+      keywords: ["progress", "loading", "bar"],
+      example: "<Progress value={60} />",
+      files: ["registry/components/ui/progress.tsx"],
+      dependencies: ["@radix-ui/react-progress"],
+    },
+    "input-otp": {
+      name: "Input OTP",
+      category: "ui-input",
+      description: "One-time password input for verification codes and security pins.",
+      icon: "key-round",
+      keywords: ["otp", "pin", "code", "verification"],
+      example:
+        "<InputOTP maxLength={6}>\n  <InputOTPGroup>\n    <InputOTPSlot index={0} />\n    <InputOTPSlot index={1} />\n    <InputOTPSlot index={2} />\n  </InputOTPGroup>\n</InputOTP>",
+      files: ["registry/components/ui/input-otp.tsx"],
+      dependencies: ["input-otp", "lucide-react"],
+    },
+    chart: {
+      name: "Chart",
+      category: "charts",
+      description: "Build data visualizations with configurable chart components.",
+      icon: "bar-chart-3",
+      keywords: ["chart", "graph", "visualization"],
+      example:
+        '<ChartContainer config={{}} className="h-[200px]">\n  <div className="flex items-center justify-center h-full text-muted-foreground">\n    Chart visualization area\n  </div>\n</ChartContainer>',
+      files: ["registry/components/ui/chart.tsx"],
+      dependencies: ["recharts"],
+    },
+    "hover-card": {
+      name: "Hover Card",
+      category: "ui-overlay",
+      description:
+        "A card that appears when hovering over an element to show additional information.",
+      icon: "mouse-pointer-2",
+      keywords: ["hover", "card", "preview"],
+      example:
+        "<HoverCard>\n  <HoverCardTrigger>Hover me</HoverCardTrigger>\n  <HoverCardContent>\n    Additional information appears here\n  </HoverCardContent>\n</HoverCard>",
+      files: ["registry/components/ui/hover-card.tsx"],
+      dependencies: ["@radix-ui/react-hover-card"],
+    },
+    sheet: {
+      name: "Sheet",
+      category: "ui-overlay",
+      description: "A panel that slides in from the edge of the screen.",
+      icon: "panel-right",
+      keywords: ["sheet", "panel", "drawer", "slide", "sidebar"],
+      example:
+        "<Sheet>\n  <SheetTrigger asChild>\n    <button>Open</button>\n  </SheetTrigger>\n  <SheetContent>\n    <SheetHeader>\n      <SheetTitle>Settings</SheetTitle>\n      <SheetDescription>\n        Make changes to your profile here.\n      </SheetDescription>\n    </SheetHeader>\n  </SheetContent>\n</Sheet>",
+      files: ["registry/components/ui/sheet.tsx"],
+      dependencies: ["@radix-ui/react-dialog", "class-variance-authority", "lucide-react"],
+    },
+    field: {
+      name: "Field",
+      category: "ui-input",
+      description:
+        "A form field wrapper with label and error handling for building accessible forms.",
+      icon: "text-cursor-input",
+      keywords: ["field", "form", "input", "label"],
+      example:
+        '<Field>\n  <FieldLabel>Email</FieldLabel>\n  <Input type="email" placeholder="Enter your email" />\n  <FieldDescription>We\'ll never share your email.</FieldDescription>\n</Field>',
+      files: ["registry/components/ui/field.tsx"],
+      dependencies: ["class-variance-authority"],
+    },
+    "scroll-area": {
+      name: "Scroll Area",
+      category: "ui-layout",
+      description: "A custom scrollbar container for overflow content.",
+      icon: "scroll",
+      keywords: ["scroll", "overflow", "scrollbar"],
+      example:
+        '<ScrollArea className="h-72 w-48">\n  <div>Long content that scrolls...</div>\n</ScrollArea>',
+      files: ["registry/components/ui/scroll-area.tsx"],
+      dependencies: ["@radix-ui/react-scroll-area"],
+    },
+    resizable: {
+      name: "Resizable",
+      category: "ui-layout",
+      description: "Resizable panel groups with draggable handles for adjusting layout.",
+      icon: "move",
+      keywords: ["resizable", "resize", "panels"],
+      example:
+        '<ResizablePanelGroup direction="horizontal">\n  <ResizablePanel defaultSize={50}>Panel 1</ResizablePanel>\n  <ResizableHandle />\n  <ResizablePanel defaultSize={50}>Panel 2</ResizablePanel>\n</ResizablePanelGroup>',
+      files: ["registry/components/ui/resizable.tsx"],
+      dependencies: ["lucide-react", "react-resizable-panels"],
+    },
+    label: {
+      name: "Label",
+      category: "ui-input",
+      description: "A label for form controls with accessibility support.",
+      icon: "tag",
+      keywords: ["label", "form", "accessibility"],
+      example: '<Label htmlFor="email">Email Address</Label>',
+      files: ["registry/components/ui/label.tsx"],
+      dependencies: ["@radix-ui/react-label", "class-variance-authority"],
+    },
+    sonner: {
+      name: "Toaster",
+      category: "ui-feedback",
+      description: "Display brief notifications at the corner of the screen.",
+      icon: "bell",
+      keywords: ["toast", "notification", "sonner", "alert", "message"],
+      example: "<Toaster />",
+      files: ["registry/components/ui/sonner.tsx"],
+      dependencies: ["next-themes", "sonner"],
+    },
+    "navigation-menu": {
+      name: "Navigation Menu",
+      category: "ui-navigation",
+      description: "A navigation menu with links and expandable sub-menus.",
+      icon: "navigation",
+      keywords: ["navigation", "menu", "nav"],
+      example:
+        "<NavigationMenu>\n  <NavigationMenuList>\n    <NavigationMenuItem>\n      <NavigationMenuTrigger>Products</NavigationMenuTrigger>\n      <NavigationMenuContent>Menu items here</NavigationMenuContent>\n    </NavigationMenuItem>\n  </NavigationMenuList>\n</NavigationMenu>",
+      files: ["registry/components/ui/navigation-menu.tsx"],
+      dependencies: ["@radix-ui/react-navigation-menu", "class-variance-authority", "lucide-react"],
+    },
+    accordion: {
+      name: "Accordion",
+      category: "ui-layout",
+      description: "Expandable sections that show and hide content.",
+      icon: "chevrons-down-up",
+      keywords: ["accordion", "collapse", "expand", "sections"],
+      example:
+        '<Accordion type="single" collapsible>\n  <AccordionItem value="item-1">\n    <AccordionTrigger>Question?</AccordionTrigger>\n    <AccordionContent>Answer here.</AccordionContent>\n  </AccordionItem>\n</Accordion>',
+      files: ["registry/components/ui/accordion.tsx"],
+      dependencies: ["@radix-ui/react-accordion", "lucide-react"],
+    },
+    drawer: {
+      name: "Drawer",
+      category: "ui-overlay",
+      description: "Slide in content from the screen edge.",
+      icon: "panel-left",
+      keywords: ["drawer", "panel", "slide"],
+      example:
+        "<Drawer>\n  <DrawerTrigger>Open Drawer</DrawerTrigger>\n  <DrawerContent>\n    <DrawerTitle>Drawer Title</DrawerTitle>\n    <DrawerDescription>Drawer content here.</DrawerDescription>\n  </DrawerContent>\n</Drawer>",
+      files: ["registry/components/ui/drawer.tsx"],
+      dependencies: ["vaul"],
+    },
+    empty: {
+      name: "Empty",
+      category: "ui-feedback",
+      description: "A placeholder for empty states when there is no data to display.",
+      icon: "inbox",
+      keywords: ["empty", "placeholder", "no-data"],
+      example:
+        "<Empty>\n  <EmptyHeader>\n    <EmptyTitle>No messages</EmptyTitle>\n    <EmptyDescription>You don't have any messages yet.</EmptyDescription>\n  </EmptyHeader>\n</Empty>",
+      files: ["registry/components/ui/empty.tsx"],
+      dependencies: ["class-variance-authority"],
+    },
+    tooltip: {
+      name: "Tooltip",
+      category: "ui-overlay",
+      description: "A small popup that appears when hovering over an element.",
+      icon: "message-circle",
+      keywords: ["tooltip", "hint", "help", "hover", "popup"],
+      example:
+        "<TooltipProvider>\n  <Tooltip>\n    <TooltipTrigger>Hover me</TooltipTrigger>\n    <TooltipContent>\n      <p>Helpful information</p>\n    </TooltipContent>\n  </Tooltip>\n</TooltipProvider>",
+      files: ["registry/components/ui/tooltip.tsx"],
+      dependencies: ["@radix-ui/react-tooltip"],
+    },
+    alert: {
+      name: "Alert",
+      category: "ui-feedback",
+      description: "Display important messages or notifications to users.",
+      icon: "alert-circle",
+      keywords: ["alert", "message", "notification", "callout"],
+      example:
+        "<Alert>\n  <AlertTitle>Heads up!</AlertTitle>\n  <AlertDescription>You can use this to highlight important information.</AlertDescription>\n</Alert>",
+      files: ["registry/components/ui/alert.tsx"],
+      dependencies: ["class-variance-authority"],
+    },
+    switch: {
+      name: "Switch",
+      category: "ui-input",
+      description: "A toggle that switches between on and off states.",
+      icon: "toggle-right",
+      keywords: ["switch", "toggle", "boolean", "on", "off"],
+      example:
+        '<div className="flex items-center space-x-2">\n  <Switch id="airplane-mode" />\n  <label htmlFor="airplane-mode">Airplane Mode</label>\n</div>',
+      files: ["registry/components/ui/switch.tsx"],
+      dependencies: ["@radix-ui/react-switch"],
+    },
+    calendar: {
+      name: "Calendar",
+      category: "ui-input",
+      description: "Pick dates from an interactive calendar view.",
+      icon: "calendar",
+      keywords: ["calendar", "date", "picker"],
+      example: '<Calendar mode="single" />',
+      files: ["registry/components/ui/calendar.tsx"],
+      dependencies: ["lucide-react", "react-day-picker"],
+    },
+    breadcrumb: {
+      name: "Breadcrumb",
+      category: "ui-navigation",
+      description: "Show the current page location within a site hierarchy.",
+      icon: "chevron-right",
+      keywords: ["breadcrumb", "navigation", "path"],
+      example:
+        '<Breadcrumb>\n  <BreadcrumbList>\n    <BreadcrumbItem>\n      <BreadcrumbLink href="/">Home</BreadcrumbLink>\n    </BreadcrumbItem>\n    <BreadcrumbItem>\n      <BreadcrumbPage>Current Page</BreadcrumbPage>\n    </BreadcrumbItem>\n  </BreadcrumbList>\n</Breadcrumb>',
+      files: ["registry/components/ui/breadcrumb.tsx"],
+      dependencies: ["@radix-ui/react-slot", "lucide-react"],
+    },
+    "radio-group": {
+      name: "Radio Group",
+      category: "ui-input",
+      description: "A set of radio buttons for selecting a single option from multiple choices.",
+      icon: "circle-dot",
+      keywords: ["radio", "select", "options"],
+      example:
+        '<RadioGroup defaultValue="option1">\n  <div className="flex items-center space-x-2">\n    <RadioGroupItem value="option1" id="option1" />\n    <Label htmlFor="option1">Option 1</Label>\n  </div>\n</RadioGroup>',
+      files: ["registry/components/ui/radio-group.tsx"],
+      dependencies: ["@radix-ui/react-radio-group", "lucide-react"],
+    },
+    command: {
+      name: "Command",
+      category: "ui-input",
+      description: "Search and navigate with a keyboard-driven command palette.",
+      icon: "command",
+      keywords: ["command", "search", "palette", "cmdk"],
+      example:
+        '<Command>\n  <CommandInput placeholder="Search..." />\n  <CommandList>\n    <CommandGroup heading="Actions">\n      <CommandItem>New File</CommandItem>\n      <CommandItem>Open</CommandItem>\n    </CommandGroup>\n  </CommandList>\n</Command>',
+      files: ["registry/components/ui/command.tsx"],
+      dependencies: ["@radix-ui/react-dialog", "cmdk", "lucide-react"],
+    },
+    item: {
+      name: "Item",
+      category: "ui-display",
+      description: "A list item component for displaying content with media, titles, and actions.",
+      icon: "list",
+      keywords: ["item", "list", "row"],
+      example:
+        "<Item>\n  <ItemContent>\n    <ItemTitle>User Name</ItemTitle>\n    <ItemDescription>user@example.com</ItemDescription>\n  </ItemContent>\n</Item>",
+      files: ["registry/components/ui/item.tsx"],
+      dependencies: ["@radix-ui/react-slot", "class-variance-authority"],
+    },
+    "toggle-group": {
+      name: "Toggle Group",
+      category: "ui-input",
+      description: "Multiple toggle buttons grouped together for related choices.",
+      icon: "layout-grid",
+      keywords: ["toggle", "group", "buttons", "toolbar", "options"],
+      example:
+        '<ToggleGroup type="single">\n  <ToggleGroupItem value="bold">Bold</ToggleGroupItem>\n  <ToggleGroupItem value="italic">Italic</ToggleGroupItem>\n  <ToggleGroupItem value="underline">Underline</ToggleGroupItem>\n</ToggleGroup>',
+      files: ["registry/components/ui/toggle-group.tsx"],
+      dependencies: ["@radix-ui/react-toggle-group", "class-variance-authority"],
+    },
+    avatar: {
+      name: "Avatar",
+      category: "ui-display",
+      description: "Display user profile pictures with automatic fallback.",
+      icon: "user-circle",
+      keywords: ["avatar", "profile", "user", "image"],
+      example:
+        '<Avatar>\n  <AvatarImage src="profile.jpg" />\n  <AvatarFallback>JD</AvatarFallback>\n</Avatar>',
+      files: ["registry/components/ui/avatar.tsx"],
+      dependencies: ["@radix-ui/react-avatar"],
+    },
+    menubar: {
+      name: "Menubar",
+      category: "ui-navigation",
+      description: "A horizontal menu bar with dropdown menus for navigation.",
+      icon: "menu-square",
+      keywords: ["menubar", "menu", "navigation"],
+      example:
+        "<Menubar>\n  <MenubarMenu>\n    <MenubarTrigger>File</MenubarTrigger>\n    <MenubarContent>\n      <MenubarItem>New File</MenubarItem>\n      <MenubarItem>Save</MenubarItem>\n    </MenubarContent>\n  </MenubarMenu>\n</Menubar>",
+      files: ["registry/components/ui/menubar.tsx"],
+      dependencies: ["@radix-ui/react-menubar", "lucide-react"],
+    },
+    kbd: {
+      name: "Kbd",
+      category: "ui-display",
+      description: "Displays keyboard shortcuts in a styled format.",
+      icon: "keyboard",
+      keywords: ["keyboard", "shortcut", "key"],
+      example: "<Kbd>Ctrl+C</Kbd>",
+      files: ["registry/components/ui/kbd.tsx"],
+      dependencies: [],
+    },
+    dialog: {
+      name: "Dialog",
+      category: "ui-overlay",
+      description: "Display content in a centered overlay window.",
+      icon: "panel-top",
+      keywords: ["dialog", "modal", "popup"],
+      example:
+        "<Dialog>\n  <DialogTrigger>Open</DialogTrigger>\n  <DialogContent>\n    <DialogTitle>Dialog Title</DialogTitle>\n    <DialogDescription>Dialog content goes here.</DialogDescription>\n  </DialogContent>\n</Dialog>",
+      files: ["registry/components/ui/dialog.tsx"],
+      dependencies: ["@radix-ui/react-dialog", "lucide-react"],
+    },
+    badge: {
+      name: "Badge",
+      category: "ui-display",
+      description: "Small labels for highlighting status or categories.",
+      icon: "tag",
+      keywords: ["badge", "tag", "label", "chip"],
+      example:
+        '<div className="flex gap-2">\n  <Badge>New</Badge>\n  <Badge variant="destructive">Error</Badge>\n</div>',
+      files: ["registry/components/ui/badge.tsx"],
+      dependencies: ["class-variance-authority"],
+    },
+    sidebar: {
+      name: "Sidebar",
+      category: "ui-navigation",
+      description: "A collapsible navigation menu for organizing your app's structure.",
+      icon: "sidebar",
+      keywords: ["sidebar", "navigation", "menu", "nav", "collapsible"],
+      example:
+        "<SidebarProvider>\n  <Sidebar>\n    <SidebarContent>\n      <SidebarGroup>\n        <SidebarGroupLabel>Menu</SidebarGroupLabel>\n        <SidebarGroupContent>\n          <SidebarMenu>\n            <SidebarMenuItem>\n              <SidebarMenuButton>Home</SidebarMenuButton>\n            </SidebarMenuItem>\n          </SidebarMenu>\n        </SidebarGroupContent>\n      </SidebarGroup>\n    </SidebarContent>\n  </Sidebar>\n</SidebarProvider>",
+      files: ["registry/components/ui/sidebar.tsx"],
+      dependencies: ["@radix-ui/react-slot", "class-variance-authority", "lucide-react"],
+    },
+    "ui-table": {
+      name: "Table",
+      category: "ui-display",
+      description: "Display data in rows and columns with headers and borders.",
+      icon: "table",
+      keywords: ["table", "data", "grid", "rows", "columns"],
+      example:
+        "<Table>\n  <TableHeader>\n    <TableRow>\n      <TableHead>Name</TableHead>\n      <TableHead>Email</TableHead>\n    </TableRow>\n  </TableHeader>\n  <TableBody>\n    <TableRow>\n      <TableCell>John Doe</TableCell>\n      <TableCell>john@example.com</TableCell>\n    </TableRow>\n  </TableBody>\n</Table>",
+      files: ["registry/components/ui/table.tsx"],
+      dependencies: [],
+    },
+    separator: {
+      name: "Separator",
+      category: "ui-layout",
+      description: "A line that divides content into distinct sections.",
+      icon: "minus",
+      keywords: ["separator", "divider", "line", "hr", "horizontal", "vertical"],
+      example:
+        '<div>\n  <div>Section 1</div>\n  <Separator className="my-4" />\n  <div>Section 2</div>\n</div>',
+      files: ["registry/components/ui/separator.tsx"],
+      dependencies: ["@radix-ui/react-separator"],
+    },
+    button: {
+      name: "Button",
+      category: "ui-input",
+      description: "Interactive buttons for actions and navigation.",
+      icon: "mouse-pointer-click",
+      keywords: ["button", "click", "action"],
+      example:
+        '<div className="flex gap-2">\n  <Button>Primary</Button>\n  <Button variant="secondary">Secondary</Button>\n  <Button variant="outline">Outline</Button>\n</div>',
+      files: ["registry/components/ui/button.tsx"],
+      dependencies: ["@radix-ui/react-slot", "class-variance-authority"],
+    },
+    "toggle-ui": {
+      name: "Toggle",
+      category: "ui-input",
+      description: "A button that can be pressed to switch between on and off.",
+      icon: "toggle-left",
+      keywords: ["toggle", "button", "switch", "press", "on", "off"],
+      example: '<Toggle aria-label="Toggle bold">B</Toggle>',
+      files: ["registry/components/ui/toggle.tsx"],
+      dependencies: ["@radix-ui/react-toggle", "class-variance-authority"],
+    },
+    checkbox: {
+      name: "Checkbox",
+      category: "ui-input",
+      description: "Toggle between checked and unchecked states.",
+      icon: "check-square",
+      keywords: ["checkbox", "check", "toggle"],
+      example:
+        '<div className="flex items-center gap-2">\n  <Checkbox id="terms" />\n  <Label htmlFor="terms">Accept terms</Label>\n</div>',
+      files: ["registry/components/ui/checkbox.tsx"],
+      dependencies: ["@radix-ui/react-checkbox", "lucide-react"],
+    },
+    spinner: {
+      name: "Spinner",
+      category: "ui-feedback",
+      description: "An animated spinning icon to indicate loading or processing.",
+      icon: "loader-2",
+      keywords: ["spinner", "loading", "loader", "progress", "wait"],
+      example: '<Spinner className="h-6 w-6" />',
+      files: ["registry/components/ui/spinner.tsx"],
+      dependencies: ["lucide-react"],
+    },
+    collapsible: {
+      name: "Collapsible",
+      category: "ui-layout",
+      description: "Expand and collapse content sections interactively.",
+      icon: "fold-vertical",
+      keywords: ["collapsible", "expand", "collapse"],
+      example:
+        "<Collapsible>\n  <CollapsibleTrigger>Toggle</CollapsibleTrigger>\n  <CollapsibleContent>Hidden content here.</CollapsibleContent>\n</Collapsible>",
+      files: ["registry/components/ui/collapsible.tsx"],
+      dependencies: ["@radix-ui/react-collapsible"],
+    },
+    "dropdown-menu": {
+      name: "Dropdown Menu",
+      category: "ui-overlay",
+      description: "Display a menu of options triggered by a button.",
+      icon: "chevron-down",
+      keywords: ["dropdown", "menu", "popover"],
+      example:
+        "<DropdownMenu>\n  <DropdownMenuTrigger>Menu</DropdownMenuTrigger>\n  <DropdownMenuContent>\n    <DropdownMenuItem>Option 1</DropdownMenuItem>\n    <DropdownMenuItem>Option 2</DropdownMenuItem>\n  </DropdownMenuContent>\n</DropdownMenu>",
+      files: ["registry/components/ui/dropdown-menu.tsx"],
+      dependencies: ["@radix-ui/react-dropdown-menu", "lucide-react"],
+    },
+    select: {
+      name: "Select",
+      category: "ui-input",
+      description: "Choose one option from a list of choices in a dropdown menu.",
+      icon: "chevron-down",
+      keywords: ["select", "dropdown", "picker", "choose", "option"],
+      example:
+        '<Select>\n  <SelectTrigger>\n    <SelectValue placeholder="Select a fruit" />\n  </SelectTrigger>\n  <SelectContent>\n    <SelectItem value="apple">Apple</SelectItem>\n    <SelectItem value="banana">Banana</SelectItem>\n    <SelectItem value="orange">Orange</SelectItem>\n  </SelectContent>\n</Select>',
+      files: ["registry/components/ui/select.tsx"],
+      dependencies: ["@radix-ui/react-select", "lucide-react"],
+    },
+    textarea: {
+      name: "Textarea",
+      category: "ui-input",
+      description: "A multi-line text input for longer content.",
+      icon: "text",
+      keywords: ["textarea", "text", "multiline", "input", "field"],
+      example: '<Textarea\n  placeholder="Type your message here"\n  rows={4}\n/>',
+      files: ["registry/components/ui/textarea.tsx"],
+      dependencies: [],
+    },
+    input: {
+      name: "Input",
+      category: "ui-input",
+      description: "Text input field for collecting user information.",
+      icon: "text-cursor",
+      keywords: ["input", "text", "field"],
+      example: '<Input placeholder="Enter your email" type="email" />',
+      files: ["registry/components/ui/input.tsx"],
+      dependencies: [],
+    },
+    skeleton: {
+      name: "Skeleton",
+      category: "ui-feedback",
+      description: "A placeholder animation shown while content is loading.",
+      icon: "box",
+      keywords: ["skeleton", "loading", "placeholder", "shimmer", "loader"],
+      example:
+        '<div className="flex items-center space-x-4">\n  <Skeleton className="h-12 w-12 rounded-full" />\n  <div className="space-y-2">\n    <Skeleton className="h-4 w-[250px]" />\n    <Skeleton className="h-4 w-[200px]" />\n  </div>\n</div>',
+      files: ["registry/components/ui/skeleton.tsx"],
+      dependencies: [],
+    },
+    "context-menu": {
+      name: "Context Menu",
+      category: "ui-overlay",
+      description: "Display a menu when users right-click or long-press.",
+      icon: "menu",
+      keywords: ["context", "menu", "right-click"],
+      example:
+        "<ContextMenu>\n  <ContextMenuTrigger>Right-click me</ContextMenuTrigger>\n  <ContextMenuContent>\n    <ContextMenuItem>Edit</ContextMenuItem>\n    <ContextMenuItem>Delete</ContextMenuItem>\n  </ContextMenuContent>\n</ContextMenu>",
+      files: ["registry/components/ui/context-menu.tsx"],
+      dependencies: ["@radix-ui/react-context-menu", "lucide-react"],
+    },
+    form: {
+      name: "Form",
+      category: "ui-input",
+      description:
+        "Form components with validation for building complex forms with error handling.",
+      icon: "file-input",
+      keywords: ["form", "validation", "react-hook-form"],
+      example:
+        '<FormItem>\n  <FormLabel>Email</FormLabel>\n  <FormControl><Input placeholder="you@example.com" /></FormControl>\n  <FormMessage />\n</FormItem>',
+      files: ["registry/components/ui/form.tsx"],
+      dependencies: ["@radix-ui/react-label", "@radix-ui/react-slot"],
+    },
+    carousel: {
+      name: "Carousel",
+      category: "ui-display",
+      description: "Slide through multiple items with navigation controls.",
+      icon: "gallery-horizontal",
+      keywords: ["carousel", "slider", "slideshow"],
+      example:
+        "<Carousel>\n  <CarouselContent>\n    <CarouselItem>Slide 1</CarouselItem>\n    <CarouselItem>Slide 2</CarouselItem>\n  </CarouselContent>\n  <CarouselPrevious />\n  <CarouselNext />\n</Carousel>",
+      files: ["registry/components/ui/carousel.tsx"],
+      dependencies: ["embla-carousel-react", "lucide-react"],
+    },
+    "bar-chart": {
+      name: "Bar Chart",
+      category: "charts",
+      description: "Compare values across categories with vertical or horizontal bars.",
+      icon: "bar-chart-2",
+      keywords: ["bar", "chart", "graph", "comparison", "data"],
+      example:
+        '<BarChart\n  data={[\n    { month: "Jan", sales: 4200 },\n    { month: "Feb", sales: 3800 },\n    { month: "Mar", sales: 5100 },\n  ]}\n  x="month"\n  y="sales"\n  height={300}\n/>',
+      files: ["registry/components/charts/bar-chart.tsx"],
+      dependencies: ["recharts"],
+    },
+    "line-chart": {
+      name: "Line Chart",
+      category: "charts",
+      description: "Show trends over time with connected data points.",
+      icon: "line-chart",
+      keywords: ["line", "chart", "graph", "trend", "time series"],
+      example:
+        '<LineChart\n  data={[\n    { month: "Jan", revenue: 4200 },\n    { month: "Feb", revenue: 3800 },\n    { month: "Mar", revenue: 5100 },\n  ]}\n  x="month"\n  y="revenue"\n  height={300}\n/>',
+      files: ["registry/components/charts/line-chart.tsx"],
+      dependencies: ["recharts"],
+    },
+    "data-table": {
+      name: "DataTable",
+      category: "data",
+      description: "Display structured data in a customizable table with sortable columns.",
+      icon: "table-2",
+      keywords: ["data", "table", "grid", "columns", "rows"],
+      example:
+        '<DataTable\n  data={[\n    { name: "John", email: "john@example.com", role: "Admin" },\n    { name: "Jane", email: "jane@example.com", role: "User" },\n  ]}\n  columns={[\n    { key: "name", header: "Name" },\n    { key: "email", header: "Email" },\n    { key: "role", header: "Role" },\n  ]}\n/>',
+      files: ["registry/components/data/data-table.tsx"],
+      dependencies: [],
+    },
+    "metric-card": {
+      name: "MetricCard",
+      category: "data",
+      description:
+        "Display key metrics at a glance with optional trend indicators showing growth or decline.",
+      icon: "trending-up",
+      keywords: ["metric", "kpi", "stat"],
+      example:
+        '<MetricCard\n  title="Total Revenue"\n  value="$48,352"\n  trend={{ value: 12.5, direction: "up" }}\n  description="vs last month"\n/>',
+      files: ["registry/components/data/metric-card.tsx"],
+      dependencies: [],
+    },
   },
-  "scatterplot-map": {
-    "name": "Scatterplot Map",
-    "category": "maps",
-    "description": "Display point data on an interactive map with scatterplot visualization.",
-    "icon": "map-pin",
-    "keywords": [
-      "map",
-      "scatter",
-      "points",
-      "geospatial",
-      "location",
-      "coordinates"
-    ],
-    "example": "<ScatterplotMap\n  data={[\n    { lat: 37.7749, lng: -122.4194, value: 100 },\n    { lat: 34.0522, lng: -118.2437, value: 200 },\n  ]}\n  latKey=\"lat\"\n  lngKey=\"lng\"\n  radiusKey=\"value\"\n  height={400}\n/>",
-    "files": [
-      "registry/components/maps/scatterplot-map.tsx"
-    ],
-    "dependencies": [
-      "@deck.gl/react",
-      "@deck.gl/layers",
-      "react-map-gl"
-    ]
-  },
-  "hexagon-map": {
-    "name": "Hexagon Map",
-    "category": "maps",
-    "description": "Display aggregated point data on an interactive map using 3D hexagonal bins.",
-    "icon": "hexagon",
-    "keywords": [
-      "map",
-      "hexagon",
-      "hexbin",
-      "aggregation",
-      "3d",
-      "geospatial",
-      "location",
-      "bins"
-    ],
-    "example": "<HexagonMap\n  data={[\n    { lat: 37.7749, lng: -122.4194 },\n    { lat: 37.7849, lng: -122.4094 },\n    { lat: 37.7649, lng: -122.4294 },\n  ]}\n  latKey=\"lat\"\n  lngKey=\"lng\"\n  height={400}\n/>",
-    "files": [
-      "registry/components/maps/hexagon-map.tsx"
-    ],
-    "dependencies": [
-      "@deck.gl/react",
-      "@deck.gl/aggregation-layers",
-      "react-map-gl"
-    ]
-  },
-  "geojson-map": {
-    "name": "GeoJSON Map",
-    "category": "maps",
-    "description": "Display GeoJSON features on an interactive map with customizable styling.",
-    "icon": "map",
-    "keywords": [
-      "map",
-      "geojson",
-      "features",
-      "polygons",
-      "lines",
-      "shapes",
-      "geospatial",
-      "boundaries"
-    ],
-    "example": "<GeoJsonMap\n  data={{\n    type: \"FeatureCollection\",\n    features: [\n      {\n        type: \"Feature\",\n        geometry: { type: \"Point\", coordinates: [-122.4194, 37.7749] },\n        properties: { name: \"San Francisco\" }\n      }\n    ]\n  }}\n  height={400}\n/>",
-    "files": [
-      "registry/components/maps/geojson-map.tsx"
-    ],
-    "dependencies": [
-      "@deck.gl/react",
-      "@deck.gl/layers",
-      "react-map-gl"
-    ]
-  },
-  "aspect-ratio": {
-    "name": "Aspect Ratio",
-    "category": "ui-layout",
-    "description": "Keep content at a specific width-to-height ratio.",
-    "icon": "ratio",
-    "keywords": [
-      "aspect",
-      "ratio",
-      "responsive"
-    ],
-    "example": "<AspectRatio ratio={16 / 9}>\n  <img src=\"photo.jpg\" alt=\"Photo\" />\n</AspectRatio>",
-    "files": [
-      "registry/components/ui/aspect-ratio.tsx"
-    ],
-    "dependencies": [
-      "@radix-ui/react-aspect-ratio"
-    ]
-  },
-  "alert-dialog": {
-    "name": "Alert Dialog",
-    "category": "ui-overlay",
-    "description": "Display important confirmations that require user action.",
-    "icon": "alert-triangle",
-    "keywords": [
-      "dialog",
-      "modal",
-      "confirm",
-      "alert"
-    ],
-    "example": "<AlertDialog>\n  <AlertDialogTrigger>Delete</AlertDialogTrigger>\n  <AlertDialogContent>\n    <AlertDialogTitle>Are you sure?</AlertDialogTitle>\n    <AlertDialogDescription>This action cannot be undone.</AlertDialogDescription>\n    <AlertDialogAction>Continue</AlertDialogAction>\n  </AlertDialogContent>\n</AlertDialog>",
-    "files": [
-      "registry/components/ui/alert-dialog.tsx"
-    ],
-    "dependencies": [
-      "@radix-ui/react-alert-dialog"
-    ]
-  },
-  "pagination": {
-    "name": "Pagination",
-    "category": "ui-navigation",
-    "description": "Navigation controls for paginated content with previous and next buttons.",
-    "icon": "more-horizontal",
-    "keywords": [
-      "pagination",
-      "pages",
-      "navigation"
-    ],
-    "example": "<Pagination>\n  <PaginationContent>\n    <PaginationItem><PaginationPrevious href=\"#\" /></PaginationItem>\n    <PaginationItem><PaginationLink href=\"#\">1</PaginationLink></PaginationItem>\n    <PaginationItem><PaginationNext href=\"#\" /></PaginationItem>\n  </PaginationContent>\n</Pagination>",
-    "files": [
-      "registry/components/ui/pagination.tsx"
-    ],
-    "dependencies": [
-      "lucide-react"
-    ]
-  },
-  "tabs": {
-    "name": "Tabs",
-    "category": "ui-navigation",
-    "description": "Switch between different views using clickable tabs.",
-    "icon": "layout-panel-top",
-    "keywords": [
-      "tabs",
-      "navigation",
-      "panels",
-      "switch",
-      "toggle"
-    ],
-    "example": "<Tabs defaultValue=\"account\">\n  <TabsList>\n    <TabsTrigger value=\"account\">Account</TabsTrigger>\n    <TabsTrigger value=\"password\">Password</TabsTrigger>\n  </TabsList>\n  <TabsContent value=\"account\">\n    Account settings here.\n  </TabsContent>\n  <TabsContent value=\"password\">\n    Password settings here.\n  </TabsContent>\n</Tabs>",
-    "files": [
-      "registry/components/ui/tabs.tsx"
-    ],
-    "dependencies": [
-      "@radix-ui/react-tabs"
-    ]
-  },
-  "button-group": {
-    "name": "Button Group",
-    "category": "ui-input",
-    "description": "Combine related buttons into a connected group.",
-    "icon": "layout-grid",
-    "keywords": [
-      "button",
-      "group",
-      "toolbar"
-    ],
-    "example": "<ButtonGroup>\n  <Button>Left</Button>\n  <Button>Center</Button>\n  <Button>Right</Button>\n</ButtonGroup>",
-    "files": [
-      "registry/components/ui/button-group.tsx"
-    ],
-    "dependencies": [
-      "@radix-ui/react-slot",
-      "class-variance-authority"
-    ]
-  },
-  "card": {
-    "name": "Card",
-    "category": "ui-layout",
-    "description": "Container for grouping related content with optional header and footer.",
-    "icon": "square",
-    "keywords": [
-      "card",
-      "container",
-      "panel"
-    ],
-    "example": "<Card>\n  <CardHeader>\n    <CardTitle>Project Overview</CardTitle>\n    <CardDescription>Summary of your current project status</CardDescription>\n  </CardHeader>\n  <CardContent>\n    <p>Your project is on track with 85% completion.</p>\n  </CardContent>\n</Card>",
-    "files": [
-      "registry/components/ui/card.tsx"
-    ],
-    "dependencies": []
-  },
-  "slider": {
-    "name": "Slider",
-    "category": "ui-input",
-    "description": "Choose a number by dragging along a track.",
-    "icon": "sliders-horizontal",
-    "keywords": [
-      "slider",
-      "range",
-      "input",
-      "track",
-      "number"
-    ],
-    "example": "<Slider\n  defaultValue={[50]}\n  max={100}\n  step={1}\n/>",
-    "files": [
-      "registry/components/ui/slider.tsx"
-    ],
-    "dependencies": [
-      "@radix-ui/react-slider"
-    ]
-  },
-  "input-group": {
-    "name": "Input Group",
-    "category": "ui-input",
-    "description": "Groups inputs with additional elements like icons, buttons, or text labels.",
-    "icon": "layout-list",
-    "keywords": [
-      "input",
-      "group",
-      "addon"
-    ],
-    "example": "<InputGroup>\n  <InputGroupText>@</InputGroupText>\n  <InputGroupInput placeholder=\"Username\" />\n</InputGroup>",
-    "files": [
-      "registry/components/ui/input-group.tsx"
-    ],
-    "dependencies": [
-      "class-variance-authority"
-    ]
-  },
-  "popover": {
-    "name": "Popover",
-    "category": "ui-overlay",
-    "description": "A floating content panel triggered by a button or other element.",
-    "icon": "message-square",
-    "keywords": [
-      "popover",
-      "popup",
-      "tooltip"
-    ],
-    "example": "<Popover>\n  <PopoverTrigger>Open</PopoverTrigger>\n  <PopoverContent>\n    Content goes here\n  </PopoverContent>\n</Popover>",
-    "files": [
-      "registry/components/ui/popover.tsx"
-    ],
-    "dependencies": [
-      "@radix-ui/react-popover"
-    ]
-  },
-  "progress": {
-    "name": "Progress",
-    "category": "ui-feedback",
-    "description": "Shows progress toward a goal with an animated bar.",
-    "icon": "loader",
-    "keywords": [
-      "progress",
-      "loading",
-      "bar"
-    ],
-    "example": "<Progress value={60} />",
-    "files": [
-      "registry/components/ui/progress.tsx"
-    ],
-    "dependencies": [
-      "@radix-ui/react-progress"
-    ]
-  },
-  "input-otp": {
-    "name": "Input OTP",
-    "category": "ui-input",
-    "description": "One-time password input for verification codes and security pins.",
-    "icon": "key-round",
-    "keywords": [
-      "otp",
-      "pin",
-      "code",
-      "verification"
-    ],
-    "example": "<InputOTP maxLength={6}>\n  <InputOTPGroup>\n    <InputOTPSlot index={0} />\n    <InputOTPSlot index={1} />\n    <InputOTPSlot index={2} />\n  </InputOTPGroup>\n</InputOTP>",
-    "files": [
-      "registry/components/ui/input-otp.tsx"
-    ],
-    "dependencies": [
-      "input-otp",
-      "lucide-react"
-    ]
-  },
-  "chart": {
-    "name": "Chart",
-    "category": "charts",
-    "description": "Build data visualizations with configurable chart components.",
-    "icon": "bar-chart-3",
-    "keywords": [
-      "chart",
-      "graph",
-      "visualization"
-    ],
-    "example": "<ChartContainer config={{}} className=\"h-[200px]\">\n  <div className=\"flex items-center justify-center h-full text-muted-foreground\">\n    Chart visualization area\n  </div>\n</ChartContainer>",
-    "files": [
-      "registry/components/ui/chart.tsx"
-    ],
-    "dependencies": [
-      "recharts"
-    ]
-  },
-  "hover-card": {
-    "name": "Hover Card",
-    "category": "ui-overlay",
-    "description": "A card that appears when hovering over an element to show additional information.",
-    "icon": "mouse-pointer-2",
-    "keywords": [
-      "hover",
-      "card",
-      "preview"
-    ],
-    "example": "<HoverCard>\n  <HoverCardTrigger>Hover me</HoverCardTrigger>\n  <HoverCardContent>\n    Additional information appears here\n  </HoverCardContent>\n</HoverCard>",
-    "files": [
-      "registry/components/ui/hover-card.tsx"
-    ],
-    "dependencies": [
-      "@radix-ui/react-hover-card"
-    ]
-  },
-  "sheet": {
-    "name": "Sheet",
-    "category": "ui-overlay",
-    "description": "A panel that slides in from the edge of the screen.",
-    "icon": "panel-right",
-    "keywords": [
-      "sheet",
-      "panel",
-      "drawer",
-      "slide",
-      "sidebar"
-    ],
-    "example": "<Sheet>\n  <SheetTrigger asChild>\n    <button>Open</button>\n  </SheetTrigger>\n  <SheetContent>\n    <SheetHeader>\n      <SheetTitle>Settings</SheetTitle>\n      <SheetDescription>\n        Make changes to your profile here.\n      </SheetDescription>\n    </SheetHeader>\n  </SheetContent>\n</Sheet>",
-    "files": [
-      "registry/components/ui/sheet.tsx"
-    ],
-    "dependencies": [
-      "@radix-ui/react-dialog",
-      "class-variance-authority",
-      "lucide-react"
-    ]
-  },
-  "field": {
-    "name": "Field",
-    "category": "ui-input",
-    "description": "A form field wrapper with label and error handling for building accessible forms.",
-    "icon": "text-cursor-input",
-    "keywords": [
-      "field",
-      "form",
-      "input",
-      "label"
-    ],
-    "example": "<Field>\n  <FieldLabel>Email</FieldLabel>\n  <Input type=\"email\" placeholder=\"Enter your email\" />\n  <FieldDescription>We'll never share your email.</FieldDescription>\n</Field>",
-    "files": [
-      "registry/components/ui/field.tsx"
-    ],
-    "dependencies": [
-      "class-variance-authority"
-    ]
-  },
-  "scroll-area": {
-    "name": "Scroll Area",
-    "category": "ui-layout",
-    "description": "A custom scrollbar container for overflow content.",
-    "icon": "scroll",
-    "keywords": [
-      "scroll",
-      "overflow",
-      "scrollbar"
-    ],
-    "example": "<ScrollArea className=\"h-72 w-48\">\n  <div>Long content that scrolls...</div>\n</ScrollArea>",
-    "files": [
-      "registry/components/ui/scroll-area.tsx"
-    ],
-    "dependencies": [
-      "@radix-ui/react-scroll-area"
-    ]
-  },
-  "resizable": {
-    "name": "Resizable",
-    "category": "ui-layout",
-    "description": "Resizable panel groups with draggable handles for adjusting layout.",
-    "icon": "move",
-    "keywords": [
-      "resizable",
-      "resize",
-      "panels"
-    ],
-    "example": "<ResizablePanelGroup direction=\"horizontal\">\n  <ResizablePanel defaultSize={50}>Panel 1</ResizablePanel>\n  <ResizableHandle />\n  <ResizablePanel defaultSize={50}>Panel 2</ResizablePanel>\n</ResizablePanelGroup>",
-    "files": [
-      "registry/components/ui/resizable.tsx"
-    ],
-    "dependencies": [
-      "lucide-react",
-      "react-resizable-panels"
-    ]
-  },
-  "label": {
-    "name": "Label",
-    "category": "ui-input",
-    "description": "A label for form controls with accessibility support.",
-    "icon": "tag",
-    "keywords": [
-      "label",
-      "form",
-      "accessibility"
-    ],
-    "example": "<Label htmlFor=\"email\">Email Address</Label>",
-    "files": [
-      "registry/components/ui/label.tsx"
-    ],
-    "dependencies": [
-      "@radix-ui/react-label",
-      "class-variance-authority"
-    ]
-  },
-  "sonner": {
-    "name": "Toaster",
-    "category": "ui-feedback",
-    "description": "Display brief notifications at the corner of the screen.",
-    "icon": "bell",
-    "keywords": [
-      "toast",
-      "notification",
-      "sonner",
-      "alert",
-      "message"
-    ],
-    "example": "<Toaster />",
-    "files": [
-      "registry/components/ui/sonner.tsx"
-    ],
-    "dependencies": [
-      "next-themes",
-      "sonner"
-    ]
-  },
-  "navigation-menu": {
-    "name": "Navigation Menu",
-    "category": "ui-navigation",
-    "description": "A navigation menu with links and expandable sub-menus.",
-    "icon": "navigation",
-    "keywords": [
-      "navigation",
-      "menu",
-      "nav"
-    ],
-    "example": "<NavigationMenu>\n  <NavigationMenuList>\n    <NavigationMenuItem>\n      <NavigationMenuTrigger>Products</NavigationMenuTrigger>\n      <NavigationMenuContent>Menu items here</NavigationMenuContent>\n    </NavigationMenuItem>\n  </NavigationMenuList>\n</NavigationMenu>",
-    "files": [
-      "registry/components/ui/navigation-menu.tsx"
-    ],
-    "dependencies": [
-      "@radix-ui/react-navigation-menu",
-      "class-variance-authority",
-      "lucide-react"
-    ]
-  },
-  "accordion": {
-    "name": "Accordion",
-    "category": "ui-layout",
-    "description": "Expandable sections that show and hide content.",
-    "icon": "chevrons-down-up",
-    "keywords": [
-      "accordion",
-      "collapse",
-      "expand",
-      "sections"
-    ],
-    "example": "<Accordion type=\"single\" collapsible>\n  <AccordionItem value=\"item-1\">\n    <AccordionTrigger>Question?</AccordionTrigger>\n    <AccordionContent>Answer here.</AccordionContent>\n  </AccordionItem>\n</Accordion>",
-    "files": [
-      "registry/components/ui/accordion.tsx"
-    ],
-    "dependencies": [
-      "@radix-ui/react-accordion",
-      "lucide-react"
-    ]
-  },
-  "drawer": {
-    "name": "Drawer",
-    "category": "ui-overlay",
-    "description": "Slide in content from the screen edge.",
-    "icon": "panel-left",
-    "keywords": [
-      "drawer",
-      "panel",
-      "slide"
-    ],
-    "example": "<Drawer>\n  <DrawerTrigger>Open Drawer</DrawerTrigger>\n  <DrawerContent>\n    <DrawerTitle>Drawer Title</DrawerTitle>\n    <DrawerDescription>Drawer content here.</DrawerDescription>\n  </DrawerContent>\n</Drawer>",
-    "files": [
-      "registry/components/ui/drawer.tsx"
-    ],
-    "dependencies": [
-      "vaul"
-    ]
-  },
-  "empty": {
-    "name": "Empty",
-    "category": "ui-feedback",
-    "description": "A placeholder for empty states when there is no data to display.",
-    "icon": "inbox",
-    "keywords": [
-      "empty",
-      "placeholder",
-      "no-data"
-    ],
-    "example": "<Empty>\n  <EmptyHeader>\n    <EmptyTitle>No messages</EmptyTitle>\n    <EmptyDescription>You don't have any messages yet.</EmptyDescription>\n  </EmptyHeader>\n</Empty>",
-    "files": [
-      "registry/components/ui/empty.tsx"
-    ],
-    "dependencies": [
-      "class-variance-authority"
-    ]
-  },
-  "tooltip": {
-    "name": "Tooltip",
-    "category": "ui-overlay",
-    "description": "A small popup that appears when hovering over an element.",
-    "icon": "message-circle",
-    "keywords": [
-      "tooltip",
-      "hint",
-      "help",
-      "hover",
-      "popup"
-    ],
-    "example": "<TooltipProvider>\n  <Tooltip>\n    <TooltipTrigger>Hover me</TooltipTrigger>\n    <TooltipContent>\n      <p>Helpful information</p>\n    </TooltipContent>\n  </Tooltip>\n</TooltipProvider>",
-    "files": [
-      "registry/components/ui/tooltip.tsx"
-    ],
-    "dependencies": [
-      "@radix-ui/react-tooltip"
-    ]
-  },
-  "alert": {
-    "name": "Alert",
-    "category": "ui-feedback",
-    "description": "Display important messages or notifications to users.",
-    "icon": "alert-circle",
-    "keywords": [
-      "alert",
-      "message",
-      "notification",
-      "callout"
-    ],
-    "example": "<Alert>\n  <AlertTitle>Heads up!</AlertTitle>\n  <AlertDescription>You can use this to highlight important information.</AlertDescription>\n</Alert>",
-    "files": [
-      "registry/components/ui/alert.tsx"
-    ],
-    "dependencies": [
-      "class-variance-authority"
-    ]
-  },
-  "switch": {
-    "name": "Switch",
-    "category": "ui-input",
-    "description": "A toggle that switches between on and off states.",
-    "icon": "toggle-right",
-    "keywords": [
-      "switch",
-      "toggle",
-      "boolean",
-      "on",
-      "off"
-    ],
-    "example": "<div className=\"flex items-center space-x-2\">\n  <Switch id=\"airplane-mode\" />\n  <label htmlFor=\"airplane-mode\">Airplane Mode</label>\n</div>",
-    "files": [
-      "registry/components/ui/switch.tsx"
-    ],
-    "dependencies": [
-      "@radix-ui/react-switch"
-    ]
-  },
-  "calendar": {
-    "name": "Calendar",
-    "category": "ui-input",
-    "description": "Pick dates from an interactive calendar view.",
-    "icon": "calendar",
-    "keywords": [
-      "calendar",
-      "date",
-      "picker"
-    ],
-    "example": "<Calendar mode=\"single\" />",
-    "files": [
-      "registry/components/ui/calendar.tsx"
-    ],
-    "dependencies": [
-      "lucide-react",
-      "react-day-picker"
-    ]
-  },
-  "breadcrumb": {
-    "name": "Breadcrumb",
-    "category": "ui-navigation",
-    "description": "Show the current page location within a site hierarchy.",
-    "icon": "chevron-right",
-    "keywords": [
-      "breadcrumb",
-      "navigation",
-      "path"
-    ],
-    "example": "<Breadcrumb>\n  <BreadcrumbList>\n    <BreadcrumbItem>\n      <BreadcrumbLink href=\"/\">Home</BreadcrumbLink>\n    </BreadcrumbItem>\n    <BreadcrumbItem>\n      <BreadcrumbPage>Current Page</BreadcrumbPage>\n    </BreadcrumbItem>\n  </BreadcrumbList>\n</Breadcrumb>",
-    "files": [
-      "registry/components/ui/breadcrumb.tsx"
-    ],
-    "dependencies": [
-      "@radix-ui/react-slot",
-      "lucide-react"
-    ]
-  },
-  "radio-group": {
-    "name": "Radio Group",
-    "category": "ui-input",
-    "description": "A set of radio buttons for selecting a single option from multiple choices.",
-    "icon": "circle-dot",
-    "keywords": [
-      "radio",
-      "select",
-      "options"
-    ],
-    "example": "<RadioGroup defaultValue=\"option1\">\n  <div className=\"flex items-center space-x-2\">\n    <RadioGroupItem value=\"option1\" id=\"option1\" />\n    <Label htmlFor=\"option1\">Option 1</Label>\n  </div>\n</RadioGroup>",
-    "files": [
-      "registry/components/ui/radio-group.tsx"
-    ],
-    "dependencies": [
-      "@radix-ui/react-radio-group",
-      "lucide-react"
-    ]
-  },
-  "command": {
-    "name": "Command",
-    "category": "ui-input",
-    "description": "Search and navigate with a keyboard-driven command palette.",
-    "icon": "command",
-    "keywords": [
-      "command",
-      "search",
-      "palette",
-      "cmdk"
-    ],
-    "example": "<Command>\n  <CommandInput placeholder=\"Search...\" />\n  <CommandList>\n    <CommandGroup heading=\"Actions\">\n      <CommandItem>New File</CommandItem>\n      <CommandItem>Open</CommandItem>\n    </CommandGroup>\n  </CommandList>\n</Command>",
-    "files": [
-      "registry/components/ui/command.tsx"
-    ],
-    "dependencies": [
-      "@radix-ui/react-dialog",
-      "cmdk",
-      "lucide-react"
-    ]
-  },
-  "item": {
-    "name": "Item",
-    "category": "ui-display",
-    "description": "A list item component for displaying content with media, titles, and actions.",
-    "icon": "list",
-    "keywords": [
-      "item",
-      "list",
-      "row"
-    ],
-    "example": "<Item>\n  <ItemContent>\n    <ItemTitle>User Name</ItemTitle>\n    <ItemDescription>user@example.com</ItemDescription>\n  </ItemContent>\n</Item>",
-    "files": [
-      "registry/components/ui/item.tsx"
-    ],
-    "dependencies": [
-      "@radix-ui/react-slot",
-      "class-variance-authority"
-    ]
-  },
-  "toggle-group": {
-    "name": "Toggle Group",
-    "category": "ui-input",
-    "description": "Multiple toggle buttons grouped together for related choices.",
-    "icon": "layout-grid",
-    "keywords": [
-      "toggle",
-      "group",
-      "buttons",
-      "toolbar",
-      "options"
-    ],
-    "example": "<ToggleGroup type=\"single\">\n  <ToggleGroupItem value=\"bold\">Bold</ToggleGroupItem>\n  <ToggleGroupItem value=\"italic\">Italic</ToggleGroupItem>\n  <ToggleGroupItem value=\"underline\">Underline</ToggleGroupItem>\n</ToggleGroup>",
-    "files": [
-      "registry/components/ui/toggle-group.tsx"
-    ],
-    "dependencies": [
-      "@radix-ui/react-toggle-group",
-      "class-variance-authority"
-    ]
-  },
-  "avatar": {
-    "name": "Avatar",
-    "category": "ui-display",
-    "description": "Display user profile pictures with automatic fallback.",
-    "icon": "user-circle",
-    "keywords": [
-      "avatar",
-      "profile",
-      "user",
-      "image"
-    ],
-    "example": "<Avatar>\n  <AvatarImage src=\"profile.jpg\" />\n  <AvatarFallback>JD</AvatarFallback>\n</Avatar>",
-    "files": [
-      "registry/components/ui/avatar.tsx"
-    ],
-    "dependencies": [
-      "@radix-ui/react-avatar"
-    ]
-  },
-  "menubar": {
-    "name": "Menubar",
-    "category": "ui-navigation",
-    "description": "A horizontal menu bar with dropdown menus for navigation.",
-    "icon": "menu-square",
-    "keywords": [
-      "menubar",
-      "menu",
-      "navigation"
-    ],
-    "example": "<Menubar>\n  <MenubarMenu>\n    <MenubarTrigger>File</MenubarTrigger>\n    <MenubarContent>\n      <MenubarItem>New File</MenubarItem>\n      <MenubarItem>Save</MenubarItem>\n    </MenubarContent>\n  </MenubarMenu>\n</Menubar>",
-    "files": [
-      "registry/components/ui/menubar.tsx"
-    ],
-    "dependencies": [
-      "@radix-ui/react-menubar",
-      "lucide-react"
-    ]
-  },
-  "kbd": {
-    "name": "Kbd",
-    "category": "ui-display",
-    "description": "Displays keyboard shortcuts in a styled format.",
-    "icon": "keyboard",
-    "keywords": [
-      "keyboard",
-      "shortcut",
-      "key"
-    ],
-    "example": "<Kbd>Ctrl+C</Kbd>",
-    "files": [
-      "registry/components/ui/kbd.tsx"
-    ],
-    "dependencies": []
-  },
-  "dialog": {
-    "name": "Dialog",
-    "category": "ui-overlay",
-    "description": "Display content in a centered overlay window.",
-    "icon": "panel-top",
-    "keywords": [
-      "dialog",
-      "modal",
-      "popup"
-    ],
-    "example": "<Dialog>\n  <DialogTrigger>Open</DialogTrigger>\n  <DialogContent>\n    <DialogTitle>Dialog Title</DialogTitle>\n    <DialogDescription>Dialog content goes here.</DialogDescription>\n  </DialogContent>\n</Dialog>",
-    "files": [
-      "registry/components/ui/dialog.tsx"
-    ],
-    "dependencies": [
-      "@radix-ui/react-dialog",
-      "lucide-react"
-    ]
-  },
-  "badge": {
-    "name": "Badge",
-    "category": "ui-display",
-    "description": "Small labels for highlighting status or categories.",
-    "icon": "tag",
-    "keywords": [
-      "badge",
-      "tag",
-      "label",
-      "chip"
-    ],
-    "example": "<div className=\"flex gap-2\">\n  <Badge>New</Badge>\n  <Badge variant=\"destructive\">Error</Badge>\n</div>",
-    "files": [
-      "registry/components/ui/badge.tsx"
-    ],
-    "dependencies": [
-      "class-variance-authority"
-    ]
-  },
-  "sidebar": {
-    "name": "Sidebar",
-    "category": "ui-navigation",
-    "description": "A collapsible navigation menu for organizing your app's structure.",
-    "icon": "sidebar",
-    "keywords": [
-      "sidebar",
-      "navigation",
-      "menu",
-      "nav",
-      "collapsible"
-    ],
-    "example": "<SidebarProvider>\n  <Sidebar>\n    <SidebarContent>\n      <SidebarGroup>\n        <SidebarGroupLabel>Menu</SidebarGroupLabel>\n        <SidebarGroupContent>\n          <SidebarMenu>\n            <SidebarMenuItem>\n              <SidebarMenuButton>Home</SidebarMenuButton>\n            </SidebarMenuItem>\n          </SidebarMenu>\n        </SidebarGroupContent>\n      </SidebarGroup>\n    </SidebarContent>\n  </Sidebar>\n</SidebarProvider>",
-    "files": [
-      "registry/components/ui/sidebar.tsx"
-    ],
-    "dependencies": [
-      "@radix-ui/react-slot",
-      "class-variance-authority",
-      "lucide-react"
-    ]
-  },
-  "ui-table": {
-    "name": "Table",
-    "category": "ui-display",
-    "description": "Display data in rows and columns with headers and borders.",
-    "icon": "table",
-    "keywords": [
-      "table",
-      "data",
-      "grid",
-      "rows",
-      "columns"
-    ],
-    "example": "<Table>\n  <TableHeader>\n    <TableRow>\n      <TableHead>Name</TableHead>\n      <TableHead>Email</TableHead>\n    </TableRow>\n  </TableHeader>\n  <TableBody>\n    <TableRow>\n      <TableCell>John Doe</TableCell>\n      <TableCell>john@example.com</TableCell>\n    </TableRow>\n  </TableBody>\n</Table>",
-    "files": [
-      "registry/components/ui/table.tsx"
-    ],
-    "dependencies": []
-  },
-  "separator": {
-    "name": "Separator",
-    "category": "ui-layout",
-    "description": "A line that divides content into distinct sections.",
-    "icon": "minus",
-    "keywords": [
-      "separator",
-      "divider",
-      "line",
-      "hr",
-      "horizontal",
-      "vertical"
-    ],
-    "example": "<div>\n  <div>Section 1</div>\n  <Separator className=\"my-4\" />\n  <div>Section 2</div>\n</div>",
-    "files": [
-      "registry/components/ui/separator.tsx"
-    ],
-    "dependencies": [
-      "@radix-ui/react-separator"
-    ]
-  },
-  "button": {
-    "name": "Button",
-    "category": "ui-input",
-    "description": "Interactive buttons for actions and navigation.",
-    "icon": "mouse-pointer-click",
-    "keywords": [
-      "button",
-      "click",
-      "action"
-    ],
-    "example": "<div className=\"flex gap-2\">\n  <Button>Primary</Button>\n  <Button variant=\"secondary\">Secondary</Button>\n  <Button variant=\"outline\">Outline</Button>\n</div>",
-    "files": [
-      "registry/components/ui/button.tsx"
-    ],
-    "dependencies": [
-      "@radix-ui/react-slot",
-      "class-variance-authority"
-    ]
-  },
-  "toggle-ui": {
-    "name": "Toggle",
-    "category": "ui-input",
-    "description": "A button that can be pressed to switch between on and off.",
-    "icon": "toggle-left",
-    "keywords": [
-      "toggle",
-      "button",
-      "switch",
-      "press",
-      "on",
-      "off"
-    ],
-    "example": "<Toggle aria-label=\"Toggle bold\">B</Toggle>",
-    "files": [
-      "registry/components/ui/toggle.tsx"
-    ],
-    "dependencies": [
-      "@radix-ui/react-toggle",
-      "class-variance-authority"
-    ]
-  },
-  "checkbox": {
-    "name": "Checkbox",
-    "category": "ui-input",
-    "description": "Toggle between checked and unchecked states.",
-    "icon": "check-square",
-    "keywords": [
-      "checkbox",
-      "check",
-      "toggle"
-    ],
-    "example": "<div className=\"flex items-center gap-2\">\n  <Checkbox id=\"terms\" />\n  <Label htmlFor=\"terms\">Accept terms</Label>\n</div>",
-    "files": [
-      "registry/components/ui/checkbox.tsx"
-    ],
-    "dependencies": [
-      "@radix-ui/react-checkbox",
-      "lucide-react"
-    ]
-  },
-  "spinner": {
-    "name": "Spinner",
-    "category": "ui-feedback",
-    "description": "An animated spinning icon to indicate loading or processing.",
-    "icon": "loader-2",
-    "keywords": [
-      "spinner",
-      "loading",
-      "loader",
-      "progress",
-      "wait"
-    ],
-    "example": "<Spinner className=\"h-6 w-6\" />",
-    "files": [
-      "registry/components/ui/spinner.tsx"
-    ],
-    "dependencies": [
-      "lucide-react"
-    ]
-  },
-  "collapsible": {
-    "name": "Collapsible",
-    "category": "ui-layout",
-    "description": "Expand and collapse content sections interactively.",
-    "icon": "fold-vertical",
-    "keywords": [
-      "collapsible",
-      "expand",
-      "collapse"
-    ],
-    "example": "<Collapsible>\n  <CollapsibleTrigger>Toggle</CollapsibleTrigger>\n  <CollapsibleContent>Hidden content here.</CollapsibleContent>\n</Collapsible>",
-    "files": [
-      "registry/components/ui/collapsible.tsx"
-    ],
-    "dependencies": [
-      "@radix-ui/react-collapsible"
-    ]
-  },
-  "dropdown-menu": {
-    "name": "Dropdown Menu",
-    "category": "ui-overlay",
-    "description": "Display a menu of options triggered by a button.",
-    "icon": "chevron-down",
-    "keywords": [
-      "dropdown",
-      "menu",
-      "popover"
-    ],
-    "example": "<DropdownMenu>\n  <DropdownMenuTrigger>Menu</DropdownMenuTrigger>\n  <DropdownMenuContent>\n    <DropdownMenuItem>Option 1</DropdownMenuItem>\n    <DropdownMenuItem>Option 2</DropdownMenuItem>\n  </DropdownMenuContent>\n</DropdownMenu>",
-    "files": [
-      "registry/components/ui/dropdown-menu.tsx"
-    ],
-    "dependencies": [
-      "@radix-ui/react-dropdown-menu",
-      "lucide-react"
-    ]
-  },
-  "select": {
-    "name": "Select",
-    "category": "ui-input",
-    "description": "Choose one option from a list of choices in a dropdown menu.",
-    "icon": "chevron-down",
-    "keywords": [
-      "select",
-      "dropdown",
-      "picker",
-      "choose",
-      "option"
-    ],
-    "example": "<Select>\n  <SelectTrigger>\n    <SelectValue placeholder=\"Select a fruit\" />\n  </SelectTrigger>\n  <SelectContent>\n    <SelectItem value=\"apple\">Apple</SelectItem>\n    <SelectItem value=\"banana\">Banana</SelectItem>\n    <SelectItem value=\"orange\">Orange</SelectItem>\n  </SelectContent>\n</Select>",
-    "files": [
-      "registry/components/ui/select.tsx"
-    ],
-    "dependencies": [
-      "@radix-ui/react-select",
-      "lucide-react"
-    ]
-  },
-  "textarea": {
-    "name": "Textarea",
-    "category": "ui-input",
-    "description": "A multi-line text input for longer content.",
-    "icon": "text",
-    "keywords": [
-      "textarea",
-      "text",
-      "multiline",
-      "input",
-      "field"
-    ],
-    "example": "<Textarea\n  placeholder=\"Type your message here\"\n  rows={4}\n/>",
-    "files": [
-      "registry/components/ui/textarea.tsx"
-    ],
-    "dependencies": []
-  },
-  "input": {
-    "name": "Input",
-    "category": "ui-input",
-    "description": "Text input field for collecting user information.",
-    "icon": "text-cursor",
-    "keywords": [
-      "input",
-      "text",
-      "field"
-    ],
-    "example": "<Input placeholder=\"Enter your email\" type=\"email\" />",
-    "files": [
-      "registry/components/ui/input.tsx"
-    ],
-    "dependencies": []
-  },
-  "skeleton": {
-    "name": "Skeleton",
-    "category": "ui-feedback",
-    "description": "A placeholder animation shown while content is loading.",
-    "icon": "box",
-    "keywords": [
-      "skeleton",
-      "loading",
-      "placeholder",
-      "shimmer",
-      "loader"
-    ],
-    "example": "<div className=\"flex items-center space-x-4\">\n  <Skeleton className=\"h-12 w-12 rounded-full\" />\n  <div className=\"space-y-2\">\n    <Skeleton className=\"h-4 w-[250px]\" />\n    <Skeleton className=\"h-4 w-[200px]\" />\n  </div>\n</div>",
-    "files": [
-      "registry/components/ui/skeleton.tsx"
-    ],
-    "dependencies": []
-  },
-  "context-menu": {
-    "name": "Context Menu",
-    "category": "ui-overlay",
-    "description": "Display a menu when users right-click or long-press.",
-    "icon": "menu",
-    "keywords": [
-      "context",
-      "menu",
-      "right-click"
-    ],
-    "example": "<ContextMenu>\n  <ContextMenuTrigger>Right-click me</ContextMenuTrigger>\n  <ContextMenuContent>\n    <ContextMenuItem>Edit</ContextMenuItem>\n    <ContextMenuItem>Delete</ContextMenuItem>\n  </ContextMenuContent>\n</ContextMenu>",
-    "files": [
-      "registry/components/ui/context-menu.tsx"
-    ],
-    "dependencies": [
-      "@radix-ui/react-context-menu",
-      "lucide-react"
-    ]
-  },
-  "form": {
-    "name": "Form",
-    "category": "ui-input",
-    "description": "Form components with validation for building complex forms with error handling.",
-    "icon": "file-input",
-    "keywords": [
-      "form",
-      "validation",
-      "react-hook-form"
-    ],
-    "example": "<FormItem>\n  <FormLabel>Email</FormLabel>\n  <FormControl><Input placeholder=\"you@example.com\" /></FormControl>\n  <FormMessage />\n</FormItem>",
-    "files": [
-      "registry/components/ui/form.tsx"
-    ],
-    "dependencies": [
-      "@radix-ui/react-label",
-      "@radix-ui/react-slot"
-    ]
-  },
-  "carousel": {
-    "name": "Carousel",
-    "category": "ui-display",
-    "description": "Slide through multiple items with navigation controls.",
-    "icon": "gallery-horizontal",
-    "keywords": [
-      "carousel",
-      "slider",
-      "slideshow"
-    ],
-    "example": "<Carousel>\n  <CarouselContent>\n    <CarouselItem>Slide 1</CarouselItem>\n    <CarouselItem>Slide 2</CarouselItem>\n  </CarouselContent>\n  <CarouselPrevious />\n  <CarouselNext />\n</Carousel>",
-    "files": [
-      "registry/components/ui/carousel.tsx"
-    ],
-    "dependencies": [
-      "embla-carousel-react",
-      "lucide-react"
-    ]
-  },
-  "bar-chart": {
-    "name": "Bar Chart",
-    "category": "charts",
-    "description": "Compare values across categories with vertical or horizontal bars.",
-    "icon": "bar-chart-2",
-    "keywords": [
-      "bar",
-      "chart",
-      "graph",
-      "comparison",
-      "data"
-    ],
-    "example": "<BarChart\n  data={[\n    { month: \"Jan\", sales: 4200 },\n    { month: \"Feb\", sales: 3800 },\n    { month: \"Mar\", sales: 5100 },\n  ]}\n  x=\"month\"\n  y=\"sales\"\n  height={300}\n/>",
-    "files": [
-      "registry/components/charts/bar-chart.tsx"
-    ],
-    "dependencies": [
-      "recharts"
-    ]
-  },
-  "line-chart": {
-    "name": "Line Chart",
-    "category": "charts",
-    "description": "Show trends over time with connected data points.",
-    "icon": "line-chart",
-    "keywords": [
-      "line",
-      "chart",
-      "graph",
-      "trend",
-      "time series"
-    ],
-    "example": "<LineChart\n  data={[\n    { month: \"Jan\", revenue: 4200 },\n    { month: \"Feb\", revenue: 3800 },\n    { month: \"Mar\", revenue: 5100 },\n  ]}\n  x=\"month\"\n  y=\"revenue\"\n  height={300}\n/>",
-    "files": [
-      "registry/components/charts/line-chart.tsx"
-    ],
-    "dependencies": [
-      "recharts"
-    ]
-  },
-  "data-table": {
-    "name": "DataTable",
-    "category": "data",
-    "description": "Display structured data in a customizable table with sortable columns.",
-    "icon": "table-2",
-    "keywords": [
-      "data",
-      "table",
-      "grid",
-      "columns",
-      "rows"
-    ],
-    "example": "<DataTable\n  data={[\n    { name: \"John\", email: \"john@example.com\", role: \"Admin\" },\n    { name: \"Jane\", email: \"jane@example.com\", role: \"User\" },\n  ]}\n  columns={[\n    { key: \"name\", header: \"Name\" },\n    { key: \"email\", header: \"Email\" },\n    { key: \"role\", header: \"Role\" },\n  ]}\n/>",
-    "files": [
-      "registry/components/data/data-table.tsx"
-    ],
-    "dependencies": []
-  },
-  "metric-card": {
-    "name": "MetricCard",
-    "category": "data",
-    "description": "Display key metrics at a glance with optional trend indicators showing growth or decline.",
-    "icon": "trending-up",
-    "keywords": [
-      "metric",
-      "kpi",
-      "stat"
-    ],
-    "example": "<MetricCard\n  title=\"Total Revenue\"\n  value=\"$48,352\"\n  trend={{ value: 12.5, direction: \"up\" }}\n  description=\"vs last month\"\n/>",
-    "files": [
-      "registry/components/data/metric-card.tsx"
-    ],
-    "dependencies": []
-  }
-},
   categories: {
-  "ui-input": {
-    "name": "Form Inputs",
-    "description": "Form controls and input components"
+    "ui-input": {
+      name: "Form Inputs",
+      description: "Form controls and input components",
+    },
+    "ui-display": {
+      name: "Data Display",
+      description: "Components for displaying data",
+    },
+    "ui-feedback": {
+      name: "Feedback",
+      description: "Loading, progress, and notifications",
+    },
+    "ui-overlay": {
+      name: "Overlays",
+      description: "Dialogs, popovers, and modals",
+    },
+    "ui-navigation": {
+      name: "Navigation",
+      description: "Navigation and menu components",
+    },
+    "ui-layout": {
+      name: "UI Layout",
+      description: "Layout primitives and containers",
+    },
+    data: {
+      name: "Data",
+      description: "Components for data visualization",
+    },
+    charts: {
+      name: "Charts",
+      description: "Chart and graph components",
+    },
+    maps: {
+      name: "Maps",
+      description: "Geospatial visualization components",
+    },
   },
-  "ui-display": {
-    "name": "Data Display",
-    "description": "Components for displaying data"
-  },
-  "ui-feedback": {
-    "name": "Feedback",
-    "description": "Loading, progress, and notifications"
-  },
-  "ui-overlay": {
-    "name": "Overlays",
-    "description": "Dialogs, popovers, and modals"
-  },
-  "ui-navigation": {
-    "name": "Navigation",
-    "description": "Navigation and menu components"
-  },
-  "ui-layout": {
-    "name": "UI Layout",
-    "description": "Layout primitives and containers"
-  },
-  "data": {
-    "name": "Data",
-    "description": "Components for data visualization"
-  },
-  "charts": {
-    "name": "Charts",
-    "description": "Chart and graph components"
-  },
-  "maps": {
-    "name": "Maps",
-    "description": "Geospatial visualization components"
-  }
-},
 } as const;
 
 export default registry;

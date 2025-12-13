@@ -69,7 +69,7 @@ export function registerTRPCRoutes(app: Hono, config: TRPCConfig) {
   });
 }
 
-// Re-export router types for client usage
-export type { SourcesRouter } from "../sources/trpc.js";
 export type { ActionsRouter } from "../actions/trpc.js";
 export type { GitRouter } from "../git/trpc.js";
+// Re-export router types for client usage
+export type { SourcesRouter } from "../sources/trpc.js";

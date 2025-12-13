@@ -5,7 +5,7 @@
  * Supports infinite scroll with sparse data cache and ID-based selections.
  */
 
-import { useCallback, useMemo, useRef, useState, useEffect } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { trpc } from "@/lib/trpc";
 
 export interface UseTableDataOptions {
@@ -54,10 +54,7 @@ export function useTableData(options: UseTableDataOptions) {
   const pendingRequests = useRef<Set<string>>(new Set());
 
   // Fetch table schema
-  const schemaQuery = trpc.sources.tables.schema.useQuery(
-    { table },
-    { staleTime: 60000 },
-  );
+  const schemaQuery = trpc.sources.tables.schema.useQuery({ table }, { staleTime: 60000 });
 
   // Get initial count via a list query with limit 1
   const initialQuery = trpc.sources.tables.list.useQuery(

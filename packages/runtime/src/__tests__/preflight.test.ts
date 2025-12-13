@@ -8,7 +8,7 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { existsSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { runPreflight, type PreflightResult } from "../preflight.js";
+import { type PreflightResult, runPreflight } from "../preflight.js";
 
 const TEMP_DIR = join(import.meta.dir, "fixtures/temp-preflight");
 

@@ -5,24 +5,23 @@
  * Step 2: If browsing, show full template picker with back button
  */
 
+import { previews } from "@hands/stdlib/previews";
+// Import registry data and previews separately to avoid SSR issues
+import { registry } from "@hands/stdlib/registry";
 import {
   ArrowLeft,
   CaretRight,
+  Check,
   File,
   MagnifyingGlass,
-  Check,
   SquaresFour,
 } from "@phosphor-icons/react";
-import { useState, useMemo, useEffect } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { cn } from "@/lib/utils";
-import { useSaveBlockContent } from "@/hooks/useWorkbook";
 import { setChatBarHidden } from "@/hooks/useChatState";
-
-// Import registry data and previews separately to avoid SSR issues
-import { registry } from "@hands/stdlib/registry";
-import { previews } from "@hands/stdlib/previews";
+import { useSaveBlockContent } from "@/hooks/useWorkbook";
+import { cn } from "@/lib/utils";
 
 // Types for registry
 interface ComponentMeta {
@@ -64,7 +63,7 @@ function pascalCase(str: string): string {
 function extractComponentNames(code: string): string[] {
   // Match JSX component tags like <ComponentName or <ComponentName>
   const matches = code.match(/<([A-Z][A-Za-z0-9]*)/g) || [];
-  const names = matches.map(m => m.slice(1)); // Remove leading <
+  const names = matches.map((m) => m.slice(1)); // Remove leading <
   return [...new Set(names)]; // Deduplicate
 }
 
@@ -72,7 +71,7 @@ function extractComponentNames(code: string): string[] {
 function generateSource(
   blockName: string,
   componentKey: string | null,
-  componentMeta: ComponentMeta | null
+  componentMeta: ComponentMeta | null,
 ): string {
   const fnName = pascalCase(blockName);
 
@@ -90,9 +89,10 @@ function generateSource(
   // If we have example code, use it
   if (componentMeta.example) {
     const componentNames = extractComponentNames(componentMeta.example);
-    const imports = componentNames.length > 0
-      ? `import { ${componentNames.join(", ")} } from "@hands/stdlib";\n\n`
-      : "";
+    const imports =
+      componentNames.length > 0
+        ? `import { ${componentNames.join(", ")} } from "@hands/stdlib";\n\n`
+        : "";
 
     return `${imports}export default function ${fnName}() {
   return (
@@ -109,7 +109,6 @@ export default function ${fnName}() {
   return <${componentName} />;
 }`;
 }
-
 
 interface EmptyBlockViewProps {
   blockId: string;
@@ -155,7 +154,7 @@ export function EmptyBlockView({ blockId, onInitialized }: EmptyBlockViewProps) 
           c.key.includes(query) ||
           c.name.toLowerCase().includes(query) ||
           c.description.toLowerCase().includes(query) ||
-          c.keywords?.some((k) => k.toLowerCase().includes(query))
+          c.keywords?.some((k) => k.toLowerCase().includes(query)),
       );
     }
 
@@ -222,11 +221,7 @@ export function EmptyBlockView({ blockId, onInitialized }: EmptyBlockViewProps) 
   // Render live preview of selected component
   const renderPreview = () => {
     if (!selectedComponentKey) {
-      return (
-        <div className="p-4 text-muted-foreground text-sm">
-          Select a template to preview
-        </div>
-      );
+      return <div className="p-4 text-muted-foreground text-sm">Select a template to preview</div>;
     }
 
     // Get the preview component from generated previews
@@ -265,15 +260,19 @@ export function EmptyBlockView({ blockId, onInitialized }: EmptyBlockViewProps) 
               className="w-full flex items-center gap-4 p-4 bg-background rounded-xl border hover:border-primary/50 hover:bg-accent/50 transition-colors text-left group"
             >
               <div className="p-3 rounded-lg bg-muted group-hover:bg-primary/10">
-                <File weight="duotone" className="h-6 w-6 text-muted-foreground group-hover:text-primary" />
+                <File
+                  weight="duotone"
+                  className="h-6 w-6 text-muted-foreground group-hover:text-primary"
+                />
               </div>
               <div className="flex-1">
                 <div className="font-medium">Start Empty</div>
-                <div className="text-sm text-muted-foreground">
-                  Begin with a blank canvas
-                </div>
+                <div className="text-sm text-muted-foreground">Begin with a blank canvas</div>
               </div>
-              <CaretRight weight="bold" className="h-4 w-4 text-muted-foreground group-hover:text-primary" />
+              <CaretRight
+                weight="bold"
+                className="h-4 w-4 text-muted-foreground group-hover:text-primary"
+              />
             </button>
 
             {/* Browse Templates */}
@@ -284,7 +283,10 @@ export function EmptyBlockView({ blockId, onInitialized }: EmptyBlockViewProps) 
               className="w-full flex items-center gap-4 p-4 bg-background rounded-xl border hover:border-primary/50 hover:bg-accent/50 transition-colors text-left group"
             >
               <div className="p-3 rounded-lg bg-muted group-hover:bg-primary/10">
-                <SquaresFour weight="duotone" className="h-6 w-6 text-muted-foreground group-hover:text-primary" />
+                <SquaresFour
+                  weight="duotone"
+                  className="h-6 w-6 text-muted-foreground group-hover:text-primary"
+                />
               </div>
               <div className="flex-1">
                 <div className="font-medium">Browse Templates</div>
@@ -292,7 +294,10 @@ export function EmptyBlockView({ blockId, onInitialized }: EmptyBlockViewProps) 
                   Start from a pre-built component
                 </div>
               </div>
-              <CaretRight weight="bold" className="h-4 w-4 text-muted-foreground group-hover:text-primary" />
+              <CaretRight
+                weight="bold"
+                className="h-4 w-4 text-muted-foreground group-hover:text-primary"
+              />
             </button>
           </div>
         </div>
@@ -316,9 +321,7 @@ export function EmptyBlockView({ blockId, onInitialized }: EmptyBlockViewProps) 
               <ArrowLeft weight="bold" className="h-4 w-4" />
             </button>
             <h1 className="text-sm font-semibold">Choose a Template</h1>
-            <span className="text-xs text-muted-foreground">
-              {blockName}
-            </span>
+            <span className="text-xs text-muted-foreground">{blockName}</span>
           </div>
           <Button
             onClick={handleConfirmTemplate}
@@ -361,7 +364,7 @@ export function EmptyBlockView({ blockId, onInitialized }: EmptyBlockViewProps) 
                   "px-2 py-1 text-xs font-medium rounded transition-colors",
                   activeCategory === null
                     ? "bg-primary text-primary-foreground"
-                    : "text-muted-foreground hover:text-foreground hover:bg-muted"
+                    : "text-muted-foreground hover:text-foreground hover:bg-muted",
                 )}
               >
                 All
@@ -375,7 +378,7 @@ export function EmptyBlockView({ blockId, onInitialized }: EmptyBlockViewProps) 
                     "px-2 py-1 text-xs font-medium rounded transition-colors",
                     activeCategory === cat.key
                       ? "bg-primary text-primary-foreground"
-                      : "text-muted-foreground hover:text-foreground hover:bg-muted"
+                      : "text-muted-foreground hover:text-foreground hover:bg-muted",
                   )}
                 >
                   {cat.name}
@@ -400,7 +403,7 @@ export function EmptyBlockView({ blockId, onInitialized }: EmptyBlockViewProps) 
                         "w-full flex items-center gap-2.5 px-2 py-2 rounded-md text-left transition-colors",
                         selectedComponentKey === comp.key
                           ? "bg-primary/10 text-foreground"
-                          : "hover:bg-muted text-muted-foreground hover:text-foreground"
+                          : "hover:bg-muted text-muted-foreground hover:text-foreground",
                       )}
                     >
                       <div className="flex-1 min-w-0">
@@ -449,9 +452,7 @@ export function EmptyBlockView({ blockId, onInitialized }: EmptyBlockViewProps) 
 
             {/* Preview content - render actual component */}
             <div className="flex-1 overflow-auto p-5">
-              <div className="w-full max-w-lg mx-auto">
-                {renderPreview()}
-              </div>
+              <div className="w-full max-w-lg mx-auto">{renderPreview()}</div>
             </div>
           </div>
         </div>

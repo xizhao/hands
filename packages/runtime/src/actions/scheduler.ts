@@ -24,11 +24,7 @@ interface CronParts {
   dayOfWeek: number[];
 }
 
-function expandCronPart(
-  part: string,
-  min: number,
-  max: number,
-): number[] {
+function expandCronPart(part: string, min: number, max: number): number[] {
   const values: number[] = [];
 
   // Handle wildcard
@@ -112,10 +108,7 @@ function matchesCron(cron: CronParts, date: Date): boolean {
 /**
  * Calculate the next run time for a cron expression
  */
-export function getNextRunTime(
-  expression: string,
-  from: Date = new Date(),
-): Date | null {
+export function getNextRunTime(expression: string, from: Date = new Date()): Date | null {
   const cron = parseCron(expression);
   if (!cron) return null;
 
@@ -234,14 +227,9 @@ async function checkScheduledActions(
         console.log(`[scheduler] Running scheduled action: ${action.id}`);
 
         // Run async - don't await to avoid blocking other scheduled actions
-        runScheduledAction(action, db, getSources(), workbookDir).catch(
-          (err) => {
-            console.error(
-              `[scheduler] Failed to run action ${action.id}:`,
-              err,
-            );
-          },
-        );
+        runScheduledAction(action, db, getSources(), workbookDir).catch((err) => {
+          console.error(`[scheduler] Failed to run action ${action.id}:`, err);
+        });
       }
     }
   } catch (err) {

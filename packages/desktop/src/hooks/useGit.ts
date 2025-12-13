@@ -47,11 +47,7 @@ export interface GitDiffStats {
 // tRPC Helper
 // ============================================================================
 
-async function trpcQuery<T>(
-  port: number,
-  path: string,
-  input?: unknown,
-): Promise<T> {
+async function trpcQuery<T>(port: number, path: string, input?: unknown): Promise<T> {
   const url = input
     ? `http://localhost:${port}/trpc/${path}?input=${encodeURIComponent(JSON.stringify(input))}`
     : `http://localhost:${port}/trpc/${path}`;
@@ -66,11 +62,7 @@ async function trpcQuery<T>(
   return data.result?.data as T;
 }
 
-async function trpcMutation<T>(
-  port: number,
-  path: string,
-  input?: unknown,
-): Promise<T> {
+async function trpcMutation<T>(port: number, path: string, input?: unknown): Promise<T> {
   const res = await fetch(`http://localhost:${port}/trpc/${path}`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -79,9 +71,7 @@ async function trpcMutation<T>(
 
   if (!res.ok) {
     const error = await res.json().catch(() => ({ message: "Request failed" }));
-    throw new Error(
-      error.error?.message || error.message || `tRPC ${path} failed`,
-    );
+    throw new Error(error.error?.message || error.message || `tRPC ${path} failed`);
   }
 
   const data = await res.json();
@@ -155,15 +145,9 @@ export function useGitSave() {
 
   return useMutation({
     mutationKey: ["git-save"],
-    mutationFn: async (
-      message?: string,
-    ): Promise<{ hash: string; message: string } | null> => {
+    mutationFn: async (message?: string): Promise<{ hash: string; message: string } | null> => {
       if (!port) throw new Error("Runtime not connected");
-      return trpcMutation<{ hash: string; message: string } | null>(
-        port,
-        "git.save",
-        { message },
-      );
+      return trpcMutation<{ hash: string; message: string } | null>(port, "git.save", { message });
     },
     onSuccess: () => {
       // Invalidate git queries to refresh status and history
@@ -182,15 +166,9 @@ export function useGitCommit() {
 
   return useMutation({
     mutationKey: ["git-commit"],
-    mutationFn: async (
-      message?: string,
-    ): Promise<{ hash: string; message: string }> => {
+    mutationFn: async (message?: string): Promise<{ hash: string; message: string }> => {
       if (!port) throw new Error("Runtime not connected");
-      return trpcMutation<{ hash: string; message: string }>(
-        port,
-        "git.commit",
-        { message },
-      );
+      return trpcMutation<{ hash: string; message: string }>(port, "git.commit", { message });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["git-status"] });

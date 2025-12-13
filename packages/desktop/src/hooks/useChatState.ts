@@ -48,7 +48,12 @@ interface ChatStateSnapshot {
 }
 
 // Cached snapshot - only recreate when state changes
-let snapshot: ChatStateSnapshot = { pendingAttachment, chatExpanded, autoSubmitPending, chatBarHidden };
+let snapshot: ChatStateSnapshot = {
+  pendingAttachment,
+  chatExpanded,
+  autoSubmitPending,
+  chatBarHidden,
+};
 
 // Subscribers for useSyncExternalStore
 let listeners: Array<() => void> = [];

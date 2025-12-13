@@ -27,6 +27,7 @@ import { ChatBar } from "@/components/ChatBar";
 import { FileDropOverlay } from "@/components/FileDropOverlay";
 import { NewWorkbookModal } from "@/components/NewWorkbookModal";
 import { Thread } from "@/components/Notebook/Thread";
+import { SaveStatusIndicator } from "@/components/SaveStatusIndicator";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -40,6 +41,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/comp
 import { useChatState } from "@/hooks/useChatState";
 import { useNeedsTrafficLightOffset } from "@/hooks/useFullscreen";
 import { useActiveSession, useClearNavigation, useRightPanel } from "@/hooks/useNavState";
+import { useRuntimeState } from "@/hooks/useRuntimeState";
 import { useImportWithAgent } from "@/hooks/useSession";
 import {
   useCreateWorkbook,
@@ -49,12 +51,10 @@ import {
   useUpdateWorkbook,
   useWorkbooks,
 } from "@/hooks/useWorkbook";
-import { useRuntimeState } from "@/hooks/useRuntimeState";
 import { cn } from "@/lib/utils";
 import type { Workbook } from "@/lib/workbook";
 import { RightPanel } from "./panels/RightPanel";
 import { NotebookSidebar } from "./sidebar/NotebookSidebar";
-import { SaveStatusIndicator } from "@/components/SaveStatusIndicator";
 
 interface NotebookShellProps {
   children: ReactNode;
@@ -344,10 +344,7 @@ export function NotebookShell({ children }: NotebookShellProps) {
         // Note: NOT setting autoSubmitPending - user must manually submit
       } else {
         // Workspace drop: start import with agent and focus on it
-        console.log(
-          "[handleFileDrop] File dropped on workspace, starting import:",
-          file.name,
-        );
+        console.log("[handleFileDrop] File dropped on workspace, starting import:", file.name);
         importWithAgent.mutate({
           file,
           onSessionCreated: (sessionId) => {

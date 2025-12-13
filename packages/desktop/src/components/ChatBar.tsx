@@ -5,6 +5,7 @@ import { ChatSettings } from "@/components/ChatSettings";
 import { Button } from "@/components/ui/button";
 import type { AnyPendingAttachment } from "@/hooks/useChatState";
 import { useActiveSession } from "@/hooks/useNavState";
+import { useRuntimeState } from "@/hooks/useRuntimeState";
 import { useServer } from "@/hooks/useServer";
 import {
   useAbortSession,
@@ -12,7 +13,6 @@ import {
   useSendMessage,
   useSessionStatuses,
 } from "@/hooks/useSession";
-import { useRuntimeState } from "@/hooks/useRuntimeState";
 import { useWorkbook, useWorkbookDatabase } from "@/hooks/useWorkbook";
 import { fillTemplate, PROMPTS } from "@/lib/prompts";
 import { cn } from "@/lib/utils";

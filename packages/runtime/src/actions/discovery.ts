@@ -16,9 +16,7 @@ import { readEnvFile } from "../sources/secrets.js";
 /**
  * Discover all actions in a workbook
  */
-export async function discoverActions(
-  workbookDir: string,
-): Promise<DiscoveredAction[]> {
+export async function discoverActions(workbookDir: string): Promise<DiscoveredAction[]> {
   const actionsDir = join(workbookDir, "actions");
 
   if (!existsSync(actionsDir)) {
@@ -42,11 +40,7 @@ export async function discoverActions(
 
     if (stat.isDirectory()) {
       // Folder-based action: actions/<name>/action.ts
-      const action = await discoverAction(
-        join(entryPath, "action.ts"),
-        entry,
-        secrets,
-      );
+      const action = await discoverAction(join(entryPath, "action.ts"), entry, secrets);
       if (action) {
         actions.push(action);
       }
@@ -80,21 +74,15 @@ async function discoverAction(
     const definition = mod.default as ActionDefinition | undefined;
 
     if (!definition?.name || !definition?.run) {
-      console.warn(
-        `[actions] Invalid action ${actionId}: missing name or run function`,
-      );
+      console.warn(`[actions] Invalid action ${actionId}: missing name or run function`);
       return null;
     }
 
     // Check for missing secrets
-    const missingSecrets = definition.secrets?.filter(
-      (secret) => !secrets[secret],
-    );
+    const missingSecrets = definition.secrets?.filter((secret) => !secrets[secret]);
 
     // Calculate next run if scheduled
-    const nextRun = definition.schedule
-      ? calculateNextRun(definition.schedule)
-      : undefined;
+    const nextRun = definition.schedule ? calculateNextRun(definition.schedule) : undefined;
 
     return {
       id: actionId,

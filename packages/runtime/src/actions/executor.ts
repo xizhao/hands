@@ -5,11 +5,7 @@
  */
 
 import type { PGlite } from "@electric-sql/pglite";
-import type {
-  ActionRun,
-  ActionTriggerType,
-  DiscoveredAction,
-} from "@hands/stdlib";
+import type { ActionRun, ActionTriggerType, DiscoveredAction } from "@hands/stdlib";
 import { readEnvFile } from "../sources/secrets.js";
 import type { DiscoveredSource } from "../sources/types.js";
 import { buildActionContext, createRunMeta } from "./context.js";
@@ -36,9 +32,7 @@ export interface ExecuteActionOptions {
 /**
  * Execute an action
  */
-export async function executeAction(
-  options: ExecuteActionOptions,
-): Promise<ActionRun> {
+export async function executeAction(options: ExecuteActionOptions): Promise<ActionRun> {
   const { action, trigger, input, db, sources, workbookDir } = options;
   const runId = generateRunId();
   const startTime = Date.now();

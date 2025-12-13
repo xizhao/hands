@@ -11,8 +11,8 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { existsSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { generateWorkerTemplate } from "../build/worker-template.js";
 import type { HandsConfig } from "../build/index.js";
+import { generateWorkerTemplate } from "../build/worker-template.js";
 
 // We test the worker template generation and routing logic
 // without spinning up a full Vite server
@@ -68,9 +68,9 @@ describe("Block Route Resolution", () => {
       });
 
       // The route handler should check BLOCKS registry and return 404
-      expect(template).toContain('const Block = BLOCKS[blockId]');
-      expect(template).toContain('if (!Block)');
-      expect(template).toContain('return c.json({ error: `Block not found: ${blockId}` }, 404)');
+      expect(template).toContain("const Block = BLOCKS[blockId]");
+      expect(template).toContain("if (!Block)");
+      expect(template).toContain("return c.json({ error: `Block not found: ${blockId}` }, 404)");
     });
 
     test("generates /blocks list endpoint", () => {
@@ -87,7 +87,7 @@ describe("Block Route Resolution", () => {
 
       // Should have a /blocks endpoint that lists all blocks
       expect(template).toContain('app.get("/blocks", (c) => {');
-      expect(template).toContain('blocks: Object.keys(BLOCKS)');
+      expect(template).toContain("blocks: Object.keys(BLOCKS)");
     });
 
     test("supports nested block paths with Hono path pattern", () => {
@@ -109,7 +109,7 @@ describe("Block Route Resolution", () => {
       });
 
       // Edit param should be removed before passing to component
-      expect(template).toContain('delete props.edit');
+      expect(template).toContain("delete props.edit");
     });
 
     test("generates manifest endpoint with blocks from registry", () => {
@@ -120,7 +120,7 @@ describe("Block Route Resolution", () => {
       });
 
       // Manifest should use BLOCKS registry
-      expect(template).toContain('const blocks = Object.keys(BLOCKS).map(id => {');
+      expect(template).toContain("const blocks = Object.keys(BLOCKS).map(id => {");
     });
   });
 
@@ -183,7 +183,7 @@ describe("Block Discovery Integration", () => {
 export default async function Welcome() {
   return <div>Welcome</div>
 }
-export const meta = { title: "Welcome" };`
+export const meta = { title: "Welcome" };`,
     );
 
     writeFileSync(
@@ -192,7 +192,7 @@ export const meta = { title: "Welcome" };`
 export default async function BarChart() {
   return <div>Bar Chart</div>
 }
-export const meta = { title: "Bar Chart" };`
+export const meta = { title: "Bar Chart" };`,
     );
   });
 

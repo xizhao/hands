@@ -11,11 +11,15 @@
  * Auto-fixes issues where possible (install deps, create dirs, fix symlinks).
  */
 
-import { existsSync, mkdirSync, readFileSync, rmSync, symlinkSync, statSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, rmSync, statSync, symlinkSync } from "node:fs";
 import { join } from "node:path";
 import { $ } from "bun";
-import { PORTS, waitForPortFree, killProcessOnPort } from "./ports.js";
-import { ensureStdlibSymlink, ensureWorkbookStdlibSymlink, getStdlibSourcePath } from "./config/index.js";
+import {
+  ensureStdlibSymlink,
+  ensureWorkbookStdlibSymlink,
+  getStdlibSourcePath,
+} from "./config/index.js";
+import { killProcessOnPort, PORTS, waitForPortFree } from "./ports.js";
 
 // ============================================================================
 // Types
@@ -521,7 +525,10 @@ async function checkHandsOutputDir(workbookDir: string, autoFix: boolean): Promi
   };
 }
 
-async function checkHandsDependencies(workbookDir: string, autoFix: boolean): Promise<PreflightCheck> {
+async function checkHandsDependencies(
+  workbookDir: string,
+  autoFix: boolean,
+): Promise<PreflightCheck> {
   const handsDir = join(workbookDir, ".hands");
   const packageJson = join(handsDir, "package.json");
   const nodeModules = join(handsDir, "node_modules");
@@ -588,9 +595,7 @@ async function checkHandsDependencies(workbookDir: string, autoFix: boolean): Pr
   }
 
   // Also verify critical subpath exports are present (rwsdk/vite is required for Vite to start)
-  const criticalSubpaths = [
-    { pkg: "rwsdk", subpath: "dist/vite", display: "rwsdk/vite" },
-  ];
+  const criticalSubpaths = [{ pkg: "rwsdk", subpath: "dist/vite", display: "rwsdk/vite" }];
 
   for (const { pkg, subpath, display } of criticalSubpaths) {
     const subpathDir = join(nodeModules, pkg, subpath);

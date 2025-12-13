@@ -91,10 +91,7 @@ export interface ActionContext {
   sources: Record<string, Record<string, TableClient>>;
 
   /** Raw SQL tagged template: ctx.sql`SELECT * FROM users` */
-  sql: <T = unknown>(
-    strings: TemplateStringsArray,
-    ...values: unknown[]
-  ) => Promise<T[]>;
+  sql: <T = unknown>(strings: TemplateStringsArray, ...values: unknown[]) => Promise<T[]>;
 
   /** Structured logging */
   log: ActionLogger;
@@ -113,10 +110,7 @@ export interface ActionContext {
 // Action Definition
 // =============================================================================
 
-export interface ActionDefinition<
-  TInput = unknown,
-  TOutput = unknown,
-> {
+export interface ActionDefinition<TInput = unknown, TOutput = unknown> {
   /** Unique action name (used in API routes, must be URL-safe) */
   name: string;
 
