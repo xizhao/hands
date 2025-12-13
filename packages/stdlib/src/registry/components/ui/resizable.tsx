@@ -1,3 +1,17 @@
+/**
+ * @component resizable
+ * @name Resizable
+ * @category ui-layout
+ * @description Resizable panel groups with draggable handles for adjusting layout.
+ * @icon move
+ * @keywords resizable, resize, panels
+ * @example
+ * <ResizablePanelGroup direction="horizontal">
+ *   <ResizablePanel defaultSize={50}>Panel 1</ResizablePanel>
+ *   <ResizableHandle />
+ *   <ResizablePanel defaultSize={50}>Panel 2</ResizablePanel>
+ * </ResizablePanelGroup>
+ */
 "use client";
 
 import { GripVertical } from "lucide-react";

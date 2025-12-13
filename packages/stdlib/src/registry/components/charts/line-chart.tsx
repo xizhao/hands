@@ -1,3 +1,22 @@
+/**
+ * @component line-chart
+ * @name Line Chart
+ * @category charts
+ * @description Show trends over time with connected data points.
+ * @icon line-chart
+ * @keywords line, chart, graph, trend, time series
+ * @example
+ * <LineChart
+ *   data={[
+ *     { month: "Jan", revenue: 4200 },
+ *     { month: "Feb", revenue: 3800 },
+ *     { month: "Mar", revenue: 5100 },
+ *   ]}
+ *   x="month"
+ *   y="revenue"
+ *   height={300}
+ * />
+ */
 /** @jsxImportSource react */
 "use client";
 

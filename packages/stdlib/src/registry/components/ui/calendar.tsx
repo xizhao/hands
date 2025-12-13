@@ -1,3 +1,17 @@
+/**
+ * @component calendar
+ * @name Calendar
+ * @category ui-input
+ * @description Pick dates from an interactive calendar view.
+ * @icon calendar
+ * @keywords calendar, date, picker
+ * @example
+ * <Calendar
+ *   mode="single"
+ *   selected={date}
+ *   onSelect={setDate}
+ * />
+ */
 "use client";
 
 import { ChevronDownIcon, ChevronLeftIcon, ChevronRightIcon } from "lucide-react";

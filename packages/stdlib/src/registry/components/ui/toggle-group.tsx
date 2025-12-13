@@ -1,3 +1,17 @@
+/**
+ * @component toggle-group
+ * @name Toggle Group
+ * @category ui-input
+ * @description Multiple toggle buttons grouped together for related choices.
+ * @icon layout-grid
+ * @keywords toggle, group, buttons, toolbar, options
+ * @example
+ * <ToggleGroup type="single">
+ *   <ToggleGroupItem value="bold">Bold</ToggleGroupItem>
+ *   <ToggleGroupItem value="italic">Italic</ToggleGroupItem>
+ *   <ToggleGroupItem value="underline">Underline</ToggleGroupItem>
+ * </ToggleGroup>
+ */
 "use client";
 
 import * as ToggleGroupPrimitive from "@radix-ui/react-toggle-group";

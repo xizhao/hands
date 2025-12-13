@@ -1,3 +1,17 @@
+/**
+ * @component button-group
+ * @name Button Group
+ * @category ui-input
+ * @description Combine related buttons into a connected group.
+ * @icon layout-grid
+ * @keywords button, group, toolbar
+ * @example
+ * <ButtonGroup>
+ *   <Button>Left</Button>
+ *   <Button>Center</Button>
+ *   <Button>Right</Button>
+ * </ButtonGroup>
+ */
 import { Slot } from "@radix-ui/react-slot";
 import { cva, type VariantProps } from "class-variance-authority";
 

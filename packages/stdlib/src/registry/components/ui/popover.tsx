@@ -1,3 +1,18 @@
+/**
+ * @component popover
+ * @name Popover
+ * @category ui-overlay
+ * @description A floating content panel triggered by a button or other element.
+ * @icon message-square
+ * @keywords popover, popup, tooltip
+ * @example
+ * <Popover>
+ *   <PopoverTrigger>Open</PopoverTrigger>
+ *   <PopoverContent>
+ *     Content goes here
+ *   </PopoverContent>
+ * </Popover>
+ */
 import * as PopoverPrimitive from "@radix-ui/react-popover";
 import * as React from "react";
 

@@ -1,3 +1,26 @@
+/**
+ * @component ui-table
+ * @name Table
+ * @category ui-display
+ * @description Display data in rows and columns with headers and borders.
+ * @icon table
+ * @keywords table, data, grid, rows, columns
+ * @example
+ * <Table>
+ *   <TableHeader>
+ *     <TableRow>
+ *       <TableHead>Name</TableHead>
+ *       <TableHead>Email</TableHead>
+ *     </TableRow>
+ *   </TableHeader>
+ *   <TableBody>
+ *     <TableRow>
+ *       <TableCell>John Doe</TableCell>
+ *       <TableCell>john@example.com</TableCell>
+ *     </TableRow>
+ *   </TableBody>
+ * </Table>
+ */
 import * as React from "react";
 
 import { cn } from "../../../lib/utils";

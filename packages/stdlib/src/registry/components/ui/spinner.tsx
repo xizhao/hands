@@ -1,3 +1,13 @@
+/**
+ * @component spinner
+ * @name Spinner
+ * @category ui-feedback
+ * @description An animated spinning icon to indicate loading or processing.
+ * @icon loader-2
+ * @keywords spinner, loading, loader, progress, wait
+ * @example
+ * <Spinner className="h-6 w-6" />
+ */
 import { Loader2Icon } from "lucide-react";
 
 import { cn } from "../../../lib/utils";

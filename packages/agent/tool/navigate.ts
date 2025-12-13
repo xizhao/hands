@@ -9,58 +9,86 @@ import { tool } from "@opencode-ai/plugin";
  * Returns structured JSON that the UI renders as a clickable navigation card.
  */
 
-interface NavigateOutput {
+type RouteType = "block" | "table" | "action";
+
+export interface NavigateOutput {
   type: "navigate";
-  page: string;
+  routeType: RouteType;
+  id: string;
   title?: string;
   description?: string;
-  anchor?: string;
   autoNavigate?: boolean;
+  refresh?: boolean;
 }
+
+const ROUTE_PREFIXES: Record<RouteType, string> = {
+  block: "/blocks",
+  table: "/tables",
+  action: "/actions",
+};
 
 const navigate = tool({
   description: `Navigate the user to a page in the workbook.
 
 Use this tool after completing work to show the user the result. For example:
-- After building a dashboard page, navigate to that page
-- After creating a report, show the user where to find it
+- After building a dashboard block, navigate to that block
+- After importing data to a table, navigate to that table to show progress
+- After creating an action, navigate to show it
 
 **Parameters:**
-- \`page\`: The page route (e.g., "/dashboard", "/reports/sales")
-- \`title\`: Optional - display title for the navigation card (e.g., "Sales Dashboard")
+- \`routeType\`: The type of page - "block", "table", or "action"
+- \`id\`: The ID of the item (block name, table name, or action name)
+- \`title\`: Optional - display title for the navigation card
 - \`description\`: Optional - brief description of what they'll see
-- \`anchor\`: Optional - section to scroll to (e.g., "#revenue")
+- \`autoNavigate\`: Optional - if true, automatically navigate the user (default: true for foreground, false for background)
+- \`refresh\`: Optional - if true, refreshes the data on that page (useful after inserting data)
 
 **Examples:**
-- Show dashboard: navigate page="/dashboard" title="Dashboard"
-- Show report: navigate page="/reports/monthly" title="Monthly Report" description="Your sales summary"`,
+- Show a block: navigate routeType="block" id="dashboard" title="Dashboard"
+- Show table with data: navigate routeType="table" id="orders" title="Orders" description="500 rows imported" refresh=true
+- Show action: navigate routeType="action" id="sync-data" title="Sync Action"`,
 
   args: {
-    page: tool.schema.string().describe("Page route starting with '/' (e.g., '/dashboard')"),
+    routeType: tool.schema
+      .enum(["block", "table", "action"])
+      .describe('Type of page: "block", "table", or "action"'),
+    id: tool.schema.string().describe("ID of the item (e.g., 'dashboard', 'orders', 'sync-data')"),
     title: tool.schema.string().optional().describe("Display title for the navigation card"),
     description: tool.schema
       .string()
       .optional()
       .describe("Brief description of what the user will see"),
-    anchor: tool.schema.string().optional().describe("Section to scroll to (e.g., '#metrics')"),
+    autoNavigate: tool.schema
+      .boolean()
+      .optional()
+      .describe("Auto-navigate the user (default: true for foreground threads)"),
+    refresh: tool.schema
+      .boolean()
+      .optional()
+      .describe("Refresh the data on the page (use after inserting/updating data)"),
   },
 
-  async execute(args, _ctx) {
-    const { page, title, description, anchor } = args;
+  async execute(args, ctx) {
+    const { routeType, id, title, description, autoNavigate, refresh } = args;
 
-    // Validate page format
-    if (!page.startsWith("/")) {
-      return `Error: Page routes must start with "/" (e.g., "/dashboard"). Got: "${page}"`;
+    // Validate routeType
+    if (!["block", "table", "action"].includes(routeType)) {
+      return `Error: routeType must be "block", "table", or "action". Got: "${routeType}"`;
     }
 
-    // Build the navigation output - always auto-navigate
+    // Check if this is a background session (subagent/background)
+    // For now, default autoNavigate to true - the UI can decide based on focus
+    const shouldAutoNavigate = autoNavigate ?? true;
+
+    // Build the navigation output
     const output: NavigateOutput = {
       type: "navigate",
-      page,
-      title: title || page.replace(/^\//, "").replace(/\//g, " > ") || "Home",
+      routeType: routeType as RouteType,
+      id,
+      title: title || id,
       description,
-      anchor,
-      autoNavigate: true,
+      autoNavigate: shouldAutoNavigate,
+      refresh: refresh ?? false,
     };
 
     return JSON.stringify(output);

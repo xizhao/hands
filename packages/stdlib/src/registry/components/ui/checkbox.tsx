@@ -1,3 +1,16 @@
+/**
+ * @component checkbox
+ * @name Checkbox
+ * @category ui-input
+ * @description Toggle between checked and unchecked states.
+ * @icon check-square
+ * @keywords checkbox, check, toggle
+ * @example
+ * <Checkbox
+ *   checked={isChecked}
+ *   onCheckedChange={setIsChecked}
+ * />
+ */
 import * as CheckboxPrimitive from "@radix-ui/react-checkbox";
 import { Check } from "lucide-react";
 import * as React from "react";

@@ -297,10 +297,28 @@ function handlePartUpdated(part: SdkPart, queryClient: QueryClient, directory?: 
     ) {
       try {
         const parsed = JSON.parse(toolPart.state.output);
-        if (parsed?.type === "navigate" && parsed.page && parsed.autoNavigate) {
+        // Check for new format: routeType + id
+        if (parsed?.type === "navigate" && parsed.routeType && parsed.id && parsed.autoNavigate) {
           navigatedParts.add(toolPart.id);
-          console.log("[sse] Navigate tool completed, navigating to:", parsed.page);
-          navigateCallback(parsed.page);
+
+          // Build path from routeType + id
+          const routePath = `/${parsed.routeType}s/${parsed.id}`;
+          console.log("[sse] Navigate tool completed, navigating to:", routePath);
+
+          // If refresh is requested, invalidate relevant queries before navigation
+          if (parsed.refresh) {
+            console.log("[sse] Refresh requested, invalidating queries for routeType:", parsed.routeType);
+            if (parsed.routeType === "table") {
+              queryClient.invalidateQueries({ queryKey: ["postgres", "tables"] });
+              queryClient.invalidateQueries({ queryKey: ["postgres", "query"] });
+            } else if (parsed.routeType === "block") {
+              queryClient.invalidateQueries({ queryKey: ["blocks"] });
+            } else if (parsed.routeType === "action") {
+              queryClient.invalidateQueries({ queryKey: ["actions"] });
+            }
+          }
+
+          navigateCallback(routePath);
         }
       } catch {
         // Not valid JSON, ignore

@@ -1,3 +1,19 @@
+/**
+ * @component empty
+ * @name Empty
+ * @category ui-feedback
+ * @description A placeholder for empty states when there is no data to display.
+ * @icon inbox
+ * @keywords empty, placeholder, no-data
+ * @example
+ * <Empty>
+ *   <EmptyHeader>
+ *     <EmptyMedia variant="icon"><InboxIcon /></EmptyMedia>
+ *     <EmptyTitle>No messages</EmptyTitle>
+ *     <EmptyDescription>You don't have any messages yet.</EmptyDescription>
+ *   </EmptyHeader>
+ * </Empty>
+ */
 import { cva, type VariantProps } from "class-variance-authority";
 
 import { cn } from "../../../lib/utils";

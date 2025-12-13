@@ -1,3 +1,16 @@
+/**
+ * @component textarea
+ * @name Textarea
+ * @category ui-input
+ * @description A multi-line text input for longer content.
+ * @icon text
+ * @keywords textarea, text, multiline, input, field
+ * @example
+ * <Textarea
+ *   placeholder="Type your message here"
+ *   rows={4}
+ * />
+ */
 import * as React from "react";
 
 import { cn } from "../../../lib/utils";

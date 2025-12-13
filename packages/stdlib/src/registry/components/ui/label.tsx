@@ -1,3 +1,13 @@
+/**
+ * @component label
+ * @name Label
+ * @category ui-input
+ * @description A label for form controls with accessibility support.
+ * @icon tag
+ * @keywords label, form, accessibility
+ * @example
+ * <Label htmlFor="email">Email Address</Label>
+ */
 "use client";
 
 import * as LabelPrimitive from "@radix-ui/react-label";

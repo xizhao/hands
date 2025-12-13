@@ -189,7 +189,7 @@ interface ManifestSource {
  * Single file walk discovers blocks and sources.
  */
 async function getManifest(workbookDir: string, workbookId: string) {
-  const blocks: Array<{ id: string; title: string; path: string; parentDir: string }> = [];
+  const blocks: Array<{ id: string; title: string; path: string; parentDir: string; uninitialized?: boolean }> = [];
   const sources: ManifestSource[] = [];
 
   // Read blocks from filesystem (recursive walk)
@@ -207,7 +207,9 @@ async function getManifest(workbookDir: string, workbookId: string) {
         // Extract title from meta export
         const content = readFileSync(filePath, "utf-8");
         const title = extractBlockTitle(content) || id.split("/").pop() || id;
-        blocks.push({ id, title, path: relativePath, parentDir });
+        // Check if block has the uninitialized marker (fast string check)
+        const uninitialized = content.includes("@hands:uninitialized");
+        blocks.push({ id, title, path: relativePath, parentDir, uninitialized: uninitialized || undefined });
       }
     });
   }

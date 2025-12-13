@@ -1,3 +1,20 @@
+/**
+ * @component navigation-menu
+ * @name Navigation Menu
+ * @category ui-navigation
+ * @description A navigation menu with links and expandable sub-menus.
+ * @icon navigation
+ * @keywords navigation, menu, nav
+ * @example
+ * <NavigationMenu>
+ *   <NavigationMenuList>
+ *     <NavigationMenuItem>
+ *       <NavigationMenuTrigger>Products</NavigationMenuTrigger>
+ *       <NavigationMenuContent>Menu items here</NavigationMenuContent>
+ *     </NavigationMenuItem>
+ *   </NavigationMenuList>
+ * </NavigationMenu>
+ */
 import * as NavigationMenuPrimitive from "@radix-ui/react-navigation-menu";
 import { cva } from "class-variance-authority";
 import { ChevronDown } from "lucide-react";

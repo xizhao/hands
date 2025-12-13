@@ -101,7 +101,7 @@ function BlockIcon({ className, empty }: { className?: string; empty?: boolean }
         className,
       )}
     >
-      &#x25A0;
+      {empty ? "\u25A1" : "\u25A0"}
     </span>
   );
 }
@@ -349,6 +349,7 @@ export function NotebookSidebar({
 
   const [blocksExpanded, setBlocksExpanded] = useState(true);
   const [dataExpanded, setDataExpanded] = useState(true);
+  const [actionsExpanded, setActionsExpanded] = useState(true);
   const [expandedDirs, setExpandedDirs] = useState<Set<string>>(new Set()); // Track expanded directories
   const [expandedSources, setExpandedSources] = useState<Set<string>>(new Set()); // Track expanded sources
 
@@ -697,89 +698,78 @@ export default function Placeholder() {
   if (collapsed) {
     return (
       <TooltipProvider delayDuration={0}>
-        <div className="space-y-4">
-          {/* Blocks section - collapsed */}
+        <div className="space-y-3 px-1">
+          {/* Blocks section - collapsed: show all as compact squares */}
           {blocks.length > 0 && (
-            <div className="space-y-0.5 pt-2 border-t border-border/50">
-              {blocks.slice(0, 3).map((block) => (
-                <Tooltip key={block.id}>
-                  <TooltipTrigger asChild>
-                    <button
-                      onClick={() => handleBlockClick(block.id)}
-                      className="w-full flex items-center justify-center p-1.5 text-muted-foreground hover:text-blue-400 transition-all"
-                    >
-                      <span className="text-sm">&#x25A0;</span>
-                    </button>
-                  </TooltipTrigger>
-                  <TooltipContent side="right">
-                    <p>{block.title || block.id}</p>
-                  </TooltipContent>
-                </Tooltip>
-              ))}
-              {blocks.length > 3 && (
-                <div className="text-[8px] text-muted-foreground/70 text-center">
-                  +{blocks.length - 3}
-                </div>
-              )}
-            </div>
-          )}
-
-          {/* Data section - collapsed (sources + tables) */}
-          {(sources.length > 0 || (schema && schema.length > 0)) && (
-            <div className="space-y-0.5 pt-2 border-t border-border/50">
-              {/* Show sources first */}
-              {sources.slice(0, 2).map((source) => (
-                <Tooltip key={source.id}>
-                  <TooltipTrigger asChild>
-                    <button
-                      onClick={() => handleSourceClick(source.id)}
-                      className="w-full flex items-center justify-center p-1.5 text-muted-foreground hover:text-green-400 transition-all"
-                    >
-                      <span className="text-sm">&#x25B2;</span>
-                    </button>
-                  </TooltipTrigger>
-                  <TooltipContent side="right">
-                    <p>{source.title}</p>
-                  </TooltipContent>
-                </Tooltip>
-              ))}
-              {/* Show unassigned tables (muted icon) */}
-              {unassociatedTables.slice(0, sources.length > 0 ? 1 : 3).map((tableName) => (
-                <Tooltip key={tableName}>
-                  <TooltipTrigger asChild>
-                    <button
-                      onClick={() => handleTableClick(tableName)}
-                      className="w-full flex items-center justify-center p-1.5 text-muted-foreground hover:text-foreground transition-all"
-                    >
-                      <Table weight="duotone" className="h-4 w-4" />
-                    </button>
-                  </TooltipTrigger>
-                  <TooltipContent side="right">
-                    <p>{tableName}</p>
-                  </TooltipContent>
-                </Tooltip>
-              ))}
-              {sources.length + unassociatedTables.length > 3 && (
-                <div className="text-[8px] text-muted-foreground/70 text-center">
-                  +{sources.length + unassociatedTables.length - 3}
-                </div>
-              )}
-            </div>
-          )}
-
-          {/* Actions section - collapsed */}
-          <div className="space-y-0.5 pt-2 border-t border-border/50">
             <Tooltip>
               <TooltipTrigger asChild>
-                <button className="w-full flex items-center justify-center p-1.5 text-muted-foreground/50 transition-all cursor-default">
-                  <Play weight="fill" className="h-4 w-4 text-green-500/50" />
-                </button>
+                <div className="flex flex-wrap gap-0.5 justify-center pt-2 border-t border-border/50 cursor-default">
+                  {blocks.map((block) => (
+                    <span
+                      key={block.id}
+                      className={cn(
+                        "text-[8px] leading-none",
+                        block.uninitialized ? "text-muted-foreground/40" : "text-blue-400/70"
+                      )}
+                    >
+                      {block.uninitialized ? "\u25A1" : "\u25A0"}
+                    </span>
+                  ))}
+                </div>
               </TooltipTrigger>
               <TooltipContent side="right">
-                <p>No actions</p>
+                <p>{blocks.length} block{blocks.length !== 1 ? "s" : ""}</p>
               </TooltipContent>
             </Tooltip>
-          </div>
+          )}
+
+          {/* Data section - collapsed: show all tables as compact icons */}
+          {(schema && schema.length > 0) && (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <div className="flex flex-wrap gap-0.5 justify-center pt-2 border-t border-border/50 cursor-default">
+                  {schema.map((table) => (
+                    <span
+                      key={table.table_name}
+                      className="text-[8px] leading-none text-emerald-400/70"
+                    >
+                      &#x25A0;
+                    </span>
+                  ))}
+                </div>
+              </TooltipTrigger>
+              <TooltipContent side="right">
+                <p>{schema.length} table{schema.length !== 1 ? "s" : ""}</p>
+              </TooltipContent>
+            </Tooltip>
+          )}
+
+          {/* Actions section - collapsed: show all as compact icons */}
+          {actions.length > 0 ? (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <div className="flex flex-wrap gap-0.5 justify-center pt-2 border-t border-border/50 cursor-default">
+                  {actions.map((action) => (
+                    <span
+                      key={action.id}
+                      className="text-[8px] leading-none text-orange-400/70"
+                    >
+                      &#x25B6;
+                    </span>
+                  ))}
+                </div>
+              </TooltipTrigger>
+              <TooltipContent side="right">
+                <p>{actions.length} action{actions.length !== 1 ? "s" : ""}</p>
+              </TooltipContent>
+            </Tooltip>
+          ) : (
+            <div className="pt-2 border-t border-border/50">
+              <div className="flex justify-center">
+                <span className="text-[8px] leading-none text-muted-foreground/30">&#x25B6;</span>
+              </div>
+            </div>
+          )}
         </div>
       </TooltipProvider>
     );
@@ -955,7 +945,7 @@ export default function Placeholder() {
                               <div className="ml-4 border-l border-border/50 pl-2">
                                 {filteredDirBlocks.map((block) => (
                                   <div key={block.id} className={listItemStyles}>
-                                    <BlockIcon />
+                                    <BlockIcon empty={block.uninitialized} />
                                     <button
                                       onClick={() => handleBlockClick(block.id)}
                                       className="flex-1 truncate text-left hover:underline"
@@ -982,7 +972,7 @@ export default function Placeholder() {
                       : blockTree.rootBlocks
                     ).map((block) => (
                       <div key={block.id} className={listItemStyles}>
-                        <BlockIcon />
+                        <BlockIcon empty={block.uninitialized} />
                         <button
                           onClick={() => handleBlockClick(block.id)}
                           className="flex-1 truncate text-left hover:underline"
@@ -1258,10 +1248,17 @@ export default function Placeholder() {
           {/* Actions Section */}
           <div className="space-y-1">
             <div className="flex items-center justify-between">
-              <span className="flex items-center gap-1 text-[10px] font-medium text-muted-foreground/80 uppercase tracking-wider">
-                <ActionIcon className="h-3 w-3" />
+              <button
+                onClick={() => setActionsExpanded(!actionsExpanded)}
+                className="flex items-center gap-1 text-[10px] font-medium text-muted-foreground/80 uppercase tracking-wider hover:text-muted-foreground transition-colors"
+              >
+                {actionsExpanded ? (
+                  <ChevronDown className="h-3 w-3" />
+                ) : (
+                  <ChevronRight className="h-3 w-3" />
+                )}
                 Actions
-              </span>
+              </button>
               <Tooltip>
                 <TooltipTrigger asChild>
                   <button
@@ -1274,22 +1271,25 @@ export default function Placeholder() {
                 <TooltipContent side="right">New action</TooltipContent>
               </Tooltip>
             </div>
-            {(manifest?.actions ?? []).length > 0 ? (
-              <div className="space-y-0">
-                {(manifest?.actions ?? []).map((action) => (
-                  <ActionListItem
-                    key={action.id}
-                    action={action}
-                    onSelect={() => navigate({ to: "/actions/$actionId", params: { actionId: action.id } })}
-                    runtimePort={runtimePort}
-                  />
-                ))}
-              </div>
-            ) : (
-              <div className={emptyStateStyles}>
-                <ActionIcon empty />
-                <span>No actions</span>
-              </div>
+
+            {actionsExpanded && (
+              (manifest?.actions ?? []).length > 0 ? (
+                <div className="space-y-0">
+                  {(manifest?.actions ?? []).map((action) => (
+                    <ActionListItem
+                      key={action.id}
+                      action={action}
+                      onSelect={() => navigate({ to: "/actions/$actionId", params: { actionId: action.id } })}
+                      runtimePort={runtimePort}
+                    />
+                  ))}
+                </div>
+              ) : (
+                <div className={emptyStateStyles}>
+                  <ActionIcon empty />
+                  <span>No actions</span>
+                </div>
+              )
             )}
           </div>
         </div>

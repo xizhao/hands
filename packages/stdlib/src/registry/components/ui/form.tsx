@@ -1,3 +1,21 @@
+/**
+ * @component form
+ * @name Form
+ * @category ui-input
+ * @description Form components with validation for building complex forms with error handling.
+ * @icon file-input
+ * @keywords form, validation, react-hook-form
+ * @example
+ * <Form {...form}>
+ *   <FormField control={form.control} name="email" render={({ field }) => (
+ *     <FormItem>
+ *       <FormLabel>Email</FormLabel>
+ *       <FormControl><Input {...field} /></FormControl>
+ *       <FormMessage />
+ *     </FormItem>
+ *   )} />
+ * </Form>
+ */
 "use client";
 
 import type * as LabelPrimitive from "@radix-ui/react-label";

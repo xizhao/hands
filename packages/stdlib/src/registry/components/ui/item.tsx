@@ -1,3 +1,19 @@
+/**
+ * @component item
+ * @name Item
+ * @category ui-display
+ * @description A list item component for displaying content with media, titles, and actions.
+ * @icon list
+ * @keywords item, list, row
+ * @example
+ * <Item>
+ *   <ItemMedia variant="icon"><UserIcon /></ItemMedia>
+ *   <ItemContent>
+ *     <ItemTitle>User Name</ItemTitle>
+ *     <ItemDescription>user@example.com</ItemDescription>
+ *   </ItemContent>
+ * </Item>
+ */
 import { Slot } from "@radix-ui/react-slot";
 import { cva, type VariantProps } from "class-variance-authority";
 import type * as React from "react";

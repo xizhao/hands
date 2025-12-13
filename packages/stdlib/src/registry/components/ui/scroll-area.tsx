@@ -1,3 +1,15 @@
+/**
+ * @component scroll-area
+ * @name Scroll Area
+ * @category ui-layout
+ * @description A custom scrollbar container for overflow content.
+ * @icon scroll
+ * @keywords scroll, overflow, scrollbar
+ * @example
+ * <ScrollArea className="h-72 w-48">
+ *   <div>Long content that scrolls...</div>
+ * </ScrollArea>
+ */
 import * as ScrollAreaPrimitive from "@radix-ui/react-scroll-area";
 import * as React from "react";
 

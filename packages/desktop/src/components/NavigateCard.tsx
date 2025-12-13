@@ -10,14 +10,23 @@ import { ArrowRight } from "lucide-react";
 import { memo } from "react";
 import { cn } from "@/lib/utils";
 
+type RouteType = "block" | "table" | "action";
+
 export interface NavigateOutput {
   type: "navigate";
-  blockId: string;
+  routeType: RouteType;
+  id: string;
   title?: string;
   description?: string;
-  anchor?: string;
   autoNavigate?: boolean;
+  refresh?: boolean;
 }
+
+const ROUTE_CONFIGS: Record<RouteType, { path: string; param: string }> = {
+  block: { path: "/blocks/$blockId", param: "blockId" },
+  table: { path: "/tables/$tableId", param: "tableId" },
+  action: { path: "/actions/$actionId", param: "actionId" },
+};
 
 /**
  * Parse navigate tool output
@@ -25,13 +34,22 @@ export interface NavigateOutput {
 export function parseNavigateOutput(output: string): NavigateOutput | null {
   try {
     const parsed = JSON.parse(output);
-    if (parsed?.type === "navigate" && parsed.blockId) {
+    if (parsed?.type === "navigate" && parsed.routeType && parsed.id) {
       return parsed as NavigateOutput;
     }
   } catch {
     // Not JSON or not a navigate output
   }
   return null;
+}
+
+/**
+ * Build route path from navigate output
+ */
+export function buildRoutePath(output: NavigateOutput): string {
+  const prefix = output.routeType === "block" ? "/blocks" :
+                 output.routeType === "table" ? "/tables" : "/actions";
+  return `${prefix}/${output.id}`;
 }
 
 interface NavigateCardProps {
@@ -43,8 +61,13 @@ export const NavigateCard = memo(({ output }: NavigateCardProps) => {
   const navigate = useNavigate();
 
   const handleClick = () => {
-    const blockId = output.blockId.replace(/^\//, "");
-    navigate({ to: "/blocks/$blockId", params: { blockId } });
+    const config = ROUTE_CONFIGS[output.routeType];
+    if (config) {
+      navigate({
+        to: config.path as any,
+        params: { [config.param]: output.id }
+      });
+    }
   };
 
   // Minimal inline link
@@ -58,7 +81,7 @@ export const NavigateCard = memo(({ output }: NavigateCardProps) => {
         "hover:underline transition-colors",
       )}
     >
-      <span>{output.title || output.blockId}</span>
+      <span>{output.title || output.id}</span>
       <ArrowRight className="h-3 w-3" />
     </button>
   );

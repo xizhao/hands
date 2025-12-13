@@ -1,17 +1,17 @@
 /**
- * EmptyBlockView - Full-screen template picker for empty blocks
+ * EmptyBlockView - Two-step block initialization
  *
- * Dynamically loads components from @hands/stdlib registry.
- * - "Empty" is the default selection (generates minimal component)
- * - Browse all stdlib components by category
- * - Live preview of selected component (no mock data)
+ * Step 1: Choose between "Initialize Empty" or "Browse Template Library"
+ * Step 2: If browsing, show full template picker with back button
  */
 
 import {
+  ArrowLeft,
   CaretRight,
   File,
   MagnifyingGlass,
   Check,
+  SquaresFour,
 } from "@phosphor-icons/react";
 import { useState, useMemo, useEffect } from "react";
 import { Button } from "@/components/ui/button";
@@ -26,8 +26,6 @@ import {
   listCategories,
   type ComponentMeta,
 } from "@hands/stdlib/registry";
-// Import all components from stdlib
-import * as StdlibComponents from "@hands/stdlib";
 
 // Convert kebab-case to PascalCase
 function pascalCase(str: string): string {
@@ -37,8 +35,20 @@ function pascalCase(str: string): string {
     .join("");
 }
 
+// Extract component names used in example code for imports
+function extractComponentNames(code: string): string[] {
+  // Match JSX component tags like <ComponentName or <ComponentName>
+  const matches = code.match(/<([A-Z][A-Za-z0-9]*)/g) || [];
+  const names = matches.map(m => m.slice(1)); // Remove leading <
+  return [...new Set(names)]; // Deduplicate
+}
+
 // Generate source code for a component
-function generateSource(blockName: string, componentKey: string | null, componentMeta: ComponentMeta | null): string {
+function generateSource(
+  blockName: string,
+  componentKey: string | null,
+  componentMeta: ComponentMeta | null
+): string {
   const fnName = pascalCase(blockName);
 
   // Empty/blank template
@@ -52,7 +62,21 @@ function generateSource(blockName: string, componentKey: string | null, componen
 }`;
   }
 
-  // Component from stdlib
+  // If we have example code, use it
+  if (componentMeta.example) {
+    const componentNames = extractComponentNames(componentMeta.example);
+    const imports = componentNames.length > 0
+      ? `import { ${componentNames.join(", ")} } from "@hands/stdlib";\n\n`
+      : "";
+
+    return `${imports}export default function ${fnName}() {
+  return (
+    ${componentMeta.example}
+  );
+}`;
+  }
+
+  // Fallback: Component from stdlib without example
   const componentName = componentMeta.name.replace(/\s+/g, "");
   return `import { ${componentName} } from "@hands/stdlib";
 
@@ -61,25 +85,18 @@ export default function ${fnName}() {
 }`;
 }
 
-// Get the actual React component from stdlib exports
-function getStdlibComponent(componentMeta: ComponentMeta): React.ComponentType<Record<string, unknown>> | null {
-  const componentName = componentMeta.name.replace(/\s+/g, "");
-  const Component = (StdlibComponents as Record<string, unknown>)[componentName];
-  if (typeof Component === "function") {
-    return Component as React.ComponentType<Record<string, unknown>>;
-  }
-  return null;
-}
 
 interface EmptyBlockViewProps {
   blockId: string;
   onInitialized?: () => void;
 }
 
+type ViewMode = "initial" | "browse";
+
 export function EmptyBlockView({ blockId, onInitialized }: EmptyBlockViewProps) {
+  const [viewMode, setViewMode] = useState<ViewMode>("initial");
   const [searchQuery, setSearchQuery] = useState("");
   const [activeCategory, setActiveCategory] = useState<string | null>(null);
-  // null means "Empty" (blank) is selected
   const [selectedComponentKey, setSelectedComponentKey] = useState<string | null>(null);
   const [isInitializing, setIsInitializing] = useState(false);
 
@@ -143,7 +160,21 @@ export function EmptyBlockView({ blockId, onInitialized }: EmptyBlockViewProps) 
     return cat?.name || categoryKey;
   };
 
-  const handleConfirm = async () => {
+  const handleInitializeEmpty = async () => {
+    setIsInitializing(true);
+    try {
+      const source = generateSource(blockName, null, null);
+      await saveBlock({ blockId, source });
+      onInitialized?.();
+    } catch (err) {
+      console.error("[EmptyBlockView] Failed to initialize block:", err);
+    } finally {
+      setIsInitializing(false);
+    }
+  };
+
+  const handleConfirmTemplate = async () => {
+    if (!selectedComponentKey) return;
     setIsInitializing(true);
     try {
       const source = generateSource(blockName, selectedComponentKey, selectedComponent);
@@ -156,38 +187,96 @@ export function EmptyBlockView({ blockId, onInitialized }: EmptyBlockViewProps) 
     }
   };
 
-  // Render preview of selected component
-  const renderPreview = () => {
-    if (!selectedComponent) {
-      // Empty/blank preview
-      return (
-        <div className="p-4">
-          <h1 className="text-lg font-semibold">{blockName}</h1>
-        </div>
-      );
-    }
-
-    const Component = getStdlibComponent(selectedComponent);
-    if (!Component) {
-      return (
-        <div className="p-4 text-muted-foreground text-sm">
-          Preview not available for {selectedComponent.name}
-        </div>
-      );
-    }
-
-    // Render component with no props (stdlib components should handle empty state)
-    try {
-      return <Component />;
-    } catch {
-      return (
-        <div className="p-4 text-muted-foreground text-sm">
-          Preview not available
-        </div>
-      );
-    }
+  const handleBack = () => {
+    setViewMode("initial");
+    setSelectedComponentKey(null);
+    setSearchQuery("");
+    setActiveCategory(null);
   };
 
+  // Render preview of selected component example code
+  const renderPreview = () => {
+    if (!selectedComponent) {
+      return (
+        <div className="p-4 text-muted-foreground text-sm">
+          Select a template to preview
+        </div>
+      );
+    }
+
+    // Show example code if available
+    if (selectedComponent.example) {
+      return (
+        <div className="rounded-lg border bg-muted/50 p-4">
+          <pre className="text-sm overflow-auto whitespace-pre-wrap font-mono text-foreground">
+            {selectedComponent.example}
+          </pre>
+        </div>
+      );
+    }
+
+    return (
+      <div className="p-4 text-muted-foreground text-sm">
+        No example available for {selectedComponent.name}
+      </div>
+    );
+  };
+
+  // Initial choice view
+  if (viewMode === "initial") {
+    return (
+      <div className="h-full flex items-center justify-center bg-black/5 dark:bg-black/40 p-4">
+        <div className="w-full max-w-md">
+          <div className="text-center mb-6">
+            <h1 className="text-lg font-semibold mb-1">Initialize Block</h1>
+            <p className="text-sm text-muted-foreground">{blockName}</p>
+          </div>
+
+          <div className="space-y-3">
+            {/* Initialize Empty */}
+            <button
+              type="button"
+              onClick={handleInitializeEmpty}
+              disabled={isInitializing}
+              className="w-full flex items-center gap-4 p-4 bg-background rounded-xl border hover:border-primary/50 hover:bg-accent/50 transition-colors text-left group"
+            >
+              <div className="p-3 rounded-lg bg-muted group-hover:bg-primary/10">
+                <File weight="duotone" className="h-6 w-6 text-muted-foreground group-hover:text-primary" />
+              </div>
+              <div className="flex-1">
+                <div className="font-medium">Start Empty</div>
+                <div className="text-sm text-muted-foreground">
+                  Begin with a blank canvas
+                </div>
+              </div>
+              <CaretRight weight="bold" className="h-4 w-4 text-muted-foreground group-hover:text-primary" />
+            </button>
+
+            {/* Browse Templates */}
+            <button
+              type="button"
+              onClick={() => setViewMode("browse")}
+              disabled={isInitializing}
+              className="w-full flex items-center gap-4 p-4 bg-background rounded-xl border hover:border-primary/50 hover:bg-accent/50 transition-colors text-left group"
+            >
+              <div className="p-3 rounded-lg bg-muted group-hover:bg-primary/10">
+                <SquaresFour weight="duotone" className="h-6 w-6 text-muted-foreground group-hover:text-primary" />
+              </div>
+              <div className="flex-1">
+                <div className="font-medium">Browse Templates</div>
+                <div className="text-sm text-muted-foreground">
+                  Start from a pre-built component
+                </div>
+              </div>
+              <CaretRight weight="bold" className="h-4 w-4 text-muted-foreground group-hover:text-primary" />
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // Template browser view
   return (
     <div className="h-full flex items-center justify-center bg-black/5 dark:bg-black/40 p-4 pt-2">
       {/* Main card panel */}
@@ -195,21 +284,28 @@ export function EmptyBlockView({ blockId, onInitialized }: EmptyBlockViewProps) 
         {/* Header */}
         <div className="flex items-center justify-between px-5 py-3 border-b bg-muted/30">
           <div className="flex items-center gap-3">
-            <h1 className="text-sm font-semibold">Initialize Block</h1>
-            <code className="text-xs bg-muted px-2 py-0.5 rounded text-muted-foreground">
-              {blockId}.tsx
-            </code>
+            <button
+              type="button"
+              onClick={handleBack}
+              className="p-1.5 -ml-1.5 rounded-md hover:bg-muted transition-colors"
+            >
+              <ArrowLeft weight="bold" className="h-4 w-4" />
+            </button>
+            <h1 className="text-sm font-semibold">Choose a Template</h1>
+            <span className="text-xs text-muted-foreground">
+              {blockName}
+            </span>
           </div>
           <Button
-            onClick={handleConfirm}
-            disabled={isInitializing}
+            onClick={handleConfirmTemplate}
+            disabled={isInitializing || !selectedComponentKey}
           >
             {isInitializing ? (
               "Creating..."
             ) : (
               <>
                 <Check weight="bold" className="h-4 w-4 mr-1.5" />
-                Create {selectedComponent ? `with ${selectedComponent.name}` : "Empty"}
+                Create {selectedComponent ? `with ${selectedComponent.name}` : ""}
               </>
             )}
           </Button>
@@ -226,7 +322,7 @@ export function EmptyBlockView({ blockId, onInitialized }: EmptyBlockViewProps) 
                 <Input
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
-                  placeholder="Search components..."
+                  placeholder="Search templates..."
                   className="pl-8 h-8 text-sm"
                 />
               </div>
@@ -265,34 +361,6 @@ export function EmptyBlockView({ blockId, onInitialized }: EmptyBlockViewProps) 
 
             {/* Component list */}
             <div className="flex-1 overflow-auto p-2">
-              {/* Empty/Blank option - always first */}
-              <div className="mb-3">
-                <div className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider px-2 py-1">
-                  Basic
-                </div>
-                <button
-                  type="button"
-                  onClick={() => setSelectedComponentKey(null)}
-                  className={cn(
-                    "w-full flex items-center gap-2.5 px-2 py-2 rounded-md text-left transition-colors",
-                    selectedComponentKey === null
-                      ? "bg-primary/10 text-foreground"
-                      : "hover:bg-muted text-muted-foreground hover:text-foreground"
-                  )}
-                >
-                  <File
-                    weight={selectedComponentKey === null ? "duotone" : "regular"}
-                    className="h-4 w-4 shrink-0"
-                  />
-                  <div className="flex-1 min-w-0">
-                    <div className="text-sm font-medium truncate">Empty</div>
-                  </div>
-                  {selectedComponentKey === null && (
-                    <CaretRight weight="bold" className="h-3 w-3 shrink-0 text-primary" />
-                  )}
-                </button>
-              </div>
-
               {/* Grouped components from registry */}
               {Array.from(groupedComponents.entries()).map(([category, components]) => (
                 <div key={category} className="mb-3">
@@ -324,7 +392,13 @@ export function EmptyBlockView({ blockId, onInitialized }: EmptyBlockViewProps) 
 
               {filteredComponents.length === 0 && searchQuery && (
                 <div className="text-center py-8 text-sm text-muted-foreground">
-                  No components found
+                  No templates found
+                </div>
+              )}
+
+              {filteredComponents.length === 0 && !searchQuery && (
+                <div className="text-center py-8 text-sm text-muted-foreground">
+                  No templates available
                 </div>
               )}
             </div>
@@ -340,10 +414,10 @@ export function EmptyBlockView({ blockId, onInitialized }: EmptyBlockViewProps) 
                 </div>
                 <div>
                   <h2 className="font-semibold">
-                    {selectedComponent?.name || "Empty"}
+                    {selectedComponent?.name || "Select a Template"}
                   </h2>
                   <p className="text-sm text-muted-foreground">
-                    {selectedComponent?.description || "Start with a minimal React component"}
+                    {selectedComponent?.description || "Choose a template from the list"}
                   </p>
                 </div>
               </div>
@@ -351,10 +425,8 @@ export function EmptyBlockView({ blockId, onInitialized }: EmptyBlockViewProps) 
 
             {/* Preview content - render actual component */}
             <div className="flex-1 overflow-auto p-5">
-              <div className="h-full flex items-start justify-center">
-                <div className="w-full max-w-lg">
-                  {renderPreview()}
-                </div>
+              <div className="w-full max-w-lg mx-auto">
+                {renderPreview()}
               </div>
             </div>
           </div>

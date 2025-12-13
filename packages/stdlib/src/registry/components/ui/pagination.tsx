@@ -1,3 +1,19 @@
+/**
+ * @component pagination
+ * @name Pagination
+ * @category ui-navigation
+ * @description Navigation controls for paginated content with previous and next buttons.
+ * @icon more-horizontal
+ * @keywords pagination, pages, navigation
+ * @example
+ * <Pagination>
+ *   <PaginationContent>
+ *     <PaginationItem><PaginationPrevious href="#" /></PaginationItem>
+ *     <PaginationItem><PaginationLink href="#">1</PaginationLink></PaginationItem>
+ *     <PaginationItem><PaginationNext href="#" /></PaginationItem>
+ *   </PaginationContent>
+ * </Pagination>
+ */
 import { ChevronLeft, ChevronRight, MoreHorizontal } from "lucide-react";
 import * as React from "react";
 

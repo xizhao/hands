@@ -177,6 +177,35 @@ When modifying existing schema, always:
 2. Migrate incrementally, verify at each step
 3. Report any schema changes made
 
+## Showing Progress to the User
+
+Use the **navigate** tool to show the user their data as you import it. This provides real-time feedback during long imports.
+
+**Usage:**
+\`\`\`
+navigate routeType="table" id="orders" title="Orders" description="500 rows imported" refresh=true
+\`\`\`
+
+**Parameters:**
+- \`routeType\`: "block", "table", or "action"
+- \`id\`: The table/block/action name
+- \`title\`: Display title
+- \`description\`: Progress description
+- \`refresh\`: Set to true to reload data
+
+**When to navigate:**
+- After creating the table and inserting the first batch (so they can see data appearing)
+- Periodically during large imports (every few thousand rows)
+- After completing the import (final refresh to show all data)
+
+**Example flow for a 10,000 row import:**
+1. Create table, insert first 500 rows
+2. \`navigate routeType="table" id="orders" title="Orders" description="500 of 10,000 rows" refresh=true\`
+3. Continue inserting...
+4. \`navigate routeType="table" id="orders" title="Orders" description="5,000 of 10,000 rows" refresh=true\`
+5. Complete import
+6. \`navigate routeType="table" id="orders" title="Orders" description="10,000 rows imported" refresh=true\`
+
 ## Completion Report
 
 Always report:
@@ -214,5 +243,6 @@ export const importAgent: AgentConfig = {
     bash: true,
     write: true,
     glob: true,
+    navigate: true,
   },
 };

@@ -16,6 +16,9 @@ export interface BlockValidationResult {
 
   /** Extracted metadata */
   meta?: BlockMeta;
+
+  /** Whether block has the @hands:uninitialized marker */
+  uninitialized?: boolean;
 }
 
 /**
@@ -80,9 +83,13 @@ export async function validateBlockFile(filePath: string): Promise<BlockValidati
     // Extract metadata if present
     const meta = extractMeta(code);
 
+    // Check for uninitialized marker (fast string check)
+    const uninitialized = code.includes("@hands:uninitialized");
+
     return {
       valid: true,
       meta,
+      uninitialized,
     };
   } catch (err) {
     return {

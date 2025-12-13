@@ -1,3 +1,21 @@
+/**
+ * @component command
+ * @name Command
+ * @category ui-input
+ * @description Search and navigate with a keyboard-driven command palette.
+ * @icon command
+ * @keywords command, search, palette, cmdk
+ * @example
+ * <Command>
+ *   <CommandInput placeholder="Search..." />
+ *   <CommandList>
+ *     <CommandGroup heading="Actions">
+ *       <CommandItem>New File</CommandItem>
+ *       <CommandItem>Open</CommandItem>
+ *     </CommandGroup>
+ *   </CommandList>
+ * </Command>
+ */
 "use client";
 
 import type { DialogProps } from "@radix-ui/react-dialog";

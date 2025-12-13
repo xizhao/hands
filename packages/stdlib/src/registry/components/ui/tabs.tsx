@@ -1,3 +1,24 @@
+/**
+ * @component tabs
+ * @name Tabs
+ * @category ui-navigation
+ * @description Switch between different views using clickable tabs.
+ * @icon layout-panel-top
+ * @keywords tabs, navigation, panels, switch, toggle
+ * @example
+ * <Tabs defaultValue="account">
+ *   <TabsList>
+ *     <TabsTrigger value="account">Account</TabsTrigger>
+ *     <TabsTrigger value="password">Password</TabsTrigger>
+ *   </TabsList>
+ *   <TabsContent value="account">
+ *     Account settings here.
+ *   </TabsContent>
+ *   <TabsContent value="password">
+ *     Password settings here.
+ *   </TabsContent>
+ * </Tabs>
+ */
 import * as TabsPrimitive from "@radix-ui/react-tabs";
 import * as React from "react";
 

@@ -1,3 +1,14 @@
+/**
+ * @component badge
+ * @name Badge
+ * @category ui-display
+ * @description Small labels for highlighting status or categories.
+ * @icon tag
+ * @keywords badge, tag, label, chip
+ * @example
+ * <Badge>New</Badge>
+ * <Badge variant="destructive">Error</Badge>
+ */
 import { cva, type VariantProps } from "class-variance-authority";
 import type * as React from "react";
 

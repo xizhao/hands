@@ -1,3 +1,18 @@
+/**
+ * @component radio-group
+ * @name Radio Group
+ * @category ui-input
+ * @description A set of radio buttons for selecting a single option from multiple choices.
+ * @icon circle-dot
+ * @keywords radio, select, options
+ * @example
+ * <RadioGroup defaultValue="option1">
+ *   <div className="flex items-center space-x-2">
+ *     <RadioGroupItem value="option1" id="option1" />
+ *     <Label htmlFor="option1">Option 1</Label>
+ *   </div>
+ * </RadioGroup>
+ */
 import * as RadioGroupPrimitive from "@radix-ui/react-radio-group";
 import { Circle } from "lucide-react";
 import * as React from "react";

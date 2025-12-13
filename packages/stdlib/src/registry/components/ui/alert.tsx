@@ -1,3 +1,16 @@
+/**
+ * @component alert
+ * @name Alert
+ * @category ui-feedback
+ * @description Display important messages or notifications to users.
+ * @icon alert-circle
+ * @keywords alert, message, notification, callout
+ * @example
+ * <Alert>
+ *   <AlertTitle>Heads up!</AlertTitle>
+ *   <AlertDescription>You can use this to highlight important information.</AlertDescription>
+ * </Alert>
+ */
 import { cva, type VariantProps } from "class-variance-authority";
 import * as React from "react";
 

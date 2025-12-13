@@ -76,7 +76,8 @@
     "react": "^18.0.0 || ^19.0.0"
   },
   "scripts": {
-    "typecheck": "tsc --noEmit"
+    "generate": "bun run scripts/generate-registry.ts",
+    "typecheck": "bun run generate && tsc --noEmit"
   },
   "type": "module",
   "types": "./src/index.ts",

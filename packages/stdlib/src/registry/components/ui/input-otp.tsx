@@ -1,3 +1,19 @@
+/**
+ * @component input-otp
+ * @name Input OTP
+ * @category ui-input
+ * @description One-time password input for verification codes and security pins.
+ * @icon key-round
+ * @keywords otp, pin, code, verification
+ * @example
+ * <InputOTP maxLength={6}>
+ *   <InputOTPGroup>
+ *     <InputOTPSlot index={0} />
+ *     <InputOTPSlot index={1} />
+ *     <InputOTPSlot index={2} />
+ *   </InputOTPGroup>
+ * </InputOTP>
+ */
 "use client";
 
 import { OTPInput, OTPInputContext } from "input-otp";

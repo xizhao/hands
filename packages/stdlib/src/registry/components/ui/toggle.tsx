@@ -1,3 +1,15 @@
+/**
+ * @component toggle-ui
+ * @name Toggle
+ * @category ui-input
+ * @description A button that can be pressed to switch between on and off.
+ * @icon toggle-left
+ * @keywords toggle, button, switch, press, on, off
+ * @example
+ * <Toggle aria-label="Toggle italic">
+ *   <Bold className="h-4 w-4" />
+ * </Toggle>
+ */
 import * as TogglePrimitive from "@radix-ui/react-toggle";
 import { cva, type VariantProps } from "class-variance-authority";
 import * as React from "react";

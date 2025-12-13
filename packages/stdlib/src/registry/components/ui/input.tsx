@@ -1,3 +1,13 @@
+/**
+ * @component input
+ * @name Input
+ * @category ui-input
+ * @description Text input field for collecting user information.
+ * @icon text-cursor
+ * @keywords input, text, field
+ * @example
+ * <Input placeholder="Enter your email" type="email" />
+ */
 import * as React from "react";
 
 import { cn } from "../../../lib/utils";

@@ -38,7 +38,7 @@ import { HoverCard, HoverCardContent, HoverCardTrigger } from "@/components/ui/h
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { useChatState } from "@/hooks/useChatState";
-import { useFullscreen } from "@/hooks/useFullscreen";
+import { useNeedsTrafficLightOffset } from "@/hooks/useFullscreen";
 import { useActiveSession, useRightPanel } from "@/hooks/useNavState";
 import { useImportWithAgent } from "@/hooks/useSession";
 import {
@@ -93,8 +93,8 @@ export function NotebookShell({ children }: NotebookShellProps) {
   } = useRuntimeState();
 
   const { panel: rightPanel, togglePanel: toggleRightPanel } = useRightPanel();
-  const { setSession: _setActiveSession } = useActiveSession();
-  const isFullscreen = useFullscreen();
+  const { setSession: setActiveSession } = useActiveSession();
+  const needsTrafficLightOffset = useNeedsTrafficLightOffset();
   const { data: workbooks } = useWorkbooks();
   const createWorkbook = useCreateWorkbook();
   const openWorkbook = useOpenWorkbook();
@@ -338,22 +338,23 @@ export function NotebookShell({ children }: NotebookShellProps) {
         chatState.setChatExpanded(true);
         // Note: NOT setting autoSubmitPending - user must manually submit
       } else {
-        // Workspace drop: start background import with agent (don't change focused thread)
+        // Workspace drop: start import with agent and focus on it
         console.log(
-          "[handleFileDrop] File dropped on workspace, starting background import:",
+          "[handleFileDrop] File dropped on workspace, starting import:",
           file.name,
         );
         importWithAgent.mutate({
           file,
-          // Don't set active session - let it run in background
           onSessionCreated: (sessionId) => {
-            console.log("[handleFileDrop] Background import session created:", sessionId);
-            // Could show a toast notification here
+            console.log("[handleFileDrop] Import session created, focusing:", sessionId);
+            // Focus on the import thread and expand chat
+            setActiveSession(sessionId);
+            chatState.setChatExpanded(true);
           },
         });
       }
     },
-    [chatState, importWithAgent],
+    [chatState, importWithAgent, setActiveSession],
   );
 
   return (
@@ -370,7 +371,7 @@ export function NotebookShell({ children }: NotebookShellProps) {
           data-tauri-drag-region
           className={cn(
             "h-11 flex items-center justify-between pr-4 border-b border-border/50 bg-background shrink-0",
-            isFullscreen ? "pl-4" : "pl-[80px]",
+            needsTrafficLightOffset ? "pl-[80px]" : "pl-4",
           )}
         >
           {/* Left: Workbook title + breadcrumb */}

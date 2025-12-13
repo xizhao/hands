@@ -1,3 +1,25 @@
+/**
+ * @component sheet
+ * @name Sheet
+ * @category ui-overlay
+ * @description A panel that slides in from the edge of the screen.
+ * @icon panel-right
+ * @keywords sheet, panel, drawer, slide, sidebar
+ * @example
+ * <Sheet>
+ *   <SheetTrigger asChild>
+ *     <button>Open</button>
+ *   </SheetTrigger>
+ *   <SheetContent>
+ *     <SheetHeader>
+ *       <SheetTitle>Settings</SheetTitle>
+ *       <SheetDescription>
+ *         Make changes to your profile here.
+ *       </SheetDescription>
+ *     </SheetHeader>
+ *   </SheetContent>
+ * </Sheet>
+ */
 "use client";
 
 import * as SheetPrimitive from "@radix-ui/react-dialog";

@@ -113,13 +113,15 @@ export function SaveStatusIndicator() {
   }, [save.isPending]);
 
   // Tooltip text for hover
-  const tooltipText = statusLoading
-    ? "Checking..."
-    : hasChanges
-      ? "Unsaved changes"
-      : lastSaveTime
-        ? `Saved ${lastSaveTime}`
-        : "All saved";
+  const tooltipText = save.isPending
+    ? "Saving..."
+    : statusLoading
+      ? "Checking..."
+      : hasChanges
+        ? "Unsaved changes"
+        : lastSaveTime
+          ? `Saved ${lastSaveTime}`
+          : "All saved";
 
   return (
     <Popover>
@@ -136,11 +138,13 @@ export function SaveStatusIndicator() {
               <span
                 className={cn(
                   "w-2 h-2 rounded-full transition-colors",
-                  statusLoading
-                    ? "bg-muted-foreground/50"
-                    : hasChanges
-                      ? "bg-amber-500"
-                      : "bg-green-500",
+                  save.isPending
+                    ? "bg-white animate-pulse"
+                    : statusLoading
+                      ? "bg-muted-foreground/50"
+                      : hasChanges
+                        ? "bg-amber-500"
+                        : "bg-green-500",
                 )}
               />
             </button>

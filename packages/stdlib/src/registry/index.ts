@@ -1,4 +1,4 @@
-import { registry } from "../registry.js";
+import { registry } from "../registry.generated.js";
 
 // ============================================
 // Runtime Components - for RSC serialization
@@ -336,12 +336,12 @@ export interface ComponentMeta {
   description: string;
   files: string[];
   dependencies: string[];
-  /** Plate KEYS value for block/inline types */
-  plateKey?: string;
   /** Lucide icon name */
   icon?: string;
   /** Search keywords */
   keywords?: string[];
+  /** JSX example code */
+  example?: string;
 }
 
 export interface CategoryMeta {

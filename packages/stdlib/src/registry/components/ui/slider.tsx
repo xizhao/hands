@@ -1,3 +1,17 @@
+/**
+ * @component slider
+ * @name Slider
+ * @category ui-input
+ * @description Choose a number by dragging along a track.
+ * @icon sliders-horizontal
+ * @keywords slider, range, input, track, number
+ * @example
+ * <Slider
+ *   defaultValue={[50]}
+ *   max={100}
+ *   step={1}
+ * />
+ */
 import * as SliderPrimitive from "@radix-ui/react-slider";
 import * as React from "react";
 

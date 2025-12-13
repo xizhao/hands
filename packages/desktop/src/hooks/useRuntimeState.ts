@@ -33,7 +33,7 @@ interface TauriRuntimeStatus {
 export interface WorkbookManifest {
   workbookId: string;
   workbookDir: string;
-  blocks: Array<{ id: string; title: string; path: string; parentDir: string; description?: string }>;
+  blocks: Array<{ id: string; title: string; path: string; parentDir: string; description?: string; uninitialized?: boolean }>;
   sources?: Array<{
     id: string;
     name: string;

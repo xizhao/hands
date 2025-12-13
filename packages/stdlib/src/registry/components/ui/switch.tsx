@@ -1,3 +1,16 @@
+/**
+ * @component switch
+ * @name Switch
+ * @category ui-input
+ * @description A toggle that switches between on and off states.
+ * @icon toggle-right
+ * @keywords switch, toggle, boolean, on, off
+ * @example
+ * <div className="flex items-center space-x-2">
+ *   <Switch id="airplane-mode" />
+ *   <label htmlFor="airplane-mode">Airplane Mode</label>
+ * </div>
+ */
 import * as SwitchPrimitives from "@radix-ui/react-switch";
 import * as React from "react";
 

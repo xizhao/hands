@@ -1,3 +1,17 @@
+/**
+ * @component field
+ * @name Field
+ * @category ui-input
+ * @description A form field wrapper with label and error handling for building accessible forms.
+ * @icon text-cursor-input
+ * @keywords field, form, input, label
+ * @example
+ * <Field>
+ *   <FieldLabel>Email</FieldLabel>
+ *   <Input type="email" placeholder="Enter your email" />
+ *   <FieldDescription>We'll never share your email.</FieldDescription>
+ * </Field>
+ */
 "use client";
 
 import { cva, type VariantProps } from "class-variance-authority";

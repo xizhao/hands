@@ -1,3 +1,19 @@
+/**
+ * @component drawer
+ * @name Drawer
+ * @category ui-overlay
+ * @description Slide in content from the screen edge.
+ * @icon panel-left
+ * @keywords drawer, panel, slide
+ * @example
+ * <Drawer>
+ *   <DrawerTrigger>Open Drawer</DrawerTrigger>
+ *   <DrawerContent>
+ *     <DrawerTitle>Drawer Title</DrawerTitle>
+ *     <DrawerDescription>Drawer content here.</DrawerDescription>
+ *   </DrawerContent>
+ * </Drawer>
+ */
 import * as React from "react";
 import { Drawer as DrawerPrimitive } from "vaul";
 

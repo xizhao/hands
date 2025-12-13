@@ -1,3 +1,22 @@
+/**
+ * @component select
+ * @name Select
+ * @category ui-input
+ * @description Choose one option from a list of choices in a dropdown menu.
+ * @icon chevron-down
+ * @keywords select, dropdown, picker, choose, option
+ * @example
+ * <Select>
+ *   <SelectTrigger>
+ *     <SelectValue placeholder="Select a fruit" />
+ *   </SelectTrigger>
+ *   <SelectContent>
+ *     <SelectItem value="apple">Apple</SelectItem>
+ *     <SelectItem value="banana">Banana</SelectItem>
+ *     <SelectItem value="orange">Orange</SelectItem>
+ *   </SelectContent>
+ * </Select>
+ */
 "use client";
 
 import * as SelectPrimitive from "@radix-ui/react-select";

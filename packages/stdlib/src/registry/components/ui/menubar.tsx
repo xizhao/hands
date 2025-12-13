@@ -1,3 +1,21 @@
+/**
+ * @component menubar
+ * @name Menubar
+ * @category ui-navigation
+ * @description A horizontal menu bar with dropdown menus for navigation.
+ * @icon menu-square
+ * @keywords menubar, menu, navigation
+ * @example
+ * <Menubar>
+ *   <MenubarMenu>
+ *     <MenubarTrigger>File</MenubarTrigger>
+ *     <MenubarContent>
+ *       <MenubarItem>New File</MenubarItem>
+ *       <MenubarItem>Save</MenubarItem>
+ *     </MenubarContent>
+ *   </MenubarMenu>
+ * </Menubar>
+ */
 import * as MenubarPrimitive from "@radix-ui/react-menubar";
 import { Check, ChevronRight, Circle } from "lucide-react";
 import * as React from "react";

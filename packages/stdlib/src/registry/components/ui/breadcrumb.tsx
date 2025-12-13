@@ -1,3 +1,22 @@
+/**
+ * @component breadcrumb
+ * @name Breadcrumb
+ * @category ui-navigation
+ * @description Show the current page location within a site hierarchy.
+ * @icon chevron-right
+ * @keywords breadcrumb, navigation, path
+ * @example
+ * <Breadcrumb>
+ *   <BreadcrumbList>
+ *     <BreadcrumbItem>
+ *       <BreadcrumbLink href="/">Home</BreadcrumbLink>
+ *     </BreadcrumbItem>
+ *     <BreadcrumbItem>
+ *       <BreadcrumbPage>Current Page</BreadcrumbPage>
+ *     </BreadcrumbItem>
+ *   </BreadcrumbList>
+ * </Breadcrumb>
+ */
 import { Slot } from "@radix-ui/react-slot";
 import { ChevronRight, MoreHorizontal } from "lucide-react";
 import * as React from "react";

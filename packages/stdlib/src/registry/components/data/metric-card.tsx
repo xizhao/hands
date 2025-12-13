@@ -1,3 +1,18 @@
+/**
+ * @component metric-card
+ * @name MetricCard
+ * @category data
+ * @description Display key metrics at a glance with optional trend indicators showing growth or decline.
+ * @icon trending-up
+ * @keywords metric, kpi, stat
+ * @example
+ * <MetricCard
+ *   title="Total Revenue"
+ *   value="$48,352"
+ *   trend={{ value: 12.5, direction: "up" }}
+ *   description="vs last month"
+ * />
+ */
 /** @jsxImportSource react */
 import type * as React from "react";
 import { cn } from "../../../lib/utils.js";

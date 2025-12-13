@@ -1,3 +1,17 @@
+/**
+ * @component button
+ * @name Button
+ * @category ui-input
+ * @description Interactive buttons for actions and navigation.
+ * @icon mouse-pointer-click
+ * @keywords button, click, action
+ * @example
+ * <div className="flex gap-2">
+ *   <Button>Primary</Button>
+ *   <Button variant="secondary">Secondary</Button>
+ *   <Button variant="outline">Outline</Button>
+ * </div>
+ */
 import { Slot } from "@radix-ui/react-slot";
 import { cva, type VariantProps } from "class-variance-authority";
 import * as React from "react";

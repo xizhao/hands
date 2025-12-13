@@ -1,3 +1,19 @@
+/**
+ * @component dropdown-menu
+ * @name Dropdown Menu
+ * @category ui-overlay
+ * @description Display a menu of options triggered by a button.
+ * @icon chevron-down
+ * @keywords dropdown, menu, popover
+ * @example
+ * <DropdownMenu>
+ *   <DropdownMenuTrigger>Menu</DropdownMenuTrigger>
+ *   <DropdownMenuContent>
+ *     <DropdownMenuItem>Option 1</DropdownMenuItem>
+ *     <DropdownMenuItem>Option 2</DropdownMenuItem>
+ *   </DropdownMenuContent>
+ * </DropdownMenu>
+ */
 "use client";
 
 import * as DropdownMenuPrimitive from "@radix-ui/react-dropdown-menu";

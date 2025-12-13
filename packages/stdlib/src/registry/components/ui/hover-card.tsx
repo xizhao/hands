@@ -1,3 +1,18 @@
+/**
+ * @component hover-card
+ * @name Hover Card
+ * @category ui-overlay
+ * @description A card that appears when hovering over an element to show additional information.
+ * @icon mouse-pointer-2
+ * @keywords hover, card, preview
+ * @example
+ * <HoverCard>
+ *   <HoverCardTrigger>Hover me</HoverCardTrigger>
+ *   <HoverCardContent>
+ *     Additional information appears here
+ *   </HoverCardContent>
+ * </HoverCard>
+ */
 import * as HoverCardPrimitive from "@radix-ui/react-hover-card";
 import * as React from "react";
 

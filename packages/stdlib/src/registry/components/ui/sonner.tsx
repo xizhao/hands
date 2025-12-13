@@ -1,3 +1,17 @@
+/**
+ * @component sonner
+ * @name Toaster
+ * @category ui-feedback
+ * @description Display brief notifications at the corner of the screen.
+ * @icon bell
+ * @keywords toast, notification, sonner, alert, message
+ * @example
+ * <Toaster />
+ * // In your component:
+ * import { toast } from "sonner"
+ *
+ * toast("Event has been created")
+ */
 "use client";
 
 import { useTheme } from "next-themes";

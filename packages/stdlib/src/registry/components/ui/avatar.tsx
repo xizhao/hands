@@ -1,3 +1,16 @@
+/**
+ * @component avatar
+ * @name Avatar
+ * @category ui-display
+ * @description Display user profile pictures with automatic fallback.
+ * @icon user-circle
+ * @keywords avatar, profile, user, image
+ * @example
+ * <Avatar>
+ *   <AvatarImage src="profile.jpg" />
+ *   <AvatarFallback>JD</AvatarFallback>
+ * </Avatar>
+ */
 "use client";
 
 import * as AvatarPrimitive from "@radix-ui/react-avatar";

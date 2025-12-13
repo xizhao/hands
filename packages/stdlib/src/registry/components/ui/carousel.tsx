@@ -1,3 +1,20 @@
+/**
+ * @component carousel
+ * @name Carousel
+ * @category ui-display
+ * @description Slide through multiple items with navigation controls.
+ * @icon gallery-horizontal
+ * @keywords carousel, slider, slideshow
+ * @example
+ * <Carousel>
+ *   <CarouselContent>
+ *     <CarouselItem>Slide 1</CarouselItem>
+ *     <CarouselItem>Slide 2</CarouselItem>
+ *   </CarouselContent>
+ *   <CarouselPrevious />
+ *   <CarouselNext />
+ * </Carousel>
+ */
 "use client";
 
 import useEmblaCarousel, { type UseEmblaCarouselType } from "embla-carousel-react";

@@ -1,3 +1,20 @@
+/**
+ * @component tooltip
+ * @name Tooltip
+ * @category ui-overlay
+ * @description A small popup that appears when hovering over an element.
+ * @icon message-circle
+ * @keywords tooltip, hint, help, hover, popup
+ * @example
+ * <TooltipProvider>
+ *   <Tooltip>
+ *     <TooltipTrigger>Hover me</TooltipTrigger>
+ *     <TooltipContent>
+ *       <p>Helpful information</p>
+ *     </TooltipContent>
+ *   </Tooltip>
+ * </TooltipProvider>
+ */
 "use client";
 
 import * as TooltipPrimitive from "@radix-ui/react-tooltip";

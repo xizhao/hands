@@ -33,11 +33,31 @@ function NotebookLayout() {
   // For backward compatibility in the effect below
   const activeRuntime = port ? { workbook_id: workbookId } : null;
 
-  // Set up navigate callback for SSE - navigates to blocks by ID
+  // Set up navigate callback for SSE - routes to correct page based on path
   useEffect(() => {
-    setNavigateCallback((blockId: string) => {
-      const cleanBlockId = blockId.replace(/^\//, "");
-      navigate({ to: "/blocks/$blockId", params: { blockId: cleanBlockId } });
+    setNavigateCallback((path: string) => {
+      const cleanPath = path.replace(/^\//, "");
+      const [routeType, id] = cleanPath.split("/");
+
+      if (!id) {
+        console.warn("[navigate] Invalid path, missing id:", path);
+        return;
+      }
+
+      // Route to the correct page based on route type
+      switch (routeType) {
+        case "blocks":
+          navigate({ to: "/blocks/$blockId", params: { blockId: id } });
+          break;
+        case "tables":
+          navigate({ to: "/tables/$tableId", params: { tableId: id } });
+          break;
+        case "actions":
+          navigate({ to: "/actions/$actionId", params: { actionId: id } });
+          break;
+        default:
+          console.warn("[navigate] Unknown route type:", routeType, "from path:", path);
+      }
     });
   }, [navigate]);
 

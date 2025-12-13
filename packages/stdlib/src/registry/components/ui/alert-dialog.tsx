@@ -1,3 +1,20 @@
+/**
+ * @component alert-dialog
+ * @name Alert Dialog
+ * @category ui-overlay
+ * @description Display important confirmations that require user action.
+ * @icon alert-triangle
+ * @keywords dialog, modal, confirm, alert
+ * @example
+ * <AlertDialog>
+ *   <AlertDialogTrigger>Delete</AlertDialogTrigger>
+ *   <AlertDialogContent>
+ *     <AlertDialogTitle>Are you sure?</AlertDialogTitle>
+ *     <AlertDialogDescription>This action cannot be undone.</AlertDialogDescription>
+ *     <AlertDialogAction>Continue</AlertDialogAction>
+ *   </AlertDialogContent>
+ * </AlertDialog>
+ */
 import * as AlertDialogPrimitive from "@radix-ui/react-alert-dialog";
 import * as React from "react";
 

@@ -1,3 +1,17 @@
+/**
+ * @component separator
+ * @name Separator
+ * @category ui-layout
+ * @description A line that divides content into distinct sections.
+ * @icon minus
+ * @keywords separator, divider, line, hr, horizontal, vertical
+ * @example
+ * <div>
+ *   <div>Section 1</div>
+ *   <Separator className="my-4" />
+ *   <div>Section 2</div>
+ * </div>
+ */
 import * as SeparatorPrimitive from "@radix-ui/react-separator";
 import * as React from "react";
 

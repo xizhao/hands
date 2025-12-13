@@ -1,3 +1,22 @@
+/**
+ * @component bar-chart
+ * @name Bar Chart
+ * @category charts
+ * @description Compare values across categories with vertical or horizontal bars.
+ * @icon bar-chart-2
+ * @keywords bar, chart, graph, comparison, data
+ * @example
+ * <BarChart
+ *   data={[
+ *     { month: "Jan", sales: 4200 },
+ *     { month: "Feb", sales: 3800 },
+ *     { month: "Mar", sales: 5100 },
+ *   ]}
+ *   x="month"
+ *   y="sales"
+ *   height={300}
+ * />
+ */
 /** @jsxImportSource react */
 "use client";
 

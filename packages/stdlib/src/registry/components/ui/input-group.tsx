@@ -1,3 +1,16 @@
+/**
+ * @component input-group
+ * @name Input Group
+ * @category ui-input
+ * @description Groups inputs with additional elements like icons, buttons, or text labels.
+ * @icon layout-list
+ * @keywords input, group, addon
+ * @example
+ * <InputGroup>
+ *   <InputGroupAddon><SearchIcon /></InputGroupAddon>
+ *   <InputGroupInput placeholder="Search..." />
+ * </InputGroup>
+ */
 import { cva, type VariantProps } from "class-variance-authority";
 import type * as React from "react";
 

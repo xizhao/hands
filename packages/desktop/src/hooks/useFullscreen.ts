@@ -1,23 +1,29 @@
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { useEffect, useState } from "react";
 
+// Check platform synchronously via navigator
+const isMac = navigator.platform.toLowerCase().includes("mac");
+
 /**
- * Hook to detect if the window is in fullscreen mode.
- * On macOS, traffic lights are hidden in fullscreen, so we can skip the titlebar offset.
+ * Hook to detect if we need the macOS traffic light offset.
+ * Returns true only on macOS when NOT in fullscreen mode.
  */
-export function useFullscreen() {
-  const [isFullscreen, setIsFullscreen] = useState(false);
+export function useNeedsTrafficLightOffset() {
+  // Start with offset on mac (most common case), no offset on other platforms
+  const [needsOffset, setNeedsOffset] = useState(isMac);
 
   useEffect(() => {
+    if (!isMac) return;
+
     const window = getCurrentWindow();
 
-    // Check initial state
-    window.isFullscreen().then(setIsFullscreen);
+    // Check initial fullscreen state
+    window.isFullscreen().then((fs) => setNeedsOffset(!fs));
 
     // Listen for fullscreen changes
     const unlisten = window.onResized(async () => {
       const fullscreen = await window.isFullscreen();
-      setIsFullscreen(fullscreen);
+      setNeedsOffset(!fullscreen);
     });
 
     return () => {
@@ -25,5 +31,5 @@ export function useFullscreen() {
     };
   }, []);
 
-  return isFullscreen;
+  return needsOffset;
 }

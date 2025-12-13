@@ -1,3 +1,13 @@
+/**
+ * @component kbd
+ * @name Kbd
+ * @category ui-display
+ * @description Displays keyboard shortcuts in a styled format.
+ * @icon keyboard
+ * @keywords keyboard, shortcut, key
+ * @example
+ * <Kbd>Ctrl+C</Kbd>
+ */
 import { cn } from "../../../lib/utils";
 
 function Kbd({ className, ...props }: React.ComponentProps<"kbd">) {

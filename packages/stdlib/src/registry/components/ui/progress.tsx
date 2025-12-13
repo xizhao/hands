@@ -1,3 +1,13 @@
+/**
+ * @component progress
+ * @name Progress
+ * @category ui-feedback
+ * @description Shows progress toward a goal with an animated bar.
+ * @icon loader
+ * @keywords progress, loading, bar
+ * @example
+ * <Progress value={60} />
+ */
 "use client";
 
 import * as ProgressPrimitive from "@radix-ui/react-progress";

@@ -1,3 +1,19 @@
+/**
+ * @component context-menu
+ * @name Context Menu
+ * @category ui-overlay
+ * @description Display a menu when users right-click or long-press.
+ * @icon menu
+ * @keywords context, menu, right-click
+ * @example
+ * <ContextMenu>
+ *   <ContextMenuTrigger>Right-click me</ContextMenuTrigger>
+ *   <ContextMenuContent>
+ *     <ContextMenuItem>Edit</ContextMenuItem>
+ *     <ContextMenuItem>Delete</ContextMenuItem>
+ *   </ContextMenuContent>
+ * </ContextMenu>
+ */
 import * as ContextMenuPrimitive from "@radix-ui/react-context-menu";
 import { Check, ChevronRight, Circle } from "lucide-react";
 import * as React from "react";

@@ -1,3 +1,28 @@
+/**
+ * @component sidebar
+ * @name Sidebar
+ * @category ui-navigation
+ * @description A collapsible navigation menu for organizing your app's structure.
+ * @icon sidebar
+ * @keywords sidebar, navigation, menu, nav, collapsible
+ * @example
+ * <SidebarProvider>
+ *   <Sidebar>
+ *     <SidebarContent>
+ *       <SidebarGroup>
+ *         <SidebarGroupLabel>Menu</SidebarGroupLabel>
+ *         <SidebarGroupContent>
+ *           <SidebarMenu>
+ *             <SidebarMenuItem>
+ *               <SidebarMenuButton>Home</SidebarMenuButton>
+ *             </SidebarMenuItem>
+ *           </SidebarMenu>
+ *         </SidebarGroupContent>
+ *       </SidebarGroup>
+ *     </SidebarContent>
+ *   </Sidebar>
+ * </SidebarProvider>
+ */
 "use client";
 
 import { Slot } from "@radix-ui/react-slot";

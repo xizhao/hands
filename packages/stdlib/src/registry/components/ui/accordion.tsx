@@ -1,3 +1,18 @@
+/**
+ * @component accordion
+ * @name Accordion
+ * @category ui-layout
+ * @description Expandable sections that show and hide content.
+ * @icon chevrons-down-up
+ * @keywords accordion, collapse, expand, sections
+ * @example
+ * <Accordion type="single" collapsible>
+ *   <AccordionItem value="item-1">
+ *     <AccordionTrigger>Question?</AccordionTrigger>
+ *     <AccordionContent>Answer here.</AccordionContent>
+ *   </AccordionItem>
+ * </Accordion>
+ */
 import * as AccordionPrimitive from "@radix-ui/react-accordion";
 import { ChevronDown } from "lucide-react";
 import * as React from "react";

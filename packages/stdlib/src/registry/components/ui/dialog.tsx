@@ -1,3 +1,19 @@
+/**
+ * @component dialog
+ * @name Dialog
+ * @category ui-overlay
+ * @description Display content in a centered overlay window.
+ * @icon panel-top
+ * @keywords dialog, modal, popup
+ * @example
+ * <Dialog>
+ *   <DialogTrigger>Open</DialogTrigger>
+ *   <DialogContent>
+ *     <DialogTitle>Dialog Title</DialogTitle>
+ *     <DialogDescription>Dialog content goes here.</DialogDescription>
+ *   </DialogContent>
+ * </Dialog>
+ */
 "use client";
 
 import * as DialogPrimitive from "@radix-ui/react-dialog";

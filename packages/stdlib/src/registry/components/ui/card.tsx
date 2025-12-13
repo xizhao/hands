@@ -1,3 +1,21 @@
+/**
+ * @component card
+ * @name Card
+ * @category ui-layout
+ * @description Container for grouping related content with optional header and footer.
+ * @icon square
+ * @keywords card, container, panel
+ * @example
+ * <Card>
+ *   <CardHeader>
+ *     <CardTitle>Project Overview</CardTitle>
+ *     <CardDescription>Summary of your current project status</CardDescription>
+ *   </CardHeader>
+ *   <CardContent>
+ *     <p>Your project is on track with 85% completion.</p>
+ *   </CardContent>
+ * </Card>
+ */
 import * as React from "react";
 
 import { cn } from "../../../lib/utils";

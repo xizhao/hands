@@ -1,3 +1,23 @@
+/**
+ * @component data-table
+ * @name DataTable
+ * @category data
+ * @description Display structured data in a customizable table with sortable columns.
+ * @icon table-2
+ * @keywords data, table, grid, columns, rows
+ * @example
+ * <DataTable
+ *   data={[
+ *     { name: "John", email: "john@example.com", role: "Admin" },
+ *     { name: "Jane", email: "jane@example.com", role: "User" },
+ *   ]}
+ *   columns={[
+ *     { key: "name", header: "Name" },
+ *     { key: "email", header: "Email" },
+ *     { key: "role", header: "Role" },
+ *   ]}
+ * />
+ */
 /** @jsxImportSource react */
 import type * as React from "react";
 import { cn } from "../../../lib/utils.js";
