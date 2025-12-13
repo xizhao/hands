@@ -1,34 +1,39 @@
 // Core types
-export * from "./types/index.js"
-
-// Source utilities
-export { defineSource } from "./sources/types.js"
-
-// Component registry (single source of truth for RSC components)
-export {
-  // Runtime registry for worker template
-  rscComponents,
-  // Individual components
-  Button,
-  buttonVariants,
-  Card,
-  CardHeader,
-  CardTitle,
-  CardDescription,
-  CardContent,
-  CardFooter,
-  Badge,
-  badgeVariants,
-  MetricCard,
-  DataTable,
-  BarChart,
-  LineChart,
-} from "./registry/index.js"
 
 // Component types
 export type {
   BarChartProps,
-  LineChartProps,
-  DataTableProps,
   DataTableColumn,
-} from "./registry/index.js"
+  DataTableProps,
+  LineChartProps,
+} from "./registry/index.js";
+// Component registry (single source of truth for RSC components)
+export {
+  Badge,
+  BarChart,
+  // Individual components
+  Button,
+  badgeVariants,
+  buttonVariants,
+  Card,
+  CardContent,
+  CardDescription,
+  CardFooter,
+  CardHeader,
+  CardTitle,
+  DataTable,
+  LineChart,
+  MetricCard,
+} from "./registry/index.js";
+// Source utilities (v2 - table containers)
+export {
+  type DiscoveredSource,
+  type DiscoveredTable,
+  defineSourceV2,
+  type SourceDefinitionV2,
+  type TableColumn,
+  type TableDefinition,
+  type TableSchema,
+  type TableSubscription,
+} from "./sources/types.js";
+export * from "./types/index.js";

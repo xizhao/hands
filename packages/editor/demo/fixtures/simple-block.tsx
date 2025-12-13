@@ -8,7 +8,7 @@ export default (async (ctx) => (
     <button variant="primary">Click Me</button>
   </div>
 )) satisfies BlockFn
-`
+`;
 
 export const cardBlockSource = `import type { BlockFn } from '@hands/stdlib'
 
@@ -24,7 +24,7 @@ export default (async (ctx) => (
     </CardContent>
   </Card>
 )) satisfies BlockFn
-`
+`;
 
 export const dataBlockSource = `import type { BlockFn } from '@hands/stdlib'
 
@@ -34,7 +34,7 @@ export default (async (ctx) => (
     <MetricCard title="Revenue" value={56789} description="+8% from last month" />
   </div>
 )) satisfies BlockFn
-`
+`;
 
 // Chart block - uses "use client" components with interactivity
 export const chartBlockSource = `import type { BlockFn } from '@hands/stdlib'
@@ -92,4 +92,4 @@ export default (async (ctx) => (
     </div>
   </div>
 )) satisfies BlockFn
-`
+`;

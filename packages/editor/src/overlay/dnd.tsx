@@ -5,16 +5,16 @@
  * Uses react-dnd with HTML5 backend.
  */
 
-import { useState, useEffect, useRef } from 'react'
-import { useDrag, useDrop, useDragLayer } from 'react-dnd'
-import { DotsSixVertical, Trash } from '@phosphor-icons/react'
+import { DotsSixVertical, Trash } from "@phosphor-icons/react";
+import { useEffect, useRef, useState } from "react";
+import { useDrag, useDragLayer, useDrop } from "react-dnd";
 
 // DnD item type
-export const ELEMENT_TYPE = 'RSC_ELEMENT'
+export const ELEMENT_TYPE = "RSC_ELEMENT";
 
 export interface DragItem {
-  type: typeof ELEMENT_TYPE
-  nodeId: string
+  type: typeof ELEMENT_TYPE;
+  nodeId: string;
 }
 
 // ============================================================================
@@ -22,77 +22,82 @@ export interface DragItem {
 // ============================================================================
 
 interface DragHandleProps {
-  nodeId: string
-  containerRef: React.RefObject<HTMLDivElement | null>
-  onDelete: () => void
-  onHoverChange?: (isHovered: boolean) => void
+  nodeId: string;
+  containerRef: React.RefObject<HTMLDivElement | null>;
+  onDelete: () => void;
+  onHoverChange?: (isHovered: boolean) => void;
 }
 
 export function DragHandle({ nodeId, containerRef, onDelete, onHoverChange }: DragHandleProps) {
-  const [rect, setRect] = useState<DOMRect | null>(null)
-  const [menuOpen, setMenuOpen] = useState(false)
-  const menuRef = useRef<HTMLDivElement>(null)
+  const [rect, setRect] = useState<DOMRect | null>(null);
+  const [menuOpen, setMenuOpen] = useState(false);
+  const menuRef = useRef<HTMLDivElement>(null);
 
   // Set up drag
-  const [{ isDragging }, dragRef] = useDrag(() => ({
-    type: ELEMENT_TYPE,
-    item: { type: ELEMENT_TYPE, nodeId } as DragItem,
-    collect: (monitor) => ({
-      isDragging: monitor.isDragging(),
+  const [{ isDragging }, dragRef] = useDrag(
+    () => ({
+      type: ELEMENT_TYPE,
+      item: { type: ELEMENT_TYPE, nodeId } as DragItem,
+      collect: (monitor) => ({
+        isDragging: monitor.isDragging(),
+      }),
     }),
-  }), [nodeId])
+    [nodeId],
+  );
 
   useEffect(() => {
-    if (!containerRef.current) return
+    if (!containerRef.current) return;
 
-    const element = containerRef.current.querySelector(`[data-node-id="${nodeId}"]`)
-    if (!element) return
+    const element = containerRef.current.querySelector(`[data-node-id="${nodeId}"]`);
+    if (!element) return;
 
     const updateRect = () => {
-      const container = containerRef.current!
-      const containerRect = container.getBoundingClientRect()
-      const elementRect = element.getBoundingClientRect()
+      const container = containerRef.current!;
+      const containerRect = container.getBoundingClientRect();
+      const elementRect = element.getBoundingClientRect();
 
       // Overlays are outside scroll container, positioned relative to outer wrapper (which has pl-10 = 40px)
       // Container is 40px to the right of the outer wrapper, so add 40 to get correct position
-      setRect(new DOMRect(
-        elementRect.left - containerRect.left + 40,
-        elementRect.top - containerRect.top,
-        elementRect.width,
-        elementRect.height
-      ))
-    }
+      setRect(
+        new DOMRect(
+          elementRect.left - containerRect.left + 40,
+          elementRect.top - containerRect.top,
+          elementRect.width,
+          elementRect.height,
+        ),
+      );
+    };
 
-    updateRect()
+    updateRect();
 
-    const observer = new ResizeObserver(updateRect)
-    observer.observe(element)
+    const observer = new ResizeObserver(updateRect);
+    observer.observe(element);
 
     // Update on scroll to keep position accurate during scrolling
-    const container = containerRef.current
-    container.addEventListener('scroll', updateRect)
+    const container = containerRef.current;
+    container.addEventListener("scroll", updateRect);
 
     return () => {
-      observer.disconnect()
-      container.removeEventListener('scroll', updateRect)
-    }
-  }, [nodeId, containerRef])
+      observer.disconnect();
+      container.removeEventListener("scroll", updateRect);
+    };
+  }, [nodeId, containerRef]);
 
   // Close menu when clicking outside
   useEffect(() => {
-    if (!menuOpen) return
+    if (!menuOpen) return;
 
     const handleClickOutside = (e: MouseEvent) => {
       if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
-        setMenuOpen(false)
+        setMenuOpen(false);
       }
-    }
+    };
 
-    document.addEventListener('mousedown', handleClickOutside)
-    return () => document.removeEventListener('mousedown', handleClickOutside)
-  }, [menuOpen])
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, [menuOpen]);
 
-  if (!rect) return null
+  if (!rect) return null;
 
   return (
     <div
@@ -105,7 +110,7 @@ export function DragHandle({ nodeId, containerRef, onDelete, onHoverChange }: Dr
       onMouseEnter={() => onHoverChange?.(true)}
       onMouseLeave={() => {
         if (!menuOpen) {
-          onHoverChange?.(false)
+          onHoverChange?.(false);
         }
       }}
     >
@@ -115,8 +120,8 @@ export function DragHandle({ nodeId, containerRef, onDelete, onHoverChange }: Dr
           ref={dragRef as any}
           className="size-6 p-0 flex items-center justify-center rounded hover:bg-gray-100 dark:hover:bg-gray-800 cursor-grab active:cursor-grabbing transition-colors"
           onClick={(e) => {
-            e.stopPropagation()
-            setMenuOpen(!menuOpen)
+            e.stopPropagation();
+            setMenuOpen(!menuOpen);
           }}
         >
           <DotsSixVertical className="size-4 text-gray-400" weight="bold" />
@@ -128,9 +133,9 @@ export function DragHandle({ nodeId, containerRef, onDelete, onHoverChange }: Dr
             <button
               className="w-full px-3 py-1.5 text-left text-sm flex items-center gap-2 hover:bg-muted transition-colors text-red-500"
               onClick={(e) => {
-                e.stopPropagation()
-                setMenuOpen(false)
-                onDelete()
+                e.stopPropagation();
+                setMenuOpen(false);
+                onDelete();
               }}
             >
               <Trash className="size-4" />
@@ -140,7 +145,7 @@ export function DragHandle({ nodeId, containerRef, onDelete, onHoverChange }: Dr
         )}
       </div>
     </div>
-  )
+  );
 }
 
 // ============================================================================
@@ -148,13 +153,13 @@ export function DragHandle({ nodeId, containerRef, onDelete, onHoverChange }: Dr
 // ============================================================================
 
 function isDescendantOf(container: HTMLElement, sourceId: string, targetId: string): boolean {
-  const sourceEl = container.querySelector(`[data-node-id="${sourceId}"]`)
-  const targetEl = container.querySelector(`[data-node-id="${targetId}"]`)
+  const sourceEl = container.querySelector(`[data-node-id="${sourceId}"]`);
+  const targetEl = container.querySelector(`[data-node-id="${targetId}"]`);
 
-  if (!sourceEl || !targetEl) return false
+  if (!sourceEl || !targetEl) return false;
 
   // Check if target is inside source (source contains target)
-  return sourceEl.contains(targetEl)
+  return sourceEl.contains(targetEl);
 }
 
 // ============================================================================
@@ -162,124 +167,131 @@ function isDescendantOf(container: HTMLElement, sourceId: string, targetId: stri
 // ============================================================================
 
 interface DropZoneProps {
-  containerRef: React.RefObject<HTMLDivElement | null>
-  onDrop: (nodeId: string, targetId: string, position: 'before' | 'after' | 'inside') => void
+  containerRef: React.RefObject<HTMLDivElement | null>;
+  onDrop: (nodeId: string, targetId: string, position: "before" | "after" | "inside") => void;
 }
 
 export function DropZone({ containerRef, onDrop }: DropZoneProps) {
   const [dropInfo, setDropInfo] = useState<{
-    targetId: string
-    position: 'before' | 'after'
-    rect: DOMRect
-  } | null>(null)
+    targetId: string;
+    position: "before" | "after";
+    rect: DOMRect;
+  } | null>(null);
 
   // Use drag layer to track dragging state globally
   const { isDragging, item } = useDragLayer((monitor) => ({
     isDragging: monitor.isDragging(),
     item: monitor.getItem() as DragItem | null,
-  }))
+  }));
 
   // Set up drop handler
-  const [{ isOver }, dropRef] = useDrop(() => ({
-    accept: ELEMENT_TYPE,
-    hover: (dragItem: DragItem, monitor) => {
-      if (!containerRef.current) return
+  const [{ isOver }, dropRef] = useDrop(
+    () => ({
+      accept: ELEMENT_TYPE,
+      hover: (dragItem: DragItem, monitor) => {
+        if (!containerRef.current) return;
 
-      const clientOffset = monitor.getClientOffset()
-      if (!clientOffset) return
+        const clientOffset = monitor.getClientOffset();
+        if (!clientOffset) return;
 
-      const containerRect = containerRef.current.getBoundingClientRect()
+        const containerRect = containerRef.current.getBoundingClientRect();
 
-      // Raycast approach: get elements at cursor position in z-index order (top first)
-      const elementsAtPoint = document.elementsFromPoint(clientOffset.x, clientOffset.y)
+        // Raycast approach: get elements at cursor position in z-index order (top first)
+        const elementsAtPoint = document.elementsFromPoint(clientOffset.x, clientOffset.y);
 
-      // Find the topmost element with data-node-id that's inside our container
-      let targetElement: Element | null = null
-      for (const el of elementsAtPoint) {
-        if (containerRef.current.contains(el) && el.hasAttribute('data-node-id')) {
-          targetElement = el
-          break
-        }
-      }
-
-      // If cursor is not directly over an element, find closest by Y
-      if (!targetElement) {
-        const elements = containerRef.current.querySelectorAll('[data-node-id]')
-        let closestDistance = Infinity
-
-        elements.forEach((el) => {
-          const elRect = el.getBoundingClientRect()
-          const elMidY = elRect.top + elRect.height / 2
-          const distance = Math.abs(clientOffset.y - elMidY)
-          if (distance < closestDistance) {
-            closestDistance = distance
-            targetElement = el
+        // Find the topmost element with data-node-id that's inside our container
+        let targetElement: Element | null = null;
+        for (const el of elementsAtPoint) {
+          if (containerRef.current.contains(el) && el.hasAttribute("data-node-id")) {
+            targetElement = el;
+            break;
           }
-        })
-      }
-
-      if (targetElement) {
-        const targetId = targetElement.getAttribute('data-node-id')!
-
-        // Don't allow dropping on self
-        if (targetId === dragItem.nodeId) {
-          setDropInfo(null)
-          return
         }
 
-        // Don't allow dropping a parent into its own descendant (would create cycle)
-        if (isDescendantOf(containerRef.current, dragItem.nodeId, targetId)) {
-          setDropInfo(null)
-          return
+        // If cursor is not directly over an element, find closest by Y
+        if (!targetElement) {
+          const elements = containerRef.current.querySelectorAll("[data-node-id]");
+          let closestDistance = Infinity;
+
+          elements.forEach((el) => {
+            const elRect = el.getBoundingClientRect();
+            const elMidY = elRect.top + elRect.height / 2;
+            const distance = Math.abs(clientOffset.y - elMidY);
+            if (distance < closestDistance) {
+              closestDistance = distance;
+              targetElement = el;
+            }
+          });
         }
 
-        const elRect = targetElement.getBoundingClientRect()
-        const elMidY = elRect.top + elRect.height / 2
-        const position: 'before' | 'after' = clientOffset.y < elMidY ? 'before' : 'after'
+        if (targetElement) {
+          const targetId = targetElement.getAttribute("data-node-id")!;
 
-        // Overlays are outside scroll container, add 40px for pl-10 offset
-        setDropInfo({
-          targetId,
-          position,
-          rect: new DOMRect(
-            elRect.left - containerRect.left + 40,
-            position === 'before'
-              ? elRect.top - containerRect.top
-              : elRect.bottom - containerRect.top,
-            elRect.width,
-            2
-          ),
-        })
-      }
-    },
-    drop: (dragItem: DragItem) => {
-      if (dropInfo) {
-        console.log('[DropZone] Drop:', { nodeId: dragItem.nodeId, targetId: dropInfo.targetId, position: dropInfo.position })
-        onDrop(dragItem.nodeId, dropInfo.targetId, dropInfo.position)
-      }
-      setDropInfo(null)
-    },
-    collect: (monitor) => ({
-      isOver: monitor.isOver(),
+          // Don't allow dropping on self
+          if (targetId === dragItem.nodeId) {
+            setDropInfo(null);
+            return;
+          }
+
+          // Don't allow dropping a parent into its own descendant (would create cycle)
+          if (isDescendantOf(containerRef.current, dragItem.nodeId, targetId)) {
+            setDropInfo(null);
+            return;
+          }
+
+          const elRect = targetElement.getBoundingClientRect();
+          const elMidY = elRect.top + elRect.height / 2;
+          const position: "before" | "after" = clientOffset.y < elMidY ? "before" : "after";
+
+          // Overlays are outside scroll container, add 40px for pl-10 offset
+          setDropInfo({
+            targetId,
+            position,
+            rect: new DOMRect(
+              elRect.left - containerRect.left + 40,
+              position === "before"
+                ? elRect.top - containerRect.top
+                : elRect.bottom - containerRect.top,
+              elRect.width,
+              2,
+            ),
+          });
+        }
+      },
+      drop: (dragItem: DragItem) => {
+        if (dropInfo) {
+          console.log("[DropZone] Drop:", {
+            nodeId: dragItem.nodeId,
+            targetId: dropInfo.targetId,
+            position: dropInfo.position,
+          });
+          onDrop(dragItem.nodeId, dropInfo.targetId, dropInfo.position);
+        }
+        setDropInfo(null);
+      },
+      collect: (monitor) => ({
+        isOver: monitor.isOver(),
+      }),
     }),
-  }), [containerRef, dropInfo, onDrop])
+    [containerRef, dropInfo, onDrop],
+  );
 
   // Attach drop ref to container when it changes
   useEffect(() => {
     if (containerRef.current) {
-      dropRef(containerRef.current)
+      dropRef(containerRef.current);
     }
-  }, [dropRef, containerRef.current])
+  }, [dropRef, containerRef.current]);
 
   // Clear drop info when not over
   useEffect(() => {
     if (!isOver) {
-      setDropInfo(null)
+      setDropInfo(null);
     }
-  }, [isOver])
+  }, [isOver]);
 
   // Only show indicator when dragging and over
-  if (!isDragging || !isOver || !dropInfo) return null
+  if (!isDragging || !isOver || !dropInfo) return null;
 
   return (
     <div
@@ -289,10 +301,10 @@ export function DropZone({ containerRef, onDrop }: DropZoneProps) {
         top: dropInfo.rect.y - 1,
         width: dropInfo.rect.width,
         height: 3,
-        boxShadow: '0 0 4px rgba(59, 130, 246, 0.5)',
+        boxShadow: "0 0 4px rgba(59, 130, 246, 0.5)",
       }}
     />
-  )
+  );
 }
 
 // ============================================================================
@@ -300,56 +312,54 @@ export function DropZone({ containerRef, onDrop }: DropZoneProps) {
 // ============================================================================
 
 interface NodeHighlightProps {
-  nodeId: string
-  containerRef: React.RefObject<HTMLDivElement | null>
-  mode: 'hover' | 'select' | 'editing'
+  nodeId: string;
+  containerRef: React.RefObject<HTMLDivElement | null>;
+  mode: "hover" | "select" | "editing";
 }
 
-export function NodeHighlight({
-  nodeId,
-  containerRef,
-  mode,
-}: NodeHighlightProps) {
-  const [rect, setRect] = useState<DOMRect | null>(null)
+export function NodeHighlight({ nodeId, containerRef, mode }: NodeHighlightProps) {
+  const [rect, setRect] = useState<DOMRect | null>(null);
 
   useEffect(() => {
-    if (!containerRef.current) return
+    if (!containerRef.current) return;
 
-    const element = containerRef.current.querySelector(`[data-node-id="${nodeId}"]`)
-    if (!element) return
+    const element = containerRef.current.querySelector(`[data-node-id="${nodeId}"]`);
+    if (!element) return;
 
     const updateRect = () => {
-      const container = containerRef.current!
-      const containerRect = container.getBoundingClientRect()
-      const elementRect = element.getBoundingClientRect()
+      const container = containerRef.current!;
+      const containerRect = container.getBoundingClientRect();
+      const elementRect = element.getBoundingClientRect();
 
       // Overlays are outside scroll container, add 40px for pl-10 offset
-      setRect(new DOMRect(
-        elementRect.left - containerRect.left + 40,
-        elementRect.top - containerRect.top,
-        elementRect.width,
-        elementRect.height
-      ))
-    }
+      setRect(
+        new DOMRect(
+          elementRect.left - containerRect.left + 40,
+          elementRect.top - containerRect.top,
+          elementRect.width,
+          elementRect.height,
+        ),
+      );
+    };
 
-    updateRect()
+    updateRect();
 
     // Update on scroll/resize to keep position accurate
-    const observer = new ResizeObserver(updateRect)
-    observer.observe(element)
+    const observer = new ResizeObserver(updateRect);
+    observer.observe(element);
 
-    const container = containerRef.current
-    container.addEventListener('scroll', updateRect)
+    const container = containerRef.current;
+    container.addEventListener("scroll", updateRect);
 
     return () => {
-      observer.disconnect()
-      container.removeEventListener('scroll', updateRect)
-    }
-  }, [nodeId, containerRef])
+      observer.disconnect();
+      container.removeEventListener("scroll", updateRect);
+    };
+  }, [nodeId, containerRef]);
 
-  if (!rect) return null
+  if (!rect) return null;
 
-  if (mode === 'hover') {
+  if (mode === "hover") {
     // Subtle full overlay on hover
     return (
       <div
@@ -359,15 +369,15 @@ export function NodeHighlight({
           top: rect.y,
           width: rect.width,
           height: rect.height,
-          backgroundColor: 'rgba(0, 0, 0, 0.03)',
+          backgroundColor: "rgba(0, 0, 0, 0.03)",
         }}
       />
-    )
+    );
   }
 
-  if (mode === 'editing') {
+  if (mode === "editing") {
     // No visual indicator when editing - cursor in text is enough
-    return null
+    return null;
   }
 
   // Selection: small left border (Notion-style)
@@ -379,9 +389,9 @@ export function NodeHighlight({
         top: rect.y,
         width: 3,
         height: rect.height,
-        backgroundColor: 'rgba(59, 130, 246, 0.6)',
+        backgroundColor: "rgba(59, 130, 246, 0.6)",
         borderRadius: 2,
       }}
     />
-  )
+  );
 }

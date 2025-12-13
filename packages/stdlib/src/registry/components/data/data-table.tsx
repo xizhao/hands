@@ -1,5 +1,5 @@
 /** @jsxImportSource react */
-import * as React from "react";
+import type * as React from "react";
 import { cn } from "../../../lib/utils.js";
 
 export interface DataTableColumn<T> {
@@ -48,7 +48,7 @@ export function DataTable<T extends Record<string, unknown>>({
                   "px-4 py-3 font-medium text-muted-foreground",
                   col.align === "center" && "text-center",
                   col.align === "right" && "text-right",
-                  !col.align && "text-left"
+                  !col.align && "text-left",
                 )}
                 style={{ width: col.width }}
               >
@@ -60,10 +60,7 @@ export function DataTable<T extends Record<string, unknown>>({
         <tbody>
           {data.length === 0 ? (
             <tr>
-              <td
-                colSpan={columns.length}
-                className="px-4 py-8 text-center text-muted-foreground"
-              >
+              <td colSpan={columns.length} className="px-4 py-8 text-center text-muted-foreground">
                 {emptyMessage}
               </td>
             </tr>
@@ -78,7 +75,7 @@ export function DataTable<T extends Record<string, unknown>>({
                       className={cn(
                         "px-4 py-3",
                         col.align === "center" && "text-center",
-                        col.align === "right" && "text-right"
+                        col.align === "right" && "text-right",
                       )}
                     >
                       {col.render ? col.render(value, row) : String(value ?? "")}

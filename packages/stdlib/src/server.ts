@@ -7,11 +7,10 @@
  * Import like: import { Button, BarChart } from "@hands/stdlib/server"
  */
 
-// Core types
-export * from "./types/index.js"
-
-// Source utilities
-export { defineSource } from "./sources/types.js"
-
 // All components and registry utilities from single source of truth
-export * from "./registry/index.js"
+export * from "./registry/index.js";
+
+// Source utilities (v2 - table containers)
+export { defineSourceV2 } from "./sources/types.js";
+// Core types
+export * from "./types/index.js";

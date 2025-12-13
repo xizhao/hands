@@ -1,49 +1,67 @@
-import React, { useState, useCallback, useRef, useEffect } from 'react'
-import { useEditor, PlateVisualEditor } from '../src'
-import { useRsc } from '../src/rsc'
-import { simpleBlockSource, cardBlockSource, dataBlockSource, chartBlockSource } from './fixtures/simple-block'
-import { CodeEditor } from './components/CodeEditor'
-import { cn } from './lib/utils'
+import { useCallback, useEffect, useRef, useState } from "react";
+import { PlateVisualEditor, useEditor } from "../src";
+import { useRsc } from "../src/rsc";
+import { CodeEditor } from "./components/CodeEditor";
+import {
+  cardBlockSource,
+  chartBlockSource,
+  dataBlockSource,
+  simpleBlockSource,
+} from "./fixtures/simple-block";
+import { cn } from "./lib/utils";
 
 const FIXTURES = {
-  simple: { label: 'Simple Block', source: simpleBlockSource },
-  card: { label: 'Card Block', source: cardBlockSource },
-  data: { label: 'Data Block', source: dataBlockSource },
-  chart: { label: 'Chart Block', source: chartBlockSource },
-}
+  simple: { label: "Simple Block", source: simpleBlockSource },
+  card: { label: "Card Block", source: cardBlockSource },
+  data: { label: "Data Block", source: dataBlockSource },
+  chart: { label: "Chart Block", source: chartBlockSource },
+};
 
 export function App() {
-  const [fixture, setFixture] = useState<keyof typeof FIXTURES>('simple')
-  const editor = useEditor(FIXTURES[fixture].source)
-  const { init, ready } = useRsc()
+  const [fixture, setFixture] = useState<keyof typeof FIXTURES>("simple");
+  const editor = useEditor(FIXTURES[fixture].source);
+  const { init, ready } = useRsc();
 
   // Initialize RSC on mount
   useEffect(() => {
     init().then((success) => {
-      console.log('[App] RSC context initialized:', success)
-    })
-  }, [init])
+      console.log("[App] RSC context initialized:", success);
+    });
+  }, [init]);
 
-  const sourceRef = useRef<'plate' | 'code' | null>(null)
+  const sourceRef = useRef<"plate" | "code" | null>(null);
 
-  const handleFixtureChange = useCallback((newFixture: keyof typeof FIXTURES) => {
-    setFixture(newFixture)
-    editor.setSource(FIXTURES[newFixture].source)
-  }, [editor])
+  const handleFixtureChange = useCallback(
+    (newFixture: keyof typeof FIXTURES) => {
+      setFixture(newFixture);
+      editor.setSource(FIXTURES[newFixture].source);
+    },
+    [editor],
+  );
 
-  const handlePlateSourceChange = useCallback((newSource: string) => {
-    if (sourceRef.current === 'code') return
-    sourceRef.current = 'plate'
-    editor.setSource(newSource)
-    setTimeout(() => { sourceRef.current = null }, 0)
-  }, [editor])
+  const handlePlateSourceChange = useCallback(
+    (newSource: string) => {
+      if (sourceRef.current === "code") return;
+      sourceRef.current = "plate";
+      editor.setSource(newSource);
+      setTimeout(() => {
+        sourceRef.current = null;
+      }, 0);
+    },
+    [editor],
+  );
 
-  const handleCodeSourceChange = useCallback((newSource: string) => {
-    if (sourceRef.current === 'plate') return
-    sourceRef.current = 'code'
-    editor.setSource(newSource)
-    setTimeout(() => { sourceRef.current = null }, 0)
-  }, [editor])
+  const handleCodeSourceChange = useCallback(
+    (newSource: string) => {
+      if (sourceRef.current === "plate") return;
+      sourceRef.current = "code";
+      editor.setSource(newSource);
+      setTimeout(() => {
+        sourceRef.current = null;
+      }, 0);
+    },
+    [editor],
+  );
 
   return (
     <div className="dark flex h-screen bg-background text-foreground">
@@ -64,17 +82,16 @@ export function App() {
               key={key}
               onClick={() => handleFixtureChange(key)}
               className={cn(
-                'w-full text-left px-3 py-2 rounded-md text-sm transition-colors',
+                "w-full text-left px-3 py-2 rounded-md text-sm transition-colors",
                 fixture === key
-                  ? 'bg-accent text-accent-foreground font-medium'
-                  : 'text-muted-foreground hover:bg-accent/50 hover:text-foreground'
+                  ? "bg-accent text-accent-foreground font-medium"
+                  : "text-muted-foreground hover:bg-accent/50 hover:text-foreground",
               )}
             >
               {FIXTURES[key].label}
             </button>
           ))}
         </nav>
-
       </aside>
 
       {/* Main Content */}
@@ -83,10 +100,7 @@ export function App() {
         {editor.state.error && (
           <div className="flex items-center justify-between px-4 py-2 bg-destructive/20 border-b border-destructive/30 text-destructive-foreground">
             <span className="text-sm">Error: {editor.state.error}</span>
-            <button
-              onClick={editor.clearError}
-              className="text-sm hover:underline"
-            >
+            <button onClick={editor.clearError} className="text-sm hover:underline">
               Dismiss
             </button>
           </div>
@@ -109,16 +123,13 @@ export function App() {
           <div className="flex flex-col overflow-hidden">
             <PanelHeader title="Source Code" badge="TypeScript" />
             <div className="flex-1 overflow-hidden">
-              <CodeEditor
-                source={editor.state.source}
-                onChange={handleCodeSourceChange}
-              />
+              <CodeEditor source={editor.state.source} onChange={handleCodeSourceChange} />
             </div>
           </div>
         </div>
       </main>
     </div>
-  )
+  );
 }
 
 function PanelHeader({ title, badge }: { title: string; badge?: string }) {
@@ -131,5 +142,5 @@ function PanelHeader({ title, badge }: { title: string; badge?: string }) {
         </span>
       )}
     </div>
-  )
+  );
 }

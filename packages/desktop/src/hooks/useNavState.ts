@@ -35,27 +35,27 @@ export function useRightPanel() {
   const setPanel = useCallback(
     (newPanel: RightPanelId) => {
       navigate({
-        search: (prev: NavSearchParams) => ({
+        search: ((prev: NavSearchParams) => ({
           ...prev,
           panel: newPanel ?? undefined,
-        }),
+        })) as never,
         replace: true,
       });
     },
-    [navigate]
+    [navigate],
   );
 
   const togglePanel = useCallback(
     (targetPanel: Exclude<RightPanelId, null>) => {
       navigate({
-        search: (prev: NavSearchParams) => ({
+        search: ((prev: NavSearchParams) => ({
           ...prev,
           panel: prev.panel === targetPanel ? undefined : targetPanel,
-        }),
+        })) as never,
         replace: true,
       });
     },
-    [navigate]
+    [navigate],
   );
 
   return { panel, setPanel, togglePanel };
@@ -70,14 +70,14 @@ export function useActiveTab() {
   const setTab = useCallback(
     (newTab: TabId) => {
       navigate({
-        search: (prev: NavSearchParams) => ({
+        search: ((prev: NavSearchParams) => ({
           ...prev,
           tab: newTab === "preview" ? undefined : newTab,
-        }),
+        })) as never,
         replace: true,
       });
     },
-    [navigate]
+    [navigate],
   );
 
   return { tab, setTab };
@@ -92,14 +92,14 @@ export function useActiveSession() {
   const setSession = useCallback(
     (newSessionId: string | null) => {
       navigate({
-        search: (prev: NavSearchParams) => ({
+        search: ((prev: NavSearchParams) => ({
           ...prev,
           session: newSessionId ?? undefined,
-        }),
+        })) as never,
         replace: true,
       });
     },
-    [navigate]
+    [navigate],
   );
 
   return { sessionId, setSession };

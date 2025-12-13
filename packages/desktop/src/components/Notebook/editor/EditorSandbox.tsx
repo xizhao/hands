@@ -7,16 +7,15 @@
  * If the editor isn't ready, we poll the runtime until it is (or timeout).
  */
 
-import { useCallback, useEffect, useRef, useState } from "react";
 import { AlertTriangle, RefreshCw } from "lucide-react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { useRuntimePort } from "@/hooks/useWorkbook";
 import { cn } from "@/lib/utils";
-import { toast } from "sonner";
-import { useAlertsStore } from "@/stores/alerts";
 
 // Editor error event types (must match packages/editor/src/overlay/errors.ts)
-type EditorErrorCategory = 'http' | 'runtime' | 'mutation';
+type EditorErrorCategory = "http" | "runtime" | "mutation";
 
 interface EditorError {
   id: string;
@@ -31,20 +30,19 @@ interface EditorError {
 }
 
 interface EditorErrorEvent {
-  type: 'editor-error';
+  type: "editor-error";
   category: EditorErrorCategory;
   error: EditorError;
 }
 
 function isEditorErrorEvent(msg: unknown): msg is EditorErrorEvent {
   return (
-    typeof msg === 'object' &&
+    typeof msg === "object" &&
     msg !== null &&
-    (msg as EditorErrorEvent).type === 'editor-error' &&
-    typeof (msg as EditorErrorEvent).error === 'object'
+    (msg as EditorErrorEvent).type === "editor-error" &&
+    typeof (msg as EditorErrorEvent).error === "object"
   );
 }
-
 
 type SandboxState = "loading" | "waiting" | "ready" | "error";
 
@@ -54,11 +52,7 @@ interface EditorSandboxProps {
   readOnly?: boolean;
 }
 
-export function EditorSandbox({
-  blockId,
-  className,
-  readOnly = false,
-}: EditorSandboxProps) {
+export function EditorSandbox({ blockId, className, readOnly = false }: EditorSandboxProps) {
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const [state, setState] = useState<SandboxState>("waiting");
   const [error, setError] = useState<string | null>(null);
@@ -109,63 +103,96 @@ export function EditorSandbox({
     };
 
     poll();
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, [runtimePort, editorReady]);
 
   // Build iframe URL - load directly from editor Vite for proper module resolution
   // Vite needs to serve its own assets (/@vite, /src, /@react-refresh, etc.)
-  const iframeSrc = editorPort && editorReady
-    ? `http://localhost:${editorPort}/sandbox.html?blockId=${encodeURIComponent(blockId)}&runtimePort=${runtimePort}&readOnly=${readOnly}`
-    : null;
+  const iframeSrc =
+    editorPort && editorReady
+      ? `http://localhost:${editorPort}/sandbox.html?blockId=${encodeURIComponent(blockId)}&runtimePort=${runtimePort}&readOnly=${readOnly}`
+      : null;
 
   // Generate CSS to inject into iframe - copy ALL CSS variables
   const generateStyles = useCallback(() => {
     const root = document.documentElement;
-    const isDark = root.classList.contains('dark');
+    const isDark = root.classList.contains("dark");
 
     // All the CSS variables we need to pass
     const allVars = [
       // Theme colors (from theme.ts)
-      'background', 'foreground', 'card', 'card-foreground', 'popover', 'popover-foreground',
-      'primary', 'primary-foreground', 'secondary', 'secondary-foreground',
-      'muted', 'muted-foreground', 'accent', 'accent-foreground',
-      'destructive', 'destructive-foreground', 'border', 'input', 'ring',
+      "background",
+      "foreground",
+      "card",
+      "card-foreground",
+      "popover",
+      "popover-foreground",
+      "primary",
+      "primary-foreground",
+      "secondary",
+      "secondary-foreground",
+      "muted",
+      "muted-foreground",
+      "accent",
+      "accent-foreground",
+      "destructive",
+      "destructive-foreground",
+      "border",
+      "input",
+      "ring",
       // Additional vars from index.css
-      'radius', 'chart-1', 'chart-2', 'chart-3', 'chart-4', 'chart-5', 'brand', 'highlight',
+      "radius",
+      "chart-1",
+      "chart-2",
+      "chart-3",
+      "chart-4",
+      "chart-5",
+      "brand",
+      "highlight",
       // Sidebar vars if they exist
-      'sidebar-background', 'sidebar-foreground', 'sidebar-primary', 'sidebar-primary-foreground',
-      'sidebar-accent', 'sidebar-accent-foreground', 'sidebar-border', 'sidebar-ring'
+      "sidebar-background",
+      "sidebar-foreground",
+      "sidebar-primary",
+      "sidebar-primary-foreground",
+      "sidebar-accent",
+      "sidebar-accent-foreground",
+      "sidebar-border",
+      "sidebar-ring",
     ];
 
     // Get computed values for all vars
     const computedStyle = getComputedStyle(root);
     const cssVars = allVars
-      .map(v => {
+      .map((v) => {
         const value = computedStyle.getPropertyValue(`--${v}`).trim();
         return value ? `--${v}:${value}` : null;
       })
       .filter(Boolean)
-      .join(';');
+      .join(";");
 
     // Build complete CSS
-    return `:root{${cssVars}}` +
-      (isDark ? 'html{color-scheme:dark}' : 'html{color-scheme:light}') +
-      'html,body{background:transparent}' +
-      '#root{padding-bottom:80px}'; // Room for floating chatbar overlay
+    return (
+      `:root{${cssVars}}` +
+      (isDark ? "html{color-scheme:dark}" : "html{color-scheme:light}") +
+      "html,body{background:transparent}" +
+      "#root{padding-bottom:80px}"
+    ); // Room for floating chatbar overlay
   }, []);
 
   // Send styles to iframe
   const sendStyles = useCallback(() => {
     if (!iframeRef.current?.contentWindow) return;
     const css = generateStyles();
-    iframeRef.current.contentWindow.postMessage({ type: 'styles', css }, '*');
+    iframeRef.current.contentWindow.postMessage({ type: "styles", css }, "*");
   }, [generateStyles]);
 
   // Listen for sandbox ready signal and editor errors
   useEffect(() => {
     const handleMessage = (e: MessageEvent) => {
-      if (e.data?.type === 'sandbox-ready') {
-        console.log('[EditorSandbox] Sandbox ready, sending styles');
+      if (e.data?.type === "sandbox-ready") {
+        console.log("[EditorSandbox] Sandbox ready, sending styles");
         sendStyles();
         setState("ready");
       }
@@ -173,33 +200,28 @@ export function EditorSandbox({
       // Handle editor errors from iframe
       if (isEditorErrorEvent(e.data)) {
         const { error } = e.data;
-        console.log('[EditorSandbox] Received error from editor:', error.category, error.message);
+        console.log("[EditorSandbox] Received error from editor:", error.category, error.message);
 
         // HTTP and mutation errors show as Sonner toasts
-        if (error.category === 'http' || error.category === 'mutation') {
+        if (error.category === "http" || error.category === "mutation") {
           toast.error(error.message, {
             description: error.details || error.operation,
             duration: 5000,
           });
         }
 
-        // Runtime errors go to the alerts store
-        if (error.category === 'runtime') {
-          console.error('[EditorSandbox] Runtime error in editor:', error.message, error.stack);
-          useAlertsStore.getState().addAlert({
-            id: error.id,
-            category: error.category,
-            message: error.message,
-            details: error.details,
-            stack: error.stack,
-            blockId: error.blockId,
-            timestamp: error.timestamp,
+        // Runtime errors show as toasts (previously went to alerts store)
+        if (error.category === "runtime") {
+          console.error("[EditorSandbox] Runtime error in editor:", error.message, error.stack);
+          toast.error(error.message, {
+            description: error.details || error.stack?.split("\n")[0],
+            duration: 8000,
           });
         }
       }
     };
-    window.addEventListener('message', handleMessage);
-    return () => window.removeEventListener('message', handleMessage);
+    window.addEventListener("message", handleMessage);
+    return () => window.removeEventListener("message", handleMessage);
   }, [sendStyles]);
 
   // Handle iframe load - also try sending styles (fallback)
@@ -207,7 +229,7 @@ export function EditorSandbox({
     // Sandbox should send 'sandbox-ready' but also try after a delay as fallback
     setTimeout(() => {
       if (state === "loading") {
-        console.log('[EditorSandbox] Fallback: sending styles after timeout');
+        console.log("[EditorSandbox] Fallback: sending styles after timeout");
         sendStyles();
         setState("ready");
       }
@@ -222,7 +244,10 @@ export function EditorSandbox({
       sendStyles();
     });
 
-    observer.observe(document.documentElement, { attributes: true, attributeFilter: ['class', 'style'] });
+    observer.observe(document.documentElement, {
+      attributes: true,
+      attributeFilter: ["class", "style"],
+    });
     return () => observer.disconnect();
   }, [state, sendStyles]);
 
@@ -230,7 +255,7 @@ export function EditorSandbox({
   const handleIframeError = useCallback(() => {
     setState("error");
     setError(
-      "Could not connect to editor. The runtime should start the editor automatically. Check the runtime logs for errors."
+      "Could not connect to editor. The runtime should start the editor automatically. Check the runtime logs for errors.",
     );
   }, []);
 
@@ -289,13 +314,16 @@ export function EditorSandbox({
   // Error state
   if (state === "error") {
     return (
-      <div className={cn("flex flex-col items-center justify-center h-full bg-background gap-4", className)}>
+      <div
+        className={cn(
+          "flex flex-col items-center justify-center h-full bg-background gap-4",
+          className,
+        )}
+      >
         <AlertTriangle className="h-8 w-8 text-destructive" />
         <div className="text-center">
           <p className="text-sm font-medium text-foreground">Editor Error</p>
-          <p className="text-xs text-muted-foreground mt-1 whitespace-pre-line max-w-md">
-            {error}
-          </p>
+          <p className="text-xs text-muted-foreground mt-1 whitespace-pre-line max-w-md">{error}</p>
         </div>
         {crashCount < 3 && (
           <Button variant="outline" size="xs" onClick={handleRetry}>
@@ -331,7 +359,7 @@ export function EditorSandbox({
         src={iframeSrc!}
         className={cn(
           "w-full h-full border-0 transition-opacity duration-75",
-          state === "ready" ? "opacity-100" : "opacity-0"
+          state === "ready" ? "opacity-100" : "opacity-0",
         )}
         sandbox="allow-scripts allow-same-origin"
         onLoad={handleIframeLoad}

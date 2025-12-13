@@ -2,12 +2,12 @@
  * RSC Types
  */
 
-import type { ReactNode } from 'react'
+import type { ReactNode } from "react";
 
 /** RSC render result */
 export interface RscRenderResult {
-  element: ReactNode | null
-  error?: string
+  element: ReactNode | null;
+  error?: string;
 }
 
 /** RSC context configuration */
@@ -17,21 +17,21 @@ export interface RscConfig {
    * - 55000: Runtime API (recommended, proxies /rsc/* to Vite worker)
    * - 55200: Vite worker directly (for debugging)
    */
-  port: number
+  port: number;
   /** Whether RSC is enabled */
-  enabled: boolean
+  enabled: boolean;
   /** Base URL override (default: http://localhost:{port}) */
-  baseUrl?: string
+  baseUrl?: string;
 }
 
 /** Component render request */
 export interface RscComponentRequest {
   /** Component tag name (e.g., "Card", "Button") */
-  tagName: string
+  tagName: string;
   /** Component props */
-  props: Record<string, unknown>
+  props: Record<string, unknown>;
   /** Children JSX (serialized) */
-  children?: string
+  children?: string;
   /** Unique element ID from AST */
-  elementId?: string
+  elementId?: string;
 }

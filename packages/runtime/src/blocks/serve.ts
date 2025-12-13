@@ -4,28 +4,27 @@
  * Renders blocks and returns HTML.
  */
 
-import * as React from "react"
-import { renderToString } from "react-dom/server"
-import type { BlockFn, BlockContext, BlockRenderResult } from "@hands/stdlib"
-import { BlockRegistry } from "./registry.js"
+import type { BlockContext, BlockRenderResult } from "@hands/stdlib";
+import { renderToString } from "react-dom/server";
+import type { BlockRegistry } from "./registry.js";
 
 export interface BlockServeOptions {
   /** Block registry */
-  registry: BlockRegistry
+  registry: BlockRegistry;
 
   /** Block context */
-  context: BlockContext
+  context: BlockContext;
 
   /** Block ID */
-  blockId: string
+  blockId: string;
 
   /** Props to pass to the block */
-  props?: Record<string, unknown>
+  props?: Record<string, unknown>;
 }
 
 export interface BlockServeResult extends BlockRenderResult {
   /** Time to render in milliseconds */
-  renderTime: number
+  renderTime: number;
 }
 
 /**
@@ -34,12 +33,12 @@ export interface BlockServeResult extends BlockRenderResult {
  * @param options - Serve options
  */
 export async function serveBlock(options: BlockServeOptions): Promise<BlockServeResult> {
-  const { registry, context, blockId, props = {} } = options
-  const startTime = performance.now()
+  const { registry, context, blockId, props = {} } = options;
+  const startTime = performance.now();
 
   try {
     // Get block from registry
-    const block = registry.get(blockId)
+    const block = registry.get(blockId);
 
     if (!block) {
       return {
@@ -47,11 +46,11 @@ export async function serveBlock(options: BlockServeOptions): Promise<BlockServe
         blockId,
         error: `Block not found: ${blockId}`,
         renderTime: performance.now() - startTime,
-      }
+      };
     }
 
     // Load the block module
-    const { default: BlockFn } = await block.load()
+    const { default: BlockFn } = await block.load();
 
     if (typeof BlockFn !== "function") {
       return {
@@ -59,26 +58,26 @@ export async function serveBlock(options: BlockServeOptions): Promise<BlockServe
         blockId,
         error: `Block ${blockId} does not export a function`,
         renderTime: performance.now() - startTime,
-      }
+      };
     }
 
     // Render the block (ctx is passed inside props now)
-    const element = await BlockFn({ ...props, ctx: context })
-    const html = renderToString(element)
+    const element = await BlockFn({ ...props, ctx: context });
+    const html = renderToString(element);
 
     return {
       html,
       blockId,
       renderTime: performance.now() - startTime,
-    }
+    };
   } catch (err) {
-    const error = err instanceof Error ? err.message : String(err)
+    const error = err instanceof Error ? err.message : String(err);
     return {
       html: renderError(error),
       blockId,
       error,
       renderTime: performance.now() - startTime,
-    }
+    };
   }
 }
 
@@ -86,7 +85,7 @@ export async function serveBlock(options: BlockServeOptions): Promise<BlockServe
  * Render an error message as HTML (inline, no container styling)
  */
 function renderError(message: string): string {
-  return `<span style="color:#dc2626">${escapeHtml(message)}</span>`
+  return `<span style="color:#dc2626">${escapeHtml(message)}</span>`;
 }
 
 /**
@@ -98,6 +97,5 @@ function escapeHtml(text: string): string {
     .replace(/</g, "&lt;")
     .replace(/>/g, "&gt;")
     .replace(/"/g, "&quot;")
-    .replace(/'/g, "&#039;")
+    .replace(/'/g, "&#039;");
 }
-

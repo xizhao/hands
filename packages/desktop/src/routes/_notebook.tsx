@@ -1,19 +1,18 @@
 import { createFileRoute, Outlet, useNavigate } from "@tanstack/react-router";
 import { useEffect, useRef } from "react";
-import {
-  useWorkbooks,
-  useCreateWorkbook,
-  useOpenWorkbook,
-  useActiveRuntime,
-  usePrefetchRuntimeData,
-} from "@/hooks/useWorkbook";
-import { useActiveSession } from "@/hooks/useNavState";
-import { useSessions } from "@/hooks/useSession";
-import { startSSESync, setNavigateCallback } from "@/lib/sse";
 import { queryClient } from "@/App";
-
 import { NotebookShell } from "@/components/Notebook/NotebookShell";
 import type { NavSearchParams } from "@/hooks/useNavState";
+import { useActiveSession } from "@/hooks/useNavState";
+import { useSessions } from "@/hooks/useSession";
+import {
+  useActiveRuntime,
+  useCreateWorkbook,
+  useOpenWorkbook,
+  usePrefetchRuntimeData,
+  useWorkbooks,
+} from "@/hooks/useWorkbook";
+import { setNavigateCallback, startSSESync } from "@/lib/sse";
 
 export const Route = createFileRoute("/_notebook")({
   component: NotebookLayout,
@@ -26,7 +25,7 @@ export const Route = createFileRoute("/_notebook")({
 
 function NotebookLayout() {
   const navigate = useNavigate();
-  const { data: activeRuntime } = useActiveRuntime();
+  const { data: activeRuntime, isLoading: runtimeLoading } = useActiveRuntime();
   const { sessionId: activeSessionId, setSession: setActiveSession } = useActiveSession();
 
   // Prefetch critical runtime data (schema, etc.) as soon as runtime connects
@@ -97,7 +96,7 @@ function NotebookLayout() {
             initialized.current = true;
             initializingRef.current = false;
           },
-        }
+        },
       );
     }
   }, [workbooks, workbooksLoading, activeRuntime, createWorkbook, openWorkbook]);

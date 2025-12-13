@@ -4,45 +4,49 @@
  * Exports the visual editor and related utilities for use in applications.
  */
 
-// Main editor component
-export { PlateVisualEditor } from './PlateVisualEditor'
+export { plateValueToSource, sourceToPlateValue } from "./converters";
 
 // Editor kit (plugins configuration)
-export { EditorKit } from './editor-kit'
-
-// Converters
-export { sourceToPlateValueSurgical, applyPlateChangesToSource, syncIdsFromSource } from './surgical-converters'
-export { sourceToPlateValue, plateValueToSource } from './converters'
-
+export { EditorKit } from "./editor-kit";
+// Main editor component
+export { PlateVisualEditor } from "./PlateVisualEditor";
 // Element components
 export {
-  ParagraphElement,
+  BlockquoteElement,
   H1Element,
   H2Element,
   H3Element,
-  BlockquoteElement,
   HrElement,
-} from './plate-elements'
-
+  ParagraphElement,
+} from "./plate-elements";
+export { BlockSelectionKit } from "./plugins/block-selection-kit";
+export { DndKit } from "./plugins/dnd-kit";
 // Plugins
-export { ElementPlugin, elementFallbackRenderer } from './plugins/element-plugin'
-export { SourceSyncPlugin, initSourceSync, updateSourceExternal } from './plugins/source-sync-plugin'
-export { DndKit } from './plugins/dnd-kit'
-export { BlockSelectionKit } from './plugins/block-selection-kit'
-export { SlashKit } from './plugins/slash-kit'
-
-// UI Components
-export { BlockDraggable } from './ui/block-draggable'
-export { BlockSelection } from './ui/block-selection'
-export { SlashInputElement } from './ui/slash-menu'
-export { Button } from './ui/button'
-
 // Utilities from element-plugin
 export {
+  ElementPlugin,
+  elementFallbackRenderer,
+  HTML_ELEMENTS,
+  HTML_VOID_TAGS,
   isCustomComponent,
   isStdlibComponent,
-  shouldBeVoid,
-  HTML_VOID_TAGS,
-  HTML_ELEMENTS,
   STDLIB_COMPONENTS,
-} from './plugins/element-plugin'
+  shouldBeVoid,
+} from "./plugins/element-plugin";
+export { SlashKit } from "./plugins/slash-kit";
+export {
+  initSourceSync,
+  SourceSyncPlugin,
+  updateSourceExternal,
+} from "./plugins/source-sync-plugin";
+// Converters
+export {
+  applyPlateChangesToSource,
+  sourceToPlateValueSurgical,
+  syncIdsFromSource,
+} from "./surgical-converters";
+// UI Components
+export { BlockDraggable } from "./ui/block-draggable";
+export { BlockSelection } from "./ui/block-selection";
+export { Button } from "./ui/button";
+export { SlashInputElement } from "./ui/slash-menu";

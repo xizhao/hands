@@ -1,9 +1,9 @@
-import { WorkbookEditor } from "../editor/WorkbookEditor";
+import { EditorSandbox } from "../editor/EditorSandbox";
 
 export function PreviewPanel() {
   return (
     <div className="h-full flex flex-col">
-      <WorkbookEditor />
+      <EditorSandbox blockId="" />
     </div>
   );
 }

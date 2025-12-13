@@ -9,7 +9,7 @@
  * The hands schema is hidden from reader/writer roles.
  */
 
-import type { PGlite } from "@electric-sql/pglite"
+import type { PGlite } from "@electric-sql/pglite";
 
 /**
  * SQL to set up all roles and permissions
@@ -63,16 +63,16 @@ GRANT ALL ON ALL TABLES IN SCHEMA public TO hands_admin;
 GRANT ALL ON ALL SEQUENCES IN SCHEMA public TO hands_admin;
 ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON TABLES TO hands_admin;
 ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON SEQUENCES TO hands_admin;
-`
+`;
 
 /**
  * Ensure all roles are set up in the database
  * Safe to call multiple times (idempotent)
  */
 export async function ensureRoles(db: PGlite): Promise<void> {
-  console.log("[db] Setting up roles...")
-  await db.exec(ROLE_SETUP_SQL)
-  console.log("[db] Roles configured: hands_reader, hands_writer, hands_admin")
+  console.log("[db] Setting up roles...");
+  await db.exec(ROLE_SETUP_SQL);
+  console.log("[db] Roles configured: hands_reader, hands_writer, hands_admin");
 }
 
 /**
@@ -82,6 +82,6 @@ export const Roles = {
   READER: "hands_reader",
   WRITER: "hands_writer",
   ADMIN: "hands_admin",
-} as const
+} as const;
 
-export type RoleName = (typeof Roles)[keyof typeof Roles]
+export type RoleName = (typeof Roles)[keyof typeof Roles];

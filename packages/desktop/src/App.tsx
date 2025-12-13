@@ -1,7 +1,9 @@
-import { QueryClient, QueryClientProvider, MutationCache } from "@tanstack/react-query";
+import { MutationCache, QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { RouterProvider } from "@tanstack/react-router";
-import { TooltipProvider } from "@/components/ui/tooltip";
 import { Toaster, toast } from "sonner";
+import { TRPCProvider } from "@/components/TRPCProvider";
+import { TooltipProvider } from "@/components/ui/tooltip";
+import { useActiveRuntime } from "@/hooks/useWorkbook";
 import { router } from "@/router";
 
 // Map mutation keys to user-friendly action names
@@ -47,39 +49,63 @@ export const queryClient = new QueryClient({
       const errorMessage = error instanceof Error ? error.message : "Unknown error";
 
       // Build descriptive message
-      const message = action
-        ? `Failed to ${action}: ${errorMessage}`
-        : errorMessage;
+      const message = action ? `Failed to ${action}: ${errorMessage}` : errorMessage;
 
       toast.error(message);
     },
   }),
 });
 
+/**
+ * Inner app content - requires runtime to be connected for tRPC
+ */
+function AppContent() {
+  const { data: runtime } = useActiveRuntime();
+
+  // Base app shell without tRPC (for when runtime isn't ready)
+  const appShell = (
+    <TooltipProvider>
+      <RouterProvider router={router} />
+      <Toaster
+        position="top-right"
+        offset={16}
+        gap={8}
+        toastOptions={{
+          unstyled: true,
+          classNames: {
+            toast:
+              "flex items-center gap-2 px-3 py-2 rounded-lg text-xs bg-popover border border-border text-popover-foreground shadow-lg max-w-xs mt-12",
+            error: "text-red-400 [&>svg]:text-red-400",
+            success: "text-green-400 [&>svg]:text-green-400",
+            title: "font-medium",
+            description: "text-muted-foreground",
+            actionButton: "bg-primary text-primary-foreground px-2 py-1 rounded text-xs",
+            cancelButton: "bg-muted text-muted-foreground px-2 py-1 rounded text-xs",
+          },
+        }}
+        style={{ zIndex: 9999 }}
+      />
+    </TooltipProvider>
+  );
+
+  // Only wrap with TRPCProvider when runtime is connected
+  if (runtime?.runtime_port) {
+    return (
+      <TRPCProvider queryClient={queryClient} runtimePort={runtime.runtime_port}>
+        {appShell}
+      </TRPCProvider>
+    );
+  }
+
+  // Render without tRPC when runtime isn't ready
+  // Components using tRPC hooks should handle this gracefully
+  return appShell;
+}
+
 export default function App() {
   return (
     <QueryClientProvider client={queryClient}>
-      <TooltipProvider>
-        <RouterProvider router={router} />
-        <Toaster
-          position="top-right"
-          offset={16}
-          gap={8}
-          toastOptions={{
-            unstyled: true,
-            classNames: {
-              toast: "flex items-center gap-2 px-3 py-2 rounded-lg text-xs bg-popover border border-border text-popover-foreground shadow-lg max-w-xs mt-12",
-              error: "text-red-400 [&>svg]:text-red-400",
-              success: "text-green-400 [&>svg]:text-green-400",
-              title: "font-medium",
-              description: "text-muted-foreground",
-              actionButton: "bg-primary text-primary-foreground px-2 py-1 rounded text-xs",
-              cancelButton: "bg-muted text-muted-foreground px-2 py-1 rounded text-xs",
-            },
-          }}
-          style={{ zIndex: 9999 }}
-        />
-      </TooltipProvider>
+      <AppContent />
     </QueryClientProvider>
   );
 }

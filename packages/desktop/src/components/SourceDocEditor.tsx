@@ -6,35 +6,30 @@
  * Header: Title + Test/Run buttons
  */
 
-import { useState, useCallback, useEffect, useRef } from "react";
-import { cn } from "@/lib/utils";
-import { SpecEditor } from "@/components/SpecEditor";
 import {
-  useSourceManagement,
-  useSaveSpec,
-  useSourceTests,
-  useStreamingSync,
-  type Source,
-} from "@/hooks/useSources";
-import { useSourceSync, type GitSyncStatus } from "@/hooks/useSourceSync";
-import {
-  CircleNotch,
   ArrowDown,
   ArrowUp,
-  TestTube,
-  Play,
-  FloppyDisk,
   Check,
   Circle,
+  CircleNotch,
+  FloppyDisk,
+  Play,
   Table,
   Terminal,
+  TestTube,
 } from "@phosphor-icons/react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { SpecEditor } from "@/components/SpecEditor";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import { type GitSyncStatus, useSourceSync } from "@/hooks/useSourceSync";
 import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from "@/components/ui/tooltip";
+  type Source,
+  useSaveSpec,
+  useSourceManagement,
+  useSourceTests,
+  useStreamingSync,
+} from "@/hooks/useSources";
+import { cn } from "@/lib/utils";
 
 interface SourceDocEditorProps {
   sourceId: string;
@@ -140,7 +135,7 @@ export function SourceDocEditor({ sourceId }: SourceDocEditorProps) {
             className={cn(
               "flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm transition-colors",
               "hover:bg-muted",
-              tests.isRunning && "opacity-50"
+              tests.isRunning && "opacity-50",
             )}
           >
             {tests.isRunning ? (
@@ -164,7 +159,7 @@ export function SourceDocEditor({ sourceId }: SourceDocEditorProps) {
                 className={cn(
                   "flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm transition-colors",
                   "bg-purple-500 hover:bg-purple-600 text-white",
-                  (streamingSync.isRunning || hasMissingSecrets) && "opacity-50 cursor-not-allowed"
+                  (streamingSync.isRunning || hasMissingSecrets) && "opacity-50 cursor-not-allowed",
                 )}
               >
                 {streamingSync.isRunning ? (
@@ -251,15 +246,22 @@ function SpecCard({
   const toolbarLeft = (
     <div className="flex items-center gap-1.5">
       {/* Status chip with GitHub-style diff stats */}
-      <div className={cn(
-        "flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-medium",
-        isDirty ? "bg-amber-500/15 text-amber-600" :
-        syncStatus === "synced" ? "bg-green-500/15 text-green-600" :
-        syncStatus === "spec-ahead" ? "bg-blue-500/15 text-blue-600" :
-        syncStatus === "code-ahead" ? "bg-amber-500/15 text-amber-600" :
-        syncStatus === "diverged" ? "bg-red-500/15 text-red-600" :
-        "bg-muted text-muted-foreground"
-      )}>
+      <div
+        className={cn(
+          "flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-medium",
+          isDirty
+            ? "bg-amber-500/15 text-amber-600"
+            : syncStatus === "synced"
+              ? "bg-green-500/15 text-green-600"
+              : syncStatus === "spec-ahead"
+                ? "bg-blue-500/15 text-blue-600"
+                : syncStatus === "code-ahead"
+                  ? "bg-amber-500/15 text-amber-600"
+                  : syncStatus === "diverged"
+                    ? "bg-red-500/15 text-red-600"
+                    : "bg-muted text-muted-foreground",
+        )}
+      >
         {isDirty ? (
           <>
             <Circle weight="fill" className="h-1.5 w-1.5" />
@@ -282,9 +284,13 @@ function SpecCard({
               </span>
             ) : (
               <span>
-                {syncStatus === "spec-ahead" ? "Spec ahead" :
-                 syncStatus === "code-ahead" ? "Code ahead" :
-                 syncStatus === "diverged" ? "Diverged" : null}
+                {syncStatus === "spec-ahead"
+                  ? "Spec ahead"
+                  : syncStatus === "code-ahead"
+                    ? "Code ahead"
+                    : syncStatus === "diverged"
+                      ? "Diverged"
+                      : null}
               </span>
             )}
           </>
@@ -301,7 +307,7 @@ function SpecCard({
               className={cn(
                 "flex items-center justify-center h-6 w-6 rounded",
                 "hover:bg-muted text-muted-foreground hover:text-foreground",
-                isSaving && "opacity-50"
+                isSaving && "opacity-50",
               )}
             >
               {isSaving ? (
@@ -325,7 +331,7 @@ function SpecCard({
               className={cn(
                 "flex items-center justify-center h-6 w-6 rounded",
                 "hover:bg-muted text-muted-foreground hover:text-foreground",
-                isOperating && "opacity-50"
+                isOperating && "opacity-50",
               )}
             >
               {isPushing ? (
@@ -349,7 +355,7 @@ function SpecCard({
               className={cn(
                 "flex items-center justify-center h-6 w-6 rounded",
                 "hover:bg-muted text-muted-foreground hover:text-foreground",
-                isOperating && "opacity-50"
+                isOperating && "opacity-50",
               )}
             >
               {isPulling ? (
@@ -408,7 +414,9 @@ function LogsCard({ tests, streamingSync }: LogsCardProps) {
         {hasLogs ? (
           <div className="p-2 font-mono text-xs space-y-0.5">
             {tests.logs.map((log, i) => (
-              <div key={`t-${i}`} className="text-muted-foreground whitespace-pre-wrap">{log}</div>
+              <div key={`t-${i}`} className="text-muted-foreground whitespace-pre-wrap">
+                {log}
+              </div>
             ))}
             {streamingSync.logs.map((log, i) => (
               <div
@@ -417,17 +425,19 @@ function LogsCard({ tests, streamingSync }: LogsCardProps) {
                   "whitespace-pre-wrap",
                   log.level === "error" && "text-red-400",
                   log.level === "warn" && "text-amber-400",
-                  log.level === "info" && "text-muted-foreground"
+                  log.level === "info" && "text-muted-foreground",
                 )}
               >
                 {log.message}
               </div>
             ))}
             {streamingSync.result && (
-              <div className={cn(
-                "pt-1 mt-1 border-t",
-                streamingSync.result.success ? "text-green-500" : "text-red-500"
-              )}>
+              <div
+                className={cn(
+                  "pt-1 mt-1 border-t",
+                  streamingSync.result.success ? "text-green-500" : "text-red-500",
+                )}
+              >
                 {streamingSync.result.success
                   ? `Done in ${streamingSync.result.durationMs}ms`
                   : streamingSync.result.error}
@@ -462,13 +472,13 @@ function TablesCard({ source }: { source: Source }) {
         {tables.length > 0 ? (
           <div className="space-y-1">
             {tables.map((table) => (
-              <div key={table} className="text-xs font-mono text-muted-foreground">{table}</div>
+              <div key={table} className="text-xs font-mono text-muted-foreground">
+                {table}
+              </div>
             ))}
           </div>
         ) : (
-          <div className="text-xs text-muted-foreground/50 text-center">
-            Run sync to discover
-          </div>
+          <div className="text-xs text-muted-foreground/50 text-center">Run sync to discover</div>
         )}
       </div>
     </div>

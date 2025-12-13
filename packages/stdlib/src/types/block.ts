@@ -4,7 +4,7 @@
  * Blocks are server-rendered React components that can query the database.
  */
 
-import type { ReactElement } from "react"
+import type { ReactElement } from "react";
 
 /**
  * pgtyped prepared query interface
@@ -12,7 +12,7 @@ import type { ReactElement } from "react"
  */
 export interface PreparedQuery<TParams, TResult> {
   /** Execute the prepared query with params */
-  run(params: TParams, client: unknown): Promise<TResult[]>
+  run(params: TParams, client: unknown): Promise<TResult[]>;
 }
 
 /**
@@ -27,7 +27,7 @@ export interface DbContext {
   sql<T = Record<string, unknown>>(
     strings: TemplateStringsArray,
     ...values: unknown[]
-  ): Promise<T[]>
+  ): Promise<T[]>;
 
   /**
    * Execute a pgtyped prepared query with type-safe params and results
@@ -37,8 +37,8 @@ export interface DbContext {
    */
   query<TParams, TResult>(
     preparedQuery: PreparedQuery<TParams, TResult>,
-    params: TParams
-  ): Promise<TResult[]>
+    params: TParams,
+  ): Promise<TResult[]>;
 }
 
 /**
@@ -46,7 +46,7 @@ export interface DbContext {
  */
 export interface BlockContext<TParams = Record<string, unknown>> {
   /** Database query interface */
-  db: DbContext
+  db: DbContext;
 
   /**
    * Tagged template literal for type-safe SQL queries (shorthand for db.sql)
@@ -56,7 +56,7 @@ export interface BlockContext<TParams = Record<string, unknown>> {
   sql<T = Record<string, unknown>>(
     strings: TemplateStringsArray,
     ...values: unknown[]
-  ): Promise<T[]>
+  ): Promise<T[]>;
 
   /**
    * Execute a pgtyped prepared query (shorthand for db.query)
@@ -66,19 +66,19 @@ export interface BlockContext<TParams = Record<string, unknown>> {
    */
   query<TParams, TResult>(
     preparedQuery: PreparedQuery<TParams, TResult>,
-    params: TParams
-  ): Promise<TResult[]>
+    params: TParams,
+  ): Promise<TResult[]>;
 
   /** URL params, form values, user inputs */
-  params: TParams
+  params: TParams;
 }
 
 /**
  * Props passed to block functions (includes context)
  */
 export type BlockProps<TProps = unknown, TParams = Record<string, unknown>> = TProps & {
-  ctx: BlockContext<TParams>
-}
+  ctx: BlockContext<TParams>;
+};
 
 /**
  * Block function signature
@@ -95,16 +95,16 @@ export type BlockProps<TProps = unknown, TParams = Record<string, unknown>> = TP
  * ```
  */
 export type BlockFn<TProps = unknown, TParams = Record<string, unknown>> = (
-  props: BlockProps<TProps, TParams>
-) => ReactElement | Promise<ReactElement>
+  props: BlockProps<TProps, TParams>,
+) => ReactElement | Promise<ReactElement>;
 
 /**
  * Block metadata for discovery and UI
  */
 export interface BlockMeta {
-  title?: string
-  description?: string
-  refreshable?: boolean
+  title?: string;
+  description?: string;
+  refreshable?: boolean;
 }
 
 /**
@@ -112,20 +112,20 @@ export interface BlockMeta {
  */
 export interface DiscoveredBlock {
   /** Block ID - path-based for nested blocks (e.g., "charts/bar-chart") */
-  id: string
+  id: string;
   /** Relative path to the file from blocks dir (e.g., "charts/bar-chart.tsx") */
-  path: string
+  path: string;
   /** Parent directory path (empty string for root, "charts" for charts/foo.tsx) */
-  parentDir: string
-  meta: BlockMeta
-  load: () => Promise<{ default: BlockFn; meta?: BlockMeta }>
+  parentDir: string;
+  meta: BlockMeta;
+  load: () => Promise<{ default: BlockFn; meta?: BlockMeta }>;
 }
 
 /**
  * Result of rendering a block
  */
 export interface BlockRenderResult {
-  html: string
-  blockId: string
-  error?: string
+  html: string;
+  blockId: string;
+  error?: string;
 }

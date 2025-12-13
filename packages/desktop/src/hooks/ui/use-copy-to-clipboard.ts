@@ -1,5 +1,5 @@
 // Simple clipboard hook without sonner toast
-import { useCallback, useState } from 'react';
+import { useCallback, useState } from "react";
 
 export interface UseCopyToClipboardProps {
   timeout?: number;
@@ -10,7 +10,7 @@ export function useCopyToClipboard({ timeout = 2000 }: UseCopyToClipboardProps =
 
   const copyToClipboard = useCallback(
     (value: string) => {
-      if (typeof window === 'undefined' || !navigator.clipboard?.writeText) {
+      if (typeof window === "undefined" || !navigator.clipboard?.writeText) {
         return;
       }
 
@@ -19,7 +19,7 @@ export function useCopyToClipboard({ timeout = 2000 }: UseCopyToClipboardProps =
         setTimeout(() => setIsCopied(false), timeout);
       });
     },
-    [timeout]
+    [timeout],
   );
 
   return { isCopied, copyToClipboard };

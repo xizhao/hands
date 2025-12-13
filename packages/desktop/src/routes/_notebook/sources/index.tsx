@@ -12,7 +12,7 @@ export const Route = createFileRoute("/_notebook/sources/")({
 });
 
 function SourcesIndexPage() {
-  const router = useRouter();
+  const _router = useRouter();
 
   return (
     <div className="flex-1 flex items-start justify-center overflow-y-auto">

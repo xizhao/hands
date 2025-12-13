@@ -5,4 +5,4 @@
  */
 
 // Re-export canonical types from stdlib
-export type { BlockContext, DbContext, BlockFn, BlockMeta } from "@hands/stdlib"
+export type { BlockContext, BlockFn, BlockMeta, DbContext } from "@hands/stdlib";

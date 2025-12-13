@@ -4,20 +4,20 @@
  * Displays status, agent output, and action buttons.
  */
 
-import { cn } from "@/lib/utils";
-import type { BackgroundTaskState, BackgroundTaskResult } from "@/hooks/useBackgroundTask";
-import type { MessageWithParts } from "@/lib/api";
 import {
-  CheckCircle,
-  XCircle,
-  CircleNotch,
-  Robot,
+  ArrowClockwise,
   CaretDown,
   CaretRight,
+  CheckCircle,
+  CircleNotch,
+  Robot,
   Wrench,
-  ArrowClockwise,
+  XCircle,
 } from "@phosphor-icons/react";
 import { useState } from "react";
+import type { BackgroundTaskState } from "@/hooks/useBackgroundTask";
+import type { MessageWithParts } from "@/lib/api";
+import { cn } from "@/lib/utils";
 
 interface ValidationPanelProps {
   state: BackgroundTaskState;
@@ -26,12 +26,7 @@ interface ValidationPanelProps {
   className?: string;
 }
 
-export function ValidationPanel({
-  state,
-  onValidate,
-  onFix,
-  className,
-}: ValidationPanelProps) {
+export function ValidationPanel({ state, onValidate, onFix, className }: ValidationPanelProps) {
   const [expanded, setExpanded] = useState(true);
   const { status, messages, result } = state;
 
@@ -43,7 +38,7 @@ export function ValidationPanel({
           onClick={onValidate}
           className={cn(
             "flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm font-medium transition-colors",
-            "bg-purple-500/10 hover:bg-purple-500/20 text-purple-400"
+            "bg-purple-500/10 hover:bg-purple-500/20 text-purple-400",
           )}
         >
           <Robot weight="duotone" className="h-4 w-4" />
@@ -92,10 +87,12 @@ export function ValidationPanel({
             ) : (
               <XCircle weight="fill" className="h-4 w-4 text-red-500" />
             )}
-            <span className={cn(
-              "text-sm font-medium",
-              result.success ? "text-green-500" : "text-red-500"
-            )}>
+            <span
+              className={cn(
+                "text-sm font-medium",
+                result.success ? "text-green-500" : "text-red-500",
+              )}
+            >
               {result.success ? "Passed" : "Failed"}
             </span>
           </>

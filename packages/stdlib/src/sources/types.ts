@@ -1,148 +1,180 @@
-import type { DbContext } from "../types/block.js"
-
 /**
- * Source - A data sync function
+ * Sources v2 - Table Containers with Optional Subscriptions
  *
- * Sources are serverless-style functions that sync external data.
- * The function owns everything: fetching, transforming, writing to DB.
+ * A Source is a logical grouping of tables with:
+ * - Auto-generated CRUD routes
+ * - Optional Electric-SQL subscriptions for real-time sync
+ * - Role-based permissions
  *
- * ## Return Types (determines runtime behavior)
- *
- * ### Current (implemented)
- * - `any object/void` - Just returns the result, source owns all DB writes
- *
- * ### Future Return Types (not yet implemented)
- *
- * **1. AsyncGenerator<SchemaRecord[]>** - dlt-style auto-table creation + upsert
- * ```typescript
- * async function* sync(ctx) {
- *   for await (const page of fetchPages()) {
- *     yield page.items.map(item => ({
- *       _stream: "items",  // -> creates/upserts to `items` table
- *       id: item.id,
- *       ...item
- *     }))
- *   }
- * }
- * ```
- * Runtime auto-creates tables from first batch schema, upserts by primaryKey.
- *
- * **2. ShapeResult** - Electric-style declarative shapes (inspired by ElectricSQL)
- * ```typescript
- * defineSource({
- *   name: "hackernews",
- *   shapes: {
- *     // Static shape - sync all, runtime manages incremental
- *     topStories: {
- *       table: "hn_stories",
- *       where: "type = 'top'",
- *       schedule: "0,15,30,45 * * * *",  // every 15 minutes
- *     },
- *     // Parameterized shape - sync on-demand when subscribed
- *     storyComments: {
- *       table: "hn_comments",
- *       where: "story_id = $1",  // $1 provided by subscriber
- *     },
- *   },
- *   // Producer function populates the shapes
- *   sync: async (ctx) => { ... }
- * })
- * ```
- * Consumer-oriented: UI subscribes to shapes, runtime syncs what's needed.
- * Multiple shapes can be combined client-side for relations.
- *
- * **3. PipelineResult** - Multi-step ETL with checkpoints
- * ```typescript
- * definePipeline({
- *   steps: [
- *     { name: "extract", fn: extractFromAPI },
- *     { name: "transform", fn: normalizeData },
- *     { name: "load", fn: writeToDb },
- *   ],
- *   checkpoint: "step",  // Resume from last successful step
- * })
- * ```
- *
- * @see https://electric-sql.com/docs/guides/shapes for shape design inspiration
+ * Tables are created in the database first, then introspected.
+ * Schema is derived from DB, exported to schema.sql for portability.
  */
 
-export interface SourceContext<TSecrets extends readonly string[] = readonly string[]> {
-  /** Secrets object - keys from config, values from env */
-  secrets: { [K in TSecrets[number]]: string }
-  /** Database query interface - source owns all writes */
-  db: DbContext
-  /** Structured logging */
-  log: (...args: unknown[]) => void
+// =============================================================================
+// Table Subscription (Electric-SQL Shape)
+// =============================================================================
+
+/**
+ * Electric-SQL shape subscription for a table
+ * Syncs data from a remote Postgres to the local PGlite table
+ */
+export interface TableSubscription {
+  /** Electric service URL (e.g., "https://electric.example.com") */
+  url: string;
+  /** Remote table name to sync from */
+  table: string;
+  /** Optional WHERE clause to filter synced rows */
+  where?: string;
+  /** Optional column subset to sync (default: all columns) */
+  columns?: string[];
 }
 
-export interface SourceConfig<TSecrets extends readonly string[] = readonly string[]> {
-  name: string
-  title: string
-  description: string
-  /** Cron schedule - used by orchestrator (desktop/cloudflare), not runtime */
-  schedule?: string
-  /** Required secret names (env var keys) */
-  secrets: TSecrets
+// =============================================================================
+// Table Definition
+// =============================================================================
+
+/**
+ * Table definition within a source
+ */
+export interface TableDefinition {
+  /** Optional description for documentation */
+  description?: string;
   /**
-   * Spec - Markdown documentation describing the source's intent, tables, and behavior.
-   * Used for documentation and AI-assisted code generation.
-   *
-   * @example
-   * ```markdown
-   * ## Intent
-   * Sync Stripe customers and their subscription status
-   *
-   * ## Tables
-   * - stripe_customers: id, email, name, created_at
-   * - stripe_subscriptions: id, customer_id, status, plan
-   * ```
+   * Optional Electric-SQL subscription
+   * If provided, the table will sync from the remote Postgres
+   * If omitted, the table is local-only
    */
-  spec?: string
+  subscription?: TableSubscription;
+  /**
+   * Optional role override for this table
+   * Defaults to source-level permission
+   */
+  role?: "hands_reader" | "hands_writer" | "hands_admin";
 }
 
-/** Source handler - just a function that gets context, returns anything */
-export type SourceHandler<TSecrets extends readonly string[], TResult = unknown> = (
-  ctx: SourceContext<TSecrets>
-) => Promise<TResult>
+// =============================================================================
+// Source Permissions
+// =============================================================================
 
-export interface SourceDefinition<
-  TSecrets extends readonly string[] = readonly string[],
-  TResult = unknown,
-> {
-  config: SourceConfig<TSecrets>
-  sync: SourceHandler<TSecrets, TResult>
+export type SourceRole = "hands_reader" | "hands_writer" | "hands_admin";
+
+export interface SourcePermissions {
+  /** Default role for all tables in this source */
+  default?: SourceRole;
+  /** Per-table role overrides */
+  tables?: Record<string, SourceRole>;
+}
+
+// =============================================================================
+// Source Definition v2
+// =============================================================================
+
+export interface SourceDefinitionV2 {
+  /** Unique source name (used in API routes) */
+  name: string;
+  /** Human-readable description */
+  description?: string;
+  /**
+   * Tables in this source
+   * Keys are table names, values are table definitions
+   * Tables are discovered from DB, this config adds metadata
+   */
+  tables?: Record<string, TableDefinition>;
+  /**
+   * Role-based permissions
+   * Controls CRUD access to tables
+   */
+  permissions?: SourcePermissions;
 }
 
 /**
- * Define a source with full type inference
+ * Define a source (v2 - table containers)
  *
  * @example
  * ```typescript
  * export default defineSource({
- *   name: "stripe",
- *   title: "Stripe",
- *   description: "Sync Stripe data",
- *   schedule: "0 *\/6 * * *",
- *   secrets: ["STRIPE_KEY"] as const,
- * }, async (ctx) => {
- *   const stripe = new Stripe(ctx.secrets.STRIPE_KEY)
- *   const customers = await stripe.customers.list()
- *
- *   for (const c of customers.data) {
- *     await ctx.db.sql`
- *       INSERT INTO customers (id, email, name)
- *       VALUES (${c.id}, ${c.email}, ${c.name})
- *       ON CONFLICT (id) DO UPDATE SET email = EXCLUDED.email, name = EXCLUDED.name
- *     `
- *   }
- *
- *   return { synced: customers.data.length }
+ *   name: "crm",
+ *   description: "Customer relationship management data",
+ *   tables: {
+ *     contacts: {
+ *       subscription: {
+ *         url: process.env.ELECTRIC_URL!,
+ *         table: "contacts",
+ *         where: "tenant_id = 'abc123'",
+ *       },
+ *     },
+ *     deals: {
+ *       // No subscription = local only
+ *     },
+ *   },
+ *   permissions: {
+ *     default: "hands_writer",
+ *     tables: {
+ *       contacts: "hands_reader", // read-only synced data
+ *     },
+ *   },
  * })
  * ```
  */
-export function defineSource<TSecrets extends readonly string[], TResult = unknown>(
-  config: SourceConfig<TSecrets>,
-  sync: SourceHandler<TSecrets, TResult>
-): SourceDefinition<TSecrets, TResult> {
-  return { config, sync }
+export function defineSourceV2(config: SourceDefinitionV2): SourceDefinitionV2 {
+  return config;
+}
+
+// =============================================================================
+// Discovered Source (Runtime)
+// =============================================================================
+
+/**
+ * A source discovered by the runtime (v2 - table container)
+ */
+export interface DiscoveredSource {
+  id: string;
+  path: string;
+  definition: SourceDefinitionV2;
+  /** Tables discovered from DB that match this source */
+  tables: DiscoveredTable[];
+}
+
+/**
+ * A table discovered from the database
+ */
+export interface DiscoveredTable {
+  name: string;
+  source: string;
+  schema: TableSchema;
+  subscription?: TableSubscription & { status: SubscriptionStatus };
+}
+
+/**
+ * Table schema from DB introspection
+ */
+export interface TableSchema {
+  columns: TableColumn[];
+  primaryKey?: string[];
+  indexes?: TableIndex[];
+}
+
+export interface TableColumn {
+  name: string;
+  type: string;
+  nullable: boolean;
+  defaultValue?: string;
+  isPrimaryKey: boolean;
+}
+
+export interface TableIndex {
+  name: string;
+  columns: string[];
+  unique: boolean;
+}
+
+/**
+ * Electric-SQL subscription status
+ */
+export interface SubscriptionStatus {
+  active: boolean;
+  shapeId?: string;
+  lastSyncAt?: string;
+  rowCount?: number;
+  error?: string;
 }

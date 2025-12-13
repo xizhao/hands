@@ -5,18 +5,18 @@
  * Uses Vite + @cloudflare/vite-plugin for building and dev server.
  */
 
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "fs"
-import { join } from "path"
-import { discoverBlocks } from "../blocks/discovery.js"
-import type { HandsConfig, BuildResult, BuildOptions } from "./index.js"
-import { generateWorkerTemplate } from "./worker-template.js"
-import { getStdlibSourcePath } from "../config/index.js"
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { join } from "node:path";
+import { discoverBlocks } from "../blocks/discovery.js";
+import { getStdlibSourcePath } from "../config/index.js";
+import type { BuildOptions, BuildResult, HandsConfig } from "./index.js";
+import { generateWorkerTemplate } from "./worker-template.js";
 
 export interface RSCBuildResult extends BuildResult {
   /** Path to generated vite.config.mts */
-  viteConfig?: string
+  viteConfig?: string;
   /** Path to generated worker.tsx */
-  workerEntry?: string
+  workerEntry?: string;
 }
 
 /**
@@ -24,97 +24,97 @@ export interface RSCBuildResult extends BuildResult {
  */
 export async function buildRSC(
   workbookDir: string,
-  options: BuildOptions = {}
+  options: BuildOptions = {},
 ): Promise<RSCBuildResult> {
-  const errors: string[] = []
-  const files: string[] = []
-  const outputDir = join(workbookDir, ".hands")
+  const errors: string[] = [];
+  const files: string[] = [];
+  const outputDir = join(workbookDir, ".hands");
 
   try {
     // Read hands.json
-    const handsJsonPath = join(workbookDir, "hands.json")
+    const handsJsonPath = join(workbookDir, "hands.json");
     if (!existsSync(handsJsonPath)) {
       return {
         success: false,
         outputDir,
         files: [],
         errors: [`No hands.json found in ${workbookDir}`],
-      }
+      };
     }
 
-    const config: HandsConfig = JSON.parse(readFileSync(handsJsonPath, "utf-8"))
+    const config: HandsConfig = JSON.parse(readFileSync(handsJsonPath, "utf-8"));
 
     // Ensure output directory exists
     if (!existsSync(outputDir)) {
-      mkdirSync(outputDir, { recursive: true })
+      mkdirSync(outputDir, { recursive: true });
     }
 
     // Create src directory
-    const srcDir = join(outputDir, "src")
+    const srcDir = join(outputDir, "src");
     if (!existsSync(srcDir)) {
-      mkdirSync(srcDir, { recursive: true })
+      mkdirSync(srcDir, { recursive: true });
     }
 
     // Discover blocks
-    const blocksDir = join(workbookDir, config.blocks?.dir || "./blocks")
+    const blocksDir = join(workbookDir, config.blocks?.dir || "./blocks");
     const blocksResult = await discoverBlocks(blocksDir, {
       include: config.blocks?.include,
       exclude: config.blocks?.exclude,
-    })
+    });
 
     if (blocksResult.errors.length > 0) {
       for (const err of blocksResult.errors) {
-        errors.push(`Block error (${err.file}): ${err.error}`)
+        errors.push(`Block error (${err.file}): ${err.error}`);
       }
     }
 
     if (options.verbose) {
-      console.log(`Found ${blocksResult.blocks.length} blocks`)
+      console.log(`Found ${blocksResult.blocks.length} blocks`);
       for (const block of blocksResult.blocks) {
-        console.log(`  ${block.id} -> ${block.path}`)
+        console.log(`  ${block.id} -> ${block.path}`);
       }
     }
 
     // Get stdlib path first (used by both package.json and vite.config)
-    const stdlibPath = getStdlibSourcePath()
+    const stdlibPath = getStdlibSourcePath();
 
     // Generate package.json
-    const packageJson = generatePackageJson(config, stdlibPath)
-    writeFileSync(join(outputDir, "package.json"), packageJson)
-    files.push("package.json")
+    const packageJson = generatePackageJson(config, stdlibPath);
+    writeFileSync(join(outputDir, "package.json"), packageJson);
+    files.push("package.json");
 
     // Generate vite.config.mts
-    const viteConfig = generateViteConfig()
-    writeFileSync(join(outputDir, "vite.config.mts"), viteConfig)
-    files.push("vite.config.mts")
+    const viteConfig = generateViteConfig();
+    writeFileSync(join(outputDir, "vite.config.mts"), viteConfig);
+    files.push("vite.config.mts");
 
     // Generate wrangler.jsonc
-    const wranglerConfig = generateWranglerConfig(config)
-    writeFileSync(join(outputDir, "wrangler.jsonc"), wranglerConfig)
-    files.push("wrangler.jsonc")
+    const wranglerConfig = generateWranglerConfig(config);
+    writeFileSync(join(outputDir, "wrangler.jsonc"), wranglerConfig);
+    files.push("wrangler.jsonc");
 
     // Generate worker.tsx with RSC block rendering + API routes
     const workerTsx = generateWorkerTemplate({
       config,
       blocks: blocksResult.blocks,
       workbookDir,
-    })
-    writeFileSync(join(srcDir, "worker.tsx"), workerTsx)
-    files.push("src/worker.tsx")
+    });
+    writeFileSync(join(srcDir, "worker.tsx"), workerTsx);
+    files.push("src/worker.tsx");
 
     // Generate client.tsx for hydration
-    const clientTsx = generateClientEntry()
-    writeFileSync(join(srcDir, "client.tsx"), clientTsx)
-    files.push("src/client.tsx")
+    const clientTsx = generateClientEntry();
+    writeFileSync(join(srcDir, "client.tsx"), clientTsx);
+    files.push("src/client.tsx");
 
     // Generate tsconfig.json
-    const tsconfig = generateTsConfig()
-    writeFileSync(join(outputDir, "tsconfig.json"), tsconfig)
-    files.push("tsconfig.json")
+    const tsconfig = generateTsConfig();
+    writeFileSync(join(outputDir, "tsconfig.json"), tsconfig);
+    files.push("tsconfig.json");
 
     // Generate .gitignore
-    writeFileSync(join(outputDir, ".gitignore"), "node_modules/\ndist/\n.wrangler/\n")
-    files.push(".gitignore")
+    writeFileSync(join(outputDir, ".gitignore"), "node_modules/\ndist/\n.wrangler/\n");
+    files.push(".gitignore");
 
     return {
       success: errors.length === 0,
@@ -124,14 +124,14 @@ export async function buildRSC(
       blocks: blocksResult.blocks.map((b) => ({ id: b.id, path: b.path, parentDir: b.parentDir })),
       viteConfig: join(outputDir, "vite.config.mts"),
       workerEntry: join(srcDir, "worker.tsx"),
-    }
+    };
   } catch (error) {
     return {
       success: false,
       outputDir,
       files,
       errors: [error instanceof Error ? error.message : String(error)],
-    }
+    };
   }
 }
 
@@ -166,9 +166,9 @@ function generatePackageJson(config: HandsConfig, stdlibPath: string): string {
       typescript: "5.8.3",
       vite: "7.2.6",
     },
-  }
+  };
 
-  return JSON.stringify(pkg, null, 2) + "\n"
+  return `${JSON.stringify(pkg, null, 2)}\n`;
 }
 
 /**
@@ -343,7 +343,7 @@ export default defineConfig({
     },
   },
 });
-`
+`;
 }
 
 /**
@@ -366,7 +366,7 @@ function generateWranglerConfig(config: HandsConfig): string {
     // DATABASE_URL is set at runtime by the dev server
   }
 }
-`
+`;
 }
 
 // Note: Worker generation moved to worker-template.ts
@@ -398,7 +398,7 @@ export async function createBlockFromStream(blockId: string, props: Record<strin
   // Return the stream for React to consume
   return response.body;
 }
-`
+`;
 }
 
 /**
@@ -423,5 +423,5 @@ function generateTsConfig(): string {
   "include": ["src/**/*"],
   "exclude": ["node_modules"]
 }
-`
+`;
 }

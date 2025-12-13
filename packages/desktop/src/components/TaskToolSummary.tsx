@@ -7,18 +7,25 @@
  * - Live streaming updates from child session
  */
 
+import { AnimatePresence, motion } from "framer-motion";
+import {
+  AlertCircle,
+  CheckCircle2,
+  ChevronRight,
+  ExternalLink,
+  GitBranch,
+  Loader2,
+} from "lucide-react";
 import { useState } from "react";
-import { motion, AnimatePresence } from "framer-motion";
-import { GitBranch, ChevronRight, CheckCircle2, AlertCircle, ExternalLink, Loader2 } from "lucide-react";
-import { cn, MSG_FONT } from "@/lib/utils";
-import { useSessions, useSessionStatuses, useMessages } from "@/hooks/useSession";
-import { useActiveSession } from "@/hooks/useNavState";
-import type { Session, ToolPart } from "@/lib/api";
 import { ShimmerText } from "@/components/ui/thinking-indicator";
+import { useActiveSession } from "@/hooks/useNavState";
+import { useMessages, useSessionStatuses, useSessions } from "@/hooks/useSession";
+import type { Session, ToolPart } from "@/lib/api";
+import { cn, MSG_FONT } from "@/lib/utils";
 
 interface TaskToolSummaryProps {
   part: ToolPart;
-  sessionId: string;  // Parent session ID
+  sessionId: string; // Parent session ID
   compact?: boolean;
 }
 
@@ -35,10 +42,12 @@ export function TaskToolSummary({ part, sessionId, compact = false }: TaskToolSu
   const metaFont = compact ? MSG_FONT.metaCompact : MSG_FONT.meta;
 
   // Extract task input
-  const input = part.state.input as {
-    description?: string;
-    prompt?: string;
-  } | undefined;
+  const input = part.state.input as
+    | {
+        description?: string;
+        prompt?: string;
+      }
+    | undefined;
 
   const description = input?.description || "Subtask";
 
@@ -46,7 +55,7 @@ export function TaskToolSummary({ part, sessionId, compact = false }: TaskToolSu
   // Child sessions have parentID matching the parent session
   // We try to match by finding the most recent child session
   // TODO: Better matching if multiple tasks are running (could use tool invocation time)
-  const childSessions = sessions.filter(s => {
+  const childSessions = sessions.filter((s) => {
     const sessionWithParent = s as SessionWithParent;
     return sessionWithParent.parentID === sessionId;
   });
@@ -65,7 +74,8 @@ export function TaskToolSummary({ part, sessionId, compact = false }: TaskToolSu
   // Child session state
   const isChildRunning = childStatus?.type === "busy" || childStatus?.type === "running";
   const hasChildError = childStatus?.type === "retry";
-  const activeForm = childStatus?.type === "busy" ? (childStatus as { activeForm?: string }).activeForm : undefined;
+  const activeForm =
+    childStatus?.type === "busy" ? (childStatus as { activeForm?: string }).activeForm : undefined;
 
   // Combined state: running if either tool or child is running
   const isRunning = isToolRunning || isChildRunning;
@@ -74,14 +84,16 @@ export function TaskToolSummary({ part, sessionId, compact = false }: TaskToolSu
 
   // Get summary from child session messages if available
   const { data: childMessages = [] } = useMessages(childSessionId || null);
-  const lastAssistantMessage = childMessages.filter(m => m.info.role === "assistant").pop();
-  const summaryPart = lastAssistantMessage?.parts?.find(p => p.type === "text");
-  const summary = summaryPart && "text" in summaryPart ? (summaryPart.text as string)?.slice(0, 150) : undefined;
+  const lastAssistantMessage = childMessages.filter((m) => m.info.role === "assistant").pop();
+  const summaryPart = lastAssistantMessage?.parts?.find((p) => p.type === "text");
+  const summary =
+    summaryPart && "text" in summaryPart ? (summaryPart.text as string)?.slice(0, 150) : undefined;
 
   // Tool output for completed tasks
-  const toolOutput = isToolCompleted && "output" in part.state
-    ? (part.state.output as string | undefined)?.slice(0, 200)
-    : undefined;
+  const toolOutput =
+    isToolCompleted && "output" in part.state
+      ? (part.state.output as string | undefined)?.slice(0, 200)
+      : undefined;
 
   const handleOpenInThread = (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -91,9 +103,7 @@ export function TaskToolSummary({ part, sessionId, compact = false }: TaskToolSu
   };
 
   return (
-    <div className={cn(
-      "py-0.5"
-    )}>
+    <div className={cn("py-0.5")}>
       {/* Header row */}
       <div className="flex items-center gap-1.5">
         <button
@@ -101,7 +111,7 @@ export function TaskToolSummary({ part, sessionId, compact = false }: TaskToolSu
           className={cn(
             "flex items-center gap-1.5 text-muted-foreground/60",
             "hover:text-muted-foreground transition-colors",
-            labelFont
+            labelFont,
           )}
         >
           {/* Status icon with pulsating indicator for running */}
@@ -119,10 +129,7 @@ export function TaskToolSummary({ part, sessionId, compact = false }: TaskToolSu
           )}
 
           {/* Description as header */}
-          <span className={cn(
-            "truncate max-w-[200px]",
-            isRunning && "text-green-400"
-          )}>
+          <span className={cn("truncate max-w-[200px]", isRunning && "text-green-400")}>
             {description}
           </span>
 
@@ -134,10 +141,9 @@ export function TaskToolSummary({ part, sessionId, compact = false }: TaskToolSu
           )}
 
           {/* Expand chevron */}
-          <ChevronRight className={cn(
-            "h-2.5 w-2.5 transition-transform",
-            expanded && "rotate-90"
-          )} />
+          <ChevronRight
+            className={cn("h-2.5 w-2.5 transition-transform", expanded && "rotate-90")}
+          />
         </button>
 
         {/* Open in thread button - only when we have a child session */}
@@ -147,7 +153,7 @@ export function TaskToolSummary({ part, sessionId, compact = false }: TaskToolSu
             className={cn(
               "flex items-center gap-0.5 px-1 py-0.5 rounded text-muted-foreground/40",
               "hover:text-muted-foreground hover:bg-muted/50 transition-colors",
-              metaFont
+              metaFont,
             )}
             title="Open in thread"
           >
@@ -159,10 +165,7 @@ export function TaskToolSummary({ part, sessionId, compact = false }: TaskToolSu
       {/* Streaming status when running (below header) */}
       {isRunning && activeForm && (
         <div className="ml-4 mt-0.5">
-          <ShimmerText
-            text={activeForm}
-            className={cn("text-green-400/70", metaFont)}
-          />
+          <ShimmerText text={activeForm} className={cn("text-green-400/70", metaFont)} />
         </div>
       )}
 
@@ -176,17 +179,22 @@ export function TaskToolSummary({ part, sessionId, compact = false }: TaskToolSu
             transition={{ duration: 0.15 }}
             className="overflow-hidden"
           >
-            <div className={cn(
-              "ml-4 mt-1.5 p-2 rounded-lg bg-background/30",
-              "font-mono space-y-1.5",
-              metaFont
-            )}>
+            <div
+              className={cn(
+                "ml-4 mt-1.5 p-2 rounded-lg bg-background/30",
+                "font-mono space-y-1.5",
+                metaFont,
+              )}
+            >
               {/* Summary from child session */}
               {summary && (
                 <div>
-                  <span className={cn("text-muted-foreground/40 uppercase", metaFont)}>output: </span>
+                  <span className={cn("text-muted-foreground/40 uppercase", metaFont)}>
+                    output:{" "}
+                  </span>
                   <span className="text-muted-foreground/70 break-words">
-                    {summary}{summary.length >= 150 && "..."}
+                    {summary}
+                    {summary.length >= 150 && "..."}
                   </span>
                 </div>
               )}
@@ -194,18 +202,19 @@ export function TaskToolSummary({ part, sessionId, compact = false }: TaskToolSu
               {/* Tool output for completed without child summary */}
               {!summary && toolOutput && (
                 <div>
-                  <span className={cn("text-muted-foreground/40 uppercase", metaFont)}>result: </span>
+                  <span className={cn("text-muted-foreground/40 uppercase", metaFont)}>
+                    result:{" "}
+                  </span>
                   <span className="text-muted-foreground/70 break-words">
-                    {toolOutput}{toolOutput.length >= 200 && "..."}
+                    {toolOutput}
+                    {toolOutput.length >= 200 && "..."}
                   </span>
                 </div>
               )}
 
               {/* Error message */}
               {hasError && part.state.status === "error" && (
-                <div className="text-red-400">
-                  {part.state.error}
-                </div>
+                <div className="text-red-400">{part.state.error}</div>
               )}
 
               {/* Loading state */}
@@ -218,9 +227,7 @@ export function TaskToolSummary({ part, sessionId, compact = false }: TaskToolSu
 
               {/* Pending state */}
               {!isRunning && !isCompleted && !hasError && !summary && (
-                <div className="text-muted-foreground/50 italic">
-                  Waiting to start...
-                </div>
+                <div className="text-muted-foreground/50 italic">Waiting to start...</div>
               )}
             </div>
           </motion.div>

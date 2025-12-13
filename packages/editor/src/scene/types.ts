@@ -2,10 +2,10 @@
  * Scene types - re-exported from main types
  */
 export type {
-  RenderedNode,
-  RenderedScene,
   IteratorContext,
   NodePath,
-} from '../types'
+  RenderedNode,
+  RenderedScene,
+} from "../types";
 
-export { generateId } from '../types'
+export { generateId } from "../types";

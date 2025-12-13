@@ -1,7 +1,7 @@
-import { memo } from "react";
 import { motion } from "framer-motion";
-import { cn } from "@/lib/utils";
 import { Brain, Sparkles } from "lucide-react";
+import { memo } from "react";
+import { cn } from "@/lib/utils";
 
 // Shimmer text effect - gradient sweeps across text
 interface ShimmerTextProps {
@@ -15,10 +15,11 @@ export const ShimmerText = memo(({ text, className }: ShimmerTextProps) => (
       "inline-block bg-clip-text text-transparent",
       "bg-[length:200%_100%]",
       "animate-shimmer",
-      className
+      className,
     )}
     style={{
-      backgroundImage: "linear-gradient(90deg, hsl(var(--muted-foreground)) 0%, hsl(var(--foreground)) 50%, hsl(var(--muted-foreground)) 100%)",
+      backgroundImage:
+        "linear-gradient(90deg, hsl(var(--muted-foreground)) 0%, hsl(var(--foreground)) 50%, hsl(var(--muted-foreground)) 100%)",
     }}
   >
     {text}
@@ -98,41 +99,40 @@ const BrainThinking = memo(({ className }: { className?: string }) => (
 
 BrainThinking.displayName = "BrainThinking";
 
-export const ThinkingIndicator = memo(({
-  className,
-  variant = "dots",
-  text = "Thinking",
-  size = "md",
-}: ThinkingIndicatorProps) => {
-  const sizeClasses = {
-    sm: "text-xs gap-1.5",
-    md: "text-sm gap-2",
-    lg: "text-base gap-2.5",
-  };
+export const ThinkingIndicator = memo(
+  ({ className, variant = "dots", text = "Thinking", size = "md" }: ThinkingIndicatorProps) => {
+    const sizeClasses = {
+      sm: "text-xs gap-1.5",
+      md: "text-sm gap-2",
+      lg: "text-base gap-2.5",
+    };
 
-  const iconComponent = {
-    dots: <ThinkingDots />,
-    pulse: <PulseRing />,
-    sparkle: <SparkleEffect />,
-    brain: <BrainThinking />,
-  }[variant];
+    const iconComponent = {
+      dots: <ThinkingDots />,
+      pulse: <PulseRing />,
+      sparkle: <SparkleEffect />,
+      brain: <BrainThinking />,
+    }[variant];
 
-  return (
-    <div className={cn(
-      "inline-flex items-center text-muted-foreground",
-      sizeClasses[size],
-      className
-    )}>
-      {iconComponent}
-      <motion.span
-        animate={{ opacity: [0.5, 1, 0.5] }}
-        transition={{ duration: 2, repeat: Infinity, ease: "easeInOut" }}
+    return (
+      <div
+        className={cn(
+          "inline-flex items-center text-muted-foreground",
+          sizeClasses[size],
+          className,
+        )}
       >
-        {text}
-      </motion.span>
-    </div>
-  );
-});
+        {iconComponent}
+        <motion.span
+          animate={{ opacity: [0.5, 1, 0.5] }}
+          transition={{ duration: 2, repeat: Infinity, ease: "easeInOut" }}
+        >
+          {text}
+        </motion.span>
+      </div>
+    );
+  },
+);
 
 ThinkingIndicator.displayName = "ThinkingIndicator";
 
@@ -148,16 +148,15 @@ export const LoadingCard = memo(({ className, children }: LoadingCardProps) => (
     <motion.div
       className="absolute inset-0"
       style={{
-        background: "linear-gradient(90deg, hsl(var(--primary)), hsl(var(--primary)/0.5), hsl(var(--primary)))",
+        background:
+          "linear-gradient(90deg, hsl(var(--primary)), hsl(var(--primary)/0.5), hsl(var(--primary)))",
         backgroundSize: "200% 100%",
       }}
       animate={{ backgroundPosition: ["0% center", "200% center"] }}
       transition={{ duration: 2, repeat: Infinity, ease: "linear" }}
     />
     {/* Content */}
-    <div className="relative bg-background rounded-lg p-3">
-      {children}
-    </div>
+    <div className="relative bg-background rounded-lg p-3">{children}</div>
   </div>
 ));
 
@@ -178,7 +177,8 @@ export const Skeleton = memo(({ className, width, height }: SkeletonProps) => (
     <motion.div
       className="h-full w-full"
       style={{
-        background: "linear-gradient(90deg, transparent, hsl(var(--muted-foreground)/0.1), transparent)",
+        background:
+          "linear-gradient(90deg, transparent, hsl(var(--muted-foreground)/0.1), transparent)",
         backgroundSize: "200% 100%",
       }}
       animate={{ backgroundPosition: ["-100% center", "200% center"] }}

@@ -4,18 +4,15 @@
  * A structural editor for React Server Component blocks.
  */
 
-// Core types
-export * from './types'
-
 // Submodules (can also be imported directly)
-export * as ast from './ast'
-export * as scene from './scene'
-export * as plate from './plate'
-
+export * as ast from "./ast";
+export type { UseEditorReturn } from "./hooks/useEditor";
 // Main hook
-export { useEditor } from './hooks/useEditor'
-export type { UseEditorReturn } from './hooks/useEditor'
-
+export { useEditor } from "./hooks/useEditor";
+export type {} from "./plate"; // Placeholder for future type exports
+export * as plate from "./plate";
 // Plate visual editor (re-exported for convenience)
-export { PlateVisualEditor } from './plate'
-export type { } from './plate' // Placeholder for future type exports
+export { PlateVisualEditor } from "./plate";
+export * as scene from "./scene";
+// Core types
+export * from "./types";

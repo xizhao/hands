@@ -6,17 +6,11 @@
  * - Plate → Source: Uses surgical mutations (character-level edits)
  */
 
-import type { TElement, Value } from 'platejs'
-import {
-  parseSourceWithLocations,
-  type EditableNode,
-  type ParseResult,
-} from '../ast/oxc-parser'
-import {
-  applySurgicalMutations,
-  type SurgicalMutation,
-} from '../ast/surgical-mutations'
-import { generateMutationsFromPlateChange } from '../ast/plate-diff'
+import type { TElement, Value } from "platejs";
+import { type EditableNode, type ParseResult, parseSourceWithLocations } from "../ast/oxc-parser";
+import { generateMutationsFromPlateChange } from "../ast/plate-diff";
+import { applySurgicalMutations } from "../ast/surgical-mutations";
+
 // Stdlib plugin no longer needed - all components use generic JSX elements
 
 // ============================================================================
@@ -27,9 +21,20 @@ import { generateMutationsFromPlateChange } from '../ast/plate-diff'
  * HTML void elements - these truly have no children
  */
 const HTML_VOID_TAGS = new Set([
-  'img', 'br', 'hr', 'input', 'meta', 'link', 'area', 'base', 'col', 'embed',
-  'source', 'track', 'wbr',
-])
+  "img",
+  "br",
+  "hr",
+  "input",
+  "meta",
+  "link",
+  "area",
+  "base",
+  "col",
+  "embed",
+  "source",
+  "track",
+  "wbr",
+]);
 
 /**
  * Check if an element should be void (no editable children)
@@ -44,22 +49,22 @@ const HTML_VOID_TAGS = new Set([
 function shouldBeVoid(node: EditableNode): boolean {
   // HTML void elements are always void
   if (HTML_VOID_TAGS.has(node.tagName.toLowerCase())) {
-    return true
+    return true;
   }
 
   // Self-closing JSX elements are void (no editable children)
   if (node.selfClosing) {
-    return true
+    return true;
   }
 
-  return false
+  return false;
 }
 
 /**
  * Check if an element has only text children (inline content)
  */
-function hasOnlyTextChildren(node: EditableNode): boolean {
-  return node.children.every(child => child.isText)
+function _hasOnlyTextChildren(node: EditableNode): boolean {
+  return node.children.every((child) => child.isText);
 }
 
 /**
@@ -75,67 +80,66 @@ function editableNodeToPlateElement(node: EditableNode): TElement {
   // Handle text nodes - wrap in paragraph
   if (node.isText) {
     return {
-      type: 'p',
+      type: "p",
       id: node.id,
-      children: [{ text: node.text || '' }],
-    }
+      children: [{ text: node.text || "" }],
+    };
   }
 
   // Handle fragments
-  if (node.tagName === '#fragment') {
+  if (node.tagName === "#fragment") {
     return {
-      type: 'fragment',
+      type: "fragment",
       id: node.id,
-      children: node.children.length > 0
-        ? node.children.map(editableNodeToPlateElement)
-        : [{ text: '' }],
-    } as unknown as TElement
+      children:
+        node.children.length > 0 ? node.children.map(editableNodeToPlateElement) : [{ text: "" }],
+    } as unknown as TElement;
   }
 
   // Convert props to plain values
   // IMPORTANT: Filter out reserved Plate keys to avoid conflicts
   // e.g., <input type="text" /> has a "type" prop that would overwrite the element type
-  const reservedKeys = new Set(['type', 'id', 'children', 'isVoid'])
-  const plateProps: Record<string, unknown> = {}
+  const reservedKeys = new Set(["type", "id", "children", "isVoid"]);
+  const plateProps: Record<string, unknown> = {};
   for (const [key, prop] of Object.entries(node.props)) {
-    if (key !== '...spread' && !reservedKeys.has(key)) {
-      plateProps[key] = prop.value
+    if (key !== "...spread" && !reservedKeys.has(key)) {
+      plateProps[key] = prop.value;
     }
   }
   // Store original props under a namespaced key to preserve them
-  const jsxProps: Record<string, unknown> = {}
+  const jsxProps: Record<string, unknown> = {};
   for (const [key, prop] of Object.entries(node.props)) {
-    if (key !== '...spread') {
-      jsxProps[key] = prop.value
+    if (key !== "...spread") {
+      jsxProps[key] = prop.value;
     }
   }
 
   // Use the actual tagName as the type
   // This preserves the original element for round-trip editing
-  const type = node.tagName
+  const type = node.tagName;
 
   // Check if this element should be void (no editable children)
-  const isVoid = shouldBeVoid(node)
+  const isVoid = shouldBeVoid(node);
 
   // Convert children
   // IMPORTANT: Even void elements preserve their children for structure/rendering
   // The children aren't directly editable in Plate, but we keep them for display
-  const children: (TElement | { text: string })[] = []
+  const children: (TElement | { text: string })[] = [];
 
   for (const child of node.children) {
     if (child.isText) {
       // Only add non-empty text nodes, or one empty if needed
-      if (child.text && child.text.trim()) {
-        children.push({ text: child.text })
+      if (child.text?.trim()) {
+        children.push({ text: child.text });
       }
     } else {
-      children.push(editableNodeToPlateElement(child))
+      children.push(editableNodeToPlateElement(child));
     }
   }
 
   // Ensure at least one child (Plate requirement)
   if (children.length === 0) {
-    children.push({ text: '' })
+    children.push({ text: "" });
   }
 
   return {
@@ -147,7 +151,7 @@ function editableNodeToPlateElement(node: EditableNode): TElement {
     children,
     // Mark void elements so Plate knows they're not editable
     ...(isVoid ? { isVoid: true } : {}),
-  }
+  };
 }
 
 /**
@@ -156,52 +160,52 @@ function editableNodeToPlateElement(node: EditableNode): TElement {
  * This preserves stable IDs for surgical updates
  */
 export function sourceToPlateValueSurgical(source: string): {
-  value: Value
-  parseResult: ParseResult
+  value: Value;
+  parseResult: ParseResult;
 } {
-  const parseResult = parseSourceWithLocations(source)
+  const parseResult = parseSourceWithLocations(source);
 
   if (!parseResult.root) {
     return {
-      value: [{ type: 'p', children: [{ text: '' }] }],
+      value: [{ type: "p", children: [{ text: "" }] }],
       parseResult,
-    }
+    };
   }
 
-  const rootElement = editableNodeToPlateElement(parseResult.root)
+  const rootElement = editableNodeToPlateElement(parseResult.root);
 
   // Handle fragments - extract children
-  if ((rootElement as any).type === 'fragment') {
-    const children = rootElement.children as TElement[]
+  if ((rootElement as any).type === "fragment") {
+    const children = rootElement.children as TElement[];
     // Filter to only elements (not text nodes at root level)
-    const elements = children.filter(child => 'type' in child) as TElement[]
+    const elements = children.filter((child) => "type" in child) as TElement[];
     return {
-      value: elements.length > 0 ? elements : [{ type: 'p', children: [{ text: '' }] }],
+      value: elements.length > 0 ? elements : [{ type: "p", children: [{ text: "" }] }],
       parseResult,
-    }
+    };
   }
 
   // If root is a div/span wrapper with block children, flatten to top-level
   // This matches Plate's flat document model
-  const rootTag = parseResult.root.tagName.toLowerCase()
-  if ((rootTag === 'div' || rootTag === 'span') && rootElement.children) {
+  const rootTag = parseResult.root.tagName.toLowerCase();
+  if ((rootTag === "div" || rootTag === "span") && rootElement.children) {
     // Check if children are block elements (not just text)
     const blockChildren = rootElement.children.filter(
-      (child: any) => 'type' in child && child.type !== 'text'
-    ) as TElement[]
+      (child: any) => "type" in child && child.type !== "text",
+    ) as TElement[];
 
     if (blockChildren.length > 0) {
       return {
         value: blockChildren,
         parseResult,
-      }
+      };
     }
   }
 
   return {
     value: [rootElement],
     parseResult,
-  }
+  };
 }
 
 // ============================================================================
@@ -221,27 +225,27 @@ export function sourceToPlateValueSurgical(source: string): {
 export function applyPlateChangesToSource(
   source: string,
   oldValue: Value,
-  newValue: Value
+  newValue: Value,
 ): string | null {
   // Generate mutations from the diff
-  const mutations = generateMutationsFromPlateChange(oldValue, newValue)
+  const mutations = generateMutationsFromPlateChange(oldValue, newValue);
 
   if (mutations.length === 0) {
     // No changes
-    return source
+    return source;
   }
 
-  console.log('[surgical-converters] Generated mutations:', mutations)
+  console.log("[surgical-converters] Generated mutations:", mutations);
 
   // Apply mutations to source
-  const result = applySurgicalMutations(source, mutations)
+  const result = applySurgicalMutations(source, mutations);
 
   if (result === null) {
-    console.error('[surgical-converters] Failed to apply mutations')
-    return null
+    console.error("[surgical-converters] Failed to apply mutations");
+    return null;
   }
 
-  return result
+  return result;
 }
 
 // ============================================================================
@@ -254,65 +258,65 @@ export function applyPlateChangesToSource(
  * Call this after parsing source to sync IDs
  */
 export function syncIdsFromSource(value: Value, parseResult: ParseResult): Value {
-  if (!parseResult.root) return value
+  if (!parseResult.root) return value;
 
   // Build a map of IDs by structure
-  const idMap = buildIdMap(parseResult.root)
+  const idMap = buildIdMap(parseResult.root);
 
   // Apply IDs to Plate value
-  return applyIdsToValue(value, idMap, [0])
+  return applyIdsToValue(value, idMap, [0]);
 }
 
 function buildIdMap(node: EditableNode, path: number[] = [0]): Map<string, string> {
-  const map = new Map<string, string>()
+  const map = new Map<string, string>();
 
   // Key by path for matching
-  const pathKey = path.join('.')
-  map.set(pathKey, node.id)
+  const pathKey = path.join(".");
+  map.set(pathKey, node.id);
 
   // Recurse into children
   node.children.forEach((child, index) => {
-    const childMap = buildIdMap(child, [...path, index])
-    childMap.forEach((id, key) => map.set(key, id))
-  })
+    const childMap = buildIdMap(child, [...path, index]);
+    childMap.forEach((id, key) => map.set(key, id));
+  });
 
-  return map
+  return map;
 }
 
 function applyIdsToValue(value: Value, idMap: Map<string, string>, basePath: number[]): Value {
   return value.map((element, index) => {
-    const path = [...basePath, index]
-    const pathKey = path.slice(1).join('.') // Skip the leading [0] from basePath
-    const id = idMap.get(pathKey) || idMap.get(index.toString())
+    const path = [...basePath, index];
+    const pathKey = path.slice(1).join("."); // Skip the leading [0] from basePath
+    const id = idMap.get(pathKey) || idMap.get(index.toString());
 
-    const newElement = { ...element }
+    const newElement = { ...element };
     if (id) {
-      (newElement as any).id = id
+      (newElement as any).id = id;
     }
 
     // Recurse into children
     if (Array.isArray(newElement.children)) {
       const elementChildren = newElement.children.filter(
-        (child: any) => 'type' in child
-      ) as TElement[]
+        (child: any) => "type" in child,
+      ) as TElement[];
 
       if (elementChildren.length > 0) {
         newElement.children = newElement.children.map((child: any, childIndex: number) => {
-          if ('type' in child) {
-            const childPath = [...path, childIndex]
-            const childPathKey = childPath.slice(1).join('.')
-            const childId = idMap.get(childPathKey)
+          if ("type" in child) {
+            const childPath = [...path, childIndex];
+            const childPathKey = childPath.slice(1).join(".");
+            const childId = idMap.get(childPathKey);
             if (childId) {
-              return { ...child, id: childId }
+              return { ...child, id: childId };
             }
           }
-          return child
-        })
+          return child;
+        });
       }
     }
 
-    return newElement
-  })
+    return newElement;
+  });
 }
 
 // ============================================================================
@@ -320,4 +324,4 @@ function applyIdsToValue(value: Value, idMap: Map<string, string>, basePath: num
 // ============================================================================
 
 // Re-export original converters as fallback
-export { sourceToPlateValue, plateValueToSource } from './converters'
+export { plateValueToSource, sourceToPlateValue } from "./converters";

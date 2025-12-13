@@ -1,5 +1,10 @@
+import { invoke } from "@tauri-apps/api/core";
+import { ArrowUp, Blocks, Database, Hand, Loader2, Paperclip, Square, X } from "lucide-react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { ChatSettings } from "@/components/ChatSettings";
 import { Button } from "@/components/ui/button";
+import type { AnyPendingAttachment } from "@/hooks/useChatState";
+import { useActiveSession } from "@/hooks/useNavState";
 import { useServer } from "@/hooks/useServer";
 import {
   useAbortSession,
@@ -7,18 +12,9 @@ import {
   useSendMessage,
   useSessionStatuses,
 } from "@/hooks/useSession";
-import {
-  useWorkbook,
-  useWorkbookDatabase,
-  useActiveWorkbookId,
-} from "@/hooks/useWorkbook";
-import { useActiveSession } from "@/hooks/useNavState";
-import type { AnyPendingAttachment } from "@/hooks/useChatState";
+import { useActiveWorkbookId, useWorkbook, useWorkbookDatabase } from "@/hooks/useWorkbook";
+import { fillTemplate, PROMPTS } from "@/lib/prompts";
 import { cn } from "@/lib/utils";
-import { ArrowUp, Hand, Loader2, Square, X, Paperclip, Blocks, FileText, Database } from "lucide-react";
-import { PROMPTS, fillTemplate } from "@/lib/prompts";
-import { useCallback, useEffect, useRef, useState } from "react";
-import { invoke } from "@tauri-apps/api/core";
 
 interface ChatBarProps {
   expanded: boolean;
@@ -151,7 +147,7 @@ export function ChatBar({
               system,
             });
           },
-        }
+        },
       );
       return;
     }
@@ -161,7 +157,21 @@ export function ChatBar({
       content: finalMessage,
       system,
     });
-  }, [input, pendingAttachment, isBusy, isConnected, expanded, activeWorkbookId, activeSessionId, onExpandChange, getSystemPrompt, setPendingAttachment, createSession, setActiveSession, sendMessage]);
+  }, [
+    input,
+    pendingAttachment,
+    isBusy,
+    isConnected,
+    expanded,
+    activeWorkbookId,
+    activeSessionId,
+    onExpandChange,
+    getSystemPrompt,
+    setPendingAttachment,
+    createSession,
+    setActiveSession,
+    sendMessage,
+  ]);
 
   // Auto-submit when file is dropped or block error fix is triggered
   useEffect(() => {
@@ -173,10 +183,12 @@ export function ChatBar({
         setInput(PROMPTS.IMPORT_FILE);
       } else if (pendingAttachment.type === "block" && pendingAttachment.errorContext) {
         // Block error fix: include block ID and error context in prompt
-        setInput(fillTemplate("FIX_BLOCK_ERROR", {
-          blockId: pendingAttachment.blockId,
-          errorContext: pendingAttachment.errorContext,
-        }));
+        setInput(
+          fillTemplate("FIX_BLOCK_ERROR", {
+            blockId: pendingAttachment.blockId,
+            errorContext: pendingAttachment.errorContext,
+          }),
+        );
       } else {
         // Other cases: don't auto-submit
         return;
@@ -185,7 +197,14 @@ export function ChatBar({
       // Submit on next tick after input is set
       setTimeout(() => handleSubmit(), 0);
     }
-  }, [autoSubmitPending, pendingAttachment, isConnected, isBusy, setAutoSubmitPending, handleSubmit]);
+  }, [
+    autoSubmitPending,
+    pendingAttachment,
+    isConnected,
+    isBusy,
+    setAutoSubmitPending,
+    handleSubmit,
+  ]);
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === "Enter" && !e.shiftKey) {
@@ -210,14 +229,12 @@ export function ChatBar({
       data-chat-bar
       className="flex flex-col gap-1 px-2 py-2 rounded-xl border border-border/40 bg-background/80 backdrop-blur-sm overflow-visible"
     >
-      {/* Attachment chip - show when file, block, page, or source is attached */}
+      {/* Attachment chip - show when file, block, or source is attached */}
       {pendingAttachment && (
         <div className="flex items-center gap-1 px-1">
           <div className="flex items-center gap-1.5 px-2 py-1 rounded-md bg-accent/50 text-xs">
             {pendingAttachment.type === "block" ? (
               <Blocks className="h-3 w-3 text-muted-foreground" />
-            ) : pendingAttachment.type === "page" ? (
-              <FileText className="h-3 w-3 text-muted-foreground" />
             ) : pendingAttachment.type === "source" ? (
               <Database className="h-3 w-3 text-muted-foreground" />
             ) : (
@@ -225,6 +242,7 @@ export function ChatBar({
             )}
             <span className="max-w-[200px] truncate">{pendingAttachment.name}</span>
             <button
+              type="button"
               onClick={() => setPendingAttachment(null)}
               className="p-0.5 rounded hover:bg-accent transition-colors"
             >
@@ -241,10 +259,7 @@ export function ChatBar({
           <Button
             variant="ghost"
             size="icon"
-            className={cn(
-              "h-8 w-8 shrink-0 rounded-lg",
-              !isConnected && "text-red-400"
-            )}
+            className={cn("h-8 w-8 shrink-0 rounded-lg", !isConnected && "text-red-400")}
           >
             <Hand className="h-5 w-5" />
           </Button>
@@ -258,7 +273,7 @@ export function ChatBar({
             setInput(e.target.value);
             // Auto-resize textarea
             e.target.style.height = "auto";
-            e.target.style.height = Math.min(e.target.scrollHeight, 120) + "px";
+            e.target.style.height = `${Math.min(e.target.scrollHeight, 120)}px`;
           }}
           onKeyDown={handleKeyDown}
           onFocus={() => {
@@ -285,8 +300,7 @@ export function ChatBar({
             size="icon"
             className={cn(
               "h-7 w-7 shrink-0 rounded-lg transition-colors",
-              hasContent &&
-                "bg-primary text-primary-foreground hover:bg-primary/90"
+              hasContent && "bg-primary text-primary-foreground hover:bg-primary/90",
             )}
             disabled={
               !hasContent ||
@@ -302,8 +316,8 @@ export function ChatBar({
             ) : (
               <ArrowUp className="h-3.5 w-3.5" />
             )}
-        </Button>
-      )}
+          </Button>
+        )}
       </div>
     </div>
   );

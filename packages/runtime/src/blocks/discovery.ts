@@ -5,29 +5,29 @@
  * Supports nested folders with path-based block IDs.
  */
 
-import { existsSync } from "fs"
-import { readdir } from "fs/promises"
-import { join, basename, dirname } from "path"
-import type { BlockMeta, DiscoveredBlock } from "@hands/stdlib"
-import { validateBlockFile } from "./validate.js"
+import { existsSync } from "node:fs";
+import { readdir } from "node:fs/promises";
+import { basename, dirname, join } from "node:path";
+import type { BlockMeta, DiscoveredBlock } from "@hands/stdlib";
+import { validateBlockFile } from "./validate.js";
 
 export interface BlockDiscoveryResult {
   /** Successfully discovered blocks */
-  blocks: DiscoveredBlock[]
+  blocks: DiscoveredBlock[];
 
   /** Errors encountered during discovery */
   errors: Array<{
-    file: string
-    error: string
-  }>
+    file: string;
+    error: string;
+  }>;
 }
 
 export interface DiscoverBlocksOptions {
   /** Patterns to include (default: all *.tsx files) */
-  include?: string[]
+  include?: string[];
 
   /** Patterns to exclude (default: ui/** ) */
-  exclude?: string[]
+  exclude?: string[];
 }
 
 /**
@@ -41,46 +41,46 @@ export interface DiscoverBlocksOptions {
  */
 export async function discoverBlocks(
   blocksDir: string,
-  options: DiscoverBlocksOptions = {}
+  options: DiscoverBlocksOptions = {},
 ): Promise<BlockDiscoveryResult> {
-  const blocks: DiscoveredBlock[] = []
-  const errors: Array<{ file: string; error: string }> = []
+  const blocks: DiscoveredBlock[] = [];
+  const errors: Array<{ file: string; error: string }> = [];
 
   // Check if directory exists
   if (!existsSync(blocksDir)) {
-    return { blocks, errors }
+    return { blocks, errors };
   }
 
   // Find all .tsx files recursively
-  const files = await findBlockFiles(blocksDir, "", options)
+  const files = await findBlockFiles(blocksDir, "", options);
 
   for (const file of files) {
-    const filePath = join(blocksDir, file)
+    const filePath = join(blocksDir, file);
     // ID is path without extension: "charts/bar-chart.tsx" -> "charts/bar-chart"
-    const id = file.replace(/\.tsx$/, "")
+    const id = file.replace(/\.tsx$/, "");
     // Parent dir: "charts/bar-chart.tsx" -> "charts", "foo.tsx" -> ""
-    const parentDir = dirname(file) === "." ? "" : dirname(file)
+    const parentDir = dirname(file) === "." ? "" : dirname(file);
 
     try {
       // Validate the file
-      const validation = await validateBlockFile(filePath)
+      const validation = await validateBlockFile(filePath);
 
       if (!validation.valid) {
-        errors.push({ file, error: validation.error || "Unknown validation error" })
-        continue
+        errors.push({ file, error: validation.error || "Unknown validation error" });
+        continue;
       }
 
       // Create lazy loader
       const load = async () => {
-        const module = await import(filePath)
+        const module = await import(filePath);
         return {
           default: module.default,
           meta: module.meta as BlockMeta | undefined,
-        }
-      }
+        };
+      };
 
       // Use filename for title if not specified in meta
-      const filename = basename(file, ".tsx")
+      const filename = basename(file, ".tsx");
 
       blocks.push({
         id,
@@ -88,16 +88,16 @@ export async function discoverBlocks(
         parentDir,
         meta: validation.meta || { title: filename },
         load,
-      })
+      });
     } catch (err) {
       errors.push({
         file,
         error: `Failed to process: ${err instanceof Error ? err.message : String(err)}`,
-      })
+      });
     }
   }
 
-  return { blocks, errors }
+  return { blocks, errors };
 }
 
 /**
@@ -109,44 +109,52 @@ export async function discoverBlocks(
 async function findBlockFiles(
   baseDir: string,
   subDir: string,
-  options: DiscoverBlocksOptions
+  options: DiscoverBlocksOptions,
 ): Promise<string[]> {
-  const files: string[] = []
-  const currentDir = subDir ? join(baseDir, subDir) : baseDir
-  const entries = await readdir(currentDir, { withFileTypes: true })
+  const files: string[] = [];
+  const currentDir = subDir ? join(baseDir, subDir) : baseDir;
+  const entries = await readdir(currentDir, { withFileTypes: true });
 
   for (const entry of entries) {
-    const relativePath = subDir ? `${subDir}/${entry.name}` : entry.name
+    const relativePath = subDir ? `${subDir}/${entry.name}` : entry.name;
 
     // Recursively scan subdirectories (except excluded ones like ui/)
     if (entry.isDirectory()) {
       // Check if directory should be excluded
-      if (options.exclude?.some((pattern) => matchPattern(relativePath, pattern) || matchPattern(`${relativePath}/`, pattern))) {
-        continue
+      if (
+        options.exclude?.some(
+          (pattern) =>
+            matchPattern(relativePath, pattern) || matchPattern(`${relativePath}/`, pattern),
+        )
+      ) {
+        continue;
       }
       // Recurse into subdirectory
-      const subFiles = await findBlockFiles(baseDir, relativePath, options)
-      files.push(...subFiles)
-      continue
+      const subFiles = await findBlockFiles(baseDir, relativePath, options);
+      files.push(...subFiles);
+      continue;
     }
 
     // Only process .tsx files
-    if (!entry.name.endsWith(".tsx")) continue
+    if (!entry.name.endsWith(".tsx")) continue;
 
     // Check exclude patterns
     if (options.exclude?.some((pattern) => matchPattern(relativePath, pattern))) {
-      continue
+      continue;
     }
 
     // Check include patterns (if specified)
-    if (options.include && !options.include.some((pattern) => matchPattern(relativePath, pattern))) {
-      continue
+    if (
+      options.include &&
+      !options.include.some((pattern) => matchPattern(relativePath, pattern))
+    ) {
+      continue;
     }
 
-    files.push(relativePath)
+    files.push(relativePath);
   }
 
-  return files.sort()
+  return files.sort();
 }
 
 /**
@@ -154,8 +162,6 @@ async function findBlockFiles(
  */
 function matchPattern(filename: string, pattern: string): boolean {
   // Convert pattern to regex
-  const regex = new RegExp(
-    "^" + pattern.replace(/\*/g, ".*").replace(/\?/g, ".") + "$"
-  )
-  return regex.test(filename)
+  const regex = new RegExp(`^${pattern.replace(/\*/g, ".*").replace(/\?/g, ".")}$`);
+  return regex.test(filename);
 }

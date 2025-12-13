@@ -7,10 +7,10 @@
  * - No manual sync management needed
  */
 
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { invoke } from "@tauri-apps/api/core";
 import { useActiveWorkbookDirectory, useActiveWorkbookId } from "@/hooks/useWorkbook";
-import { api, type Session, type PermissionResponse, type MessageWithParts } from "@/lib/api";
+import { api, type MessageWithParts, type PermissionResponse, type Session } from "@/lib/api";
 import { fillTemplate } from "@/lib/prompts";
 
 // ============ SESSION HOOKS ============
@@ -80,7 +80,7 @@ export function useDeleteSession() {
     onSuccess: (_, deletedId) => {
       // Remove from sessions list
       queryClient.setQueryData<Session[]>(["sessions", directory], (old) =>
-        old?.filter((s) => s.id !== deletedId)
+        old?.filter((s) => s.id !== deletedId),
       );
       // Remove individual session cache
       queryClient.removeQueries({ queryKey: ["session", deletedId] });
@@ -116,7 +116,9 @@ export function useMessages(sessionId: string | null) {
         // This happens when fetching mid-stream messages after restart
         const errorMsg = err instanceof Error ? err.message : String(err);
         if (errorMsg.includes("required following item")) {
-          console.warn("[useMessages] Session has incomplete streaming data, returning empty until ready");
+          console.warn(
+            "[useMessages] Session has incomplete streaming data, returning empty until ready",
+          );
           return [];
         }
         throw err;
@@ -166,7 +168,11 @@ export function useSendMessage() {
       await queryClient.cancelQueries({ queryKey: ["messages", sessionId, directory] });
 
       // Snapshot previous value
-      const previousMessages = queryClient.getQueryData<MessageWithParts[]>(["messages", sessionId, directory]);
+      const previousMessages = queryClient.getQueryData<MessageWithParts[]>([
+        "messages",
+        sessionId,
+        directory,
+      ]);
 
       // Optimistically add user message (use unknown cast for SDK types)
       const now = Date.now();
@@ -178,25 +184,27 @@ export function useSendMessage() {
           role: "user",
           time: { created: now, updated: now },
         },
-        parts: [{
-          id: `optimistic-part-${now}`,
-          type: "text",
-          text: content,
-          messageID: optimisticId,
-          sessionID: sessionId,
-          time: { created: now, updated: now },
-        }],
+        parts: [
+          {
+            id: `optimistic-part-${now}`,
+            type: "text",
+            text: content,
+            messageID: optimisticId,
+            sessionID: sessionId,
+            time: { created: now, updated: now },
+          },
+        ],
       } as unknown as MessageWithParts;
 
-      queryClient.setQueryData<MessageWithParts[]>(
-        ["messages", sessionId, directory],
-        (old) => [...(old ?? []), optimisticMessage]
-      );
+      queryClient.setQueryData<MessageWithParts[]>(["messages", sessionId, directory], (old) => [
+        ...(old ?? []),
+        optimisticMessage,
+      ]);
 
       // Optimistically set status to busy
       queryClient.setQueryData<Record<string, { type: string }>>(
         ["session-statuses", directory],
-        (old) => ({ ...old, [sessionId]: { type: "busy" } })
+        (old) => ({ ...old, [sessionId]: { type: "busy" } }),
       );
 
       return { previousMessages };
@@ -347,10 +355,7 @@ export function useImportWithAgent() {
 
       // 2. Create a new session for the import
       console.log("[import] Step 2: Creating session...");
-      const session = await api.sessions.create(
-        { title: `Import: ${file.name}` },
-        directory
-      );
+      const session = await api.sessions.create({ title: `Import: ${file.name}` }, directory);
       console.log("[import] Session created:", session.id);
 
       // Notify caller of session ID for UI tracking
@@ -369,7 +374,7 @@ export function useImportWithAgent() {
       console.log("[import] Step 4: Setting status to busy...");
       queryClient.setQueryData<Record<string, { type: string }>>(
         ["session-statuses", directory],
-        (old) => ({ ...old, [session.id]: { type: "busy" } })
+        (old) => ({ ...old, [session.id]: { type: "busy" } }),
       );
 
       // 5. CRITICAL: Initialize messages cache so SSE updates can find it
@@ -386,18 +391,20 @@ export function useImportWithAgent() {
           role: "user",
           time: { created: now, updated: now },
         },
-        parts: [{
-          id: `optimistic-part-${now}`,
-          type: "text",
-          text: userMessage,
-          messageID: optimisticId,
-          sessionID: session.id,
-          time: { created: now, updated: now },
-        }],
+        parts: [
+          {
+            id: `optimistic-part-${now}`,
+            type: "text",
+            text: userMessage,
+            messageID: optimisticId,
+            sessionID: session.id,
+            time: { created: now, updated: now },
+          },
+        ],
       } as unknown as MessageWithParts;
       queryClient.setQueryData<MessageWithParts[]>(
         ["messages", session.id, directory],
-        [optimisticMessage]
+        [optimisticMessage],
       );
       console.log("[import] Messages cache initialized with optimistic message");
 
@@ -407,7 +414,10 @@ export function useImportWithAgent() {
       console.log("[import] Prompt:", userMessage);
 
       // Use main "hands" agent to orchestrate import + view integration
-      const promptResult = await api.promptAsync(session.id, userMessage, { agent: "hands", directory });
+      const promptResult = await api.promptAsync(session.id, userMessage, {
+        agent: "hands",
+        directory,
+      });
       console.log("[import] promptAsync returned:", promptResult);
 
       // Immediately invalidate messages to trigger a fetch

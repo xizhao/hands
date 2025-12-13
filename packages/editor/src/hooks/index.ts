@@ -1,4 +1,4 @@
 /**
  * Hooks module
  */
-export * from './useEditor'
+export * from "./useEditor";

@@ -1,8 +1,8 @@
-import { useEffect, useRef, useLayoutEffect } from "react";
+import { useEffect, useLayoutEffect, useRef } from "react";
+import { ChatMessage } from "@/components/ChatMessage";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { useActiveSession } from "@/hooks/useNavState";
 import { useMessages } from "@/hooks/useSession";
-import { ChatMessage } from "@/components/ChatMessage";
 
 interface ChatThreadProps {
   onCollapse: () => void;
@@ -25,7 +25,7 @@ export function ChatThread({ onCollapse: _onCollapse }: ChatThreadProps) {
       scrollToBottom(hasScrolledRef.current ? "smooth" : "instant");
       hasScrolledRef.current = true;
     }
-  }, [messages.length]);
+  }, [messages.length, scrollToBottom]);
 
   // Scroll to bottom on mount (after animation settles)
   useLayoutEffect(() => {
@@ -33,7 +33,7 @@ export function ChatThread({ onCollapse: _onCollapse }: ChatThreadProps) {
       scrollToBottom("instant");
     }, 250); // Wait for expand animation
     return () => clearTimeout(timer);
-  }, []);
+  }, [scrollToBottom]);
 
   if (!activeSessionId) {
     return (
@@ -58,13 +58,9 @@ export function ChatThread({ onCollapse: _onCollapse }: ChatThreadProps) {
       <ScrollArea className="max-h-[calc(100vh-10rem)]">
         <div className="p-3 space-y-3">
           {messages.length === 0 ? (
-            <div className="text-center text-muted-foreground text-sm py-8">
-              No messages yet
-            </div>
+            <div className="text-center text-muted-foreground text-sm py-8">No messages yet</div>
           ) : (
-            messages.map((message) => (
-              <ChatMessage key={message.info.id} message={message} />
-            ))
+            messages.map((message) => <ChatMessage key={message.info.id} message={message} />)
           )}
           {/* Scroll anchor */}
           <div ref={bottomRef} />

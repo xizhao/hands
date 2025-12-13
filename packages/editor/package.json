@@ -52,7 +52,7 @@
   },
   "devDependencies": {
     "@cloudflare/vite-plugin": "1.16.1",
-    "@oxc-parser/binding-wasm32-wasi": "^0.102.0",
+    "@oxc-parser/binding-wasm32-wasi": "0.102.0",
     "@types/react": "^19.2.0",
     "@types/react-dom": "^19.2.0",
     "@vitejs/plugin-react": "^4.2.0",

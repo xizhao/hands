@@ -1,9 +1,9 @@
+import { CheckCircle2, Circle, ListTodo, Loader2 } from "lucide-react";
 import { memo } from "react";
-import type { Todo } from "@/lib/api";
-import { useTodos } from "@/hooks/useSession";
-import { useActiveSession } from "@/hooks/useNavState";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { CheckCircle2, Circle, Loader2, ListTodo } from "lucide-react";
+import { useActiveSession } from "@/hooks/useNavState";
+import { useTodos } from "@/hooks/useSession";
+import type { Todo } from "@/lib/api";
 import { cn } from "@/lib/utils";
 
 const TodoItem = memo(({ todo }: { todo: Todo }) => {
@@ -18,14 +18,14 @@ const TodoItem = memo(({ todo }: { todo: Todo }) => {
       className={cn(
         "flex items-start gap-2 px-3 py-2 text-sm border-b border-border/50 last:border-b-0",
         todo.status === "completed" && "opacity-60",
-        todo.status === "in_progress" && "bg-blue-500/5"
+        todo.status === "in_progress" && "bg-blue-500/5",
       )}
     >
       <span className="shrink-0 mt-0.5">{statusIcon}</span>
       <span
         className={cn(
           "flex-1",
-          todo.status === "completed" && "line-through text-muted-foreground"
+          todo.status === "completed" && "line-through text-muted-foreground",
         )}
       >
         {todo.content}

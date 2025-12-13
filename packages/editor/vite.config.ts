@@ -1,37 +1,40 @@
-import { defineConfig } from 'vite'
-import react from '@vitejs/plugin-react'
-import { resolve } from 'path'
+import { resolve } from "node:path";
+import react from "@vitejs/plugin-react";
+import { defineConfig } from "vite";
 
 export default defineConfig({
   plugins: [react()],
-  root: 'demo', // Demo app is in demo/
+  root: "demo", // Demo app is in demo/
   build: {
-    target: 'esnext', // Support top-level await
+    target: "esnext", // Support top-level await
   },
   esbuild: {
-    target: 'esnext', // Support top-level await in dev
+    target: "esnext", // Support top-level await in dev
   },
   resolve: {
     alias: {
-      '@hands/editor': resolve(__dirname, 'src'),
+      "@hands/editor": resolve(__dirname, "src"),
       // Use WASM entry for oxc-parser in browser
-      'oxc-parser': resolve(__dirname, '../../node_modules/.bun/oxc-parser@0.102.0/node_modules/oxc-parser/src-js/wasm.js'),
+      "oxc-parser": resolve(
+        __dirname,
+        "../../node_modules/.bun/oxc-parser@0.102.0/node_modules/oxc-parser/src-js/wasm.js",
+      ),
       // Resolve WASM binding (manually installed since bun prefers native)
-      '@oxc-parser/binding-wasm32-wasi': resolve(__dirname, '../../node_modules/@oxc-parser+binding-wasm32-wasi'),
+      "@oxc-parser/binding-wasm32-wasi": resolve(
+        __dirname,
+        "../../node_modules/@oxc-parser+binding-wasm32-wasi",
+      ),
     },
   },
   server: {
     port: 5166, // Use 5166 to avoid conflicts with main app
   },
   optimizeDeps: {
-    include: [
-      '@codemirror/lang-javascript',
-      '@uiw/react-codemirror',
-    ],
+    include: ["@codemirror/lang-javascript", "@uiw/react-codemirror"],
     // Exclude oxc-parser from optimization - WASM needs top-level await
-    exclude: ['oxc-parser', '@oxc-parser/binding-wasm32-wasi'],
+    exclude: ["oxc-parser", "@oxc-parser/binding-wasm32-wasi"],
     esbuildOptions: {
-      target: 'esnext',
+      target: "esnext",
     },
   },
-})
+});

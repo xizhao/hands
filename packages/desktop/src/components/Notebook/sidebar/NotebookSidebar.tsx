@@ -1,20 +1,50 @@
 /**
- * NotebookSidebar - Navigation sidebar for sources and blocks
+ * NotebookSidebar - Navigation sidebar with 2 columns: Blocks and Data
  *
  * Features:
- * - Sources section with database tables
- * - Blocks section with custom components
+ * - Blocks section with custom components (grouped by directory)
+ * - Data section containing:
+ *   - Unassociated Tables folder (tables not linked to any source)
+ *   - Sources (expandable to show their associated tables)
  * - Collapsible sections with headers
  * - Router-based navigation
  * - Unified responsive layout (single view, responsive styling)
  */
 
-import { useState, useMemo, useCallback } from "react";
+import {
+  ArrowsClockwise,
+  CaretLeft,
+  CaretRight,
+  CircleNotch,
+  Code,
+  Copy,
+  Database,
+  Folder,
+  FolderOpen,
+  Key,
+  Newspaper,
+  Trash,
+  Warning,
+} from "@phosphor-icons/react";
 import { useNavigate, useRouter } from "@tanstack/react-router";
-import { cn } from "@/lib/utils";
-import { Plus, ChevronDown, ChevronRight, Search, X, Pin, PinOff, MoreHorizontal } from "lucide-react";
-import { CaretLeft, CaretRight, Database, Newspaper, Code, Key, CircleNotch, ArrowsClockwise, Warning, Folder, FolderOpen, Copy, Trash } from "@phosphor-icons/react";
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import {
+  ChevronDown,
+  ChevronRight,
+  MoreHorizontal,
+  Pin,
+  PinOff,
+  Plus,
+  Search,
+  X,
+} from "lucide-react";
+import { useCallback, useMemo, useState } from "react";
+import {
+  Dialog,
+  DialogBody,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -22,15 +52,16 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { useDbSchema, useManifest, useActiveWorkbookId, useDbReady, useRuntimePort } from "@/hooks/useWorkbook";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { useSourceManagement } from "@/hooks/useSources";
 import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogBody,
-} from "@/components/ui/dialog";
+  useActiveWorkbookId,
+  useDbReady,
+  useDbSchema,
+  useManifest,
+  useRuntimePort,
+} from "@/hooks/useWorkbook";
+import { cn } from "@/lib/utils";
 
 interface NotebookSidebarProps {
   collapsed?: boolean;
@@ -47,41 +78,60 @@ interface NotebookSidebarProps {
 const sourceIconMap: Record<string, React.ElementType> = {
   newspaper: Newspaper,
   code: Code,
-}
+};
 
 function SourceIcon({ icon, className }: { icon?: string; className?: string }) {
-  const Icon = icon && sourceIconMap[icon] ? sourceIconMap[icon] : Database
-  return <Icon weight="duotone" className={className} />
+  const Icon = icon && sourceIconMap[icon] ? sourceIconMap[icon] : Database;
+  return <Icon weight="duotone" className={className} />;
 }
 
 // Shared list item styles - consistent across all views
-const listItemStyles = "w-full flex items-center gap-2 px-2 py-1 text-sm text-muted-foreground hover:text-foreground hover:bg-accent/50 rounded-md transition-colors group"
-const listItemIconStyles = "shrink-0 transition-colors"
-const emptyStateStyles = "flex items-center gap-2 px-2 py-1 text-sm text-muted-foreground/60"
+const listItemStyles =
+  "w-full flex items-center gap-2 px-2 py-1 text-sm text-muted-foreground hover:text-foreground hover:bg-accent/50 rounded-md transition-colors group";
+const listItemIconStyles = "shrink-0 transition-colors";
+const emptyStateStyles = "flex items-center gap-2 px-2 py-1 text-sm text-muted-foreground/60";
 
 // Icon components with hover color
 function BlockIcon({ className, empty }: { className?: string; empty?: boolean }) {
   return (
-    <span className={cn(listItemIconStyles, empty ? "opacity-50" : "group-hover:text-blue-400", className)}>
+    <span
+      className={cn(
+        listItemIconStyles,
+        empty ? "opacity-50" : "group-hover:text-blue-400",
+        className,
+      )}
+    >
       &#x25A0;
     </span>
-  )
+  );
 }
 
 function SourceItemIcon({ className, empty }: { className?: string; empty?: boolean }) {
   return (
-    <span className={cn(listItemIconStyles, empty ? "opacity-50" : "group-hover:text-green-400", className)}>
+    <span
+      className={cn(
+        listItemIconStyles,
+        empty ? "opacity-50" : "group-hover:text-green-400",
+        className,
+      )}
+    >
       &#x25B2;
     </span>
-  )
+  );
 }
 
 function DataIcon({ className, empty }: { className?: string; empty?: boolean }) {
   return (
-    <span className={cn(listItemIconStyles, empty ? "opacity-50" : "group-hover:text-purple-400", className)}>
+    <span
+      className={cn(
+        listItemIconStyles,
+        empty ? "opacity-50" : "group-hover:text-purple-400",
+        className,
+      )}
+    >
       &#x25CF;
     </span>
-  )
+  );
 }
 
 // Reusable dropdown for item actions (copy, delete)
@@ -93,7 +143,13 @@ interface ItemActionsProps {
   onOpenChange?: (open: boolean) => void;
 }
 
-function ItemActions({ onCopy, onDelete, copyLabel = "Duplicate", deleteLabel = "Delete", onOpenChange }: ItemActionsProps) {
+function ItemActions({
+  onCopy,
+  onDelete,
+  copyLabel = "Duplicate",
+  deleteLabel = "Delete",
+  onOpenChange,
+}: ItemActionsProps) {
   return (
     <DropdownMenu onOpenChange={onOpenChange}>
       <DropdownMenuTrigger asChild>
@@ -106,7 +162,12 @@ function ItemActions({ onCopy, onDelete, copyLabel = "Duplicate", deleteLabel = 
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="w-32">
         {onCopy && (
-          <DropdownMenuItem onClick={(e) => { e.stopPropagation(); onCopy(); }}>
+          <DropdownMenuItem
+            onClick={(e) => {
+              e.stopPropagation();
+              onCopy();
+            }}
+          >
             <Copy weight="duotone" className="h-3.5 w-3.5 mr-2" />
             {copyLabel}
           </DropdownMenuItem>
@@ -114,7 +175,10 @@ function ItemActions({ onCopy, onDelete, copyLabel = "Duplicate", deleteLabel = 
         {onCopy && onDelete && <DropdownMenuSeparator />}
         {onDelete && (
           <DropdownMenuItem
-            onClick={(e) => { e.stopPropagation(); onDelete(); }}
+            onClick={(e) => {
+              e.stopPropagation();
+              onDelete();
+            }}
             className="text-destructive focus:text-destructive"
           >
             <Trash weight="duotone" className="h-3.5 w-3.5 mr-2" />
@@ -123,10 +187,16 @@ function ItemActions({ onCopy, onDelete, copyLabel = "Duplicate", deleteLabel = 
         )}
       </DropdownMenuContent>
     </DropdownMenu>
-  )
+  );
 }
 
-export function NotebookSidebar({ collapsed = false, fullWidth = false, pinned = false, onPinnedChange, onMenuOpenChange }: NotebookSidebarProps) {
+export function NotebookSidebar({
+  collapsed = false,
+  fullWidth = false,
+  pinned = false,
+  onPinnedChange,
+  onMenuOpenChange,
+}: NotebookSidebarProps) {
   const navigate = useNavigate();
   const router = useRouter();
 
@@ -137,33 +207,40 @@ export function NotebookSidebar({ collapsed = false, fullWidth = false, pinned =
   const { isDbReady, isLoading: isDbLoading } = useDbReady();
 
   // Source management hooks
-  const {
-    sources,
-    availableSources,
-    addSource,
-    isAdding,
-    syncSource,
-    isSyncing,
-    syncingSourceId,
-  } = useSourceManagement();
+  const { sources, availableSources, addSource, isAdding, syncSource, isSyncing, syncingSourceId } =
+    useSourceManagement();
 
   // All data from manifest (filesystem source of truth)
   const blocks = manifest?.blocks ?? [];
   const blocksLoading = manifestLoading;
 
-  const [sourcesExpanded, setSourcesExpanded] = useState(true);
   const [blocksExpanded, setBlocksExpanded] = useState(true);
   const [dataExpanded, setDataExpanded] = useState(true);
   const [expandedDirs, setExpandedDirs] = useState<Set<string>>(new Set()); // Track expanded directories
+  const [expandedSources, setExpandedSources] = useState<Set<string>>(new Set()); // Track expanded sources
+  const [unassociatedExpanded, setUnassociatedExpanded] = useState(true); // Track unassociated tables folder
 
   // Toggle directory expansion
   const toggleDir = useCallback((dir: string) => {
-    setExpandedDirs(prev => {
+    setExpandedDirs((prev) => {
       const next = new Set(prev);
       if (next.has(dir)) {
         next.delete(dir);
       } else {
         next.add(dir);
+      }
+      return next;
+    });
+  }, []);
+
+  // Toggle source expansion
+  const toggleSource = useCallback((sourceId: string) => {
+    setExpandedSources((prev) => {
+      const next = new Set(prev);
+      if (next.has(sourceId)) {
+        next.delete(sourceId);
+      } else {
+        next.add(sourceId);
       }
       return next;
     });
@@ -182,21 +259,52 @@ export function NotebookSidebar({ collapsed = false, fullWidth = false, pinned =
         if (!tree.has(parentDir)) {
           tree.set(parentDir, []);
         }
-        tree.get(parentDir)!.push(block);
+        tree.get(parentDir)?.push(block);
       }
     }
 
     return { rootBlocks, directories: tree };
   }, [blocks]);
+
+  // Group tables by source - tables prefixed with source name belong to that source
+  const { sourceTableMap, unassociatedTables } = useMemo(() => {
+    const tableMap = new Map<string, string[]>(); // sourceId -> table names
+    const unassociated: string[] = [];
+
+    if (!schema) return { sourceTableMap: tableMap, unassociatedTables: unassociated };
+
+    for (const table of schema) {
+      const tableName = table.table_name;
+      // Check if table is prefixed with any source name (e.g., "hackernews_stories" belongs to "hackernews" source)
+      let matched = false;
+      for (const source of sources) {
+        const prefix = `${source.name.toLowerCase()}_`;
+        if (
+          tableName.toLowerCase().startsWith(prefix) ||
+          tableName.toLowerCase() === source.name.toLowerCase()
+        ) {
+          if (!tableMap.has(source.id)) {
+            tableMap.set(source.id, []);
+          }
+          tableMap.get(source.id)?.push(tableName);
+          matched = true;
+          break;
+        }
+      }
+      if (!matched) {
+        unassociated.push(tableName);
+      }
+    }
+
+    return { sourceTableMap: tableMap, unassociatedTables: unassociated };
+  }, [schema, sources]);
   const [searchQuery, setSearchQuery] = useState("");
   const [addSourceOpen, setAddSourceOpen] = useState(false);
   const [selectedSource, setSelectedSource] = useState<string | null>(null);
 
   // Get installed source names for filtering
   const installedSourceNames = sources.map((s) => s.name);
-  const availableToAdd = availableSources.filter(
-    (s) => !installedSourceNames.includes(s.name)
-  );
+  const availableToAdd = availableSources.filter((s) => !installedSourceNames.includes(s.name));
 
   const handleAddSource = async (sourceName: string) => {
     setSelectedSource(sourceName);
@@ -206,114 +314,144 @@ export function NotebookSidebar({ collapsed = false, fullWidth = false, pinned =
   };
 
   // Filter sources and blocks based on search query
-  const filteredSources = useMemo(() => {
+  const _filteredSources = useMemo(() => {
     if (!searchQuery.trim() || !schema) return schema;
     const query = searchQuery.toLowerCase();
     return schema.filter((table) => table.table_name.toLowerCase().includes(query));
   }, [schema, searchQuery]);
 
-  const filteredBlocks = useMemo(() => {
+  const _filteredBlocks = useMemo(() => {
     if (!searchQuery.trim()) return blocks;
     const query = searchQuery.toLowerCase();
     return blocks.filter((block) => block.title.toLowerCase().includes(query));
   }, [blocks, searchQuery]);
 
   // Handle block click - navigate to block editor
-  const handleBlockClick = useCallback((blockId: string) => {
-    console.log("[sidebar] navigating to block:", blockId);
-    navigate({ to: "/blocks/$blockId", params: { blockId } });
-  }, [navigate]);
+  const handleBlockClick = useCallback(
+    (blockId: string) => {
+      console.log("[sidebar] navigating to block:", blockId);
+      navigate({ to: "/blocks/$blockId", params: { blockId } });
+    },
+    [navigate],
+  );
 
   // Handle source click - navigate to source viewer
-  const handleSourceClick = useCallback((sourceId: string) => {
-    console.log("[sidebar] navigating to source:", sourceId);
-    navigate({ to: "/sources/$sourceId", params: { sourceId } });
-  }, [navigate]);
+  const handleSourceClick = useCallback(
+    (sourceId: string) => {
+      console.log("[sidebar] navigating to source:", sourceId);
+      navigate({ to: "/sources/$sourceId", params: { sourceId } });
+    },
+    [navigate],
+  );
 
   // Handle table click - navigate to table viewer
-  const handleTableClick = useCallback((tableId: string) => {
-    console.log("[sidebar] navigating to table:", tableId);
-    navigate({ to: "/tables/$tableId", params: { tableId } });
-  }, [navigate]);
+  const handleTableClick = useCallback(
+    (tableId: string) => {
+      console.log("[sidebar] navigating to table:", tableId);
+      navigate({ to: "/tables/$tableId", params: { tableId } });
+    },
+    [navigate],
+  );
 
   // Runtime port for API calls
   const runtimePort = useRuntimePort();
 
   // CRUD action handlers
-  const handleCopyBlock = useCallback(async (blockId: string) => {
-    if (!runtimePort) return;
-    try {
-      const res = await fetch(`http://localhost:${runtimePort}/workbook/blocks/${blockId}/duplicate`, {
-        method: "POST",
-      });
-      if (!res.ok) throw new Error("Failed to duplicate block");
-      console.log("[sidebar] duplicated block:", blockId);
-    } catch (err) {
-      console.error("[sidebar] failed to duplicate block:", err);
-    }
-  }, [runtimePort]);
+  const handleCopyBlock = useCallback(
+    async (blockId: string) => {
+      if (!runtimePort) return;
+      try {
+        const res = await fetch(
+          `http://localhost:${runtimePort}/workbook/blocks/${blockId}/duplicate`,
+          {
+            method: "POST",
+          },
+        );
+        if (!res.ok) throw new Error("Failed to duplicate block");
+        console.log("[sidebar] duplicated block:", blockId);
+      } catch (err) {
+        console.error("[sidebar] failed to duplicate block:", err);
+      }
+    },
+    [runtimePort],
+  );
 
-  const handleDeleteBlock = useCallback(async (blockId: string) => {
-    if (!runtimePort) return;
-    try {
-      const res = await fetch(`http://localhost:${runtimePort}/workbook/blocks/${blockId}`, {
-        method: "DELETE",
-      });
-      if (!res.ok) throw new Error("Failed to delete block");
-      console.log("[sidebar] deleted block:", blockId);
-      // Navigate away if we deleted the current block
-      navigate({ to: "/" });
-    } catch (err) {
-      console.error("[sidebar] failed to delete block:", err);
-    }
-  }, [runtimePort, navigate]);
+  const handleDeleteBlock = useCallback(
+    async (blockId: string) => {
+      if (!runtimePort) return;
+      try {
+        const res = await fetch(`http://localhost:${runtimePort}/workbook/blocks/${blockId}`, {
+          method: "DELETE",
+        });
+        if (!res.ok) throw new Error("Failed to delete block");
+        console.log("[sidebar] deleted block:", blockId);
+        // Navigate away if we deleted the current block
+        navigate({ to: "/" });
+      } catch (err) {
+        console.error("[sidebar] failed to delete block:", err);
+      }
+    },
+    [runtimePort, navigate],
+  );
 
-  const handleCopySource = useCallback(async (sourceId: string) => {
-    if (!runtimePort) return;
-    try {
-      const res = await fetch(`http://localhost:${runtimePort}/workbook/sources/${sourceId}/duplicate`, {
-        method: "POST",
-      });
-      if (!res.ok) throw new Error("Failed to duplicate source");
-      console.log("[sidebar] duplicated source:", sourceId);
-    } catch (err) {
-      console.error("[sidebar] failed to duplicate source:", err);
-    }
-  }, [runtimePort]);
+  const handleCopySource = useCallback(
+    async (sourceId: string) => {
+      if (!runtimePort) return;
+      try {
+        const res = await fetch(
+          `http://localhost:${runtimePort}/workbook/sources/${sourceId}/duplicate`,
+          {
+            method: "POST",
+          },
+        );
+        if (!res.ok) throw new Error("Failed to duplicate source");
+        console.log("[sidebar] duplicated source:", sourceId);
+      } catch (err) {
+        console.error("[sidebar] failed to duplicate source:", err);
+      }
+    },
+    [runtimePort],
+  );
 
-  const handleDeleteSource = useCallback(async (sourceId: string) => {
-    if (!runtimePort) return;
-    try {
-      const res = await fetch(`http://localhost:${runtimePort}/workbook/sources/${sourceId}`, {
-        method: "DELETE",
-      });
-      if (!res.ok) throw new Error("Failed to delete source");
-      console.log("[sidebar] deleted source:", sourceId);
-      navigate({ to: "/" });
-    } catch (err) {
-      console.error("[sidebar] failed to delete source:", err);
-    }
-  }, [runtimePort, navigate]);
+  const handleDeleteSource = useCallback(
+    async (sourceId: string) => {
+      if (!runtimePort) return;
+      try {
+        const res = await fetch(`http://localhost:${runtimePort}/workbook/sources/${sourceId}`, {
+          method: "DELETE",
+        });
+        if (!res.ok) throw new Error("Failed to delete source");
+        console.log("[sidebar] deleted source:", sourceId);
+        navigate({ to: "/" });
+      } catch (err) {
+        console.error("[sidebar] failed to delete source:", err);
+      }
+    },
+    [runtimePort, navigate],
+  );
 
-  const handleDeleteTable = useCallback(async (tableName: string) => {
-    if (!runtimePort) return;
-    try {
-      const res = await fetch(`http://localhost:${runtimePort}/postgres/tables/${tableName}`, {
-        method: "DELETE",
-      });
-      if (!res.ok) throw new Error("Failed to delete table");
-      console.log("[sidebar] deleted table:", tableName);
-      navigate({ to: "/" });
-    } catch (err) {
-      console.error("[sidebar] failed to delete table:", err);
-    }
-  }, [runtimePort, navigate]);
+  const handleDeleteTable = useCallback(
+    async (tableName: string) => {
+      if (!runtimePort) return;
+      try {
+        const res = await fetch(`http://localhost:${runtimePort}/postgres/tables/${tableName}`, {
+          method: "DELETE",
+        });
+        if (!res.ok) throw new Error("Failed to delete table");
+        console.log("[sidebar] deleted table:", tableName);
+        navigate({ to: "/" });
+      } catch (err) {
+        console.error("[sidebar] failed to delete table:", err);
+      }
+    },
+    [runtimePort, navigate],
+  );
 
   if (collapsed) {
     return (
       <TooltipProvider delayDuration={0}>
         <div className="space-y-4">
-          {/* Blocks section - collapsed (first) */}
+          {/* Blocks section - collapsed */}
           {blocks.length > 0 && (
             <div className="space-y-0.5 pt-2 border-t border-border/50">
               {blocks.slice(0, 3).map((block) => (
@@ -339,10 +477,11 @@ export function NotebookSidebar({ collapsed = false, fullWidth = false, pinned =
             </div>
           )}
 
-          {/* Sources section - collapsed */}
-          {sources.length > 0 && (
+          {/* Data section - collapsed (sources + tables) */}
+          {(sources.length > 0 || (schema && schema.length > 0)) && (
             <div className="space-y-0.5 pt-2 border-t border-border/50">
-              {sources.slice(0, 3).map((source) => (
+              {/* Show sources first */}
+              {sources.slice(0, 2).map((source) => (
                 <Tooltip key={source.id}>
                   <TooltipTrigger asChild>
                     <button
@@ -357,35 +496,25 @@ export function NotebookSidebar({ collapsed = false, fullWidth = false, pinned =
                   </TooltipContent>
                 </Tooltip>
               ))}
-              {sources.length > 3 && (
-                <div className="text-[8px] text-muted-foreground/70 text-center">
-                  +{sources.length - 3}
-                </div>
-              )}
-            </div>
-          )}
-
-          {/* Data section - collapsed (database tables with circles) */}
-          {schema && schema.length > 0 && (
-            <div className="space-y-0.5 pt-2 border-t border-border/50">
-              {schema.slice(0, 3).map((table) => (
-                <Tooltip key={table.table_name}>
+              {/* Show unassociated tables */}
+              {unassociatedTables.slice(0, sources.length > 0 ? 1 : 3).map((tableName) => (
+                <Tooltip key={tableName}>
                   <TooltipTrigger asChild>
                     <button
-                      onClick={() => handleTableClick(table.table_name)}
+                      onClick={() => handleTableClick(tableName)}
                       className="w-full flex items-center justify-center p-1.5 text-muted-foreground hover:text-purple-400 transition-all"
                     >
                       <span className="text-sm">&#x25CF;</span>
                     </button>
                   </TooltipTrigger>
                   <TooltipContent side="right">
-                    <p>{table.table_name}</p>
+                    <p>{tableName}</p>
                   </TooltipContent>
                 </Tooltip>
               ))}
-              {schema.length > 3 && (
+              {sources.length + unassociatedTables.length > 3 && (
                 <div className="text-[8px] text-muted-foreground/70 text-center">
-                  +{schema.length - 3}
+                  +{sources.length + unassociatedTables.length - 3}
                 </div>
               )}
             </div>
@@ -435,7 +564,7 @@ export function NotebookSidebar({ collapsed = false, fullWidth = false, pinned =
                       "p-1 rounded transition-colors",
                       pinned
                         ? "text-foreground bg-accent/50"
-                        : "text-muted-foreground/70 hover:text-foreground hover:bg-accent/50"
+                        : "text-muted-foreground/70 hover:text-foreground hover:bg-accent/50",
                     )}
                   >
                     {pinned ? <Pin className="h-3.5 w-3.5" /> : <PinOff className="h-3.5 w-3.5" />}
@@ -469,10 +598,8 @@ export function NotebookSidebar({ collapsed = false, fullWidth = false, pinned =
           )}
         </div>
 
-        {/* Main content grid - 1 column narrow, 3 columns fullWidth */}
-        <div className={cn(
-          fullWidth ? "grid grid-cols-1 md:grid-cols-3 gap-6" : "space-y-3"
-        )}>
+        {/* Main content grid - 1 column narrow, 2 columns fullWidth */}
+        <div className={cn(fullWidth ? "grid grid-cols-1 md:grid-cols-2 gap-6" : "space-y-3")}>
           {/* Blocks Section */}
           <div className="space-y-1">
             <div className="flex items-center justify-between">
@@ -507,55 +634,69 @@ export function NotebookSidebar({ collapsed = false, fullWidth = false, pinned =
                 ) : blocks.length > 0 ? (
                   <>
                     {/* Directories */}
-                    {Array.from(blockTree.directories.keys()).sort().map((dir) => {
-                      const isExpanded = expandedDirs.has(dir);
-                      const dirBlocks = blockTree.directories.get(dir) || [];
-                      const filteredDirBlocks = searchQuery
-                        ? dirBlocks.filter((b) => b.title.toLowerCase().includes(searchQuery.toLowerCase()))
-                        : dirBlocks;
+                    {Array.from(blockTree.directories.keys())
+                      .sort()
+                      .map((dir) => {
+                        const isExpanded = expandedDirs.has(dir);
+                        const dirBlocks = blockTree.directories.get(dir) || [];
+                        const filteredDirBlocks = searchQuery
+                          ? dirBlocks.filter((b) =>
+                              b.title.toLowerCase().includes(searchQuery.toLowerCase()),
+                            )
+                          : dirBlocks;
 
-                      if (searchQuery && filteredDirBlocks.length === 0) return null;
+                        if (searchQuery && filteredDirBlocks.length === 0) return null;
 
-                      return (
-                        <div key={dir}>
-                          <button
-                            onClick={() => toggleDir(dir)}
-                            className={cn(listItemStyles, "group")}
-                          >
-                            {isExpanded ? (
-                              <FolderOpen weight="duotone" className="h-4 w-4 shrink-0 text-amber-500" />
-                            ) : (
-                              <Folder weight="duotone" className="h-4 w-4 shrink-0 text-amber-500" />
+                        return (
+                          <div key={dir}>
+                            <button
+                              onClick={() => toggleDir(dir)}
+                              className={cn(listItemStyles, "group")}
+                            >
+                              {isExpanded ? (
+                                <FolderOpen
+                                  weight="duotone"
+                                  className="h-4 w-4 shrink-0 text-amber-500"
+                                />
+                              ) : (
+                                <Folder
+                                  weight="duotone"
+                                  className="h-4 w-4 shrink-0 text-amber-500"
+                                />
+                              )}
+                              <span className="flex-1 truncate text-left">{dir}</span>
+                              <span className="text-xs text-muted-foreground/60">
+                                {filteredDirBlocks.length}
+                              </span>
+                            </button>
+                            {(isExpanded || searchQuery) && (
+                              <div className="ml-4 border-l border-border/50 pl-2">
+                                {filteredDirBlocks.map((block) => (
+                                  <div key={block.id} className={listItemStyles}>
+                                    <BlockIcon />
+                                    <button
+                                      onClick={() => handleBlockClick(block.id)}
+                                      className="flex-1 truncate text-left hover:underline"
+                                    >
+                                      {block.title || block.id}
+                                    </button>
+                                    <ItemActions
+                                      onCopy={() => handleCopyBlock(block.id)}
+                                      onDelete={() => handleDeleteBlock(block.id)}
+                                      onOpenChange={onMenuOpenChange}
+                                    />
+                                  </div>
+                                ))}
+                              </div>
                             )}
-                            <span className="flex-1 truncate text-left">{dir}</span>
-                            <span className="text-xs text-muted-foreground/60">{filteredDirBlocks.length}</span>
-                          </button>
-                          {(isExpanded || searchQuery) && (
-                            <div className="ml-4 border-l border-border/50 pl-2">
-                              {filteredDirBlocks.map((block) => (
-                                <div key={block.id} className={listItemStyles}>
-                                  <BlockIcon />
-                                  <button
-                                    onClick={() => handleBlockClick(block.id)}
-                                    className="flex-1 truncate text-left hover:underline"
-                                  >
-                                    {block.title || block.id}
-                                  </button>
-                                  <ItemActions
-                                    onCopy={() => handleCopyBlock(block.id)}
-                                    onDelete={() => handleDeleteBlock(block.id)}
-                                    onOpenChange={onMenuOpenChange}
-                                  />
-                                </div>
-                              ))}
-                            </div>
-                          )}
-                        </div>
-                      );
-                    })}
+                          </div>
+                        );
+                      })}
                     {/* Root blocks */}
                     {(searchQuery
-                      ? blockTree.rootBlocks.filter((b) => b.title.toLowerCase().includes(searchQuery.toLowerCase()))
+                      ? blockTree.rootBlocks.filter((b) =>
+                          b.title.toLowerCase().includes(searchQuery.toLowerCase()),
+                        )
                       : blockTree.rootBlocks
                     ).map((block) => (
                       <div key={block.id} className={listItemStyles}>
@@ -584,19 +725,19 @@ export function NotebookSidebar({ collapsed = false, fullWidth = false, pinned =
             )}
           </div>
 
-          {/* Sources Section */}
+          {/* Data Section - Contains Sources (with their tables) and Unassociated Tables */}
           <div className="space-y-1">
             <div className="flex items-center justify-between">
               <button
-                onClick={() => setSourcesExpanded(!sourcesExpanded)}
+                onClick={() => setDataExpanded(!dataExpanded)}
                 className="flex items-center gap-1 text-[10px] font-medium text-muted-foreground/80 uppercase tracking-wider hover:text-muted-foreground transition-colors"
               >
-                {sourcesExpanded ? (
+                {dataExpanded ? (
                   <ChevronDown className="h-3 w-3" />
                 ) : (
                   <ChevronRight className="h-3 w-3" />
                 )}
-                Sources
+                Data
               </button>
               <Tooltip>
                 <TooltipTrigger asChild>
@@ -611,7 +752,7 @@ export function NotebookSidebar({ collapsed = false, fullWidth = false, pinned =
               </Tooltip>
             </div>
 
-            {/* Add Source Dialog - shared */}
+            {/* Add Source Dialog */}
             <Dialog open={addSourceOpen} onOpenChange={setAddSourceOpen}>
               <DialogContent size="md">
                 <DialogHeader>
@@ -623,7 +764,7 @@ export function NotebookSidebar({ collapsed = false, fullWidth = false, pinned =
                       <div className="text-xs font-medium text-muted-foreground">From Registry</div>
                       <div className="space-y-1">
                         {availableToAdd.map((source) => {
-                          const isThisAdding = isAdding && selectedSource === source.name
+                          const isThisAdding = isAdding && selectedSource === source.name;
                           return (
                             <button
                               key={source.name}
@@ -632,13 +773,18 @@ export function NotebookSidebar({ collapsed = false, fullWidth = false, pinned =
                               className={cn(
                                 "w-full flex items-start gap-3 p-3 rounded-lg border",
                                 "hover:bg-accent hover:border-accent-foreground/20 transition-colors text-left",
-                                isAdding && "opacity-50 cursor-not-allowed"
+                                isAdding && "opacity-50 cursor-not-allowed",
                               )}
                             >
-                              <SourceIcon icon={source.icon} className="h-5 w-5 text-purple-400 shrink-0 mt-0.5" />
+                              <SourceIcon
+                                icon={source.icon}
+                                className="h-5 w-5 text-purple-400 shrink-0 mt-0.5"
+                              />
                               <div className="flex-1 min-w-0">
                                 <div className="font-medium">{source.title}</div>
-                                <div className="text-xs text-muted-foreground mt-0.5">{source.description}</div>
+                                <div className="text-xs text-muted-foreground mt-0.5">
+                                  {source.description}
+                                </div>
                                 {source.secrets.length > 0 && (
                                   <div className="flex items-center gap-1 mt-1.5 text-xs text-amber-500">
                                     <Key weight="fill" className="h-3 w-3" />
@@ -646,9 +792,14 @@ export function NotebookSidebar({ collapsed = false, fullWidth = false, pinned =
                                   </div>
                                 )}
                               </div>
-                              {isThisAdding && <CircleNotch weight="bold" className="h-4 w-4 animate-spin shrink-0" />}
+                              {isThisAdding && (
+                                <CircleNotch
+                                  weight="bold"
+                                  className="h-4 w-4 animate-spin shrink-0"
+                                />
+                              )}
                             </button>
-                          )
+                          );
                         })}
                       </div>
                     </div>
@@ -666,100 +817,21 @@ export function NotebookSidebar({ collapsed = false, fullWidth = false, pinned =
                       onClick={() => setAddSourceOpen(false)}
                       className={cn(
                         "w-full flex items-start gap-3 p-3 rounded-lg border border-dashed",
-                        "hover:bg-accent hover:border-accent-foreground/20 transition-colors text-left"
+                        "hover:bg-accent hover:border-accent-foreground/20 transition-colors text-left",
                       )}
                     >
                       <Code weight="duotone" className="h-5 w-5 text-blue-400 shrink-0 mt-0.5" />
                       <div className="flex-1 min-w-0">
                         <div className="font-medium">Blank Source</div>
-                        <div className="text-xs text-muted-foreground mt-0.5">Create a custom source from scratch</div>
+                        <div className="text-xs text-muted-foreground mt-0.5">
+                          Create a custom source from scratch
+                        </div>
                       </div>
                     </button>
                   </div>
                 </DialogBody>
               </DialogContent>
             </Dialog>
-
-            {sourcesExpanded && (
-              <div className="space-y-0">
-                {sources.length > 0 ? (
-                  sources.map((source) => {
-                    const isThisSyncing = isSyncing && syncingSourceId === source.id
-                    const hasMissingSecrets = source.missingSecrets.length > 0
-                    return (
-                      <div key={source.id} className={listItemStyles}>
-                        <SourceItemIcon />
-                        <button
-                          onClick={() => handleSourceClick(source.id)}
-                          className="flex-1 truncate text-left hover:underline"
-                        >
-                          {source.title}
-                        </button>
-                        {hasMissingSecrets && (
-                          <Warning weight="fill" className="h-3.5 w-3.5 text-amber-500 shrink-0" />
-                        )}
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            syncSource(source.id);
-                          }}
-                          disabled={isThisSyncing || hasMissingSecrets}
-                          className={cn(
-                            "p-0.5 rounded opacity-0 group-hover:opacity-100 hover:bg-accent transition-all",
-                            (isThisSyncing || hasMissingSecrets) && "opacity-50 cursor-not-allowed"
-                          )}
-                          title={hasMissingSecrets ? "Configure secrets first" : "Sync now"}
-                        >
-                          {isThisSyncing ? (
-                            <CircleNotch weight="bold" className="h-3.5 w-3.5 animate-spin" />
-                          ) : (
-                            <ArrowsClockwise weight="bold" className="h-3.5 w-3.5" />
-                          )}
-                        </button>
-                        <ItemActions
-                          onCopy={() => handleCopySource(source.id)}
-                          onDelete={() => handleDeleteSource(source.id)}
-                          onOpenChange={onMenuOpenChange}
-                        />
-                      </div>
-                    )
-                  })
-                ) : (
-                  <div className={emptyStateStyles}>
-                    <SourceItemIcon empty />
-                    <span>No sources</span>
-                  </div>
-                )}
-              </div>
-            )}
-          </div>
-
-          {/* Data Section */}
-          <div className="space-y-1">
-            <div className="flex items-center justify-between">
-              <button
-                onClick={() => setDataExpanded(!dataExpanded)}
-                className="flex items-center gap-1 text-[10px] font-medium text-muted-foreground/80 uppercase tracking-wider hover:text-muted-foreground transition-colors"
-              >
-                {dataExpanded ? (
-                  <ChevronDown className="h-3 w-3" />
-                ) : (
-                  <ChevronRight className="h-3 w-3" />
-                )}
-                Data
-              </button>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <button
-                    className="p-0.5 text-muted-foreground/60 hover:text-muted-foreground transition-colors"
-                    title="New table"
-                  >
-                    <Plus className="h-3 w-3" />
-                  </button>
-                </TooltipTrigger>
-                <TooltipContent side="right">New table</TooltipContent>
-              </Tooltip>
-            </div>
 
             {dataExpanded && (
               <div className="space-y-0">
@@ -769,31 +841,154 @@ export function NotebookSidebar({ collapsed = false, fullWidth = false, pinned =
                     <div className="h-5 bg-muted/50 rounded animate-pulse w-3/4" />
                     <div className="h-5 bg-muted/50 rounded animate-pulse w-1/2" />
                   </div>
-                ) : schema && schema.length > 0 ? (
-                  (searchQuery
-                    ? schema.filter((t) => t.table_name.toLowerCase().includes(searchQuery.toLowerCase()))
-                    : schema
-                  ).map((table) => (
-                    <div key={table.table_name} className={listItemStyles}>
-                      <DataIcon />
-                      <button
-                        onClick={() => handleTableClick(table.table_name)}
-                        className="flex-1 truncate text-left hover:underline"
-                      >
-                        {table.table_name}
-                      </button>
-                      <ItemActions
-                        onDelete={() => handleDeleteTable(table.table_name)}
-                        deleteLabel="Drop table"
-                        onOpenChange={onMenuOpenChange}
-                      />
-                    </div>
-                  ))
                 ) : (
-                  <div className={emptyStateStyles}>
-                    <DataIcon empty />
-                    <span>No tables</span>
-                  </div>
+                  <>
+                    {/* Unassociated Tables folder */}
+                    {unassociatedTables.length > 0 && (
+                      <div>
+                        <button
+                          onClick={() => setUnassociatedExpanded(!unassociatedExpanded)}
+                          className={cn(listItemStyles, "group")}
+                        >
+                          {unassociatedExpanded ? (
+                            <FolderOpen
+                              weight="duotone"
+                              className="h-4 w-4 shrink-0 text-purple-400"
+                            />
+                          ) : (
+                            <Folder weight="duotone" className="h-4 w-4 shrink-0 text-purple-400" />
+                          )}
+                          <span className="flex-1 truncate text-left">Unassociated Tables</span>
+                          <span className="text-xs text-muted-foreground/60">
+                            {unassociatedTables.length}
+                          </span>
+                        </button>
+                        {unassociatedExpanded && (
+                          <div className="ml-4 border-l border-border/50 pl-2">
+                            {(searchQuery
+                              ? unassociatedTables.filter((t) =>
+                                  t.toLowerCase().includes(searchQuery.toLowerCase()),
+                                )
+                              : unassociatedTables
+                            ).map((tableName) => (
+                              <div key={tableName} className={listItemStyles}>
+                                <DataIcon />
+                                <button
+                                  onClick={() => handleTableClick(tableName)}
+                                  className="flex-1 truncate text-left hover:underline"
+                                >
+                                  {tableName}
+                                </button>
+                                <ItemActions
+                                  onDelete={() => handleDeleteTable(tableName)}
+                                  deleteLabel="Drop table"
+                                  onOpenChange={onMenuOpenChange}
+                                />
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    )}
+
+                    {/* Sources with their tables */}
+                    {sources.length > 0 ? (
+                      sources.map((source) => {
+                        const isThisSyncing = isSyncing && syncingSourceId === source.id;
+                        const hasMissingSecrets = source.missingSecrets.length > 0;
+                        const isSourceExpanded = expandedSources.has(source.id);
+                        const sourceTables = sourceTableMap.get(source.id) || [];
+                        const filteredSourceTables = searchQuery
+                          ? sourceTables.filter((t) =>
+                              t.toLowerCase().includes(searchQuery.toLowerCase()),
+                            )
+                          : sourceTables;
+
+                        return (
+                          <div key={source.id}>
+                            <div className={listItemStyles}>
+                              <button onClick={() => toggleSource(source.id)} className="shrink-0">
+                                {isSourceExpanded ? (
+                                  <ChevronDown className="h-3 w-3" />
+                                ) : (
+                                  <ChevronRight className="h-3 w-3" />
+                                )}
+                              </button>
+                              <SourceItemIcon />
+                              <button
+                                onClick={() => handleSourceClick(source.id)}
+                                className="flex-1 truncate text-left hover:underline"
+                              >
+                                {source.title}
+                              </button>
+                              {sourceTables.length > 0 && (
+                                <span className="text-xs text-muted-foreground/60">
+                                  {sourceTables.length}
+                                </span>
+                              )}
+                              {hasMissingSecrets && (
+                                <Warning
+                                  weight="fill"
+                                  className="h-3.5 w-3.5 text-amber-500 shrink-0"
+                                />
+                              )}
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  syncSource(source.id);
+                                }}
+                                disabled={isThisSyncing || hasMissingSecrets}
+                                className={cn(
+                                  "p-0.5 rounded opacity-0 group-hover:opacity-100 hover:bg-accent transition-all",
+                                  (isThisSyncing || hasMissingSecrets) &&
+                                    "opacity-50 cursor-not-allowed",
+                                )}
+                                title={hasMissingSecrets ? "Configure secrets first" : "Sync now"}
+                              >
+                                {isThisSyncing ? (
+                                  <CircleNotch weight="bold" className="h-3.5 w-3.5 animate-spin" />
+                                ) : (
+                                  <ArrowsClockwise weight="bold" className="h-3.5 w-3.5" />
+                                )}
+                              </button>
+                              <ItemActions
+                                onCopy={() => handleCopySource(source.id)}
+                                onDelete={() => handleDeleteSource(source.id)}
+                                onOpenChange={onMenuOpenChange}
+                              />
+                            </div>
+                            {/* Source's tables */}
+                            {(isSourceExpanded || searchQuery) &&
+                              filteredSourceTables.length > 0 && (
+                                <div className="ml-6 border-l border-border/50 pl-2">
+                                  {filteredSourceTables.map((tableName) => (
+                                    <div key={tableName} className={listItemStyles}>
+                                      <DataIcon />
+                                      <button
+                                        onClick={() => handleTableClick(tableName)}
+                                        className="flex-1 truncate text-left hover:underline"
+                                      >
+                                        {tableName}
+                                      </button>
+                                      <ItemActions
+                                        onDelete={() => handleDeleteTable(tableName)}
+                                        deleteLabel="Drop table"
+                                        onOpenChange={onMenuOpenChange}
+                                      />
+                                    </div>
+                                  ))}
+                                </div>
+                              )}
+                          </div>
+                        );
+                      })
+                    ) : unassociatedTables.length === 0 ? (
+                      <div className={emptyStateStyles}>
+                        <DataIcon empty />
+                        <span>No data</span>
+                      </div>
+                    ) : null}
+                  </>
                 )}
               </div>
             )}
@@ -803,4 +998,3 @@ export function NotebookSidebar({ collapsed = false, fullWidth = false, pinned =
     </TooltipProvider>
   );
 }
-

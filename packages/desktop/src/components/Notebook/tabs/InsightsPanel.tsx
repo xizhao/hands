@@ -1,5 +1,5 @@
+import { BarChart3, FileText, Plus, Table2 } from "lucide-react";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Plus, BarChart3, Table2, FileText } from "lucide-react";
 
 export function InsightsPanel() {
   return (

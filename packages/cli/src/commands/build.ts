@@ -10,50 +10,50 @@
  *   --skip-prerender Skip static pre-rendering (all SSR at runtime)
  */
 
-import { spawn } from "bun"
-import { existsSync } from "fs"
-import { join, resolve } from "path"
+import { existsSync } from "node:fs";
+import { join, resolve } from "node:path";
+import { spawn } from "bun";
 
 interface BuildOptions {
-  check?: boolean
-  fix?: boolean
-  json?: boolean
-  strict?: boolean
-  verbose?: boolean
-  production?: boolean
-  skipPrerender?: boolean
+  check?: boolean;
+  fix?: boolean;
+  json?: boolean;
+  strict?: boolean;
+  verbose?: boolean;
+  production?: boolean;
+  skipPrerender?: boolean;
 }
 
 export async function buildCommand(options: BuildOptions) {
-  const workbookDir = process.cwd()
+  const workbookDir = process.cwd();
 
   // Verify this is a workbook directory
-  const handsJsonPath = join(workbookDir, "hands.json")
+  const handsJsonPath = join(workbookDir, "hands.json");
   if (!existsSync(handsJsonPath)) {
-    console.error("Error: hands.json not found")
-    console.error("Run this command from a workbook directory")
-    process.exit(1)
+    console.error("Error: hands.json not found");
+    console.error("Run this command from a workbook directory");
+    process.exit(1);
   }
 
   if (options.production) {
-    console.log("Building for production...")
+    console.log("Building for production...");
   } else {
-    console.log("Building...")
+    console.log("Building...");
   }
 
   // Find the runtime build script
-  const runtimeBuildPath = findRuntimeBuildPath()
+  const runtimeBuildPath = findRuntimeBuildPath();
   if (!runtimeBuildPath) {
     // Fallback: inline simple build
-    await inlineBuild(workbookDir, options)
-    return
+    await inlineBuild(workbookDir, options);
+    return;
   }
 
   // Build command args
-  const args = ["bun", runtimeBuildPath, workbookDir]
-  if (options.production) args.push("--production")
-  if (options.verbose) args.push("--verbose")
-  if (options.skipPrerender) args.push("--skip-prerender")
+  const args = ["bun", runtimeBuildPath, workbookDir];
+  if (options.production) args.push("--production");
+  if (options.verbose) args.push("--verbose");
+  if (options.skipPrerender) args.push("--skip-prerender");
 
   // Spawn runtime build
   const proc = spawn({
@@ -61,11 +61,11 @@ export async function buildCommand(options: BuildOptions) {
     cwd: workbookDir,
     stdout: "inherit",
     stderr: "inherit",
-  })
+  });
 
-  const exitCode = await proc.exited
+  const exitCode = await proc.exited;
   if (exitCode !== 0) {
-    process.exit(exitCode)
+    process.exit(exitCode);
   }
 }
 
@@ -74,48 +74,48 @@ export async function buildCommand(options: BuildOptions) {
  */
 function findRuntimeBuildPath(): string | null {
   // Try workspace path (development)
-  const devPath = resolve(import.meta.dir, "../../../runtime/src/build/cli.ts")
+  const devPath = resolve(import.meta.dir, "../../../runtime/src/build/cli.ts");
   if (existsSync(devPath)) {
-    return devPath
+    return devPath;
   }
 
   // Try node_modules path (production)
-  const nodeModulesPath = join(process.cwd(), "node_modules/@hands/runtime/src/build/cli.ts")
+  const nodeModulesPath = join(process.cwd(), "node_modules/@hands/runtime/src/build/cli.ts");
   if (existsSync(nodeModulesPath)) {
-    return nodeModulesPath
+    return nodeModulesPath;
   }
 
-  return null
+  return null;
 }
 
 /**
  * Inline build for when runtime is not available
  * This is a minimal fallback that generates the basic structure
  */
-async function inlineBuild(workbookDir: string, options: BuildOptions) {
-  const { mkdir, writeFile } = await import("fs/promises")
+async function inlineBuild(workbookDir: string, _options: BuildOptions) {
+  const { mkdir, writeFile } = await import("node:fs/promises");
 
   // Read hands.json
-  const handsJsonPath = join(workbookDir, "hands.json")
-  const config = JSON.parse(await Bun.file(handsJsonPath).text())
+  const handsJsonPath = join(workbookDir, "hands.json");
+  const config = JSON.parse(await Bun.file(handsJsonPath).text());
 
-  const outputDir = join(workbookDir, config.build?.outDir || ".hands")
+  const outputDir = join(workbookDir, config.build?.outDir || ".hands");
 
   // Create output directory
-  await mkdir(outputDir, { recursive: true })
+  await mkdir(outputDir, { recursive: true });
 
   // Generate wrangler.toml
-  const wranglerContent = generateWranglerToml(config)
-  await writeFile(join(outputDir, "wrangler.toml"), wranglerContent)
+  const wranglerContent = generateWranglerToml(config);
+  await writeFile(join(outputDir, "wrangler.toml"), wranglerContent);
 
   // Generate worker.ts (minimal stub)
-  const workerContent = generateWorkerStub(config)
-  await writeFile(join(outputDir, "worker.ts"), workerContent)
+  const workerContent = generateWorkerStub(config);
+  await writeFile(join(outputDir, "worker.ts"), workerContent);
 
   // Generate .gitignore
-  await writeFile(join(outputDir, ".gitignore"), "# Auto-generated\n*\n")
+  await writeFile(join(outputDir, ".gitignore"), "# Auto-generated\n*\n");
 
-  console.log(`Generated files in ${config.build?.outDir || ".hands"}/`)
+  console.log(`Generated files in ${config.build?.outDir || ".hands"}/`);
 }
 
 function generateWranglerToml(config: any): string {
@@ -124,8 +124,8 @@ function generateWranglerToml(config: any): string {
     `name = "${config.name}"`,
     `main = "worker.ts"`,
     `compatibility_date = "2024-01-01"`,
-  ]
-  return lines.join("\n") + "\n"
+  ];
+  return `${lines.join("\n")}\n`;
 }
 
 function generateWorkerStub(config: any): string {
@@ -137,5 +137,5 @@ export default {
     return new Response("Workbook: ${config.name}");
   }
 };
-`
+`;
 }

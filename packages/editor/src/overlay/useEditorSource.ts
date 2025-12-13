@@ -8,51 +8,51 @@
  * - Undo/redo source restoration
  */
 
-import { useState, useEffect, useRef, useCallback } from 'react'
-import { applyOperation, applyOperations, type EditOperation } from './operations'
-import { createHttpError, createMutationError, sendErrorToParent } from './errors'
+import { useCallback, useEffect, useRef, useState } from "react";
+import { createHttpError, createMutationError, sendErrorToParent } from "./errors";
+import { applyOperation, applyOperations, type EditOperation } from "./operations";
 
 // ============================================================================
 // Types
 // ============================================================================
 
 export interface UseEditorSourceOptions {
-  blockId: string
-  runtimePort: number
-  initialSource: string
-  pollInterval?: number
+  blockId: string;
+  runtimePort: number;
+  initialSource: string;
+  pollInterval?: number;
 }
 
 export interface UseEditorSourceReturn {
   /** Current source code */
-  source: string
+  source: string;
 
   /** Whether a save is in progress */
-  isSaving: boolean
+  isSaving: boolean;
 
   /** Whether we're in a loading/mutation state (set immediately, before network) */
-  isLoading: boolean
+  isLoading: boolean;
 
   /** Version number (increments on changes, triggers RSC re-render) */
-  version: number
+  version: number;
 
   /** Apply a single mutation */
-  mutate: (operation: EditOperation) => Promise<MutationResult>
+  mutate: (operation: EditOperation) => Promise<MutationResult>;
 
   /** Apply multiple mutations in sequence */
-  mutateMany: (operations: EditOperation[]) => Promise<MutationResult>
+  mutateMany: (operations: EditOperation[]) => Promise<MutationResult>;
 
   /** Set source directly (for undo/redo) */
-  setSource: (source: string) => Promise<boolean>
+  setSource: (source: string) => Promise<boolean>;
 
   /** Force a refresh (increment version without source change) */
-  refresh: () => void
+  refresh: () => void;
 }
 
 export interface MutationResult {
-  success: boolean
-  newSource?: string
-  error?: string
+  success: boolean;
+  newSource?: string;
+  error?: string;
 }
 
 // ============================================================================
@@ -65,61 +65,61 @@ export function useEditorSource({
   initialSource,
   pollInterval = 1000,
 }: UseEditorSourceOptions): UseEditorSourceReturn {
-  const [source, setSourceState] = useState(initialSource)
-  const [isSaving, setIsSaving] = useState(false)
-  const [isLoading, setIsLoading] = useState(false)
-  const [version, setVersion] = useState(0)
+  const [source, setSourceState] = useState(initialSource);
+  const [isSaving, setIsSaving] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
+  const [version, setVersion] = useState(0);
 
   // Track the source that's confirmed saved on server (only updated AFTER successful save)
-  const confirmedServerSource = useRef(initialSource)
+  const confirmedServerSource = useRef(initialSource);
 
   // Track pending source during save (to prevent poll overwrites)
-  const pendingSource = useRef<string | null>(null)
+  const pendingSource = useRef<string | null>(null);
 
   // ============================================================================
   // Polling for External Changes
   // ============================================================================
 
   useEffect(() => {
-    let active = true
+    let active = true;
 
     const poll = async () => {
       // Skip polling if we have a pending save
       if (!active || pendingSource.current !== null) {
-        return
+        return;
       }
 
       try {
         const res = await fetch(
-          `http://localhost:${runtimePort}/workbook/blocks/${blockId}/source`
-        )
+          `http://localhost:${runtimePort}/workbook/blocks/${blockId}/source`,
+        );
         if (res.ok && active && pendingSource.current === null) {
-          const data = await res.json()
+          const data = await res.json();
           // Only update if source changed externally (different from last confirmed server source)
           if (data.source !== confirmedServerSource.current) {
-            console.log('[useEditorSource] Source changed externally, updating')
-            setSourceState(data.source)
-            confirmedServerSource.current = data.source
-            setVersion((v) => v + 1)
+            console.log("[useEditorSource] Source changed externally, updating");
+            setSourceState(data.source);
+            confirmedServerSource.current = data.source;
+            setVersion((v) => v + 1);
           }
         }
-      } catch (e) {
+      } catch (_e) {
         // Ignore polling errors
       }
-    }
+    };
 
     // Initial poll after short delay
-    const initialTimeout = setTimeout(poll, 100)
+    const initialTimeout = setTimeout(poll, 100);
 
     // Set up interval
-    const interval = setInterval(poll, pollInterval)
+    const interval = setInterval(poll, pollInterval);
 
     return () => {
-      active = false
-      clearTimeout(initialTimeout)
-      clearInterval(interval)
-    }
-  }, [blockId, runtimePort, pollInterval])
+      active = false;
+      clearTimeout(initialTimeout);
+      clearInterval(interval);
+    };
+  }, [blockId, runtimePort, pollInterval]);
 
   // ============================================================================
   // Save Source to Server
@@ -128,63 +128,63 @@ export function useEditorSource({
   const saveSource = useCallback(
     async (newSource: string): Promise<boolean> => {
       // Set loading state IMMEDIATELY (before any async work)
-      setIsLoading(true)
+      setIsLoading(true);
 
       // Mark as pending BEFORE any async work - blocks polling
-      pendingSource.current = newSource
-      setIsSaving(true)
+      pendingSource.current = newSource;
+      setIsSaving(true);
 
       // Update local state immediately for fast feedback
-      setSourceState(newSource)
+      setSourceState(newSource);
 
       // Increment version to trigger RSC re-render
-      setVersion((v) => v + 1)
+      setVersion((v) => v + 1);
 
       try {
         const res = await fetch(
           `http://localhost:${runtimePort}/workbook/blocks/${blockId}/source`,
           {
-            method: 'PUT',
-            headers: { 'Content-Type': 'application/json' },
+            method: "PUT",
+            headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ source: newSource }),
-          }
-        )
+          },
+        );
 
         if (res.ok) {
           // Only update confirmed source AFTER server confirms
-          confirmedServerSource.current = newSource
-          console.log('[useEditorSource] Saved successfully')
-          return true
+          confirmedServerSource.current = newSource;
+          console.log("[useEditorSource] Saved successfully");
+          return true;
         }
 
         // HTTP error - stream to parent
-        const errorText = await res.text().catch(() => 'Unknown error')
+        const errorText = await res.text().catch(() => "Unknown error");
         const error = createHttpError(`Failed to save block: ${res.status} ${res.statusText}`, {
           status: res.status,
           details: errorText,
           blockId,
-        })
-        sendErrorToParent(error)
-        console.error('[useEditorSource] Save returned non-ok status:', res.status)
-        return false
+        });
+        sendErrorToParent(error);
+        console.error("[useEditorSource] Save returned non-ok status:", res.status);
+        return false;
       } catch (e) {
         // Network error - stream to parent
         const error = createHttpError(
-          `Network error saving block: ${e instanceof Error ? e.message : 'Unknown error'}`,
-          { blockId }
-        )
-        sendErrorToParent(error)
-        console.error('[useEditorSource] Save failed:', e)
-        return false
+          `Network error saving block: ${e instanceof Error ? e.message : "Unknown error"}`,
+          { blockId },
+        );
+        sendErrorToParent(error);
+        console.error("[useEditorSource] Save failed:", e);
+        return false;
       } finally {
         // Clear pending - allows polling to resume
-        pendingSource.current = null
-        setIsSaving(false)
-        setIsLoading(false)
+        pendingSource.current = null;
+        setIsSaving(false);
+        setIsLoading(false);
       }
     },
-    [blockId, runtimePort]
-  )
+    [blockId, runtimePort],
+  );
 
   // ============================================================================
   // Mutations
@@ -193,78 +193,78 @@ export function useEditorSource({
   const mutate = useCallback(
     async (operation: EditOperation): Promise<MutationResult> => {
       // Apply operation to source
-      const result = applyOperation(source, operation)
+      const result = applyOperation(source, operation);
 
       if (!result.success || !result.newSource) {
         // Stream mutation error to parent
-        const error = createMutationError(result.error ?? 'Operation failed', {
+        const error = createMutationError(result.error ?? "Operation failed", {
           operation: operation.type,
           blockId,
-        })
-        sendErrorToParent(error)
+        });
+        sendErrorToParent(error);
         return {
           success: false,
-          error: result.error ?? 'Operation failed',
-        }
+          error: result.error ?? "Operation failed",
+        };
       }
 
       // Save to server (saveSource handles pendingSource blocking and error streaming)
-      const saved = await saveSource(result.newSource)
+      const saved = await saveSource(result.newSource);
 
       if (!saved) {
         return {
           success: false,
-          error: 'Failed to save to server',
-        }
+          error: "Failed to save to server",
+        };
       }
 
       return {
         success: true,
         newSource: result.newSource,
-      }
+      };
     },
-    [source, saveSource, blockId]
-  )
+    [source, saveSource, blockId],
+  );
 
   const mutateMany = useCallback(
     async (operations: EditOperation[]): Promise<MutationResult> => {
       if (operations.length === 0) {
-        return { success: true, newSource: source }
+        return { success: true, newSource: source };
       }
 
       // Apply all operations
-      const result = applyOperations(source, operations)
+      const result = applyOperations(source, operations);
 
       if (!result.success || !result.newSource) {
         // Stream mutation error to parent
-        const error = createMutationError(result.error ?? 'Operations failed', {
+        const error = createMutationError(result.error ?? "Operations failed", {
           operation: `batch (${operations.length} operations)`,
           blockId,
-        })
-        sendErrorToParent(error)
+        });
+        sendErrorToParent(error);
         return {
           success: false,
-          error: result.error ?? 'Operations failed',
-        }
+          error: result.error ?? "Operations failed",
+        };
       }
 
       // Save to server (saveSource handles pendingSource blocking and error streaming)
-      const saved = await saveSource(result.newSource)
+      const saved = await saveSource(result.newSource);
 
       if (!saved) {
         return {
           success: false,
-          error: 'Failed to save to server',
-        }
+          error: "Failed to save to server",
+        };
       }
 
       return {
         success: true,
         newSource: result.newSource,
-      }
+      };
     },
-    [source, saveSource, blockId]
-  )
+    [source, saveSource, blockId],
+  );
 
   // ============================================================================
   // Direct Source Set (for undo/redo)
@@ -273,18 +273,18 @@ export function useEditorSource({
   const setSource = useCallback(
     async (newSource: string): Promise<boolean> => {
       // saveSource handles pendingSource blocking
-      return await saveSource(newSource)
+      return await saveSource(newSource);
     },
-    [saveSource]
-  )
+    [saveSource],
+  );
 
   // ============================================================================
   // Manual Refresh
   // ============================================================================
 
   const refresh = useCallback(() => {
-    setVersion((v) => v + 1)
-  }, [])
+    setVersion((v) => v + 1);
+  }, []);
 
   return {
     source,
@@ -295,5 +295,5 @@ export function useEditorSource({
     mutateMany,
     setSource,
     refresh,
-  }
+  };
 }

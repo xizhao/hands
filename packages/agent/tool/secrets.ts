@@ -1,7 +1,7 @@
+import { existsSync } from "node:fs";
+import { readFile } from "node:fs/promises";
+import { join } from "node:path";
 import { tool } from "@opencode-ai/plugin";
-import { existsSync } from "fs";
-import { readFile } from "fs/promises";
-import { join } from "path";
 
 /**
  * Secrets tool - check and request workbook secrets
@@ -10,12 +10,6 @@ import { join } from "path";
  * renders as an interactive form. After the user provides secrets, the agent
  * can retry and get the values.
  */
-
-interface SecretSpec {
-  key: string;
-  description?: string;
-  required?: boolean;
-}
 
 interface SecretsRequestOutput {
   type: "secrets_request";
@@ -46,8 +40,10 @@ function parseEnvFile(content: string): Map<string, string> {
     let value = trimmed.slice(eqIndex + 1).trim();
 
     // Remove surrounding quotes if present
-    if ((value.startsWith('"') && value.endsWith('"')) ||
-        (value.startsWith("'") && value.endsWith("'"))) {
+    if (
+      (value.startsWith('"') && value.endsWith('"')) ||
+      (value.startsWith("'") && value.endsWith("'"))
+    ) {
       value = value.slice(1, -1);
     }
 
@@ -125,7 +121,7 @@ Use this tool when you need API keys, tokens, or other credentials to connect to
       .describe("Secret keys to check or request (e.g., ['GITHUB_TOKEN', 'OPENAI_API_KEY'])"),
   },
 
-  async execute(args, ctx) {
+  async execute(args, _ctx) {
     const { action, keys } = args;
     const workbookDir = process.cwd();
 
@@ -136,13 +132,13 @@ Use this tool when you need API keys, tokens, or other credentials to connect to
         return "Error: 'keys' parameter required for check action.";
       }
 
-      const results = keys.map(key => ({
+      const results = keys.map((key) => ({
         key,
         exists: existingSecrets.has(key),
       }));
 
-      const missing = results.filter(r => !r.exists).map(r => r.key);
-      const present = results.filter(r => r.exists).map(r => r.key);
+      const missing = results.filter((r) => !r.exists).map((r) => r.key);
+      const present = results.filter((r) => r.exists).map((r) => r.key);
 
       if (missing.length === 0) {
         return `All secrets present: ${present.join(", ")}`;
@@ -161,14 +157,14 @@ Use action="request" to ask the user to provide the missing secrets.`;
       }
 
       // Build the secrets request output
-      const secretsInfo = keys.map(key => ({
+      const secretsInfo = keys.map((key) => ({
         key,
         description: KNOWN_SECRETS[key] || `Secret value for ${key}`,
         required: true,
         exists: existingSecrets.has(key),
       }));
 
-      const missing = secretsInfo.filter(s => !s.exists);
+      const missing = secretsInfo.filter((s) => !s.exists);
 
       if (missing.length === 0) {
         return `All requested secrets already exist: ${keys.join(", ")}`;

@@ -1,17 +1,22 @@
+import { FolderOpen, Loader2, MoreVertical, Plus, Trash2 } from "lucide-react";
 import { useState } from "react";
-import { useWorkbooks, useCreateWorkbook, useDeleteWorkbook, useOpenWorkbook } from "@/hooks/useWorkbook";
+import { NewWorkbookModal } from "@/components/NewWorkbookModal";
 import { Button } from "@/components/ui/button";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { FolderOpen, Plus, MoreVertical, Trash2, Loader2 } from "lucide-react";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import {
+  useCreateWorkbook,
+  useDeleteWorkbook,
+  useOpenWorkbook,
+  useWorkbooks,
+} from "@/hooks/useWorkbook";
 import { cn } from "@/lib/utils";
 import type { Workbook } from "@/lib/workbook";
-import { NewWorkbookModal } from "@/components/NewWorkbookModal";
 
 function formatDate(timestamp: number): string {
   const date = new Date(timestamp);
@@ -44,7 +49,7 @@ function WorkbookCard({
       onClick={onSelect}
       className={cn(
         "group relative p-4 rounded-lg border border-border",
-        "bg-background hover:bg-muted/50 cursor-pointer transition-colors"
+        "bg-background hover:bg-muted/50 cursor-pointer transition-colors",
       )}
     >
       <div className="flex items-start justify-between gap-2">
@@ -114,7 +119,7 @@ export function WorkbookPicker() {
             console.log(`Applying template: ${templateId}`);
           }
         },
-      }
+      },
     );
   };
 
@@ -127,9 +132,7 @@ export function WorkbookPicker() {
       <div className="w-full max-w-2xl">
         <div className="text-center mb-8">
           <h1 className="text-2xl font-bold mb-2">Welcome to Hands</h1>
-          <p className="text-muted-foreground">
-            Select a workbook to continue or create a new one
-          </p>
+          <p className="text-muted-foreground">Select a workbook to continue or create a new one</p>
         </div>
 
         <div className="mb-4 flex items-center justify-between">

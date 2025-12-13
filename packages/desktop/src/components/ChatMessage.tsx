@@ -1,56 +1,52 @@
+import { AnimatePresence, motion } from "framer-motion";
+import {
+  AlertCircle,
+  Brain,
+  Check,
+  CheckCircle2,
+  ChevronDown,
+  ChevronRight,
+  Circle,
+  Copy,
+  Database,
+  File,
+  FileCode,
+  GitBranch,
+  Glasses,
+  Globe,
+  Key,
+  List,
+  ListTodo,
+  Loader2,
+  type LucideIcon,
+  Navigation,
+  PenLine,
+  Search,
+  Terminal,
+} from "lucide-react";
 import { memo, useMemo, useState } from "react";
-import { motion, AnimatePresence } from "framer-motion";
-import type {
-  MessageWithParts,
-  Part,
-  ToolPart,
-  TextPart,
-  ReasoningPart,
-  AssistantMessage,
-  AgentPart,
-} from "@/lib/api";
-import { cn, MSG_FONT } from "@/lib/utils";
 import ReactMarkdown from "react-markdown";
 import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
 import { oneDark } from "react-syntax-highlighter/dist/esm/styles/prism";
-import {
-  Loader2,
-  Terminal,
-  FileCode,
-  Search,
-  AlertCircle,
-  ChevronRight,
-  ChevronDown,
-  Copy,
-  Check,
-  Database,
-  Globe,
-  Brain,
-  GitBranch,
-  List,
-  PenLine,
-  ListTodo,
-  Glasses,
-  File,
-  Circle,
-  CheckCircle2,
-  Key,
-  Navigation,
-  type LucideIcon,
-} from "lucide-react";
-import { Button } from "@/components/ui/button";
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipTrigger,
-} from "@/components/ui/tooltip";
-import { Skeleton, ShimmerText } from "@/components/ui/thinking-indicator";
-import { SecretsForm, parseSecretsOutput } from "@/components/SecretsForm";
-import { NavigateCard, parseNavigateOutput } from "@/components/NavigateCard";
 import { BlockEditLink, parseBlockPath } from "@/components/BlockEditLink";
+import { NavigateCard, parseNavigateOutput } from "@/components/NavigateCard";
+import { parseSecretsOutput, SecretsForm } from "@/components/SecretsForm";
 import { SubagentSummary } from "@/components/SubagentSummary";
 import { TaskToolSummary } from "@/components/TaskToolSummary";
+import { Button } from "@/components/ui/button";
+import { ShimmerText, Skeleton } from "@/components/ui/thinking-indicator";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import type {
+  AgentPart,
+  AssistantMessage,
+  MessageWithParts,
+  Part,
+  ReasoningPart,
+  TextPart,
+  ToolPart,
+} from "@/lib/api";
 import { matchPrompt, type PromptMatch } from "@/lib/prompts";
+import { cn, MSG_FONT } from "@/lib/utils";
 
 interface ChatMessageProps {
   message: MessageWithParts;
@@ -65,7 +61,6 @@ const formatTokens = (count: number): string => {
   return count.toString();
 };
 
-
 // Tool registry - maps tool names to icons and labels
 interface ToolConfig {
   icon: LucideIcon;
@@ -73,42 +68,41 @@ interface ToolConfig {
   getSubtitle?: (input: Record<string, unknown>) => string;
 }
 
-
 const TOOL_REGISTRY: Record<string, ToolConfig> = {
   read: {
     icon: Glasses,
     label: "Read",
-    getSubtitle: (input) => input.filePath ? getFilename(String(input.filePath)) : "",
+    getSubtitle: (input) => (input.filePath ? getFilename(String(input.filePath)) : ""),
   },
   glob: {
     icon: Search,
     label: "Search",
-    getSubtitle: (input) => input.pattern ? String(input.pattern) : "",
+    getSubtitle: (input) => (input.pattern ? String(input.pattern) : ""),
   },
   grep: {
     icon: Search,
     label: "Search",
-    getSubtitle: (input) => input.pattern ? String(input.pattern) : "",
+    getSubtitle: (input) => (input.pattern ? String(input.pattern) : ""),
   },
   list: {
     icon: List,
     label: "List",
-    getSubtitle: (input) => input.path ? String(input.path) : "",
+    getSubtitle: (input) => (input.path ? String(input.path) : ""),
   },
   bash: {
     icon: Terminal,
     label: "Terminal",
-    getSubtitle: (input) => input.command ? String(input.command).slice(0, 40) : "",
+    getSubtitle: (input) => (input.command ? String(input.command).slice(0, 40) : ""),
   },
   edit: {
     icon: PenLine,
     label: "Edit",
-    getSubtitle: (input) => input.file_path ? getFilename(String(input.file_path)) : "",
+    getSubtitle: (input) => (input.file_path ? getFilename(String(input.file_path)) : ""),
   },
   write: {
     icon: FileCode,
     label: "Write",
-    getSubtitle: (input) => input.file_path ? getFilename(String(input.file_path)) : "",
+    getSubtitle: (input) => (input.file_path ? getFilename(String(input.file_path)) : ""),
   },
   webfetch: {
     icon: Globe,
@@ -124,12 +118,12 @@ const TOOL_REGISTRY: Record<string, ToolConfig> = {
   websearch: {
     icon: Globe,
     label: "Search",
-    getSubtitle: (input) => input.query ? String(input.query).slice(0, 30) : "",
+    getSubtitle: (input) => (input.query ? String(input.query).slice(0, 30) : ""),
   },
   task: {
     icon: GitBranch,
     label: "Task",
-    getSubtitle: (input) => input.description ? String(input.description).slice(0, 30) : "",
+    getSubtitle: (input) => (input.description ? String(input.description).slice(0, 30) : ""),
   },
   todowrite: {
     icon: ListTodo,
@@ -142,12 +136,12 @@ const TOOL_REGISTRY: Record<string, ToolConfig> = {
   psql: {
     icon: Database,
     label: "psql",
-    getSubtitle: (input) => input.query ? String(input.query).slice(0, 40) : "",
+    getSubtitle: (input) => (input.query ? String(input.query).slice(0, 40) : ""),
   },
   schemaread: {
     icon: Database,
     label: "Schema",
-    getSubtitle: (input) => input.table ? String(input.table) : "all tables",
+    getSubtitle: (input) => (input.table ? String(input.table) : "all tables"),
   },
   secrets: {
     icon: Key,
@@ -211,113 +205,118 @@ const CopyButton = ({ text, className }: { text: string; className?: string }) =
 // Collapsible code block - collapsed by default for large blocks
 const CODE_COLLAPSE_THRESHOLD = 8; // Lines above which code is collapsed
 
-const CollapsibleCodeBlock = memo(({
-  code,
-  language,
-  codeBlockFontSize,
-  metaFontSize,
-}: {
-  code: string;
-  language: string;
-  codeBlockFontSize: string;
-  metaFontSize: string;
-}) => {
-  const lines = code.split("\n");
-  const lineCount = lines.length;
-  const isLarge = lineCount > CODE_COLLAPSE_THRESHOLD;
-  const [expanded, setExpanded] = useState(!isLarge);
+const CollapsibleCodeBlock = memo(
+  ({
+    code,
+    language,
+    codeBlockFontSize,
+    metaFontSize,
+  }: {
+    code: string;
+    language: string;
+    codeBlockFontSize: string;
+    metaFontSize: string;
+  }) => {
+    const lines = code.split("\n");
+    const lineCount = lines.length;
+    const isLarge = lineCount > CODE_COLLAPSE_THRESHOLD;
+    const [expanded, setExpanded] = useState(!isLarge);
 
-  // Preview: first 3 lines
-  const previewCode = lines.slice(0, 3).join("\n") + (lineCount > 3 ? "\n..." : "");
+    // Preview: first 3 lines
+    const previewCode = lines.slice(0, 3).join("\n") + (lineCount > 3 ? "\n..." : "");
 
-  return (
-    <div className="relative group rounded-lg overflow-hidden my-2">
-      {/* Header - clickable to expand/collapse for large blocks */}
-      <div
-        className={cn(
-          "flex items-center justify-between px-2 py-1 bg-background/60",
-          isLarge && "cursor-pointer hover:bg-background/70"
-        )}
-        onClick={() => isLarge && setExpanded(!expanded)}
-      >
-        <div className="flex items-center gap-2">
-          <span className={cn("text-muted-foreground/40 font-mono uppercase", metaFontSize)}>
-            {language}
-          </span>
-          {isLarge && (
-            <span className={cn("text-muted-foreground/30", metaFontSize)}>
-              {lineCount} lines
+    return (
+      <div className="relative group rounded-lg overflow-hidden my-2">
+        {/* Header - clickable to expand/collapse for large blocks */}
+        <div
+          className={cn(
+            "flex items-center justify-between px-2 py-1 bg-background/60",
+            isLarge && "cursor-pointer hover:bg-background/70",
+          )}
+          onClick={() => isLarge && setExpanded(!expanded)}
+        >
+          <div className="flex items-center gap-2">
+            <span className={cn("text-muted-foreground/40 font-mono uppercase", metaFontSize)}>
+              {language}
             </span>
-          )}
+            {isLarge && (
+              <span className={cn("text-muted-foreground/30", metaFontSize)}>
+                {lineCount} lines
+              </span>
+            )}
+          </div>
+          <div className="flex items-center gap-1">
+            {isLarge && (
+              <span className={cn("text-muted-foreground/40 mr-1", metaFontSize)}>
+                {expanded ? "collapse" : "expand"}
+              </span>
+            )}
+            {isLarge &&
+              (expanded ? (
+                <ChevronDown className="h-3 w-3 text-muted-foreground/40" />
+              ) : (
+                <ChevronRight className="h-3 w-3 text-muted-foreground/40" />
+              ))}
+            <CopyButton text={code} />
+          </div>
         </div>
-        <div className="flex items-center gap-1">
-          {isLarge && (
-            <span className={cn("text-muted-foreground/40 mr-1", metaFontSize)}>
-              {expanded ? "collapse" : "expand"}
-            </span>
+
+        {/* Code content */}
+        <AnimatePresence initial={false}>
+          {expanded ? (
+            <motion.div
+              initial={isLarge ? { height: 0, opacity: 0 } : false}
+              animate={{ height: "auto", opacity: 1 }}
+              exit={{ height: 0, opacity: 0 }}
+              transition={{ duration: 0.2 }}
+            >
+              <SyntaxHighlighter
+                style={oneDark}
+                language={language}
+                PreTag="div"
+                customStyle={{
+                  margin: 0,
+                  borderRadius: "0 0 0.5rem 0.5rem",
+                  fontSize: codeBlockFontSize,
+                  padding: "0.75rem",
+                  background: "hsl(var(--background) / 0.5)",
+                }}
+              >
+                {code}
+              </SyntaxHighlighter>
+            </motion.div>
+          ) : (
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="relative"
+            >
+              <SyntaxHighlighter
+                style={oneDark}
+                language={language}
+                PreTag="div"
+                customStyle={{
+                  margin: 0,
+                  borderRadius: "0 0 0.5rem 0.5rem",
+                  fontSize: codeBlockFontSize,
+                  padding: "0.75rem",
+                  background: "hsl(var(--background) / 0.5)",
+                  maxHeight: "5rem",
+                  overflow: "hidden",
+                }}
+              >
+                {previewCode}
+              </SyntaxHighlighter>
+              {/* Fade overlay */}
+              <div className="absolute inset-x-0 bottom-0 h-8 bg-gradient-to-t from-background/80 to-transparent pointer-events-none" />
+            </motion.div>
           )}
-          {isLarge && (
-            expanded ? <ChevronDown className="h-3 w-3 text-muted-foreground/40" /> : <ChevronRight className="h-3 w-3 text-muted-foreground/40" />
-          )}
-          <CopyButton text={code} />
-        </div>
+        </AnimatePresence>
       </div>
-
-      {/* Code content */}
-      <AnimatePresence initial={false}>
-        {expanded ? (
-          <motion.div
-            initial={isLarge ? { height: 0, opacity: 0 } : false}
-            animate={{ height: "auto", opacity: 1 }}
-            exit={{ height: 0, opacity: 0 }}
-            transition={{ duration: 0.2 }}
-          >
-            <SyntaxHighlighter
-              style={oneDark}
-              language={language}
-              PreTag="div"
-              customStyle={{
-                margin: 0,
-                borderRadius: "0 0 0.5rem 0.5rem",
-                fontSize: codeBlockFontSize,
-                padding: "0.75rem",
-                background: "hsl(var(--background) / 0.5)",
-              }}
-            >
-              {code}
-            </SyntaxHighlighter>
-          </motion.div>
-        ) : (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="relative"
-          >
-            <SyntaxHighlighter
-              style={oneDark}
-              language={language}
-              PreTag="div"
-              customStyle={{
-                margin: 0,
-                borderRadius: "0 0 0.5rem 0.5rem",
-                fontSize: codeBlockFontSize,
-                padding: "0.75rem",
-                background: "hsl(var(--background) / 0.5)",
-                maxHeight: "5rem",
-                overflow: "hidden",
-              }}
-            >
-              {previewCode}
-            </SyntaxHighlighter>
-            {/* Fade overlay */}
-            <div className="absolute inset-x-0 bottom-0 h-8 bg-gradient-to-t from-background/80 to-transparent pointer-events-none" />
-          </motion.div>
-        )}
-      </AnimatePresence>
-    </div>
-  );
-});
+    );
+  },
+);
 
 CollapsibleCodeBlock.displayName = "CollapsibleCodeBlock";
 
@@ -337,12 +336,15 @@ const parsePsqlOutput = (output: string): ParsedTable | null => {
   if (lines.length < 2) return null;
 
   // Find the separator line (---+---)
-  const sepIndex = lines.findIndex(line => /^-+(\+-+)+$/.test(line.replace(/\s/g, '')));
+  const sepIndex = lines.findIndex((line) => /^-+(\+-+)+$/.test(line.replace(/\s/g, "")));
   if (sepIndex < 1) return null;
 
   // Parse headers from line before separator
   const headerLine = lines[sepIndex - 1];
-  const headers = headerLine.split("|").map(h => h.trim()).filter(Boolean);
+  const headers = headerLine
+    .split("|")
+    .map((h) => h.trim())
+    .filter(Boolean);
   if (headers.length === 0) return null;
 
   // Parse data rows (after separator, before row count)
@@ -353,7 +355,7 @@ const parsePsqlOutput = (output: string): ParsedTable | null => {
     if (line.match(/^\s*\(\d+ rows?\)\s*$/)) break;
     if (!line.includes("|")) continue;
 
-    const cells = line.split("|").map(c => c.trim());
+    const cells = line.split("|").map((c) => c.trim());
     if (cells.length >= headers.length) {
       rows.push(cells.slice(0, headers.length));
     }
@@ -367,74 +369,99 @@ const parsePsqlOutput = (output: string): ParsedTable | null => {
 };
 
 // QueryResult component - renders psql output as expandable DataTable
-const QueryResult = memo(({ output, query: _query, compact = false }: { output: string; query?: string; compact?: boolean }) => {
-  const [expanded, setExpanded] = useState(false);
-  const parsed = useMemo(() => parsePsqlOutput(output), [output]);
+const QueryResult = memo(
+  ({
+    output,
+    query: _query,
+    compact = false,
+  }: {
+    output: string;
+    query?: string;
+    compact?: boolean;
+  }) => {
+    const [expanded, setExpanded] = useState(false);
+    const parsed = useMemo(() => parsePsqlOutput(output), [output]);
 
-  const labelFont = compact ? MSG_FONT.labelCompact : MSG_FONT.label;
-  const metaFont = compact ? MSG_FONT.metaCompact : MSG_FONT.meta;
+    const labelFont = compact ? MSG_FONT.labelCompact : MSG_FONT.label;
+    const metaFont = compact ? MSG_FONT.metaCompact : MSG_FONT.meta;
 
-  // If not a table result, show as plain text
-  if (!parsed || parsed.rows.length === 0) {
+    // If not a table result, show as plain text
+    if (!parsed || parsed.rows.length === 0) {
+      return (
+        <div className={cn("text-muted-foreground/70 font-mono", labelFont)}>
+          {output.slice(0, 200)}
+          {output.length > 200 && "..."}
+        </div>
+      );
+    }
+
+    const previewRows = parsed.rows.slice(0, 3);
+    const hasMore = parsed.rows.length > 3;
+
     return (
-      <div className={cn("text-muted-foreground/70 font-mono", labelFont)}>
-        {output.slice(0, 200)}{output.length > 200 && "..."}
-      </div>
-    );
-  }
-
-  const previewRows = parsed.rows.slice(0, 3);
-  const hasMore = parsed.rows.length > 3;
-
-  return (
-    <div className="mt-1">
-      {/* Compact preview table */}
-      <div className="rounded-md overflow-hidden border border-border/50 bg-background/30">
-        <table className={cn("w-full font-mono", metaFont)}>
-          <thead>
-            <tr className="bg-background/50">
-              {parsed.headers.map((h, i) => (
-                <th key={i} className="px-2 py-1 text-left text-muted-foreground/60 font-medium truncate max-w-[120px]">
-                  {h}
-                </th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {(expanded ? parsed.rows : previewRows).map((row, i) => (
-              <tr key={i} className="border-t border-border/20 hover:bg-foreground/5">
-                {row.map((cell, j) => (
-                  <td key={j} className="px-2 py-1 text-muted-foreground/80 truncate max-w-[120px]" title={cell}>
-                    {cell || <span className="text-muted-foreground/30">null</span>}
-                  </td>
+      <div className="mt-1">
+        {/* Compact preview table */}
+        <div className="rounded-md overflow-hidden border border-border/50 bg-background/30">
+          <table className={cn("w-full font-mono", metaFont)}>
+            <thead>
+              <tr className="bg-background/50">
+                {parsed.headers.map((h, i) => (
+                  <th
+                    key={i}
+                    className="px-2 py-1 text-left text-muted-foreground/60 font-medium truncate max-w-[120px]"
+                  >
+                    {h}
+                  </th>
                 ))}
               </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+            </thead>
+            <tbody>
+              {(expanded ? parsed.rows : previewRows).map((row, i) => (
+                <tr key={i} className="border-t border-border/20 hover:bg-foreground/5">
+                  {row.map((cell, j) => (
+                    <td
+                      key={j}
+                      className="px-2 py-1 text-muted-foreground/80 truncate max-w-[120px]"
+                      title={cell}
+                    >
+                      {cell || <span className="text-muted-foreground/30">null</span>}
+                    </td>
+                  ))}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
 
-      {/* Footer with expand/collapse and row count */}
-      <div className="flex items-center justify-between mt-1 px-1">
-        <span className={cn("text-muted-foreground/40", metaFont)}>
-          {parsed.rowCount} row{parsed.rowCount !== 1 && "s"}
-        </span>
-        {hasMore && (
-          <button
-            onClick={() => setExpanded(!expanded)}
-            className={cn("text-blue-400/70 hover:text-blue-400 flex items-center gap-0.5", metaFont)}
-          >
-            {expanded ? (
-              <>Show less <ChevronDown className="h-2.5 w-2.5" /></>
-            ) : (
-              <>Show all {parsed.rowCount} <ChevronRight className="h-2.5 w-2.5" /></>
-            )}
-          </button>
-        )}
+        {/* Footer with expand/collapse and row count */}
+        <div className="flex items-center justify-between mt-1 px-1">
+          <span className={cn("text-muted-foreground/40", metaFont)}>
+            {parsed.rowCount} row{parsed.rowCount !== 1 && "s"}
+          </span>
+          {hasMore && (
+            <button
+              onClick={() => setExpanded(!expanded)}
+              className={cn(
+                "text-blue-400/70 hover:text-blue-400 flex items-center gap-0.5",
+                metaFont,
+              )}
+            >
+              {expanded ? (
+                <>
+                  Show less <ChevronDown className="h-2.5 w-2.5" />
+                </>
+              ) : (
+                <>
+                  Show all {parsed.rowCount} <ChevronRight className="h-2.5 w-2.5" />
+                </>
+              )}
+            </button>
+          )}
+        </div>
       </div>
-    </div>
-  );
-});
+    );
+  },
+);
 
 QueryResult.displayName = "QueryResult";
 
@@ -446,96 +473,103 @@ interface TodoItem {
 }
 
 // TodoResult component - compact renderer for todowrite tool
-const TodoResult = memo(({ input, compact = false }: { input: { todos?: TodoItem[] }; compact?: boolean }) => {
-  const [expanded, setExpanded] = useState(false);
-  const todos = input?.todos || [];
+const TodoResult = memo(
+  ({ input, compact = false }: { input: { todos?: TodoItem[] }; compact?: boolean }) => {
+    const [expanded, setExpanded] = useState(false);
+    const todos = input?.todos || [];
 
-  const labelFont = compact ? MSG_FONT.labelCompact : MSG_FONT.label;
+    const labelFont = compact ? MSG_FONT.labelCompact : MSG_FONT.label;
 
-  // If no todos, show "Plan completed"
-  if (todos.length === 0) {
+    // If no todos, show "Plan completed"
+    if (todos.length === 0) {
+      return (
+        <div className={cn("flex items-center gap-1.5 text-green-400/70", labelFont)}>
+          <CheckCircle2 className="h-3 w-3" />
+          <span>Plan completed</span>
+        </div>
+      );
+    }
+
+    const completedCount = todos.filter((t) => t.status === "completed").length;
+    const inProgressCount = todos.filter((t) => t.status === "in_progress").length;
+    const pendingCount = todos.filter((t) => t.status === "pending").length;
+
+    // All completed
+    if (completedCount === todos.length) {
+      return (
+        <div className={cn("flex items-center gap-1.5 text-green-400/70", labelFont)}>
+          <CheckCircle2 className="h-3 w-3" />
+          <span>All {completedCount} tasks completed</span>
+        </div>
+      );
+    }
+
+    // Summary line
+    const summaryParts: string[] = [];
+    if (inProgressCount > 0) summaryParts.push(`${inProgressCount} in progress`);
+    if (completedCount > 0) summaryParts.push(`${completedCount} done`);
+    if (pendingCount > 0) summaryParts.push(`${pendingCount} pending`);
+
     return (
-      <div className={cn("flex items-center gap-1.5 text-green-400/70", labelFont)}>
-        <CheckCircle2 className="h-3 w-3" />
-        <span>Plan completed</span>
+      <div className="py-0.5">
+        <button
+          onClick={() => setExpanded(!expanded)}
+          className={cn(
+            "flex items-center gap-1.5 text-muted-foreground/60 hover:text-muted-foreground",
+            labelFont,
+          )}
+        >
+          {inProgressCount > 0 ? (
+            <Loader2 className="h-3 w-3 animate-spin text-blue-400" />
+          ) : (
+            <ListTodo className="h-3 w-3" />
+          )}
+          <span>{todos.length} tasks</span>
+          <span className="text-muted-foreground/40">· {summaryParts.join(", ")}</span>
+          {expanded ? <ChevronDown className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />}
+        </button>
+
+        <AnimatePresence>
+          {expanded && (
+            <motion.div
+              initial={{ height: 0, opacity: 0 }}
+              animate={{ height: "auto", opacity: 1 }}
+              exit={{ height: 0, opacity: 0 }}
+              className="overflow-hidden"
+            >
+              <div className="ml-2 mt-1.5 space-y-1 border-l border-border/30 pl-2">
+                {todos.map((todo, idx) => (
+                  <div
+                    key={idx}
+                    className={cn(
+                      "flex items-start gap-1.5",
+                      labelFont,
+                      todo.status === "completed" && "text-muted-foreground/40",
+                      todo.status === "in_progress" && "text-blue-400",
+                    )}
+                  >
+                    {todo.status === "completed" ? (
+                      <CheckCircle2 className="h-3 w-3 shrink-0 mt-0.5 text-green-400/70" />
+                    ) : todo.status === "in_progress" ? (
+                      <Loader2 className="h-3 w-3 shrink-0 mt-0.5 animate-spin" />
+                    ) : (
+                      <Circle className="h-3 w-3 shrink-0 mt-0.5 text-muted-foreground/40" />
+                    )}
+                    <span className={cn(todo.status === "completed" && "line-through")}>
+                      {todo.status === "in_progress" && todo.activeForm
+                        ? todo.activeForm
+                        : todo.content}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
       </div>
     );
-  }
-
-  const completedCount = todos.filter(t => t.status === "completed").length;
-  const inProgressCount = todos.filter(t => t.status === "in_progress").length;
-  const pendingCount = todos.filter(t => t.status === "pending").length;
-
-  // All completed
-  if (completedCount === todos.length) {
-    return (
-      <div className={cn("flex items-center gap-1.5 text-green-400/70", labelFont)}>
-        <CheckCircle2 className="h-3 w-3" />
-        <span>All {completedCount} tasks completed</span>
-      </div>
-    );
-  }
-
-  // Summary line
-  const summaryParts: string[] = [];
-  if (inProgressCount > 0) summaryParts.push(`${inProgressCount} in progress`);
-  if (completedCount > 0) summaryParts.push(`${completedCount} done`);
-  if (pendingCount > 0) summaryParts.push(`${pendingCount} pending`);
-
-  return (
-    <div className="py-0.5">
-      <button
-        onClick={() => setExpanded(!expanded)}
-        className={cn("flex items-center gap-1.5 text-muted-foreground/60 hover:text-muted-foreground", labelFont)}
-      >
-        {inProgressCount > 0 ? (
-          <Loader2 className="h-3 w-3 animate-spin text-blue-400" />
-        ) : (
-          <ListTodo className="h-3 w-3" />
-        )}
-        <span>{todos.length} tasks</span>
-        <span className="text-muted-foreground/40">· {summaryParts.join(", ")}</span>
-        {expanded ? <ChevronDown className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />}
-      </button>
-
-      <AnimatePresence>
-        {expanded && (
-          <motion.div
-            initial={{ height: 0, opacity: 0 }}
-            animate={{ height: "auto", opacity: 1 }}
-            exit={{ height: 0, opacity: 0 }}
-            className="overflow-hidden"
-          >
-            <div className="ml-2 mt-1.5 space-y-1 border-l border-border/30 pl-2">
-              {todos.map((todo, idx) => (
-                <div
-                  key={idx}
-                  className={cn(
-                    "flex items-start gap-1.5",
-                    labelFont,
-                    todo.status === "completed" && "text-muted-foreground/40",
-                    todo.status === "in_progress" && "text-blue-400"
-                  )}
-                >
-                  {todo.status === "completed" ? (
-                    <CheckCircle2 className="h-3 w-3 shrink-0 mt-0.5 text-green-400/70" />
-                  ) : todo.status === "in_progress" ? (
-                    <Loader2 className="h-3 w-3 shrink-0 mt-0.5 animate-spin" />
-                  ) : (
-                    <Circle className="h-3 w-3 shrink-0 mt-0.5 text-muted-foreground/40" />
-                  )}
-                  <span className={cn(todo.status === "completed" && "line-through")}>
-                    {todo.status === "in_progress" && todo.activeForm ? todo.activeForm : todo.content}
-                  </span>
-                </div>
-              ))}
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
-    </div>
-  );
-});
+  },
+);
 
 TodoResult.displayName = "TodoResult";
 
@@ -545,9 +579,11 @@ const ToolThread = memo(({ tools, compact = false }: { tools: ToolPart[]; compac
 
   const labelFont = compact ? MSG_FONT.labelCompact : MSG_FONT.label;
 
-  const runningCount = tools.filter(t => t.state.status === "running" || t.state.status === "pending").length;
-  const completedCount = tools.filter(t => t.state.status === "completed").length;
-  const errorCount = tools.filter(t => t.state.status === "error").length;
+  const runningCount = tools.filter(
+    (t) => t.state.status === "running" || t.state.status === "pending",
+  ).length;
+  const completedCount = tools.filter((t) => t.state.status === "completed").length;
+  const errorCount = tools.filter((t) => t.state.status === "error").length;
 
   const isRunning = runningCount > 0;
   const summary = isRunning
@@ -561,7 +597,7 @@ const ToolThread = memo(({ tools, compact = false }: { tools: ToolPart[]; compac
         className={cn(
           "flex items-center gap-1.5 px-2 py-1 rounded-lg transition-colors",
           "text-muted-foreground/60 hover:text-muted-foreground hover:bg-foreground/5",
-          labelFont
+          labelFont,
         )}
       >
         {isRunning ? (
@@ -616,9 +652,10 @@ const ToolInvocation = memo(({ part, compact = false }: { part: ToolPart; compac
 
   // Check if this is a SQL tool with table output
   // Tool name could be "psql", "psqlTool", or prefixed like "hands_psql", "psql_psqlTool"
-  const isPsqlTool = toolName.toLowerCase().endsWith("psql") ||
-    toolName.toLowerCase().endsWith("psqltool");
-  const hasTableResult = isPsqlTool &&
+  const isPsqlTool =
+    toolName.toLowerCase().endsWith("psql") || toolName.toLowerCase().endsWith("psqltool");
+  const hasTableResult =
+    isPsqlTool &&
     state.status === "completed" &&
     state.output &&
     state.output.includes("|") &&
@@ -633,7 +670,9 @@ const ToolInvocation = memo(({ part, compact = false }: { part: ToolPart; compac
     return null;
   }, [state, config]);
 
-  const hasDetails = Boolean(state.input || (state.status === "completed" && state.output) || isError);
+  const hasDetails = Boolean(
+    state.input || (state.status === "completed" && state.output) || isError,
+  );
 
   // For todowrite, use custom compact renderer
   if (isTodoTool && state.input) {
@@ -665,7 +704,9 @@ const ToolInvocation = memo(({ part, compact = false }: { part: ToolPart; compac
       <div className="py-1">
         <div className={cn("flex items-center gap-1.5 text-muted-foreground/60 mb-1", labelFont)}>
           <Database className="h-2.5 w-2.5 text-blue-400" />
-          <span className={cn("font-mono text-muted-foreground/50 truncate max-w-[250px]", metaFont)}>
+          <span
+            className={cn("font-mono text-muted-foreground/50 truncate max-w-[250px]", metaFont)}
+          >
             {(state.input as Record<string, unknown>)?.query as string}
           </span>
         </div>
@@ -680,9 +721,10 @@ const ToolInvocation = memo(({ part, compact = false }: { part: ToolPart; compac
 
   // Check if this is the secrets tool with a form request
   const isSecretsTool = toolName.toLowerCase().includes("secrets");
-  const secretsRequest = isSecretsTool &&
-    state.status === "completed" &&
-    state.output ? parseSecretsOutput(state.output) : null;
+  const secretsRequest =
+    isSecretsTool && state.status === "completed" && state.output
+      ? parseSecretsOutput(state.output)
+      : null;
 
   // For secrets with form request, show the form
   if (secretsRequest) {
@@ -699,9 +741,10 @@ const ToolInvocation = memo(({ part, compact = false }: { part: ToolPart; compac
 
   // Check if this is the navigate tool with a navigation request
   const isNavigateTool = toolName.toLowerCase().includes("navigate");
-  const navigateRequest = isNavigateTool &&
-    state.status === "completed" &&
-    state.output ? parseNavigateOutput(state.output) : null;
+  const navigateRequest =
+    isNavigateTool && state.status === "completed" && state.output
+      ? parseNavigateOutput(state.output)
+      : null;
 
   // For navigate with valid output, show the navigation link
   if (navigateRequest) {
@@ -714,9 +757,10 @@ const ToolInvocation = memo(({ part, compact = false }: { part: ToolPart; compac
 
   // Check if this is an edit/write tool that modified a block file
   const isEditTool = toolName.toLowerCase() === "edit" || toolName.toLowerCase() === "write";
-  const blockInfo = isEditTool && state.input
-    ? parseBlockPath((state.input as Record<string, unknown>).file_path as string)
-    : null;
+  const blockInfo =
+    isEditTool && state.input
+      ? parseBlockPath((state.input as Record<string, unknown>).file_path as string)
+      : null;
 
   return (
     <div className="py-0.5">
@@ -724,7 +768,7 @@ const ToolInvocation = memo(({ part, compact = false }: { part: ToolPart; compac
         className={cn(
           "flex items-center gap-1.5 text-muted-foreground/60",
           labelFont,
-          hasDetails && "cursor-pointer hover:text-muted-foreground"
+          hasDetails && "cursor-pointer hover:text-muted-foreground",
         )}
         onClick={() => hasDetails && setExpanded(!expanded)}
       >
@@ -737,13 +781,18 @@ const ToolInvocation = memo(({ part, compact = false }: { part: ToolPart; compac
         )}
         <span>{config.label}</span>
         {subtitle && (
-          <span className={cn("text-muted-foreground/40 font-mono truncate max-w-[150px]", metaFont)}>
+          <span
+            className={cn("text-muted-foreground/40 font-mono truncate max-w-[150px]", metaFont)}
+          >
             {subtitle}
           </span>
         )}
-        {hasDetails && (
-          expanded ? <ChevronDown className="h-2.5 w-2.5" /> : <ChevronRight className="h-2.5 w-2.5" />
-        )}
+        {hasDetails &&
+          (expanded ? (
+            <ChevronDown className="h-2.5 w-2.5" />
+          ) : (
+            <ChevronRight className="h-2.5 w-2.5" />
+          ))}
       </button>
 
       {/* Show block edit link if this tool modified a block */}
@@ -759,10 +808,17 @@ const ToolInvocation = memo(({ part, compact = false }: { part: ToolPart; compac
             exit={{ height: 0, opacity: 0 }}
             className="overflow-hidden"
           >
-            <div className={cn("ml-4 mt-1 p-2 rounded-lg bg-background/30 font-mono space-y-1.5", metaFont)}>
+            <div
+              className={cn(
+                "ml-4 mt-1 p-2 rounded-lg bg-background/30 font-mono space-y-1.5",
+                metaFont,
+              )}
+            >
               {state.input && (
                 <div>
-                  <span className={cn("text-muted-foreground/40 uppercase", metaFont)}>input: </span>
+                  <span className={cn("text-muted-foreground/40 uppercase", metaFont)}>
+                    input:{" "}
+                  </span>
                   <span className="text-muted-foreground/70 break-all">
                     {JSON.stringify(state.input).slice(0, 300)}
                   </span>
@@ -773,9 +829,12 @@ const ToolInvocation = memo(({ part, compact = false }: { part: ToolPart; compac
               )}
               {state.status === "completed" && state.output && (
                 <div>
-                  <span className={cn("text-muted-foreground/40 uppercase", metaFont)}>output: </span>
+                  <span className={cn("text-muted-foreground/40 uppercase", metaFont)}>
+                    output:{" "}
+                  </span>
                   <span className="text-muted-foreground/70 break-all">
-                    {state.output.slice(0, 300)}{state.output.length > 300 && "..."}
+                    {state.output.slice(0, 300)}
+                    {state.output.length > 300 && "..."}
                   </span>
                 </div>
               )}
@@ -790,107 +849,131 @@ const ToolInvocation = memo(({ part, compact = false }: { part: ToolPart; compac
 ToolInvocation.displayName = "ToolInvocation";
 
 // Text content with markdown
-const TextContent = memo(({ text, isStreaming = false, darkText = false, compact = false }: { text: string; isStreaming?: boolean; darkText?: boolean; compact?: boolean }) => {
-  const fontSize = compact ? MSG_FONT.baseCompact : MSG_FONT.base;
-  const codeFontSize = compact ? MSG_FONT.codeCompact : MSG_FONT.code;
-  const codeBlockFontSize = compact ? MSG_FONT.codeBlockCompact : MSG_FONT.codeBlock;
-  const metaFontSize = compact ? MSG_FONT.metaCompact : MSG_FONT.meta;
+const TextContent = memo(
+  ({
+    text,
+    isStreaming = false,
+    darkText = false,
+    compact = false,
+  }: {
+    text: string;
+    isStreaming?: boolean;
+    darkText?: boolean;
+    compact?: boolean;
+  }) => {
+    const fontSize = compact ? MSG_FONT.baseCompact : MSG_FONT.base;
+    const codeFontSize = compact ? MSG_FONT.codeCompact : MSG_FONT.code;
+    const codeBlockFontSize = compact ? MSG_FONT.codeBlockCompact : MSG_FONT.codeBlock;
+    const metaFontSize = compact ? MSG_FONT.metaCompact : MSG_FONT.meta;
 
-  return (
-    <div className={cn(
-      "prose max-w-none prose-p:my-0.5 prose-pre:my-1 prose-p:leading-relaxed",
-      fontSize,
-      darkText ? "prose-neutral" : "dark:prose-invert"
-    )}>
-      <ReactMarkdown
-        components={{
-          code({ className, children, ...props }) {
-            const match = /language-(\w+)/.exec(className || "");
-            const inline = !match;
-
-            if (inline) {
-              return (
-                <code className={cn("bg-background/50 px-1 py-0.5 rounded font-mono", codeFontSize)} {...props}>
-                  {children}
-                </code>
-              );
-            }
-
-            // Use collapsible code block for fenced code
-            const code = String(children).replace(/\n$/, "");
-            return (
-              <CollapsibleCodeBlock
-                code={code}
-                language={match[1]}
-                codeBlockFontSize={codeBlockFontSize}
-                metaFontSize={metaFontSize}
-              />
-            );
-          },
-        }}
+    return (
+      <div
+        className={cn(
+          "prose max-w-none prose-p:my-0.5 prose-pre:my-1 prose-p:leading-relaxed",
+          fontSize,
+          darkText ? "prose-neutral" : "dark:prose-invert",
+        )}
       >
-        {text}
-      </ReactMarkdown>
-      {isStreaming && (
-        <motion.span
-          className="inline-block w-0.5 h-4 bg-primary ml-0.5 align-middle"
-          animate={{ opacity: [1, 0] }}
-          transition={{ duration: 0.5, repeat: Infinity, repeatType: "reverse" }}
-        />
-      )}
-    </div>
-  );
-});
+        <ReactMarkdown
+          components={{
+            code({ className, children, ...props }) {
+              const match = /language-(\w+)/.exec(className || "");
+              const inline = !match;
+
+              if (inline) {
+                return (
+                  <code
+                    className={cn("bg-background/50 px-1 py-0.5 rounded font-mono", codeFontSize)}
+                    {...props}
+                  >
+                    {children}
+                  </code>
+                );
+              }
+
+              // Use collapsible code block for fenced code
+              const code = String(children).replace(/\n$/, "");
+              return (
+                <CollapsibleCodeBlock
+                  code={code}
+                  language={match[1]}
+                  codeBlockFontSize={codeBlockFontSize}
+                  metaFontSize={metaFontSize}
+                />
+              );
+            },
+          }}
+        >
+          {text}
+        </ReactMarkdown>
+        {isStreaming && (
+          <motion.span
+            className="inline-block w-0.5 h-4 bg-primary ml-0.5 align-middle"
+            animate={{ opacity: [1, 0] }}
+            transition={{ duration: 0.5, repeat: Infinity, repeatType: "reverse" }}
+          />
+        )}
+      </div>
+    );
+  },
+);
 
 TextContent.displayName = "TextContent";
 
 // Collapsible reasoning section
-const ReasoningContent = memo(({ part, compact = false }: { part: ReasoningPart; compact?: boolean }) => {
-  const [expanded, setExpanded] = useState(false);
+const ReasoningContent = memo(
+  ({ part, compact = false }: { part: ReasoningPart; compact?: boolean }) => {
+    const [expanded, setExpanded] = useState(false);
 
-  const labelFont = compact ? MSG_FONT.labelCompact : MSG_FONT.label;
+    const labelFont = compact ? MSG_FONT.labelCompact : MSG_FONT.label;
 
-  // Don't render if no text
-  if (!part.text || part.text.trim().length === 0) {
-    return null;
-  }
+    // Don't render if no text
+    if (!part.text || part.text.trim().length === 0) {
+      return null;
+    }
 
-  const preview = part.text.slice(0, 50).replace(/\n/g, " ");
+    const preview = part.text.slice(0, 50).replace(/\n/g, " ");
 
-  return (
-    <div className="my-1">
-      <button
-        onClick={() => setExpanded(!expanded)}
-        className={cn(
-          "flex items-center gap-1.5 px-2 py-1 rounded-lg transition-colors",
-          "text-purple-400/70 hover:text-purple-400 hover:bg-purple-500/10",
-          labelFont
-        )}
-      >
-        <Brain className="h-3 w-3" />
-        <span className="italic">
-          {expanded ? "Reasoning" : preview + (part.text.length > 50 ? "..." : "")}
-        </span>
-        {expanded ? <ChevronDown className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />}
-      </button>
+    return (
+      <div className="my-1">
+        <button
+          onClick={() => setExpanded(!expanded)}
+          className={cn(
+            "flex items-center gap-1.5 px-2 py-1 rounded-lg transition-colors",
+            "text-purple-400/70 hover:text-purple-400 hover:bg-purple-500/10",
+            labelFont,
+          )}
+        >
+          <Brain className="h-3 w-3" />
+          <span className="italic">
+            {expanded ? "Reasoning" : preview + (part.text.length > 50 ? "..." : "")}
+          </span>
+          {expanded ? <ChevronDown className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />}
+        </button>
 
-      <AnimatePresence>
-        {expanded && (
-          <motion.div
-            initial={{ height: 0, opacity: 0 }}
-            animate={{ height: "auto", opacity: 1 }}
-            exit={{ height: 0, opacity: 0 }}
-            className="overflow-hidden"
-          >
-            <pre className={cn("mt-1 ml-2 p-2 rounded-lg bg-purple-500/10 font-mono text-purple-300/70 whitespace-pre-wrap max-h-48 overflow-auto", labelFont)}>
-              {part.text}
-            </pre>
-          </motion.div>
-        )}
-      </AnimatePresence>
-    </div>
-  );
-});
+        <AnimatePresence>
+          {expanded && (
+            <motion.div
+              initial={{ height: 0, opacity: 0 }}
+              animate={{ height: "auto", opacity: 1 }}
+              exit={{ height: 0, opacity: 0 }}
+              className="overflow-hidden"
+            >
+              <pre
+                className={cn(
+                  "mt-1 ml-2 p-2 rounded-lg bg-purple-500/10 font-mono text-purple-300/70 whitespace-pre-wrap max-h-48 overflow-auto",
+                  labelFont,
+                )}
+              >
+                {part.text}
+              </pre>
+            </motion.div>
+          )}
+        </AnimatePresence>
+      </div>
+    );
+  },
+);
 
 ReasoningContent.displayName = "ReasoningContent";
 
@@ -900,9 +983,16 @@ const FileChip = memo(({ path, compact = false }: { path: string; compact?: bool
   const codeFont = compact ? MSG_FONT.codeCompact : MSG_FONT.code;
 
   return (
-    <span className={cn("inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-primary-foreground/20 text-primary-foreground font-mono", codeFont)}>
+    <span
+      className={cn(
+        "inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-primary-foreground/20 text-primary-foreground font-mono",
+        codeFont,
+      )}
+    >
       <File className="h-3 w-3 shrink-0" />
-      <span className="truncate max-w-[200px]" title={path}>{filename}</span>
+      <span className="truncate max-w-[200px]" title={path}>
+        {filename}
+      </span>
     </span>
   );
 });
@@ -915,10 +1005,12 @@ const ActionChip = memo(({ match, compact = false }: { match: PromptMatch; compa
   const baseFont = compact ? MSG_FONT.baseCompact : MSG_FONT.base;
 
   return (
-    <span className={cn(
-      "inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg",
-      "bg-primary-foreground/20 text-primary-foreground"
-    )}>
+    <span
+      className={cn(
+        "inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg",
+        "bg-primary-foreground/20 text-primary-foreground",
+      )}
+    >
       <Icon className={cn("h-3.5 w-3.5 shrink-0", match.meta.color)} />
       <span className={cn("font-medium", baseFont)}>{match.meta.label}</span>
     </span>
@@ -981,7 +1073,7 @@ const UserTextContent = memo(({ text, compact = false }: { text: string; compact
           <FileChip key={idx} path={part.content} compact={compact} />
         ) : (
           <span key={idx}>{part.content}</span>
-        )
+        ),
       )}
     </span>
   );
@@ -990,55 +1082,65 @@ const UserTextContent = memo(({ text, compact = false }: { text: string; compact
 UserTextContent.displayName = "UserTextContent";
 
 // Cost indicator for assistant messages - shown to the left of the bubble with popover on hover
-const CostIndicator = memo(({ info, compact = false }: { info: AssistantMessage; compact?: boolean }) => {
-  // Only show if there's a cost
-  if (!info.cost || info.cost <= 0) return null;
+const CostIndicator = memo(
+  ({ info, compact = false }: { info: AssistantMessage; compact?: boolean }) => {
+    // Only show if there's a cost
+    if (!info.cost || info.cost <= 0) return null;
 
-  const metaFont = compact ? MSG_FONT.metaCompact : MSG_FONT.meta;
-  const tokens = info.tokens;
+    const metaFont = compact ? MSG_FONT.metaCompact : MSG_FONT.meta;
+    const tokens = info.tokens;
 
-  return (
-    <Tooltip>
-      <TooltipTrigger asChild>
-        <span className={cn("text-muted-foreground/30 font-mono opacity-0 group-hover:opacity-100 transition-opacity cursor-default", metaFont)}>
-          ${info.cost.toFixed(4)}
-        </span>
-      </TooltipTrigger>
-      <TooltipContent side="right" className={cn("font-mono bg-background/95 backdrop-blur-xl", MSG_FONT.code)}>
-        <div className="space-y-1">
-          <div className="flex justify-between gap-4">
-            <span className="text-muted-foreground">Model</span>
-            <span>{info.modelID}</span>
+    return (
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <span
+            className={cn(
+              "text-muted-foreground/30 font-mono opacity-0 group-hover:opacity-100 transition-opacity cursor-default",
+              metaFont,
+            )}
+          >
+            ${info.cost.toFixed(4)}
+          </span>
+        </TooltipTrigger>
+        <TooltipContent
+          side="right"
+          className={cn("font-mono bg-background/95 backdrop-blur-xl", MSG_FONT.code)}
+        >
+          <div className="space-y-1">
+            <div className="flex justify-between gap-4">
+              <span className="text-muted-foreground">Model</span>
+              <span>{info.modelID}</span>
+            </div>
+            {tokens && (
+              <>
+                <div className="flex justify-between gap-4">
+                  <span className="text-muted-foreground">Input</span>
+                  <span>{formatTokens(tokens.input)}</span>
+                </div>
+                <div className="flex justify-between gap-4">
+                  <span className="text-muted-foreground">Output</span>
+                  <span>{formatTokens(tokens.output)}</span>
+                </div>
+                {tokens.reasoning > 0 && (
+                  <div className="flex justify-between gap-4">
+                    <span className="text-purple-400">Reasoning</span>
+                    <span className="text-purple-400">{formatTokens(tokens.reasoning)}</span>
+                  </div>
+                )}
+                {tokens.cache.read > 0 && (
+                  <div className="flex justify-between gap-4">
+                    <span className="text-green-400">Cache</span>
+                    <span className="text-green-400">{formatTokens(tokens.cache.read)}</span>
+                  </div>
+                )}
+              </>
+            )}
           </div>
-          {tokens && (
-            <>
-              <div className="flex justify-between gap-4">
-                <span className="text-muted-foreground">Input</span>
-                <span>{formatTokens(tokens.input)}</span>
-              </div>
-              <div className="flex justify-between gap-4">
-                <span className="text-muted-foreground">Output</span>
-                <span>{formatTokens(tokens.output)}</span>
-              </div>
-              {tokens.reasoning > 0 && (
-                <div className="flex justify-between gap-4">
-                  <span className="text-purple-400">Reasoning</span>
-                  <span className="text-purple-400">{formatTokens(tokens.reasoning)}</span>
-                </div>
-              )}
-              {tokens.cache.read > 0 && (
-                <div className="flex justify-between gap-4">
-                  <span className="text-green-400">Cache</span>
-                  <span className="text-green-400">{formatTokens(tokens.cache.read)}</span>
-                </div>
-              )}
-            </>
-          )}
-        </div>
-      </TooltipContent>
-    </Tooltip>
-  );
-});
+        </TooltipContent>
+      </Tooltip>
+    );
+  },
+);
 
 CostIndicator.displayName = "CostIndicator";
 
@@ -1059,194 +1161,223 @@ interface MessageProgressProps {
   isThinking?: boolean;
 }
 
-export const MessageProgress = memo(({ tools, currentStatus, isThinking = false, compact = false }: MessageProgressProps & { compact?: boolean }) => {
-  const runningTool = tools.find(t => t.status === "running" || t.status === "pending");
-  const statusText = currentStatus || (runningTool ? getToolConfig(runningTool.name).label : isThinking ? "Thinking..." : "Working...");
-  const baseFont = compact ? MSG_FONT.baseCompact : MSG_FONT.base;
+export const MessageProgress = memo(
+  ({
+    tools,
+    currentStatus,
+    isThinking = false,
+    compact = false,
+  }: MessageProgressProps & { compact?: boolean }) => {
+    const runningTool = tools.find((t) => t.status === "running" || t.status === "pending");
+    const statusText =
+      currentStatus ||
+      (runningTool
+        ? getToolConfig(runningTool.name).label
+        : isThinking
+          ? "Thinking..."
+          : "Working...");
+    const baseFont = compact ? MSG_FONT.baseCompact : MSG_FONT.base;
 
-  return (
-    <div className="py-3">
-      <ShimmerText text={statusText} className={cn("font-medium", baseFont)} />
-    </div>
-  );
-});
+    return (
+      <div className="py-3">
+        <ShimmerText text={statusText} className={cn("font-medium", baseFont)} />
+      </div>
+    );
+  },
+);
 
 MessageProgress.displayName = "MessageProgress";
 
 // Main message component - iOS style bubbles
-export const ChatMessage = memo(({ message, isStreaming = false, compact = false }: ChatMessageProps) => {
-  const { info, parts = [] } = message;
-  const isUser = info.role === "user";
-  const isAssistant = info.role === "assistant";
-  const assistantInfo = isAssistant ? (info as AssistantMessage) : null;
+export const ChatMessage = memo(
+  ({ message, isStreaming = false, compact = false }: ChatMessageProps) => {
+    const { info, parts = [] } = message;
+    const isUser = info.role === "user";
+    const isAssistant = info.role === "assistant";
+    const assistantInfo = isAssistant ? (info as AssistantMessage) : null;
 
-  const sortedParts = useMemo(
-    () => [...(parts || [])].sort((a, b) => a.id.localeCompare(b.id)),
-    [parts]
-  );
+    const sortedParts = useMemo(
+      () => [...(parts || [])].sort((a, b) => a.id.localeCompare(b.id)),
+      [parts],
+    );
 
-  // Group consecutive tools together for collapsible threads
-  const groupedContent = useMemo(() => {
-    const groups: { type: "text" | "tools" | "reasoning" | "agent" | "other"; items: Part[] }[] = [];
-    let currentTools: Part[] = [];
+    // Group consecutive tools together for collapsible threads
+    const groupedContent = useMemo(() => {
+      const groups: { type: "text" | "tools" | "reasoning" | "agent" | "other"; items: Part[] }[] =
+        [];
+      let currentTools: Part[] = [];
 
-    const flushTools = () => {
-      if (currentTools.length > 0) {
-        groups.push({ type: "tools", items: currentTools });
-        currentTools = [];
+      const flushTools = () => {
+        if (currentTools.length > 0) {
+          groups.push({ type: "tools", items: currentTools });
+          currentTools = [];
+        }
+      };
+
+      for (const part of sortedParts) {
+        if (part.type === "text") {
+          flushTools();
+          groups.push({ type: "text", items: [part] });
+        } else if (part.type === "tool") {
+          currentTools.push(part);
+        } else if (part.type === "reasoning") {
+          flushTools();
+          groups.push({ type: "reasoning", items: [part] });
+        } else if (part.type === "agent") {
+          flushTools();
+          groups.push({ type: "agent", items: [part] });
+        } else if (part.type !== "step-start" && part.type !== "step-finish") {
+          flushTools();
+          groups.push({ type: "other", items: [part] });
+        }
       }
-    };
+      flushTools();
+      return groups;
+    }, [sortedParts]);
 
-    for (const part of sortedParts) {
-      if (part.type === "text") {
-        flushTools();
-        groups.push({ type: "text", items: [part] });
-      } else if (part.type === "tool") {
-        currentTools.push(part);
-      } else if (part.type === "reasoning") {
-        flushTools();
-        groups.push({ type: "reasoning", items: [part] });
-      } else if (part.type === "agent") {
-        flushTools();
-        groups.push({ type: "agent", items: [part] });
-      } else if (part.type !== "step-start" && part.type !== "step-finish") {
-        flushTools();
-        groups.push({ type: "other", items: [part] });
-      }
+    const hasContent = sortedParts.some(
+      (p) => p.type === "text" || p.type === "tool" || p.type === "reasoning",
+    );
+
+    // Don't render empty assistant messages
+    if (isAssistant && !hasContent && !assistantInfo?.error) {
+      return null;
     }
-    flushTools();
-    return groups;
-  }, [sortedParts]);
 
-  const hasContent = sortedParts.some(p => p.type === "text" || p.type === "tool" || p.type === "reasoning");
-
-  // Don't render empty assistant messages
-  if (isAssistant && !hasContent && !assistantInfo?.error) {
-    return null;
-  }
-
-  return (
-    <motion.div
-      initial={{ opacity: 0, y: 20 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.25, ease: "easeOut" }}
-      className={cn(
-        "flex w-full",
-        isUser ? "justify-end" : "justify-start"
-      )}
-    >
-      {/* User message - on right, corner angled down toward input */}
-      {isUser && (
-        <div className={cn(
-          "max-w-[85%] rounded-2xl rounded-br-sm shadow-sm",
-          "bg-primary text-primary-foreground",
-          compact ? "px-2.5 py-1.5" : "px-3.5 py-2"
-        )}>
-          <div className={cn(
-            "leading-relaxed",
-            compact ? MSG_FONT.baseCompact : MSG_FONT.base
-          )}>
-            {groupedContent.map((group, idx) => {
-              if (group.type === "text") {
-                const textPart = group.items[0] as TextPart;
-                return <UserTextContent key={idx} text={textPart.text} compact={compact} />;
-              }
-              return null;
-            })}
-          </div>
-        </div>
-      )}
-
-      {/* Hands/Assistant message - on left, corner angled down toward input */}
-      {isAssistant && (
-        <div className="group max-w-[90%] flex items-center gap-2">
-          <div className={cn(
-            "rounded-2xl rounded-bl-sm shadow-sm",
-            "bg-muted text-foreground",
-            compact ? "px-2.5 py-1.5" : "px-3.5 py-2"
-          )}>
-            <div className="space-y-0.5">
+    return (
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.25, ease: "easeOut" }}
+        className={cn("flex w-full", isUser ? "justify-end" : "justify-start")}
+      >
+        {/* User message - on right, corner angled down toward input */}
+        {isUser && (
+          <div
+            className={cn(
+              "max-w-[85%] rounded-2xl rounded-br-sm shadow-sm",
+              "bg-primary text-primary-foreground",
+              compact ? "px-2.5 py-1.5" : "px-3.5 py-2",
+            )}
+          >
+            <div className={cn("leading-relaxed", compact ? MSG_FONT.baseCompact : MSG_FONT.base)}>
               {groupedContent.map((group, idx) => {
                 if (group.type === "text") {
                   const textPart = group.items[0] as TextPart;
-                  return (
-                    <TextContent
-                      key={idx}
-                      text={textPart.text}
-                      isStreaming={isStreaming && idx === groupedContent.length - 1}
-                      compact={compact}
-                    />
-                  );
-                }
-                if (group.type === "tools") {
-                  // Separate task tools from other tools
-                  const taskTools = group.items.filter(
-                    (p) => (p as ToolPart).tool.toLowerCase() === "task"
-                  ) as ToolPart[];
-                  const otherTools = group.items.filter(
-                    (p) => (p as ToolPart).tool.toLowerCase() !== "task"
-                  ) as ToolPart[];
-
-                  return (
-                    <div key={idx} className="space-y-0.5">
-                      {/* Render task tools with TaskToolSummary */}
-                      {taskTools.map((part) => (
-                        <TaskToolSummary
-                          key={part.id}
-                          part={part}
-                          sessionId={message.info.sessionID}
-                          compact={compact}
-                        />
-                      ))}
-                      {/* Show collapsible thread if 3+ other tools, otherwise show inline */}
-                      {otherTools.length >= 3 ? (
-                        <ToolThread tools={otherTools} compact={compact} />
-                      ) : (
-                        otherTools.map((part) => (
-                          <ToolInvocation key={part.id} part={part} compact={compact} />
-                        ))
-                      )}
-                    </div>
-                  );
-                }
-                if (group.type === "reasoning") {
-                  return <ReasoningContent key={idx} part={group.items[0] as ReasoningPart} compact={compact} />;
-                }
-                if (group.type === "agent") {
-                  const agentPart = group.items[0] as AgentPart;
-                  return (
-                    <SubagentSummary
-                      key={idx}
-                      agentName={agentPart.name}
-                      sessionId={message.info.sessionID}
-                      messageId={agentPart.messageID}
-                      compact={compact}
-                    />
-                  );
+                  return <UserTextContent key={idx} text={textPart.text} compact={compact} />;
                 }
                 return null;
               })}
-
-              {/* Error display */}
-              {assistantInfo?.error && (
-                <div className={cn("flex items-center gap-2 text-red-400 px-2 py-1 rounded-lg bg-red-500/10", compact ? MSG_FONT.codeCompact : MSG_FONT.code)}>
-                  <AlertCircle className="h-3 w-3" />
-                  <span>{assistantInfo.error.data?.message as string || assistantInfo.error.name}</span>
-                </div>
-              )}
             </div>
           </div>
+        )}
 
-          {/* Cost indicator - shown to the right of the bubble on hover */}
-          {assistantInfo && !isStreaming && (
-            <div className="shrink-0">
-              <CostIndicator info={assistantInfo} compact={compact} />
+        {/* Hands/Assistant message - on left, corner angled down toward input */}
+        {isAssistant && (
+          <div className="group max-w-[90%] flex items-center gap-2">
+            <div
+              className={cn(
+                "rounded-2xl rounded-bl-sm shadow-sm",
+                "bg-muted text-foreground",
+                compact ? "px-2.5 py-1.5" : "px-3.5 py-2",
+              )}
+            >
+              <div className="space-y-0.5">
+                {groupedContent.map((group, idx) => {
+                  if (group.type === "text") {
+                    const textPart = group.items[0] as TextPart;
+                    return (
+                      <TextContent
+                        key={idx}
+                        text={textPart.text}
+                        isStreaming={isStreaming && idx === groupedContent.length - 1}
+                        compact={compact}
+                      />
+                    );
+                  }
+                  if (group.type === "tools") {
+                    // Separate task tools from other tools
+                    const taskTools = group.items.filter(
+                      (p) => (p as ToolPart).tool.toLowerCase() === "task",
+                    ) as ToolPart[];
+                    const otherTools = group.items.filter(
+                      (p) => (p as ToolPart).tool.toLowerCase() !== "task",
+                    ) as ToolPart[];
+
+                    return (
+                      <div key={idx} className="space-y-0.5">
+                        {/* Render task tools with TaskToolSummary */}
+                        {taskTools.map((part) => (
+                          <TaskToolSummary
+                            key={part.id}
+                            part={part}
+                            sessionId={message.info.sessionID}
+                            compact={compact}
+                          />
+                        ))}
+                        {/* Show collapsible thread if 3+ other tools, otherwise show inline */}
+                        {otherTools.length >= 3 ? (
+                          <ToolThread tools={otherTools} compact={compact} />
+                        ) : (
+                          otherTools.map((part) => (
+                            <ToolInvocation key={part.id} part={part} compact={compact} />
+                          ))
+                        )}
+                      </div>
+                    );
+                  }
+                  if (group.type === "reasoning") {
+                    return (
+                      <ReasoningContent
+                        key={idx}
+                        part={group.items[0] as ReasoningPart}
+                        compact={compact}
+                      />
+                    );
+                  }
+                  if (group.type === "agent") {
+                    const agentPart = group.items[0] as AgentPart;
+                    return (
+                      <SubagentSummary
+                        key={idx}
+                        agentName={agentPart.name}
+                        sessionId={message.info.sessionID}
+                        messageId={agentPart.messageID}
+                        compact={compact}
+                      />
+                    );
+                  }
+                  return null;
+                })}
+
+                {/* Error display */}
+                {assistantInfo?.error && (
+                  <div
+                    className={cn(
+                      "flex items-center gap-2 text-red-400 px-2 py-1 rounded-lg bg-red-500/10",
+                      compact ? MSG_FONT.codeCompact : MSG_FONT.code,
+                    )}
+                  >
+                    <AlertCircle className="h-3 w-3" />
+                    <span>
+                      {(assistantInfo.error.data?.message as string) || assistantInfo.error.name}
+                    </span>
+                  </div>
+                )}
+              </div>
             </div>
-          )}
-        </div>
-      )}
-    </motion.div>
-  );
-});
+
+            {/* Cost indicator - shown to the right of the bubble on hover */}
+            {assistantInfo && !isStreaming && (
+              <div className="shrink-0">
+                <CostIndicator info={assistantInfo} compact={compact} />
+              </div>
+            )}
+          </div>
+        )}
+      </motion.div>
+    );
+  },
+);
 
 ChatMessage.displayName = "ChatMessage";

@@ -1,5 +1,5 @@
-import { useEffect, useState, useCallback } from "react";
-import { load, Store } from "@tauri-apps/plugin-store";
+import { load, type Store } from "@tauri-apps/plugin-store";
+import { useCallback, useEffect, useState } from "react";
 import { api } from "@/lib/api";
 import { PORTS } from "@/lib/ports";
 
@@ -144,31 +144,34 @@ export function useSettings() {
   }, [settings.provider, settings.model, syncModelWithOpenCode]);
 
   // Update a single setting
-  const updateSetting = useCallback(async <K extends keyof Settings>(key: K, value: Settings[K]) => {
-    const newSettings = { ...settings, [key]: value };
+  const updateSetting = useCallback(
+    async <K extends keyof Settings>(key: K, value: Settings[K]) => {
+      const newSettings = { ...settings, [key]: value };
 
-    // If provider changes, reset model to first option for that provider
-    if (key === "provider") {
-      const models = modelOptions[value as Settings["provider"]];
-      if (models && models.length > 0) {
-        newSettings.model = models[0].value;
+      // If provider changes, reset model to first option for that provider
+      if (key === "provider") {
+        const models = modelOptions[value as Settings["provider"]];
+        if (models && models.length > 0) {
+          newSettings.model = models[0].value;
+        }
       }
-    }
 
-    setSettings(newSettings);
+      setSettings(newSettings);
 
-    try {
-      const s = await getStore();
-      await s.set("settings", newSettings);
+      try {
+        const s = await getStore();
+        await s.set("settings", newSettings);
 
-      // Sync with OpenCode when provider or model changes
-      if (key === "provider" || key === "model") {
-        await syncModelWithOpenCode(newSettings.provider, newSettings.model);
+        // Sync with OpenCode when provider or model changes
+        if (key === "provider" || key === "model") {
+          await syncModelWithOpenCode(newSettings.provider, newSettings.model);
+        }
+      } catch (error) {
+        console.error("Failed to save setting:", error);
       }
-    } catch (error) {
-      console.error("Failed to save setting:", error);
-    }
-  }, [settings, syncModelWithOpenCode]);
+    },
+    [settings, syncModelWithOpenCode],
+  );
 
   // Update an API key
   const updateApiKey = useCallback(async <K extends keyof ApiKeys>(key: K, value: string) => {
@@ -207,7 +210,7 @@ export function useSettings() {
 
   // Check if any API key is set
   const hasApiKey = Boolean(
-    apiKeys.anthropic_api_key || apiKeys.openai_api_key || apiKeys.google_api_key
+    apiKeys.anthropic_api_key || apiKeys.openai_api_key || apiKeys.google_api_key,
   );
 
   // Get API key for current provider

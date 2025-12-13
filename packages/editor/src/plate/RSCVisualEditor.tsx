@@ -12,30 +12,29 @@
  * 6. Map edits back to source mutations
  */
 
-import * as React from 'react'
-import { useState, useMemo, useCallback, useEffect, useRef } from 'react'
-import { parseSourceWithLocations, type ParseResult, type EditableNode } from '../ast/oxc-parser'
-import { generateSkeletonFromAST } from '../rsc/skeleton-generator'
-import { HotSwapContainer } from '../rsc/HotSwapContainer'
-import { useRSCRender, useDebouncedRefresh } from '../rsc/useRSCRender'
-import { PlateEditOverlay, type EditOperation } from './PlateEditOverlay'
-import { applyEditOperation } from '../operations/edit-handler'
+import * as React from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { parseSourceWithLocations } from "../ast/oxc-parser";
+import { applyEditOperation } from "../operations/edit-handler";
+import { generateSkeletonFromAST } from "../rsc/skeleton-generator";
+import { useDebouncedRefresh, useRSCRender } from "../rsc/useRSCRender";
+import { type EditOperation, PlateEditOverlay } from "./PlateEditOverlay";
 
-export type EditorMode = 'preview' | 'edit'
+export type EditorMode = "preview" | "edit";
 
 export interface RSCVisualEditorProps {
   /** Block source code */
-  source: string
+  source: string;
   /** Block ID for RSC fetching */
-  blockId: string
+  blockId: string;
   /** Runtime port for RSC server */
-  runtimePort: number
+  runtimePort: number;
   /** Current editor mode */
-  mode: EditorMode
+  mode: EditorMode;
   /** Callback when source changes (from edits) */
-  onSourceChange?: (newSource: string) => void
+  onSourceChange?: (newSource: string) => void;
   /** Whether editor is read-only */
-  readOnly?: boolean
+  readOnly?: boolean;
 }
 
 export function RSCVisualEditor({
@@ -47,73 +46,67 @@ export function RSCVisualEditor({
   readOnly = false,
 }: RSCVisualEditorProps) {
   // Container ref for position tracking
-  const containerRef = useRef<HTMLDivElement | null>(null)
+  const containerRef = useRef<HTMLDivElement | null>(null);
 
   // Selection state
-  const [selectedNodeIds, setSelectedNodeIds] = useState<string[]>([])
+  const [selectedNodeIds, setSelectedNodeIds] = useState<string[]>([]);
 
   // Parse source for AST - only needed in edit mode
   const parseResult = useMemo(() => {
-    if (mode !== 'edit') return null
-    return parseSourceWithLocations(source)
-  }, [source, mode])
+    if (mode !== "edit") return null;
+    return parseSourceWithLocations(source);
+  }, [source, mode]);
 
   // Generate skeleton from AST - only in edit mode when we have AST
   const skeleton = useMemo(() => {
-    if (!parseResult?.root) return null
-    return generateSkeletonFromAST(parseResult.root)
-  }, [parseResult?.root])
+    if (!parseResult?.root) return null;
+    return generateSkeletonFromAST(parseResult.root);
+  }, [parseResult?.root]);
 
   // Fetch RSC render
-  const {
-    rscElement,
-    isLoading,
-    error,
-    refresh,
-    renderKey,
-  } = useRSCRender({
+  const { rscElement, isLoading, error, refresh, renderKey } = useRSCRender({
     port: runtimePort,
     blockId,
-  })
+  });
 
   // Debounced refresh on source change
-  const debouncedRefresh = useDebouncedRefresh(refresh, 500)
+  const debouncedRefresh = useDebouncedRefresh(refresh, 500);
 
   // Refresh when source changes (after initial load)
-  const sourceRef = React.useRef(source)
+  const sourceRef = React.useRef(source);
   useEffect(() => {
     if (sourceRef.current !== source) {
-      sourceRef.current = source
-      debouncedRefresh()
+      sourceRef.current = source;
+      debouncedRefresh();
     }
-  }, [source, debouncedRefresh])
+  }, [source, debouncedRefresh]);
 
   // Handle edit operations
   const handleEditOperation = useCallback(
     (operation: EditOperation) => {
-      if (readOnly) return
+      if (readOnly) return;
 
       // Handle selection updates
-      if (operation.type === 'select') {
-        setSelectedNodeIds(operation.nodeIds)
-        return
+      if (operation.type === "select") {
+        setSelectedNodeIds(operation.nodeIds);
+        return;
       }
 
       // Other operations need onSourceChange
-      if (!onSourceChange) return
+      if (!onSourceChange) return;
 
       // Apply the edit operation to source
-      const newSource = applyEditOperation(operation, source)
+      const newSource = applyEditOperation(operation, source);
       if (newSource !== null && newSource !== source) {
-        onSourceChange(newSource)
+        onSourceChange(newSource);
         // Clear selection after destructive operations
-        if (operation.type === 'delete') {
-          setSelectedNodeIds([])
+        if (operation.type === "delete") {
+          setSelectedNodeIds([]);
         }
       }
     },
-    [readOnly, onSourceChange, source]
-  )
+    [readOnly, onSourceChange, source],
+  );
 
   // Error display
   if (error && !rscElement) {
@@ -121,11 +114,11 @@ export function RSCVisualEditor({
       <div className="p-4">
         <ErrorDisplay error={error} parseErrors={parseResult?.errors || []} />
       </div>
-    )
+    );
   }
 
   // Preview mode: Just show RSC content (no parsing needed)
-  if (mode === 'preview') {
+  if (mode === "preview") {
     return (
       <div className="rsc-visual-editor rsc-visual-editor--preview">
         {isLoading ? (
@@ -136,7 +129,7 @@ export function RSCVisualEditor({
           rscElement
         )}
       </div>
-    )
+    );
   }
 
   // Edit mode: RSC content + Plate overlay
@@ -144,15 +137,13 @@ export function RSCVisualEditor({
     <div ref={containerRef} className="rsc-visual-editor rsc-visual-editor--edit relative">
       {/* RSC content layer */}
       <div className="rsc-content-layer">
-        {isLoading ? (
-          skeleton || (
-            <div className="flex items-center justify-center py-8">
-              <div className="w-4 h-4 border-2 border-muted-foreground/30 border-t-muted-foreground rounded-full animate-spin" />
-            </div>
-          )
-        ) : (
-          rscElement
-        )}
+        {isLoading
+          ? skeleton || (
+              <div className="flex items-center justify-center py-8">
+                <div className="w-4 h-4 border-2 border-muted-foreground/30 border-t-muted-foreground rounded-full animate-spin" />
+              </div>
+            )
+          : rscElement}
       </div>
 
       {/* Edit overlay layer */}
@@ -176,23 +167,17 @@ export function RSCVisualEditor({
         Edit Mode
       </div>
     </div>
-  )
+  );
 }
 
 // Re-export EditOperation type from PlateEditOverlay
-export type { EditOperation } from './PlateEditOverlay'
+export type { EditOperation } from "./PlateEditOverlay";
 
 // ============================================================================
 // Sub-components
 // ============================================================================
 
-function ErrorDisplay({
-  error,
-  parseErrors,
-}: {
-  error: string
-  parseErrors: string[]
-}) {
+function ErrorDisplay({ error, parseErrors }: { error: string; parseErrors: string[] }) {
   return (
     <div className="rounded-lg border border-red-500/30 bg-red-500/10 p-4">
       <div className="text-sm font-medium text-red-400">Render Error</div>
@@ -208,11 +193,11 @@ function ErrorDisplay({
         </div>
       )}
     </div>
-  )
+  );
 }
 
 function ParseErrorBanner({ errors }: { errors: string[] }) {
-  if (errors.length === 0) return null
+  if (errors.length === 0) return null;
 
   return (
     <div className="absolute bottom-2 left-2 right-2 rounded-md border border-amber-500/30 bg-amber-500/10 p-2">
@@ -223,10 +208,8 @@ function ParseErrorBanner({ errors }: { errors: string[] }) {
         </div>
       ))}
       {errors.length > 3 && (
-        <div className="text-xs text-amber-400/50 mt-1">
-          +{errors.length - 3} more
-        </div>
+        <div className="text-xs text-amber-400/50 mt-1">+{errors.length - 3} more</div>
       )}
     </div>
-  )
+  );
 }

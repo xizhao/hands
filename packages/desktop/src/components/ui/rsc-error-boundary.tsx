@@ -4,8 +4,8 @@
  * Use this to wrap any RSC content to prevent render errors from crashing the app.
  */
 
-import { Component, type ReactNode, type ErrorInfo } from "react";
-import { RefreshCw, AlertTriangle } from "lucide-react";
+import { AlertTriangle, RefreshCw } from "lucide-react";
+import { Component, type ErrorInfo, type ReactNode } from "react";
 import { cn } from "@/lib/utils";
 
 export interface RscErrorBoundaryProps {
@@ -57,7 +57,12 @@ export class RscErrorBoundary extends Component<RscErrorBoundaryProps, RscErrorB
 
       if (compact) {
         return (
-          <div className={cn("flex items-center gap-2 p-3 text-destructive bg-destructive/5 rounded-md", className)}>
+          <div
+            className={cn(
+              "flex items-center gap-2 p-3 text-destructive bg-destructive/5 rounded-md",
+              className,
+            )}
+          >
             <AlertTriangle className="h-4 w-4 shrink-0" />
             <span className="text-sm flex-1 truncate">
               {this.state.error?.message || "Render error"}

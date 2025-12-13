@@ -2,4 +2,4 @@
  * Edit Operations
  */
 
-export * from './edit-handler'
+export * from "./edit-handler";

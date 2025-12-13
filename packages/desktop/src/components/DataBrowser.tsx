@@ -3,106 +3,124 @@
  *
  * Uses Glide Data Grid for efficient rendering of large datasets
  * with native scrolling and cell virtualization.
+ * Now uses tRPC for type-safe CRUD operations.
  */
 
-import { useMemo, useCallback, useState, useRef, useEffect } from "react"
 import DataEditor, {
-  GridCellKind,
+  type EditableGridCell,
   type GridCell,
+  GridCellKind,
   type GridColumn,
   type Item,
-} from "@glideapps/glide-data-grid"
-import "@glideapps/glide-data-grid/dist/index.css"
-import { useTableData, useTableRowCount } from "@/hooks/useTableData"
-import { useDbSchema, useActiveWorkbookId } from "@/hooks/useWorkbook"
-import { cn } from "@/lib/utils"
+} from "@glideapps/glide-data-grid";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import "@glideapps/glide-data-grid/dist/index.css";
 import {
-  Table as TableIcon,
   ArrowLeft,
   ArrowRight,
   CircleNotch,
-} from "@phosphor-icons/react"
+  FloppyDisk,
+  Plus,
+  Table as TableIcon,
+  Trash,
+} from "@phosphor-icons/react";
+import { toast } from "sonner";
+import { type ColumnDefinition, useTableData } from "@/hooks/useTableData";
+import { cn } from "@/lib/utils";
 
 interface DataBrowserProps {
-  tableName: string
-  className?: string
+  source: string;
+  table: string;
+  className?: string;
+  editable?: boolean;
 }
 
-const PAGE_SIZE = 500
+const PAGE_SIZE = 500;
 
-export function DataBrowser({ tableName, className }: DataBrowserProps) {
-  const [page, setPage] = useState(0)
-  const containerRef = useRef<HTMLDivElement>(null)
-  const [containerSize, setContainerSize] = useState({ width: 0, height: 0 })
+export function DataBrowser({ source, table, className, editable = false }: DataBrowserProps) {
+  const containerRef = useRef<HTMLDivElement>(null);
+  const [containerSize, setContainerSize] = useState({ width: 0, height: 0 });
+  const [pendingChanges, setPendingChanges] = useState<Map<string, Record<string, unknown>>>(
+    new Map(),
+  );
+  const [selectedRows, setSelectedRows] = useState<Set<number>>(new Set());
 
   // Measure container size
   useEffect(() => {
-    const container = containerRef.current
-    if (!container) return
+    const container = containerRef.current;
+    if (!container) return;
 
     const observer = new ResizeObserver((entries) => {
-      const entry = entries[0]
+      const entry = entries[0];
       if (entry) {
         setContainerSize({
           width: entry.contentRect.width,
           height: entry.contentRect.height,
-        })
+        });
       }
-    })
+    });
 
-    observer.observe(container)
-    return () => observer.disconnect()
-  }, [])
+    observer.observe(container);
+    return () => observer.disconnect();
+  }, []);
 
-  const activeWorkbookId = useActiveWorkbookId()
-  const { data: schema } = useDbSchema(activeWorkbookId)
-  const tableSchema = schema?.find((t) => t.table_name === tableName)
-
-  // Get total row count
-  const { data: totalRows = 0 } = useTableRowCount(tableName)
-
-  // Fetch data with pagination
-  const { data, isLoading, isFetching } = useTableData({
-    tableName,
-    limit: PAGE_SIZE,
-    offset: page * PAGE_SIZE,
-  })
-
-  const rows = data?.rows ?? []
+  // Use tRPC-based table data hook
+  const {
+    rows,
+    columns,
+    primaryKeyColumn,
+    isLoading,
+    isFetching,
+    isMutating,
+    pagination,
+    nextPage,
+    prevPage,
+    updateRow,
+    deleteRow,
+    bulkUpdate,
+    createRow,
+  } = useTableData({
+    source,
+    table,
+    pageSize: PAGE_SIZE,
+  });
 
   // Build columns for glide-data-grid
-  const columns = useMemo<GridColumn[]>(() => {
-    if (!tableSchema?.columns) return []
-
-    return tableSchema.columns.map((col) => ({
+  const gridColumns = useMemo<GridColumn[]>(() => {
+    return columns.map((col) => ({
       id: col.name,
       title: col.name,
-      width: 150,
+      width: getColumnWidth(col),
       grow: 1,
-    }))
-  }, [tableSchema])
+    }));
+  }, [columns]);
 
   // Column name lookup for getCellContent
   const columnNames = useMemo(() => {
-    return tableSchema?.columns?.map((col) => col.name) ?? []
-  }, [tableSchema])
+    return columns.map((col) => col.name);
+  }, [columns]);
 
   // Get cell content callback - this is called for each visible cell
   const getCellContent = useCallback(
     (cell: Item): GridCell => {
-      const [col, row] = cell
+      const [col, row] = cell;
 
       // Safety check
       if (row >= rows.length || col >= columnNames.length) {
         return {
           kind: GridCellKind.Loading,
           allowOverlay: false,
-        }
+        };
       }
 
-      const rowData = rows[row]
-      const columnName = columnNames[col]
-      const value = rowData?.[columnName]
+      const rowData = rows[row];
+      const columnName = columnNames[col];
+      const columnDef = columns[col];
+
+      // Check for pending changes
+      const rowId = String(rowData[primaryKeyColumn]);
+      const pending = pendingChanges.get(rowId);
+      const value = pending?.[columnName] ?? rowData?.[columnName];
 
       // Handle null values
       if (value === null || value === undefined) {
@@ -110,43 +128,49 @@ export function DataBrowser({ tableName, className }: DataBrowserProps) {
           kind: GridCellKind.Text,
           data: "",
           displayData: "null",
-          allowOverlay: true,
-          readonly: true,
+          allowOverlay: editable,
+          readonly: !editable,
           style: "faded",
-        }
+        };
       }
 
-      // Handle boolean values
-      if (typeof value === "boolean") {
+      // Handle boolean values - BooleanCell requires allowOverlay: false
+      if (typeof value === "boolean" || columnDef?.type === "boolean") {
         return {
           kind: GridCellKind.Boolean,
-          data: value,
+          data: Boolean(value),
           allowOverlay: false,
-          readonly: true,
-        }
+          readonly: !editable,
+        };
       }
 
       // Handle number values
-      if (typeof value === "number") {
+      if (
+        typeof value === "number" ||
+        columnDef?.type.includes("int") ||
+        columnDef?.type.includes("numeric") ||
+        columnDef?.type.includes("float") ||
+        columnDef?.type.includes("double")
+      ) {
         return {
           kind: GridCellKind.Number,
-          data: value,
+          data: Number(value),
           displayData: String(value),
-          allowOverlay: true,
-          readonly: true,
-        }
+          allowOverlay: editable,
+          readonly: !editable,
+        };
       }
 
       // Handle objects/arrays as JSON
       if (typeof value === "object") {
-        const jsonStr = JSON.stringify(value)
+        const jsonStr = JSON.stringify(value);
         return {
           kind: GridCellKind.Text,
           data: jsonStr,
           displayData: jsonStr,
-          allowOverlay: true,
-          readonly: true,
-        }
+          allowOverlay: editable,
+          readonly: !editable,
+        };
       }
 
       // Default to text
@@ -154,32 +178,113 @@ export function DataBrowser({ tableName, className }: DataBrowserProps) {
         kind: GridCellKind.Text,
         data: String(value),
         displayData: String(value),
-        allowOverlay: true,
-        readonly: true,
-      }
+        allowOverlay: editable,
+        readonly: !editable,
+      };
     },
-    [rows, columnNames]
-  )
+    [rows, columnNames, columns, primaryKeyColumn, pendingChanges, editable],
+  );
+
+  // Handle cell edits
+  const onCellEdited = useCallback(
+    (cell: Item, newValue: EditableGridCell) => {
+      if (!editable) return;
+
+      const [col, row] = cell;
+      const rowData = rows[row];
+      const columnName = columnNames[col];
+      const rowId = String(rowData[primaryKeyColumn]);
+
+      // Extract value from cell
+      let value: unknown;
+      if (newValue.kind === GridCellKind.Text) {
+        value = newValue.data;
+      } else if (newValue.kind === GridCellKind.Number) {
+        value = newValue.data;
+      } else if (newValue.kind === GridCellKind.Boolean) {
+        value = newValue.data;
+      }
+
+      // Track pending change
+      setPendingChanges((prev) => {
+        const next = new Map(prev);
+        const existing = next.get(rowId) ?? {};
+        next.set(rowId, { ...existing, [columnName]: value });
+        return next;
+      });
+    },
+    [editable, rows, columnNames, primaryKeyColumn],
+  );
+
+  // Save pending changes
+  const handleSaveChanges = useCallback(async () => {
+    if (pendingChanges.size === 0) return;
+
+    try {
+      const updates = Array.from(pendingChanges.entries()).map(([id, data]) => ({ id, data }));
+      await bulkUpdate(updates);
+      setPendingChanges(new Map());
+      toast.success(`Saved ${updates.length} changes`);
+    } catch (error) {
+      toast.error(`Failed to save: ${error instanceof Error ? error.message : "Unknown error"}`);
+    }
+  }, [pendingChanges, bulkUpdate]);
+
+  // Add new row
+  const handleAddRow = useCallback(async () => {
+    try {
+      // Create empty row with default values
+      const newData: Record<string, unknown> = {};
+      for (const col of columns) {
+        if (col.defaultValue) {
+          newData[col.name] = col.defaultValue;
+        } else if (!col.nullable && !col.isPrimaryKey) {
+          // Set sensible defaults for required fields
+          if (col.type.includes("int") || col.type.includes("numeric")) {
+            newData[col.name] = 0;
+          } else if (col.type === "boolean") {
+            newData[col.name] = false;
+          } else {
+            newData[col.name] = "";
+          }
+        }
+      }
+      await createRow(newData);
+      toast.success("Row added");
+    } catch (error) {
+      toast.error(`Failed to add row: ${error instanceof Error ? error.message : "Unknown error"}`);
+    }
+  }, [columns, createRow]);
+
+  // Delete selected rows
+  const handleDeleteSelected = useCallback(async () => {
+    if (selectedRows.size === 0) return;
+
+    try {
+      for (const rowIndex of selectedRows) {
+        const rowData = rows[rowIndex];
+        if (rowData) {
+          await deleteRow(String(rowData[primaryKeyColumn]));
+        }
+      }
+      setSelectedRows(new Set());
+      toast.success(`Deleted ${selectedRows.size} rows`);
+    } catch (error) {
+      toast.error(`Failed to delete: ${error instanceof Error ? error.message : "Unknown error"}`);
+    }
+  }, [selectedRows, rows, primaryKeyColumn, deleteRow]);
 
   // Pagination
-  const totalPages = Math.ceil(totalRows / PAGE_SIZE)
-  const canPrevPage = page > 0
-  const canNextPage = page < totalPages - 1
+  const { page, totalPages } = pagination;
+  const canPrevPage = page > 0;
+  const canNextPage = page < totalPages - 1;
 
-  const goToPrevPage = useCallback(() => {
-    if (canPrevPage) setPage((p) => p - 1)
-  }, [canPrevPage])
-
-  const goToNextPage = useCallback(() => {
-    if (canNextPage) setPage((p) => p + 1)
-  }, [canNextPage])
-
-  if (!tableSchema) {
+  if (columns.length === 0 && !isLoading) {
     return (
       <div className="flex items-center justify-center h-full text-muted-foreground">
-        Table not found in schema
+        Table not found or has no columns
       </div>
-    )
+    );
   }
 
   return (
@@ -191,41 +296,79 @@ export function DataBrowser({ tableName, className }: DataBrowserProps) {
             <TableIcon weight="duotone" className="h-5 w-5 text-purple-500" />
           </div>
           <div>
-            <h1 className="text-lg font-semibold">{tableName}</h1>
+            <h1 className="text-lg font-semibold">
+              {source}.{table}
+            </h1>
             <p className="text-sm text-muted-foreground">
-              {totalRows.toLocaleString()} rows &middot; {tableSchema.columns?.length ?? 0} columns
+              {rows.length.toLocaleString()} rows &middot; {columns.length} columns
             </p>
           </div>
         </div>
 
-        {/* Pagination controls */}
         <div className="flex items-center gap-2">
-          {isFetching && (
+          {/* Editing actions */}
+          {editable && (
+            <>
+              <button
+                onClick={handleAddRow}
+                disabled={isMutating}
+                className="flex items-center gap-1.5 px-2.5 py-1.5 text-sm rounded-md bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
+              >
+                <Plus weight="bold" className="h-4 w-4" />
+                Add Row
+              </button>
+              {selectedRows.size > 0 && (
+                <button
+                  onClick={handleDeleteSelected}
+                  disabled={isMutating}
+                  className="flex items-center gap-1.5 px-2.5 py-1.5 text-sm rounded-md bg-destructive text-destructive-foreground hover:bg-destructive/90 disabled:opacity-50"
+                >
+                  <Trash weight="bold" className="h-4 w-4" />
+                  Delete ({selectedRows.size})
+                </button>
+              )}
+              {pendingChanges.size > 0 && (
+                <button
+                  onClick={handleSaveChanges}
+                  disabled={isMutating}
+                  className="flex items-center gap-1.5 px-2.5 py-1.5 text-sm rounded-md bg-green-600 text-white hover:bg-green-700 disabled:opacity-50"
+                >
+                  <FloppyDisk weight="bold" className="h-4 w-4" />
+                  Save ({pendingChanges.size})
+                </button>
+              )}
+            </>
+          )}
+
+          {/* Loading indicator */}
+          {(isFetching || isMutating) && (
             <CircleNotch weight="bold" className="h-4 w-4 animate-spin text-muted-foreground" />
           )}
+
+          {/* Pagination controls */}
           <span className="text-sm text-muted-foreground tabular-nums">
             Page {page + 1} of {Math.max(1, totalPages)}
           </span>
           <button
-            onClick={goToPrevPage}
+            onClick={prevPage}
             disabled={!canPrevPage}
             className={cn(
               "p-1.5 rounded-md transition-colors",
               canPrevPage
                 ? "hover:bg-accent text-foreground"
-                : "text-muted-foreground/50 cursor-not-allowed"
+                : "text-muted-foreground/50 cursor-not-allowed",
             )}
           >
             <ArrowLeft weight="bold" className="h-4 w-4" />
           </button>
           <button
-            onClick={goToNextPage}
+            onClick={nextPage}
             disabled={!canNextPage}
             className={cn(
               "p-1.5 rounded-md transition-colors",
               canNextPage
                 ? "hover:bg-accent text-foreground"
-                : "text-muted-foreground/50 cursor-not-allowed"
+                : "text-muted-foreground/50 cursor-not-allowed",
             )}
           >
             <ArrowRight weight="bold" className="h-4 w-4" />
@@ -243,12 +386,22 @@ export function DataBrowser({ tableName, className }: DataBrowserProps) {
           <div className="flex flex-col items-center justify-center h-64 text-muted-foreground">
             <TableIcon weight="duotone" className="h-12 w-12 mb-3 opacity-50" />
             <p>No data in this table</p>
+            {editable && (
+              <button
+                onClick={handleAddRow}
+                className="mt-4 flex items-center gap-1.5 px-3 py-2 text-sm rounded-md bg-primary text-primary-foreground hover:bg-primary/90"
+              >
+                <Plus weight="bold" className="h-4 w-4" />
+                Add First Row
+              </button>
+            )}
           </div>
         ) : containerSize.width > 0 && containerSize.height > 0 ? (
           <DataEditor
-            columns={columns}
+            columns={gridColumns}
             rows={rows.length}
             getCellContent={getCellContent}
+            onCellEdited={editable ? onCellEdited : undefined}
             smoothScrollX
             smoothScrollY
             width={containerSize.width}
@@ -288,5 +441,17 @@ export function DataBrowser({ tableName, className }: DataBrowserProps) {
         ) : null}
       </div>
     </div>
-  )
+  );
+}
+
+// Helper to determine column width based on type
+function getColumnWidth(col: ColumnDefinition): number {
+  const type = col.type.toLowerCase();
+  if (type === "boolean") return 80;
+  if (type.includes("uuid")) return 280;
+  if (type.includes("timestamp") || type.includes("date")) return 180;
+  if (type.includes("int") || type.includes("numeric")) return 100;
+  if (type.includes("text") || type.includes("varchar")) return 200;
+  if (type.includes("json")) return 250;
+  return 150;
 }

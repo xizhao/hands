@@ -6,8 +6,7 @@ import PreviewWindow from "./preview";
 
 // Route based on URL path
 const isPreviewWindow =
-  window.location.pathname === "/preview" ||
-  window.location.search.includes("preview=true");
+  window.location.pathname === "/preview" || window.location.search.includes("preview=true");
 
 function getComponent() {
   if (isPreviewWindow) return <PreviewWindow />;
@@ -15,5 +14,5 @@ function getComponent() {
 }
 
 ReactDOM.createRoot(document.getElementById("root")!).render(
-  <React.StrictMode>{getComponent()}</React.StrictMode>
+  <React.StrictMode>{getComponent()}</React.StrictMode>,
 );

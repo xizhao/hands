@@ -1,10 +1,10 @@
-import { useState, useEffect } from "react";
 import { getCurrentWindow } from "@tauri-apps/api/window";
-import { motion, AnimatePresence } from "framer-motion";
+import { AnimatePresence, motion } from "framer-motion";
 import { MessageSquare, Minus } from "lucide-react";
-import { ChatToolbar } from "./ChatToolbar";
-import { ChatThread } from "./ChatThread";
+import { useEffect, useState } from "react";
 import { useChatExpanded } from "@/hooks/useNavState";
+import { ChatThread } from "./ChatThread";
+import { ChatToolbar } from "./ChatToolbar";
 
 export function FloatingChat() {
   const [isVisible, setIsVisible] = useState(true);
@@ -89,10 +89,7 @@ export function FloatingChat() {
           </div>
 
           {/* Input toolbar */}
-          <ChatToolbar
-            expanded={isExpanded}
-            onExpandChange={setIsExpanded}
-          />
+          <ChatToolbar expanded={isExpanded} onExpandChange={setIsExpanded} />
         </div>
       </motion.div>
     </AnimatePresence>

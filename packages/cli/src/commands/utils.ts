@@ -7,27 +7,27 @@
 
 // Re-export everything from the runtime config module
 export {
-  // Schemas
-  SourceConfigSchema,
-  SecretSchema,
-  PagesConfigSchema,
+  type BlocksConfig,
   BlocksConfigSchema,
-  DatabaseConfigSchema,
+  type BuildConfig,
   BuildConfigSchema,
+  createDefaultConfig as createDefaultHandsJson,
+  type DatabaseConfig,
+  DatabaseConfigSchema,
+  type DevConfig,
   DevConfigSchema,
-  HandsJsonSchema,
   // Types
   type HandsJson,
-  type SourceConfig,
-  type SecretConfig,
-  type PagesConfig,
-  type BlocksConfig,
-  type DatabaseConfig,
-  type BuildConfig,
-  type DevConfig,
+  HandsJsonSchema,
   // Functions
   loadConfig as loadHandsJson,
+  type PagesConfig,
+  PagesConfigSchema,
+  type SecretConfig,
+  SecretSchema,
+  type SourceConfig,
+  // Schemas
+  SourceConfigSchema,
   saveConfig as saveHandsJson,
-  createDefaultConfig as createDefaultHandsJson,
   slugify,
-} from "@hands/runtime/config"
+} from "@hands/runtime/config";

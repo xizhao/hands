@@ -8,34 +8,33 @@
  */
 
 import {
-  BoldPlugin,
-  ItalicPlugin,
-  UnderlinePlugin,
-  StrikethroughPlugin,
-  CodePlugin,
   BlockquotePlugin,
+  BoldPlugin,
+  CodePlugin,
   H1Plugin,
   H2Plugin,
   H3Plugin,
   HorizontalRulePlugin,
-} from '@platejs/basic-nodes/react'
-import { ParagraphPlugin } from 'platejs/react'
-import { TrailingBlockPlugin } from 'platejs'
+  ItalicPlugin,
+  StrikethroughPlugin,
+  UnderlinePlugin,
+} from "@platejs/basic-nodes/react";
+import { TrailingBlockPlugin } from "platejs";
+import { ParagraphPlugin } from "platejs/react";
 
 import {
-  ParagraphElement,
+  BlockquoteElement,
   H1Element,
   H2Element,
   H3Element,
-  BlockquoteElement,
   HrElement,
-} from './plate-elements'
-
+  ParagraphElement,
+} from "./plate-elements";
+import { BlockSelectionKit } from "./plugins/block-selection-kit";
 // Plugin kits
-import { DndKit } from './plugins/dnd-kit'
-import { BlockSelectionKit } from './plugins/block-selection-kit'
-import { SlashKit } from './plugins/slash-kit'
-import { ElementPlugin } from './plugins/element-plugin'
+import { DndKit } from "./plugins/dnd-kit";
+import { ElementPlugin } from "./plugins/element-plugin";
+import { SlashKit } from "./plugins/slash-kit";
 
 export const EditorKit = [
   // Unified Element Plugin - Renders ALL elements (HTML + custom components)
@@ -46,15 +45,15 @@ export const EditorKit = [
   ParagraphPlugin.withComponent(ParagraphElement),
   H1Plugin.configure({
     node: { component: H1Element },
-    rules: { break: { empty: 'reset' } },
+    rules: { break: { empty: "reset" } },
   }),
   H2Plugin.configure({
     node: { component: H2Element },
-    rules: { break: { empty: 'reset' } },
+    rules: { break: { empty: "reset" } },
   }),
   H3Plugin.configure({
     node: { component: H3Element },
-    rules: { break: { empty: 'reset' } },
+    rules: { break: { empty: "reset" } },
   }),
   BlockquotePlugin.configure({
     node: { component: BlockquoteElement },
@@ -79,4 +78,4 @@ export const EditorKit = [
 
   // Utilities
   TrailingBlockPlugin,
-]
+];

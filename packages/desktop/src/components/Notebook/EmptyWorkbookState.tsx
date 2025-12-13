@@ -7,27 +7,18 @@
  * 3. Ask Hands to get you data (points to chat bar)
  */
 
-import { useState, useRef, useEffect } from "react";
-import { cn } from "@/lib/utils";
 import {
-  FileArrowDown,
   ChatCircle,
-  Newspaper,
-  GithubLogo,
   Database,
+  FileArrowDown,
+  GithubLogo,
+  Newspaper,
   Plus,
 } from "@phosphor-icons/react";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
-import {
-  useAvailableSources,
-  useAddSource,
-  type AvailableSource,
-} from "@/hooks/useWorkbook";
+import { useEffect, useRef, useState } from "react";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { type AvailableSource, useAddSource, useAvailableSources } from "@/hooks/useWorkbook";
+import { cn } from "@/lib/utils";
 
 interface EmptyWorkbookStateProps {
   onImportFile: () => void;
@@ -45,7 +36,17 @@ function getSourceIcon(name: string) {
 }
 
 // Hand-drawn chalk arrow - dusty but cohesive
-function HandDrawnArrow({ startX, startY, endX, endY }: { startX: number; startY: number; endX: number; endY: number }) {
+function HandDrawnArrow({
+  startX,
+  startY,
+  endX,
+  endY,
+}: {
+  startX: number;
+  startY: number;
+  endX: number;
+  endY: number;
+}) {
   const x = startX;
   const arrowLen = 10;
   const length = endY - startY;
@@ -120,36 +121,22 @@ function HandDrawnArrow({ startX, startY, endX, endY }: { startX: number; startY
       style={{
         left: 0,
         top: 0,
-        width: '100%',
-        height: '100%',
-        overflow: 'visible',
+        width: "100%",
+        height: "100%",
+        overflow: "visible",
       }}
     >
       {/* Main line - chalk dust particles */}
       <g>
         {particles.map((p, i) => (
-          <circle
-            key={`line-${i}`}
-            cx={p.cx}
-            cy={p.cy}
-            r={p.r}
-            fill="white"
-            opacity={p.opacity}
-          />
+          <circle key={`line-${i}`} cx={p.cx} cy={p.cy} r={p.r} fill="white" opacity={p.opacity} />
         ))}
       </g>
 
       {/* Arrow head particles */}
       <g>
         {arrowParticles.map((p, i) => (
-          <circle
-            key={`arrow-${i}`}
-            cx={p.cx}
-            cy={p.cy}
-            r={p.r}
-            fill="white"
-            opacity={p.opacity}
-          />
+          <circle key={`arrow-${i}`} cx={p.cx} cy={p.cy} r={p.r} fill="white" opacity={p.opacity} />
         ))}
       </g>
     </svg>
@@ -161,7 +148,12 @@ export function EmptyWorkbookState({
   chatExpanded = false,
 }: EmptyWorkbookStateProps) {
   const [showSources, setShowSources] = useState(false);
-  const [arrowCoords, setArrowCoords] = useState<{ startX: number; startY: number; endX: number; endY: number } | null>(null);
+  const [arrowCoords, setArrowCoords] = useState<{
+    startX: number;
+    startY: number;
+    endX: number;
+    endY: number;
+  } | null>(null);
   const askHandsRef = useRef<HTMLDivElement>(null);
 
   const { data: availableSources = [] } = useAvailableSources();
@@ -172,7 +164,7 @@ export function EmptyWorkbookState({
     const updateArrow = () => {
       const askHandsEl = askHandsRef.current;
       // Find the chat bar input
-      const chatBar = document.querySelector('[data-chat-bar]');
+      const chatBar = document.querySelector("[data-chat-bar]");
 
       if (askHandsEl && chatBar) {
         const askRect = askHandsEl.getBoundingClientRect();
@@ -188,13 +180,13 @@ export function EmptyWorkbookState({
     };
 
     updateArrow();
-    window.addEventListener('resize', updateArrow);
+    window.addEventListener("resize", updateArrow);
 
     // Also update after a short delay to catch layout shifts
     const timeout = setTimeout(updateArrow, 100);
 
     return () => {
-      window.removeEventListener('resize', updateArrow);
+      window.removeEventListener("resize", updateArrow);
       clearTimeout(timeout);
     };
   }, []);
@@ -219,12 +211,10 @@ export function EmptyWorkbookState({
       <div
         className={cn(
           "flex flex-col items-center justify-center h-full pb-32 px-8 max-w-2xl mx-auto transition-opacity duration-300",
-          chatExpanded && "opacity-20 pointer-events-none"
+          chatExpanded && "opacity-20 pointer-events-none",
         )}
       >
-        <h2 className="text-xl font-semibold text-foreground tracking-tight mb-2">
-          Get started
-        </h2>
+        <h2 className="text-xl font-semibold text-foreground tracking-tight mb-2">Get started</h2>
         <p className="text-sm text-muted-foreground text-center mb-10">
           Bring in some data to start exploring and building
         </p>
@@ -239,7 +229,7 @@ export function EmptyWorkbookState({
               "bg-gradient-to-b from-primary/5 to-primary/10",
               "border-2 border-dashed border-primary/30 hover:border-primary/50",
               "hover:bg-primary/15",
-              "transition-all duration-200"
+              "transition-all duration-200",
             )}
           >
             <FileArrowDown
@@ -247,12 +237,8 @@ export function EmptyWorkbookState({
               className="h-8 w-8 text-primary/70 group-hover:text-primary transition-colors"
             />
             <div className="text-center">
-              <div className="text-sm font-medium text-foreground">
-                Drop files
-              </div>
-              <div className="text-xs text-muted-foreground mt-1">
-                CSV, JSON, Parquet
-              </div>
+              <div className="text-sm font-medium text-foreground">Drop files</div>
+              <div className="text-xs text-muted-foreground mt-1">CSV, JSON, Parquet</div>
             </div>
           </button>
 
@@ -261,12 +247,10 @@ export function EmptyWorkbookState({
             className={cn(
               "flex flex-col items-center justify-center gap-3 p-6 rounded-xl",
               "bg-gradient-to-b from-muted/30 to-muted/10",
-              "border border-border/50"
+              "border border-border/50",
             )}
           >
-            <div className="text-sm font-medium text-foreground mb-1">
-              Add a source
-            </div>
+            <div className="text-sm font-medium text-foreground mb-1">Add a source</div>
 
             {/* Quick source buttons */}
             <div className="flex flex-wrap justify-center gap-1.5">
@@ -282,7 +266,7 @@ export function EmptyWorkbookState({
                       "border border-border/50",
                       "hover:bg-accent hover:border-border",
                       "transition-all duration-150",
-                      addSource.isPending && "opacity-50 cursor-not-allowed"
+                      addSource.isPending && "opacity-50 cursor-not-allowed",
                     )}
                   >
                     <Icon weight="duotone" className="h-3 w-3 text-orange-500" />
@@ -311,27 +295,20 @@ export function EmptyWorkbookState({
             className={cn(
               "flex flex-col items-center justify-center gap-3 p-6 rounded-xl",
               "bg-gradient-to-b from-muted/30 to-muted/10",
-              "border border-border/50"
+              "border border-border/50",
             )}
           >
-            <ChatCircle
-              weight="duotone"
-              className="h-8 w-8 text-foreground/50"
-            />
+            <ChatCircle weight="duotone" className="h-8 w-8 text-foreground/50" />
             <div className="text-center">
-              <div className="text-sm font-medium text-foreground">
-                Ask Hands
-              </div>
-              <div className="text-xs text-muted-foreground mt-1">
-                "Get me some sample data"
-              </div>
+              <div className="text-sm font-medium text-foreground">Ask Hands</div>
+              <div className="text-xs text-muted-foreground mt-1">"Get me some sample data"</div>
             </div>
           </div>
         </div>
       </div>
 
       {/* Hand-drawn arrow pointing to chat bar - hide when chat is expanded */}
-      {arrowCoords && (arrowCoords.endY - arrowCoords.startY) > 5 && !chatExpanded && (
+      {arrowCoords && arrowCoords.endY - arrowCoords.startY > 5 && !chatExpanded && (
         <HandDrawnArrow
           startX={arrowCoords.startX}
           startY={arrowCoords.startY}
@@ -359,16 +336,14 @@ export function EmptyWorkbookState({
                     "border border-border/50",
                     "hover:bg-accent hover:border-border",
                     "transition-all duration-150",
-                    addSource.isPending && "opacity-50 cursor-not-allowed"
+                    addSource.isPending && "opacity-50 cursor-not-allowed",
                   )}
                 >
                   <div className="p-2 rounded-md bg-muted/50">
                     <Icon weight="duotone" className="h-4 w-4 text-orange-500" />
                   </div>
                   <div className="flex-1 min-w-0">
-                    <div className="text-sm font-medium truncate">
-                      {source.title}
-                    </div>
+                    <div className="text-sm font-medium truncate">{source.title}</div>
                     <div className="text-xs text-muted-foreground line-clamp-1">
                       {source.description}
                     </div>

@@ -3,48 +3,48 @@ import { PORTS } from "./ports";
 
 // Re-export types from SDK client (avoids importing server-only code)
 export type {
-  UserMessage,
-  AssistantMessage,
-  Message,
-  TextPart,
-  ReasoningPart,
-  FilePart,
-  StepStartPart,
-  StepFinishPart,
   AgentPart,
-  RetryPart,
-  ToolPart,
-  Part,
-  ToolState,
-  ToolStatePending,
-  ToolStateRunning,
-  ToolStateCompleted,
-  ToolStateError,
   ApiError,
+  AssistantMessage,
   // Event types - use SDK's typed discriminated union for type-safe event handling
   Event as SdkEvent,
-  GlobalEvent,
-  EventMessageUpdated,
-  EventMessageRemoved,
-  EventMessagePartUpdated,
   EventMessagePartRemoved,
-  EventSessionStatus,
+  EventMessagePartUpdated,
+  EventMessageRemoved,
+  EventMessageUpdated,
   EventSessionCreated,
-  EventSessionUpdated,
   EventSessionDeleted,
+  EventSessionStatus,
+  EventSessionUpdated,
   EventTodoUpdated,
-  SessionStatus as SdkSessionStatus,
+  FilePart,
+  GlobalEvent,
+  Message,
+  Part,
+  ReasoningPart,
+  RetryPart,
   Session as SdkSession,
+  SessionStatus as SdkSessionStatus,
+  StepFinishPart,
+  StepStartPart,
+  TextPart,
   Todo as SdkTodo,
+  ToolPart,
+  ToolState,
+  ToolStateCompleted,
+  ToolStateError,
+  ToolStatePending,
+  ToolStateRunning,
+  UserMessage,
 } from "@opencode-ai/sdk/client";
 
 // Import types we need locally
 import type {
-  Session as SdkSession,
-  Message as SdkMessage,
-  Part as SdkPart,
   Event as SdkEventType,
   GlobalEvent as SdkGlobalEvent,
+  Message as SdkMessage,
+  Part as SdkPart,
+  Session as SdkSession,
 } from "@opencode-ai/sdk/client";
 
 // Alias SDK types
@@ -95,7 +95,10 @@ export type SessionStatus =
 export type ServerEvent = SdkEventType;
 
 export interface PromptRequest {
-  parts: Array<{ type: "text"; text: string } | { type: "file"; mediaType: string; url?: string; filename?: string }>;
+  parts: Array<
+    | { type: "text"; text: string }
+    | { type: "file"; mediaType: string; url?: string; filename?: string }
+  >;
   model?: { providerID: string; modelID: string };
   agent?: string;
   noReply?: boolean;
@@ -180,7 +183,10 @@ export const api = {
       const result = await client.session.get({ path: { id } });
       return result.data as Session;
     },
-    create: async (body?: { parentID?: string; title?: string }, directory?: string | null): Promise<Session> => {
+    create: async (
+      body?: { parentID?: string; title?: string },
+      directory?: string | null,
+    ): Promise<Session> => {
       const client = getClient(directory);
       const result = await client.session.create({ body: body || {} });
       return result.data as Session;
@@ -198,9 +204,15 @@ export const api = {
       const result = await client.session.messages({ path: { id: sessionId } });
       return result.data as MessageWithParts[];
     },
-    get: async (sessionId: string, messageId: string, directory?: string | null): Promise<MessageWithParts> => {
+    get: async (
+      sessionId: string,
+      messageId: string,
+      directory?: string | null,
+    ): Promise<MessageWithParts> => {
       const client = getClient(directory);
-      const result = await client.session.message({ path: { id: sessionId, messageID: messageId } });
+      const result = await client.session.message({
+        path: { id: sessionId, messageID: messageId },
+      });
       return result.data as MessageWithParts;
     },
   },
@@ -224,7 +236,12 @@ export const api = {
   prompt: async (
     sessionId: string,
     content: string,
-    options?: { model?: { providerID: string; modelID: string }; system?: string; agent?: string; directory?: string | null }
+    options?: {
+      model?: { providerID: string; modelID: string };
+      system?: string;
+      agent?: string;
+      directory?: string | null;
+    },
   ): Promise<MessageWithParts> => {
     const client = getClient(options?.directory);
     const result = await client.session.prompt({
@@ -242,7 +259,12 @@ export const api = {
   promptAsync: async (
     sessionId: string,
     content: string,
-    options?: { model?: { providerID: string; modelID: string }; system?: string; agent?: string; directory?: string | null }
+    options?: {
+      model?: { providerID: string; modelID: string };
+      system?: string;
+      agent?: string;
+      directory?: string | null;
+    },
   ) => {
     const client = getClient(options?.directory);
     return client.session.promptAsync({
@@ -261,7 +283,7 @@ export const api = {
     sessionId: string,
     text: string,
     filePaths: string[],
-    options?: { directory?: string | null }
+    options?: { directory?: string | null },
   ) => {
     const client = getClient(options?.directory);
     type FilePart = { type: "file"; mime: string; url: string; filename?: string };
@@ -296,7 +318,7 @@ export const api = {
     sessionId: string,
     content: string,
     agent: string,
-    options?: { directory?: string | null }
+    options?: { directory?: string | null },
   ) => {
     const client = getClient(options?.directory);
     return client.session.promptAsync({
@@ -318,7 +340,7 @@ export const api = {
     sessionId: string,
     permissionId: string,
     response: PermissionResponse,
-    directory?: string | null
+    directory?: string | null,
   ): Promise<boolean> => {
     const client = getClient(directory);
     await client.postSessionIdPermissionsPermissionId({
@@ -381,38 +403,47 @@ export const api = {
 // Uses SDK's typed GlobalEvent which contains { directory, payload: Event }
 export function subscribeToEvents(
   onEvent: (event: ServerEvent, directory?: string) => void,
-  onError?: (error: unknown) => void
+  onError?: (error: unknown) => void,
 ): () => void {
   const client = getClient();
   const abortController = new AbortController();
 
   // Start the SSE stream using SDK (same as opencode's global-sdk.tsx)
-  client.global.event({ signal: abortController.signal }).then(async (events) => {
-    try {
-      for await (const event of events.stream) {
-        if (abortController.signal.aborted) break;
+  client.global
+    .event({ signal: abortController.signal })
+    .then(async (events) => {
+      try {
+        for await (const event of events.stream) {
+          if (abortController.signal.aborted) break;
 
-        // SDK's GlobalEvent has { directory, payload } structure
-        // The payload is the typed Event union
-        const globalEvent = event as SdkGlobalEvent;
-        const typedEvent = globalEvent.payload;
-        const directory = globalEvent.directory;
+          // SDK's GlobalEvent has { directory, payload } structure
+          // The payload is the typed Event union
+          const globalEvent = event as SdkGlobalEvent;
+          const typedEvent = globalEvent.payload;
+          const directory = globalEvent.directory;
 
-        console.log("SSE event:", typedEvent.type, "directory:", directory, "properties" in typedEvent ? typedEvent.properties : typedEvent);
-        onEvent(typedEvent, directory);
+          console.log(
+            "SSE event:",
+            typedEvent.type,
+            "directory:",
+            directory,
+            "properties" in typedEvent ? typedEvent.properties : typedEvent,
+          );
+          onEvent(typedEvent, directory);
+        }
+      } catch (err) {
+        if (!abortController.signal.aborted) {
+          console.error("SSE stream error:", err);
+          onError?.(err);
+        }
       }
-    } catch (err) {
+    })
+    .catch((err) => {
       if (!abortController.signal.aborted) {
-        console.error("SSE stream error:", err);
+        console.error("SSE connection error:", err);
         onError?.(err);
       }
-    }
-  }).catch((err) => {
-    if (!abortController.signal.aborted) {
-      console.error("SSE connection error:", err);
-      onError?.(err);
-    }
-  });
+    });
 
   return () => {
     abortController.abort();

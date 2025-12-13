@@ -6,26 +6,19 @@
  * All settings backed by Tauri store (persisted)
  */
 
-import { useState, useEffect } from "react";
-import { X, Check, ChevronDown } from "lucide-react";
-import {
-  Palette,
-  Robot,
-  Keyboard,
-  Info,
-  Key,
-  Desktop,
-} from "@phosphor-icons/react";
-import { cn } from "@/lib/utils";
-import { getTheme, setTheme, getThemeList } from "@/lib/theme";
-import { useSettings, modelOptions, providerOptions, type Settings } from "@/hooks/useSettings";
-import { useServer } from "@/hooks/useServer";
+import { Desktop, Info, Key, Keyboard, Palette, Robot } from "@phosphor-icons/react";
+import { Check, ChevronDown, X } from "lucide-react";
+import { useEffect, useState } from "react";
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { useServer } from "@/hooks/useServer";
+import { modelOptions, providerOptions, type Settings, useSettings } from "@/hooks/useSettings";
+import { getTheme, getThemeList, setTheme } from "@/lib/theme";
+import { cn } from "@/lib/utils";
 
 type SettingsSection = "appearance" | "ai" | "shortcuts" | "about";
 
@@ -60,10 +53,7 @@ export function SettingsModal({ open, onClose }: SettingsModalProps) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center">
       {/* Backdrop */}
-      <div
-        className="absolute inset-0 bg-black/50 backdrop-blur-sm"
-        onClick={onClose}
-      />
+      <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={onClose} />
 
       {/* Modal */}
       <div className="relative w-[700px] h-[500px] bg-background border border-border rounded-xl shadow-2xl overflow-hidden flex">
@@ -81,7 +71,7 @@ export function SettingsModal({ open, onClose }: SettingsModalProps) {
                   "w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-sm transition-colors",
                   activeSection === section.id
                     ? "bg-accent text-accent-foreground"
-                    : "text-muted-foreground hover:text-foreground hover:bg-accent/50"
+                    : "text-muted-foreground hover:text-foreground hover:bg-accent/50",
                 )}
               >
                 <section.icon weight="duotone" className="h-4 w-4" />
@@ -129,7 +119,7 @@ function AppearanceSettings() {
   };
 
   // Default options: system, dark, light
-  const defaultOptions = ["system", "dark", "light"];
+  const _defaultOptions = ["system", "dark", "light"];
 
   // Get palette colors for dark/light themes
   const darkTheme = themes.find((t) => t.id === "dark");
@@ -149,7 +139,7 @@ function AppearanceSettings() {
               "flex-1 flex items-center justify-center gap-2 p-3 rounded-lg border-2 transition-all",
               currentTheme === "system"
                 ? "border-primary bg-primary/5"
-                : "border-border hover:border-muted-foreground/50"
+                : "border-border hover:border-muted-foreground/50",
             )}
           >
             <Desktop weight="duotone" className="h-4 w-4" />
@@ -164,13 +154,19 @@ function AppearanceSettings() {
               "flex-1 flex items-center justify-center gap-2 p-3 rounded-lg border-2 transition-all",
               currentTheme === "dark"
                 ? "border-primary bg-primary/5"
-                : "border-border hover:border-muted-foreground/50"
+                : "border-border hover:border-muted-foreground/50",
             )}
           >
             {darkTheme && (
               <div className="flex gap-0.5 rounded overflow-hidden">
-                <div className="h-4 w-4 rounded-sm" style={{ backgroundColor: `hsl(${darkTheme.colors.background})` }} />
-                <div className="h-4 w-4 rounded-sm" style={{ backgroundColor: `hsl(${darkTheme.colors.primary})` }} />
+                <div
+                  className="h-4 w-4 rounded-sm"
+                  style={{ backgroundColor: `hsl(${darkTheme.colors.background})` }}
+                />
+                <div
+                  className="h-4 w-4 rounded-sm"
+                  style={{ backgroundColor: `hsl(${darkTheme.colors.primary})` }}
+                />
               </div>
             )}
             <span className="text-sm font-medium">Dark</span>
@@ -184,13 +180,19 @@ function AppearanceSettings() {
               "flex-1 flex items-center justify-center gap-2 p-3 rounded-lg border-2 transition-all",
               currentTheme === "light"
                 ? "border-primary bg-primary/5"
-                : "border-border hover:border-muted-foreground/50"
+                : "border-border hover:border-muted-foreground/50",
             )}
           >
             {lightTheme && (
               <div className="flex gap-0.5 rounded overflow-hidden">
-                <div className="h-4 w-4 rounded-sm border border-border/50" style={{ backgroundColor: `hsl(${lightTheme.colors.background})` }} />
-                <div className="h-4 w-4 rounded-sm" style={{ backgroundColor: `hsl(${lightTheme.colors.primary})` }} />
+                <div
+                  className="h-4 w-4 rounded-sm border border-border/50"
+                  style={{ backgroundColor: `hsl(${lightTheme.colors.background})` }}
+                />
+                <div
+                  className="h-4 w-4 rounded-sm"
+                  style={{ backgroundColor: `hsl(${lightTheme.colors.primary})` }}
+                />
               </div>
             )}
             <span className="text-sm font-medium">Light</span>
@@ -245,31 +247,16 @@ function ThemeButton({
         "p-2 rounded-lg border-2 text-left transition-all",
         isActive
           ? "border-primary bg-primary/5 ring-1 ring-primary/20"
-          : "border-border hover:border-muted-foreground/50"
+          : "border-border hover:border-muted-foreground/50",
       )}
     >
       {/* Color palette preview */}
       <div className="flex gap-0.5 mb-2 rounded overflow-hidden">
-        <div
-          className="h-6 flex-1"
-          style={{ backgroundColor: toHsl(theme.colors.background) }}
-        />
-        <div
-          className="h-6 flex-1"
-          style={{ backgroundColor: toHsl(theme.colors.muted) }}
-        />
-        <div
-          className="h-6 flex-1"
-          style={{ backgroundColor: toHsl(theme.colors.primary) }}
-        />
-        <div
-          className="h-6 flex-1"
-          style={{ backgroundColor: toHsl(theme.colors.accent) }}
-        />
-        <div
-          className="h-6 flex-1"
-          style={{ backgroundColor: toHsl(theme.colors.foreground) }}
-        />
+        <div className="h-6 flex-1" style={{ backgroundColor: toHsl(theme.colors.background) }} />
+        <div className="h-6 flex-1" style={{ backgroundColor: toHsl(theme.colors.muted) }} />
+        <div className="h-6 flex-1" style={{ backgroundColor: toHsl(theme.colors.primary) }} />
+        <div className="h-6 flex-1" style={{ backgroundColor: toHsl(theme.colors.accent) }} />
+        <div className="h-6 flex-1" style={{ backgroundColor: toHsl(theme.colors.foreground) }} />
       </div>
       <div className="flex items-center justify-between">
         <span className="text-xs font-medium truncate">{theme.name}</span>
@@ -283,9 +270,7 @@ function AISettings() {
   const { settings, updateSetting, apiKeys, updateApiKey, syncModel } = useSettings();
   const { restartServer } = useServer();
 
-  const currentModel = modelOptions[settings.provider]?.find(
-    (m) => m.value === settings.model
-  );
+  const currentModel = modelOptions[settings.provider]?.find((m) => m.value === settings.model);
 
   const getApiKeyField = () => {
     switch (settings.provider) {
@@ -309,9 +294,7 @@ function AISettings() {
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <button className="w-full max-w-xs flex items-center justify-between h-9 px-3 text-sm bg-muted rounded-md border border-border hover:bg-muted/80 transition-colors">
-              <span>
-                {providerOptions.find((p) => p.value === settings.provider)?.label}
-              </span>
+              <span>{providerOptions.find((p) => p.value === settings.provider)?.label}</span>
               <ChevronDown className="h-4 w-4 text-muted-foreground" />
             </button>
           </DropdownMenuTrigger>
@@ -334,9 +317,7 @@ function AISettings() {
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <button className="w-full max-w-xs flex items-center justify-between h-9 px-3 text-sm bg-muted rounded-md border border-border hover:bg-muted/80 transition-colors">
-              <span className="truncate">
-                {currentModel?.label || settings.model}
-              </span>
+              <span className="truncate">{currentModel?.label || settings.model}</span>
               <ChevronDown className="h-4 w-4 text-muted-foreground shrink-0" />
             </button>
           </DropdownMenuTrigger>
@@ -489,9 +470,7 @@ function SettingGroup({
     <div className="space-y-3">
       <div>
         <h3 className="text-sm font-medium">{title}</h3>
-        {description && (
-          <p className="text-xs text-muted-foreground mt-0.5">{description}</p>
-        )}
+        {description && <p className="text-xs text-muted-foreground mt-0.5">{description}</p>}
       </div>
       {children}
     </div>

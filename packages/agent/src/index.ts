@@ -5,36 +5,32 @@
  * Spawned by Tauri as a subprocess.
  */
 
+import { existsSync, lstatSync, mkdirSync, symlinkSync, unlinkSync } from "node:fs";
+import { dirname, resolve } from "node:path";
 import type { Config } from "@opencode-ai/sdk";
 import { createOpencode } from "@opencode-ai/sdk";
-import { existsSync, lstatSync, mkdirSync, symlinkSync, unlinkSync } from "fs";
-import { dirname, resolve } from "path";
-import { handsAgent, coderAgent, importAgent } from "../agents";
+import { coderAgent, handsAgent, importAgent } from "../agents";
 
 // Configuration
 const PORT = parseInt(process.env.HANDS_AGENT_PORT || "55300", 10);
 const MODEL = process.env.HANDS_MODEL || "anthropic/claude-sonnet-4-20250514";
 
 // Paths
-const AGENT_PKG_DIR = resolve(dirname(import.meta.dirname), ".");
+// Bun uses import.meta.dir, Node uses import.meta.dirname
+const AGENT_PKG_DIR = resolve(dirname(import.meta.dir ?? import.meta.dirname ?? __dirname), ".");
 const TOOLS_SOURCE = resolve(AGENT_PKG_DIR, "tool");
-const PLUGINS_SOURCE = resolve(AGENT_PKG_DIR, "plugin");
 
 /**
- * Symlink a source directory to a target in .opencode/
- * OpenCode discovers tools from $CWD/.opencode/tool/*.ts
- * OpenCode discovers plugins from $CWD/.opencode/plugin/*.ts
+ * Symlink tools directory to .opencode/tool/
  */
-function setupSymlink(workingDir: string, source: string, name: string) {
+function setupToolsSymlink(workingDir: string) {
   const opencodeDir = resolve(workingDir, ".opencode");
-  const target = resolve(opencodeDir, name);
+  const target = resolve(opencodeDir, "tool");
 
-  // Create .opencode directory if needed
   if (!existsSync(opencodeDir)) {
     mkdirSync(opencodeDir, { recursive: true });
   }
 
-  // Remove existing symlink/dir if it exists
   if (existsSync(target)) {
     const stat = lstatSync(target);
     if (stat.isSymbolicLink()) {
@@ -45,15 +41,39 @@ function setupSymlink(workingDir: string, source: string, name: string) {
     }
   }
 
-  // Create symlink
-  symlinkSync(source, target, "dir");
+  symlinkSync(TOOLS_SOURCE, target, "dir");
+}
+
+/**
+ * Symlink plugin directory to .opencode/plugin/
+ * OpenCode discovers plugins from the workbook's .opencode/plugin/ dir
+ */
+function setupPluginsSymlink(workingDir: string) {
+  const opencodeDir = resolve(workingDir, ".opencode");
+  const target = resolve(opencodeDir, "plugin");
+  const pluginSource = resolve(AGENT_PKG_DIR, "plugin");
+
+  if (!existsSync(opencodeDir)) {
+    mkdirSync(opencodeDir, { recursive: true });
+  }
+
+  if (existsSync(target)) {
+    const stat = lstatSync(target);
+    if (stat.isSymbolicLink()) {
+      unlinkSync(target);
+    } else {
+      console.warn(`[agent] Warning: ${target} exists and is not a symlink`);
+      return;
+    }
+  }
+
+  symlinkSync(pluginSource, target, "dir");
 }
 
 // Build config
 const config: Config = {
   model: MODEL,
-  // Register plugins by path - OpenCode will load from .opencode/plugin/ directory
-  plugin: ["diagnostics"],
+  // Plugins are auto-discovered from .opencode/plugin/ directory
   agent: {
     // Disable general and build, keep plan/explore
     general: { disable: true },
@@ -69,9 +89,9 @@ async function main() {
   // Get working directory from env (set by Tauri) or use cwd
   const workingDir = process.env.HANDS_WORKBOOK_DIR || process.cwd();
 
-  // Setup symlinks so OpenCode can discover our custom tools and plugins
-  setupSymlink(workingDir, TOOLS_SOURCE, "tool");
-  setupSymlink(workingDir, PLUGINS_SOURCE, "plugin");
+  // Setup tools and plugins symlinks (both in workbook dir)
+  setupToolsSymlink(workingDir);
+  setupPluginsSymlink(workingDir);
 
   try {
     const { server, client } = await createOpencode({

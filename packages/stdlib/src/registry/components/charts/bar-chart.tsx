@@ -1,59 +1,59 @@
 /** @jsxImportSource react */
-"use client"
+"use client";
 
-import * as React from "react"
-import { Bar, BarChart as RechartsBarChart, CartesianGrid, XAxis, YAxis } from "recharts"
-import { cn } from "../../../lib/utils.js"
+import * as React from "react";
+import { Bar, CartesianGrid, BarChart as RechartsBarChart, XAxis, YAxis } from "recharts";
+import { cn } from "../../../lib/utils.js";
 import {
-  ChartConfig,
+  type ChartConfig,
   ChartContainer,
-  ChartTooltip,
-  ChartTooltipContent,
   ChartLegend,
   ChartLegendContent,
-} from "../ui/chart.js"
+  ChartTooltip,
+  ChartTooltipContent,
+} from "../ui/chart.js";
 
 export interface BarChartProps<T extends Record<string, unknown>> {
   /** Data array to visualize */
-  data: T[]
+  data: T[];
   /** X-axis key (category/label) */
-  x?: keyof T
+  x?: keyof T;
   /** Y-axis key(s) - can be single key or array for multi-series */
-  y?: keyof T | (keyof T)[]
+  y?: keyof T | (keyof T)[];
   /** Alias for x */
-  xKey?: keyof T
+  xKey?: keyof T;
   /** Alias for y */
-  yKey?: keyof T | (keyof T)[]
+  yKey?: keyof T | (keyof T)[];
   /** Additional CSS classes */
-  className?: string
+  className?: string;
   /** Chart height in pixels */
-  height?: number
+  height?: number;
   /** Primary color for single series */
-  color?: string
+  color?: string;
   /** Colors for multiple series */
-  colors?: string[]
+  colors?: string[];
   /** Horizontal bar chart */
-  horizontal?: boolean
+  horizontal?: boolean;
   /** Show grid lines */
-  showGrid?: boolean
+  showGrid?: boolean;
   /** Show X axis */
-  showXAxis?: boolean
+  showXAxis?: boolean;
   /** Show Y axis */
-  showYAxis?: boolean
+  showYAxis?: boolean;
   /** Show tooltip on hover */
-  showTooltip?: boolean
+  showTooltip?: boolean;
   /** Show legend */
-  showLegend?: boolean
+  showLegend?: boolean;
   /** Bar radius for rounded corners */
-  radius?: number
+  radius?: number;
   /** Custom chart config for theming */
-  chartConfig?: ChartConfig
+  chartConfig?: ChartConfig;
   /** Format function for X axis labels */
-  formatX?: (value: unknown) => string
+  formatX?: (value: unknown) => string;
   /** Format function for Y axis values */
-  formatY?: (value: number) => string
+  formatY?: (value: number) => string;
   /** Chart title */
-  title?: string
+  title?: string;
 }
 
 export function BarChart<T extends Record<string, unknown>>({
@@ -85,40 +85,40 @@ export function BarChart<T extends Record<string, unknown>>({
   title,
 }: BarChartProps<T>) {
   // Support both x/y and xKey/yKey prop names
-  const xAxisKey = (xProp ?? xKey ?? "x") as string
+  const xAxisKey = (xProp ?? xKey ?? "x") as string;
   const yAxisKeys = React.useMemo(() => {
-    const yValue = yProp ?? yKey ?? "y"
-    return Array.isArray(yValue) ? yValue.map(String) : [String(yValue)]
-  }, [yProp, yKey])
+    const yValue = yProp ?? yKey ?? "y";
+    return Array.isArray(yValue) ? yValue.map(String) : [String(yValue)];
+  }, [yProp, yKey]);
 
   // Build chart config from y keys
   const chartConfig = React.useMemo<ChartConfig>(() => {
-    if (externalConfig) return externalConfig
+    if (externalConfig) return externalConfig;
 
-    const config: ChartConfig = {}
+    const config: ChartConfig = {};
     yAxisKeys.forEach((key, index) => {
       config[key] = {
         label: key.charAt(0).toUpperCase() + key.slice(1),
         color: yAxisKeys.length === 1 ? color : colors[index % colors.length],
-      }
-    })
-    return config
-  }, [externalConfig, yAxisKeys, color, colors])
+      };
+    });
+    return config;
+  }, [externalConfig, yAxisKeys, color, colors]);
 
   // Defensive check - data must be an array
   if (!Array.isArray(data)) {
-    console.warn('[BarChart] data prop is not an array:', typeof data, data)
+    console.warn("[BarChart] data prop is not an array:", typeof data, data);
     return (
       <div
         className={cn(
           "flex items-center justify-center text-muted-foreground rounded-lg border border-dashed",
-          className
+          className,
         )}
         style={{ height }}
       >
         Invalid data: expected array, got {typeof data}
       </div>
-    )
+    );
   }
 
   if (data.length === 0) {
@@ -126,21 +126,23 @@ export function BarChart<T extends Record<string, unknown>>({
       <div
         className={cn(
           "flex items-center justify-center text-muted-foreground rounded-lg border border-dashed",
-          className
+          className,
         )}
         style={{ height }}
       >
         No data available
       </div>
-    )
+    );
   }
 
   return (
     <div className={cn("w-full", className)}>
-      {title && (
-        <h3 className="text-sm font-medium mb-2 text-foreground">{title}</h3>
-      )}
-      <ChartContainer config={chartConfig} className={cn("min-h-[200px] w-full")} style={{ height }}>
+      {title && <h3 className="text-sm font-medium mb-2 text-foreground">{title}</h3>}
+      <ChartContainer
+        config={chartConfig}
+        className={cn("min-h-[200px] w-full")}
+        style={{ height }}
+      >
         <RechartsBarChart
           data={data}
           layout={horizontal ? "vertical" : "horizontal"}
@@ -189,12 +191,7 @@ export function BarChart<T extends Record<string, unknown>>({
                 />
               )}
               {showYAxis && (
-                <YAxis
-                  tickLine={false}
-                  axisLine={false}
-                  tickMargin={8}
-                  tickFormatter={formatY}
-                />
+                <YAxis tickLine={false} axisLine={false} tickMargin={8} tickFormatter={formatY} />
               )}
             </>
           )}
@@ -206,9 +203,7 @@ export function BarChart<T extends Record<string, unknown>>({
             />
           )}
 
-          {showLegend && (
-            <ChartLegend content={<ChartLegendContent />} />
-          )}
+          {showLegend && <ChartLegend content={<ChartLegendContent />} />}
 
           {yAxisKeys.map((key, index) => (
             <Bar
@@ -221,7 +216,7 @@ export function BarChart<T extends Record<string, unknown>>({
         </RechartsBarChart>
       </ChartContainer>
     </div>
-  )
+  );
 }
 
-export default BarChart
+export default BarChart;

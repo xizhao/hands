@@ -1,6 +1,6 @@
 import { useEffect } from "react";
 import { useActiveSession } from "@/hooks/useNavState";
-import { useCreateSession, useAbortSession } from "@/hooks/useSession";
+import { useAbortSession, useCreateSession } from "@/hooks/useSession";
 
 export function useKeyboard() {
   const { sessionId: activeSessionId, setSession: setActiveSession } = useActiveSession();

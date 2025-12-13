@@ -1,12 +1,12 @@
-import { useEffect, useRef, useLayoutEffect, useState } from "react";
-import { useMessages, useSessions, useSessionStatuses, useDeleteSession } from "@/hooks/useSession";
-import { useActiveSession } from "@/hooks/useNavState";
+import { AnimatePresence, motion } from "framer-motion";
+import { Layers, X } from "lucide-react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { ChatMessage } from "@/components/ChatMessage";
-import { cn } from "@/lib/utils";
-import { X, Layers } from "lucide-react";
 import { ShimmerText } from "@/components/ui/thinking-indicator";
-import { motion, AnimatePresence } from "framer-motion";
+import { useActiveSession } from "@/hooks/useNavState";
+import { useDeleteSession, useMessages, useSessionStatuses, useSessions } from "@/hooks/useSession";
 import type { Session } from "@/lib/api";
+import { cn } from "@/lib/utils";
 
 interface ThreadProps {
   expanded: boolean;
@@ -36,21 +36,22 @@ export function Thread({ expanded, onCollapse, onExpand }: ThreadProps) {
 
   // Check if waiting for response
   const lastMessage = messages[messages.length - 1];
-  const lastAssistantMessage = messages.filter(m => m.info.role === "assistant").pop();
+  const lastAssistantMessage = messages.filter((m) => m.info.role === "assistant").pop();
   const hasAssistantContent = lastAssistantMessage?.parts?.some(
-    p => p.type === "text" || p.type === "tool" || p.type === "reasoning"
+    (p) => p.type === "text" || p.type === "tool" || p.type === "reasoning",
   );
-  const waitingForResponse = isBusy && (!lastAssistantMessage || !hasAssistantContent || lastMessage?.info.role === "user");
+  const waitingForResponse =
+    isBusy && (!lastAssistantMessage || !hasAssistantContent || lastMessage?.info.role === "user");
 
   // Session info
-  const currentSession = sessions.find(s => s.id === activeSessionId);
-  const otherSessions = sessions.filter(s => s.id !== activeSessionId && s.title);
-  const currentHasTitle = Boolean(currentSession?.title);
+  const currentSession = sessions.find((s) => s.id === activeSessionId);
+  const _otherSessions = sessions.filter((s) => s.id !== activeSessionId && s.title);
+  const _currentHasTitle = Boolean(currentSession?.title);
 
   // Status helpers
   const lastAssistantHasError = Boolean(
     lastAssistantMessage?.info?.role === "assistant" &&
-    (lastAssistantMessage.info as { error?: unknown }).error
+      (lastAssistantMessage.info as { error?: unknown }).error,
   );
 
   const getSessionStatus = (sessionId: string): "busy" | "error" | null => {
@@ -74,7 +75,7 @@ export function Thread({ expanded, onCollapse, onExpand }: ThreadProps) {
       scrollToBottom(hasScrolledRef.current ? "smooth" : "instant");
       hasScrolledRef.current = true;
     }
-  }, [messages.length]);
+  }, [messages.length, scrollToBottom]);
 
   // Scroll to bottom when expanded (after animation)
   useLayoutEffect(() => {
@@ -84,7 +85,7 @@ export function Thread({ expanded, onCollapse, onExpand }: ThreadProps) {
       }, 250);
       return () => clearTimeout(timer);
     }
-  }, [expanded]);
+  }, [expanded, scrollToBottom]);
 
   const hasMessages = messages.length > 0;
 
@@ -99,29 +100,27 @@ export function Thread({ expanded, onCollapse, onExpand }: ThreadProps) {
   };
 
   // Separate foreground sessions (no parentID) from background sessions (has parentID)
-  const foregroundSessions = sessions.filter(s => {
+  const foregroundSessions = sessions.filter((s) => {
     const sessionWithParent = s as SessionWithParent;
     return s.title && !sessionWithParent.parentID;
   });
 
-  const backgroundSessions = sessions.filter(s => {
+  const backgroundSessions = sessions.filter((s) => {
     const sessionWithParent = s as SessionWithParent;
     return sessionWithParent.parentID; // Child sessions (subagents)
   });
 
   // Foreground thread chips - keep stable order, just mark which is active
-  const allChips = foregroundSessions
-    .slice(0, 5)
-    .map(s => ({
-      id: s.id,
-      title: s.title || "",
-      status: getSessionStatus(s.id),
-      isCurrent: s.id === activeSessionId,
-    }));
+  const allChips = foregroundSessions.slice(0, 5).map((s) => ({
+    id: s.id,
+    title: s.title || "",
+    status: getSessionStatus(s.id),
+    isCurrent: s.id === activeSessionId,
+  }));
 
   // Background sessions count and status
   const backgroundCount = backgroundSessions.length;
-  const backgroundBusyCount = backgroundSessions.filter(s => {
+  const backgroundBusyCount = backgroundSessions.filter((s) => {
     const status = sessionStatuses[s.id];
     return status?.type === "busy" || status?.type === "running";
   }).length;
@@ -149,7 +148,7 @@ export function Thread({ expanded, onCollapse, onExpand }: ThreadProps) {
                     "flex items-center gap-1 px-2 py-0.5 text-[11px] rounded-md transition-colors",
                     chip.isCurrent
                       ? "bg-muted text-foreground"
-                      : "text-muted-foreground hover:text-foreground hover:bg-muted/50"
+                      : "text-muted-foreground hover:text-foreground hover:bg-muted/50",
                   )}
                 >
                   <StatusDot status={chip.status} />
@@ -176,7 +175,7 @@ export function Thread({ expanded, onCollapse, onExpand }: ThreadProps) {
                   "flex items-center gap-1 px-1.5 py-0.5 text-[10px] rounded transition-colors",
                   showBackgroundSessions
                     ? "bg-muted/80 text-foreground"
-                    : "text-muted-foreground/50 hover:text-muted-foreground hover:bg-muted/30"
+                    : "text-muted-foreground/50 hover:text-muted-foreground hover:bg-muted/30",
                 )}
               >
                 <span className="tabular-nums">{backgroundCount}</span>
@@ -236,11 +235,7 @@ export function Thread({ expanded, onCollapse, onExpand }: ThreadProps) {
           <div className="space-y-1 px-1 pb-2">
             {/* Messages (oldest to newest, bottom-aligned) */}
             {messages.map((message, idx) => (
-              <ChatMessage
-                key={message.info.id || idx}
-                message={message}
-                compact
-              />
+              <ChatMessage key={message.info.id || idx} message={message} compact />
             ))}
 
             {/* Loading indicator */}
@@ -251,10 +246,7 @@ export function Thread({ expanded, onCollapse, onExpand }: ThreadProps) {
                 className="flex w-full justify-start"
               >
                 <div className="px-2.5 py-1.5 rounded-lg rounded-tl-sm bg-muted text-foreground">
-                  <ShimmerText
-                    text={activeForm || "Thinking..."}
-                    className="text-xs"
-                  />
+                  <ShimmerText text={activeForm || "Thinking..."} className="text-xs" />
                 </div>
               </motion.div>
             )}

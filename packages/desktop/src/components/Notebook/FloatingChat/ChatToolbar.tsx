@@ -1,7 +1,12 @@
-import { useState, useRef, KeyboardEvent } from "react";
-import { Send, Loader2, Square } from "lucide-react";
+import { Loader2, Send, Square } from "lucide-react";
+import { type KeyboardEvent, useRef, useState } from "react";
 import { useActiveSession } from "@/hooks/useNavState";
-import { useSendMessage, useAbortSession, useCreateSession, useSessionStatus } from "@/hooks/useSession";
+import {
+  useAbortSession,
+  useCreateSession,
+  useSendMessage,
+  useSessionStatus,
+} from "@/hooks/useSession";
 
 interface ChatToolbarProps {
   expanded: boolean;
@@ -81,7 +86,7 @@ export function ChatToolbar({ expanded, onExpandChange }: ChatToolbarProps) {
           setInput(e.target.value);
           // Auto-resize textarea
           e.target.style.height = "auto";
-          e.target.style.height = Math.min(e.target.scrollHeight, 120) + "px";
+          e.target.style.height = `${Math.min(e.target.scrollHeight, 120)}px`;
         }}
         onKeyDown={handleKeyDown}
         onFocus={() => !expanded && onExpandChange(true)}
@@ -112,9 +117,7 @@ export function ChatToolbar({ expanded, onExpandChange }: ChatToolbarProps) {
 
       {/* Status indicator */}
       <div
-        className={`h-2 w-2 rounded-full ${
-          isBusy ? "bg-green-500 animate-pulse" : "bg-green-500"
-        }`}
+        className={`h-2 w-2 rounded-full ${isBusy ? "bg-green-500 animate-pulse" : "bg-green-500"}`}
         title={isBusy ? "Working..." : "Ready"}
       />
     </div>

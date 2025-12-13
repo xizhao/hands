@@ -8,99 +8,95 @@
  */
 
 // MUST BE FIRST: Initialize shared React for RSC client components
-import '../rsc/shared-react'
+import "../rsc/shared-react";
 
-import { StrictMode, useEffect, useState, useCallback } from 'react'
-import { createRoot } from 'react-dom/client'
-import { RscProvider, initFlightClient, setRuntimePort } from '../rsc'
-import { OverlayEditor } from '../overlay'
-import { installGlobalErrorHandler } from '../overlay/errors'
+import { StrictMode, useCallback, useEffect, useState } from "react";
+import { createRoot } from "react-dom/client";
+import { OverlayEditor } from "../overlay";
+import { installGlobalErrorHandler } from "../overlay/errors";
+import { initFlightClient, RscProvider, setRuntimePort } from "../rsc";
 
-import './styles.css'
+import "./styles.css";
 
-const params = new URLSearchParams(window.location.search)
-const blockId = params.get('blockId')
+const params = new URLSearchParams(window.location.search);
+const blockId = params.get("blockId");
 // runtimePort is the main API port (55100) for /workbook/* endpoints
-const runtimePort = params.get('runtimePort')
-const runtimePortNum = runtimePort ? parseInt(runtimePort, 10) : null
+const runtimePort = params.get("runtimePort");
+const runtimePortNum = runtimePort ? parseInt(runtimePort, 10) : null;
 // workerPort is the Vite worker port (55200+) for RSC /blocks/* endpoints
-const workerPort = params.get('workerPort')
-const workerPortNum = workerPort ? parseInt(workerPort, 10) : runtimePortNum
-const readOnly = params.get('readOnly') === 'true'
+const workerPort = params.get("workerPort");
+const workerPortNum = workerPort ? parseInt(workerPort, 10) : runtimePortNum;
+const readOnly = params.get("readOnly") === "true";
 
 // Listen for styles from parent
-window.addEventListener('message', (e) => {
-  if (e.data?.type === 'styles') {
-    let style = document.getElementById('parent-styles') as HTMLStyleElement
+window.addEventListener("message", (e) => {
+  if (e.data?.type === "styles") {
+    let style = document.getElementById("parent-styles") as HTMLStyleElement;
     if (!style) {
-      style = document.createElement('style')
-      style.id = 'parent-styles'
-      document.head.appendChild(style)
+      style = document.createElement("style");
+      style.id = "parent-styles";
+      document.head.appendChild(style);
     }
-    style.textContent = e.data.css
+    style.textContent = e.data.css;
 
-    if (e.data.css.includes('color-scheme:dark')) {
-      document.documentElement.classList.add('dark')
+    if (e.data.css.includes("color-scheme:dark")) {
+      document.documentElement.classList.add("dark");
     } else {
-      document.documentElement.classList.remove('dark')
+      document.documentElement.classList.remove("dark");
     }
   }
-})
+});
 
 // Tell parent we're ready
-window.parent.postMessage({ type: 'sandbox-ready' }, '*')
+window.parent.postMessage({ type: "sandbox-ready" }, "*");
 
 // Set runtime port for RSC client module loading (vite-proxy is on main runtime port)
 if (runtimePortNum) {
-  setRuntimePort(runtimePortNum)
+  setRuntimePort(runtimePortNum);
 }
 
 // Install global error handler to stream runtime errors to parent
-installGlobalErrorHandler(blockId ?? undefined)
+installGlobalErrorHandler(blockId ?? undefined);
 
 function SandboxApp() {
-  const [source, setSource] = useState<string | null>(null)
-  const [error, setError] = useState<string | null>(null)
-  const [rscReady, setRscReady] = useState(false)
+  const [source, setSource] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [rscReady, setRscReady] = useState(false);
 
   // Initialize RSC Flight client
   useEffect(() => {
     initFlightClient().then((success) => {
-      console.log('[Sandbox] RSC initialized:', success)
-      setRscReady(success)
-    })
-  }, [])
+      console.log("[Sandbox] RSC initialized:", success);
+      setRscReady(success);
+    });
+  }, []);
 
   // Fetch block source
   useEffect(() => {
     if (!blockId || !runtimePortNum) {
-      setError('Missing blockId or runtimePort')
-      return
+      setError("Missing blockId or runtimePort");
+      return;
     }
 
     fetch(`http://localhost:${runtimePortNum}/workbook/blocks/${blockId}/source`)
-      .then(res => res.ok ? res.json() : Promise.reject('Failed to load'))
-      .then(data => setSource(data.source))
-      .catch(err => setError(String(err)))
-  }, [])
+      .then((res) => (res.ok ? res.json() : Promise.reject("Failed to load")))
+      .then((data) => setSource(data.source))
+      .catch((err) => setError(String(err)));
+  }, []);
 
   // Save source changes
-  const handleSave = useCallback((newSource: string) => {
-    if (readOnly || !blockId || !runtimePortNum) return
+  const _handleSave = useCallback((newSource: string) => {
+    if (readOnly || !blockId || !runtimePortNum) return;
 
     fetch(`http://localhost:${runtimePortNum}/workbook/blocks/${blockId}/source`, {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ source: newSource }),
-    }).catch(console.error)
-  }, [])
+    }).catch(console.error);
+  }, []);
 
   if (error) {
-    return (
-      <div className="flex items-center justify-center h-screen text-red-500">
-        {error}
-      </div>
-    )
+    return <div className="flex items-center justify-center h-screen text-red-500">{error}</div>;
   }
 
   if (!rscReady || source === null) {
@@ -111,7 +107,7 @@ function SandboxApp() {
           <span className="text-sm">Loading...</span>
         </div>
       </div>
-    )
+    );
   }
 
   return (
@@ -124,11 +120,11 @@ function SandboxApp() {
         readOnly={readOnly}
       />
     </RscProvider>
-  )
+  );
 }
 
-createRoot(document.getElementById('root')!).render(
+createRoot(document.getElementById("root")!).render(
   <StrictMode>
     <SandboxApp />
-  </StrictMode>
-)
+  </StrictMode>,
+);

@@ -1,4 +1,4 @@
-'use client';
+"use client";
 
 /**
  * SpecEditor - Minimal Plate-based markdown editor for source specs
@@ -7,38 +7,37 @@
  * Based on Potion's premium template with minimal features for spec editing.
  */
 
-import { useCallback, useEffect, useRef } from 'react';
 import {
   BlockquotePlugin,
+  BoldPlugin,
+  CodePlugin,
   H1Plugin,
   H2Plugin,
   H3Plugin,
   HorizontalRulePlugin,
-  BoldPlugin,
-  CodePlugin,
   ItalicPlugin,
   StrikethroughPlugin,
-} from '@platejs/basic-nodes/react';
-import { ListPlugin } from '@platejs/list/react';
-import { MarkdownPlugin } from '@platejs/markdown';
-import { TrailingBlockPlugin, type Value, KEYS } from 'platejs';
+} from "@platejs/basic-nodes/react";
+import { ListPlugin } from "@platejs/list/react";
+import { MarkdownPlugin } from "@platejs/markdown";
+import { KEYS, TrailingBlockPlugin, type Value } from "platejs";
 import {
+  ParagraphPlugin,
   Plate,
   PlateContainer,
   PlateContent,
-  ParagraphPlugin,
-  usePlateEditor,
   type TPlateEditor,
-} from 'platejs/react';
-import remarkGfm from 'remark-gfm';
-
-import { cn } from '@/lib/utils';
-import { BlockquoteElement } from '@/components/ui/blockquote-node';
-import { H1Element, H2Element, H3Element } from '@/components/ui/heading-node';
-import { HrElement } from '@/components/ui/hr-node';
-import { ParagraphElement } from '@/components/ui/paragraph-node';
-import { CodeLeaf } from '@/components/ui/code-node';
-import { BlockList } from '@/components/ui/block-list';
+  usePlateEditor,
+} from "platejs/react";
+import { useCallback, useEffect, useRef } from "react";
+import remarkGfm from "remark-gfm";
+import { BlockList } from "@/components/ui/block-list";
+import { BlockquoteElement } from "@/components/ui/blockquote-node";
+import { CodeLeaf } from "@/components/ui/code-node";
+import { H1Element, H2Element, H3Element } from "@/components/ui/heading-node";
+import { HrElement } from "@/components/ui/hr-node";
+import { ParagraphElement } from "@/components/ui/paragraph-node";
+import { cn } from "@/lib/utils";
 
 // Minimal plugin kit for spec editing
 const SpecEditorKit = [
@@ -46,15 +45,15 @@ const SpecEditorKit = [
   ParagraphPlugin.withComponent(ParagraphElement),
   H1Plugin.configure({
     node: { component: H1Element },
-    rules: { break: { empty: 'reset' } },
+    rules: { break: { empty: "reset" } },
   }),
   H2Plugin.configure({
     node: { component: H2Element },
-    rules: { break: { empty: 'reset' } },
+    rules: { break: { empty: "reset" } },
   }),
   H3Plugin.configure({
     node: { component: H3Element },
-    rules: { break: { empty: 'reset' } },
+    rules: { break: { empty: "reset" } },
   }),
   BlockquotePlugin.configure({
     node: { component: BlockquoteElement },
@@ -64,11 +63,7 @@ const SpecEditorKit = [
   // Lists
   ListPlugin.configure({
     inject: {
-      targetPlugins: [
-        ...KEYS.heading,
-        KEYS.p,
-        KEYS.blockquote,
-      ],
+      targetPlugins: [...KEYS.heading, KEYS.p, KEYS.blockquote],
     },
     render: {
       belowNodes: BlockList,
@@ -111,10 +106,10 @@ interface SpecEditorProps {
 }
 
 export function SpecEditor({
-  id = 'spec-editor',
-  value = '',
+  id = "spec-editor",
+  value = "",
   onChange,
-  placeholder = 'Write your spec here...',
+  placeholder = "Write your spec here...",
   className,
   readOnly = false,
   toolbarLeft,
@@ -129,16 +124,14 @@ export function SpecEditor({
     plugins: SpecEditorKit,
     // Initialize with deserialized markdown
     value: (editor) => {
-      if (!value) return [{ type: 'p', children: [{ text: '' }] }];
+      if (!value) return [{ type: "p", children: [{ text: "" }] }];
       try {
         const markdownApi = editor.getApi(MarkdownPlugin);
         const parsed = markdownApi.markdown.deserialize(value);
-        return parsed && parsed.length > 0
-          ? parsed
-          : [{ type: 'p', children: [{ text: '' }] }];
+        return parsed && parsed.length > 0 ? parsed : [{ type: "p", children: [{ text: "" }] }];
       } catch (err) {
-        console.error('Failed to parse markdown:', err);
-        return [{ type: 'p', children: [{ text: '' }] }];
+        console.error("Failed to parse markdown:", err);
+        return [{ type: "p", children: [{ text: "" }] }];
       }
     },
   });
@@ -160,7 +153,7 @@ export function SpecEditor({
         editor.tf.setValue(parsed);
       }
     } catch (err) {
-      console.error('Failed to parse markdown on update:', err);
+      console.error("Failed to parse markdown on update:", err);
     }
   }, [editor, value]);
 
@@ -175,20 +168,17 @@ export function SpecEditor({
       lastValueRef.current = md;
       onChange?.(md);
     } catch (err) {
-      console.error('Failed to serialize markdown:', err);
+      console.error("Failed to serialize markdown:", err);
     }
   }, [editor, readOnly, onChange]);
 
   return (
-    <Plate
-      editor={editor}
-      onChange={handleChange}
-    >
+    <Plate editor={editor} onChange={handleChange}>
       <PlateContainer
         className={cn(
-          'relative flex flex-col w-full h-full overflow-hidden',
-          'rounded-lg border border-border/50 bg-card shadow-sm',
-          className
+          "relative flex flex-col w-full h-full overflow-hidden",
+          "rounded-lg border border-border/50 bg-card shadow-sm",
+          className,
         )}
       >
         {/* Toolbar */}
@@ -201,17 +191,17 @@ export function SpecEditor({
         {/* Editor content */}
         <PlateContent
           className={cn(
-            'flex-1 overflow-y-auto px-4 py-3 text-sm',
-            'outline-none',
-            '[&_h1]:text-xl [&_h1]:font-semibold [&_h1]:mt-4 [&_h1]:mb-2',
-            '[&_h2]:text-lg [&_h2]:font-semibold [&_h2]:mt-3 [&_h2]:mb-2',
-            '[&_h3]:text-base [&_h3]:font-semibold [&_h3]:mt-2 [&_h3]:mb-1',
-            '[&_p]:my-1',
-            '[&_ul]:my-1 [&_ol]:my-1',
-            '[&_li]:my-0.5',
-            '[&_pre]:bg-muted [&_pre]:rounded-md [&_pre]:p-3 [&_pre]:my-2',
-            '[&_code]:bg-muted [&_code]:px-1 [&_code]:py-0.5 [&_code]:rounded [&_code]:text-xs',
-            readOnly && 'cursor-default'
+            "flex-1 overflow-y-auto px-4 py-3 text-sm",
+            "outline-none",
+            "[&_h1]:text-xl [&_h1]:font-semibold [&_h1]:mt-4 [&_h1]:mb-2",
+            "[&_h2]:text-lg [&_h2]:font-semibold [&_h2]:mt-3 [&_h2]:mb-2",
+            "[&_h3]:text-base [&_h3]:font-semibold [&_h3]:mt-2 [&_h3]:mb-1",
+            "[&_p]:my-1",
+            "[&_ul]:my-1 [&_ol]:my-1",
+            "[&_li]:my-0.5",
+            "[&_pre]:bg-muted [&_pre]:rounded-md [&_pre]:p-3 [&_pre]:my-2",
+            "[&_code]:bg-muted [&_code]:px-1 [&_code]:py-0.5 [&_code]:rounded [&_code]:text-xs",
+            readOnly && "cursor-default",
           )}
           placeholder={placeholder}
           readOnly={readOnly}
@@ -226,11 +216,5 @@ export function SpecEditor({
  * Read-only markdown renderer using the same Plate setup
  */
 export function SpecViewer({ markdown, className }: { markdown: string; className?: string }) {
-  return (
-    <SpecEditor
-      value={markdown}
-      readOnly
-      className={className}
-    />
-  );
+  return <SpecEditor value={markdown} readOnly className={className} />;
 }

@@ -1,8 +1,8 @@
 import { createRootRoute, Outlet } from "@tanstack/react-router";
-import { useEffect, useState } from "react";
 import { listen } from "@tauri-apps/api/event";
-import { initTheme } from "@/lib/theme";
+import { useEffect, useState } from "react";
 import { SettingsModal } from "@/components/SettingsModal";
+import { initTheme } from "@/lib/theme";
 
 export const Route = createRootRoute({
   component: RootComponent,

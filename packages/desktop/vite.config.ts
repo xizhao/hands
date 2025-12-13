@@ -1,8 +1,8 @@
-import { defineConfig, type Plugin } from "vite";
-import react from "@vitejs/plugin-react-swc";
+import fs from "node:fs";
+import path from "node:path";
 import { TanStackRouterVite } from "@tanstack/router-plugin/vite";
-import path from "path";
-import fs from "fs";
+import react from "@vitejs/plugin-react-swc";
+import { defineConfig, type Plugin } from "vite";
 
 const host = process.env.TAURI_DEV_HOST;
 
@@ -83,7 +83,11 @@ export default defineConfig({
       output: {
         manualChunks: {
           react: ["react", "react-dom"],
-          ui: ["@radix-ui/react-dialog", "@radix-ui/react-dropdown-menu", "@radix-ui/react-scroll-area"],
+          ui: [
+            "@radix-ui/react-dialog",
+            "@radix-ui/react-dropdown-menu",
+            "@radix-ui/react-scroll-area",
+          ],
           markdown: ["react-markdown", "react-syntax-highlighter"],
         },
       },

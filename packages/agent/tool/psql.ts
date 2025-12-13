@@ -40,12 +40,12 @@ function formatTable(rows: Record<string, unknown>[]): string {
 
   const headers = Object.keys(rows[0]);
   const widths = headers.map((h) =>
-    Math.max(h.length, ...rows.map((r) => String(r[h] ?? "").length))
+    Math.max(h.length, ...rows.map((r) => String(r[h] ?? "").length)),
   );
   const separator = widths.map((w) => "-".repeat(w)).join("-+-");
   const headerRow = headers.map((h, i) => h.padEnd(widths[i])).join(" | ");
   const dataRows = rows.map((r) =>
-    headers.map((h, i) => String(r[h] ?? "").padEnd(widths[i])).join(" | ")
+    headers.map((h, i) => String(r[h] ?? "").padEnd(widths[i])).join(" | "),
   );
   return [headerRow, separator, ...dataRows].join("\n");
 }
@@ -61,7 +61,7 @@ function formatCsv(rows: Record<string, unknown>[]): string {
         const val = String(r[h] ?? "");
         return val.includes(",") ? `"${val}"` : val;
       })
-      .join(",")
+      .join(","),
   );
   return [headerRow, ...dataRows].join("\n");
 }
@@ -91,12 +91,10 @@ IMPORTANT RULES:
     confirm_destructive: tool.schema
       .boolean()
       .optional()
-      .describe(
-        "Set to true to confirm destructive operations (DROP, TRUNCATE, DELETE)"
-      ),
+      .describe("Set to true to confirm destructive operations (DROP, TRUNCATE, DELETE)"),
   },
 
-  async execute(args, ctx) {
+  async execute(args, _ctx) {
     const { query, format = "table", confirm_destructive = false } = args;
 
     const lowerQuery = query.toLowerCase().trim();
@@ -132,9 +130,7 @@ This would modify/delete data. To proceed, run again with confirm_destructive: t
       } else if (format === "csv") {
         return formatCsv(rows);
       } else {
-        return `${formatTable(rows)}\n\n(${rows.length} row${
-          rows.length === 1 ? "" : "s"
-        })`;
+        return `${formatTable(rows)}\n\n(${rows.length} row${rows.length === 1 ? "" : "s"})`;
       }
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);

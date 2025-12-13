@@ -2,11 +2,11 @@
  * DatabasePanel - Shows database tables with data browser
  */
 
+import { CaretDown, CaretRight, CircleNotch, Table } from "@phosphor-icons/react";
 import { useState } from "react";
-import { useDbSchema, useRuntimeQuery, useActiveWorkbookId } from "@/hooks/useWorkbook";
-import { Table, CaretRight, CaretDown, CircleNotch } from "@phosphor-icons/react";
-import { cn } from "@/lib/utils";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { useActiveWorkbookId, useDbSchema, useRuntimeQuery } from "@/hooks/useWorkbook";
+import { cn } from "@/lib/utils";
 
 export function DatabasePanel() {
   const activeWorkbookId = useActiveWorkbookId();
@@ -43,11 +43,7 @@ export function DatabasePanel() {
   };
 
   if (isLoading) {
-    return (
-      <div className="p-4 text-sm text-muted-foreground">
-        Loading tables...
-      </div>
-    );
+    return <div className="p-4 text-sm text-muted-foreground">Loading tables...</div>;
   }
 
   if (!schema || schema.length === 0) {
@@ -76,7 +72,7 @@ export function DatabasePanel() {
                 className={cn(
                   "w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-left",
                   "text-sm hover:bg-accent transition-colors",
-                  expandedTable === table.table_name && "bg-accent"
+                  expandedTable === table.table_name && "bg-accent",
                 )}
               >
                 {expandedTable === table.table_name ? (
@@ -86,9 +82,7 @@ export function DatabasePanel() {
                 )}
                 <Table weight="duotone" className="h-4 w-4 text-blue-400 shrink-0" />
                 <span className="flex-1 truncate font-medium">{table.table_name}</span>
-                <span className="text-xs text-muted-foreground">
-                  {table.columns.length} cols
-                </span>
+                <span className="text-xs text-muted-foreground">{table.columns.length} cols</span>
               </button>
 
               {/* Expanded table view */}
@@ -100,10 +94,7 @@ export function DatabasePanel() {
                       Columns
                     </div>
                     {table.columns.map((col) => (
-                      <div
-                        key={col.name}
-                        className="flex items-center gap-2 px-2 py-0.5 text-xs"
-                      >
+                      <div key={col.name} className="flex items-center gap-2 px-2 py-0.5 text-xs">
                         <span className="text-foreground">{col.name}</span>
                         <span className="text-muted-foreground/60">{col.type}</span>
                         {!col.nullable && (
@@ -124,9 +115,7 @@ export function DatabasePanel() {
                         Loading...
                       </div>
                     ) : tableData[table.table_name]?.length === 0 ? (
-                      <div className="px-2 py-2 text-xs text-muted-foreground">
-                        No data
-                      </div>
+                      <div className="px-2 py-2 text-xs text-muted-foreground">No data</div>
                     ) : tableData[table.table_name] ? (
                       <div className="overflow-x-auto">
                         <table className="w-full text-[11px]">
@@ -151,10 +140,7 @@ export function DatabasePanel() {
                             {tableData[table.table_name]?.slice(0, 5).map((row, idx) => (
                               <tr key={idx} className="border-b border-border/50">
                                 {table.columns.slice(0, 4).map((col) => (
-                                  <td
-                                    key={col.name}
-                                    className="px-2 py-1 truncate max-w-[80px]"
-                                  >
+                                  <td key={col.name} className="px-2 py-1 truncate max-w-[80px]">
                                     {String((row as Record<string, unknown>)[col.name] ?? "")}
                                   </td>
                                 ))}

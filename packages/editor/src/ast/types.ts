@@ -3,8 +3,8 @@
  */
 export type {
   JsxNode,
-  PropValue,
   NodePath,
-} from '../types'
+  PropValue,
+} from "../types";
 
-export { generateId, literal, expression, pathEquals, isAncestor } from '../types'
+export { expression, generateId, isAncestor, literal, pathEquals } from "../types";

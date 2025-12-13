@@ -5,12 +5,12 @@
  * Uses runtime endpoint to get actual git status.
  */
 
-import { useCallback } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { useRuntimePort } from "@/hooks/useWorkbook";
+import { useCallback } from "react";
+import { toast } from "sonner";
 import { useBackgroundTask } from "@/hooks/useBackgroundTask";
 import type { Source } from "@/hooks/useSources";
-import { toast } from "sonner";
+import { useRuntimePort } from "@/hooks/useWorkbook";
 
 // Git sync status from runtime
 export interface GitSyncStatus {
@@ -86,7 +86,7 @@ interface UseSourceSyncOptions {
  * Hook for managing spec <-> code sync operations
  */
 export function useSourceSync(source: Source | undefined, options?: UseSourceSyncOptions) {
-  const port = useRuntimePort();
+  const _port = useRuntimePort();
   const queryClient = useQueryClient();
   const pushTask = useBackgroundTask();
   const pullTask = useBackgroundTask();
@@ -133,7 +133,7 @@ If the code already matches the spec, respond with "✅ Code already matches spe
             description: result.error,
           });
         },
-      }
+      },
     );
   }, [source, specInfo, pushTask, options, refetchStatus]);
 
@@ -174,7 +174,7 @@ Generate a complete spec that someone could use to understand and recreate this 
             description: result.error,
           });
         },
-      }
+      },
     );
   }, [source, pullTask, options, refetchStatus, refetchSpec, queryClient]);
 

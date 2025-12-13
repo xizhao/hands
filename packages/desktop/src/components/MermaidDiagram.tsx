@@ -4,8 +4,8 @@
  * Uses mermaid.js to parse and render diagrams.
  */
 
-import { useEffect, useRef, useState, useId } from "react";
 import mermaid from "mermaid";
+import { useEffect, useId, useRef, useState } from "react";
 import { cn } from "@/lib/utils";
 
 // Initialize mermaid with default config
@@ -53,10 +53,7 @@ export function MermaidDiagram({ code, className }: MermaidDiagramProps) {
         }
 
         // Render the diagram
-        const { svg: renderedSvg } = await mermaid.render(
-          `mermaid-${uniqueId}`,
-          code
-        );
+        const { svg: renderedSvg } = await mermaid.render(`mermaid-${uniqueId}`, code);
 
         setSvg(renderedSvg);
         setError(null);
@@ -75,26 +72,19 @@ export function MermaidDiagram({ code, className }: MermaidDiagramProps) {
       <div
         className={cn(
           "p-4 rounded-lg bg-red-500/10 border border-red-500/20 text-red-400 text-sm",
-          className
+          className,
         )}
       >
         <p className="font-medium mb-1">Diagram Error</p>
         <p className="font-mono text-xs">{error}</p>
-        <pre className="mt-2 text-xs text-muted-foreground whitespace-pre-wrap">
-          {code}
-        </pre>
+        <pre className="mt-2 text-xs text-muted-foreground whitespace-pre-wrap">{code}</pre>
       </div>
     );
   }
 
   if (!svg) {
     return (
-      <div
-        className={cn(
-          "p-4 rounded-lg bg-muted/50 animate-pulse",
-          className
-        )}
-      >
+      <div className={cn("p-4 rounded-lg bg-muted/50 animate-pulse", className)}>
         <div className="h-32 bg-muted rounded" />
       </div>
     );
@@ -106,7 +96,7 @@ export function MermaidDiagram({ code, className }: MermaidDiagramProps) {
       className={cn(
         "p-4 rounded-lg bg-muted/30 overflow-x-auto",
         "[&_svg]:max-w-full [&_svg]:h-auto",
-        className
+        className,
       )}
       dangerouslySetInnerHTML={{ __html: svg }}
     />

@@ -28,7 +28,10 @@ export interface PendingSourceAttachment {
 }
 
 // Combined attachment type
-export type AnyPendingAttachment = PendingAttachment | PendingBlockAttachment | PendingSourceAttachment;
+export type AnyPendingAttachment =
+  | PendingAttachment
+  | PendingBlockAttachment
+  | PendingSourceAttachment;
 
 // Module-level state
 let pendingAttachment: AnyPendingAttachment | null = null;

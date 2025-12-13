@@ -8,32 +8,32 @@
  * - Drop zones for drag targets
  */
 
-import * as React from 'react'
-import type { ParseResult } from '../ast/oxc-parser'
+import type * as React from "react";
+import type { ParseResult } from "../ast/oxc-parser";
 
 // ============================================================================
 // Types
 // ============================================================================
 
 export type EditOperation =
-  | { type: 'select'; nodeIds: string[] }
-  | { type: 'move'; nodeId: string; targetId: string; position: 'before' | 'after' | 'inside' }
-  | { type: 'delete'; nodeIds: string[] }
-  | { type: 'duplicate'; nodeId: string }
-  | { type: 'edit-text'; nodeId: string; text: string }
-  | { type: 'edit-prop'; nodeId: string; propName: string; value: unknown }
+  | { type: "select"; nodeIds: string[] }
+  | { type: "move"; nodeId: string; targetId: string; position: "before" | "after" | "inside" }
+  | { type: "delete"; nodeIds: string[] }
+  | { type: "duplicate"; nodeId: string }
+  | { type: "edit-text"; nodeId: string; text: string }
+  | { type: "edit-prop"; nodeId: string; propName: string; value: unknown };
 
 export interface PlateEditOverlayProps {
   /** Parsed AST of the source */
-  parseResult: ParseResult
+  parseResult: ParseResult;
   /** Callback when an edit operation occurs */
-  onEditOperation: (operation: EditOperation) => void
+  onEditOperation: (operation: EditOperation) => void;
   /** Container element for position tracking */
-  containerRef: React.RefObject<HTMLElement | null>
+  containerRef: React.RefObject<HTMLElement | null>;
   /** Currently selected node IDs */
-  selectedNodeIds?: string[]
+  selectedNodeIds?: string[];
   /** Whether editing is disabled */
-  disabled?: boolean
+  disabled?: boolean;
 }
 
 // ============================================================================
@@ -47,7 +47,7 @@ export function PlateEditOverlay({
   selectedNodeIds,
   disabled = false,
 }: PlateEditOverlayProps) {
-  if (disabled) return null
+  if (disabled) return null;
 
   // For now, just show that edit mode is active
   // Full implementation needs AST-to-DOM matching
@@ -58,5 +58,5 @@ export function PlateEditOverlay({
         Edit mode active • {parseResult.root?.children.length || 0} nodes
       </div>
     </div>
-  )
+  );
 }

@@ -3,11 +3,11 @@
  * Enables drag and drop for blocks
  */
 
-import { DndPlugin } from '@platejs/dnd'
-import { DndProvider } from 'react-dnd'
-import { HTML5Backend } from 'react-dnd-html5-backend'
+import { DndPlugin } from "@platejs/dnd";
+import { DndProvider } from "react-dnd";
+import { HTML5Backend } from "react-dnd-html5-backend";
 
-import { BlockDraggable } from '../ui/block-draggable'
+import { BlockDraggable } from "../ui/block-draggable";
 
 export const DndKit = [
   DndPlugin.configure({
@@ -16,9 +16,7 @@ export const DndKit = [
     },
     render: {
       aboveNodes: BlockDraggable,
-      aboveSlate: ({ children }) => (
-        <DndProvider backend={HTML5Backend}>{children}</DndProvider>
-      ),
+      aboveSlate: ({ children }) => <DndProvider backend={HTML5Backend}>{children}</DndProvider>,
     },
   }),
-]
+];

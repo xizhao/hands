@@ -2,20 +2,20 @@
  * SettingsPanel - Project settings, secrets, and configuration
  */
 
-import { useState } from "react";
-import { useWorkbook, useUpdateWorkbook, useActiveWorkbookId } from "@/hooks/useWorkbook";
 import {
-  Gear,
-  Key,
-  Database,
-  Globe,
   CaretRight,
-  Plus,
+  Database,
   Eye,
   EyeSlash,
-  Trash,
   FolderOpen,
+  Gear,
+  Globe,
+  Key,
+  Plus,
+  Trash,
 } from "@phosphor-icons/react";
+import { useState } from "react";
+import { useActiveWorkbookId, useUpdateWorkbook, useWorkbook } from "@/hooks/useWorkbook";
 import { cn } from "@/lib/utils";
 
 type SettingsSection = "general" | "secrets" | "database" | "deployment";
@@ -28,8 +28,18 @@ export function SettingsPanel() {
   const sections = [
     { id: "general" as const, label: "General", icon: Gear, description: "Name, description" },
     { id: "secrets" as const, label: "Secrets", icon: Key, description: "Environment variables" },
-    { id: "database" as const, label: "Database", icon: Database, description: "Connection settings" },
-    { id: "deployment" as const, label: "Deployment", icon: Globe, description: "Production config" },
+    {
+      id: "database" as const,
+      label: "Database",
+      icon: Database,
+      description: "Connection settings",
+    },
+    {
+      id: "deployment" as const,
+      label: "Deployment",
+      icon: Globe,
+      description: "Production config",
+    },
   ];
 
   if (activeSection) {
@@ -65,7 +75,7 @@ export function SettingsPanel() {
             onClick={() => setActiveSection(section.id)}
             className={cn(
               "w-full flex items-center gap-2 px-2 py-2 rounded-md text-left",
-              "text-sm text-foreground hover:bg-accent transition-colors"
+              "text-sm text-foreground hover:bg-accent transition-colors",
             )}
           >
             <section.icon weight="duotone" className="h-4 w-4 text-muted-foreground shrink-0" />
@@ -129,7 +139,7 @@ function GeneralSettings() {
               "p-1.5 rounded-md transition-colors",
               workbook?.directory
                 ? "text-muted-foreground hover:text-foreground hover:bg-accent"
-                : "text-muted-foreground/30 cursor-not-allowed"
+                : "text-muted-foreground/30 cursor-not-allowed",
             )}
             title="Open in Finder"
           >
@@ -161,7 +171,7 @@ function SecretsSettings() {
   };
 
   const toggleVisibility = (index: number) => {
-    setSecrets(secrets.map((s, i) => i === index ? { ...s, visible: !s.visible } : s));
+    setSecrets(secrets.map((s, i) => (i === index ? { ...s, visible: !s.visible } : s)));
   };
 
   return (
@@ -185,7 +195,11 @@ function SecretsSettings() {
                 onClick={() => toggleVisibility(idx)}
                 className="p-1 text-muted-foreground hover:text-foreground transition-colors"
               >
-                {secret.visible ? <EyeSlash weight="duotone" className="h-3 w-3" /> : <Eye weight="duotone" className="h-3 w-3" />}
+                {secret.visible ? (
+                  <EyeSlash weight="duotone" className="h-3 w-3" />
+                ) : (
+                  <Eye weight="duotone" className="h-3 w-3" />
+                )}
               </button>
               <button
                 onClick={() => removeSecret(idx)}
@@ -221,7 +235,7 @@ function SecretsSettings() {
             "flex items-center gap-1 px-2 py-1 text-xs rounded-md transition-colors",
             newKey && newValue
               ? "bg-primary text-primary-foreground hover:bg-primary/90"
-              : "bg-muted text-muted-foreground cursor-not-allowed"
+              : "bg-muted text-muted-foreground cursor-not-allowed",
           )}
         >
           <Plus weight="bold" className="h-3 w-3" />
@@ -255,9 +269,7 @@ function DeploymentSettings() {
       </p>
       <div className="p-3 bg-muted/50 rounded-md text-center">
         <Globe weight="duotone" className="h-6 w-6 text-muted-foreground/50 mx-auto mb-2" />
-        <div className="text-xs text-muted-foreground">
-          Deployment coming soon
-        </div>
+        <div className="text-xs text-muted-foreground">Deployment coming soon</div>
       </div>
     </div>
   );

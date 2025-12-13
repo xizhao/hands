@@ -8,8 +8,8 @@
  * The useSessionStatuses hook tracks status changes pushed by SSE.
  */
 
-import { useCallback, useEffect, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useActiveWorkbookDirectory } from "@/hooks/useWorkbook";
 import { api, type MessageWithParts, type Session, type SessionStatus } from "@/lib/api";
 
@@ -137,69 +137,69 @@ export function useBackgroundTask() {
   /**
    * Run a background task with the given prompt
    */
-  const run = useCallback(async (prompt: string, options?: BackgroundTaskOptions) => {
-    // Store callbacks
-    callbacksRef.current = options || {};
-    completedRef.current = false;
+  const run = useCallback(
+    async (prompt: string, options?: BackgroundTaskOptions) => {
+      // Store callbacks
+      callbacksRef.current = options || {};
+      completedRef.current = false;
 
-    // Reset state
-    setState({
-      sessionId: null,
-      status: "running",
-      messages: [],
-      result: null,
-    });
-
-    try {
-      // Create session
-      const session = await api.sessions.create(
-        { title: options?.title || "Background Task" },
-        directory
-      );
-
-      setState((prev) => ({ ...prev, sessionId: session.id }));
-      options?.onStart?.(session.id);
-
-      // Update React Query cache for sessions list
-      queryClient.setQueryData<Session[]>(["sessions", directory], (old) => {
-        if (!old) return [session];
-        if (old.some((s) => s.id === session.id)) return old;
-        return [session, ...old];
+      // Reset state
+      setState({
+        sessionId: null,
+        status: "running",
+        messages: [],
+        result: null,
       });
 
-      // Optimistically set status to busy
-      queryClient.setQueryData<Record<string, SessionStatus>>(
-        ["session-statuses", directory],
-        (old) => ({ ...old, [session.id]: { type: "busy" } })
-      );
+      try {
+        // Create session
+        const session = await api.sessions.create(
+          { title: options?.title || "Background Task" },
+          directory,
+        );
 
-      // Initialize empty messages cache so SSE updates can populate it
-      queryClient.setQueryData<MessageWithParts[]>(
-        ["messages", session.id, directory],
-        []
-      );
+        setState((prev) => ({ ...prev, sessionId: session.id }));
+        options?.onStart?.(session.id);
 
-      // Send prompt
-      await api.promptAsync(session.id, prompt, {
-        agent: options?.agent || "hands",
-        directory,
-      });
+        // Update React Query cache for sessions list
+        queryClient.setQueryData<Session[]>(["sessions", directory], (old) => {
+          if (!old) return [session];
+          if (old.some((s) => s.id === session.id)) return old;
+          return [session, ...old];
+        });
 
-      // SSE will update the cache and trigger our effects
-    } catch (err) {
-      const error = err instanceof Error ? err.message : String(err);
-      const result: BackgroundTaskResult = { success: false, error };
+        // Optimistically set status to busy
+        queryClient.setQueryData<Record<string, SessionStatus>>(
+          ["session-statuses", directory],
+          (old) => ({ ...old, [session.id]: { type: "busy" } }),
+        );
 
-      setState((prev) => ({
-        ...prev,
-        status: "failure",
-        result,
-      }));
+        // Initialize empty messages cache so SSE updates can populate it
+        queryClient.setQueryData<MessageWithParts[]>(["messages", session.id, directory], []);
 
-      options?.onFailure?.(result);
-      options?.onComplete?.(result);
-    }
-  }, [directory, queryClient]);
+        // Send prompt
+        await api.promptAsync(session.id, prompt, {
+          agent: options?.agent || "hands",
+          directory,
+        });
+
+        // SSE will update the cache and trigger our effects
+      } catch (err) {
+        const error = err instanceof Error ? err.message : String(err);
+        const result: BackgroundTaskResult = { success: false, error };
+
+        setState((prev) => ({
+          ...prev,
+          status: "failure",
+          result,
+        }));
+
+        options?.onFailure?.(result);
+        options?.onComplete?.(result);
+      }
+    },
+    [directory, queryClient],
+  );
 
   /**
    * Cancel the current task (if running)
@@ -249,9 +249,7 @@ export function useBackgroundTask() {
  */
 function determineResult(messages: MessageWithParts[]): BackgroundTaskResult {
   // Get the last assistant message
-  const lastAssistantMessage = [...messages]
-    .reverse()
-    .find((m) => m.info.role === "assistant");
+  const lastAssistantMessage = [...messages].reverse().find((m) => m.info.role === "assistant");
 
   if (!lastAssistantMessage) {
     return { success: false, error: "No response from assistant" };
@@ -259,9 +257,7 @@ function determineResult(messages: MessageWithParts[]): BackgroundTaskResult {
 
   // Extract text content
   const textParts = lastAssistantMessage.parts.filter((p) => p.type === "text");
-  const fullText = textParts
-    .map((p) => (p as { text?: string }).text || "")
-    .join("\n");
+  const fullText = textParts.map((p) => (p as { text?: string }).text || "").join("\n");
 
   // Check for explicit markers (case-insensitive)
   const lowerText = fullText.toLowerCase();

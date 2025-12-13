@@ -2,21 +2,26 @@
  * AlertsPanel - Categorized alerts for App, Runtime, and Code quality
  */
 
-import { useState } from "react";
-import { useEvalResult, useRuntimeEval, useRuntimePort, useActiveWorkbookId } from "@/hooks/useWorkbook";
-import { useServer } from "@/hooks/useServer";
-import { useIsMutating } from "@tanstack/react-query";
 import {
-  Warning,
-  WarningCircle,
-  Sparkle,
   ArrowsClockwise,
-  Desktop,
-  Cpu,
-  Code,
   CaretDown,
   CaretRight,
+  Code,
+  Cpu,
+  Desktop,
+  Sparkle,
+  Warning,
+  WarningCircle,
 } from "@phosphor-icons/react";
+import { useIsMutating } from "@tanstack/react-query";
+import { useState } from "react";
+import { useServer } from "@/hooks/useServer";
+import {
+  useActiveWorkbookId,
+  useEvalResult,
+  useRuntimeEval,
+  useRuntimePort,
+} from "@/hooks/useWorkbook";
 import { cn } from "@/lib/utils";
 
 type Category = "app" | "runtime" | "code";
@@ -95,19 +100,23 @@ export function AlertsPanel() {
         <div className="flex items-center gap-3">
           {totalIssues > 0 ? (
             <>
-              {(appIssues.some(i => i.variant === "error") || runtimeIssues.some(i => i.variant === "error") || codeErrors > 0) && (
+              {(appIssues.some((i) => i.variant === "error") ||
+                runtimeIssues.some((i) => i.variant === "error") ||
+                codeErrors > 0) && (
                 <div className="flex items-center gap-1 text-red-400">
                   <WarningCircle weight="fill" className="h-3.5 w-3.5" />
                   <span className="text-xs font-medium">
-                    {appIssues.filter(i => i.variant === "error").length + runtimeIssues.filter(i => i.variant === "error").length + codeErrors}
+                    {appIssues.filter((i) => i.variant === "error").length +
+                      runtimeIssues.filter((i) => i.variant === "error").length +
+                      codeErrors}
                   </span>
                 </div>
               )}
-              {(runtimeIssues.some(i => i.variant === "warning") || codeWarnings > 0) && (
+              {(runtimeIssues.some((i) => i.variant === "warning") || codeWarnings > 0) && (
                 <div className="flex items-center gap-1 text-yellow-400">
                   <Warning weight="fill" className="h-3.5 w-3.5" />
                   <span className="text-xs font-medium">
-                    {runtimeIssues.filter(i => i.variant === "warning").length + codeWarnings}
+                    {runtimeIssues.filter((i) => i.variant === "warning").length + codeWarnings}
                   </span>
                 </div>
               )}
@@ -124,7 +133,7 @@ export function AlertsPanel() {
           disabled={runtimeEval.isPending}
           className={cn(
             "p-1 rounded hover:bg-muted text-muted-foreground hover:text-foreground transition-colors",
-            runtimeEval.isPending && "opacity-50 cursor-not-allowed"
+            runtimeEval.isPending && "opacity-50 cursor-not-allowed",
           )}
           title="Refresh diagnostics"
         >
@@ -138,15 +147,11 @@ export function AlertsPanel() {
       {/* Categories */}
       <div className="flex-1 overflow-y-auto">
         {isLoading ? (
-          <div className="p-4 text-center text-sm text-muted-foreground">
-            Loading...
-          </div>
+          <div className="p-4 text-center text-sm text-muted-foreground">Loading...</div>
         ) : allClear ? (
           <div className="p-8 text-center">
             <Sparkle weight="duotone" className="h-8 w-8 text-green-400/50 mx-auto mb-2" />
-            <div className="text-sm text-muted-foreground">
-              All systems operational
-            </div>
+            <div className="text-sm text-muted-foreground">All systems operational</div>
           </div>
         ) : (
           <div className="divide-y divide-border">
@@ -157,8 +162,8 @@ export function AlertsPanel() {
                 icon={<Desktop weight="duotone" className="h-4 w-4" />}
                 expanded={expanded.app}
                 onToggle={() => toggleCategory("app")}
-                errorCount={appIssues.filter(i => i.variant === "error").length}
-                warningCount={appIssues.filter(i => i.variant === "warning").length}
+                errorCount={appIssues.filter((i) => i.variant === "error").length}
+                warningCount={appIssues.filter((i) => i.variant === "warning").length}
               >
                 {appIssues.map((item, i) => (
                   <AlertRow key={i} {...item} />
@@ -173,8 +178,8 @@ export function AlertsPanel() {
                 icon={<Cpu weight="duotone" className="h-4 w-4" />}
                 expanded={expanded.runtime}
                 onToggle={() => toggleCategory("runtime")}
-                errorCount={runtimeIssues.filter(i => i.variant === "error").length}
-                warningCount={runtimeIssues.filter(i => i.variant === "warning").length}
+                errorCount={runtimeIssues.filter((i) => i.variant === "error").length}
+                warningCount={runtimeIssues.filter((i) => i.variant === "warning").length}
               >
                 {runtimeIssues.map((item, i) => (
                   <AlertRow key={i} {...item} />
@@ -264,12 +269,8 @@ function CategorySection({
         <span className="text-muted-foreground">{icon}</span>
         <span className="text-sm font-medium flex-1 text-left">{title}</span>
         <div className="flex items-center gap-2">
-          {errorCount > 0 && (
-            <span className="text-xs text-red-400">{errorCount}</span>
-          )}
-          {warningCount > 0 && (
-            <span className="text-xs text-yellow-400">{warningCount}</span>
-          )}
+          {errorCount > 0 && <span className="text-xs text-red-400">{errorCount}</span>}
+          {warningCount > 0 && <span className="text-xs text-yellow-400">{warningCount}</span>}
         </div>
       </button>
       {expanded && <div className="pb-1">{children}</div>}
@@ -295,11 +296,8 @@ function AlertRow({ message, location, variant }: AlertItem) {
     <div className="px-3 py-1.5 pl-8">
       <div className={cn("text-xs", colors[variant])}>{message}</div>
       {location && (
-        <div className="text-[10px] font-mono text-muted-foreground/60 truncate">
-          {location}
-        </div>
+        <div className="text-[10px] font-mono text-muted-foreground/60 truncate">{location}</div>
       )}
     </div>
   );
 }
-

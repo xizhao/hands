@@ -1,10 +1,12 @@
+import { spawn } from "node:child_process";
 import { tool } from "@opencode-ai/plugin";
-import { spawn } from "child_process";
 
 /**
  * Execute a hands-runtime CLI command and return the output
  */
-function runHandsCommand(args: string[]): Promise<{ stdout: string; stderr: string; code: number }> {
+function runHandsCommand(
+  args: string[],
+): Promise<{ stdout: string; stderr: string; code: number }> {
   return new Promise((resolve) => {
     const proc = spawn("hands-runtime", args, {
       cwd: process.cwd(),
@@ -46,17 +48,14 @@ Use this tool to:
 - Find unused code to clean up`,
 
   args: {
-    fix: tool.schema
-      .boolean()
-      .optional()
-      .describe("Auto-fix formatting issues (default: true)"),
+    fix: tool.schema.boolean().optional().describe("Auto-fix formatting issues (default: true)"),
     strict: tool.schema
       .boolean()
       .optional()
       .describe("Treat warnings and unused code as errors (default: false)"),
   },
 
-  async execute(args, ctx) {
+  async execute(args, _ctx) {
     const { fix = true, strict = false } = args;
 
     const cmdArgs = ["check"];

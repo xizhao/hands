@@ -1,20 +1,26 @@
-import { tool } from "@opencode-ai/plugin";
 import {
-  listComponents,
-  getComponent,
-  searchComponents,
-  listCategories,
-  getCategory,
   type ComponentMeta,
+  getCategory,
+  getComponent,
+  listCategories,
+  listComponents,
+  searchComponents,
 } from "@hands/stdlib/registry";
+import { tool } from "@opencode-ai/plugin";
 
 function formatComponentList(components: Array<{ key: string } & ComponentMeta>): string {
   if (components.length === 0) return "No components found.";
 
-  const byCategory = components.reduce((acc, comp) => {
-    (acc[comp.category] ??= []).push(comp);
-    return acc;
-  }, {} as Record<string, typeof components>);
+  const byCategory = components.reduce(
+    (acc, comp) => {
+      if (!acc[comp.category]) {
+        acc[comp.category] = [];
+      }
+      acc[comp.category].push(comp);
+      return acc;
+    },
+    {} as Record<string, typeof components>,
+  );
 
   let output = "";
   for (const [cat, comps] of Object.entries(byCategory)) {
@@ -65,17 +71,9 @@ Actions:
 - **list**: List all components, optionally filtered by category`,
 
   args: {
-    action: tool.schema
-      .enum(["search", "info", "list"])
-      .describe("Action to perform"),
-    query: tool.schema
-      .string()
-      .optional()
-      .describe("Search query for 'search' action"),
-    name: tool.schema
-      .string()
-      .optional()
-      .describe("Component name for 'info' action"),
+    action: tool.schema.enum(["search", "info", "list"]).describe("Action to perform"),
+    query: tool.schema.string().optional().describe("Search query for 'search' action"),
+    name: tool.schema.string().optional().describe("Component name for 'info' action"),
     category: tool.schema
       .enum(["ui", "data", "charts"])
       .optional()

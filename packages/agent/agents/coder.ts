@@ -6,11 +6,7 @@
  */
 
 import type { AgentConfig } from "@opencode-ai/sdk";
-import {
-  BLOCK_API_DOCS,
-  BLOCK_CONTEXT_DOCS,
-  BLOCK_ANTI_PATTERNS,
-} from "../docs/stdlib.js";
+import { BLOCK_ANTI_PATTERNS, BLOCK_API_DOCS, BLOCK_CONTEXT_DOCS } from "../docs/stdlib.js";
 
 const CODER_PROMPT = `You are the technical implementation specialist for Hands. You create blocks (TSX) and pages (MDX) when delegated by the primary agent.
 

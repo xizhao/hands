@@ -5,21 +5,21 @@
  * This preserves all non-JSX code while making precise edits.
  */
 
-import type { EditableNode, EditableProp, SourceLocation } from './oxc-parser'
-import { parseSourceWithLocations, getNodeById } from './oxc-parser'
+import type { EditableNode } from "./oxc-parser";
+import { getNodeById, parseSourceWithLocations } from "./oxc-parser";
 
 // ============================================================================
 // Mutation Types
 // ============================================================================
 
 export type SurgicalMutation =
-  | { type: 'set-prop'; nodeId: string; propName: string; value: string | number | boolean | null }
-  | { type: 'delete-prop'; nodeId: string; propName: string }
-  | { type: 'set-text'; nodeId: string; text: string }
-  | { type: 'insert-node'; parentId: string; index: number; jsx: string }
-  | { type: 'delete-node'; nodeId: string }
-  | { type: 'move-node'; nodeId: string; newParentId: string; newIndex: number }
-  | { type: 'replace-node'; nodeId: string; jsx: string }
+  | { type: "set-prop"; nodeId: string; propName: string; value: string | number | boolean | null }
+  | { type: "delete-prop"; nodeId: string; propName: string }
+  | { type: "set-text"; nodeId: string; text: string }
+  | { type: "insert-node"; parentId: string; index: number; jsx: string }
+  | { type: "delete-node"; nodeId: string }
+  | { type: "move-node"; nodeId: string; newParentId: string; newIndex: number }
+  | { type: "replace-node"; nodeId: string; jsx: string };
 
 // ============================================================================
 // Source Text Editing
@@ -29,37 +29,37 @@ export type SurgicalMutation =
  * Apply a text edit to source
  */
 function applyTextEdit(source: string, start: number, end: number, replacement: string): string {
-  return source.slice(0, start) + replacement + source.slice(end)
+  return source.slice(0, start) + replacement + source.slice(end);
 }
 
 /**
  * Format a prop value for JSX
  */
 function formatPropValue(value: string | number | boolean | null): string {
-  if (value === true) return '' // Boolean true is just the prop name
-  if (value === false) return '{false}'
-  if (value === null) return '{null}'
-  if (typeof value === 'number') return `{${value}}`
-  if (typeof value === 'string') {
+  if (value === true) return ""; // Boolean true is just the prop name
+  if (value === false) return "{false}";
+  if (value === null) return "{null}";
+  if (typeof value === "number") return `{${value}}`;
+  if (typeof value === "string") {
     // Check if it looks like an expression
-    if (value.startsWith('{') && value.endsWith('}')) {
-      return value
+    if (value.startsWith("{") && value.endsWith("}")) {
+      return value;
     }
     // Escape quotes and use double quotes
-    return `"${value.replace(/"/g, '\\"')}"`
+    return `"${value.replace(/"/g, '\\"')}"`;
   }
-  return `{${JSON.stringify(value)}}`
+  return `{${JSON.stringify(value)}}`;
 }
 
 /**
  * Generate JSX for inserting a prop
  */
 function formatProp(name: string, value: string | number | boolean | null): string {
-  const formattedValue = formatPropValue(value)
-  if (formattedValue === '') {
-    return name // Boolean true shorthand
+  const formattedValue = formatPropValue(value);
+  if (formattedValue === "") {
+    return name; // Boolean true shorthand
   }
-  return `${name}=${formattedValue}`
+  return `${name}=${formattedValue}`;
 }
 
 // ============================================================================
@@ -74,35 +74,35 @@ function applySetProp(
   root: EditableNode,
   nodeId: string,
   propName: string,
-  value: string | number | boolean | null
+  value: string | number | boolean | null,
 ): string | null {
-  const node = getNodeById(root, nodeId)
+  const node = getNodeById(root, nodeId);
   if (!node) {
-    console.error(`[surgical] Node not found: ${nodeId}`)
-    return null
+    console.error(`[surgical] Node not found: ${nodeId}`);
+    return null;
   }
 
-  const existingProp = node.props[propName]
+  const existingProp = node.props[propName];
 
   if (existingProp) {
     // Update existing prop value
-    const newValue = formatPropValue(value)
-    return applyTextEdit(source, existingProp.valueLoc.start, existingProp.valueLoc.end, newValue)
+    const newValue = formatPropValue(value);
+    return applyTextEdit(source, existingProp.valueLoc.start, existingProp.valueLoc.end, newValue);
   } else {
     // Insert new prop at end of opening tag (before > or />)
-    const openingEnd = node.openingTagLoc.end
+    const openingEnd = node.openingTagLoc.end;
     // Find the position just before > or />
-    let insertPos = openingEnd - 1
-    if (source[insertPos - 1] === '/') {
-      insertPos -= 1 // Account for self-closing />
+    let insertPos = openingEnd - 1;
+    if (source[insertPos - 1] === "/") {
+      insertPos -= 1; // Account for self-closing />
     }
     // Go back past any whitespace
     while (insertPos > node.openingTagLoc.start && /\s/.test(source[insertPos - 1])) {
-      insertPos--
+      insertPos--;
     }
 
-    const newProp = ` ${formatProp(propName, value)}`
-    return applyTextEdit(source, insertPos, insertPos, newProp)
+    const newProp = ` ${formatProp(propName, value)}`;
+    return applyTextEdit(source, insertPos, insertPos, newProp);
   }
 }
 
@@ -113,28 +113,28 @@ function applyDeleteProp(
   source: string,
   root: EditableNode,
   nodeId: string,
-  propName: string
+  propName: string,
 ): string | null {
-  const node = getNodeById(root, nodeId)
+  const node = getNodeById(root, nodeId);
   if (!node) {
-    console.error(`[surgical] Node not found: ${nodeId}`)
-    return null
+    console.error(`[surgical] Node not found: ${nodeId}`);
+    return null;
   }
 
-  const prop = node.props[propName]
+  const prop = node.props[propName];
   if (!prop) {
-    console.warn(`[surgical] Prop not found: ${propName} on ${nodeId}`)
-    return source // Nothing to delete
+    console.warn(`[surgical] Prop not found: ${propName} on ${nodeId}`);
+    return source; // Nothing to delete
   }
 
   // Delete the prop including leading whitespace
-  let start = prop.loc.start
+  let start = prop.loc.start;
   // Include leading whitespace
   while (start > 0 && /\s/.test(source[start - 1])) {
-    start--
+    start--;
   }
 
-  return applyTextEdit(source, start, prop.loc.end, '')
+  return applyTextEdit(source, start, prop.loc.end, "");
 }
 
 /**
@@ -144,26 +144,26 @@ function applySetText(
   source: string,
   root: EditableNode,
   nodeId: string,
-  text: string
+  text: string,
 ): string | null {
-  const node = getNodeById(root, nodeId)
+  const node = getNodeById(root, nodeId);
   if (!node) {
-    console.error(`[surgical] Node not found: ${nodeId}`)
-    return null
+    console.error(`[surgical] Node not found: ${nodeId}`);
+    return null;
   }
 
   if (node.isText) {
     // Replace text content directly
-    return applyTextEdit(source, node.loc.start, node.loc.end, text)
+    return applyTextEdit(source, node.loc.start, node.loc.end, text);
   }
 
   // For elements, replace children area with text
   if (node.childrenLoc) {
-    return applyTextEdit(source, node.childrenLoc.start, node.childrenLoc.end, text)
+    return applyTextEdit(source, node.childrenLoc.start, node.childrenLoc.end, text);
   }
 
-  console.error(`[surgical] Cannot set text on node without children area: ${nodeId}`)
-  return null
+  console.error(`[surgical] Cannot set text on node without children area: ${nodeId}`);
+  return null;
 }
 
 /**
@@ -174,73 +174,69 @@ function applyInsertNode(
   root: EditableNode,
   parentId: string,
   index: number,
-  jsx: string
+  jsx: string,
 ): string | null {
-  const parent = getNodeById(root, parentId)
+  const parent = getNodeById(root, parentId);
   if (!parent) {
-    console.error(`[surgical] Parent not found: ${parentId}`)
-    return null
+    console.error(`[surgical] Parent not found: ${parentId}`);
+    return null;
   }
 
   if (!parent.childrenLoc) {
-    console.error(`[surgical] Parent has no children area: ${parentId}`)
-    return null
+    console.error(`[surgical] Parent has no children area: ${parentId}`);
+    return null;
   }
 
   // Find insertion position
-  let insertPos: number
+  let insertPos: number;
 
   if (index === 0 || parent.children.length === 0) {
     // Insert at start of children area
-    insertPos = parent.childrenLoc.start
+    insertPos = parent.childrenLoc.start;
   } else if (index >= parent.children.length) {
     // Insert at end of children area
-    insertPos = parent.childrenLoc.end
+    insertPos = parent.childrenLoc.end;
   } else {
     // Insert before the child at index
-    insertPos = parent.children[index].loc.start
+    insertPos = parent.children[index].loc.start;
   }
 
   // Add newline and indentation if needed
-  const needsNewlineBefore = insertPos > 0 && source[insertPos - 1] !== '\n'
-  const needsNewlineAfter = insertPos < source.length && source[insertPos] !== '\n'
+  const needsNewlineBefore = insertPos > 0 && source[insertPos - 1] !== "\n";
+  const needsNewlineAfter = insertPos < source.length && source[insertPos] !== "\n";
 
-  let insertion = jsx
-  if (needsNewlineBefore) insertion = '\n' + insertion
-  if (needsNewlineAfter) insertion = insertion + '\n'
+  let insertion = jsx;
+  if (needsNewlineBefore) insertion = `\n${insertion}`;
+  if (needsNewlineAfter) insertion = `${insertion}\n`;
 
-  return applyTextEdit(source, insertPos, insertPos, insertion)
+  return applyTextEdit(source, insertPos, insertPos, insertion);
 }
 
 /**
  * Apply delete-node mutation
  */
-function applyDeleteNode(
-  source: string,
-  root: EditableNode,
-  nodeId: string
-): string | null {
-  const node = getNodeById(root, nodeId)
+function applyDeleteNode(source: string, root: EditableNode, nodeId: string): string | null {
+  const node = getNodeById(root, nodeId);
   if (!node) {
-    console.error(`[surgical] Node not found: ${nodeId}`)
-    return null
+    console.error(`[surgical] Node not found: ${nodeId}`);
+    return null;
   }
 
   // Delete the node and surrounding whitespace/newlines
-  let start = node.loc.start
-  let end = node.loc.end
+  let start = node.loc.start;
+  let end = node.loc.end;
 
   // Include leading whitespace up to previous newline
-  while (start > 0 && source[start - 1] !== '\n' && /\s/.test(source[start - 1])) {
-    start--
+  while (start > 0 && source[start - 1] !== "\n" && /\s/.test(source[start - 1])) {
+    start--;
   }
 
   // Include trailing newline if present
-  if (source[end] === '\n') {
-    end++
+  if (source[end] === "\n") {
+    end++;
   }
 
-  return applyTextEdit(source, start, end, '')
+  return applyTextEdit(source, start, end, "");
 }
 
 /**
@@ -250,15 +246,15 @@ function applyReplaceNode(
   source: string,
   root: EditableNode,
   nodeId: string,
-  jsx: string
+  jsx: string,
 ): string | null {
-  const node = getNodeById(root, nodeId)
+  const node = getNodeById(root, nodeId);
   if (!node) {
-    console.error(`[surgical] Node not found: ${nodeId}`)
-    return null
+    console.error(`[surgical] Node not found: ${nodeId}`);
+    return null;
   }
 
-  return applyTextEdit(source, node.loc.start, node.loc.end, jsx)
+  return applyTextEdit(source, node.loc.start, node.loc.end, jsx);
 }
 
 /**
@@ -269,32 +265,32 @@ function applyMoveNode(
   root: EditableNode,
   nodeId: string,
   newParentId: string,
-  newIndex: number
+  newIndex: number,
 ): string | null {
-  const node = getNodeById(root, nodeId)
+  const node = getNodeById(root, nodeId);
   if (!node) {
-    console.error(`[surgical] Node not found: ${nodeId}`)
-    return null
+    console.error(`[surgical] Node not found: ${nodeId}`);
+    return null;
   }
 
   // Get the JSX source of the node to move
-  const nodeJsx = source.slice(node.loc.start, node.loc.end)
+  const nodeJsx = source.slice(node.loc.start, node.loc.end);
 
   // Delete the node first
-  let result = applyDeleteNode(source, root, nodeId)
-  if (!result) return null
+  let result = applyDeleteNode(source, root, nodeId);
+  if (!result) return null;
 
   // Re-parse to get updated positions
-  const { root: newRoot } = parseSourceWithLocations(result)
+  const { root: newRoot } = parseSourceWithLocations(result);
   if (!newRoot) {
-    console.error(`[surgical] Failed to re-parse after delete`)
-    return null
+    console.error(`[surgical] Failed to re-parse after delete`);
+    return null;
   }
 
   // Insert at new position
-  result = applyInsertNode(result, newRoot, newParentId, newIndex, nodeJsx)
+  result = applyInsertNode(result, newRoot, newParentId, newIndex, nodeJsx);
 
-  return result
+  return result;
 }
 
 // ============================================================================
@@ -307,38 +303,38 @@ function applyMoveNode(
  * Returns the modified source, or null if the mutation failed
  */
 export function applySurgicalMutation(source: string, mutation: SurgicalMutation): string | null {
-  const { root } = parseSourceWithLocations(source)
+  const { root } = parseSourceWithLocations(source);
 
   if (!root) {
-    console.error(`[surgical] Failed to parse source`)
-    return null
+    console.error(`[surgical] Failed to parse source`);
+    return null;
   }
 
   switch (mutation.type) {
-    case 'set-prop':
-      return applySetProp(source, root, mutation.nodeId, mutation.propName, mutation.value)
+    case "set-prop":
+      return applySetProp(source, root, mutation.nodeId, mutation.propName, mutation.value);
 
-    case 'delete-prop':
-      return applyDeleteProp(source, root, mutation.nodeId, mutation.propName)
+    case "delete-prop":
+      return applyDeleteProp(source, root, mutation.nodeId, mutation.propName);
 
-    case 'set-text':
-      return applySetText(source, root, mutation.nodeId, mutation.text)
+    case "set-text":
+      return applySetText(source, root, mutation.nodeId, mutation.text);
 
-    case 'insert-node':
-      return applyInsertNode(source, root, mutation.parentId, mutation.index, mutation.jsx)
+    case "insert-node":
+      return applyInsertNode(source, root, mutation.parentId, mutation.index, mutation.jsx);
 
-    case 'delete-node':
-      return applyDeleteNode(source, root, mutation.nodeId)
+    case "delete-node":
+      return applyDeleteNode(source, root, mutation.nodeId);
 
-    case 'move-node':
-      return applyMoveNode(source, root, mutation.nodeId, mutation.newParentId, mutation.newIndex)
+    case "move-node":
+      return applyMoveNode(source, root, mutation.nodeId, mutation.newParentId, mutation.newIndex);
 
-    case 'replace-node':
-      return applyReplaceNode(source, root, mutation.nodeId, mutation.jsx)
+    case "replace-node":
+      return applyReplaceNode(source, root, mutation.nodeId, mutation.jsx);
 
     default:
-      console.error(`[surgical] Unknown mutation type: ${(mutation as any).type}`)
-      return null
+      console.error(`[surgical] Unknown mutation type: ${(mutation as any).type}`);
+      return null;
   }
 }
 
@@ -347,17 +343,20 @@ export function applySurgicalMutation(source: string, mutation: SurgicalMutation
  *
  * Each mutation is applied and the source is re-parsed for the next
  */
-export function applySurgicalMutations(source: string, mutations: SurgicalMutation[]): string | null {
-  let result = source
+export function applySurgicalMutations(
+  source: string,
+  mutations: SurgicalMutation[],
+): string | null {
+  let result = source;
 
   for (const mutation of mutations) {
-    const newResult = applySurgicalMutation(result, mutation)
+    const newResult = applySurgicalMutation(result, mutation);
     if (newResult === null) {
-      console.error(`[surgical] Mutation failed:`, mutation)
-      return null
+      console.error(`[surgical] Mutation failed:`, mutation);
+      return null;
     }
-    result = newResult
+    result = newResult;
   }
 
-  return result
+  return result;
 }

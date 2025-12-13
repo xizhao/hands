@@ -5,9 +5,9 @@
  * This just shows a clickable link in the chat for reference.
  */
 
-import { memo } from "react";
 import { useNavigate } from "@tanstack/react-router";
 import { ArrowRight } from "lucide-react";
+import { memo } from "react";
 import { cn } from "@/lib/utils";
 
 export interface NavigateOutput {
@@ -54,7 +54,7 @@ export const NavigateCard = memo(({ output }: NavigateCardProps) => {
       className={cn(
         "inline-flex items-center gap-1 text-xs",
         "text-blue-400 hover:text-blue-300",
-        "hover:underline transition-colors"
+        "hover:underline transition-colors",
       )}
     >
       <span>{output.title || output.blockId}</span>

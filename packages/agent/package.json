@@ -4,16 +4,21 @@
   "private": true,
   "type": "module",
   "main": "src/index.ts",
+  "exports": {
+    ".": "./src/index.ts",
+    "./plugin/diagnostics": "./plugin/diagnostics.ts"
+  },
   "scripts": {
     "dev": "bun run src/index.ts",
     "build": "bun build src/index.ts --outdir dist --target node"
   },
   "dependencies": {
     "@hands/stdlib": "workspace:*",
-    "@opencode-ai/sdk": "^1.0.138",
-    "@opencode-ai/plugin": "^1.0.134"
+    "@opencode-ai/sdk": "^1.0.152",
+    "@opencode-ai/plugin": "^1.0.152"
   },
   "devDependencies": {
+    "@oxc-parser/binding-wasm32-wasi": "0.102.0",
     "@types/bun": "latest",
     "typescript": "^5"
   }

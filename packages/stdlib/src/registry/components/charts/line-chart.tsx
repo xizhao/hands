@@ -1,65 +1,65 @@
 /** @jsxImportSource react */
-"use client"
+"use client";
 
-import * as React from "react"
-import { Line, LineChart as RechartsLineChart, CartesianGrid, XAxis, YAxis, Area } from "recharts"
-import { cn } from "../../../lib/utils.js"
+import * as React from "react";
+import { CartesianGrid, Line, LineChart as RechartsLineChart, XAxis, YAxis } from "recharts";
+import { cn } from "../../../lib/utils.js";
 import {
-  ChartConfig,
+  type ChartConfig,
   ChartContainer,
-  ChartTooltip,
-  ChartTooltipContent,
   ChartLegend,
   ChartLegendContent,
-} from "../ui/chart.js"
+  ChartTooltip,
+  ChartTooltipContent,
+} from "../ui/chart.js";
 
 export interface LineChartProps<T extends Record<string, unknown>> {
   /** Data array to visualize */
-  data: T[]
+  data: T[];
   /** X-axis key (category/label) */
-  x?: keyof T
+  x?: keyof T;
   /** Y-axis key(s) - can be single key or array for multi-series */
-  y?: keyof T | (keyof T)[]
+  y?: keyof T | (keyof T)[];
   /** Alias for x */
-  xKey?: keyof T
+  xKey?: keyof T;
   /** Alias for y */
-  yKey?: keyof T | (keyof T)[]
+  yKey?: keyof T | (keyof T)[];
   /** Additional CSS classes */
-  className?: string
+  className?: string;
   /** Chart height in pixels */
-  height?: number
+  height?: number;
   /** Primary color for single series */
-  color?: string
+  color?: string;
   /** Colors for multiple series */
-  colors?: string[]
+  colors?: string[];
   /** Show area fill under line */
-  showArea?: boolean
+  showArea?: boolean;
   /** Show dots on data points */
-  showDots?: boolean
+  showDots?: boolean;
   /** Show grid lines */
-  showGrid?: boolean
+  showGrid?: boolean;
   /** Show X axis */
-  showXAxis?: boolean
+  showXAxis?: boolean;
   /** Show Y axis */
-  showYAxis?: boolean
+  showYAxis?: boolean;
   /** Show tooltip on hover */
-  showTooltip?: boolean
+  showTooltip?: boolean;
   /** Show legend */
-  showLegend?: boolean
+  showLegend?: boolean;
   /** Line curve type */
-  curveType?: "linear" | "monotone" | "step" | "natural"
+  curveType?: "linear" | "monotone" | "step" | "natural";
   /** Line stroke width */
-  strokeWidth?: number
+  strokeWidth?: number;
   /** Dot radius */
-  dotRadius?: number
+  dotRadius?: number;
   /** Custom chart config for theming */
-  chartConfig?: ChartConfig
+  chartConfig?: ChartConfig;
   /** Format function for X axis labels */
-  formatX?: (value: unknown) => string
+  formatX?: (value: unknown) => string;
   /** Format function for Y axis values */
-  formatY?: (value: number) => string
+  formatY?: (value: number) => string;
   /** Chart title */
-  title?: string
+  title?: string;
 }
 
 export function LineChart<T extends Record<string, unknown>>({
@@ -94,40 +94,40 @@ export function LineChart<T extends Record<string, unknown>>({
   title,
 }: LineChartProps<T>) {
   // Support both x/y and xKey/yKey prop names
-  const xAxisKey = (xProp ?? xKey ?? "x") as string
+  const xAxisKey = (xProp ?? xKey ?? "x") as string;
   const yAxisKeys = React.useMemo(() => {
-    const yValue = yProp ?? yKey ?? "y"
-    return Array.isArray(yValue) ? yValue.map(String) : [String(yValue)]
-  }, [yProp, yKey])
+    const yValue = yProp ?? yKey ?? "y";
+    return Array.isArray(yValue) ? yValue.map(String) : [String(yValue)];
+  }, [yProp, yKey]);
 
   // Build chart config from y keys
   const chartConfig = React.useMemo<ChartConfig>(() => {
-    if (externalConfig) return externalConfig
+    if (externalConfig) return externalConfig;
 
-    const config: ChartConfig = {}
+    const config: ChartConfig = {};
     yAxisKeys.forEach((key, index) => {
       config[key] = {
         label: key.charAt(0).toUpperCase() + key.slice(1),
         color: yAxisKeys.length === 1 ? color : colors[index % colors.length],
-      }
-    })
-    return config
-  }, [externalConfig, yAxisKeys, color, colors])
+      };
+    });
+    return config;
+  }, [externalConfig, yAxisKeys, color, colors]);
 
   // Defensive check - data must be an array
   if (!Array.isArray(data)) {
-    console.warn('[LineChart] data prop is not an array:', typeof data, data)
+    console.warn("[LineChart] data prop is not an array:", typeof data, data);
     return (
       <div
         className={cn(
           "flex items-center justify-center text-muted-foreground rounded-lg border border-dashed",
-          className
+          className,
         )}
         style={{ height }}
       >
         Invalid data: expected array, got {typeof data}
       </div>
-    )
+    );
   }
 
   if (data.length === 0) {
@@ -135,28 +135,25 @@ export function LineChart<T extends Record<string, unknown>>({
       <div
         className={cn(
           "flex items-center justify-center text-muted-foreground rounded-lg border border-dashed",
-          className
+          className,
         )}
         style={{ height }}
       >
         No data available
       </div>
-    )
+    );
   }
 
   return (
     <div className={cn("w-full", className)}>
-      {title && (
-        <h3 className="text-sm font-medium mb-2 text-foreground">{title}</h3>
-      )}
-      <ChartContainer config={chartConfig} className={cn("min-h-[200px] w-full")} style={{ height }}>
-        <RechartsLineChart
-          data={data}
-          margin={{ top: 10, right: 10, left: 10, bottom: 10 }}
-        >
-          {showGrid && (
-            <CartesianGrid strokeDasharray="3 3" vertical={false} />
-          )}
+      {title && <h3 className="text-sm font-medium mb-2 text-foreground">{title}</h3>}
+      <ChartContainer
+        config={chartConfig}
+        className={cn("min-h-[200px] w-full")}
+        style={{ height }}
+      >
+        <RechartsLineChart data={data} margin={{ top: 10, right: 10, left: 10, bottom: 10 }}>
+          {showGrid && <CartesianGrid strokeDasharray="3 3" vertical={false} />}
 
           {showXAxis && (
             <XAxis
@@ -169,27 +166,17 @@ export function LineChart<T extends Record<string, unknown>>({
           )}
 
           {showYAxis && (
-            <YAxis
-              tickLine={false}
-              axisLine={false}
-              tickMargin={8}
-              tickFormatter={formatY}
-            />
+            <YAxis tickLine={false} axisLine={false} tickMargin={8} tickFormatter={formatY} />
           )}
 
           {showTooltip && (
-            <ChartTooltip
-              cursor={{ strokeDasharray: "3 3" }}
-              content={<ChartTooltipContent />}
-            />
+            <ChartTooltip cursor={{ strokeDasharray: "3 3" }} content={<ChartTooltipContent />} />
           )}
 
-          {showLegend && (
-            <ChartLegend content={<ChartLegendContent />} />
-          )}
+          {showLegend && <ChartLegend content={<ChartLegendContent />} />}
 
           {yAxisKeys.map((key, index) => {
-            const lineColor = chartConfig[key]?.color || colors[index % colors.length]
+            const lineColor = chartConfig[key]?.color || colors[index % colors.length];
             return (
               <React.Fragment key={key}>
                 {showArea && (
@@ -210,12 +197,12 @@ export function LineChart<T extends Record<string, unknown>>({
                   fill={showArea ? `url(#fill-${key})` : "none"}
                 />
               </React.Fragment>
-            )
+            );
           })}
         </RechartsLineChart>
       </ChartContainer>
     </div>
-  )
+  );
 }
 
-export default LineChart
+export default LineChart;

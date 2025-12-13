@@ -5,17 +5,17 @@
  * Custom components portal in RSC-rendered content instead of placeholders.
  */
 
-import { useState, useCallback, useEffect } from 'react'
-import { PlateVisualEditor } from '../plate/PlateVisualEditor'
-import { useRSCRender } from '../rsc/useRSCRender'
-import { RscBlockContext } from '../rsc/context'
+import { useCallback, useEffect, useState } from "react";
+import { PlateVisualEditor } from "../plate/PlateVisualEditor";
+import { RscBlockContext } from "../rsc/context";
+import { useRSCRender } from "../rsc/useRSCRender";
 
 interface BlockEditorProps {
-  blockId: string
-  source: string
-  runtimePort: number
-  onSave: (source: string) => void
-  readOnly?: boolean
+  blockId: string;
+  source: string;
+  runtimePort: number;
+  onSave: (source: string) => void;
+  readOnly?: boolean;
 }
 
 export function BlockEditor({
@@ -25,31 +25,31 @@ export function BlockEditor({
   onSave,
   readOnly = false,
 }: BlockEditorProps) {
-  const [currentSource, setCurrentSource] = useState(source)
+  const [currentSource, setCurrentSource] = useState(source);
 
   // Fetch RSC render of the whole block
   const { rscElement, isLoading, error, refresh } = useRSCRender({
     port: runtimePort,
     blockId,
-  })
+  });
 
   // Handle source changes from Plate editor
   const handleSourceChange = useCallback(
     (newSource: string) => {
-      setCurrentSource(newSource)
-      onSave(newSource)
+      setCurrentSource(newSource);
+      onSave(newSource);
       // Trigger RSC refresh after source change
-      refresh()
+      refresh();
     },
-    [onSave, refresh]
-  )
+    [onSave, refresh],
+  );
 
   // Sync source prop changes
   useEffect(() => {
     if (source !== currentSource) {
-      setCurrentSource(source)
+      setCurrentSource(source);
     }
-  }, [source])
+  }, [source, currentSource]);
 
   return (
     <RscBlockContext.Provider value={{ rscElement, isLoading, blockId }}>
@@ -61,5 +61,5 @@ export function BlockEditor({
         />
       </div>
     </RscBlockContext.Provider>
-  )
+  );
 }

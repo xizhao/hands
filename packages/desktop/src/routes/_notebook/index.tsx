@@ -1,8 +1,8 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { NotebookSidebar } from "@/components/Notebook/sidebar/NotebookSidebar";
 import { EmptyWorkbookState } from "@/components/Notebook/EmptyWorkbookState";
-import { useManifest, useDbSchema, useActiveWorkbookId } from "@/hooks/useWorkbook";
+import { NotebookSidebar } from "@/components/Notebook/sidebar/NotebookSidebar";
 import { useChatState } from "@/hooks/useChatState";
+import { useActiveWorkbookId, useDbSchema, useManifest } from "@/hooks/useWorkbook";
 
 export const Route = createFileRoute("/_notebook/")({
   component: IndexPage,
@@ -19,7 +19,8 @@ function IndexPage() {
   const blockCount = manifest?.blocks?.length ?? 0;
 
   // Show getting started when manifest is loaded but empty (no tables or blocks)
-  const showGettingStarted = manifest !== undefined && manifestTableCount === 0 && tableCount === 0 && blockCount === 0;
+  const showGettingStarted =
+    manifest !== undefined && manifestTableCount === 0 && tableCount === 0 && blockCount === 0;
 
   const handleImportFile = () => {
     // TODO: Trigger file input
@@ -41,10 +42,7 @@ function IndexPage() {
   if (showGettingStarted) {
     return (
       <div className="flex-1 flex items-start justify-center overflow-y-auto">
-        <EmptyWorkbookState
-          onImportFile={handleImportFile}
-          chatExpanded={chatState.chatExpanded}
-        />
+        <EmptyWorkbookState onImportFile={handleImportFile} chatExpanded={chatState.chatExpanded} />
       </div>
     );
   }

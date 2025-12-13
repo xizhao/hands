@@ -1,5 +1,5 @@
+import { Database, FileJson, Globe, Plus, RefreshCw } from "lucide-react";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Plus, RefreshCw, Database, Globe, FileJson } from "lucide-react";
 
 export function SourcesPanel() {
   return (
@@ -64,9 +64,11 @@ export function SourceCard({ name, type, lastSync, status }: SourceCardProps) {
         )}
         <div
           className={`h-2 w-2 rounded-full ${
-            status === "synced" ? "bg-green-500" :
-            status === "syncing" ? "bg-yellow-500" :
-            "bg-red-500"
+            status === "synced"
+              ? "bg-green-500"
+              : status === "syncing"
+                ? "bg-yellow-500"
+                : "bg-red-500"
           }`}
         />
       </div>

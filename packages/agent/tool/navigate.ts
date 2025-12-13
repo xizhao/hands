@@ -36,24 +36,16 @@ Use this tool after completing work to show the user the result. For example:
 - Show report: navigate page="/reports/monthly" title="Monthly Report" description="Your sales summary"`,
 
   args: {
-    page: tool.schema
-      .string()
-      .describe("Page route starting with '/' (e.g., '/dashboard')"),
-    title: tool.schema
-      .string()
-      .optional()
-      .describe("Display title for the navigation card"),
+    page: tool.schema.string().describe("Page route starting with '/' (e.g., '/dashboard')"),
+    title: tool.schema.string().optional().describe("Display title for the navigation card"),
     description: tool.schema
       .string()
       .optional()
       .describe("Brief description of what the user will see"),
-    anchor: tool.schema
-      .string()
-      .optional()
-      .describe("Section to scroll to (e.g., '#metrics')"),
+    anchor: tool.schema.string().optional().describe("Section to scroll to (e.g., '#metrics')"),
   },
 
-  async execute(args, ctx) {
+  async execute(args, _ctx) {
     const { page, title, description, anchor } = args;
 
     // Validate page format

@@ -8,9 +8,7 @@
       "type": "source",
       "title": "Hacker News",
       "description": "Sync top stories from Hacker News",
-      "files": [
-        { "path": "hackernews/index.ts", "target": "sources/hackernews/index.ts" }
-      ],
+      "files": [{ "path": "hackernews/index.ts", "target": "sources/hackernews/index.ts" }],
       "dependencies": [],
       "secrets": [],
       "streams": ["stories"],

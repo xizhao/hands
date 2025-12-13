@@ -1,8 +1,8 @@
+import { Check, CheckCheck, Database, FileCode, Globe, Shield, Terminal, X } from "lucide-react";
 import { memo } from "react";
-import type { Permission } from "@/lib/api";
-import { useRespondToPermission } from "@/hooks/useSession";
 import { Button } from "@/components/ui/button";
-import { Shield, Terminal, FileCode, Globe, Database, Check, X, CheckCheck } from "lucide-react";
+import { useRespondToPermission } from "@/hooks/useSession";
+import type { Permission } from "@/lib/api";
 import { cn } from "@/lib/utils";
 
 interface PermissionDialogProps {
@@ -12,10 +12,14 @@ interface PermissionDialogProps {
 
 const PermissionIcon = ({ type }: { type: string }) => {
   const lowerType = type.toLowerCase();
-  if (lowerType.includes("bash") || lowerType.includes("shell")) return <Terminal className="h-5 w-5" />;
-  if (lowerType.includes("file") || lowerType.includes("write") || lowerType.includes("read")) return <FileCode className="h-5 w-5" />;
-  if (lowerType.includes("web") || lowerType.includes("fetch")) return <Globe className="h-5 w-5" />;
-  if (lowerType.includes("sql") || lowerType.includes("database")) return <Database className="h-5 w-5" />;
+  if (lowerType.includes("bash") || lowerType.includes("shell"))
+    return <Terminal className="h-5 w-5" />;
+  if (lowerType.includes("file") || lowerType.includes("write") || lowerType.includes("read"))
+    return <FileCode className="h-5 w-5" />;
+  if (lowerType.includes("web") || lowerType.includes("fetch"))
+    return <Globe className="h-5 w-5" />;
+  if (lowerType.includes("sql") || lowerType.includes("database"))
+    return <Database className="h-5 w-5" />;
   return <Shield className="h-5 w-5" />;
 };
 
@@ -29,7 +33,7 @@ export const PermissionDialog = memo(({ sessionId, permission }: PermissionDialo
 
   // Format metadata for display
   const metadataEntries = Object.entries(permission.metadata).filter(
-    ([, value]) => typeof value === "string" || typeof value === "number"
+    ([, value]) => typeof value === "string" || typeof value === "number",
   );
 
   return (
@@ -56,11 +60,9 @@ export const PermissionDialog = memo(({ sessionId, permission }: PermissionDialo
           <div className="space-y-1">
             {metadataEntries.slice(0, 3).map(([key, value]) => (
               <div key={key} className="flex text-xs">
-                <span className="text-muted-foreground w-20 shrink-0 capitalize">
-                  {key}:
-                </span>
+                <span className="text-muted-foreground w-20 shrink-0 capitalize">{key}:</span>
                 <span className="font-mono text-foreground/80 truncate">
-                  {String(value).length > 50 ? String(value).slice(0, 50) + "..." : String(value)}
+                  {String(value).length > 50 ? `${String(value).slice(0, 50)}...` : String(value)}
                 </span>
               </div>
             ))}
@@ -75,7 +77,7 @@ export const PermissionDialog = memo(({ sessionId, permission }: PermissionDialo
           size="xs"
           className={cn(
             "flex-1 h-8 text-xs gap-1.5",
-            "text-red-600 hover:text-red-700 hover:bg-red-500/10"
+            "text-red-600 hover:text-red-700 hover:bg-red-500/10",
           )}
           disabled={isPending}
           onClick={() => handleRespond("reject")}
@@ -88,7 +90,7 @@ export const PermissionDialog = memo(({ sessionId, permission }: PermissionDialo
           size="xs"
           className={cn(
             "flex-1 h-8 text-xs gap-1.5",
-            "text-blue-600 hover:text-blue-700 hover:bg-blue-500/10"
+            "text-blue-600 hover:text-blue-700 hover:bg-blue-500/10",
           )}
           disabled={isPending}
           onClick={() => handleRespond("once")}
@@ -101,7 +103,7 @@ export const PermissionDialog = memo(({ sessionId, permission }: PermissionDialo
           size="xs"
           className={cn(
             "flex-1 h-8 text-xs gap-1.5",
-            "text-green-600 hover:text-green-700 hover:bg-green-500/10"
+            "text-green-600 hover:text-green-700 hover:bg-green-500/10",
           )}
           disabled={isPending}
           onClick={() => handleRespond("always")}

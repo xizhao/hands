@@ -3,12 +3,12 @@
  * Groups blocks by folder (parentDir)
  */
 
+import { CaretRight, Sparkle, SquaresFour } from "@phosphor-icons/react";
+import { useNavigate } from "@tanstack/react-router";
+import { ChevronRight } from "lucide-react";
 import { useMemo, useState } from "react";
 import { useManifest, type WorkbookBlock } from "@/hooks/useWorkbook";
-import { SquaresFour, CaretRight, Sparkle } from "@phosphor-icons/react";
 import { cn } from "@/lib/utils";
-import { ChevronRight } from "lucide-react";
-import { useNavigate } from "@tanstack/react-router";
 
 // Group blocks by parentDir
 function groupBlocksByFolder(blocks: WorkbookBlock[]): Map<string, WorkbookBlock[]> {
@@ -19,7 +19,7 @@ function groupBlocksByFolder(blocks: WorkbookBlock[]): Map<string, WorkbookBlock
     if (!groups.has(folder)) {
       groups.set(folder, []);
     }
-    groups.get(folder)!.push(block);
+    groups.get(folder)?.push(block);
   }
 
   // Sort folders (root first, then alphabetically)
@@ -28,7 +28,7 @@ function groupBlocksByFolder(blocks: WorkbookBlock[]): Map<string, WorkbookBlock
       if (a[0] === "") return -1;
       if (b[0] === "") return 1;
       return a[0].localeCompare(b[0]);
-    })
+    }),
   );
 }
 
@@ -42,7 +42,7 @@ export function BlocksPanel() {
   const groupedBlocks = useMemo(() => groupBlocksByFolder(blocks), [blocks]);
 
   const toggleDir = (dir: string) => {
-    setExpandedDirs(prev => {
+    setExpandedDirs((prev) => {
       const next = new Set(prev);
       if (next.has(dir)) {
         next.delete(dir);
@@ -59,11 +59,7 @@ export function BlocksPanel() {
 
   // Loading handled by useManifest - manifest will be undefined initially
   if (!manifest) {
-    return (
-      <div className="p-4 text-sm text-muted-foreground">
-        Loading blocks...
-      </div>
-    );
+    return <div className="p-4 text-sm text-muted-foreground">Loading blocks...</div>;
   }
 
   return (
@@ -96,7 +92,7 @@ export function BlocksPanel() {
                   onClick={() => handleBlockClick(block.id)}
                   className={cn(
                     "w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-left",
-                    "text-sm text-foreground hover:bg-accent transition-colors"
+                    "text-sm text-foreground hover:bg-accent transition-colors",
                   )}
                 >
                   <Sparkle weight="duotone" className="h-4 w-4 text-purple-400 shrink-0" />
@@ -120,12 +116,16 @@ export function BlocksPanel() {
                   onClick={() => toggleDir(folder)}
                   className="w-full flex items-center gap-1.5 px-2 py-1 text-sm text-muted-foreground/70 hover:text-foreground transition-colors"
                 >
-                  <ChevronRight className={cn(
-                    "h-3 w-3 shrink-0 transition-transform",
-                    isExpanded && "rotate-90"
-                  )} />
+                  <ChevronRight
+                    className={cn(
+                      "h-3 w-3 shrink-0 transition-transform",
+                      isExpanded && "rotate-90",
+                    )}
+                  />
                   <span className="flex-1 truncate text-left">{folder}</span>
-                  <span className="text-[10px] text-muted-foreground/40">{folderBlocks.length}</span>
+                  <span className="text-[10px] text-muted-foreground/40">
+                    {folderBlocks.length}
+                  </span>
                 </button>
                 {isExpanded && (
                   <div className="ml-3 border-l border-border/30 pl-2">
@@ -135,7 +135,7 @@ export function BlocksPanel() {
                         onClick={() => handleBlockClick(block.id)}
                         className={cn(
                           "w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-left",
-                          "text-sm text-foreground hover:bg-accent transition-colors"
+                          "text-sm text-foreground hover:bg-accent transition-colors",
                         )}
                       >
                         <Sparkle weight="duotone" className="h-4 w-4 text-purple-400 shrink-0" />
@@ -147,7 +147,10 @@ export function BlocksPanel() {
                             </div>
                           )}
                         </div>
-                        <CaretRight weight="bold" className="h-3 w-3 text-muted-foreground/50 shrink-0" />
+                        <CaretRight
+                          weight="bold"
+                          className="h-3 w-3 text-muted-foreground/50 shrink-0"
+                        />
                       </button>
                     ))}
                   </div>

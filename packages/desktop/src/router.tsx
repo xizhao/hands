@@ -1,4 +1,4 @@
-import { createRouter, createMemoryHistory, redirect } from "@tanstack/react-router";
+import { createMemoryHistory, createRouter } from "@tanstack/react-router";
 import { routeTree } from "./routeTree.gen";
 
 // Use memory history for Tauri desktop app

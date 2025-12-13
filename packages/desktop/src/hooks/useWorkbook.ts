@@ -1,4 +1,4 @@
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { invoke } from "@tauri-apps/api/core";
 import { useEffect, useRef } from "react";
 import type { Workbook } from "@/lib/workbook";
@@ -146,8 +146,7 @@ export function useWorkbooks() {
   return useQuery({
     queryKey: ["workbooks"],
     queryFn: () => invoke<Workbook[]>("list_workbooks"),
-    select: (data) =>
-      [...data].sort((a, b) => b.last_opened_at - a.last_opened_at),
+    select: (data) => [...data].sort((a, b) => b.last_opened_at - a.last_opened_at),
   });
 }
 
@@ -170,7 +169,7 @@ export function useCreateWorkbook() {
       invoke<Workbook>("create_workbook", { request }),
     onSuccess: (newWorkbook) => {
       queryClient.setQueryData<Workbook[]>(["workbooks"], (old) =>
-        old ? [newWorkbook, ...old] : [newWorkbook]
+        old ? [newWorkbook, ...old] : [newWorkbook],
       );
     },
   });
@@ -182,11 +181,10 @@ export function useUpdateWorkbook() {
 
   return useMutation({
     mutationKey: ["workbook", "update"],
-    mutationFn: (workbook: Workbook) =>
-      invoke<Workbook>("update_workbook", { workbook }),
+    mutationFn: (workbook: Workbook) => invoke<Workbook>("update_workbook", { workbook }),
     onSuccess: (updated) => {
       queryClient.setQueryData<Workbook[]>(["workbooks"], (old) =>
-        old?.map((w) => (w.id === updated.id ? updated : w))
+        old?.map((w) => (w.id === updated.id ? updated : w)),
       );
       queryClient.setQueryData(["workbook", updated.id], updated);
     },
@@ -202,7 +200,7 @@ export function useDeleteWorkbook() {
     mutationFn: (id: string) => invoke<boolean>("delete_workbook", { id }),
     onSuccess: (_, deletedId) => {
       queryClient.setQueryData<Workbook[]>(["workbooks"], (old) =>
-        old?.filter((w) => w.id !== deletedId)
+        old?.filter((w) => w.id !== deletedId),
       );
       queryClient.removeQueries({ queryKey: ["workbook", deletedId] });
       queryClient.removeQueries({ queryKey: ["runtime-status", deletedId] });
@@ -295,20 +293,14 @@ export function useRuntimeHealth(runtimePort: number | null) {
   });
 }
 
-
 // Start runtime
 export function useStartRuntime() {
   const queryClient = useQueryClient();
 
   return useMutation({
     mutationKey: ["runtime", "start"],
-    mutationFn: ({
-      workbookId,
-      directory,
-    }: {
-      workbookId: string;
-      directory: string;
-    }) => invoke<TauriRuntimeStatus>("start_runtime", { workbookId, directory }),
+    mutationFn: ({ workbookId, directory }: { workbookId: string; directory: string }) =>
+      invoke<TauriRuntimeStatus>("start_runtime", { workbookId, directory }),
     onSuccess: (status) => {
       queryClient.setQueryData(["runtime-status", status.workbook_id], status);
     },
@@ -321,8 +313,7 @@ export function useStopRuntime() {
 
   return useMutation({
     mutationKey: ["runtime", "stop"],
-    mutationFn: (workbookId: string) =>
-      invoke<TauriRuntimeStatus>("stop_runtime", { workbookId }),
+    mutationFn: (workbookId: string) => invoke<TauriRuntimeStatus>("stop_runtime", { workbookId }),
     onSuccess: (status) => {
       queryClient.setQueryData(["runtime-status", status.workbook_id], status);
     },
@@ -347,8 +338,7 @@ export function useRuntimeEval() {
 
   return useMutation({
     mutationKey: ["runtime", "eval"],
-    mutationFn: (workbookId: string) =>
-      invoke<EvalResult>("runtime_eval", { workbookId }),
+    mutationFn: (workbookId: string) => invoke<EvalResult>("runtime_eval", { workbookId }),
     onSuccess: (result, workbookId) => {
       queryClient.setQueryData(["runtime-eval", workbookId], result);
     },
@@ -365,7 +355,6 @@ export function useEvalResult(workbookId: string | null) {
     staleTime: 5000,
   });
 }
-
 
 // Workbook database info - now derived from runtime status
 export interface WorkbookDatabaseInfo {
@@ -557,8 +546,6 @@ export function useSaveDatabase() {
   });
 }
 
-
-
 // ============================================================================
 // Block Content Hooks
 // ============================================================================
@@ -635,13 +622,7 @@ export function useAddSource() {
 
   return useMutation({
     mutationKey: ["source", "add"],
-    mutationFn: async ({
-      sourceName,
-      schedule,
-    }: {
-      sourceName: string;
-      schedule?: string;
-    }) => {
+    mutationFn: async ({ sourceName, schedule }: { sourceName: string; schedule?: string }) => {
       if (!port) throw new Error("Runtime not connected");
 
       const response = await fetch(`http://localhost:${port}/workbook/sources/add`, {

@@ -1,17 +1,47 @@
 /**
  * Source Management Module
  *
- * Simple serverless-style source sync:
- * - Source discovery is handled by manifest (single file walk)
- * - Secrets loading and validation
- * - Sync execution (source owns everything)
- * - Single HTTP endpoint: POST /sources/:id/sync
+ * Sources v2: Table containers with optional Electric-SQL subscriptions
  *
- * Orchestration (scheduling, history, retries) handled by caller.
+ * Features:
+ * - Source discovery (v2 table containers)
+ * - Auto-generated CRUD routes for tables
+ * - Electric-SQL subscription management
+ * - Schema introspection and export
  */
 
-// Routes (main public API)
-export { registerSourceRoutes } from "./routes.js"
+// Source creation
+export {
+  type ColumnIntrospection,
+  type CreateSourceOptions,
+  type CreateSourceResult,
+  createSource,
+  generateCreateTableDDL,
+  generateSourceFile,
+  introspectRemotePostgres,
+  listRemoteTables,
+  type TableIntrospection,
+} from "./create.js";
 
+// Discovery
+export {
+  discoverSources,
+  getOrphanTables,
+  introspectTables,
+} from "./discovery.js";
+// Routes (main public API)
+export { registerSourceRoutes } from "./routes.js";
 // Secrets utilities (used by manifest generation)
-export { checkMissingSecrets } from "./secrets.js"
+export { checkMissingSecrets } from "./secrets.js";
+// Types
+export type {
+  CrudResult,
+  DiscoveredSource,
+  DiscoveredTable,
+  ListQueryParams,
+  LogEntry,
+  SubscriptionStatus,
+  TableColumn,
+  TableIndex,
+  TableSchema,
+} from "./types.js";

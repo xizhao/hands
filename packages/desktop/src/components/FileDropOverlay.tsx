@@ -5,7 +5,7 @@
  * a subtle highlight. This prevents conflicts with editor DnD.
  */
 
-import { useState, useEffect, useCallback } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { cn } from "@/lib/utils";
 
 interface FileDropOverlayProps {
@@ -13,12 +13,9 @@ interface FileDropOverlayProps {
   disabled?: boolean;
 }
 
-export function FileDropOverlay({
-  onFileDrop,
-  disabled = false,
-}: FileDropOverlayProps) {
+export function FileDropOverlay({ onFileDrop, disabled = false }: FileDropOverlayProps) {
   const [isDragging, setIsDragging] = useState(false);
-  const [dragCounter, setDragCounter] = useState(0);
+  const [_dragCounter, setDragCounter] = useState(0);
 
   const isExternalFileDrag = useCallback((e: DragEvent): boolean => {
     // External file drags have "Files" in dataTransfer.types
@@ -69,14 +66,17 @@ export function FileDropOverlay({
       }
 
       const files = Array.from(e.dataTransfer?.files ?? []);
-      console.log("[FileDropOverlay] Files dropped:", files.map(f => f.name));
+      console.log(
+        "[FileDropOverlay] Files dropped:",
+        files.map((f) => f.name),
+      );
       const file = files[0];
 
       // Get the element under the drop point by temporarily hiding all overlays
-      const overlays = document.querySelectorAll('[data-file-drop-overlay]');
-      overlays.forEach(el => (el as HTMLElement).style.pointerEvents = 'none');
+      const overlays = document.querySelectorAll("[data-file-drop-overlay]");
+      overlays.forEach((el) => ((el as HTMLElement).style.pointerEvents = "none"));
       const dropTarget = document.elementFromPoint(e.clientX, e.clientY);
-      overlays.forEach(el => (el as HTMLElement).style.pointerEvents = '');
+      overlays.forEach((el) => ((el as HTMLElement).style.pointerEvents = ""));
       console.log("[FileDropOverlay] Drop target (under overlay):", dropTarget);
 
       if (file) {
@@ -107,7 +107,7 @@ export function FileDropOverlay({
         "fixed inset-0 z-[100]",
         "bg-primary/5",
         "border-2 border-primary/30",
-        "transition-opacity duration-100"
+        "transition-opacity duration-100",
       )}
     />
   );

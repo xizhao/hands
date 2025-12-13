@@ -4,9 +4,9 @@
  * Used for showing source sync output in real-time.
  */
 
-import { useRef, useEffect } from "react";
+import { CheckCircle, CircleNotch, Terminal, XCircle } from "@phosphor-icons/react";
+import { useEffect, useRef } from "react";
 import { cn } from "@/lib/utils";
-import { Terminal, CheckCircle, XCircle, CircleNotch } from "@phosphor-icons/react";
 
 export interface LogEntry {
   timestamp: number;
@@ -53,7 +53,7 @@ export function LogViewer({ logs, isRunning, className, maxHeight = "300px" }: L
     if (containerRef.current) {
       containerRef.current.scrollTop = containerRef.current.scrollHeight;
     }
-  }, [logs]);
+  }, []);
 
   if (logs.length === 0 && !isRunning) {
     return null;
@@ -77,21 +77,13 @@ export function LogViewer({ logs, isRunning, className, maxHeight = "300px" }: L
         style={{ maxHeight }}
       >
         {logs.length === 0 && isRunning && (
-          <div className="text-muted-foreground/50 animate-pulse">
-            Waiting for output...
-          </div>
+          <div className="text-muted-foreground/50 animate-pulse">Waiting for output...</div>
         )}
         {logs.map((log, index) => (
           <div key={index} className="flex gap-2 leading-relaxed">
-            <span className="text-muted-foreground/50 shrink-0">
-              {formatTime(log.timestamp)}
-            </span>
-            <span className={cn("shrink-0", levelColors[log.level])}>
-              {levelLabels[log.level]}
-            </span>
-            <span className="text-foreground/90 whitespace-pre-wrap break-all">
-              {log.message}
-            </span>
+            <span className="text-muted-foreground/50 shrink-0">{formatTime(log.timestamp)}</span>
+            <span className={cn("shrink-0", levelColors[log.level])}>{levelLabels[log.level]}</span>
+            <span className="text-foreground/90 whitespace-pre-wrap break-all">{log.message}</span>
           </div>
         ))}
       </div>
@@ -121,7 +113,7 @@ export function SyncLogViewer({ logs, isRunning, result, className }: SyncLogVie
     if (containerRef.current) {
       containerRef.current.scrollTop = containerRef.current.scrollHeight;
     }
-  }, [logs]);
+  }, []);
 
   const showLogs = logs.length > 0 || isRunning;
 
@@ -135,7 +127,10 @@ export function SyncLogViewer({ logs, isRunning, result, className }: SyncLogVie
             <Terminal weight="duotone" className="h-4 w-4 text-muted-foreground" />
             <span className="text-xs font-medium text-muted-foreground">Output</span>
             {isRunning && (
-              <CircleNotch weight="bold" className="h-3.5 w-3.5 animate-spin text-purple-400 ml-auto" />
+              <CircleNotch
+                weight="bold"
+                className="h-3.5 w-3.5 animate-spin text-purple-400 ml-auto"
+              />
             )}
           </div>
 
@@ -146,9 +141,7 @@ export function SyncLogViewer({ logs, isRunning, result, className }: SyncLogVie
             style={{ maxHeight: "200px" }}
           >
             {logs.length === 0 && isRunning && (
-              <div className="text-muted-foreground/50 animate-pulse">
-                Waiting for output...
-              </div>
+              <div className="text-muted-foreground/50 animate-pulse">Waiting for output...</div>
             )}
             {logs.map((log, index) => (
               <div key={index} className="flex gap-2 leading-relaxed">
@@ -174,7 +167,7 @@ export function SyncLogViewer({ logs, isRunning, result, className }: SyncLogVie
             "flex items-center gap-2 px-3 py-2 rounded-lg text-sm",
             result.success
               ? "bg-green-500/10 border border-green-500/20 text-green-400"
-              : "bg-red-500/10 border border-red-500/20 text-red-400"
+              : "bg-red-500/10 border border-red-500/20 text-red-400",
           )}
         >
           {result.success ? (

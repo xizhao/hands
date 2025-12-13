@@ -6,7 +6,7 @@
  * 2. Matched in the UI to display friendly action chips instead of raw text
  */
 
-import { FileText, Upload, Bug, Wand2, Database, type LucideIcon } from "lucide-react";
+import { Bug, Database, FileText, type LucideIcon, Upload, Wand2 } from "lucide-react";
 
 // Template literal type for prompts with variables
 type PromptTemplate<T extends string = string> = T & { __brand: "PromptTemplate" };
@@ -93,7 +93,7 @@ function templateToRegex(template: string): RegExp {
 // Extract variable names from template
 function getTemplateVars(template: string): string[] {
   const matches = template.matchAll(/\$\{(\w+)\}/g);
-  return Array.from(matches, m => m[1]);
+  return Array.from(matches, (m) => m[1]);
 }
 
 // Match result with extracted variables
@@ -131,7 +131,7 @@ export function matchPrompt(message: string): PromptMatch | null {
 // Fill a template with variables
 export function fillTemplate<K extends PromptKey>(
   key: K,
-  variables?: Record<string, string>
+  variables?: Record<string, string>,
 ): string {
   let result: string = PROMPTS[key];
 

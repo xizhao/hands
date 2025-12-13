@@ -5,35 +5,40 @@
  * with an option to open it in an adjacent thread chip.
  */
 
+import { AnimatePresence, motion } from "framer-motion";
+import { AlertCircle, Bot, CheckCircle2, ChevronRight, ExternalLink, Loader2 } from "lucide-react";
 import { useState } from "react";
-import { motion, AnimatePresence } from "framer-motion";
-import { Bot, ChevronRight, Loader2, CheckCircle2, AlertCircle, ExternalLink } from "lucide-react";
-import { cn, MSG_FONT } from "@/lib/utils";
-import { useSessions, useSessionStatuses, useMessages } from "@/hooks/useSession";
 import { useActiveSession } from "@/hooks/useNavState";
+import { useMessages, useSessionStatuses, useSessions } from "@/hooks/useSession";
 import type { Session } from "@/lib/api";
+import { cn, MSG_FONT } from "@/lib/utils";
 
 interface SubagentSummaryProps {
   agentName: string;
-  sessionId: string;  // Parent session ID - used to find child session
+  sessionId: string; // Parent session ID - used to find child session
   messageId: string;
   compact?: boolean;
 }
 
-export function SubagentSummary({ agentName, sessionId, messageId, compact = false }: SubagentSummaryProps) {
+export function SubagentSummary({
+  agentName,
+  sessionId,
+  messageId,
+  compact = false,
+}: SubagentSummaryProps) {
   const [expanded, setExpanded] = useState(false);
   const { data: sessions = [] } = useSessions();
   const { data: statuses = {} } = useSessionStatuses();
   const { setSession } = useActiveSession();
 
-  const baseFont = compact ? MSG_FONT.baseCompact : MSG_FONT.base;
+  const _baseFont = compact ? MSG_FONT.baseCompact : MSG_FONT.base;
   const labelFont = compact ? MSG_FONT.labelCompact : MSG_FONT.label;
-  const metaFont = compact ? MSG_FONT.metaCompact : MSG_FONT.meta;
+  const _metaFont = compact ? MSG_FONT.metaCompact : MSG_FONT.meta;
 
   // Find child session for this agent invocation
   // Child sessions have parentID matching the parent session
-  const childSession = sessions.find(s =>
-    (s as Session & { parentID?: string }).parentID === sessionId
+  const childSession = sessions.find(
+    (s) => (s as Session & { parentID?: string }).parentID === sessionId,
   ) as (Session & { parentID?: string }) | undefined;
 
   const childSessionId = childSession?.id;
@@ -43,12 +48,13 @@ export function SubagentSummary({ agentName, sessionId, messageId, compact = fal
   const isRunning = childStatus?.type === "busy" || childStatus?.type === "running";
   const hasError = childStatus?.type === "retry";
   const isComplete = !isRunning && !hasError && childSessionId;
-  const activeForm = childStatus?.type === "busy" ? (childStatus as { activeForm?: string }).activeForm : undefined;
+  const activeForm =
+    childStatus?.type === "busy" ? (childStatus as { activeForm?: string }).activeForm : undefined;
 
   // Get summary from child session messages if available
   const { data: childMessages = [] } = useMessages(childSessionId || null);
-  const lastAssistantMessage = childMessages.filter(m => m.info.role === "assistant").pop();
-  const summary = lastAssistantMessage?.parts?.find(p => p.type === "text")?.text?.slice(0, 100);
+  const lastAssistantMessage = childMessages.filter((m) => m.info.role === "assistant").pop();
+  const summary = lastAssistantMessage?.parts?.find((p) => p.type === "text")?.text?.slice(0, 100);
 
   const handleOpenInThread = () => {
     if (childSessionId) {
@@ -57,11 +63,13 @@ export function SubagentSummary({ agentName, sessionId, messageId, compact = fal
   };
 
   return (
-    <div className={cn(
-      "rounded-lg border bg-muted/30",
-      compact ? "px-2 py-1.5" : "px-3 py-2",
-      "transition-colors hover:bg-muted/50"
-    )}>
+    <div
+      className={cn(
+        "rounded-lg border bg-muted/30",
+        compact ? "px-2 py-1.5" : "px-3 py-2",
+        "transition-colors hover:bg-muted/50",
+      )}
+    >
       {/* Header row */}
       <div className="flex items-center gap-2">
         <button
@@ -82,7 +90,7 @@ export function SubagentSummary({ agentName, sessionId, messageId, compact = fal
           {/* Status text */}
           <span className={cn("text-muted-foreground", labelFont)}>
             {isRunning
-              ? (activeForm || "Working...")
+              ? activeForm || "Working..."
               : hasError
                 ? "Failed"
                 : isComplete
@@ -91,10 +99,12 @@ export function SubagentSummary({ agentName, sessionId, messageId, compact = fal
           </span>
 
           {/* Expand chevron */}
-          <ChevronRight className={cn(
-            "h-3 w-3 text-muted-foreground transition-transform ml-auto",
-            expanded && "rotate-90"
-          )} />
+          <ChevronRight
+            className={cn(
+              "h-3 w-3 text-muted-foreground transition-transform ml-auto",
+              expanded && "rotate-90",
+            )}
+          />
         </button>
 
         {/* Open in thread button */}
@@ -104,7 +114,7 @@ export function SubagentSummary({ agentName, sessionId, messageId, compact = fal
             className={cn(
               "flex items-center gap-1 px-1.5 py-0.5 rounded text-muted-foreground",
               "hover:text-foreground hover:bg-muted transition-colors",
-              labelFont
+              labelFont,
             )}
             title="Open in thread"
           >
@@ -124,26 +134,15 @@ export function SubagentSummary({ agentName, sessionId, messageId, compact = fal
             transition={{ duration: 0.15 }}
             className="overflow-hidden"
           >
-            <div className={cn(
-              "pt-2 mt-2 border-t border-border/50",
-              labelFont
-            )}>
+            <div className={cn("pt-2 mt-2 border-t border-border/50", labelFont)}>
               {summary ? (
-                <p className="text-muted-foreground line-clamp-3">
-                  {summary}...
-                </p>
+                <p className="text-muted-foreground line-clamp-3">{summary}...</p>
               ) : isRunning ? (
-                <p className="text-muted-foreground italic">
-                  Working on task...
-                </p>
+                <p className="text-muted-foreground italic">Working on task...</p>
               ) : !childSessionId ? (
-                <p className="text-muted-foreground italic">
-                  Waiting to start...
-                </p>
+                <p className="text-muted-foreground italic">Waiting to start...</p>
               ) : (
-                <p className="text-muted-foreground italic">
-                  No output yet
-                </p>
+                <p className="text-muted-foreground italic">No output yet</p>
               )}
             </div>
           </motion.div>

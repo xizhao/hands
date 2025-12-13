@@ -1,12 +1,11 @@
-import React from 'react'
-import CodeMirror from '@uiw/react-codemirror'
-import { javascript } from '@codemirror/lang-javascript'
-import { oneDark } from '@codemirror/theme-one-dark'
+import { javascript } from "@codemirror/lang-javascript";
+import { oneDark } from "@codemirror/theme-one-dark";
+import CodeMirror from "@uiw/react-codemirror";
 
 interface CodeEditorProps {
-  source: string
-  onChange?: (source: string) => void
-  readOnly?: boolean
+  source: string;
+  onChange?: (source: string) => void;
+  readOnly?: boolean;
 }
 
 export function CodeEditor({ source, onChange, readOnly = false }: CodeEditorProps) {
@@ -26,9 +25,9 @@ export function CodeEditor({ source, onChange, readOnly = false }: CodeEditorPro
         autocompletion: false,
       }}
       style={{
-        height: '100%',
-        fontSize: '13px',
+        height: "100%",
+        fontSize: "13px",
       }}
     />
-  )
+  );
 }

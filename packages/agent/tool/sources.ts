@@ -1,10 +1,12 @@
+import { spawn } from "node:child_process";
 import { tool } from "@opencode-ai/plugin";
-import { spawn } from "child_process";
 
 /**
  * Execute a hands CLI command and return the output
  */
-function runHandsCommand(args: string[]): Promise<{ stdout: string; stderr: string; code: number }> {
+function runHandsCommand(
+  args: string[],
+): Promise<{ stdout: string; stderr: string; code: number }> {
   return new Promise((resolve) => {
     const proc = spawn("hands", args, {
       cwd: process.cwd(),
@@ -60,7 +62,7 @@ Use this tool to:
       .describe("Custom cron schedule (optional). Default is hourly: '0 * * * *'"),
   },
 
-  async execute(args, ctx) {
+  async execute(args, _ctx) {
     const { action, name, schedule } = args;
 
     if (action === "list") {

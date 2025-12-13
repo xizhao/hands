@@ -3,29 +3,15 @@
  * Dynamically loads components from stdlib registry
  */
 
-import * as icons from 'lucide-react'
-import {
-  Heading1Icon,
-  Heading2Icon,
-  Heading3Icon,
-  ListIcon,
-  ListOrderedIcon,
-  MinusIcon,
-  PilcrowIcon,
-  QuoteIcon,
-  CodeIcon,
-  ImageIcon,
-  TableIcon,
-  SquareCheckIcon,
-  ChevronDownIcon,
-  type LucideIcon,
-} from 'lucide-react'
-import { KEYS, type TElement } from 'platejs'
-import type { PlateEditor, PlateElementProps } from 'platejs/react'
-import { PlateElement } from 'platejs/react'
-import * as React from 'react'
-import { useMemo } from 'react'
-
+// Import stdlib registry
+import { type ComponentMeta, listCategories, listComponents } from "@hands/stdlib/registry";
+import * as icons from "lucide-react";
+import { PilcrowIcon } from "lucide-react";
+import type { TElement } from "platejs";
+import type { PlateEditor, PlateElementProps } from "platejs/react";
+import { PlateElement } from "platejs/react";
+import type * as React from "react";
+import { useMemo } from "react";
 import {
   InlineCombobox,
   InlineComboboxContent,
@@ -34,109 +20,106 @@ import {
   InlineComboboxGroupLabel,
   InlineComboboxInput,
   InlineComboboxItem,
-} from './inline-combobox'
-
-// Import stdlib registry
-import {
-  listComponents,
-  listCategories,
-  type ComponentMeta,
-} from '@hands/stdlib/registry'
+} from "./inline-combobox";
 
 // All components go through RSC now - no local component registry needed
 
 type SlashMenuItem = {
-  icon: React.ReactNode
-  value: string
-  onSelect: (editor: PlateEditor) => void
-  description?: string
-  keywords?: string[]
-  label?: string
-}
+  icon: React.ReactNode;
+  value: string;
+  onSelect: (editor: PlateEditor) => void;
+  description?: string;
+  keywords?: string[];
+  label?: string;
+};
 
 type Group = {
-  group: string
-  items: SlashMenuItem[]
-}
+  group: string;
+  items: SlashMenuItem[];
+};
 
 function insertBlock(editor: PlateEditor, type: string) {
-  editor.tf.setNodes({ type } as Partial<TElement>)
+  editor.tf.setNodes({ type } as Partial<TElement>);
 }
 
-function insertStdlibComponent(editor: PlateEditor, componentName: string, isVoid: boolean = false) {
+function insertStdlibComponent(
+  editor: PlateEditor,
+  componentName: string,
+  isVoid: boolean = false,
+) {
   const node: TElement = {
     type: componentName,
-    children: isVoid ? [{ text: '' }] : [{ type: 'p', children: [{ text: '' }] }],
+    children: isVoid ? [{ text: "" }] : [{ type: "p", children: [{ text: "" }] }],
     ...(isVoid ? { isVoid: true } : {}),
-  }
-  editor.tf.insertNodes(node)
+  };
+  editor.tf.insertNodes(node);
 }
 
 /**
  * Get a Lucide icon by name (kebab-case or PascalCase)
  */
 function getIcon(iconName?: string): React.ReactNode {
-  if (!iconName) return <PilcrowIcon />
+  if (!iconName) return <PilcrowIcon />;
 
   // Convert kebab-case to PascalCase for Lucide
-  const pascalCase = iconName
-    .split('-')
-    .map(part => part.charAt(0).toUpperCase() + part.slice(1))
-    .join('') + 'Icon'
+  const pascalCase = `${iconName
+    .split("-")
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join("")}Icon`;
 
-  const IconComponent = (icons as any)[pascalCase]
+  const IconComponent = (icons as any)[pascalCase];
   if (IconComponent) {
-    return <IconComponent />
+    return <IconComponent />;
   }
 
   // Fallback
-  return <PilcrowIcon />
+  return <PilcrowIcon />;
 }
 
 /**
  * Build slash menu groups from stdlib registry
  */
 function buildGroupsFromRegistry(): Group[] {
-  const groups: Group[] = []
-  const categories = listCategories()
-  const allComponents = listComponents()
+  const groups: Group[] = [];
+  const categories = listCategories();
+  const allComponents = listComponents();
 
   // Group components by category
-  const componentsByCategory = new Map<string, Array<{ key: string } & ComponentMeta>>()
+  const componentsByCategory = new Map<string, Array<{ key: string } & ComponentMeta>>();
 
   for (const comp of allComponents) {
-    const catKey = comp.category
+    const catKey = comp.category;
     if (!componentsByCategory.has(catKey)) {
-      componentsByCategory.set(catKey, [])
+      componentsByCategory.set(catKey, []);
     }
-    componentsByCategory.get(catKey)!.push(comp)
+    componentsByCategory.get(catKey)?.push(comp);
   }
 
   // Define category order and which categories to show
   const categoryOrder = [
-    'blocks',
-    'data',
-    'charts',
-    'ui-layout',
-    'ui-input',
-    'ui-display',
-    'ui-feedback',
-    'ui-overlay',
-    'ui-navigation',
-    'media',
-    'inline',
-    'layout',
-  ]
+    "blocks",
+    "data",
+    "charts",
+    "ui-layout",
+    "ui-input",
+    "ui-display",
+    "ui-feedback",
+    "ui-overlay",
+    "ui-navigation",
+    "media",
+    "inline",
+    "layout",
+  ];
 
   // Process categories in order
   for (const catKey of categoryOrder) {
-    const catMeta = categories.find(c => c.key === catKey)
-    if (!catMeta) continue
+    const catMeta = categories.find((c) => c.key === catKey);
+    if (!catMeta) continue;
 
-    const components = componentsByCategory.get(catKey) || []
-    if (components.length === 0) continue
+    const components = componentsByCategory.get(catKey) || [];
+    if (components.length === 0) continue;
 
-    const items: SlashMenuItem[] = []
+    const items: SlashMenuItem[] = [];
 
     for (const comp of components) {
       // Check if this is a "native" plate block (has plateKey) or a component (has files)
@@ -149,13 +132,30 @@ function buildGroupsFromRegistry(): Group[] {
           description: comp.description,
           keywords: comp.keywords || [],
           onSelect: (editor) => insertBlock(editor, comp.plateKey!),
-        })
+        });
       } else if (comp.files && comp.files.length > 0) {
         // Stdlib component - will be rendered via RSC
         // Determine if component is void (self-closing, no children)
         // Components like MetricCard, charts are void; Card, Button are not
-        const voidComponents = new Set(['MetricCard', 'DataTable', 'BarChart', 'LineChart', 'Avatar', 'Badge', 'Progress', 'Skeleton', 'Spinner', 'Separator', 'Input', 'Textarea', 'Checkbox', 'Switch', 'Slider', 'Calendar'])
-        const isVoid = voidComponents.has(comp.name)
+        const voidComponents = new Set([
+          "MetricCard",
+          "DataTable",
+          "BarChart",
+          "LineChart",
+          "Avatar",
+          "Badge",
+          "Progress",
+          "Skeleton",
+          "Spinner",
+          "Separator",
+          "Input",
+          "Textarea",
+          "Checkbox",
+          "Switch",
+          "Slider",
+          "Calendar",
+        ]);
+        const isVoid = voidComponents.has(comp.name);
 
         items.push({
           icon: getIcon(comp.icon),
@@ -164,7 +164,7 @@ function buildGroupsFromRegistry(): Group[] {
           description: comp.description,
           keywords: comp.keywords || [],
           onSelect: (editor) => insertStdlibComponent(editor, comp.name, isVoid),
-        })
+        });
       }
     }
 
@@ -172,18 +172,18 @@ function buildGroupsFromRegistry(): Group[] {
       groups.push({
         group: catMeta.name,
         items,
-      })
+      });
     }
   }
 
-  return groups
+  return groups;
 }
 
 export function SlashInputElement(props: PlateElementProps) {
-  const { children, editor, element } = props
+  const { children, editor, element } = props;
 
   // Build groups from registry (memoized)
-  const groups = useMemo(() => buildGroupsFromRegistry(), [])
+  const groups = useMemo(() => buildGroupsFromRegistry(), []);
 
   return (
     <PlateElement {...props} as="span">
@@ -196,46 +196,35 @@ export function SlashInputElement(props: PlateElementProps) {
           {groups.map(({ group, items }) => (
             <InlineComboboxGroup key={group}>
               <InlineComboboxGroupLabel>{group}</InlineComboboxGroupLabel>
-              {items.map(
-                ({
-                  description,
-                  icon,
-                  keywords,
-                  label,
-                  value,
-                  onSelect,
-                }) => (
-                  <InlineComboboxItem
-                    group={group}
-                    key={value}
-                    keywords={keywords}
-                    label={label}
-                    onClick={() => onSelect(editor)}
-                    value={value}
-                  >
-                    {description ? (
-                      <>
-                        <div className="flex size-8 shrink-0 items-center justify-center rounded border border-border bg-background [&_svg]:size-4 [&_svg]:text-muted-foreground">
-                          {icon}
-                        </div>
-                        <div className="ml-2 flex flex-1 flex-col truncate">
-                          <span className="text-foreground text-sm">{label ?? value}</span>
-                          <span className="truncate text-muted-foreground text-xs">
-                            {description}
-                          </span>
-                        </div>
-                      </>
-                    ) : (
-                      <>
-                        <div className="mr-2 text-muted-foreground">
-                          {icon}
-                        </div>
-                        <span className="text-foreground">{label ?? value}</span>
-                      </>
-                    )}
-                  </InlineComboboxItem>
-                )
-              )}
+              {items.map(({ description, icon, keywords, label, value, onSelect }) => (
+                <InlineComboboxItem
+                  group={group}
+                  key={value}
+                  keywords={keywords}
+                  label={label}
+                  onClick={() => onSelect(editor)}
+                  value={value}
+                >
+                  {description ? (
+                    <>
+                      <div className="flex size-8 shrink-0 items-center justify-center rounded border border-border bg-background [&_svg]:size-4 [&_svg]:text-muted-foreground">
+                        {icon}
+                      </div>
+                      <div className="ml-2 flex flex-1 flex-col truncate">
+                        <span className="text-foreground text-sm">{label ?? value}</span>
+                        <span className="truncate text-muted-foreground text-xs">
+                          {description}
+                        </span>
+                      </div>
+                    </>
+                  ) : (
+                    <>
+                      <div className="mr-2 text-muted-foreground">{icon}</div>
+                      <span className="text-foreground">{label ?? value}</span>
+                    </>
+                  )}
+                </InlineComboboxItem>
+              ))}
             </InlineComboboxGroup>
           ))}
         </InlineComboboxContent>
@@ -243,5 +232,5 @@ export function SlashInputElement(props: PlateElementProps) {
 
       {children}
     </PlateElement>
-  )
+  );
 }

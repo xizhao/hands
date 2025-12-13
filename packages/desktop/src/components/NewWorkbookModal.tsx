@@ -7,29 +7,27 @@
  * - Preview of what each template provides
  */
 
+import {
+  ChartBar,
+  CurrencyDollar,
+  File,
+  Globe,
+  Lightning,
+  ShoppingCart,
+  Sparkle,
+  Users,
+} from "@phosphor-icons/react";
 import { useState } from "react";
+import { Button } from "@/components/ui/button";
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogHeader,
   DialogTitle,
-  DialogDescription,
 } from "@/components/ui/dialog";
-import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
-import {
-  File,
-  Table,
-  ChartBar,
-  Database,
-  Lightning,
-  Sparkle,
-  Globe,
-  ShoppingCart,
-  Users,
-  CurrencyDollar,
-} from "@phosphor-icons/react";
 
 // Template definitions
 const templates = [
@@ -112,7 +110,7 @@ export function NewWorkbookModal({
     onCreate(
       finalName,
       description.trim() || undefined,
-      selectedTemplate !== "blank" ? selectedTemplate : undefined
+      selectedTemplate !== "blank" ? selectedTemplate : undefined,
     );
     // Reset form
     setName("");
@@ -156,22 +154,16 @@ export function NewWorkbookModal({
                     "border transition-all duration-150",
                     selectedTemplate === template.id
                       ? "border-primary bg-primary/5 ring-1 ring-primary/20"
-                      : "border-border/50 hover:border-border hover:bg-accent/50"
+                      : "border-border/50 hover:border-border hover:bg-accent/50",
                   )}
                 >
                   {template.popular && (
                     <div className="absolute -top-1.5 -right-1.5">
-                      <Sparkle
-                        weight="fill"
-                        className="h-3.5 w-3.5 text-yellow-500"
-                      />
+                      <Sparkle weight="fill" className="h-3.5 w-3.5 text-yellow-500" />
                     </div>
                   )}
                   <div className={cn("p-2 rounded-md", template.bgColor)}>
-                    <template.icon
-                      weight="duotone"
-                      className={cn("h-5 w-5", template.color)}
-                    />
+                    <template.icon weight="duotone" className={cn("h-5 w-5", template.color)} />
                   </div>
                   <div>
                     <div className="text-xs font-medium">{template.name}</div>
@@ -199,8 +191,7 @@ export function NewWorkbookModal({
           {/* Description Input */}
           <div className="space-y-2">
             <label className="text-sm font-medium">
-              Description{" "}
-              <span className="text-muted-foreground font-normal">(optional)</span>
+              Description <span className="text-muted-foreground font-normal">(optional)</span>
             </label>
             <Input
               value={description}

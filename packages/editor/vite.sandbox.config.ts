@@ -8,35 +8,33 @@
  * In prod mode: Outputs to ../desktop/dist/editor/ for Tauri to serve
  */
 
-import { defineConfig } from 'vite'
-import react from '@vitejs/plugin-react'
-import { resolve } from 'path'
+import { resolve } from "node:path";
+import react from "@vitejs/plugin-react";
+import { defineConfig } from "vite";
 
-const isDev = process.env.NODE_ENV !== 'production'
+const isDev = process.env.NODE_ENV !== "production";
 
 export default defineConfig({
   plugins: [react()],
   // In dev: no base (runtime proxies /sandbox/* -> /)
   // In prod: /editor/ for Tauri asset serving
-  base: isDev ? '/' : '/editor/',
+  base: isDev ? "/" : "/editor/",
   build: {
-    target: 'esnext',
-    outDir: resolve(__dirname, '../desktop/dist/editor'),
+    target: "esnext",
+    outDir: resolve(__dirname, "../desktop/dist/editor"),
     emptyDirOnBuild: true,
     rollupOptions: {
       input: {
-        sandbox: resolve(__dirname, 'sandbox.html'),
+        sandbox: resolve(__dirname, "sandbox.html"),
       },
     },
   },
   esbuild: {
-    target: 'esnext',
+    target: "esnext",
   },
   resolve: {
     alias: {
-      '@hands/editor': resolve(__dirname, 'src'),
-      'oxc-parser': resolve(__dirname, '../../node_modules/.bun/oxc-parser@0.102.0/node_modules/oxc-parser/src-js/wasm.js'),
-      '@oxc-parser/binding-wasm32-wasi': resolve(__dirname, '../../node_modules/@oxc-parser+binding-wasm32-wasi'),
+      "@hands/editor": resolve(__dirname, "src"),
     },
   },
   server: {
@@ -45,17 +43,14 @@ export default defineConfig({
     port: 5167,
     cors: true,
     headers: {
-      'Access-Control-Allow-Origin': '*',
+      "Access-Control-Allow-Origin": "*",
     },
   },
   optimizeDeps: {
-    include: [
-      '@codemirror/lang-javascript',
-      '@uiw/react-codemirror',
-    ],
-    exclude: ['oxc-parser', '@oxc-parser/binding-wasm32-wasi'],
+    include: ["@codemirror/lang-javascript", "@uiw/react-codemirror"],
+    exclude: ["@oxc-parser/binding-wasm32-wasi", "oxc-parser"],
     esbuildOptions: {
-      target: 'esnext',
+      target: "esnext",
     },
   },
-})
+});

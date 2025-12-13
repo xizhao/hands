@@ -1,6 +1,6 @@
-import { useEffect, useState } from "react";
 import { getCurrentWindow } from "@tauri-apps/api/window";
-import { X, Minus, Maximize2, Minimize2, ExternalLink, RotateCw } from "lucide-react";
+import { ExternalLink, Maximize2, Minimize2, Minus, RotateCw, X } from "lucide-react";
+import { useEffect, useState } from "react";
 import { cn } from "@/lib/utils";
 
 // Preview window - wraps external URLs with custom window controls
@@ -39,7 +39,7 @@ export function PreviewWindow() {
     });
 
     return () => {
-      unlisten.then(fn => fn());
+      unlisten.then((fn) => fn());
     };
   }, []);
 
@@ -115,9 +115,7 @@ export function PreviewWindow() {
           onMouseDown={handleDragStart}
           className="flex-1 h-full flex items-center px-3 cursor-grab active:cursor-grabbing select-none"
         >
-          <span className="text-sm text-foreground truncate pointer-events-none">
-            {title}
-          </span>
+          <span className="text-sm text-foreground truncate pointer-events-none">{title}</span>
         </div>
 
         {/* Right side - controls (not draggable) */}

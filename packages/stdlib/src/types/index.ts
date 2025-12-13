@@ -2,10 +2,11 @@
  * Hands Stdlib Type Definitions
  */
 
-export * from "./block.js"
 export type {
-  SourceConfig,
-  SourceContext,
-  SourceHandler,
-  SourceDefinition,
-} from "../sources/types.js"
+  SourceDefinitionV2,
+  SourcePermissions,
+  SourceRole,
+  TableDefinition,
+  TableSubscription,
+} from "../sources/types.js";
+export * from "./block.js";

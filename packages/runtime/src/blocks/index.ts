@@ -4,10 +4,9 @@
  * Discovers, validates, and serves blocks from the blocks/ directory.
  */
 
-export { discoverBlocks, type BlockDiscoveryResult } from "./discovery.js"
-export { validateBlockFile, type BlockValidationResult } from "./validate.js"
-export { serveBlock, type BlockServeOptions, type BlockServeResult } from "./serve.js"
-export { BlockRegistry } from "./registry.js"
-
 // Re-export context types from stdlib
-export type { BlockContext, DbContext, BlockFn, BlockMeta, DiscoveredBlock } from "@hands/stdlib"
+export type { BlockContext, BlockFn, BlockMeta, DbContext, DiscoveredBlock } from "@hands/stdlib";
+export { type BlockDiscoveryResult, discoverBlocks } from "./discovery.js";
+export { BlockRegistry } from "./registry.js";
+export { type BlockServeOptions, type BlockServeResult, serveBlock } from "./serve.js";
+export { type BlockValidationResult, validateBlockFile } from "./validate.js";

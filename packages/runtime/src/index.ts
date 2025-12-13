@@ -1,4 +1,5 @@
 #!/usr/bin/env bun
+
 /**
  * Hands Runtime - Instant streaming dev server
  *
@@ -13,44 +14,49 @@
  *   4. Progressive readiness - manifest first, then DB, then RSC
  */
 
-import { spawn, type ChildProcess } from "child_process"
-import { existsSync, readdirSync, readFileSync, watch, type FSWatcher } from "fs"
-import { join } from "path"
-import { createServer, type ServerResponse } from "http"
-import { Hono } from "hono"
-import { cors } from "hono/cors"
-import { buildRSC } from "./build/rsc.js"
-import { PORTS } from "./ports.js"
-import { initWorkbookDb, type WorkbookDb } from "./db/index.js"
-import type { BlockContext } from "./ctx.js"
-import { registerSourceRoutes, checkMissingSecrets } from "./sources/index.js"
-import type { SourceDefinition } from "@hands/stdlib/sources"
-import { ensureStdlibSymlink, ensureWorkbookStdlibSymlink, getEditorSourcePath } from "./config/index.js"
-import { createPgTypedRunner, type PgTypedRunner } from "./db/pgtyped/index.js"
+import { type ChildProcess, spawn } from "node:child_process";
+import { existsSync, type FSWatcher, readdirSync, readFileSync, watch } from "node:fs";
+import { createServer } from "node:http";
+import { join } from "node:path";
+import type { SourceDefinitionV2 } from "@hands/stdlib/sources";
+import { Hono } from "hono";
+import { cors } from "hono/cors";
+import { buildRSC } from "./build/rsc.js";
+import {
+  ensureStdlibSymlink,
+  ensureWorkbookStdlibSymlink,
+  getEditorSourcePath,
+} from "./config/index.js";
+import type { BlockContext } from "./ctx.js";
+import { initWorkbookDb, type WorkbookDb } from "./db/index.js";
+import { createPgTypedRunner, type PgTypedRunner } from "./db/pgtyped/index.js";
+import { PORTS } from "./ports.js";
+import { registerSourceRoutes } from "./sources/index.js";
+import { registerTRPCRoutes } from "./trpc/index.js";
 
 interface RuntimeConfig {
-  workbookId: string
-  workbookDir: string
-  port: number
+  workbookId: string;
+  workbookDir: string;
+  port: number;
 }
 
 interface RuntimeState {
-  dbReady: boolean
-  viteReady: boolean
-  vitePort: number | null
-  editorReady: boolean
-  editorPort: number | null
-  editorProc: ChildProcess | null
-  editorRestartCount: number
-  editorReadyPromise: Promise<void> | null
-  editorReadyResolve: (() => void) | null
-  editorConfig: RuntimeConfig | null
-  workbookDb: WorkbookDb | null
-  viteProc: ChildProcess | null
-  fileWatchers: FSWatcher[]
-  buildErrors: string[]
-  viteError: string | null
-  pgTypedRunner: PgTypedRunner | null
+  dbReady: boolean;
+  viteReady: boolean;
+  vitePort: number | null;
+  editorReady: boolean;
+  editorPort: number | null;
+  editorProc: ChildProcess | null;
+  editorRestartCount: number;
+  editorReadyPromise: Promise<void> | null;
+  editorReadyResolve: (() => void) | null;
+  editorConfig: RuntimeConfig | null;
+  workbookDb: WorkbookDb | null;
+  viteProc: ChildProcess | null;
+  fileWatchers: FSWatcher[];
+  buildErrors: string[];
+  viteError: string | null;
+  pgTypedRunner: PgTypedRunner | null;
 }
 
 // Global state for progressive readiness
@@ -71,10 +77,10 @@ const state: RuntimeState = {
   viteError: null,
   fileWatchers: [],
   pgTypedRunner: null,
-}
+};
 
 // Max restarts before giving up
-const MAX_EDITOR_RESTARTS = 3
+const MAX_EDITOR_RESTARTS = 3;
 
 /**
  * Format a block source file with Biome + TypeScript import organization
@@ -82,88 +88,95 @@ const MAX_EDITOR_RESTARTS = 3
  */
 async function formatBlockSource(filePath: string, workbookDir: string): Promise<boolean> {
   try {
-    const blocksDir = join(workbookDir, "blocks")
+    const blocksDir = join(workbookDir, "blocks");
 
     // Step 1: TypeScript import organization via ts-morph
-    const { Project } = await import("ts-morph")
-    const tsconfigPath = join(workbookDir, "tsconfig.json")
-    let project: InstanceType<typeof Project>
+    const { Project } = await import("ts-morph");
+    const tsconfigPath = join(workbookDir, "tsconfig.json");
+    let project: InstanceType<typeof Project>;
 
     if (existsSync(tsconfigPath)) {
-      project = new Project({ tsConfigFilePath: tsconfigPath })
+      project = new Project({ tsConfigFilePath: tsconfigPath });
     } else {
-      project = new Project({ useInMemoryFileSystem: false })
-      project.addSourceFilesAtPaths(join(blocksDir, "**/*.{ts,tsx}"))
+      project = new Project({ useInMemoryFileSystem: false });
+      project.addSourceFilesAtPaths(join(blocksDir, "**/*.{ts,tsx}"));
     }
 
-    const sourceFile = project.getSourceFile(filePath)
+    const sourceFile = project.getSourceFile(filePath);
     if (sourceFile) {
-      sourceFile.organizeImports()
-      await sourceFile.save()
+      sourceFile.organizeImports();
+      await sourceFile.save();
     }
 
     // Step 2: Biome format + lint fixes
-    const { spawnSync } = await import("child_process")
-    const biomePath = join(workbookDir, "node_modules", ".bin", "biome")
-    const globalBiomePath = join(import.meta.dirname, "..", "node_modules", ".bin", "biome")
-    const biomeCmd = existsSync(biomePath) ? biomePath : globalBiomePath
+    const { spawnSync } = await import("node:child_process");
+    const biomePath = join(workbookDir, "node_modules", ".bin", "biome");
+    const globalBiomePath = join(import.meta.dirname, "..", "node_modules", ".bin", "biome");
+    const biomeCmd = existsSync(biomePath) ? biomePath : globalBiomePath;
 
     // Ensure biome config exists
-    const biomeConfigPath = join(workbookDir, "biome.json")
+    const biomeConfigPath = join(workbookDir, "biome.json");
     if (!existsSync(biomeConfigPath)) {
-      const { writeFileSync } = await import("fs")
-      writeFileSync(biomeConfigPath, JSON.stringify({
-        "$schema": "https://biomejs.dev/schemas/1.9.4/schema.json",
-        "organizeImports": { "enabled": true },
-        "linter": { "enabled": true },
-        "formatter": { "enabled": true, "indentStyle": "space", "indentWidth": 2 },
-        "javascript": { "formatter": { "semicolons": "asNeeded", "quoteStyle": "single" } }
-      }, null, 2))
+      const { writeFileSync } = await import("node:fs");
+      writeFileSync(
+        biomeConfigPath,
+        JSON.stringify(
+          {
+            $schema: "https://biomejs.dev/schemas/1.9.4/schema.json",
+            organizeImports: { enabled: true },
+            linter: { enabled: true },
+            formatter: { enabled: true, indentStyle: "space", indentWidth: 2 },
+            javascript: { formatter: { semicolons: "asNeeded", quoteStyle: "single" } },
+          },
+          null,
+          2,
+        ),
+      );
     }
 
-    spawnSync(biomeCmd, ["check", "--write", filePath], { cwd: workbookDir })
-    return true
+    spawnSync(biomeCmd, ["check", "--write", filePath], { cwd: workbookDir });
+    return true;
   } catch (err) {
-    console.error("[runtime] Format failed:", err)
-    return false
+    console.error("[runtime] Format failed:", err);
+    return false;
   }
 }
 
 // Parse CLI args
 function parseArgs(): RuntimeConfig {
-  const args: Record<string, string> = {}
+  const args: Record<string, string> = {};
 
   for (const arg of process.argv.slice(2)) {
     if (arg.startsWith("--")) {
-      const [key, value] = arg.slice(2).split("=")
-      args[key.replace(/-/g, "_")] = value
+      const [key, value] = arg.slice(2).split("=");
+      args[key.replace(/-/g, "_")] = value;
     }
   }
 
   if (!args.workbook_id || !args.workbook_dir) {
-    console.error("Usage: hands-runtime --workbook-id=<id> --workbook-dir=<dir> [--port=<port>]")
-    process.exit(1)
+    console.error("Usage: hands-runtime --workbook-id=<id> --workbook-dir=<dir> [--port=<port>]");
+    process.exit(1);
   }
 
   return {
     workbookId: args.workbook_id,
     workbookDir: args.workbook_dir,
     port: args.port ? parseInt(args.port, 10) : PORTS.RUNTIME,
-  }
+  };
 }
 
 /** Source info for manifest */
 interface ManifestSource {
-  id: string
-  name: string
-  title: string
-  description: string
-  schedule?: string
-  secrets: string[]
-  missingSecrets: string[]
-  path: string
+  id: string;
+  name: string;
+  title: string;
+  description: string;
+  schedule?: string;
+  secrets: string[];
+  missingSecrets: string[];
+  path: string;
   /** Markdown spec describing the source's intent and behavior */
-  spec?: string
+  spec?: string;
 }
 
 /**
@@ -171,84 +184,73 @@ interface ManifestSource {
  * Single file walk discovers blocks and sources.
  */
 async function getManifest(workbookDir: string, workbookId: string) {
-  const blocks: Array<{ id: string; title: string; path: string; parentDir: string }> = []
-  const sources: ManifestSource[] = []
+  const blocks: Array<{ id: string; title: string; path: string; parentDir: string }> = [];
+  const sources: ManifestSource[] = [];
 
   // Read blocks from filesystem (recursive walk)
-  const blocksDir = join(workbookDir, "blocks")
+  const blocksDir = join(workbookDir, "blocks");
   if (existsSync(blocksDir)) {
     walkDirectory(blocksDir, blocksDir, (filePath, relativePath) => {
-      const filename = filePath.split("/").pop() || ""
+      const filename = filePath.split("/").pop() || "";
       if ((filename.endsWith(".tsx") || filename.endsWith(".ts")) && !filename.startsWith("_")) {
         // ID is relative path without extension (e.g., "ui/email-events")
-        const id = relativePath.replace(/\.tsx?$/, "")
+        const id = relativePath.replace(/\.tsx?$/, "");
         // parentDir is the directory portion (e.g., "ui" or "" for root)
         const parentDir = relativePath.includes("/")
           ? relativePath.substring(0, relativePath.lastIndexOf("/"))
-          : ""
+          : "";
         // Extract title from meta export
-        const content = readFileSync(filePath, "utf-8")
-        const title = extractBlockTitle(content) || id.split("/").pop() || id
-        blocks.push({ id, title, path: relativePath, parentDir })
+        const content = readFileSync(filePath, "utf-8");
+        const title = extractBlockTitle(content) || id.split("/").pop() || id;
+        blocks.push({ id, title, path: relativePath, parentDir });
       }
-    })
+    });
   }
 
-  // Read sources from filesystem - scan sources/ for directories with index.ts
-  const sourcesDir = join(workbookDir, "sources")
+  // Read sources from filesystem - scan sources/ for directories with source.ts (v2)
+  const sourcesDir = join(workbookDir, "sources");
   if (existsSync(sourcesDir)) {
-    const entries = readdirSync(sourcesDir, { withFileTypes: true })
+    const entries = readdirSync(sourcesDir, { withFileTypes: true });
     for (const entry of entries) {
-      if (!entry.isDirectory()) continue
+      if (!entry.isDirectory()) continue;
 
-      // Look for index.ts or index.tsx
-      const sourceDir = join(sourcesDir, entry.name)
-      let indexPath: string | null = null
+      // Look for source.ts (v2 format)
+      const sourceDir = join(sourcesDir, entry.name);
+      const sourcePath = join(sourceDir, "source.ts");
 
-      for (const filename of ["index.ts", "index.tsx"]) {
-        const path = join(sourceDir, filename)
-        if (existsSync(path)) {
-          indexPath = path
-          break
-        }
-      }
-
-      if (!indexPath) continue
+      if (!existsSync(sourcePath)) continue;
 
       try {
         // Dynamic import - Bun will handle TypeScript
-        const mod = await import(indexPath)
-        const definition = mod.default as SourceDefinition<any, any> | undefined
+        const mod = await import(sourcePath);
+        const definition = mod.default as SourceDefinitionV2 | undefined;
 
-        // Validate it's a proper source definition
-        if (definition?.config && typeof definition?.sync === "function") {
-          const cfg = definition.config
-          const missing = checkMissingSecrets(workbookDir, cfg.secrets)
-
+        // Validate it's a proper v2 source definition
+        if (definition?.name) {
           sources.push({
             id: entry.name,
-            name: cfg.name,
-            title: cfg.title,
-            description: cfg.description,
-            schedule: cfg.schedule,
-            secrets: [...cfg.secrets],
-            missingSecrets: missing,
-            path: indexPath,
-            spec: cfg.spec,
-          })
+            name: definition.name,
+            title: definition.name,
+            description: definition.description ?? "",
+            schedule: undefined,
+            secrets: [],
+            missingSecrets: [],
+            path: sourcePath,
+            spec: undefined,
+          });
         }
       } catch (err) {
-        console.error(`[manifest] Failed to load source ${entry.name}:`, err)
+        console.error(`[manifest] Failed to load source ${entry.name}:`, err);
       }
     }
   }
 
   // Read config
-  let config: Record<string, any> = {}
-  const handsJsonPath = join(workbookDir, "hands.json")
+  let config: Record<string, any> = {};
+  const handsJsonPath = join(workbookDir, "hands.json");
   if (existsSync(handsJsonPath)) {
     try {
-      config = JSON.parse(readFileSync(handsJsonPath, "utf-8"))
+      config = JSON.parse(readFileSync(handsJsonPath, "utf-8"));
     } catch {}
   }
 
@@ -259,7 +261,7 @@ async function getManifest(workbookDir: string, workbookId: string) {
     sources,
     config,
     isEmpty: blocks.length === 0 && sources.length === 0,
-  }
+  };
 }
 
 /**
@@ -268,28 +270,30 @@ async function getManifest(workbookDir: string, workbookId: string) {
 function walkDirectory(
   dir: string,
   baseDir: string,
-  callback: (filePath: string, relativePath: string) => void
+  callback: (filePath: string, relativePath: string) => void,
 ) {
-  const entries = readdirSync(dir, { withFileTypes: true })
+  const entries = readdirSync(dir, { withFileTypes: true });
   for (const entry of entries) {
-    const fullPath = join(dir, entry.name)
-    const relativePath = fullPath.substring(baseDir.length + 1) // +1 for leading slash
+    const fullPath = join(dir, entry.name);
+    const relativePath = fullPath.substring(baseDir.length + 1); // +1 for leading slash
     if (entry.isDirectory()) {
       // Skip hidden directories and node_modules
       if (!entry.name.startsWith(".") && entry.name !== "node_modules") {
-        walkDirectory(fullPath, baseDir, callback)
+        walkDirectory(fullPath, baseDir, callback);
       }
     } else {
-      callback(fullPath, relativePath)
+      callback(fullPath, relativePath);
     }
   }
 }
 
 function extractBlockTitle(content: string): string | null {
   // Look for: export const meta = { title: "..." }
-  const metaMatch = content.match(/export\s+const\s+meta\s*=\s*{[\s\S]*?title\s*:\s*["']([^"']+)["']/)
-  if (metaMatch) return metaMatch[1]
-  return null
+  const metaMatch = content.match(
+    /export\s+const\s+meta\s*=\s*{[\s\S]*?title\s*:\s*["']([^"']+)["']/,
+  );
+  if (metaMatch) return metaMatch[1];
+  return null;
 }
 
 /**
@@ -300,7 +304,7 @@ function generateDefaultBlockSource(blockId: string): string {
   const functionName = blockId
     .split(/[-_]/)
     .map((word) => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
-    .join("")
+    .join("");
 
   return `import type { BlockFn, BlockMeta } from "@hands/stdlib"
 
@@ -323,7 +327,7 @@ export const meta: BlockMeta = {
   description: "A new block",
   refreshable: true,
 }
-`
+`;
 }
 
 /**
@@ -332,34 +336,34 @@ export const meta: BlockMeta = {
  * Triggers pgtyped type generation on .ts/.tsx file changes
  */
 function startFileWatcher(config: RuntimeConfig) {
-  const { workbookDir } = config
-  const blocksDir = join(workbookDir, "blocks")
+  const { workbookDir } = config;
+  const blocksDir = join(workbookDir, "blocks");
 
   // Watch blocks directory
   if (existsSync(blocksDir)) {
     try {
-      const watcher = watch(blocksDir, { recursive: true }, async (event, filename) => {
+      const watcher = watch(blocksDir, { recursive: true }, async (_event, filename) => {
         if (filename && (filename.endsWith(".ts") || filename.endsWith(".tsx"))) {
           // Skip .types.ts files to avoid infinite loops
-          if (filename.endsWith(".types.ts")) return
+          if (filename.endsWith(".types.ts")) return;
 
-          console.log(`[runtime] Block changed: ${filename}`)
+          console.log(`[runtime] Block changed: ${filename}`);
 
           // Run pgtyped type generation on file change
           if (state.pgTypedRunner && state.dbReady) {
-            const filePath = join(blocksDir, filename)
+            const filePath = join(blocksDir, filename);
             try {
-              await state.pgTypedRunner.runFile(filePath)
+              await state.pgTypedRunner.runFile(filePath);
             } catch (err) {
-              console.warn(`[runtime] pgtyped failed for ${filename}:`, err)
+              console.warn(`[runtime] pgtyped failed for ${filename}:`, err);
             }
           }
         }
-      })
-      state.fileWatchers.push(watcher)
-      console.log("[runtime] Watching blocks/ for changes")
+      });
+      state.fileWatchers.push(watcher);
+      console.log("[runtime] Watching blocks/ for changes");
     } catch (err) {
-      console.warn("[runtime] Could not watch blocks/:", err)
+      console.warn("[runtime] Could not watch blocks/:", err);
     }
   }
 }
@@ -368,33 +372,33 @@ function startFileWatcher(config: RuntimeConfig) {
  * Check if a SQL query is DDL (schema-changing)
  */
 function isDDL(sql: string): boolean {
-  const normalized = sql.trim().toUpperCase()
+  const normalized = sql.trim().toUpperCase();
   return (
     normalized.startsWith("CREATE ") ||
     normalized.startsWith("ALTER ") ||
     normalized.startsWith("DROP ") ||
     normalized.startsWith("TRUNCATE ")
-  )
+  );
 }
 
 /**
  * Create the Hono app for instant serving
  */
 function createApp(config: RuntimeConfig) {
-  const app = new Hono()
+  const app = new Hono();
 
   // CORS
-  app.use("/*", cors())
+  app.use("/*", cors());
 
   // Health - simple ready/booting status
   // Single process architecture: ready when both DB and Vite are up
   app.get("/health", (c) => {
-    const ready = state.dbReady && state.viteReady
+    const ready = state.dbReady && state.viteReady;
     return c.json({
       ready,
       status: ready ? "ready" : "booting", // backward compat
-    })
-  })
+    });
+  });
 
   // Status
   app.get("/status", (c) => {
@@ -404,11 +408,15 @@ function createApp(config: RuntimeConfig) {
       services: {
         db: { ready: state.dbReady },
         vite: { ready: state.viteReady, port: state.vitePort, error: state.viteError },
-        editor: { ready: state.editorReady, port: state.editorPort, restartCount: state.editorRestartCount },
+        editor: {
+          ready: state.editorReady,
+          port: state.editorPort,
+          restartCount: state.editorRestartCount,
+        },
       },
       buildErrors: state.buildErrors,
-    })
-  })
+    });
+  });
 
   // Eval - returns diagnostic info for AlertsPanel
   // Simplified version (no tsc/biome) - just service status
@@ -432,15 +440,15 @@ function createApp(config: RuntimeConfig) {
           error: state.viteReady ? undefined : "Vite is starting",
         },
       },
-    })
-  })
+    });
+  });
 
   // Manifest - reads from filesystem only
   // Clients poll this endpoint (every 1s) instead of using SSE
   app.get("/workbook/manifest", async (c) => {
-    const manifest = await getManifest(config.workbookDir, config.workbookId)
-    return c.json(manifest)
-  })
+    const manifest = await getManifest(config.workbookDir, config.workbookId);
+    return c.json(manifest);
+  });
 
   // ============================================
   // Block Source API - for visual block editor
@@ -450,290 +458,308 @@ function createApp(config: RuntimeConfig) {
   // Get block source code
   // Use :blockId{.+} to support nested paths: /workbook/blocks/ui/email-events/source
   app.get("/workbook/blocks/:blockId{.+}/source", async (c) => {
-    const blockId = c.req.param("blockId")
-    const blocksDir = join(config.workbookDir, "blocks")
+    const blockId = c.req.param("blockId");
+    const blocksDir = join(config.workbookDir, "blocks");
 
     for (const ext of [".tsx", ".ts"]) {
-      const filePath = join(blocksDir, blockId + ext)
+      const filePath = join(blocksDir, blockId + ext);
       if (existsSync(filePath)) {
-        const source = readFileSync(filePath, "utf-8")
+        const source = readFileSync(filePath, "utf-8");
         return c.json({
           success: true,
           blockId,
           filePath,
           source,
-        })
+        });
       }
     }
 
-    return c.json({ error: "Block not found" }, 404)
-  })
+    return c.json({ error: "Block not found" }, 404);
+  });
 
   // Save block source code
   // Use :blockId{.+} to support nested paths: /workbook/blocks/ui/email-events/source
   app.put("/workbook/blocks/:blockId{.+}/source", async (c) => {
-    const blockId = c.req.param("blockId")
-    const blocksDir = join(config.workbookDir, "blocks")
-    const { source } = await c.req.json<{ source: string }>()
+    const blockId = c.req.param("blockId");
+    const blocksDir = join(config.workbookDir, "blocks");
+    const { source } = await c.req.json<{ source: string }>();
 
     if (!source || typeof source !== "string") {
-      return c.json({ error: "Missing source in request body" }, 400)
+      return c.json({ error: "Missing source in request body" }, 400);
     }
 
     // Find existing file or use .tsx for new files
-    let filePath: string | null = null
+    let filePath: string | null = null;
     for (const ext of [".tsx", ".ts"]) {
-      const path = join(blocksDir, blockId + ext)
+      const path = join(blocksDir, blockId + ext);
       if (existsSync(path)) {
-        filePath = path
-        break
+        filePath = path;
+        break;
       }
     }
 
     // Default to .tsx for new blocks
     if (!filePath) {
-      filePath = join(blocksDir, blockId + ".tsx")
+      filePath = join(blocksDir, `${blockId}.tsx`);
     }
 
     try {
       // Write the source
-      const { writeFileSync, mkdirSync, readFileSync } = await import("fs")
+      const { writeFileSync, mkdirSync, readFileSync } = await import("node:fs");
 
       // Ensure parent directories exist (for nested blocks like ui/email-events)
-      const parentDir = filePath.substring(0, filePath.lastIndexOf("/"))
+      const parentDir = filePath.substring(0, filePath.lastIndexOf("/"));
       if (!existsSync(parentDir)) {
-        mkdirSync(parentDir, { recursive: true })
+        mkdirSync(parentDir, { recursive: true });
       }
 
-      writeFileSync(filePath, source, "utf-8")
+      writeFileSync(filePath, source, "utf-8");
 
       // Auto-format after save (non-blocking, errors don't fail the save)
-      await formatBlockSource(filePath, config.workbookDir)
+      await formatBlockSource(filePath, config.workbookDir);
 
       // Read back the formatted source
-      const formattedSource = readFileSync(filePath, "utf-8")
+      const formattedSource = readFileSync(filePath, "utf-8");
 
       return c.json({
         success: true,
         blockId,
         filePath,
         source: formattedSource,
-      })
+      });
     } catch (err) {
-      return c.json({
-        error: `Failed to write block: ${err instanceof Error ? err.message : String(err)}`,
-      }, 500)
+      return c.json(
+        {
+          error: `Failed to write block: ${err instanceof Error ? err.message : String(err)}`,
+        },
+        500,
+      );
     }
-  })
+  });
 
   // Create new block
   // Supports nested paths like "ui/email-events"
   app.post("/workbook/blocks", async (c) => {
-    const { blockId, source } = await c.req.json<{ blockId: string; source?: string }>()
+    const { blockId, source } = await c.req.json<{ blockId: string; source?: string }>();
 
     if (!blockId || typeof blockId !== "string") {
-      return c.json({ error: "Missing blockId" }, 400)
+      return c.json({ error: "Missing blockId" }, 400);
     }
 
     // Validate block ID - allow paths with slashes, each segment must be valid
     // e.g., "ui/email-events" or "charts/sales/monthly"
-    const segments = blockId.split("/")
+    const segments = blockId.split("/");
     for (const segment of segments) {
       if (!/^[a-zA-Z][a-zA-Z0-9_-]*$/.test(segment)) {
-        return c.json({ error: "Invalid blockId - each path segment must start with letter, contain only alphanumeric, dashes, underscores" }, 400)
+        return c.json(
+          {
+            error:
+              "Invalid blockId - each path segment must start with letter, contain only alphanumeric, dashes, underscores",
+          },
+          400,
+        );
       }
     }
 
-    const blocksDir = join(config.workbookDir, "blocks")
-    const filePath = join(blocksDir, blockId + ".tsx")
+    const blocksDir = join(config.workbookDir, "blocks");
+    const filePath = join(blocksDir, `${blockId}.tsx`);
 
     // Check if already exists
     if (existsSync(filePath)) {
-      return c.json({ error: "Block already exists" }, 409)
+      return c.json({ error: "Block already exists" }, 409);
     }
 
     // Generate default source if not provided (use last segment for function name)
-    const blockName = segments[segments.length - 1]
-    const defaultSource = source ?? generateDefaultBlockSource(blockName)
+    const blockName = segments[segments.length - 1];
+    const defaultSource = source ?? generateDefaultBlockSource(blockName);
 
     try {
-      const { writeFileSync, mkdirSync } = await import("fs")
+      const { writeFileSync, mkdirSync } = await import("node:fs");
 
       // Ensure parent directories exist (for nested blocks)
-      const parentDir = filePath.substring(0, filePath.lastIndexOf("/"))
+      const parentDir = filePath.substring(0, filePath.lastIndexOf("/"));
       if (!existsSync(parentDir)) {
-        mkdirSync(parentDir, { recursive: true })
+        mkdirSync(parentDir, { recursive: true });
       }
 
-      writeFileSync(filePath, defaultSource, "utf-8")
+      writeFileSync(filePath, defaultSource, "utf-8");
 
-      return c.json({
-        success: true,
-        blockId,
-        filePath,
-      }, 201)
+      return c.json(
+        {
+          success: true,
+          blockId,
+          filePath,
+        },
+        201,
+      );
     } catch (err) {
-      return c.json({
-        error: `Failed to create block: ${err instanceof Error ? err.message : String(err)}`,
-      }, 500)
+      return c.json(
+        {
+          error: `Failed to create block: ${err instanceof Error ? err.message : String(err)}`,
+        },
+        500,
+      );
     }
-  })
+  });
 
   // Delete block
   // Use :blockId{.+} to support nested paths: /workbook/blocks/ui/email-events
   app.delete("/workbook/blocks/:blockId{.+}", async (c) => {
-    const blockId = c.req.param("blockId")
-    const blocksDir = join(config.workbookDir, "blocks")
+    const blockId = c.req.param("blockId");
+    const blocksDir = join(config.workbookDir, "blocks");
 
-    let deleted = false
+    let deleted = false;
     for (const ext of [".tsx", ".ts"]) {
-      const filePath = join(blocksDir, blockId + ext)
+      const filePath = join(blocksDir, blockId + ext);
       if (existsSync(filePath)) {
-        const { unlinkSync } = await import("fs")
-        unlinkSync(filePath)
-        deleted = true
-        break
+        const { unlinkSync } = await import("node:fs");
+        unlinkSync(filePath);
+        deleted = true;
+        break;
       }
     }
 
     if (!deleted) {
-      return c.json({ error: "Block not found" }, 404)
+      return c.json({ error: "Block not found" }, 404);
     }
 
-    return c.json({ success: true, blockId })
-  })
+    return c.json({ success: true, blockId });
+  });
 
   // Move/rename block with automatic import updates
   app.post("/workbook/blocks/move", async (c) => {
-    const { from, to } = await c.req.json<{ from: string; to: string }>()
+    const { from, to } = await c.req.json<{ from: string; to: string }>();
 
     if (!from || !to) {
-      return c.json({ error: "Missing 'from' or 'to' in request body" }, 400)
+      return c.json({ error: "Missing 'from' or 'to' in request body" }, 400);
     }
 
-    const blocksDir = join(config.workbookDir, "blocks")
+    const blocksDir = join(config.workbookDir, "blocks");
 
     // Find source file
-    let sourceExt: string | null = null
+    let sourceExt: string | null = null;
     for (const ext of [".tsx", ".ts"]) {
       if (existsSync(join(blocksDir, from + ext))) {
-        sourceExt = ext
-        break
+        sourceExt = ext;
+        break;
       }
     }
 
     if (!sourceExt) {
-      return c.json({ error: `Block not found: ${from}` }, 404)
+      return c.json({ error: `Block not found: ${from}` }, 404);
     }
 
-    const sourcePath = join(blocksDir, from + sourceExt)
-    const targetPath = join(blocksDir, to + sourceExt)
+    const sourcePath = join(blocksDir, from + sourceExt);
+    const targetPath = join(blocksDir, to + sourceExt);
 
     // Check target doesn't already exist
     if (existsSync(targetPath)) {
-      return c.json({ error: `Target already exists: ${to}` }, 409)
+      return c.json({ error: `Target already exists: ${to}` }, 409);
     }
 
     try {
       // Use ts-morph to move file and update all imports
-      const { Project } = await import("ts-morph")
+      const { Project } = await import("ts-morph");
 
       // Check for tsconfig, create minimal one if missing
-      const tsconfigPath = join(config.workbookDir, "tsconfig.json")
-      let project: InstanceType<typeof Project>
+      const tsconfigPath = join(config.workbookDir, "tsconfig.json");
+      let project: InstanceType<typeof Project>;
 
       if (existsSync(tsconfigPath)) {
-        project = new Project({ tsConfigFilePath: tsconfigPath })
+        project = new Project({ tsConfigFilePath: tsconfigPath });
       } else {
         // Create project without tsconfig, manually add source files
-        project = new Project({ useInMemoryFileSystem: false })
+        project = new Project({ useInMemoryFileSystem: false });
         // Add all ts/tsx files in blocks directory
-        project.addSourceFilesAtPaths(join(blocksDir, "**/*.{ts,tsx}"))
+        project.addSourceFilesAtPaths(join(blocksDir, "**/*.{ts,tsx}"));
       }
 
-      const sourceFile = project.getSourceFile(sourcePath)
+      const sourceFile = project.getSourceFile(sourcePath);
       if (!sourceFile) {
-        return c.json({ error: "Could not parse source file" }, 500)
+        return c.json({ error: "Could not parse source file" }, 500);
       }
 
       // Ensure target directory exists
-      const { mkdirSync } = await import("fs")
-      const targetDir = targetPath.substring(0, targetPath.lastIndexOf("/"))
+      const { mkdirSync } = await import("node:fs");
+      const targetDir = targetPath.substring(0, targetPath.lastIndexOf("/"));
       if (!existsSync(targetDir)) {
-        mkdirSync(targetDir, { recursive: true })
+        mkdirSync(targetDir, { recursive: true });
       }
 
       // Move file - ts-morph updates all imports automatically
-      sourceFile.move(targetPath)
+      sourceFile.move(targetPath);
 
       // Save all changes
-      await project.save()
+      await project.save();
 
       return c.json({
         success: true,
         from,
         to,
         message: "Block moved and imports updated",
-      })
+      });
     } catch (err) {
-      return c.json({
-        error: `Failed to move block: ${err instanceof Error ? err.message : String(err)}`,
-      }, 500)
+      return c.json(
+        {
+          error: `Failed to move block: ${err instanceof Error ? err.message : String(err)}`,
+        },
+        500,
+      );
     }
-  })
+  });
 
   // Format block source with Biome + TypeScript fixes
   // POST /workbook/blocks/:blockId/fmt
   app.post("/workbook/blocks/:blockId{.+}/fmt", async (c) => {
-    const blockId = c.req.param("blockId")
-    const blocksDir = join(config.workbookDir, "blocks")
+    const blockId = c.req.param("blockId");
+    const blocksDir = join(config.workbookDir, "blocks");
 
     // Find block file
-    let filePath: string | null = null
+    let filePath: string | null = null;
     for (const ext of [".tsx", ".ts"]) {
-      const path = join(blocksDir, blockId + ext)
+      const path = join(blocksDir, blockId + ext);
       if (existsSync(path)) {
-        filePath = path
-        break
+        filePath = path;
+        break;
       }
     }
 
     if (!filePath) {
-      return c.json({ success: false }, 404)
+      return c.json({ success: false }, 404);
     }
 
-    const success = await formatBlockSource(filePath, config.workbookDir)
-    return c.json({ success })
-  })
+    const success = await formatBlockSource(filePath, config.workbookDir);
+    return c.json({ success });
+  });
 
   // DB routes - require DB ready
   app.post("/db/query", async (c) => {
     if (!state.dbReady || !state.workbookDb) {
-      return c.json({ error: "Database not ready", booting: true }, 503)
+      return c.json({ error: "Database not ready", booting: true }, 503);
     }
 
-    const { query } = await c.req.json<{ query: string }>()
+    const { query } = await c.req.json<{ query: string }>();
     try {
-      const result = await state.workbookDb.db.query(query)
+      const result = await state.workbookDb.db.query(query);
 
       // Check if DDL - regenerate schema and pgtyped types
       if (isDDL(query)) {
-        await state.workbookDb.regenerateSchema()
+        await state.workbookDb.regenerateSchema();
         if (state.pgTypedRunner) {
-          await state.pgTypedRunner.refreshSchema()
-          await state.pgTypedRunner.runAll()
+          await state.pgTypedRunner.refreshSchema();
+          await state.pgTypedRunner.runAll();
         }
       }
 
-      return c.json({ rows: result.rows, rowCount: result.rows.length })
+      return c.json({ rows: result.rows, rowCount: result.rows.length });
     } catch (err) {
-      return c.json({ error: String(err) }, 500)
+      return c.json({ error: String(err) }, 500);
     }
-  })
+  });
 
   app.get("/db/tables", async (c) => {
     if (!state.dbReady || !state.workbookDb) {
-      return c.json({ error: "Database not ready", booting: true }, 503)
+      return c.json({ error: "Database not ready", booting: true }, 503);
     }
 
     try {
@@ -742,41 +768,41 @@ function createApp(config: RuntimeConfig) {
         FROM information_schema.tables
         WHERE table_schema = 'public' AND table_type = 'BASE TABLE'
         ORDER BY table_name
-      `)
-      return c.json(result.rows)
+      `);
+      return c.json(result.rows);
     } catch (err) {
-      return c.json({ error: String(err) }, 500)
+      return c.json({ error: String(err) }, 500);
     }
-  })
+  });
 
   // Backward-compatible /postgres/* routes for desktop app
   app.post("/postgres/query", async (c) => {
     if (!state.dbReady || !state.workbookDb) {
-      return c.json({ error: "Database not ready", booting: true }, 503)
+      return c.json({ error: "Database not ready", booting: true }, 503);
     }
 
-    const { query } = await c.req.json<{ query: string }>()
+    const { query } = await c.req.json<{ query: string }>();
     try {
-      const result = await state.workbookDb.db.query(query)
+      const result = await state.workbookDb.db.query(query);
 
       // Check if DDL - regenerate schema and pgtyped types
       if (isDDL(query)) {
-        await state.workbookDb.regenerateSchema()
+        await state.workbookDb.regenerateSchema();
         if (state.pgTypedRunner) {
-          await state.pgTypedRunner.refreshSchema()
-          await state.pgTypedRunner.runAll()
+          await state.pgTypedRunner.refreshSchema();
+          await state.pgTypedRunner.runAll();
         }
       }
 
-      return c.json({ rows: result.rows, rowCount: result.rows.length })
+      return c.json({ rows: result.rows, rowCount: result.rows.length });
     } catch (err) {
-      return c.json({ error: String(err) }, 500)
+      return c.json({ error: String(err) }, 500);
     }
-  })
+  });
 
   app.get("/postgres/tables", async (c) => {
     if (!state.dbReady || !state.workbookDb) {
-      return c.json({ error: "Database not ready", booting: true }, 503)
+      return c.json({ error: "Database not ready", booting: true }, 503);
     }
 
     try {
@@ -785,16 +811,16 @@ function createApp(config: RuntimeConfig) {
         FROM information_schema.tables
         WHERE table_schema = 'public' AND table_type = 'BASE TABLE'
         ORDER BY table_name
-      `)
-      return c.json(result.rows)
+      `);
+      return c.json(result.rows);
     } catch (err) {
-      return c.json({ error: String(err) }, 500)
+      return c.json({ error: String(err) }, 500);
     }
-  })
+  });
 
   app.get("/postgres/schema", async (c) => {
     if (!state.dbReady || !state.workbookDb) {
-      return c.json({ error: "Database not ready", booting: true }, 503)
+      return c.json({ error: "Database not ready", booting: true }, 503);
     }
 
     try {
@@ -810,144 +836,161 @@ function createApp(config: RuntimeConfig) {
         JOIN information_schema.columns c ON t.table_name = c.table_name
         WHERE t.table_schema = 'public' AND t.table_type = 'BASE TABLE'
         ORDER BY t.table_name, c.ordinal_position
-      `)
+      `);
 
       // Group by table for desktop app
-      const tables: Record<string, { table_name: string; columns: { name: string; type: string; nullable: boolean }[] }> = {}
-      for (const row of result.rows as Array<{ table_name: string; column_name: string; data_type: string; is_nullable: string }>) {
+      const tables: Record<
+        string,
+        { table_name: string; columns: { name: string; type: string; nullable: boolean }[] }
+      > = {};
+      for (const row of result.rows as Array<{
+        table_name: string;
+        column_name: string;
+        data_type: string;
+        is_nullable: string;
+      }>) {
         if (!tables[row.table_name]) {
-          tables[row.table_name] = { table_name: row.table_name, columns: [] }
+          tables[row.table_name] = { table_name: row.table_name, columns: [] };
         }
         tables[row.table_name].columns.push({
           name: row.column_name,
           type: row.data_type,
           nullable: row.is_nullable === "YES",
-        })
+        });
       }
 
-      return c.json(Object.values(tables))
+      return c.json(Object.values(tables));
     } catch (err) {
-      return c.json({ error: String(err) }, 500)
+      return c.json({ error: String(err) }, 500);
     }
-  })
+  });
 
   // Save workbook (dump DB to .hands/db.tar.gz)
   app.post("/db/save", async (c) => {
     if (!state.dbReady || !state.workbookDb) {
-      return c.json({ error: "Database not ready", booting: true }, 503)
+      return c.json({ error: "Database not ready", booting: true }, 503);
     }
 
     try {
-      await state.workbookDb.save()
-      return c.json({ success: true })
+      await state.workbookDb.save();
+      return c.json({ success: true });
     } catch (err) {
-      return c.json({ error: String(err) }, 500)
+      return c.json({ error: String(err) }, 500);
     }
-  })
+  });
 
   // Get block context (for Vite server to use)
   app.get("/ctx", async (c) => {
     if (!state.dbReady || !state.workbookDb) {
-      return c.json({ error: "Database not ready", booting: true }, 503)
+      return c.json({ error: "Database not ready", booting: true }, 503);
     }
     // Context is ready - Vite will call this to check
-    return c.json({ ready: true })
-  })
+    return c.json({ ready: true });
+  });
 
   // Stop endpoint for graceful shutdown (used by Tauri)
   app.post("/stop", async (c) => {
-    console.log("[runtime] Stop requested via /stop endpoint")
+    console.log("[runtime] Stop requested via /stop endpoint");
     // Trigger shutdown after responding
-    setTimeout(() => process.exit(0), 100)
-    return c.json({ success: true })
-  })
+    setTimeout(() => process.exit(0), 100);
+    return c.json({ success: true });
+  });
 
   // ============================================
   // Source Management Routes
   // ============================================
   registerSourceRoutes(app, {
     workbookDir: config.workbookDir,
-    getDbContext: () => state.workbookDb?.ctx ?? null,
     isDbReady: () => state.dbReady,
-  })
+    getDb: () => state.workbookDb?.db ?? null,
+  });
+
+  // ============================================
+  // tRPC Routes (type-safe API)
+  // ============================================
+  registerTRPCRoutes(app, {
+    workbookDir: config.workbookDir,
+    getDb: () => state.workbookDb?.db ?? null,
+    isDbReady: () => state.dbReady,
+  });
 
   // Serve client modules for RSC hydration
   // These are "use client" components that need to be loaded client-side
   // Path format: /client-modules/ui/counter-button.tsx -> blocks/ui/counter-button.tsx
   app.get("/client-modules/*", async (c) => {
     if (!state.viteReady || !state.vitePort) {
-      return c.json({ error: "Vite not ready", booting: true }, 503)
+      return c.json({ error: "Vite not ready", booting: true }, 503);
     }
 
     // Extract the module path from the request
-    const modulePath = c.req.path.replace("/client-modules", "")
+    const modulePath = c.req.path.replace("/client-modules", "");
 
     // Request this module from Vite using the fs prefix for absolute paths
     // Vite's dev server can serve files outside the root using /@fs/ prefix
-    const blocksDir = join(config.workbookDir, "blocks")
-    const absolutePath = join(blocksDir, modulePath)
-    const viteUrl = `http://localhost:${state.vitePort}/@fs${absolutePath}`
+    const blocksDir = join(config.workbookDir, "blocks");
+    const absolutePath = join(blocksDir, modulePath);
+    const viteUrl = `http://localhost:${state.vitePort}/@fs${absolutePath}`;
 
     try {
       const response = await fetch(viteUrl, {
         headers: {
           // Vite needs these headers to know we want ESM
-          "Accept": "application/javascript, */*",
+          Accept: "application/javascript, */*",
         },
-      })
+      });
 
       if (!response.ok) {
-        console.error(`[runtime] Failed to fetch client module: ${viteUrl} -> ${response.status}`)
-        return c.json({ error: `Module not found: ${modulePath}` }, 404)
+        console.error(`[runtime] Failed to fetch client module: ${viteUrl} -> ${response.status}`);
+        return c.json({ error: `Module not found: ${modulePath}` }, 404);
       }
 
       // Get the module content as text so we can rewrite imports
-      let content = await response.text()
+      let content = await response.text();
 
       // Rewrite imports to be absolute URLs pointing to this runtime
       // This is necessary because the module will be loaded from a different origin (editor)
-      const runtimeOrigin = `http://localhost:${config.port}`
+      const runtimeOrigin = `http://localhost:${config.port}`;
 
       // Rewrite Vite's special paths to go through our proxy
       // /@vite/client, /@react-refresh, /node_modules/.vite/deps/*, etc.
       // Include query strings like ?v=xxx
-      content = content.replace(/from\s+["'](\/[^"']+)["']/g, (match, path) => {
-        return `from "${runtimeOrigin}/vite-proxy${path}"`
-      })
-      content = content.replace(/import\s+["'](\/[^"']+)["']/g, (match, path) => {
-        return `import "${runtimeOrigin}/vite-proxy${path}"`
-      })
+      content = content.replace(/from\s+["'](\/[^"']+)["']/g, (_match, path) => {
+        return `from "${runtimeOrigin}/vite-proxy${path}"`;
+      });
+      content = content.replace(/import\s+["'](\/[^"']+)["']/g, (_match, path) => {
+        return `import "${runtimeOrigin}/vite-proxy${path}"`;
+      });
       // Also handle import() calls
-      content = content.replace(/import\(["'](\/[^"']+)["']\)/g, (match, path) => {
-        return `import("${runtimeOrigin}/vite-proxy${path}")`
-      })
+      content = content.replace(/import\(["'](\/[^"']+)["']\)/g, (_match, path) => {
+        return `import("${runtimeOrigin}/vite-proxy${path}")`;
+      });
 
       // Return transformed JavaScript module
-      const headers = new Headers()
+      const headers = new Headers();
       // Set correct content type for ES module
-      headers.set("Content-Type", "application/javascript; charset=utf-8")
+      headers.set("Content-Type", "application/javascript; charset=utf-8");
       // Allow CORS for cross-origin module loading
-      headers.set("Access-Control-Allow-Origin", "*")
+      headers.set("Access-Control-Allow-Origin", "*");
 
       return new Response(content, {
         status: response.status,
         headers,
-      })
+      });
     } catch (err) {
-      console.error(`[runtime] Client module proxy failed:`, err)
-      return c.json({ error: "Module proxy failed: " + String(err) }, 502)
+      console.error(`[runtime] Client module proxy failed:`, err);
+      return c.json({ error: `Module proxy failed: ${String(err)}` }, 502);
     }
-  })
+  });
 
   // Proxy Vite internal routes for client module dependencies
   // Handles: /@vite/client, /@react-refresh, /node_modules/.vite/deps/*, /@fs/*
   app.get("/vite-proxy/*", async (c) => {
     if (!state.viteReady || !state.vitePort) {
-      return c.json({ error: "Vite not ready", booting: true }, 503)
+      return c.json({ error: "Vite not ready", booting: true }, 503);
     }
 
     // Extract the path after /vite-proxy
-    const vitePath = c.req.path.replace("/vite-proxy", "")
+    const vitePath = c.req.path.replace("/vite-proxy", "");
 
     // CRITICAL: Intercept React deps and return shims that use window.__HANDS_REACT__
     // This prevents "multiple React copies" errors when loading client components cross-origin.
@@ -1023,50 +1066,52 @@ export const jsxs = JSX.jsxs;
 export const jsxDEV = JSX.jsxDEV;
 export const Fragment = JSX.Fragment;
 `,
-    }
+    };
 
     // Check if this is a React dep request
-    const depMatch = vitePath.match(/\/node_modules\/\.vite\/deps\/(react[^?]*)/)
+    const depMatch = vitePath.match(/\/node_modules\/\.vite\/deps\/(react[^?]*)/);
     if (depMatch) {
-      const depName = depMatch[1]
-      const shim = reactShims[depName]
+      const depName = depMatch[1];
+      const shim = reactShims[depName];
       if (shim) {
-        console.debug(`[runtime] Serving React shim for: ${depName}`)
-        const headers = new Headers()
-        headers.set("Content-Type", "application/javascript; charset=utf-8")
-        headers.set("Access-Control-Allow-Origin", "*")
-        headers.set("Cache-Control", "no-cache")
-        return new Response(shim.trim(), { status: 200, headers })
+        console.debug(`[runtime] Serving React shim for: ${depName}`);
+        const headers = new Headers();
+        headers.set("Content-Type", "application/javascript; charset=utf-8");
+        headers.set("Access-Control-Allow-Origin", "*");
+        headers.set("Cache-Control", "no-cache");
+        return new Response(shim.trim(), { status: 200, headers });
       }
     }
 
-    const viteUrl = `http://localhost:${state.vitePort}${vitePath}`
+    const viteUrl = `http://localhost:${state.vitePort}${vitePath}`;
 
     try {
       const response = await fetch(viteUrl, {
         headers: {
-          "Accept": "application/javascript, */*",
+          Accept: "application/javascript, */*",
         },
-      })
+      });
 
       if (!response.ok) {
-        console.error(`[runtime] Failed to fetch vite dep: ${viteUrl} -> ${response.status}`)
-        return c.json({ error: `Vite dependency not found: ${vitePath}` }, 404)
+        console.error(`[runtime] Failed to fetch vite dep: ${viteUrl} -> ${response.status}`);
+        return c.json({ error: `Vite dependency not found: ${vitePath}` }, 404);
       }
 
       // Get the content as text to potentially rewrite nested imports
-      let content = await response.text()
+      let content = await response.text();
 
       // CRITICAL: If this chunk contains React or ReactDOM internals, replace with shim
       // to avoid "multiple copies of React" errors.
       if (vitePath.includes("chunk-")) {
-        const isReactChunk = content.includes("node_modules/react/cjs/react.development.js") ||
-                             content.includes("node_modules/react/cjs/react.production")
-        const isReactDOMChunk = content.includes("node_modules/react-dom/cjs/react-dom.development.js") ||
-                                content.includes("node_modules/react-dom/cjs/react-dom.production")
+        const isReactChunk =
+          content.includes("node_modules/react/cjs/react.development.js") ||
+          content.includes("node_modules/react/cjs/react.production");
+        const isReactDOMChunk =
+          content.includes("node_modules/react-dom/cjs/react-dom.development.js") ||
+          content.includes("node_modules/react-dom/cjs/react-dom.production");
 
         if (isReactChunk) {
-          console.debug(`[runtime] Detected React chunk, replacing with shim: ${vitePath}`)
+          console.debug(`[runtime] Detected React chunk, replacing with shim: ${vitePath}`);
           const shimContent = `
 // Shim: React chunk -> window.__HANDS_REACT__
 const R = window.__HANDS_REACT__?.React;
@@ -1112,16 +1157,16 @@ export const useOptimistic = R.useOptimistic;
 export const useActionState = R.useActionState;
 export const cache = R.cache;
 export const __SECRET_INTERNALS_DO_NOT_USE_OR_YOU_WILL_BE_FIRED = R.__SECRET_INTERNALS_DO_NOT_USE_OR_YOU_WILL_BE_FIRED;
-`
-          const headers = new Headers()
-          headers.set("Content-Type", "application/javascript; charset=utf-8")
-          headers.set("Access-Control-Allow-Origin", "*")
-          headers.set("Cache-Control", "no-cache")
-          return new Response(shimContent.trim(), { status: 200, headers })
+`;
+          const headers = new Headers();
+          headers.set("Content-Type", "application/javascript; charset=utf-8");
+          headers.set("Access-Control-Allow-Origin", "*");
+          headers.set("Cache-Control", "no-cache");
+          return new Response(shimContent.trim(), { status: 200, headers });
         }
 
         if (isReactDOMChunk) {
-          console.debug(`[runtime] Detected ReactDOM chunk, replacing with shim: ${vitePath}`)
+          console.debug(`[runtime] Detected ReactDOM chunk, replacing with shim: ${vitePath}`);
           const shimContent = `
 // Shim: ReactDOM chunk -> window.__HANDS_REACT__
 const R = window.__HANDS_REACT__?.React;
@@ -1142,99 +1187,99 @@ export const flushSync = RD.flushSync;
 export const unstable_batchedUpdates = RD.unstable_batchedUpdates;
 export const version = RD.version;
 export const __SECRET_INTERNALS_DO_NOT_USE_OR_YOU_WILL_BE_FIRED = RD.__SECRET_INTERNALS_DO_NOT_USE_OR_YOU_WILL_BE_FIRED;
-`
-          const headers = new Headers()
-          headers.set("Content-Type", "application/javascript; charset=utf-8")
-          headers.set("Access-Control-Allow-Origin", "*")
-          headers.set("Cache-Control", "no-cache")
-          return new Response(shimContent.trim(), { status: 200, headers })
+`;
+          const headers = new Headers();
+          headers.set("Content-Type", "application/javascript; charset=utf-8");
+          headers.set("Access-Control-Allow-Origin", "*");
+          headers.set("Cache-Control", "no-cache");
+          return new Response(shimContent.trim(), { status: 200, headers });
         }
       }
 
       // Rewrite any nested imports in Vite deps to go through our proxy
-      const runtimeOrigin = `http://localhost:${config.port}`
-      content = content.replace(/from\s+["'](\/[^"']+)["']/g, (match, path) => {
-        return `from "${runtimeOrigin}/vite-proxy${path}"`
-      })
-      content = content.replace(/import\s+["'](\/[^"']+)["']/g, (match, path) => {
-        return `import "${runtimeOrigin}/vite-proxy${path}"`
-      })
-      content = content.replace(/import\(["'](\/[^"']+)["']\)/g, (match, path) => {
-        return `import("${runtimeOrigin}/vite-proxy${path}")`
-      })
+      const runtimeOrigin = `http://localhost:${config.port}`;
+      content = content.replace(/from\s+["'](\/[^"']+)["']/g, (_match, path) => {
+        return `from "${runtimeOrigin}/vite-proxy${path}"`;
+      });
+      content = content.replace(/import\s+["'](\/[^"']+)["']/g, (_match, path) => {
+        return `import "${runtimeOrigin}/vite-proxy${path}"`;
+      });
+      content = content.replace(/import\(["'](\/[^"']+)["']\)/g, (_match, path) => {
+        return `import("${runtimeOrigin}/vite-proxy${path}")`;
+      });
 
-      const headers = new Headers()
-      headers.set("Content-Type", "application/javascript; charset=utf-8")
-      headers.set("Access-Control-Allow-Origin", "*")
+      const headers = new Headers();
+      headers.set("Content-Type", "application/javascript; charset=utf-8");
+      headers.set("Access-Control-Allow-Origin", "*");
 
       return new Response(content, {
         status: response.status,
         headers,
-      })
+      });
     } catch (err) {
-      console.error(`[runtime] Vite proxy failed:`, err)
-      return c.json({ error: "Vite proxy failed: " + String(err) }, 502)
+      console.error(`[runtime] Vite proxy failed:`, err);
+      return c.json({ error: `Vite proxy failed: ${String(err)}` }, 502);
     }
-  })
+  });
 
   // Proxy to Vite for RSC routes
   app.all("/blocks/*", async (c) => {
     if (!state.viteReady || !state.vitePort) {
-      return c.json({ error: "Vite not ready", booting: true }, 503)
+      return c.json({ error: "Vite not ready", booting: true }, 503);
     }
 
-    const url = new URL(c.req.url)
-    url.host = `localhost:${state.vitePort}`
+    const url = new URL(c.req.url);
+    url.host = `localhost:${state.vitePort}`;
 
     try {
       const response = await fetch(url.toString(), {
         method: c.req.method,
         headers: c.req.raw.headers,
         body: c.req.method !== "GET" ? await c.req.text() : undefined,
-      })
+      });
 
       // Copy headers but remove transfer-encoding to avoid conflicts
       // The Node.js server will handle chunked encoding itself
-      const headers = new Headers(response.headers)
-      headers.delete("transfer-encoding")
+      const headers = new Headers(response.headers);
+      headers.delete("transfer-encoding");
 
       return new Response(response.body, {
         status: response.status,
         headers,
-      })
+      });
     } catch (err) {
-      return c.json({ error: "Vite proxy failed: " + String(err) }, 502)
+      return c.json({ error: `Vite proxy failed: ${String(err)}` }, 502);
     }
-  })
+  });
 
   // Proxy RSC component routes to Vite worker
   // This allows the editor to render arbitrary components via Flight
   app.all("/rsc/*", async (c) => {
     if (!state.viteReady || !state.vitePort) {
-      return c.json({ error: "Vite not ready", booting: true }, 503)
+      return c.json({ error: "Vite not ready", booting: true }, 503);
     }
 
-    const url = new URL(c.req.url)
-    url.host = `localhost:${state.vitePort}`
+    const url = new URL(c.req.url);
+    url.host = `localhost:${state.vitePort}`;
 
     try {
       const response = await fetch(url.toString(), {
         method: c.req.method,
         headers: c.req.raw.headers,
         body: c.req.method !== "GET" ? await c.req.text() : undefined,
-      })
+      });
 
-      const headers = new Headers(response.headers)
-      headers.delete("transfer-encoding")
+      const headers = new Headers(response.headers);
+      headers.delete("transfer-encoding");
 
       return new Response(response.body, {
         status: response.status,
         headers,
-      })
+      });
     } catch (err) {
-      return c.json({ error: "Vite proxy failed: " + String(err) }, 502)
+      return c.json({ error: `Vite proxy failed: ${String(err)}` }, 502);
     }
-  })
+  });
 
   // Proxy editor sandbox routes to editor Vite dev server
   // Desktop loads editor via /sandbox/sandbox.html
@@ -1243,19 +1288,23 @@ export const __SECRET_INTERNALS_DO_NOT_USE_OR_YOU_WILL_BE_FIRED = RD.__SECRET_IN
     // If editor not ready, await the readiness promise
     if (!state.editorReady || !state.editorPort) {
       // If editor is down and we have config, try to restart it
-      if (!state.editorProc && state.editorConfig && state.editorRestartCount < MAX_EDITOR_RESTARTS) {
-        console.log("[runtime] Editor down on request, triggering restart...")
-        state.editorRestartCount++
-        bootEditor(state.editorConfig, true)
+      if (
+        !state.editorProc &&
+        state.editorConfig &&
+        state.editorRestartCount < MAX_EDITOR_RESTARTS
+      ) {
+        console.log("[runtime] Editor down on request, triggering restart...");
+        state.editorRestartCount++;
+        bootEditor(state.editorConfig, true);
       }
 
       // Await the editor ready promise with a timeout
       if (state.editorReadyPromise) {
         const timeoutPromise = new Promise<void>((_, reject) => {
-          setTimeout(() => reject(new Error("Editor startup timeout")), 30000)
-        })
+          setTimeout(() => reject(new Error("Editor startup timeout")), 30000);
+        });
         try {
-          await Promise.race([state.editorReadyPromise, timeoutPromise])
+          await Promise.race([state.editorReadyPromise, timeoutPromise]);
         } catch {
           // Timeout or error - fall through to check state
         }
@@ -1263,44 +1312,47 @@ export const __SECRET_INTERNALS_DO_NOT_USE_OR_YOU_WILL_BE_FIRED = RD.__SECRET_IN
 
       // Final check after awaiting
       if (!state.editorReady || !state.editorPort) {
-        return c.json({
-          error: "Editor not ready",
-          booting: !!state.editorProc,
-          restartCount: state.editorRestartCount,
-        }, 503)
+        return c.json(
+          {
+            error: "Editor not ready",
+            booting: !!state.editorProc,
+            restartCount: state.editorRestartCount,
+          },
+          503,
+        );
       }
     }
 
     // Rewrite /sandbox/foo to /foo on the editor server
-    const url = new URL(c.req.url)
-    url.host = `localhost:${state.editorPort}`
-    url.pathname = url.pathname.replace(/^\/sandbox/, "")
+    const url = new URL(c.req.url);
+    url.host = `localhost:${state.editorPort}`;
+    url.pathname = url.pathname.replace(/^\/sandbox/, "");
 
     try {
       const response = await fetch(url.toString(), {
         method: c.req.method,
         headers: c.req.raw.headers,
         body: c.req.method !== "GET" ? await c.req.text() : undefined,
-      })
+      });
 
-      const headers = new Headers(response.headers)
-      headers.delete("transfer-encoding")
+      const headers = new Headers(response.headers);
+      headers.delete("transfer-encoding");
 
       return new Response(response.body, {
         status: response.status,
         headers,
-      })
+      });
     } catch (err) {
       // If proxy fails, editor might have crashed - mark as not ready
       if (state.editorReady) {
-        console.error("[runtime] Editor proxy failed, marking as not ready:", err)
-        state.editorReady = false
+        console.error("[runtime] Editor proxy failed, marking as not ready:", err);
+        state.editorReady = false;
       }
-      return c.json({ error: "Editor proxy failed: " + String(err) }, 502)
+      return c.json({ error: `Editor proxy failed: ${String(err)}` }, 502);
     }
-  })
+  });
 
-  return app
+  return app;
 }
 
 /**
@@ -1309,22 +1361,22 @@ export const __SECRET_INTERNALS_DO_NOT_USE_OR_YOU_WILL_BE_FIRED = RD.__SECRET_IN
  * Also initializes pgtyped runner for type-safe SQL queries
  */
 async function bootPGlite(workbookDir: string) {
-  console.log(`[runtime] Booting database for ${workbookDir}...`)
+  console.log(`[runtime] Booting database for ${workbookDir}...`);
 
   try {
-    state.workbookDb = await initWorkbookDb(workbookDir)
-    state.dbReady = true
-    console.log("[runtime] Database ready")
+    state.workbookDb = await initWorkbookDb(workbookDir);
+    state.dbReady = true;
+    console.log("[runtime] Database ready");
 
     // Initialize pgtyped runner for type-safe SQL queries
-    state.pgTypedRunner = createPgTypedRunner(workbookDir, state.workbookDb.db)
+    state.pgTypedRunner = createPgTypedRunner(workbookDir, state.workbookDb.db);
 
     // Run initial type generation for all block files (non-blocking)
     state.pgTypedRunner.runAll().catch((err) => {
-      console.warn("[runtime] Initial pgtyped generation failed:", err)
-    })
+      console.warn("[runtime] Initial pgtyped generation failed:", err);
+    });
   } catch (err) {
-    console.error("[runtime] Database failed:", err)
+    console.error("[runtime] Database failed:", err);
   }
 }
 
@@ -1332,124 +1384,129 @@ async function bootPGlite(workbookDir: string) {
  * Create block context for execution
  * Uses reader context (hands_reader role) for read-only access
  */
-function createBlockContext(params: Record<string, any> = {}): BlockContext {
+function _createBlockContext(params: Record<string, any> = {}): BlockContext {
   if (!state.workbookDb) {
-    throw new Error("Database not ready")
+    throw new Error("Database not ready");
   }
   // Use reader context for block rendering (read-only access to public schema)
-  const dbCtx = state.workbookDb.readerCtx
+  const dbCtx = state.workbookDb.readerCtx;
   return {
     db: dbCtx,
     sql: dbCtx.sql,
+    query: dbCtx.query,
     params,
-  }
+  };
 }
 
 /**
  * Build and start Vite in background
  */
 async function bootVite(config: RuntimeConfig) {
-  const { workbookDir, workbookId } = config
-  const vitePort = PORTS.WORKER // Use worker port for Vite (55200)
+  const { workbookDir, workbookId } = config;
+  const vitePort = PORTS.WORKER; // Use worker port for Vite (55200)
 
-  console.log("[runtime] Building RSC project...")
+  console.log("[runtime] Building RSC project...");
 
   try {
-    const buildResult = await buildRSC(workbookDir, { verbose: true })
+    const buildResult = await buildRSC(workbookDir, { verbose: true });
 
     // Log errors but continue - fail open in dev mode
     if (!buildResult.success) {
-      console.warn("[runtime] Build has errors (will start Vite anyway):")
+      console.warn("[runtime] Build has errors (will start Vite anyway):");
       for (const err of buildResult.errors) {
-        console.warn(`  - ${err}`)
+        console.warn(`  - ${err}`);
       }
       // Store errors for status endpoint
-      state.buildErrors = buildResult.errors
+      state.buildErrors = buildResult.errors;
     }
 
-    const handsDir = buildResult.outputDir
-    console.log(`[runtime] Built to ${handsDir}`)
+    const handsDir = buildResult.outputDir;
+    console.log(`[runtime] Built to ${handsDir}`);
 
     // Install deps if needed
-    const nodeModules = join(handsDir, "node_modules")
+    const nodeModules = join(handsDir, "node_modules");
     if (!existsSync(nodeModules)) {
-      console.log("[runtime] Installing dependencies...")
+      console.log("[runtime] Installing dependencies...");
       await new Promise<void>((resolve, reject) => {
         const proc = spawn("npm", ["install", "--legacy-peer-deps"], {
           cwd: handsDir,
           stdio: "inherit",
-        })
+        });
         proc.on("close", (code) => {
-          if (code === 0) resolve()
-          else reject(new Error(`npm install failed with code ${code}`))
-        })
-      })
+          if (code === 0) resolve();
+          else reject(new Error(`npm install failed with code ${code}`));
+        });
+      });
     }
 
     // Start Vite
-    console.log(`[runtime] Starting Vite on port ${vitePort}...`)
-    state.viteProc = spawn("npx", ["vite", "dev", "--port", String(vitePort), "--host", "127.0.0.1"], {
-      cwd: handsDir,
-      stdio: ["ignore", "pipe", "pipe"],
-      env: {
-        ...process.env,
-        WORKBOOK_ID: workbookId,
-        WORKBOOK_DIR: workbookDir,
-        RUNTIME_PORT: String(config.port),
+    console.log(`[runtime] Starting Vite on port ${vitePort}...`);
+    state.viteProc = spawn(
+      "npx",
+      ["vite", "dev", "--port", String(vitePort), "--host", "127.0.0.1"],
+      {
+        cwd: handsDir,
+        stdio: ["ignore", "pipe", "pipe"],
+        env: {
+          ...process.env,
+          WORKBOOK_ID: workbookId,
+          WORKBOOK_DIR: workbookDir,
+          RUNTIME_PORT: String(config.port),
+        },
       },
-    })
+    );
 
     // Forward Vite output but ignore EPIPE errors on shutdown
     // Capture stderr for error reporting
-    let stderrBuffer = ""
+    let stderrBuffer = "";
     state.viteProc.stdout?.on("data", (data) => {
-      process.stdout.write(data, () => {})
-    })
+      process.stdout.write(data, () => {});
+    });
     state.viteProc.stderr?.on("data", (data) => {
-      const str = data.toString()
-      stderrBuffer += str
+      const str = data.toString();
+      stderrBuffer += str;
       // Keep only last 2000 chars
       if (stderrBuffer.length > 2000) {
-        stderrBuffer = stderrBuffer.slice(-2000)
+        stderrBuffer = stderrBuffer.slice(-2000);
       }
-      process.stderr.write(data, () => {})
-    })
+      process.stderr.write(data, () => {});
+    });
 
     // Monitor for crashes - reset viteReady if process exits
     state.viteProc.on("exit", (code, signal) => {
       if (state.viteReady) {
-        console.error(`[runtime] Vite crashed (code=${code}, signal=${signal})`)
-        state.viteReady = false
-        state.viteError = stderrBuffer || `Vite exited with code ${code}`
-        state.viteProc = null
+        console.error(`[runtime] Vite crashed (code=${code}, signal=${signal})`);
+        state.viteReady = false;
+        state.viteError = stderrBuffer || `Vite exited with code ${code}`;
+        state.viteProc = null;
       }
-    })
+    });
 
     // Wait for Vite to be ready
-    const timeout = 30000
-    const startTime = Date.now()
+    const timeout = 30000;
+    const startTime = Date.now();
 
     while (Date.now() - startTime < timeout) {
       try {
         const response = await fetch(`http://localhost:${vitePort}/health`, {
           signal: AbortSignal.timeout(1000),
-        })
+        });
         if (response.ok) {
-          state.vitePort = vitePort
-          state.viteReady = true
-          state.viteError = null // Clear any previous error
-          console.log(`[runtime] Vite ready on port ${vitePort}`)
-          return
+          state.vitePort = vitePort;
+          state.viteReady = true;
+          state.viteError = null; // Clear any previous error
+          console.log(`[runtime] Vite ready on port ${vitePort}`);
+          return;
         }
       } catch {
         // Not ready yet
       }
-      await new Promise((resolve) => setTimeout(resolve, 500))
+      await new Promise((resolve) => setTimeout(resolve, 500));
     }
 
-    console.error("[runtime] Vite failed to start within timeout")
+    console.error("[runtime] Vite failed to start within timeout");
   } catch (err) {
-    console.error("[runtime] Vite boot failed:", err)
+    console.error("[runtime] Vite boot failed:", err);
   }
 }
 
@@ -1463,119 +1520,131 @@ async function bootVite(config: RuntimeConfig) {
  */
 async function bootEditor(config: RuntimeConfig, isRestart = false) {
   // Store config for potential restarts
-  state.editorConfig = config
+  state.editorConfig = config;
 
-  const editorPort = PORTS.EDITOR
-  const editorPath = getEditorSourcePath()
+  const editorPort = PORTS.EDITOR;
+  const editorPath = getEditorSourcePath();
 
   if (!existsSync(editorPath)) {
-    console.warn(`[runtime] Editor package not found at ${editorPath}, skipping editor server`)
+    console.warn(`[runtime] Editor package not found at ${editorPath}, skipping editor server`);
     // Resolve promise immediately since there's nothing to wait for
-    state.editorReadyPromise = Promise.resolve()
-    return
+    state.editorReadyPromise = Promise.resolve();
+    return;
   }
 
   // Create a new promise that will resolve when the editor is ready
   // This allows request handlers to await editor readiness
   state.editorReadyPromise = new Promise<void>((resolve) => {
-    state.editorReadyResolve = resolve
-  })
+    state.editorReadyResolve = resolve;
+  });
 
   if (isRestart) {
-    console.log(`[runtime] Restarting editor sandbox (attempt ${state.editorRestartCount + 1}/${MAX_EDITOR_RESTARTS})...`)
+    console.log(
+      `[runtime] Restarting editor sandbox (attempt ${state.editorRestartCount + 1}/${MAX_EDITOR_RESTARTS})...`,
+    );
   } else {
-    console.log(`[runtime] Starting editor sandbox on port ${editorPort}...`)
+    console.log(`[runtime] Starting editor sandbox on port ${editorPort}...`);
   }
 
   try {
     // Start Vite for the editor sandbox using bun to run the package script
     // This ensures we use the package's local vite version
-    state.editorProc = spawn("bun", [
-      "run", "vite",
-      "--config", "vite.sandbox.config.ts",
-      "--port", String(editorPort),
-      "--host", "127.0.0.1",
-    ], {
-      cwd: editorPath,
-      stdio: ["ignore", "pipe", "pipe"],
-      env: {
-        ...process.env,
-        // Pass runtime port so editor knows where to fetch RSC/API
-        RUNTIME_PORT: String(config.port),
+    state.editorProc = spawn(
+      "bun",
+      [
+        "run",
+        "vite",
+        "--config",
+        "vite.sandbox.config.ts",
+        "--port",
+        String(editorPort),
+        "--host",
+        "127.0.0.1",
+      ],
+      {
+        cwd: editorPath,
+        stdio: ["ignore", "pipe", "pipe"],
+        env: {
+          ...process.env,
+          // Pass runtime port so editor knows where to fetch RSC/API
+          RUNTIME_PORT: String(config.port),
+        },
       },
-    })
+    );
 
-    let stderrBuffer = ""
+    let stderrBuffer = "";
 
     // Forward output
     state.editorProc.stdout?.on("data", (data) => {
-      process.stdout.write(`[editor] ${data}`)
-    })
+      process.stdout.write(`[editor] ${data}`);
+    });
     state.editorProc.stderr?.on("data", (data) => {
-      const str = data.toString()
-      stderrBuffer += str
-      process.stderr.write(`[editor] ${str}`)
-    })
+      const str = data.toString();
+      stderrBuffer += str;
+      process.stderr.write(`[editor] ${str}`);
+    });
 
     state.editorProc.on("exit", (code, signal) => {
-      const wasReady = state.editorReady
-      state.editorReady = false
-      state.editorProc = null
+      const wasReady = state.editorReady;
+      state.editorReady = false;
+      state.editorProc = null;
 
       if (wasReady) {
-        console.error(`[runtime] Editor crashed (code=${code}, signal=${signal})`)
+        console.error(`[runtime] Editor crashed (code=${code}, signal=${signal})`);
         if (stderrBuffer) {
-          console.error(`[runtime] Editor stderr: ${stderrBuffer.slice(-500)}`)
+          console.error(`[runtime] Editor stderr: ${stderrBuffer.slice(-500)}`);
         }
 
         // Attempt restart if under limit
         if (state.editorRestartCount < MAX_EDITOR_RESTARTS && state.editorConfig) {
-          state.editorRestartCount++
-          console.log(`[runtime] Attempting editor restart in 1s...`)
+          state.editorRestartCount++;
+          console.log(`[runtime] Attempting editor restart in 1s...`);
           setTimeout(() => {
-            bootEditor(state.editorConfig!, true)
-          }, 1000)
+            bootEditor(state.editorConfig!, true);
+          }, 1000);
         } else if (state.editorRestartCount >= MAX_EDITOR_RESTARTS) {
-          console.error(`[runtime] Editor exceeded max restarts (${MAX_EDITOR_RESTARTS}), giving up`)
+          console.error(
+            `[runtime] Editor exceeded max restarts (${MAX_EDITOR_RESTARTS}), giving up`,
+          );
         }
       }
-    })
+    });
 
     // Wait for editor to be ready
-    const timeout = 30000
-    const startTime = Date.now()
+    const timeout = 30000;
+    const startTime = Date.now();
 
     while (Date.now() - startTime < timeout) {
       try {
         const response = await fetch(`http://localhost:${editorPort}/sandbox.html`, {
           signal: AbortSignal.timeout(1000),
-        })
+        });
         if (response.ok) {
-          state.editorPort = editorPort
-          state.editorReady = true
+          state.editorPort = editorPort;
+          state.editorReady = true;
           // Reset restart count on successful boot
           if (isRestart) {
-            console.log(`[runtime] Editor recovered successfully on port ${editorPort}`)
+            console.log(`[runtime] Editor recovered successfully on port ${editorPort}`);
           } else {
-            console.log(`[runtime] Editor ready on port ${editorPort}`)
+            console.log(`[runtime] Editor ready on port ${editorPort}`);
           }
-          state.editorRestartCount = 0
+          state.editorRestartCount = 0;
           // Resolve the promise so any waiting requests can proceed
           if (state.editorReadyResolve) {
-            state.editorReadyResolve()
-            state.editorReadyResolve = null
+            state.editorReadyResolve();
+            state.editorReadyResolve = null;
           }
-          return
+          return;
         }
       } catch {
         // Not ready yet
       }
-      await new Promise((resolve) => setTimeout(resolve, 500))
+      await new Promise((resolve) => setTimeout(resolve, 500));
     }
 
-    console.error("[runtime] Editor failed to start within timeout")
+    console.error("[runtime] Editor failed to start within timeout");
   } catch (err) {
-    console.error("[runtime] Editor boot failed:", err)
+    console.error("[runtime] Editor boot failed:", err);
   }
 }
 
@@ -1585,25 +1654,25 @@ async function bootEditor(config: RuntimeConfig, isRestart = false) {
  * Usage: hands-runtime check <workbook-dir> [--json]
  */
 async function runCheck() {
-  const args = process.argv.slice(2)
+  const args = process.argv.slice(2);
   // Remove 'check' command
-  const restArgs = args.slice(1)
+  const restArgs = args.slice(1);
 
   // Parse workbook dir (first positional arg or current directory)
-  let workbookDir = process.cwd()
-  let jsonOutput = false
+  let workbookDir = process.cwd();
+  let jsonOutput = false;
 
   for (const arg of restArgs) {
     if (arg === "--json") {
-      jsonOutput = true
+      jsonOutput = true;
     } else if (!arg.startsWith("-")) {
-      workbookDir = arg
+      workbookDir = arg;
     }
   }
 
   // Resolve relative paths
   if (!workbookDir.startsWith("/")) {
-    workbookDir = join(process.cwd(), workbookDir)
+    workbookDir = join(process.cwd(), workbookDir);
   }
 
   // Check workbook exists
@@ -1611,40 +1680,40 @@ async function runCheck() {
     const result = {
       success: false,
       error: `Workbook directory not found: ${workbookDir}`,
-    }
+    };
     if (jsonOutput) {
-      console.log(JSON.stringify(result, null, 2))
+      console.log(JSON.stringify(result, null, 2));
     } else {
-      console.error(`Error: ${result.error}`)
+      console.error(`Error: ${result.error}`);
     }
-    process.exit(1)
+    process.exit(1);
   }
 
   // Check for hands.json
-  const handsJsonPath = join(workbookDir, "hands.json")
+  const handsJsonPath = join(workbookDir, "hands.json");
   if (!existsSync(handsJsonPath)) {
     const result = {
       success: false,
       error: `No hands.json found in ${workbookDir}`,
-    }
+    };
     if (jsonOutput) {
-      console.log(JSON.stringify(result, null, 2))
+      console.log(JSON.stringify(result, null, 2));
     } else {
-      console.error(`Error: ${result.error}`)
+      console.error(`Error: ${result.error}`);
     }
-    process.exit(1)
+    process.exit(1);
   }
 
   // Count blocks
-  const blocksDir = join(workbookDir, "blocks")
-  let blockCount = 0
+  const blocksDir = join(workbookDir, "blocks");
+  let blockCount = 0;
   if (existsSync(blocksDir)) {
     walkDirectory(blocksDir, blocksDir, (filePath) => {
-      const filename = filePath.split("/").pop() || ""
+      const filename = filePath.split("/").pop() || "";
       if ((filename.endsWith(".tsx") || filename.endsWith(".ts")) && !filename.startsWith("_")) {
-        blockCount++
+        blockCount++;
       }
-    })
+    });
   }
 
   // Build result
@@ -1655,17 +1724,17 @@ async function runCheck() {
     summary: {
       blocks: blockCount,
     },
-  }
+  };
 
   // Output
   if (jsonOutput) {
-    console.log(JSON.stringify(result, null, 2))
+    console.log(JSON.stringify(result, null, 2));
   } else {
-    console.log("✓ Workbook structure valid")
-    console.log(`  ${blockCount} blocks available`)
+    console.log("✓ Workbook structure valid");
+    console.log(`  ${blockCount} blocks available`);
   }
 
-  process.exit(0)
+  process.exit(0);
 }
 
 /**
@@ -1673,123 +1742,126 @@ async function runCheck() {
  */
 async function main() {
   // Check for 'check' subcommand early
-  const firstArg = process.argv[2]
+  const firstArg = process.argv[2];
   if (firstArg === "check") {
-    await runCheck()
-    return
+    await runCheck();
+    return;
   }
 
-  const config = parseArgs()
-  const { workbookId, workbookDir, port } = config
+  const config = parseArgs();
+  const { workbookId, workbookDir, port } = config;
 
-  console.log(`[runtime] Starting workbook: ${workbookId}`)
+  console.log(`[runtime] Starting workbook: ${workbookId}`);
 
   // Ensure stdlib symlink exists at ~/.hands/stdlib
-  ensureStdlibSymlink()
+  ensureStdlibSymlink();
 
   // Repair workbook's node_modules/@hands/stdlib symlink if broken
-  ensureWorkbookStdlibSymlink(workbookDir)
+  ensureWorkbookStdlibSymlink(workbookDir);
 
   // Preflight: Check for hands.json before starting anything
-  const handsJsonPath = join(workbookDir, "hands.json")
+  const handsJsonPath = join(workbookDir, "hands.json");
   if (!existsSync(handsJsonPath)) {
-    console.error(`\n[runtime] ERROR: No hands.json found in ${workbookDir}`)
-    console.error(`[runtime] A hands.json file is required to run blocks.`)
-    console.error(`[runtime] Create one with minimal config:`)
-    console.error(`\n  {`)
-    console.error(`    "name": "${workbookId}",`)
-    console.error(`    "blocks": { "dir": "./blocks" }`)
-    console.error(`  }\n`)
-    process.exit(1)
+    console.error(`\n[runtime] ERROR: No hands.json found in ${workbookDir}`);
+    console.error(`[runtime] A hands.json file is required to run blocks.`);
+    console.error(`[runtime] Create one with minimal config:`);
+    console.error(`\n  {`);
+    console.error(`    "name": "${workbookId}",`);
+    console.error(`    "blocks": { "dir": "./blocks" }`);
+    console.error(`  }\n`);
+    process.exit(1);
   }
 
   // 1. IMMEDIATELY start HTTP server using Node's http module with Hono
-  const app = createApp(config)
+  const app = createApp(config);
   const server = createServer(async (req, res) => {
     try {
       // Convert Node request to fetch Request
-      const url = `http://localhost:${port}${req.url}`
-      const headers = new Headers()
+      const url = `http://localhost:${port}${req.url}`;
+      const headers = new Headers();
       for (const [key, value] of Object.entries(req.headers)) {
-        if (value) headers.set(key, Array.isArray(value) ? value.join(", ") : value)
+        if (value) headers.set(key, Array.isArray(value) ? value.join(", ") : value);
       }
 
-      const body = req.method !== "GET" && req.method !== "HEAD"
-        ? await new Promise<Buffer>((resolve) => {
-            const chunks: Buffer[] = []
-            req.on("data", (chunk) => chunks.push(chunk))
-            req.on("end", () => resolve(Buffer.concat(chunks)))
-          })
-        : undefined
+      const body =
+        req.method !== "GET" && req.method !== "HEAD"
+          ? await new Promise<Buffer>((resolve) => {
+              const chunks: Buffer[] = [];
+              req.on("data", (chunk) => chunks.push(chunk));
+              req.on("end", () => resolve(Buffer.concat(chunks)));
+            })
+          : undefined;
 
       const request = new Request(url, {
         method: req.method,
         headers,
         body,
-      })
+      });
 
       // Get response from Hono
-      const response = await app.fetch(request)
+      const response = await app.fetch(request);
 
       // Send response
-      res.statusCode = response.status
+      res.statusCode = response.status;
       response.headers.forEach((value, key) => {
-        res.setHeader(key, value)
-      })
+        res.setHeader(key, value);
+      });
 
-      const responseBody = await response.arrayBuffer()
-      res.end(Buffer.from(responseBody))
+      const responseBody = await response.arrayBuffer();
+      res.end(Buffer.from(responseBody));
     } catch (err) {
-      console.error("Request error:", err)
-      res.statusCode = 500
-      res.end("Internal Server Error")
+      console.error("Request error:", err);
+      res.statusCode = 500;
+      res.end("Internal Server Error");
     }
-  })
+  });
 
   server.listen(port, () => {
-    console.log(`[runtime] Server ready on http://localhost:${port}`)
-    console.log(`[runtime] Manifest available at http://localhost:${port}/workbook/manifest`)
+    console.log(`[runtime] Server ready on http://localhost:${port}`);
+    console.log(`[runtime] Manifest available at http://localhost:${port}/workbook/manifest`);
 
     // Output ready JSON for Tauri - format must match lib.rs expectations
-    console.log(JSON.stringify({
-      type: "ready",
-      runtimePort: port,
-      postgresPort: port, // PGlite is in-process, use same port
-      workerPort: PORTS.WORKER,
-    }))
-  })
+    console.log(
+      JSON.stringify({
+        type: "ready",
+        runtimePort: port,
+        postgresPort: port, // PGlite is in-process, use same port
+        workerPort: PORTS.WORKER,
+      }),
+    );
+  });
 
   // 2. Boot critical services in parallel (non-blocking)
   // All three are independent and can start simultaneously
-  bootPGlite(workbookDir)
-  bootVite(config)
-  bootEditor(config)
+  bootPGlite(workbookDir);
+  bootVite(config);
+  bootEditor(config);
 
   // 3. Start file watcher for real-time manifest updates
-  startFileWatcher(config)
+  startFileWatcher(config);
 
   // Handle shutdown
   const shutdown = async () => {
-    console.log("[runtime] Shutting down...")
+    console.log("[runtime] Shutting down...");
     // Close file watchers
     for (const watcher of state.fileWatchers) {
-      watcher.close()
+      watcher.close();
     }
-    if (state.viteProc) state.viteProc.kill()
-    if (state.editorProc) state.editorProc.kill()
+    if (state.viteProc) state.viteProc.kill();
+    if (state.editorProc) state.editorProc.kill();
     if (state.workbookDb) {
-      await state.workbookDb.save()
-      await state.workbookDb.close()
+      await state.workbookDb.save();
+      await state.workbookDb.close();
     }
-    server.close()
-    process.exit(0)
-  }
+    server.close();
+    process.exit(0);
+  };
 
-  process.on("SIGTERM", shutdown)
-  process.on("SIGINT", shutdown)
+  process.on("SIGTERM", shutdown);
+  process.on("SIGINT", shutdown);
 }
 
 main().catch((error) => {
-  console.error("Fatal error:", error)
-  process.exit(1)
-})
+  console.error("Fatal error:", error);
+  process.exit(1);
+});

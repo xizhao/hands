@@ -1,28 +1,42 @@
 /**
- * Runtime types for source management
+ * Runtime types for source management (v2 - table containers)
  */
 
-import type { SourceDefinition } from "@hands/stdlib/sources"
-
-/** A discovered source in the workbook */
-export interface DiscoveredSource {
-  id: string
-  path: string
-  definition: SourceDefinition<any, any>
-}
+// Re-export from stdlib for convenience
+export type {
+  DiscoveredSource,
+  DiscoveredTable,
+  SourceDefinitionV2,
+  SourcePermissions,
+  SourceRole,
+  SubscriptionStatus,
+  TableColumn,
+  TableDefinition,
+  TableIndex,
+  TableSchema,
+  TableSubscription,
+} from "@hands/stdlib/sources";
 
 /** Log entry from source execution */
 export interface LogEntry {
-  timestamp: number
-  level: "info" | "warn" | "error" | "debug"
-  message: string
+  timestamp: number;
+  level: "info" | "warn" | "error" | "debug";
+  message: string;
 }
 
-/** Sync result returned by runtime */
-export interface SyncResult {
-  success: boolean
-  result?: unknown
-  error?: string
-  durationMs: number
-  logs?: LogEntry[]
+/** CRUD operation result */
+export interface CrudResult<T = unknown> {
+  success: boolean;
+  data?: T;
+  error?: string;
+  count?: number;
+}
+
+/** Query parameters for list operations */
+export interface ListQueryParams {
+  limit?: number;
+  offset?: number;
+  sort?: string;
+  filter?: Record<string, Record<string, unknown>>;
+  select?: string[];
 }
