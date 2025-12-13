@@ -202,6 +202,22 @@ export function DataBrowser({ source, table, className, editable = false }: Data
       .map((i) => columns[i]);
   }, [columns, columnOrder]);
 
+  // Custom header icons for glide-data-grid
+  // Using three dots (ellipsis) for menu icon
+  const headerIcons = useMemo(
+    () => ({
+      dots: (p: { fgColor: string }) => {
+        // Three horizontal dots icon
+        return `<svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <circle cx="3" cy="8" r="1.5" fill="${p.fgColor}"/>
+          <circle cx="8" cy="8" r="1.5" fill="${p.fgColor}"/>
+          <circle cx="13" cy="8" r="1.5" fill="${p.fgColor}"/>
+        </svg>`;
+      },
+    }),
+    [],
+  );
+
   // Build columns for glide-data-grid with resize and reorder support
   // Clean column headers with menu for sort/filter/subscribe
   const gridColumns = useMemo<GridColumn[]>(() => {
@@ -212,7 +228,8 @@ export function DataBrowser({ source, table, className, editable = false }: Data
         id: col.name,
         title: col.name + sortIndicator,
         width: columnWidths.get(col.name) ?? getColumnWidth(col),
-        hasMenu: true, // Show menu dropdown (sort/filter/subscribe)
+        hasMenu: true,
+        menuIcon: "dots", // Use custom dots icon for dropdown
       };
     });
   }, [orderedColumns, columnWidths, sortColumn, sortDirection]);
@@ -691,6 +708,8 @@ export function DataBrowser({ source, table, className, editable = false }: Data
               onColumnResize={onColumnResize}
               onColumnMoved={onColumnMoved}
               onHeaderMenuClick={onHeaderMenuClick}
+              // Custom icons (dots for menu)
+              headerIcons={headerIcons}
               // Smooth scrolling like Google Sheets
               smoothScrollX
               smoothScrollY

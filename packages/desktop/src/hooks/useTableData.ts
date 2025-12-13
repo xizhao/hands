@@ -54,13 +54,13 @@ export function useTableData(options: UseTableDataOptions) {
   const pendingRequests = useRef<Set<string>>(new Set());
 
   // Fetch table schema
-  const schemaQuery = trpc.tables.schema.useQuery(
+  const schemaQuery = trpc.sources.tables.schema.useQuery(
     { table },
     { staleTime: 60000 },
   );
 
   // Get initial count via a list query with limit 1
-  const initialQuery = trpc.tables.list.useQuery(
+  const initialQuery = trpc.sources.tables.list.useQuery(
     { table, limit: 1, offset: 0, sort: sortParam },
     { staleTime: 5000 },
   );
@@ -116,7 +116,7 @@ export function useTableData(options: UseTableDataOptions) {
         pendingRequests.current.add(requestKey);
 
         try {
-          const result = await utils.tables.list.fetch({
+          const result = await utils.sources.tables.list.fetch({
             source,
             table,
             limit: pageSize,
@@ -194,25 +194,25 @@ export function useTableData(options: UseTableDataOptions) {
   );
 
   // Mutations
-  const createMutation = trpc.tables.create.useMutation({
+  const createMutation = trpc.sources.tables.create.useMutation({
     onSuccess: () => {
       invalidateCache();
     },
   });
 
-  const updateMutation = trpc.tables.update.useMutation({
+  const updateMutation = trpc.sources.tables.update.useMutation({
     onSuccess: () => {
       invalidateCache();
     },
   });
 
-  const deleteMutation = trpc.tables.delete.useMutation({
+  const deleteMutation = trpc.sources.tables.delete.useMutation({
     onSuccess: () => {
       invalidateCache();
     },
   });
 
-  const bulkUpdateMutation = trpc.tables.bulkUpdate.useMutation({
+  const bulkUpdateMutation = trpc.sources.tables.bulkUpdate.useMutation({
     onSuccess: () => {
       invalidateCache();
     },
@@ -349,14 +349,14 @@ function mergeRanges(
  * Hook to get all tables in the database
  */
 export function useSourceTables() {
-  return trpc.tables.listAll.useQuery();
+  return trpc.sources.tables.listAll.useQuery();
 }
 
 /**
  * Hook to get table schema only
  */
 export function useTableSchema(table: string) {
-  const query = trpc.tables.schema.useQuery({ table }, { enabled: !!table });
+  const query = trpc.sources.tables.schema.useQuery({ table }, { enabled: !!table });
 
   return {
     ...query,
@@ -369,12 +369,12 @@ export function useTableSchema(table: string) {
  * Hook to list all discovered sources
  */
 export function useSources() {
-  return trpc.sources.list.useQuery();
+  return trpc.sources.sources.list.useQuery();
 }
 
 /**
  * Hook to get a single source by name
  */
 export function useSource(name: string) {
-  return trpc.sources.get.useQuery({ source: name }, { enabled: !!name });
+  return trpc.sources.sources.get.useQuery({ source: name }, { enabled: !!name });
 }
