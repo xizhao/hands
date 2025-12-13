@@ -12,6 +12,38 @@ import { AlertTriangle, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useRuntimePort } from "@/hooks/useWorkbook";
 import { cn } from "@/lib/utils";
+import { toast } from "sonner";
+import { useAlertsStore } from "@/stores/alerts";
+
+// Editor error event types (must match packages/editor/src/overlay/errors.ts)
+type EditorErrorCategory = 'http' | 'runtime' | 'mutation';
+
+interface EditorError {
+  id: string;
+  category: EditorErrorCategory;
+  message: string;
+  details?: string;
+  stack?: string;
+  status?: number;
+  operation?: string;
+  timestamp: number;
+  blockId?: string;
+}
+
+interface EditorErrorEvent {
+  type: 'editor-error';
+  category: EditorErrorCategory;
+  error: EditorError;
+}
+
+function isEditorErrorEvent(msg: unknown): msg is EditorErrorEvent {
+  return (
+    typeof msg === 'object' &&
+    msg !== null &&
+    (msg as EditorErrorEvent).type === 'editor-error' &&
+    typeof (msg as EditorErrorEvent).error === 'object'
+  );
+}
 
 
 type SandboxState = "loading" | "waiting" | "ready" | "error";
@@ -129,13 +161,41 @@ export function EditorSandbox({
     iframeRef.current.contentWindow.postMessage({ type: 'styles', css }, '*');
   }, [generateStyles]);
 
-  // Listen for sandbox ready signal
+  // Listen for sandbox ready signal and editor errors
   useEffect(() => {
     const handleMessage = (e: MessageEvent) => {
       if (e.data?.type === 'sandbox-ready') {
         console.log('[EditorSandbox] Sandbox ready, sending styles');
         sendStyles();
         setState("ready");
+      }
+
+      // Handle editor errors from iframe
+      if (isEditorErrorEvent(e.data)) {
+        const { error } = e.data;
+        console.log('[EditorSandbox] Received error from editor:', error.category, error.message);
+
+        // HTTP and mutation errors show as Sonner toasts
+        if (error.category === 'http' || error.category === 'mutation') {
+          toast.error(error.message, {
+            description: error.details || error.operation,
+            duration: 5000,
+          });
+        }
+
+        // Runtime errors go to the alerts store
+        if (error.category === 'runtime') {
+          console.error('[EditorSandbox] Runtime error in editor:', error.message, error.stack);
+          useAlertsStore.getState().addAlert({
+            id: error.id,
+            category: error.category,
+            message: error.message,
+            details: error.details,
+            stack: error.stack,
+            blockId: error.blockId,
+            timestamp: error.timestamp,
+          });
+        }
       }
     };
     window.addEventListener('message', handleMessage);

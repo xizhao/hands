@@ -1,27 +1,23 @@
 /**
- * DataBrowser - High-performance virtualized data grid
+ * DataBrowser - High-performance canvas-based data grid
  *
- * Uses TanStack Table for headless table logic and TanStack Virtual
- * for efficient rendering of large datasets.
+ * Uses Glide Data Grid for efficient rendering of large datasets
+ * with native scrolling and cell virtualization.
  */
 
-import { useMemo, useRef, useState, useCallback } from "react"
-import {
-  useReactTable,
-  getCoreRowModel,
-  getSortedRowModel,
-  flexRender,
-  type ColumnDef,
-  type SortingState,
-} from "@tanstack/react-table"
-import { useVirtualizer } from "@tanstack/react-virtual"
+import { useMemo, useCallback, useState, useRef, useEffect } from "react"
+import DataEditor, {
+  GridCellKind,
+  type GridCell,
+  type GridColumn,
+  type Item,
+} from "@glideapps/glide-data-grid"
+import "@glideapps/glide-data-grid/dist/index.css"
 import { useTableData, useTableRowCount } from "@/hooks/useTableData"
 import { useDbSchema, useActiveWorkbookId } from "@/hooks/useWorkbook"
 import { cn } from "@/lib/utils"
 import {
   Table as TableIcon,
-  CaretUp,
-  CaretDown,
   ArrowLeft,
   ArrowRight,
   CircleNotch,
@@ -32,13 +28,31 @@ interface DataBrowserProps {
   className?: string
 }
 
-const ROW_HEIGHT = 32
-const PAGE_SIZE = 100
+const PAGE_SIZE = 500
 
 export function DataBrowser({ tableName, className }: DataBrowserProps) {
-  const parentRef = useRef<HTMLDivElement>(null)
-  const [sorting, setSorting] = useState<SortingState>([])
   const [page, setPage] = useState(0)
+  const containerRef = useRef<HTMLDivElement>(null)
+  const [containerSize, setContainerSize] = useState({ width: 0, height: 0 })
+
+  // Measure container size
+  useEffect(() => {
+    const container = containerRef.current
+    if (!container) return
+
+    const observer = new ResizeObserver((entries) => {
+      const entry = entries[0]
+      if (entry) {
+        setContainerSize({
+          width: entry.contentRect.width,
+          height: entry.contentRect.height,
+        })
+      }
+    })
+
+    observer.observe(container)
+    return () => observer.disconnect()
+  }, [])
 
   const activeWorkbookId = useActiveWorkbookId()
   const { data: schema } = useDbSchema(activeWorkbookId)
@@ -47,62 +61,105 @@ export function DataBrowser({ tableName, className }: DataBrowserProps) {
   // Get total row count
   const { data: totalRows = 0 } = useTableRowCount(tableName)
 
-  // Build order by from sorting state
-  const orderBy = sorting[0]?.id
-  const orderDir = sorting[0]?.desc ? "desc" : "asc"
-
   // Fetch data with pagination
   const { data, isLoading, isFetching } = useTableData({
     tableName,
     limit: PAGE_SIZE,
     offset: page * PAGE_SIZE,
-    orderBy,
-    orderDir: orderDir as "asc" | "desc",
   })
 
   const rows = data?.rows ?? []
 
-  // Dynamically build columns from schema
-  const columns = useMemo<ColumnDef<Record<string, unknown>>[]>(() => {
+  // Build columns for glide-data-grid
+  const columns = useMemo<GridColumn[]>(() => {
     if (!tableSchema?.columns) return []
 
     return tableSchema.columns.map((col) => ({
       id: col.name,
-      accessorKey: col.name,
-      header: col.name,
-      cell: ({ getValue }) => {
-        const value = getValue()
-        if (value === null) return <span className="text-muted-foreground/50 italic">null</span>
-        if (typeof value === "boolean") return value ? "true" : "false"
-        if (typeof value === "object") return JSON.stringify(value)
-        return String(value)
-      },
-      meta: { type: col.type },
+      title: col.name,
+      width: 150,
+      grow: 1,
     }))
   }, [tableSchema])
 
-  const table = useReactTable({
-    data: rows,
-    columns,
-    state: { sorting },
-    onSortingChange: setSorting,
-    getCoreRowModel: getCoreRowModel(),
-    getSortedRowModel: getSortedRowModel(),
-    manualSorting: true, // We handle sorting server-side
-  })
+  // Column name lookup for getCellContent
+  const columnNames = useMemo(() => {
+    return tableSchema?.columns?.map((col) => col.name) ?? []
+  }, [tableSchema])
 
-  const { rows: tableRows } = table.getRowModel()
+  // Get cell content callback - this is called for each visible cell
+  const getCellContent = useCallback(
+    (cell: Item): GridCell => {
+      const [col, row] = cell
 
-  // Virtual scrolling for rows
-  const rowVirtualizer = useVirtualizer({
-    count: tableRows.length,
-    getScrollElement: () => parentRef.current,
-    estimateSize: () => ROW_HEIGHT,
-    overscan: 10,
-  })
+      // Safety check
+      if (row >= rows.length || col >= columnNames.length) {
+        return {
+          kind: GridCellKind.Loading,
+          allowOverlay: false,
+        }
+      }
 
-  const virtualRows = rowVirtualizer.getVirtualItems()
-  const totalSize = rowVirtualizer.getTotalSize()
+      const rowData = rows[row]
+      const columnName = columnNames[col]
+      const value = rowData?.[columnName]
+
+      // Handle null values
+      if (value === null || value === undefined) {
+        return {
+          kind: GridCellKind.Text,
+          data: "",
+          displayData: "null",
+          allowOverlay: true,
+          readonly: true,
+          style: "faded",
+        }
+      }
+
+      // Handle boolean values
+      if (typeof value === "boolean") {
+        return {
+          kind: GridCellKind.Boolean,
+          data: value,
+          allowOverlay: false,
+          readonly: true,
+        }
+      }
+
+      // Handle number values
+      if (typeof value === "number") {
+        return {
+          kind: GridCellKind.Number,
+          data: value,
+          displayData: String(value),
+          allowOverlay: true,
+          readonly: true,
+        }
+      }
+
+      // Handle objects/arrays as JSON
+      if (typeof value === "object") {
+        const jsonStr = JSON.stringify(value)
+        return {
+          kind: GridCellKind.Text,
+          data: jsonStr,
+          displayData: jsonStr,
+          allowOverlay: true,
+          readonly: true,
+        }
+      }
+
+      // Default to text
+      return {
+        kind: GridCellKind.Text,
+        data: String(value),
+        displayData: String(value),
+        allowOverlay: true,
+        readonly: true,
+      }
+    },
+    [rows, columnNames]
+  )
 
   // Pagination
   const totalPages = Math.ceil(totalRows / PAGE_SIZE)
@@ -176,96 +233,59 @@ export function DataBrowser({ tableName, className }: DataBrowserProps) {
         </div>
       </div>
 
-      {/* Table with virtual scrolling */}
-      <div ref={parentRef} className="flex-1 overflow-auto">
+      {/* Data grid */}
+      <div ref={containerRef} className="flex-1 overflow-hidden">
         {isLoading ? (
           <div className="flex items-center justify-center h-full">
             <CircleNotch weight="bold" className="h-8 w-8 animate-spin text-muted-foreground" />
           </div>
-        ) : (
-          <table className="w-full border-collapse text-sm">
-            {/* Sticky header */}
-            <thead className="sticky top-0 z-10 bg-background border-b">
-              {table.getHeaderGroups().map((headerGroup) => (
-                <tr key={headerGroup.id}>
-                  {headerGroup.headers.map((header) => {
-                    const isSorted = header.column.getIsSorted()
-                    return (
-                      <th
-                        key={header.id}
-                        onClick={header.column.getToggleSortingHandler()}
-                        className={cn(
-                          "px-3 py-2 text-left font-medium text-muted-foreground cursor-pointer select-none",
-                          "hover:bg-accent/50 transition-colors",
-                          "border-r last:border-r-0 border-border/50"
-                        )}
-                        style={{ minWidth: 120 }}
-                      >
-                        <div className="flex items-center gap-1">
-                          <span className="truncate">
-                            {flexRender(header.column.columnDef.header, header.getContext())}
-                          </span>
-                          {isSorted === "asc" && <CaretUp weight="bold" className="h-3 w-3 shrink-0" />}
-                          {isSorted === "desc" && <CaretDown weight="bold" className="h-3 w-3 shrink-0" />}
-                        </div>
-                        <span className="text-[10px] text-muted-foreground/60 font-normal">
-                          {(header.column.columnDef.meta as { type?: string })?.type}
-                        </span>
-                      </th>
-                    )
-                  })}
-                </tr>
-              ))}
-            </thead>
-
-            {/* Virtualized body */}
-            <tbody
-              style={{
-                height: `${totalSize}px`,
-                width: "100%",
-                position: "relative",
-              }}
-            >
-              {virtualRows.map((virtualRow) => {
-                const row = tableRows[virtualRow.index]
-                return (
-                  <tr
-                    key={row.id}
-                    data-index={virtualRow.index}
-                    ref={(node) => rowVirtualizer.measureElement(node)}
-                    className="hover:bg-accent/30 transition-colors border-b border-border/30"
-                    style={{
-                      position: "absolute",
-                      top: 0,
-                      left: 0,
-                      width: "100%",
-                      height: `${virtualRow.size}px`,
-                      transform: `translateY(${virtualRow.start}px)`,
-                    }}
-                  >
-                    {row.getVisibleCells().map((cell) => (
-                      <td
-                        key={cell.id}
-                        className="px-3 py-1.5 truncate border-r last:border-r-0 border-border/30"
-                        style={{ minWidth: 120, maxWidth: 300 }}
-                      >
-                        {flexRender(cell.column.columnDef.cell, cell.getContext())}
-                      </td>
-                    ))}
-                  </tr>
-                )
-              })}
-            </tbody>
-          </table>
-        )}
-
-        {/* Empty state */}
-        {!isLoading && rows.length === 0 && (
+        ) : rows.length === 0 ? (
           <div className="flex flex-col items-center justify-center h-64 text-muted-foreground">
             <TableIcon weight="duotone" className="h-12 w-12 mb-3 opacity-50" />
             <p>No data in this table</p>
           </div>
-        )}
+        ) : containerSize.width > 0 && containerSize.height > 0 ? (
+          <DataEditor
+            columns={columns}
+            rows={rows.length}
+            getCellContent={getCellContent}
+            smoothScrollX
+            smoothScrollY
+            width={containerSize.width}
+            height={containerSize.height}
+            rowHeight={32}
+            headerHeight={36}
+            theme={{
+              accentColor: "hsl(var(--primary))",
+              accentLight: "hsl(var(--primary) / 0.1)",
+              textDark: "hsl(var(--foreground))",
+              textMedium: "hsl(var(--muted-foreground))",
+              textLight: "hsl(var(--muted-foreground) / 0.7)",
+              textBubble: "hsl(var(--foreground))",
+              bgIconHeader: "hsl(var(--muted))",
+              fgIconHeader: "hsl(var(--muted-foreground))",
+              textHeader: "hsl(var(--muted-foreground))",
+              textHeaderSelected: "hsl(var(--foreground))",
+              bgCell: "hsl(var(--background))",
+              bgCellMedium: "hsl(var(--muted) / 0.3)",
+              bgHeader: "hsl(var(--muted) / 0.5)",
+              bgHeaderHasFocus: "hsl(var(--muted))",
+              bgHeaderHovered: "hsl(var(--accent))",
+              bgBubble: "hsl(var(--muted))",
+              bgBubbleSelected: "hsl(var(--accent))",
+              bgSearchResult: "hsl(var(--primary) / 0.2)",
+              borderColor: "hsl(var(--border))",
+              drilldownBorder: "hsl(var(--border))",
+              linkColor: "hsl(var(--primary))",
+              cellHorizontalPadding: 8,
+              cellVerticalPadding: 4,
+              headerFontStyle: "500 13px",
+              baseFontStyle: "13px",
+              fontFamily: "inherit",
+              editorFontSize: "13px",
+            }}
+          />
+        ) : null}
       </div>
     </div>
   )

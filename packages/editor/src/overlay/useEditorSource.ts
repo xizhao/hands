@@ -10,6 +10,7 @@
 
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { applyOperation, applyOperations, type EditOperation } from './operations'
+import { createHttpError, createMutationError, sendErrorToParent } from './errors'
 
 // ============================================================================
 // Types
@@ -155,9 +156,24 @@ export function useEditorSource({
           console.log('[useEditorSource] Saved successfully')
           return true
         }
-        console.error('[useEditorSource] Save returned non-ok status')
+
+        // HTTP error - stream to parent
+        const errorText = await res.text().catch(() => 'Unknown error')
+        const error = createHttpError(`Failed to save block: ${res.status} ${res.statusText}`, {
+          status: res.status,
+          details: errorText,
+          blockId,
+        })
+        sendErrorToParent(error)
+        console.error('[useEditorSource] Save returned non-ok status:', res.status)
         return false
       } catch (e) {
+        // Network error - stream to parent
+        const error = createHttpError(
+          `Network error saving block: ${e instanceof Error ? e.message : 'Unknown error'}`,
+          { blockId }
+        )
+        sendErrorToParent(error)
         console.error('[useEditorSource] Save failed:', e)
         return false
       } finally {
@@ -180,13 +196,19 @@ export function useEditorSource({
       const result = applyOperation(source, operation)
 
       if (!result.success || !result.newSource) {
+        // Stream mutation error to parent
+        const error = createMutationError(result.error ?? 'Operation failed', {
+          operation: operation.type,
+          blockId,
+        })
+        sendErrorToParent(error)
         return {
           success: false,
           error: result.error ?? 'Operation failed',
         }
       }
 
-      // Save to server (saveSource handles pendingSource blocking)
+      // Save to server (saveSource handles pendingSource blocking and error streaming)
       const saved = await saveSource(result.newSource)
 
       if (!saved) {
@@ -201,7 +223,7 @@ export function useEditorSource({
         newSource: result.newSource,
       }
     },
-    [source, saveSource]
+    [source, saveSource, blockId]
   )
 
   const mutateMany = useCallback(
@@ -214,13 +236,19 @@ export function useEditorSource({
       const result = applyOperations(source, operations)
 
       if (!result.success || !result.newSource) {
+        // Stream mutation error to parent
+        const error = createMutationError(result.error ?? 'Operations failed', {
+          operation: `batch (${operations.length} operations)`,
+          blockId,
+        })
+        sendErrorToParent(error)
         return {
           success: false,
           error: result.error ?? 'Operations failed',
         }
       }
 
-      // Save to server (saveSource handles pendingSource blocking)
+      // Save to server (saveSource handles pendingSource blocking and error streaming)
       const saved = await saveSource(result.newSource)
 
       if (!saved) {
@@ -235,7 +263,7 @@ export function useEditorSource({
         newSource: result.newSource,
       }
     },
-    [source, saveSource]
+    [source, saveSource, blockId]
   )
 
   // ============================================================================

@@ -14,6 +14,7 @@ import { StrictMode, useEffect, useState, useCallback } from 'react'
 import { createRoot } from 'react-dom/client'
 import { RscProvider, initFlightClient, setRuntimePort } from '../rsc'
 import { OverlayEditor } from '../overlay'
+import { installGlobalErrorHandler } from '../overlay/errors'
 
 import './styles.css'
 
@@ -53,6 +54,9 @@ window.parent.postMessage({ type: 'sandbox-ready' }, '*')
 if (runtimePortNum) {
   setRuntimePort(runtimePortNum)
 }
+
+// Install global error handler to stream runtime errors to parent
+installGlobalErrorHandler(blockId ?? undefined)
 
 function SandboxApp() {
   const [source, setSource] = useState<string | null>(null)
