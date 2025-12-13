@@ -28,11 +28,39 @@ function getCssVar(name: string): string {
   return `hsl(${value})`;
 }
 
-/** Convert CSS variable HSL value to hsl() string with opacity */
-function getCssVarWithAlpha(name: string, alpha: number): string {
-  const value = getComputedStyle(document.documentElement).getPropertyValue(name).trim();
-  if (!value) return "#000";
-  return `hsl(${value} / ${alpha})`;
+/**
+ * Blend a color with background at given opacity - returns SOLID color
+ * Canvas needs solid colors to avoid ghosting artifacts from transparency
+ */
+function blendWithBackground(colorVar: string, bgVar: string, opacity: number): string {
+  // Get computed colors
+  const style = getComputedStyle(document.documentElement);
+  const colorHsl = style.getPropertyValue(colorVar).trim();
+  const bgHsl = style.getPropertyValue(bgVar).trim();
+
+  if (!colorHsl || !bgHsl) return "#000";
+
+  // Parse HSL values (format: "H S% L%")
+  const parseHsl = (hsl: string) => {
+    const parts = hsl.split(/\s+/);
+    return {
+      h: parseFloat(parts[0]) || 0,
+      s: parseFloat(parts[1]) || 0,
+      l: parseFloat(parts[2]) || 0,
+    };
+  };
+
+  const color = parseHsl(colorHsl);
+  const bg = parseHsl(bgHsl);
+
+  // Blend lightness (simplified blend - works well for most cases)
+  const blendedL = bg.l + (color.l - bg.l) * opacity;
+  // For saturation, reduce it towards background
+  const blendedS = bg.s + (color.s - bg.s) * opacity;
+  // Keep hue from the color
+  const blendedH = color.h;
+
+  return `hsl(${blendedH} ${blendedS}% ${blendedL}%)`;
 }
 
 import { CircleNotch, FloppyDisk, Plus, Table as TableIcon, Trash } from "@phosphor-icons/react";
@@ -49,7 +77,9 @@ interface DataBrowserProps {
 
 export function DataBrowser({ source, table, className, editable = false }: DataBrowserProps) {
   const containerRef = useRef<HTMLDivElement>(null);
-  const [containerSize, setContainerSize] = useState({ width: 0, height: 0 });
+  const [containerSize, setContainerSize] = useState<{ width: number; height: number } | null>(
+    null,
+  );
   const [pendingChanges, setPendingChanges] = useState<Map<string, Record<string, unknown>>>(
     new Map(),
   );
@@ -62,15 +92,28 @@ export function DataBrowser({ source, table, className, editable = false }: Data
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   // Theme version to force re-render on theme change
   const [themeVersion, setThemeVersion] = useState(0);
+  // Column width overrides (for resize)
+  const [columnWidths, setColumnWidths] = useState<Map<string, number>>(new Map());
+  // Sorting state
+  const [sortColumn, setSortColumn] = useState<string | null>(null);
+  const [sortDirection, setSortDirection] = useState<"asc" | "desc">("asc");
+  // Column order for reordering (stores column indices in display order)
+  const [columnOrder, setColumnOrder] = useState<number[] | null>(null);
 
-  // Measure container size
+  // Measure container size - use layout effect to measure before paint
   useEffect(() => {
     const container = containerRef.current;
     if (!container) return;
 
+    // Initial measurement
+    const rect = container.getBoundingClientRect();
+    if (rect.width > 0 && rect.height > 0) {
+      setContainerSize({ width: rect.width, height: rect.height });
+    }
+
     const observer = new ResizeObserver((entries) => {
       const entry = entries[0];
-      if (entry) {
+      if (entry && entry.contentRect.width > 0 && entry.contentRect.height > 0) {
         setContainerSize({
           width: entry.contentRect.width,
           height: entry.contentRect.height,
@@ -117,57 +160,109 @@ export function DataBrowser({ source, table, className, editable = false }: Data
   } = useTableData({
     source,
     table,
+    sort: sortColumn ?? undefined,
+    sortDirection,
   });
 
-  // Build columns for glide-data-grid
-  const gridColumns = useMemo<GridColumn[]>(() => {
-    return columns.map((col) => ({
-      id: col.name,
-      title: col.name,
-      width: getColumnWidth(col),
-      grow: 1,
-    }));
-  }, [columns]);
+  // Reset state when table changes (fixes ghost trails)
+  useEffect(() => {
+    setGridSelection({ columns: CompactSelection.empty(), rows: CompactSelection.empty() });
+    setSelectedIds(new Set());
+    setPendingChanges(new Map());
+    setColumnWidths(new Map());
+    setSortColumn(null);
+    setSortDirection("asc");
+    setColumnOrder(null); // Reset column order to default
+  }, [source, table]);
 
-  // Column name lookup for getCellContent
+  // Apply column order (for reordering) and build ordered columns list
+  const orderedColumns = useMemo(() => {
+    if (!columnOrder) return columns;
+    // Map order indices back to columns, filtering out invalid indices
+    return columnOrder
+      .filter((i) => i >= 0 && i < columns.length)
+      .map((i) => columns[i]);
+  }, [columns, columnOrder]);
+
+  // Build columns for glide-data-grid with resize and reorder support
+  // Uses minimal sort indicators like Google Sheets
+  const gridColumns = useMemo<GridColumn[]>(() => {
+    return orderedColumns.map((col) => {
+      const isSorted = sortColumn === col.name;
+      // Add subtle sort indicator to title (↑ or ↓)
+      const sortIndicator = isSorted ? (sortDirection === "asc" ? " ↑" : " ↓") : "";
+      return {
+        id: col.name,
+        title: col.name + sortIndicator,
+        width: columnWidths.get(col.name) ?? getColumnWidth(col),
+        // No icon - cleaner look like Google Sheets
+      };
+    });
+  }, [orderedColumns, columnWidths, sortColumn, sortDirection]);
+
+  // Column name lookup for getCellContent (respects column order)
   const columnNames = useMemo(() => {
-    return columns.map((col) => col.name);
-  }, [columns]);
+    return orderedColumns.map((col) => col.name);
+  }, [orderedColumns]);
 
   // Compute theme from CSS variables at runtime (recompute when themeVersion changes)
+  // IMPORTANT: Use SOLID colors only - transparent/alpha colors cause ghosting on canvas
+  // Styled to match Google Sheets / modern Excel aesthetic
   // biome-ignore lint/correctness/useExhaustiveDependencies: themeVersion triggers recompute on theme change
   const gridTheme = useMemo<Partial<Theme>>(() => {
     // Only compute on client side
     if (typeof window === "undefined") return {};
     return {
+      // Selection - subtle blue highlight like Google Sheets
       accentColor: getCssVar("--primary"),
-      accentLight: getCssVarWithAlpha("--primary", 0.1),
+      accentFg: getCssVar("--primary-foreground"),
+      // Very subtle selection background
+      accentLight: blendWithBackground("--primary", "--background", 0.08),
+
+      // Text colors - clean, readable
       textDark: getCssVar("--foreground"),
       textMedium: getCssVar("--muted-foreground"),
-      textLight: getCssVarWithAlpha("--muted-foreground", 0.7),
+      textLight: blendWithBackground("--muted-foreground", "--background", 0.5),
       textBubble: getCssVar("--foreground"),
-      bgIconHeader: getCssVar("--muted"),
+
+      // Header styling - subtle normally, prominent when selected
+      bgIconHeader: getCssVar("--background"),
       fgIconHeader: getCssVar("--muted-foreground"),
       textHeader: getCssVar("--muted-foreground"),
-      textHeaderSelected: getCssVar("--foreground"),
+      textHeaderSelected: getCssVar("--primary"), // Blue text when column selected
+
+      // Cell backgrounds - clean white/dark based on theme
       bgCell: getCssVar("--background"),
-      bgCellMedium: getCssVarWithAlpha("--muted", 0.3),
-      bgHeader: getCssVarWithAlpha("--muted", 0.5),
-      bgHeaderHasFocus: getCssVar("--muted"),
-      bgHeaderHovered: getCssVar("--accent"),
+      bgCellMedium: getCssVar("--background"),
+
+      // Header backgrounds - very subtle, almost same as cells
+      bgHeader: blendWithBackground("--muted", "--background", 0.3),
+      bgHeaderHasFocus: blendWithBackground("--primary", "--background", 0.08),
+      bgHeaderHovered: blendWithBackground("--muted", "--background", 0.5),
+
+      // Bubbles (tags/chips)
       bgBubble: getCssVar("--muted"),
-      bgBubbleSelected: getCssVar("--accent"),
-      bgSearchResult: getCssVarWithAlpha("--primary", 0.2),
-      borderColor: getCssVar("--border"),
+      bgBubbleSelected: blendWithBackground("--primary", "--background", 0.15),
+
+      // Search highlighting
+      bgSearchResult: blendWithBackground("--primary", "--background", 0.2),
+
+      // Borders - subtle gridlines like spreadsheets
+      borderColor: blendWithBackground("--border", "--background", 0.5),
       drilldownBorder: getCssVar("--border"),
       linkColor: getCssVar("--primary"),
+
+      // Typography - clean system fonts
       cellHorizontalPadding: 8,
-      cellVerticalPadding: 4,
-      headerFontStyle: "500 13px",
+      cellVerticalPadding: 3,
+      headerFontStyle: "500 12px", // Lighter weight header
       baseFontStyle: "13px",
       fontFamily:
         '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", sans-serif',
       editorFontSize: "13px",
+
+      // Line height for compact rows
+      lineHeight: 1.4,
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [themeVersion]);
@@ -387,6 +482,59 @@ export function DataBrowser({ source, table, className, editable = false }: Data
     [getRow, getRowId],
   );
 
+  // Handle column resize
+  const onColumnResize = useCallback(
+    (column: GridColumn, newSize: number) => {
+      setColumnWidths((prev) => {
+        const next = new Map(prev);
+        next.set(column.id as string, newSize);
+        return next;
+      });
+    },
+    [],
+  );
+
+  // Handle header click for sorting
+  const onHeaderClicked = useCallback(
+    (col: number) => {
+      const columnName = columnNames[col];
+      if (!columnName) return;
+
+      if (sortColumn === columnName) {
+        // Toggle direction or clear sort
+        if (sortDirection === "asc") {
+          setSortDirection("desc");
+        } else {
+          // Clear sort on third click
+          setSortColumn(null);
+          setSortDirection("asc");
+        }
+      } else {
+        // New column - sort ascending
+        setSortColumn(columnName);
+        setSortDirection("asc");
+      }
+    },
+    [columnNames, sortColumn, sortDirection],
+  );
+
+  // Handle column reordering via drag-and-drop
+  const onColumnMoved = useCallback(
+    (startIndex: number, endIndex: number) => {
+      setColumnOrder((prevOrder) => {
+        // Initialize order if null (first reorder)
+        const currentOrder = prevOrder ?? columns.map((_, i) => i);
+        const newOrder = [...currentOrder];
+        // Remove the column from its old position
+        const [moved] = newOrder.splice(startIndex, 1);
+        // Insert it at the new position
+        newOrder.splice(endIndex, 0, moved);
+        return newOrder;
+      });
+    },
+    [columns],
+  );
+
   if (columns.length === 0 && !isLoading) {
     return (
       <div className="flex items-center justify-center h-full text-muted-foreground">
@@ -397,49 +545,39 @@ export function DataBrowser({ source, table, className, editable = false }: Data
 
   return (
     <div className={cn("flex flex-col h-full", className)}>
-      {/* Header with table info */}
-      <div className="flex items-center justify-between px-4 py-3 border-b bg-muted/30">
-        <div className="flex items-center gap-3">
-          <div className="p-2 rounded-lg bg-purple-500/10">
-            <TableIcon weight="duotone" className="h-5 w-5 text-purple-500" />
-          </div>
-          <div>
-            <h1 className="text-lg font-semibold">
-              {source}.{table}
-            </h1>
-            <p className="text-sm text-muted-foreground">
-              {totalRows.toLocaleString()} rows &middot; {columns.length} columns
-              {loadedCount < totalRows && (
-                <span className="ml-1 text-muted-foreground/60">
-                  ({loadedCount.toLocaleString()} loaded)
-                </span>
-              )}
-            </p>
-          </div>
+      {/* Minimal toolbar - Google Sheets style */}
+      <div className="flex items-center justify-between px-3 py-2 border-b bg-background">
+        <div className="flex items-center gap-2 text-sm text-muted-foreground">
+          <TableIcon weight="fill" className="h-4 w-4 text-primary/70" />
+          <span className="font-medium text-foreground">{table}</span>
+          <span className="text-xs">
+            {totalRows.toLocaleString()} rows
+            {loadedCount < totalRows && ` (${loadedCount.toLocaleString()} loaded)`}
+          </span>
         </div>
 
-        <div className="flex items-center gap-2">
-          {/* Editing actions */}
+        <div className="flex items-center gap-1.5">
+          {/* Editing actions - minimal buttons */}
           {editable && (
             <>
               <button
                 type="button"
                 onClick={handleAddRow}
                 disabled={isMutating}
-                className="flex items-center gap-1.5 px-2.5 py-1.5 text-sm rounded-md bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
+                className="flex items-center gap-1 px-2 py-1 text-xs rounded hover:bg-muted disabled:opacity-50"
+                title="Add row"
               >
-                <Plus weight="bold" className="h-4 w-4" />
-                Add Row
+                <Plus weight="bold" className="h-3.5 w-3.5" />
               </button>
               {selectedIds.size > 0 && (
                 <button
                   type="button"
                   onClick={handleDeleteSelected}
                   disabled={isMutating}
-                  className="flex items-center gap-1.5 px-2.5 py-1.5 text-sm rounded-md bg-destructive text-destructive-foreground hover:bg-destructive/90 disabled:opacity-50"
+                  className="flex items-center gap-1 px-2 py-1 text-xs rounded text-destructive hover:bg-destructive/10 disabled:opacity-50"
+                  title={`Delete ${selectedIds.size} selected`}
                 >
-                  <Trash weight="bold" className="h-4 w-4" />
-                  Delete ({selectedIds.size})
+                  <Trash weight="bold" className="h-3.5 w-3.5" />
                 </button>
               )}
               {pendingChanges.size > 0 && (
@@ -447,10 +585,10 @@ export function DataBrowser({ source, table, className, editable = false }: Data
                   type="button"
                   onClick={handleSaveChanges}
                   disabled={isMutating}
-                  className="flex items-center gap-1.5 px-2.5 py-1.5 text-sm rounded-md bg-green-600 text-white hover:bg-green-700 disabled:opacity-50"
+                  className="flex items-center gap-1 px-2 py-1 text-xs rounded bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
                 >
-                  <FloppyDisk weight="bold" className="h-4 w-4" />
-                  Save ({pendingChanges.size})
+                  <FloppyDisk weight="bold" className="h-3.5 w-3.5" />
+                  <span>Save ({pendingChanges.size})</span>
                 </button>
               )}
             </>
@@ -458,7 +596,7 @@ export function DataBrowser({ source, table, className, editable = false }: Data
 
           {/* Loading indicator */}
           {(isFetching || isMutating) && (
-            <CircleNotch weight="bold" className="h-4 w-4 animate-spin text-muted-foreground" />
+            <CircleNotch weight="bold" className="h-3.5 w-3.5 animate-spin text-muted-foreground" />
           )}
         </div>
       </div>
@@ -484,27 +622,54 @@ export function DataBrowser({ source, table, className, editable = false }: Data
               </button>
             )}
           </div>
+        ) : !containerSize ? (
+          // Wait for container to be measured before rendering grid (prevents blurry first render)
+          <div className="flex items-center justify-center h-full">
+            <CircleNotch weight="bold" className="h-6 w-6 animate-spin text-muted-foreground/50" />
+          </div>
         ) : (
           <DataEditor
+            key={`${source}/${table}`} // Force remount on table change (fixes ghost trails)
             columns={gridColumns}
             rows={totalRows}
             getCellContent={getCellContent}
             getCellsForSelection={true}
+            // Editing - double-click or Enter opens editor, Escape/Enter commits
             onCellEdited={editable ? onCellEdited : undefined}
+            // Scrolling and visibility
             onVisibleRegionChanged={onVisibleRegionChanged}
+            // Selection
             gridSelection={gridSelection}
             onGridSelectionChange={onGridSelectionChange}
             rowSelectionMode="multi"
-            rangeSelect="multi-rect"
-            columnSelect="multi"
+            rangeSelect="rect" // Single rect like spreadsheets
+            columnSelect="single" // Click header to select column
+            // Column interactions
+            onColumnResize={onColumnResize}
+            onColumnMoved={onColumnMoved}
+            onHeaderClicked={onHeaderClicked}
+            // Smooth scrolling like Google Sheets
             smoothScrollX
             smoothScrollY
+            // Sizing
             scaleToRem
-            width={containerSize.width || 100}
-            height={containerSize.height || 100}
-            rowHeight={32}
-            headerHeight={36}
+            width={containerSize.width}
+            height={containerSize.height}
+            rowHeight={28} // Compact like spreadsheets
+            headerHeight={32} // Slightly taller header
+            // Theme
             theme={gridTheme}
+            // Row markers - minimal, just for selection
+            rowMarkers="clickable-number"
+            // Keyboard handling - Enter moves down after edit (like Excel)
+            keybindings={{
+              selectAll: true,
+              copy: true,
+              paste: true,
+              search: true,
+              downFill: true,
+              rightFill: true,
+            }}
           />
         )}
       </div>

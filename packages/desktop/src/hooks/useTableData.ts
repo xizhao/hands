@@ -12,6 +12,8 @@ export interface UseTableDataOptions {
   source: string;
   table: string;
   pageSize?: number;
+  sort?: string; // Column to sort by
+  sortDirection?: "asc" | "desc"; // Sort direction
 }
 
 export interface ColumnDefinition {
@@ -36,7 +38,10 @@ interface DataCache {
 const CHUNK_SIZE = 100; // Load rows in chunks of 100
 
 export function useTableData(options: UseTableDataOptions) {
-  const { source, table, pageSize = CHUNK_SIZE } = options;
+  const { source, table, pageSize = CHUNK_SIZE, sort, sortDirection } = options;
+
+  // Build sort string for API (e.g., "name:asc")
+  const sortParam = sort ? `${sort}:${sortDirection ?? "asc"}` : undefined;
 
   // Sparse data cache
   const [cache, setCache] = useState<DataCache>({
@@ -56,9 +61,14 @@ export function useTableData(options: UseTableDataOptions) {
 
   // Get initial count via a list query with limit 1
   const initialQuery = trpc.tables.list.useQuery(
-    { table, limit: 1, offset: 0 },
+    { table, limit: 1, offset: 0, sort: sortParam },
     { staleTime: 5000 },
   );
+
+  // Clear cache when sort changes (need to refetch all data with new order)
+  useEffect(() => {
+    setCache({ rows: new Map(), loadedRanges: [], totalRows: 0 });
+  }, [sortParam]);
 
   // Update total rows when initial query completes
   useEffect(() => {
@@ -111,6 +121,7 @@ export function useTableData(options: UseTableDataOptions) {
             table,
             limit: pageSize,
             offset,
+            sort: sortParam,
           });
 
           if (result.rows) {
@@ -142,7 +153,7 @@ export function useTableData(options: UseTableDataOptions) {
         }
       }
     },
-    [source, table, pageSize, cache.totalRows, cache.loadedRanges, utils],
+    [source, table, pageSize, cache.totalRows, cache.loadedRanges, utils, sortParam],
   );
 
   // Get a row from cache (or undefined if not loaded)
