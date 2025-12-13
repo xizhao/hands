@@ -1,5 +1,8 @@
 {
   "dependencies": {
+    "@deck.gl/aggregation-layers": "^9.2.0",
+    "@deck.gl/layers": "^9.2.0",
+    "@deck.gl/react": "^9.2.0",
     "@hookform/resolvers": "^5.2.2",
     "@radix-ui/react-accordion": "^1.2.12",
     "@radix-ui/react-alert-dialog": "^1.1.15",
@@ -38,6 +41,8 @@
     "react-day-picker": "^9.12.0",
     "react-hook-form": "^7.68.0",
     "react-resizable-panels": "^3.0.6",
+    "maplibre-gl": "^4.0.0",
+    "react-map-gl": "^7.1.0",
     "recharts": "2.15.4",
     "sonner": "^2.0.7",
     "tailwind-merge": "^2.5.2",
@@ -54,13 +59,13 @@
     ".": "./src/index.ts",
     "./charts/*": "./src/registry/components/charts/*",
     "./data/*": "./src/registry/components/data/*",
-    "./registry": "./src/registry/index.ts",
-    "./registry/*": "./src/registry/*",
-    "./registry/json": "./src/registry.json",
+    "./maps/*": "./src/registry/components/maps/*",
+    "./registry": "./src/registry.generated.ts",
+    "./previews": "./src/previews.generated.tsx",
+    "./ui/*": "./src/registry/components/ui/*",
     "./server": "./src/server.ts",
     "./sources": "./src/sources/index.ts",
-    "./types": "./src/types/index.ts",
-    "./ui/*": "./src/registry/components/ui/*"
+    "./types": "./src/types/index.ts"
   },
   "hands": {
     "createdAt": 1765069644297,

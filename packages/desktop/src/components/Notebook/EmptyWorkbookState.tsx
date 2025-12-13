@@ -1,38 +1,18 @@
 /**
  * EmptyWorkbookState - Getting started page when no data and no connectors
  *
- * Three CTAs:
+ * Two CTAs:
  * 1. Drag in some data (files)
- * 2. Add sources (from stdlib registry)
- * 3. Ask Hands to get you data (points to chat bar)
+ * 2. Ask Hands to get you data (points to chat bar)
  */
 
-import {
-  ChatCircle,
-  Database,
-  FileArrowDown,
-  GithubLogo,
-  Newspaper,
-  Plus,
-} from "@phosphor-icons/react";
+import { ChatCircle, FileArrowDown } from "@phosphor-icons/react";
 import { useEffect, useRef, useState } from "react";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { type AvailableSource, useAddSource, useAvailableSources } from "@/hooks/useWorkbook";
 import { cn } from "@/lib/utils";
 
 interface EmptyWorkbookStateProps {
   onImportFile: () => void;
   chatExpanded?: boolean;
-}
-
-// Icon mapping for known sources
-const sourceIcons: Record<string, typeof Database> = {
-  hackernews: Newspaper,
-  github: GithubLogo,
-};
-
-function getSourceIcon(name: string) {
-  return sourceIcons[name] || Database;
 }
 
 // Hand-drawn chalk arrow - dusty but cohesive
@@ -147,7 +127,6 @@ export function EmptyWorkbookState({
   onImportFile,
   chatExpanded = false,
 }: EmptyWorkbookStateProps) {
-  const [showSources, setShowSources] = useState(false);
   const [arrowCoords, setArrowCoords] = useState<{
     startX: number;
     startY: number;
@@ -155,9 +134,6 @@ export function EmptyWorkbookState({
     endY: number;
   } | null>(null);
   const askHandsRef = useRef<HTMLDivElement>(null);
-
-  const { data: availableSources = [] } = useAvailableSources();
-  const addSource = useAddSource();
 
   // Calculate arrow position
   useEffect(() => {
@@ -191,26 +167,11 @@ export function EmptyWorkbookState({
     };
   }, []);
 
-  const handleAddSource = async (source: AvailableSource) => {
-    try {
-      await addSource.mutateAsync({
-        sourceName: source.name,
-      });
-      setShowSources(false);
-    } catch (err) {
-      console.error("Failed to add source:", err);
-    }
-  };
-
-  // Show first 2 sources in quick list
-  const quickSources = availableSources.slice(0, 2);
-  const hasMoreSources = availableSources.length > 2;
-
   return (
     <>
       <div
         className={cn(
-          "flex flex-col items-center justify-center h-full pb-32 px-8 max-w-2xl mx-auto transition-opacity duration-300",
+          "flex flex-col items-center justify-center h-full pb-32 px-8 max-w-xl mx-auto transition-opacity duration-300",
           chatExpanded && "opacity-20 pointer-events-none",
         )}
       >
@@ -219,8 +180,8 @@ export function EmptyWorkbookState({
           Bring in some data to start exploring and building
         </p>
 
-        {/* Three CTAs in a row - items-stretch for equal height */}
-        <div className="grid grid-cols-3 gap-4 w-full items-stretch">
+        {/* Two CTAs in a row */}
+        <div className="grid grid-cols-2 gap-4 w-full items-stretch">
           {/* 1. Drag in data */}
           <button
             type="button"
@@ -243,55 +204,7 @@ export function EmptyWorkbookState({
             </div>
           </button>
 
-          {/* 2. Add sources */}
-          <div
-            className={cn(
-              "flex flex-col items-center justify-center gap-3 p-6 rounded-xl",
-              "bg-gradient-to-b from-muted/30 to-muted/10",
-              "border border-border/50",
-            )}
-          >
-            <div className="text-sm font-medium text-foreground mb-1">Add a source</div>
-
-            {/* Quick source buttons */}
-            <div className="flex flex-wrap justify-center gap-1.5">
-              {quickSources.map((source) => {
-                const Icon = getSourceIcon(source.name);
-                return (
-                  <button
-                    type="button"
-                    key={source.name}
-                    onClick={() => handleAddSource(source)}
-                    disabled={addSource.isPending}
-                    className={cn(
-                      "flex items-center gap-1.5 px-2 py-1 rounded-md text-xs",
-                      "border border-border/50",
-                      "hover:bg-accent hover:border-border",
-                      "transition-all duration-150",
-                      addSource.isPending && "opacity-50 cursor-not-allowed",
-                    )}
-                  >
-                    <Icon weight="duotone" className="h-3 w-3 text-orange-500" />
-                    <span className="text-muted-foreground">{source.title}</span>
-                  </button>
-                );
-              })}
-              {availableSources.length === 0 && (
-                <span className="text-xs text-muted-foreground">Loading...</span>
-              )}
-            </div>
-
-            {hasMoreSources && (
-              <button
-                onClick={() => setShowSources(true)}
-                className="text-xs text-primary hover:text-primary/80 hover:underline transition-colors"
-              >
-                more...
-              </button>
-            )}
-          </div>
-
-          {/* 3. Ask Hands */}
+          {/* 2. Ask Hands */}
           <div
             ref={askHandsRef}
             className={cn(
@@ -318,50 +231,6 @@ export function EmptyWorkbookState({
           endY={arrowCoords.endY}
         />
       )}
-
-      {/* Sources Library Dialog */}
-      <Dialog open={showSources} onOpenChange={setShowSources}>
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle>Add a source</DialogTitle>
-          </DialogHeader>
-          <div className="grid gap-2 py-4">
-            {availableSources.map((source) => {
-              const Icon = getSourceIcon(source.name);
-              return (
-                <button
-                  key={source.name}
-                  onClick={() => handleAddSource(source)}
-                  disabled={addSource.isPending}
-                  className={cn(
-                    "flex items-center gap-3 p-3 rounded-lg text-left",
-                    "border border-border/50",
-                    "hover:bg-accent hover:border-border",
-                    "transition-all duration-150",
-                    addSource.isPending && "opacity-50 cursor-not-allowed",
-                  )}
-                >
-                  <div className="p-2 rounded-md bg-muted/50">
-                    <Icon weight="duotone" className="h-4 w-4 text-orange-500" />
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="text-sm font-medium truncate">{source.title}</div>
-                    <div className="text-xs text-muted-foreground line-clamp-1">
-                      {source.description}
-                    </div>
-                  </div>
-                  <Plus weight="bold" className="h-4 w-4 text-muted-foreground" />
-                </button>
-              );
-            })}
-            {availableSources.length === 0 && (
-              <div className="text-center py-8 text-sm text-muted-foreground">
-                No sources available
-              </div>
-            )}
-          </div>
-        </DialogContent>
-      </Dialog>
     </>
   );
 }

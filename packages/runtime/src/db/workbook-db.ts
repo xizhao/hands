@@ -10,6 +10,7 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { PGlite } from "@electric-sql/pglite";
+import { vector } from "@electric-sql/pglite/vector";
 import { ensureRoles } from "./roles.js";
 import { generateSchema } from "./schema-gen.js";
 import {
@@ -58,10 +59,13 @@ export async function initWorkbookDb(workbookDir: string): Promise<WorkbookDb> {
     const blob = new Blob([data]);
     db = new PGlite({
       loadDataDir: blob,
+      extensions: { vector },
     });
   } else {
     console.log("[db] Creating fresh database");
-    db = new PGlite();
+    db = new PGlite({
+      extensions: { vector },
+    });
   }
 
   await db.waitReady;

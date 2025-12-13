@@ -31,7 +31,7 @@ workbook/
 2. **Create pages** - Write MDX files in \`pages/\` directory
 3. **Choose visualizations** - Pick the right chart/display for the data
 4. **Use stdlib components** - Leverage pre-built components from @hands/stdlib
-5. **Verify quality** - Run TypeScript checks after writing
+5. **Verify quality** - Run TypeScript checks AND runtime execution tests
 
 ${BLOCK_API_DOCS}
 
@@ -87,7 +87,24 @@ title: Dashboard
 3. **Check components** - Use components tool to see what's available
 4. **Create block** - Write TSX file to blocks/
 5. **Create/update page** - Write MDX file to pages/ with Block reference
-6. **Verify** - Run check tool to ensure no TypeScript errors
+6. **Verify TypeScript** - Run check tool to ensure no TypeScript errors
+7. **Verify Runtime** - Run check-block tool to test the block actually executes
+
+## Runtime Verification (IMPORTANT)
+
+After creating or modifying a block, you MUST verify it works at runtime:
+
+\`\`\`
+check-block blockId="my-block"
+\`\`\`
+
+This catches errors that TypeScript checking misses:
+- Database query failures (missing tables, bad SQL syntax at runtime)
+- React rendering errors
+- Missing imports that only fail at runtime
+- Invalid props or context issues
+
+**Always run check-block after check.** A block that passes TypeScript checks can still fail at runtime.
 
 ## Styling Guidelines
 
@@ -135,7 +152,8 @@ Keep improvements proportional to the task - don't spend more time refactoring t
 
 When you complete a task, report back with:
 - What files were created/modified
-- Success/failure of the check tool
+- Success/failure of the check tool (TypeScript)
+- Success/failure of check-block (runtime execution)
 - Any issues encountered
 
 Keep responses concise - the primary agent will communicate with the user.`;
@@ -160,5 +178,6 @@ export const coderAgent: AgentConfig = {
     // Quality
     components: true,
     check: true,
+    "check-block": true,
   },
 };

@@ -167,19 +167,30 @@ export async function renderBlockViaRsc(
         const contentType = response.headers.get("Content-Type") || "";
         if (contentType.includes("application/json")) {
           const errorData = await response.json();
+          // Handle various JSON error formats
           errorMessage = errorData.error || errorData.message || errorMessage;
+          // Include blockServerError if present (from runtime proxy)
+          if (errorData.blockServerError) {
+            errorMessage = errorData.blockServerError;
+          }
           if (errorData.stack) {
             errorMessage += `\n${errorData.stack.split("\n").slice(0, 3).join("\n")}`;
           }
         } else {
           // Vite often returns HTML or plain text errors
           const text = await response.text();
-          // Extract error message from Vite error page or plain text
-          const match = text.match(/Error:?\s*([^\n<]+)/i);
-          if (match) {
-            errorMessage = match[1].trim();
-          } else if (text.length < 500) {
-            errorMessage = text.trim() || errorMessage;
+          // Extract module resolution errors first (most specific)
+          const moduleMatch = text.match(/Cannot find module ['"]([^'"]+)['"]/);
+          if (moduleMatch) {
+            errorMessage = `Cannot find module '${moduleMatch[1]}'`;
+          } else {
+            // Extract error message from Vite error page or plain text
+            const match = text.match(/Error:?\s*([^\n<]+)/i);
+            if (match) {
+              errorMessage = match[1].trim();
+            } else if (text.length < 500) {
+              errorMessage = text.trim() || errorMessage;
+            }
           }
         }
       } catch {

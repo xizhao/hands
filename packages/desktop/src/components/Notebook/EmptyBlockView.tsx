@@ -20,13 +20,37 @@ import { cn } from "@/lib/utils";
 import { useSaveBlockContent } from "@/hooks/useWorkbook";
 import { setChatBarHidden } from "@/hooks/useChatState";
 
-// Import registry helpers
-import {
-  listComponents,
-  listCategories,
-  previews,
-  type ComponentMeta,
-} from "@hands/stdlib/registry";
+// Import registry data and previews separately to avoid SSR issues
+import { registry } from "@hands/stdlib/registry";
+import { previews } from "@hands/stdlib/previews";
+
+// Types for registry
+interface ComponentMeta {
+  name: string;
+  category: string;
+  description: string;
+  files: readonly string[];
+  dependencies: readonly string[];
+  icon?: string;
+  keywords?: readonly string[];
+  example?: string;
+}
+
+interface CategoryMeta {
+  name: string;
+  description: string;
+}
+
+// Helper functions
+function listComponents(category?: string) {
+  return Object.entries(registry.components)
+    .filter(([_, comp]) => !category || comp.category === category)
+    .map(([key, comp]) => ({ key, ...comp }));
+}
+
+function listCategories() {
+  return Object.entries(registry.categories).map(([key, cat]) => ({ key, ...cat }));
+}
 
 // Convert kebab-case to PascalCase
 function pascalCase(str: string): string {

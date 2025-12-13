@@ -509,7 +509,7 @@ function createApp(config: RuntimeConfig) {
       workbookDir: config.workbookDir,
       services: {
         db: { ready: state.dbReady },
-        vite: { ready: state.viteReady, port: state.vitePort, error: state.viteError },
+        blockServer: { ready: state.viteReady, port: state.vitePort, error: state.viteError },
         editor: {
           ready: state.editorReady,
           port: state.editorPort,
@@ -536,10 +536,10 @@ function createApp(config: RuntimeConfig) {
           port: 0, // PGlite is in-process, no TCP port
           error: state.dbReady ? undefined : "Database is booting",
         },
-        worker: {
+        blockServer: {
           up: state.viteReady,
           port: state.vitePort ?? 0,
-          error: state.viteReady ? undefined : "Vite is starting",
+          error: state.viteReady ? undefined : state.viteError || "Block server is starting",
         },
       },
     });
@@ -1050,7 +1050,9 @@ function createApp(config: RuntimeConfig) {
   // Path format: /client-modules/ui/counter-button.tsx -> blocks/ui/counter-button.tsx
   app.get("/client-modules/*", async (c) => {
     if (!state.viteReady || !state.vitePort) {
-      return c.json({ error: "Vite not ready", booting: true }, 503);
+      const error = state.viteError || "Block server not ready";
+      const booting = !state.viteError;
+      return c.json({ error, booting, blockServerError: state.viteError }, 503);
     }
 
     // Extract the module path from the request
@@ -1117,7 +1119,9 @@ function createApp(config: RuntimeConfig) {
   // Handles: /@vite/client, /@react-refresh, /node_modules/.vite/deps/*, /@fs/*
   app.get("/vite-proxy/*", async (c) => {
     if (!state.viteReady || !state.vitePort) {
-      return c.json({ error: "Vite not ready", booting: true }, 503);
+      const error = state.viteError || "Block server not ready";
+      const booting = !state.viteError;
+      return c.json({ error, booting, blockServerError: state.viteError }, 503);
     }
 
     // Extract the path after /vite-proxy
@@ -1353,10 +1357,13 @@ export const __SECRET_INTERNALS_DO_NOT_USE_OR_YOU_WILL_BE_FIRED = RD.__SECRET_IN
     }
   });
 
-  // Proxy to Vite for RSC routes
+  // Proxy to block server for RSC routes
   app.all("/blocks/*", async (c) => {
     if (!state.viteReady || !state.vitePort) {
-      return c.json({ error: "Vite not ready", booting: true }, 503);
+      // Include actual error message if block server crashed (e.g., compilation errors)
+      const error = state.viteError || "Block server not ready";
+      const booting = !state.viteError; // Only "booting" if there's no error
+      return c.json({ error, booting, blockServerError: state.viteError }, 503);
     }
 
     const url = new URL(c.req.url);
@@ -1383,11 +1390,13 @@ export const __SECRET_INTERNALS_DO_NOT_USE_OR_YOU_WILL_BE_FIRED = RD.__SECRET_IN
     }
   });
 
-  // Proxy RSC component routes to Vite worker
+  // Proxy RSC component routes to block server
   // This allows the editor to render arbitrary components via Flight
   app.all("/rsc/*", async (c) => {
     if (!state.viteReady || !state.vitePort) {
-      return c.json({ error: "Vite not ready", booting: true }, 503);
+      const error = state.viteError || "Block server not ready";
+      const booting = !state.viteError;
+      return c.json({ error, booting, blockServerError: state.viteError }, 503);
     }
 
     const url = new URL(c.req.url);
@@ -1545,6 +1554,43 @@ function _createBlockContext(params: Record<string, any> = {}): BlockContext {
 }
 
 /**
+ * Extract the most relevant error from Vite output
+ * Looks for common error patterns like "Cannot find module", "Error:", etc.
+ */
+function extractViteError(output: string): string | null {
+  if (!output) return null;
+
+  // Look for module resolution errors (most common)
+  const moduleMatch = output.match(/Cannot find module ['"]([^'"]+)['"]/);
+  if (moduleMatch) {
+    // Find the full error line with context
+    const errorLine = output.match(/Error:[^\n]*Cannot find module[^\n]*/);
+    return errorLine ? errorLine[0] : `Cannot find module '${moduleMatch[1]}'`;
+  }
+
+  // Look for generic Error: lines
+  const errorMatch = output.match(/Error:\s*([^\n]+)/);
+  if (errorMatch) {
+    return `Error: ${errorMatch[1]}`;
+  }
+
+  // Look for Vite-specific errors
+  const viteErrorMatch = output.match(/\[vite\][^\n]*error[^\n]*/i);
+  if (viteErrorMatch) {
+    return viteErrorMatch[0];
+  }
+
+  // Fallback: return last non-empty line if it looks like an error
+  const lines = output.trim().split("\n").filter(Boolean);
+  const lastLine = lines[lines.length - 1];
+  if (lastLine && (lastLine.includes("Error") || lastLine.includes("error"))) {
+    return lastLine;
+  }
+
+  return null;
+}
+
+/**
  * Build and start Vite in background
  */
 async function bootVite(config: RuntimeConfig) {
@@ -1609,18 +1655,23 @@ async function bootVite(config: RuntimeConfig) {
     );
 
     // Forward Vite output but ignore EPIPE errors on shutdown
-    // Capture stderr for error reporting
-    let stderrBuffer = "";
+    // Capture both stdout and stderr for error reporting
+    // Vite module errors often go to stdout, not stderr
+    let outputBuffer = "";
+    const captureOutput = (data: Buffer) => {
+      const str = data.toString();
+      outputBuffer += str;
+      // Keep only last 4000 chars
+      if (outputBuffer.length > 4000) {
+        outputBuffer = outputBuffer.slice(-4000);
+      }
+    };
     state.viteProc.stdout?.on("data", (data) => {
+      captureOutput(data);
       process.stdout.write(data, () => {});
     });
     state.viteProc.stderr?.on("data", (data) => {
-      const str = data.toString();
-      stderrBuffer += str;
-      // Keep only last 2000 chars
-      if (stderrBuffer.length > 2000) {
-        stderrBuffer = stderrBuffer.slice(-2000);
-      }
+      captureOutput(data);
       process.stderr.write(data, () => {});
     });
 
@@ -1629,7 +1680,7 @@ async function bootVite(config: RuntimeConfig) {
       if (state.viteReady) {
         console.error(`[runtime] Vite crashed (code=${code}, signal=${signal})`);
         state.viteReady = false;
-        state.viteError = stderrBuffer || `Vite exited with code ${code}`;
+        state.viteError = extractViteError(outputBuffer) || `Vite exited with code ${code}`;
         state.viteProc = null;
 
         // Clear Vite cache on crash - often fixes pre-bundle errors
@@ -1662,13 +1713,35 @@ async function bootVite(config: RuntimeConfig) {
           console.log(`[runtime] Vite ready on port ${vitePort}`);
           return;
         }
+        // If we get a response but it's an error, capture it
+        // This can happen when Vite starts but module loading fails
+        if (response.status >= 400) {
+          try {
+            const text = await response.text();
+            // Look for module errors in the response
+            const moduleMatch = text.match(/Cannot find module ['"]([^'"]+)['"]/);
+            if (moduleMatch) {
+              state.viteError = `Cannot find module '${moduleMatch[1]}'`;
+            }
+          } catch {
+            // Ignore response parsing errors
+          }
+        }
       } catch {
-        // Not ready yet
+        // Not ready yet - connection refused or timeout
       }
       await new Promise((resolve) => setTimeout(resolve, 500));
     }
 
+    // Timeout - use already captured error or extract from output buffer
+    if (!state.viteError) {
+      const extractedError = extractViteError(outputBuffer);
+      state.viteError = extractedError || "Vite failed to start within timeout";
+    }
     console.error("[runtime] Vite failed to start within timeout");
+    if (outputBuffer) {
+      console.error("[runtime] Captured output:\n", outputBuffer);
+    }
   } catch (err) {
     console.error("[runtime] Vite boot failed:", err);
   }
@@ -1961,6 +2034,33 @@ async function main() {
       console.error("Request error:", err);
       res.statusCode = 500;
       res.end("Internal Server Error");
+    }
+  });
+
+  // Handle port binding errors with retry
+  server.on("error", async (err: NodeJS.ErrnoException) => {
+    if (err.code === "EADDRINUSE") {
+      console.error(`[runtime] Port ${port} in use, attempting to free it...`);
+      const { killProcessOnPort } = await import("./ports.js");
+      await killProcessOnPort(port);
+      await new Promise((resolve) => setTimeout(resolve, 1000));
+
+      // Retry once
+      server.listen(port, () => {
+        console.log(`[runtime] Server ready on http://localhost:${port} (after retry)`);
+        console.log(`[runtime] Manifest available at http://localhost:${port}/workbook/manifest`);
+        console.log(
+          JSON.stringify({
+            type: "ready",
+            runtimePort: port,
+            postgresPort: port,
+            workerPort: PORTS.WORKER,
+          }),
+        );
+      });
+    } else {
+      console.error(`[runtime] Server error:`, err);
+      process.exit(1);
     }
   });
 

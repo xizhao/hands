@@ -405,6 +405,9 @@ export async function createBlockFromStream(blockId: string, props: Record<strin
 
 /**
  * Generate tsconfig.json
+ *
+ * Note: We intentionally do NOT define @/* path alias to avoid confusion.
+ * Blocks should import from @hands/stdlib or use relative imports.
  */
 function generateTsConfig(): string {
   return `{
@@ -417,12 +420,9 @@ function generateTsConfig(): string {
     "esModuleInterop": true,
     "skipLibCheck": true,
     "jsx": "react-jsx",
-    "types": ["@cloudflare/workers-types"],
-    "paths": {
-      "@/*": ["./src/*"]
-    }
+    "types": ["@cloudflare/workers-types"]
   },
-  "include": ["src/**/*"],
+  "include": ["src/**/*", "../blocks/**/*"],
   "exclude": ["node_modules"]
 }
 `;

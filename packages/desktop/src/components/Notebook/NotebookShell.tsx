@@ -39,7 +39,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { useChatState } from "@/hooks/useChatState";
 import { useNeedsTrafficLightOffset } from "@/hooks/useFullscreen";
-import { useActiveSession, useRightPanel } from "@/hooks/useNavState";
+import { useActiveSession, useClearNavigation, useRightPanel } from "@/hooks/useNavState";
 import { useImportWithAgent } from "@/hooks/useSession";
 import {
   useCreateWorkbook,
@@ -94,6 +94,7 @@ export function NotebookShell({ children }: NotebookShellProps) {
 
   const { panel: rightPanel, togglePanel: toggleRightPanel } = useRightPanel();
   const { setSession: setActiveSession } = useActiveSession();
+  const clearNavigation = useClearNavigation();
   const needsTrafficLightOffset = useNeedsTrafficLightOffset();
   const { data: workbooks } = useWorkbooks();
   const createWorkbook = useCreateWorkbook();
@@ -211,9 +212,11 @@ export function NotebookShell({ children }: NotebookShellProps) {
   // Handle workbook switch
   const handleSwitchWorkbook = useCallback(
     (workbook: { id: string; directory: string; name: string }) => {
+      // Clear route state and navigate to / before switching workbooks
+      clearNavigation();
       openWorkbook.mutate(workbook as Workbook);
     },
-    [openWorkbook],
+    [clearNavigation, openWorkbook],
   );
 
   // Handle create new workbook - opens modal
@@ -228,6 +231,8 @@ export function NotebookShell({ children }: NotebookShellProps) {
         { name, description },
         {
           onSuccess: (newWorkbook) => {
+            // Clear route state and navigate to / before opening new workbook
+            clearNavigation();
             openWorkbook.mutate(newWorkbook);
             setShowNewWorkbookModal(false);
             // TODO: Apply template if templateId is provided
@@ -238,7 +243,7 @@ export function NotebookShell({ children }: NotebookShellProps) {
         },
       );
     },
-    [createWorkbook, openWorkbook],
+    [clearNavigation, createWorkbook, openWorkbook],
   );
 
   // Handle close page (navigate back to index)

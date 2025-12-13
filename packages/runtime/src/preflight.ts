@@ -557,11 +557,14 @@ async function checkHandsDependencies(workbookDir: string, autoFix: boolean): Pr
           message: `npm install failed: ${result.stderr.toString()}`,
           required: true,
         };
-      } catch (err) {
+      } catch (err: any) {
+        // Bun shell errors have stderr on the error object
+        const stderr = err?.stderr?.toString?.()?.trim();
+        const errMsg = stderr || (err instanceof Error ? err.message : String(err));
         return {
           name: ".hands/ dependencies",
           ok: false,
-          message: `Install failed: ${err instanceof Error ? err.message : String(err)}`,
+          message: `Install failed: ${errMsg}`,
           required: true,
         };
       }

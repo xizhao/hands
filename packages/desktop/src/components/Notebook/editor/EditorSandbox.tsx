@@ -101,10 +101,10 @@ export function EditorSandbox({ blockId, className, readOnly = false }: EditorSa
           });
           if (res.ok) {
             const data = await res.json();
-            if (data.services?.editor?.ready && data.services?.vite?.ready) {
+            if (data.services?.editor?.ready && data.services?.blockServer?.ready) {
               // Get actual ports from status
               setEditorPort(data.services.editor.port);
-              setWorkerPort(data.services.vite.port);
+              setWorkerPort(data.services.blockServer.port);
               setEditorReady(true);
               setState("loading");
               return;

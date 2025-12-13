@@ -345,6 +345,7 @@ export function NotebookSidebar({
 
   // All data from manifest (filesystem source of truth)
   const blocks = manifest?.blocks ?? [];
+  const actions = manifest?.actions ?? [];
   const blocksLoading = manifestLoading;
 
   const [blocksExpanded, setBlocksExpanded] = useState(true);

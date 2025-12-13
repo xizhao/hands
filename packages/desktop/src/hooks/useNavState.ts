@@ -140,3 +140,23 @@ export function useChatExpanded() {
 
   return { expanded, setExpanded };
 }
+
+// ============================================
+// Navigation reset (for workbook switching)
+// ============================================
+
+/**
+ * Clears all URL-based navigation state and navigates to root.
+ * Used when switching workbooks to ensure clean state.
+ */
+export function useClearNavigation() {
+  const navigate = useNavigate();
+
+  return useCallback(() => {
+    navigate({
+      to: "/",
+      search: {},
+      replace: true,
+    });
+  }, [navigate]);
+}

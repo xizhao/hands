@@ -93,7 +93,7 @@ export interface EvalResult {
   };
   services: {
     postgres: ServiceStatus;
-    worker: ServiceStatus;
+    blockServer: ServiceStatus;
   };
 }
 
@@ -509,6 +509,7 @@ export function useAddSource() {
 }
 
 // Get available sources from registry
+// NOTE: Disabled until the /workbook/sources/available endpoint is implemented
 export interface AvailableSource {
   name: string;
   title: string;
@@ -531,7 +532,7 @@ export function useAvailableSources() {
       const data = await response.json();
       return data.sources ?? [];
     },
-    enabled: !!port,
+    enabled: false, // Disabled until endpoint exists
     staleTime: 60000,
   });
 }

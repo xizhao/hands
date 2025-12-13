@@ -65,7 +65,7 @@ export const NavigateCard = memo(({ output }: NavigateCardProps) => {
     if (config) {
       navigate({
         to: config.path as any,
-        params: { [config.param]: output.id }
+        params: { [config.param]: output.id } as any
       });
     }
   };

@@ -16,31 +16,28 @@ export {
   type SelectOptions,
   type TableClient,
 } from "./actions/index.js";
+
 // Component types
-export type {
-  BarChartProps,
-  DataTableColumn,
-  DataTableProps,
-  LineChartProps,
-} from "./registry/index.js";
-// Component registry (single source of truth for RSC components)
+export type { BarChartProps } from "./registry/components/charts/bar-chart.js";
+export type { LineChartProps } from "./registry/components/charts/line-chart.js";
+export type { DataTableColumn, DataTableProps } from "./registry/components/data/data-table.js";
+
+// Components - imported directly from source files
+export { BarChart } from "./registry/components/charts/bar-chart.js";
+export { LineChart } from "./registry/components/charts/line-chart.js";
+export { DataTable } from "./registry/components/data/data-table.js";
+export { MetricCard } from "./registry/components/data/metric-card.js";
+export { Badge, badgeVariants } from "./registry/components/ui/badge.js";
+export { Button, buttonVariants } from "./registry/components/ui/button.js";
 export {
-  Badge,
-  BarChart,
-  // Individual components
-  Button,
-  badgeVariants,
-  buttonVariants,
   Card,
   CardContent,
   CardDescription,
   CardFooter,
   CardHeader,
   CardTitle,
-  DataTable,
-  LineChart,
-  MetricCard,
-} from "./registry/index.js";
+} from "./registry/components/ui/card.js";
+
 // Source utilities (v2 - table containers)
 export {
   type DiscoveredSource,

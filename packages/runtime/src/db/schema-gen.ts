@@ -61,6 +61,10 @@ function pgTypeToTs(pgType: string, nullable: boolean): string {
     case "ARRAY":
       tsType = "unknown[]";
       break;
+    case "vector":
+    case "USER-DEFINED": // pgvector shows as USER-DEFINED in information_schema
+      tsType = "number[]";
+      break;
     default:
       tsType = "unknown";
   }

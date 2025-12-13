@@ -93,6 +93,7 @@ export function useSyncSource() {
 
 /**
  * List available sources from registry
+ * NOTE: Disabled until the /workbook/sources/available endpoint is implemented
  */
 export function useAvailableSources() {
   const port = useRuntimePort();
@@ -106,7 +107,7 @@ export function useAvailableSources() {
       const data = await res.json();
       return data.sources ?? [];
     },
-    enabled: !!port,
+    enabled: false, // Disabled until endpoint exists
     staleTime: 60000, // Registry doesn't change often
   });
 }

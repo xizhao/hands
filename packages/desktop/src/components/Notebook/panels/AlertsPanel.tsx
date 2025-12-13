@@ -57,7 +57,8 @@ export function AlertsPanel() {
 
   // Runtime issues (runtimeRunning comes from useRuntime above)
   const postgresUp = evalResult?.services?.postgres?.up ?? false;
-  const workerUp = evalResult?.services?.worker?.up ?? false;
+  const blockServerUp = evalResult?.services?.blockServer?.up ?? false;
+  const blockServerError = evalResult?.services?.blockServer?.error as string | undefined;
   const runtimeIssues: AlertItem[] = [];
 
   if (!runtimeRunning) {
@@ -66,8 +67,19 @@ export function AlertsPanel() {
     if (!postgresUp) {
       runtimeIssues.push({ message: "PostgreSQL not connected", variant: "error" });
     }
-    if (!workerUp) {
-      runtimeIssues.push({ message: "Worker not running", variant: "warning" });
+    if (!blockServerUp) {
+      // Show the actual error message if available (e.g., module resolution errors)
+      if (blockServerError && blockServerError !== "Block server is starting") {
+        // Extract the most relevant error line (e.g., "Cannot find module '@/hooks'")
+        const errorMatch = blockServerError.match(/Error:\s*([^\n]+)/);
+        const shortError = errorMatch?.[1]?.trim() || blockServerError.split("\n")[0];
+        runtimeIssues.push({
+          message: shortError.length > 100 ? shortError.slice(0, 100) + "…" : shortError,
+          variant: "error",
+        });
+      } else {
+        runtimeIssues.push({ message: "Block server not running", variant: "warning" });
+      }
     }
   }
 

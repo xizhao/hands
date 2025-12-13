@@ -66,7 +66,7 @@ export interface TableSchema {
 /** Runtime service status from /status endpoint */
 interface RuntimeServiceStatus {
   db: { ready: boolean };
-  vite: { ready: boolean; port?: number; error?: string };
+  blockServer: { ready: boolean; port?: number; error?: string };
   editor: { ready: boolean; port?: number; restartCount?: number };
 }
 
@@ -174,7 +174,7 @@ export function useRuntimeState(): RuntimeState {
     staleTime: 0,
     refetchInterval: (query) => {
       const data = query.state.data;
-      const allReady = data?.services?.db?.ready && data?.services?.vite?.ready;
+      const allReady = data?.services?.db?.ready && data?.services?.blockServer?.ready;
       return allReady ? 10_000 : 1_000; // Fast poll during boot, slow when ready
     },
   });

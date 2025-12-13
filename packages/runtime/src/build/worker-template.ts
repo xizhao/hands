@@ -28,6 +28,7 @@ export function generateWorkerTemplate(opts: WorkerTemplateConfig): string {
   const blocksDir = config.blocks?.dir || "./blocks";
 
   // Generate static block imports (required for RSC "use client" to work)
+  // We import each block separately so one failure doesn't break all
   const blockImports = blocks
     .map((block, i) => {
       const importPath = `../../${blocksDir}/${block.path}`;
@@ -50,8 +51,6 @@ import { runWithRequestInfo } from "rwsdk/worker";
 import { existsSync } from "node:fs";
 import { readFile, writeFile, readdir, mkdir } from "node:fs/promises";
 import { join } from "node:path";
-// Import all components from stdlib registry - they work with RSC even with "use client"
-import * as StdlibComponents from "@hands/stdlib/registry";
 
 // ============================================================================
 // ARCHITECTURE NOTE: Why Static Block Imports?
