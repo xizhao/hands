@@ -42,7 +42,7 @@ import {
   Search,
   X,
 } from "lucide-react";
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useMemo, useRef, useState } from "react";
 import {
   Dialog,
   DialogBody,
@@ -50,6 +50,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { useCreateBlock } from "@/hooks/useWorkbook";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -431,7 +432,98 @@ export function NotebookSidebar({
   }, [schema, sources]);
   const [searchQuery, setSearchQuery] = useState("");
   const [addSourceOpen, setAddSourceOpen] = useState(false);
+  const [isCreatingNewBlock, setIsCreatingNewBlock] = useState(false);
+  const [newBlockName, setNewBlockName] = useState("");
   const [selectedSource, setSelectedSource] = useState<string | null>(null);
+  const isConfirmingRef = useRef(false); // Guard against double submission
+  const newBlockInputRef = useCallback((node: HTMLInputElement | null) => {
+    if (node) node.focus();
+  }, []);
+
+  // Create block mutation
+  const { mutateAsync: createBlock, isPending: isCreatingBlock } = useCreateBlock();
+
+  const handleStartNewBlock = () => {
+    setIsCreatingNewBlock(true);
+    setNewBlockName("");
+  };
+
+  const handleCancelNewBlock = () => {
+    setIsCreatingNewBlock(false);
+    setNewBlockName("");
+  };
+
+  const handleConfirmNewBlock = async () => {
+    // Guard against double submission (Enter + blur race condition)
+    if (isConfirmingRef.current) return;
+
+    if (!newBlockName.trim()) {
+      handleCancelNewBlock();
+      return;
+    }
+
+    // Sanitize the name to create a valid block ID
+    const blockId = newBlockName
+      .trim()
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/^-|-$/g, "");
+
+    if (!blockId) {
+      handleCancelNewBlock();
+      return;
+    }
+
+    // Set guard before async work
+    isConfirmingRef.current = true;
+
+    // Check if block already exists
+    const existingBlock = blocks.find((b) => b.id === blockId);
+    if (existingBlock) {
+      // Just navigate to existing block
+      setIsCreatingNewBlock(false);
+      setNewBlockName("");
+      isConfirmingRef.current = false;
+      navigate({ to: "/blocks/$blockId", params: { blockId } });
+      return;
+    }
+
+    try {
+      // Create block with placeholder that marks it as uninitialized
+      // This is valid TypeScript but will be detected as "empty" by EmptyBlockView
+      const placeholderSource = `// @hands:uninitialized
+export default function Placeholder() {
+  return null;
+}`;
+      await createBlock({ blockId, source: placeholderSource });
+      setIsCreatingNewBlock(false);
+      setNewBlockName("");
+      // Navigate to the newly created block
+      navigate({ to: "/blocks/$blockId", params: { blockId } });
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : "Failed to create block";
+      // If block already exists, just navigate to it
+      if (message.includes("already exists")) {
+        setIsCreatingNewBlock(false);
+        setNewBlockName("");
+        navigate({ to: "/blocks/$blockId", params: { blockId } });
+      } else {
+        console.error("[sidebar] failed to create block:", err);
+      }
+    } finally {
+      isConfirmingRef.current = false;
+    }
+  };
+
+  const handleNewBlockKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === "Enter") {
+      e.preventDefault();
+      handleConfirmNewBlock();
+    } else if (e.key === "Escape") {
+      e.preventDefault();
+      handleCancelNewBlock();
+    }
+  };
 
   // Get installed source names for filtering
   const installedSourceNames = sources.map((s) => s.name);
@@ -786,6 +878,7 @@ export function NotebookSidebar({
               <Tooltip>
                 <TooltipTrigger asChild>
                   <button
+                    onClick={handleStartNewBlock}
                     className="p-0.5 text-muted-foreground/60 hover:text-muted-foreground transition-colors"
                     title="New block"
                   >
@@ -798,9 +891,29 @@ export function NotebookSidebar({
 
             {blocksExpanded && (
               <div className="space-y-0">
+                {/* Inline new block input */}
+                {isCreatingNewBlock && (
+                  <div className={cn(listItemStyles, "pr-1")}>
+                    <BlockIcon />
+                    <input
+                      ref={newBlockInputRef}
+                      type="text"
+                      value={newBlockName}
+                      onChange={(e) => setNewBlockName(e.target.value)}
+                      onKeyDown={handleNewBlockKeyDown}
+                      onBlur={handleConfirmNewBlock}
+                      placeholder="block-name"
+                      disabled={isCreatingBlock}
+                      className="flex-1 bg-transparent border-none outline-none text-sm placeholder:text-muted-foreground/50"
+                    />
+                    {isCreatingBlock && (
+                      <CircleNotch weight="bold" className="h-3 w-3 animate-spin text-muted-foreground" />
+                    )}
+                  </div>
+                )}
                 {blocksLoading ? (
                   <div className={emptyStateStyles}>Loading...</div>
-                ) : blocks.length > 0 ? (
+                ) : blocks.length > 0 || isCreatingNewBlock ? (
                   <>
                     {/* Directories */}
                     {Array.from(blockTree.directories.keys())

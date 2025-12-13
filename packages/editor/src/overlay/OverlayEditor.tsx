@@ -34,6 +34,7 @@ import {
   useEditorHover,
   useEditorSelection,
 } from "./EditorContext";
+import { createHttpError, sendErrorToParent } from "./errors";
 import type { EditOperation } from "./operations";
 import { extractJsxForNodes, getNodeParentInfo } from "./operations";
 import { useEditorSource } from "./useEditorSource";
@@ -109,20 +110,36 @@ function DataDepChip({ nodeId, containerRef, tables }: DataDepChipProps) {
     });
   }, [nodeId, containerRef]);
 
+  const handleClick = useCallback(
+    (e: React.MouseEvent) => {
+      e.stopPropagation();
+      // Navigate to first table (or could show picker if multiple)
+      const tableId = tables[0];
+      if (tableId) {
+        window.parent.postMessage({ type: "navigate-table", tableId }, "*");
+      }
+    },
+    [tables],
+  );
+
   if (!position || tables.length === 0) return null;
 
   return (
     <div
-      className="absolute z-20 pointer-events-none"
+      className="absolute z-20"
       style={{
         top: position.top - 6,
         right: position.right - 6,
       }}
     >
-      <div className="flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-blue-500/90 text-white text-[10px] font-medium shadow-sm backdrop-blur-sm">
+      <button
+        type="button"
+        onClick={handleClick}
+        className="flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-blue-500/90 text-white text-[10px] font-medium shadow-sm backdrop-blur-sm hover:bg-blue-600 transition-colors cursor-pointer"
+      >
         <Database size={10} weight="bold" />
         <span>{tables.join(", ")}</span>
-      </div>
+      </button>
     </div>
   );
 }
@@ -257,12 +274,16 @@ function OverlayEditorInner({
 
         if (result.error) {
           setError(result.error);
+          // Send detailed error to parent for toast notification
+          sendErrorToParent(createHttpError(result.error, { blockId }));
         } else {
           setRscElement(result.element);
         }
       } catch (err) {
         if (!mounted) return;
-        setError(err instanceof Error ? err.message : String(err));
+        const errorMessage = err instanceof Error ? err.message : String(err);
+        setError(errorMessage);
+        sendErrorToParent(createHttpError(errorMessage, { blockId }));
       } finally {
         if (mounted) setIsRscLoading(false);
       }

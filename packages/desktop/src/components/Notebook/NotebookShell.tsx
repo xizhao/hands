@@ -38,6 +38,7 @@ import { HoverCard, HoverCardContent, HoverCardTrigger } from "@/components/ui/h
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { useChatState } from "@/hooks/useChatState";
+import { useFullscreen } from "@/hooks/useFullscreen";
 import { useActiveSession, useRightPanel } from "@/hooks/useNavState";
 import { useImportWithAgent } from "@/hooks/useSession";
 import {
@@ -53,6 +54,7 @@ import { cn } from "@/lib/utils";
 import type { Workbook } from "@/lib/workbook";
 import { RightPanel } from "./panels/RightPanel";
 import { NotebookSidebar } from "./sidebar/NotebookSidebar";
+import { SaveStatusIndicator } from "@/components/SaveStatusIndicator";
 
 interface NotebookShellProps {
   children: ReactNode;
@@ -92,6 +94,7 @@ export function NotebookShell({ children }: NotebookShellProps) {
 
   const { panel: rightPanel, togglePanel: toggleRightPanel } = useRightPanel();
   const { setSession: _setActiveSession } = useActiveSession();
+  const isFullscreen = useFullscreen();
   const { data: workbooks } = useWorkbooks();
   const createWorkbook = useCreateWorkbook();
   const openWorkbook = useOpenWorkbook();
@@ -365,10 +368,16 @@ export function NotebookShell({ children }: NotebookShellProps) {
         {/* macOS Titlebar - traffic lights at x:16 y:18 in tauri.conf.json */}
         <header
           data-tauri-drag-region
-          className="h-11 flex items-center justify-between pl-[80px] pr-4 border-b border-border/50 bg-background shrink-0"
+          className={cn(
+            "h-11 flex items-center justify-between pr-4 border-b border-border/50 bg-background shrink-0",
+            isFullscreen ? "pl-4" : "pl-[80px]",
+          )}
         >
           {/* Left: Workbook title + breadcrumb */}
           <div className="flex items-center gap-0 group/titlebar">
+            {/* Save status indicator - circle to left of title */}
+            <SaveStatusIndicator />
+
             {/* Editable workbook title */}
             <span
               ref={titleInputRef}
@@ -835,24 +844,26 @@ export function NotebookShell({ children }: NotebookShellProps) {
         <RightPanel />
 
         {/* Floating chat - bottom-up layout, shifts right when sidebar is open on content routes */}
-        <div
-          className="fixed bottom-4 right-4 z-50 max-w-2xl mx-auto flex flex-col transition-[left] duration-200"
-          style={{ left: isOnContentRoute && sidebarShown ? sidebarWidth + 16 : 16 }}
-        >
-          <Thread
-            expanded={chatState.chatExpanded}
-            onCollapse={() => chatState.setChatExpanded(false)}
-            onExpand={() => chatState.setChatExpanded(true)}
-          />
-          <ChatBar
-            expanded={chatState.chatExpanded}
-            onExpandChange={chatState.setChatExpanded}
-            pendingAttachment={chatState.pendingAttachment}
-            onPendingAttachmentChange={chatState.setPendingAttachment}
-            autoSubmitPending={chatState.autoSubmitPending}
-            onAutoSubmitPendingChange={chatState.setAutoSubmitPending}
-          />
-        </div>
+        {!chatState.chatBarHidden && (
+          <div
+            className="fixed bottom-4 right-4 z-50 max-w-2xl mx-auto flex flex-col transition-[left] duration-200"
+            style={{ left: isOnContentRoute && sidebarShown ? sidebarWidth + 16 : 16 }}
+          >
+            <Thread
+              expanded={chatState.chatExpanded}
+              onCollapse={() => chatState.setChatExpanded(false)}
+              onExpand={() => chatState.setChatExpanded(true)}
+            />
+            <ChatBar
+              expanded={chatState.chatExpanded}
+              onExpandChange={chatState.setChatExpanded}
+              pendingAttachment={chatState.pendingAttachment}
+              onPendingAttachmentChange={chatState.setPendingAttachment}
+              autoSubmitPending={chatState.autoSubmitPending}
+              onAutoSubmitPendingChange={chatState.setAutoSubmitPending}
+            />
+          </div>
+        )}
 
         {/* Hidden file input for import */}
         <input

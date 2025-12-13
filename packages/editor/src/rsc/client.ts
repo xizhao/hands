@@ -71,8 +71,29 @@ export async function renderComponentViaRsc(
     });
 
     if (!response.ok) {
-      const error = await response.text();
-      return { element: null, error: `RSC render failed: ${error}` };
+      // Try to get detailed error from response body
+      let errorMessage = `RSC render failed: ${response.statusText}`;
+      try {
+        const contentType = response.headers.get("Content-Type") || "";
+        if (contentType.includes("application/json")) {
+          const errorData = await response.json();
+          errorMessage = errorData.error || errorData.message || errorMessage;
+          if (errorData.stack) {
+            errorMessage += `\n${errorData.stack.split("\n").slice(0, 3).join("\n")}`;
+          }
+        } else {
+          const text = await response.text();
+          const match = text.match(/Error:?\s*([^\n<]+)/i);
+          if (match) {
+            errorMessage = match[1].trim();
+          } else if (text.length < 500) {
+            errorMessage = text.trim() || errorMessage;
+          }
+        }
+      } catch {
+        // Fallback to status text
+      }
+      return { element: null, error: errorMessage };
     }
 
     // Check content type
@@ -140,7 +161,31 @@ export async function renderBlockViaRsc(
     const response = await fetch(url);
 
     if (!response.ok) {
-      return { element: null, error: `Fetch failed: ${response.statusText}` };
+      // Try to get detailed error from response body
+      let errorMessage = `Fetch failed: ${response.statusText}`;
+      try {
+        const contentType = response.headers.get("Content-Type") || "";
+        if (contentType.includes("application/json")) {
+          const errorData = await response.json();
+          errorMessage = errorData.error || errorData.message || errorMessage;
+          if (errorData.stack) {
+            errorMessage += `\n${errorData.stack.split("\n").slice(0, 3).join("\n")}`;
+          }
+        } else {
+          // Vite often returns HTML or plain text errors
+          const text = await response.text();
+          // Extract error message from Vite error page or plain text
+          const match = text.match(/Error:?\s*([^\n<]+)/i);
+          if (match) {
+            errorMessage = match[1].trim();
+          } else if (text.length < 500) {
+            errorMessage = text.trim() || errorMessage;
+          }
+        }
+      } catch {
+        // Fallback to status text if we can't parse the body
+      }
+      return { element: null, error: errorMessage };
     }
 
     const contentType = response.headers.get("Content-Type");

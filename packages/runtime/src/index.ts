@@ -1036,6 +1036,11 @@ function createApp(config: RuntimeConfig) {
     workbookDir: config.workbookDir,
     getDb: () => state.workbookDb?.db ?? null,
     isDbReady: () => state.dbReady,
+    saveDb: async () => {
+      if (state.workbookDb) {
+        await state.workbookDb.save();
+      }
+    },
   });
 
   // Serve client modules for RSC hydration

@@ -431,6 +431,42 @@ export function useSaveBlockContent() {
   });
 }
 
+// Create a new block
+export interface CreateBlockResult {
+  success: boolean;
+  blockId: string;
+  filePath: string;
+}
+
+export function useCreateBlock() {
+  const port = useRuntimePort();
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationKey: ["block", "create"],
+    mutationFn: async ({ blockId, source }: { blockId: string; source?: string }) => {
+      if (!port) throw new Error("Runtime not connected");
+
+      const response = await fetch(`http://localhost:${port}/workbook/blocks`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ blockId, source }),
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || "Failed to create block");
+      }
+
+      return response.json() as Promise<CreateBlockResult>;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["workbook-manifest"] });
+      queryClient.invalidateQueries({ queryKey: ["manifest"] });
+    },
+  });
+}
+
 // ============================================================================
 // Source Hooks
 // ============================================================================

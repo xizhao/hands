@@ -7,6 +7,7 @@
  * If the editor isn't ready, we poll the runtime until it is (or timeout).
  */
 
+import { useNavigate } from "@tanstack/react-router";
 import { AlertTriangle, RefreshCw } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
@@ -44,6 +45,21 @@ function isEditorErrorEvent(msg: unknown): msg is EditorErrorEvent {
   );
 }
 
+// Navigation event from editor (e.g., clicking on data dependency chip)
+interface NavigateTableEvent {
+  type: "navigate-table";
+  tableId: string;
+}
+
+function isNavigateTableEvent(msg: unknown): msg is NavigateTableEvent {
+  return (
+    typeof msg === "object" &&
+    msg !== null &&
+    (msg as NavigateTableEvent).type === "navigate-table" &&
+    typeof (msg as NavigateTableEvent).tableId === "string"
+  );
+}
+
 type SandboxState = "loading" | "waiting" | "ready" | "error";
 
 interface EditorSandboxProps {
@@ -59,6 +75,7 @@ export function EditorSandbox({ blockId, className, readOnly = false }: EditorSa
   const [crashCount, setCrashCount] = useState(0);
   const [editorReady, setEditorReady] = useState(false);
   const iframeKey = useRef(0);
+  const navigate = useNavigate();
 
   // Runtime port for the editor to connect to
   const { port: runtimePort } = useRuntimeState();
@@ -198,13 +215,19 @@ export function EditorSandbox({ blockId, className, readOnly = false }: EditorSa
     iframeRef.current.contentWindow.postMessage({ type: "styles", css }, "*");
   }, [generateStyles]);
 
-  // Listen for sandbox ready signal and editor errors
+  // Listen for sandbox ready signal, editor errors, and navigation events
   useEffect(() => {
     const handleMessage = (e: MessageEvent) => {
       if (e.data?.type === "sandbox-ready") {
         console.log("[EditorSandbox] Sandbox ready, sending styles");
         sendStyles();
         setState("ready");
+      }
+
+      // Handle navigation from editor (e.g., clicking on data dependency chip)
+      if (isNavigateTableEvent(e.data)) {
+        console.log("[EditorSandbox] Navigate to table:", e.data.tableId);
+        navigate({ to: "/tables/$tableId", params: { tableId: e.data.tableId } });
       }
 
       // Handle editor errors from iframe
@@ -232,7 +255,7 @@ export function EditorSandbox({ blockId, className, readOnly = false }: EditorSa
     };
     window.addEventListener("message", handleMessage);
     return () => window.removeEventListener("message", handleMessage);
-  }, [sendStyles]);
+  }, [sendStyles, navigate]);
 
   // Handle iframe load - also try sending styles (fallback)
   const handleIframeLoad = useCallback(() => {

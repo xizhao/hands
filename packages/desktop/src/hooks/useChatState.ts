@@ -37,16 +37,18 @@ export type AnyPendingAttachment =
 let pendingAttachment: AnyPendingAttachment | null = null;
 let chatExpanded: boolean = false;
 let autoSubmitPending: boolean = false;
+let chatBarHidden: boolean = false;
 
 // Snapshot type
 interface ChatStateSnapshot {
   pendingAttachment: AnyPendingAttachment | null;
   chatExpanded: boolean;
   autoSubmitPending: boolean;
+  chatBarHidden: boolean;
 }
 
 // Cached snapshot - only recreate when state changes
-let snapshot: ChatStateSnapshot = { pendingAttachment, chatExpanded, autoSubmitPending };
+let snapshot: ChatStateSnapshot = { pendingAttachment, chatExpanded, autoSubmitPending, chatBarHidden };
 
 // Subscribers for useSyncExternalStore
 let listeners: Array<() => void> = [];
@@ -64,7 +66,7 @@ function getSnapshot() {
 
 function emitChange() {
   // Create new snapshot object so React detects the change
-  snapshot = { pendingAttachment, chatExpanded, autoSubmitPending };
+  snapshot = { pendingAttachment, chatExpanded, autoSubmitPending, chatBarHidden };
   for (const listener of listeners) {
     listener();
   }
@@ -89,6 +91,12 @@ export function setAutoSubmitPending(pending: boolean) {
   emitChange();
 }
 
+export function setChatBarHidden(hidden: boolean) {
+  if (chatBarHidden === hidden) return;
+  chatBarHidden = hidden;
+  emitChange();
+}
+
 // Hook
 export function useChatState() {
   const state = useSyncExternalStore(subscribe, getSnapshot, getSnapshot);
@@ -98,5 +106,6 @@ export function useChatState() {
     setPendingAttachment,
     setChatExpanded,
     setAutoSubmitPending,
+    setChatBarHidden,
   };
 }
