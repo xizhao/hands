@@ -153,6 +153,7 @@ export function NotebookShell({ children }: NotebookShellProps) {
   // Sidebar hover state (invisible until hover on left edge) - only used when on a page
   const [sidebarVisible, setSidebarVisible] = useState(false);
   const [sidebarPinned, setSidebarPinned] = useState(false);
+  const [sidebarMenuOpen, setSidebarMenuOpen] = useState(false);
   const sidebarTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   // Sidebar width state (for resizing when expanded)
@@ -170,12 +171,12 @@ export function NotebookShell({ children }: NotebookShellProps) {
   }, []);
 
   const handleMouseLeaveSidebar = useCallback(() => {
-    // Don't hide while resizing or pinned
-    if (isResizing || sidebarPinned) return;
+    // Don't hide while resizing, pinned, or menu is open
+    if (isResizing || sidebarPinned || sidebarMenuOpen) return;
     sidebarTimeoutRef.current = setTimeout(() => {
       setSidebarVisible(false);
     }, 300);
-  }, [isResizing, sidebarPinned]);
+  }, [isResizing, sidebarPinned, sidebarMenuOpen]);
 
   const handleResizeStart = useCallback((e: React.MouseEvent) => {
     e.preventDefault();
@@ -528,15 +529,15 @@ export function NotebookShell({ children }: NotebookShellProps) {
                         : "text-muted-foreground/70 hover:bg-accent/50 hover:text-muted-foreground"
                   )}
                 >
+                    <Database weight="duotone" className={cn("h-3.5 w-3.5", !isDbLoading && dbConnected && tableCount > 0 && "text-blue-500")} />
                   {isDbLoading ? (
-                    <CircleNotch weight="bold" className="h-3.5 w-3.5 animate-spin text-muted-foreground" />
+                    <div className="w-4 h-3 bg-muted/50 rounded animate-pulse" />
                   ) : (
-                    <Database weight="duotone" className={cn("h-3.5 w-3.5", dbConnected && tableCount > 0 && "text-blue-500")} />
+                    <span className={cn(
+                      "tabular-nums",
+                      dbConnected && tableCount > 0 ? "text-foreground" : "text-muted-foreground/70"
+                    )}>{tableCount}</span>
                   )}
-                  <span className={cn(
-                    "tabular-nums",
-                    isDbLoading ? "text-muted-foreground/70" : dbConnected && tableCount > 0 ? "text-foreground" : "text-muted-foreground/70"
-                  )}>{isDbLoading ? "—" : tableCount}</span>
                 </button>
               </HoverCardTrigger>
               <HoverCardContent side="bottom" align="center" className="w-auto p-1">
@@ -759,6 +760,7 @@ export function NotebookShell({ children }: NotebookShellProps) {
                   collapsed={false}
                   pinned={sidebarPinned}
                   onPinnedChange={setSidebarPinned}
+                  onMenuOpenChange={setSidebarMenuOpen}
                 />
               </div>
 
@@ -794,8 +796,11 @@ export function NotebookShell({ children }: NotebookShellProps) {
       {/* Right panel overlay */}
       <RightPanel />
 
-      {/* Floating chat - bottom-up layout */}
-      <div className="fixed bottom-4 left-4 right-4 z-50 max-w-2xl mx-auto flex flex-col">
+      {/* Floating chat - bottom-up layout, shifts right when sidebar is open on content routes */}
+      <div
+        className="fixed bottom-4 right-4 z-50 max-w-2xl mx-auto flex flex-col transition-[left] duration-200"
+        style={{ left: isOnContentRoute && sidebarShown ? sidebarWidth + 16 : 16 }}
+      >
         <Thread
           expanded={chatState.chatExpanded}
           onCollapse={() => chatState.setChatExpanded(false)}

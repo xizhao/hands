@@ -12,10 +12,17 @@
 import { useState, useMemo, useCallback } from "react";
 import { useNavigate, useRouter } from "@tanstack/react-router";
 import { cn } from "@/lib/utils";
-import { Plus, ChevronDown, ChevronRight, Search, X, Pin, PinOff } from "lucide-react";
-import { CaretLeft, CaretRight, Database, Newspaper, Code, Key, CircleNotch, ArrowsClockwise, Warning, Folder, FolderOpen } from "@phosphor-icons/react";
+import { Plus, ChevronDown, ChevronRight, Search, X, Pin, PinOff, MoreHorizontal } from "lucide-react";
+import { CaretLeft, CaretRight, Database, Newspaper, Code, Key, CircleNotch, ArrowsClockwise, Warning, Folder, FolderOpen, Copy, Trash } from "@phosphor-icons/react";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import { useDbSchema, useManifest, useActiveWorkbookId, useDbReady } from "@/hooks/useWorkbook";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { useDbSchema, useManifest, useActiveWorkbookId, useDbReady, useRuntimePort } from "@/hooks/useWorkbook";
 import { useSourceManagement } from "@/hooks/useSources";
 import {
   Dialog,
@@ -32,6 +39,8 @@ interface NotebookSidebarProps {
   pinned?: boolean;
   /** Callback to toggle pinned state */
   onPinnedChange?: (pinned: boolean) => void;
+  /** Callback when a dropdown menu opens/closes */
+  onMenuOpenChange?: (open: boolean) => void;
 }
 
 // Map icon names to Phosphor icons for sources
@@ -75,7 +84,49 @@ function DataIcon({ className, empty }: { className?: string; empty?: boolean })
   )
 }
 
-export function NotebookSidebar({ collapsed = false, fullWidth = false, pinned = false, onPinnedChange }: NotebookSidebarProps) {
+// Reusable dropdown for item actions (copy, delete)
+interface ItemActionsProps {
+  onCopy?: () => void;
+  onDelete?: () => void;
+  copyLabel?: string;
+  deleteLabel?: string;
+  onOpenChange?: (open: boolean) => void;
+}
+
+function ItemActions({ onCopy, onDelete, copyLabel = "Duplicate", deleteLabel = "Delete", onOpenChange }: ItemActionsProps) {
+  return (
+    <DropdownMenu onOpenChange={onOpenChange}>
+      <DropdownMenuTrigger asChild>
+        <button
+          onClick={(e) => e.stopPropagation()}
+          className="p-0.5 rounded opacity-0 group-hover:opacity-100 hover:bg-accent transition-all"
+        >
+          <MoreHorizontal className="h-3.5 w-3.5" />
+        </button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end" className="w-32">
+        {onCopy && (
+          <DropdownMenuItem onClick={(e) => { e.stopPropagation(); onCopy(); }}>
+            <Copy weight="duotone" className="h-3.5 w-3.5 mr-2" />
+            {copyLabel}
+          </DropdownMenuItem>
+        )}
+        {onCopy && onDelete && <DropdownMenuSeparator />}
+        {onDelete && (
+          <DropdownMenuItem
+            onClick={(e) => { e.stopPropagation(); onDelete(); }}
+            className="text-destructive focus:text-destructive"
+          >
+            <Trash weight="duotone" className="h-3.5 w-3.5 mr-2" />
+            {deleteLabel}
+          </DropdownMenuItem>
+        )}
+      </DropdownMenuContent>
+    </DropdownMenu>
+  )
+}
+
+export function NotebookSidebar({ collapsed = false, fullWidth = false, pinned = false, onPinnedChange, onMenuOpenChange }: NotebookSidebarProps) {
   const navigate = useNavigate();
   const router = useRouter();
 
@@ -184,6 +235,79 @@ export function NotebookSidebar({ collapsed = false, fullWidth = false, pinned =
     console.log("[sidebar] navigating to table:", tableId);
     navigate({ to: "/tables/$tableId", params: { tableId } });
   }, [navigate]);
+
+  // Runtime port for API calls
+  const runtimePort = useRuntimePort();
+
+  // CRUD action handlers
+  const handleCopyBlock = useCallback(async (blockId: string) => {
+    if (!runtimePort) return;
+    try {
+      const res = await fetch(`http://localhost:${runtimePort}/workbook/blocks/${blockId}/duplicate`, {
+        method: "POST",
+      });
+      if (!res.ok) throw new Error("Failed to duplicate block");
+      console.log("[sidebar] duplicated block:", blockId);
+    } catch (err) {
+      console.error("[sidebar] failed to duplicate block:", err);
+    }
+  }, [runtimePort]);
+
+  const handleDeleteBlock = useCallback(async (blockId: string) => {
+    if (!runtimePort) return;
+    try {
+      const res = await fetch(`http://localhost:${runtimePort}/workbook/blocks/${blockId}`, {
+        method: "DELETE",
+      });
+      if (!res.ok) throw new Error("Failed to delete block");
+      console.log("[sidebar] deleted block:", blockId);
+      // Navigate away if we deleted the current block
+      navigate({ to: "/" });
+    } catch (err) {
+      console.error("[sidebar] failed to delete block:", err);
+    }
+  }, [runtimePort, navigate]);
+
+  const handleCopySource = useCallback(async (sourceId: string) => {
+    if (!runtimePort) return;
+    try {
+      const res = await fetch(`http://localhost:${runtimePort}/workbook/sources/${sourceId}/duplicate`, {
+        method: "POST",
+      });
+      if (!res.ok) throw new Error("Failed to duplicate source");
+      console.log("[sidebar] duplicated source:", sourceId);
+    } catch (err) {
+      console.error("[sidebar] failed to duplicate source:", err);
+    }
+  }, [runtimePort]);
+
+  const handleDeleteSource = useCallback(async (sourceId: string) => {
+    if (!runtimePort) return;
+    try {
+      const res = await fetch(`http://localhost:${runtimePort}/workbook/sources/${sourceId}`, {
+        method: "DELETE",
+      });
+      if (!res.ok) throw new Error("Failed to delete source");
+      console.log("[sidebar] deleted source:", sourceId);
+      navigate({ to: "/" });
+    } catch (err) {
+      console.error("[sidebar] failed to delete source:", err);
+    }
+  }, [runtimePort, navigate]);
+
+  const handleDeleteTable = useCallback(async (tableName: string) => {
+    if (!runtimePort) return;
+    try {
+      const res = await fetch(`http://localhost:${runtimePort}/postgres/tables/${tableName}`, {
+        method: "DELETE",
+      });
+      if (!res.ok) throw new Error("Failed to delete table");
+      console.log("[sidebar] deleted table:", tableName);
+      navigate({ to: "/" });
+    } catch (err) {
+      console.error("[sidebar] failed to delete table:", err);
+    }
+  }, [runtimePort, navigate]);
 
   if (collapsed) {
     return (
@@ -351,17 +475,30 @@ export function NotebookSidebar({ collapsed = false, fullWidth = false, pinned =
         )}>
           {/* Blocks Section */}
           <div className="space-y-1">
-            <button
-              onClick={() => setBlocksExpanded(!blocksExpanded)}
-              className="flex items-center gap-1 text-[10px] font-medium text-muted-foreground/80 uppercase tracking-wider hover:text-muted-foreground transition-colors"
-            >
-              {blocksExpanded ? (
-                <ChevronDown className="h-3 w-3" />
-              ) : (
-                <ChevronRight className="h-3 w-3" />
-              )}
-              Blocks
-            </button>
+            <div className="flex items-center justify-between">
+              <button
+                onClick={() => setBlocksExpanded(!blocksExpanded)}
+                className="flex items-center gap-1 text-[10px] font-medium text-muted-foreground/80 uppercase tracking-wider hover:text-muted-foreground transition-colors"
+              >
+                {blocksExpanded ? (
+                  <ChevronDown className="h-3 w-3" />
+                ) : (
+                  <ChevronRight className="h-3 w-3" />
+                )}
+                Blocks
+              </button>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <button
+                    className="p-0.5 text-muted-foreground/60 hover:text-muted-foreground transition-colors"
+                    title="New block"
+                  >
+                    <Plus className="h-3 w-3" />
+                  </button>
+                </TooltipTrigger>
+                <TooltipContent side="right">New block</TooltipContent>
+              </Tooltip>
+            </div>
 
             {blocksExpanded && (
               <div className="space-y-0">
@@ -396,14 +533,20 @@ export function NotebookSidebar({ collapsed = false, fullWidth = false, pinned =
                           {(isExpanded || searchQuery) && (
                             <div className="ml-4 border-l border-border/50 pl-2">
                               {filteredDirBlocks.map((block) => (
-                                <button
-                                  key={block.id}
-                                  onClick={() => handleBlockClick(block.id)}
-                                  className={listItemStyles}
-                                >
+                                <div key={block.id} className={listItemStyles}>
                                   <BlockIcon />
-                                  <span className="flex-1 truncate text-left">{block.title || block.id}</span>
-                                </button>
+                                  <button
+                                    onClick={() => handleBlockClick(block.id)}
+                                    className="flex-1 truncate text-left hover:underline"
+                                  >
+                                    {block.title || block.id}
+                                  </button>
+                                  <ItemActions
+                                    onCopy={() => handleCopyBlock(block.id)}
+                                    onDelete={() => handleDeleteBlock(block.id)}
+                                    onOpenChange={onMenuOpenChange}
+                                  />
+                                </div>
                               ))}
                             </div>
                           )}
@@ -415,14 +558,20 @@ export function NotebookSidebar({ collapsed = false, fullWidth = false, pinned =
                       ? blockTree.rootBlocks.filter((b) => b.title.toLowerCase().includes(searchQuery.toLowerCase()))
                       : blockTree.rootBlocks
                     ).map((block) => (
-                      <button
-                        key={block.id}
-                        onClick={() => handleBlockClick(block.id)}
-                        className={listItemStyles}
-                      >
+                      <div key={block.id} className={listItemStyles}>
                         <BlockIcon />
-                        <span className="flex-1 truncate text-left">{block.title || block.id}</span>
-                      </button>
+                        <button
+                          onClick={() => handleBlockClick(block.id)}
+                          className="flex-1 truncate text-left hover:underline"
+                        >
+                          {block.title || block.id}
+                        </button>
+                        <ItemActions
+                          onCopy={() => handleCopyBlock(block.id)}
+                          onDelete={() => handleDeleteBlock(block.id)}
+                          onOpenChange={onMenuOpenChange}
+                        />
+                      </div>
                     ))}
                   </>
                 ) : (
@@ -567,6 +716,11 @@ export function NotebookSidebar({ collapsed = false, fullWidth = false, pinned =
                             <ArrowsClockwise weight="bold" className="h-3.5 w-3.5" />
                           )}
                         </button>
+                        <ItemActions
+                          onCopy={() => handleCopySource(source.id)}
+                          onDelete={() => handleDeleteSource(source.id)}
+                          onOpenChange={onMenuOpenChange}
+                        />
                       </div>
                     )
                   })
@@ -582,38 +736,58 @@ export function NotebookSidebar({ collapsed = false, fullWidth = false, pinned =
 
           {/* Data Section */}
           <div className="space-y-1">
-            <button
-              onClick={() => setDataExpanded(!dataExpanded)}
-              className="flex items-center gap-1 text-[10px] font-medium text-muted-foreground/80 uppercase tracking-wider hover:text-muted-foreground transition-colors"
-            >
-              {dataExpanded ? (
-                <ChevronDown className="h-3 w-3" />
-              ) : (
-                <ChevronRight className="h-3 w-3" />
-              )}
-              Data
-            </button>
+            <div className="flex items-center justify-between">
+              <button
+                onClick={() => setDataExpanded(!dataExpanded)}
+                className="flex items-center gap-1 text-[10px] font-medium text-muted-foreground/80 uppercase tracking-wider hover:text-muted-foreground transition-colors"
+              >
+                {dataExpanded ? (
+                  <ChevronDown className="h-3 w-3" />
+                ) : (
+                  <ChevronRight className="h-3 w-3" />
+                )}
+                Data
+              </button>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <button
+                    className="p-0.5 text-muted-foreground/60 hover:text-muted-foreground transition-colors"
+                    title="New table"
+                  >
+                    <Plus className="h-3 w-3" />
+                  </button>
+                </TooltipTrigger>
+                <TooltipContent side="right">New table</TooltipContent>
+              </Tooltip>
+            </div>
 
             {dataExpanded && (
               <div className="space-y-0">
                 {isDbLoading ? (
-                  <div className={emptyStateStyles}>
-                    <CircleNotch weight="bold" className="h-3.5 w-3.5 animate-spin shrink-0" />
-                    <span>Loading...</span>
+                  <div className="space-y-1 py-1">
+                    <div className="h-5 bg-muted/50 rounded animate-pulse" />
+                    <div className="h-5 bg-muted/50 rounded animate-pulse w-3/4" />
+                    <div className="h-5 bg-muted/50 rounded animate-pulse w-1/2" />
                   </div>
                 ) : schema && schema.length > 0 ? (
                   (searchQuery
                     ? schema.filter((t) => t.table_name.toLowerCase().includes(searchQuery.toLowerCase()))
                     : schema
                   ).map((table) => (
-                    <button
-                      key={table.table_name}
-                      onClick={() => handleTableClick(table.table_name)}
-                      className={listItemStyles}
-                    >
+                    <div key={table.table_name} className={listItemStyles}>
                       <DataIcon />
-                      <span className="flex-1 truncate text-left">{table.table_name}</span>
-                    </button>
+                      <button
+                        onClick={() => handleTableClick(table.table_name)}
+                        className="flex-1 truncate text-left hover:underline"
+                      >
+                        {table.table_name}
+                      </button>
+                      <ItemActions
+                        onDelete={() => handleDeleteTable(table.table_name)}
+                        deleteLabel="Drop table"
+                        onOpenChange={onMenuOpenChange}
+                      />
+                    </div>
                   ))
                 ) : (
                   <div className={emptyStateStyles}>

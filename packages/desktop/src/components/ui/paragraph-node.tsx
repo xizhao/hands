@@ -1,17 +1,10 @@
 'use client';
 
 import { PlateElement, type PlateElementProps } from 'platejs/react';
-import * as React from 'react';
 
 export function ParagraphElement(props: PlateElementProps) {
   return (
-    <PlateElement
-      {...props}
-      className="px-0.5 py-[3px]"
-      style={{
-        backgroundColor: props.element.backgroundColor as any,
-      }}
-    >
+    <PlateElement {...props} className="px-0.5 py-[3px]">
       {props.children}
     </PlateElement>
   );

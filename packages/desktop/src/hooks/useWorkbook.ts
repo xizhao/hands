@@ -228,6 +228,7 @@ export function useOpenWorkbook() {
       queryClient.removeQueries({ queryKey: ["blockSource"] });
       queryClient.removeQueries({ queryKey: ["runtime-eval"] });
       queryClient.removeQueries({ queryKey: ["runtime-health"] });
+      queryClient.removeQueries({ queryKey: ["runtime-status-services"] });
       queryClient.removeQueries({ queryKey: ["db-schema"] });
 
       // Update last opened timestamp
@@ -467,10 +468,18 @@ export function useRuntimeStatus() {
 
 // Convenience hook for DB readiness
 export function useDbReady() {
-  const { data: status, isLoading } = useRuntimeStatus();
+  const port = useRuntimePort();
+  const { data: status, isLoading, isFetching } = useRuntimeStatus();
+
+  // Loading if:
+  // 1. No port yet (runtime not connected)
+  // 2. Query is loading/fetching
+  // 3. We have status but DB service isn't ready yet
+  const isDbLoading = !port || isLoading || isFetching || (!!port && !status?.services?.db?.ready);
+
   return {
-    isDbReady: status?.services?.db?.ready ?? false,
-    isLoading: isLoading || (!!status && !status.services?.db?.ready),
+    isDbReady: !!port && (status?.services?.db?.ready ?? false),
+    isLoading: isDbLoading,
   };
 }
 

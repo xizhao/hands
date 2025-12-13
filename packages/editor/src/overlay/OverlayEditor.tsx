@@ -419,6 +419,7 @@ function OverlayEditorInner({
   }, [parseResult.root])
 
   // Check if AST node has literal text children (not just expressions)
+  // This determines if the element supports inline text editing
   const hasLiteralTextChildren = useCallback((nodeId: string): boolean => {
     const node = findAstNode(nodeId)
     if (!node) return false
@@ -473,6 +474,15 @@ function OverlayEditorInner({
       const target = e.target as HTMLElement
       const editableEl = target.closest('[data-node-id]') as HTMLElement
       const nodeId = editableEl?.getAttribute('data-node-id')
+
+      // Debug: log what we're clicking
+      console.log('[OverlayEditor] click:', {
+        target: target.tagName,
+        editableEl: editableEl?.tagName,
+        nodeId,
+        hasNodeId: !!nodeId,
+        allNodeIds: containerRef.current ? getAllNodeIds(containerRef.current) : [],
+      })
 
       // Commit editing if clicking outside current edit
       if (editingNodeId && editingNodeId !== nodeId) {
