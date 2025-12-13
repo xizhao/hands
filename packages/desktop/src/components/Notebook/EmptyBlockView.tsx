@@ -24,6 +24,7 @@ import { setChatBarHidden } from "@/hooks/useChatState";
 import {
   listComponents,
   listCategories,
+  previews,
   type ComponentMeta,
 } from "@hands/stdlib/registry";
 
@@ -194,9 +195,9 @@ export function EmptyBlockView({ blockId, onInitialized }: EmptyBlockViewProps) 
     setActiveCategory(null);
   };
 
-  // Render preview of selected component example code
+  // Render live preview of selected component
   const renderPreview = () => {
-    if (!selectedComponent) {
+    if (!selectedComponentKey) {
       return (
         <div className="p-4 text-muted-foreground text-sm">
           Select a template to preview
@@ -204,20 +205,19 @@ export function EmptyBlockView({ blockId, onInitialized }: EmptyBlockViewProps) 
       );
     }
 
-    // Show example code if available
-    if (selectedComponent.example) {
+    // Get the preview component from generated previews
+    const PreviewComponent = previews[selectedComponentKey];
+    if (PreviewComponent) {
       return (
-        <div className="rounded-lg border bg-muted/50 p-4">
-          <pre className="text-sm overflow-auto whitespace-pre-wrap font-mono text-foreground">
-            {selectedComponent.example}
-          </pre>
+        <div className="rounded-lg border bg-background p-6">
+          <PreviewComponent />
         </div>
       );
     }
 
     return (
       <div className="p-4 text-muted-foreground text-sm">
-        No example available for {selectedComponent.name}
+        No preview available for {selectedComponent?.name}
       </div>
     );
   };

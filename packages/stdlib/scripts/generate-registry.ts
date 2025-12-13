@@ -1,12 +1,12 @@
 /**
  * Registry Generator Script
  *
- * Scans component files for JSDoc comments and generates registry.generated.ts
+ * Scans component files for JSDoc comments and generates registry.generated.tsx
+ * Generates both metadata registry and live preview components.
  *
  * Usage: bun run scripts/generate-registry.ts
  */
 
-import * as ts from "typescript";
 import * as fs from "fs";
 import * as path from "path";
 
@@ -167,10 +167,87 @@ function findTsxFiles(dir: string, baseDir: string = dir): string[] {
 // Main Generator
 // ============================================
 
+// Extract component names used in JSX example code
+function extractComponentNamesFromJSX(jsx: string): string[] {
+  // Match JSX component tags like <ComponentName or <ComponentName>
+  const matches = jsx.match(/<([A-Z][A-Za-z0-9]*)/g) || [];
+  const names = matches.map((m) => m.slice(1)); // Remove leading <
+  return [...new Set(names)]; // Deduplicate
+}
+
+// Map component names to their source files
+function buildComponentImportMap(
+  componentsDir: string,
+  files: string[]
+): Map<string, { file: string; exports: string[] }> {
+  const map = new Map<string, { file: string; exports: string[] }>();
+
+  for (const file of files) {
+    const filePath = path.join(componentsDir, file);
+    const content = fs.readFileSync(filePath, "utf-8");
+
+    const exports: string[] = [];
+
+    // Match export const X = or export function X
+    const directExports = content.matchAll(
+      /export\s+(?:const|function)\s+([A-Z][A-Za-z0-9]*)/g
+    );
+    for (const match of directExports) {
+      exports.push(match[1]);
+    }
+
+    // Match export { X, Y, Z } or export { X }
+    const bracketExports = content.matchAll(/export\s*\{\s*([^}]+)\s*\}/g);
+    for (const match of bracketExports) {
+      const names = match[1]
+        .split(",")
+        .map((n) => n.trim().split(/\s+/)[0]) // Handle "X as Y" patterns
+        .filter((n) => /^[A-Z]/.test(n));
+      exports.push(...names);
+    }
+
+    // Match const X = React.forwardRef (then exported later)
+    const forwardRefMatches = content.matchAll(
+      /const\s+([A-Z][A-Za-z0-9]*)\s*=\s*React\.forwardRef/g
+    );
+    for (const match of forwardRefMatches) {
+      if (!exports.includes(match[1])) {
+        exports.push(match[1]);
+      }
+    }
+
+    // Match function X(...) { (local functions that might be exported)
+    const functionMatches = content.matchAll(
+      /^function\s+([A-Z][A-Za-z0-9]*)\s*\(/gm
+    );
+    for (const match of functionMatches) {
+      if (!exports.includes(match[1])) {
+        exports.push(match[1]);
+      }
+    }
+
+    // Match const X = SomePrimitive.Root (aliased components)
+    const aliasMatches = content.matchAll(
+      /const\s+([A-Z][A-Za-z0-9]*)\s*=\s*[A-Z][A-Za-z0-9]*(?:Primitive)?\.(?:Root|Content|Trigger)/g
+    );
+    for (const match of aliasMatches) {
+      if (!exports.includes(match[1])) {
+        exports.push(match[1]);
+      }
+    }
+
+    for (const exp of exports) {
+      map.set(exp, { file: file.replace(/\.tsx$/, ".js"), exports });
+    }
+  }
+
+  return map;
+}
+
 async function generateRegistry() {
   const stdlibRoot = path.resolve(__dirname, "..");
   const componentsDir = path.join(stdlibRoot, "src/registry/components");
-  const outputPath = path.join(stdlibRoot, "src/registry.generated.ts");
+  const outputPath = path.join(stdlibRoot, "src/registry.generated.tsx");
 
   console.log("Scanning components in:", componentsDir);
 
@@ -178,8 +255,12 @@ async function generateRegistry() {
   const files = findTsxFiles(componentsDir);
   console.log(`Found ${files.length} component files`);
 
+  // Build component import map
+  const importMap = buildComponentImportMap(componentsDir, files);
+
   // Parse each file
   const components: Record<string, ComponentEntry> = {};
+  const componentExamples: Array<{ key: string; example: string }> = [];
   let parsedCount = 0;
 
   for (const file of files) {
@@ -201,6 +282,10 @@ async function generateRegistry() {
         dependencies: extractDependencies(filePath),
       };
 
+      if (parsed.example) {
+        componentExamples.push({ key, example: parsed.example });
+      }
+
       parsedCount++;
       console.log(`  Parsed: ${key} (${file})`);
     }
@@ -208,10 +293,55 @@ async function generateRegistry() {
 
   console.log(`\nParsed ${parsedCount} components with @component JSDoc`);
   console.log(`Total components: ${Object.keys(components).length}`);
+  console.log(`Components with examples: ${componentExamples.length}`);
+
+  // Collect all component names used in examples and build imports
+  const allUsedComponents = new Set<string>();
+  for (const { example } of componentExamples) {
+    const names = extractComponentNamesFromJSX(example);
+    names.forEach((n) => allUsedComponents.add(n));
+  }
+
+  // Group imports by source file
+  const importsByFile = new Map<string, Set<string>>();
+  for (const compName of allUsedComponents) {
+    const info = importMap.get(compName);
+    if (info) {
+      const existing = importsByFile.get(info.file) || new Set();
+      existing.add(compName);
+      importsByFile.set(info.file, existing);
+    } else {
+      console.warn(`  Warning: Component ${compName} not found in import map`);
+    }
+  }
+
+  // Generate import statements
+  const importStatements: string[] = [];
+  for (const [file, components] of importsByFile) {
+    const names = Array.from(components).sort().join(", ");
+    importStatements.push(
+      `import { ${names} } from "./registry/components/${file}";`
+    );
+  }
+
+  // Generate preview components
+  const previewEntries: string[] = [];
+  for (const { key, example } of componentExamples) {
+    // Indent the example properly
+    const indentedExample = example
+      .split("\n")
+      .map((line, i) => (i === 0 ? line : "    " + line))
+      .join("\n");
+    previewEntries.push(`  "${key}": () => (\n    ${indentedExample}\n  )`);
+  }
 
   // Generate output
   const output = `// Auto-generated by scripts/generate-registry.ts - DO NOT EDIT DIRECTLY
 // Run: bun run generate
+
+import * as React from "react";
+
+${importStatements.join("\n")}
 
 export const registry = {
   $schema: "https://hands.dev/schema/registry.json",
@@ -220,6 +350,10 @@ export const registry = {
   components: ${JSON.stringify(components, null, 2)},
   categories: ${JSON.stringify(categories, null, 2)},
 } as const;
+
+export const previews: Record<string, () => React.ReactNode> = {
+${previewEntries.join(",\n")}
+};
 
 export default registry;
 `;

@@ -7,7 +7,6 @@
  * @keywords item, list, row
  * @example
  * <Item>
- *   <ItemMedia variant="icon"><UserIcon /></ItemMedia>
  *   <ItemContent>
  *     <ItemTitle>User Name</ItemTitle>
  *     <ItemDescription>user@example.com</ItemDescription>

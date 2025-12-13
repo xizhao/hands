@@ -6,9 +6,7 @@
  * @icon toggle-left
  * @keywords toggle, button, switch, press, on, off
  * @example
- * <Toggle aria-label="Toggle italic">
- *   <Bold className="h-4 w-4" />
- * </Toggle>
+ * <Toggle aria-label="Toggle bold">B</Toggle>
  */
 import * as TogglePrimitive from "@radix-ui/react-toggle";
 import { cva, type VariantProps } from "class-variance-authority";

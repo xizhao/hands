@@ -7,8 +7,8 @@
  * @keywords input, group, addon
  * @example
  * <InputGroup>
- *   <InputGroupAddon><SearchIcon /></InputGroupAddon>
- *   <InputGroupInput placeholder="Search..." />
+ *   <InputGroupText>@</InputGroupText>
+ *   <InputGroupInput placeholder="Username" />
  * </InputGroup>
  */
 import { cva, type VariantProps } from "class-variance-authority";

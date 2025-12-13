@@ -1,4 +1,6 @@
-import { registry } from "../registry.generated.js";
+import { registry, previews } from "../registry.generated.js";
+
+export { previews };
 
 // ============================================
 // Runtime Components - for RSC serialization

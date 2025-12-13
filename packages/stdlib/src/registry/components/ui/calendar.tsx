@@ -6,11 +6,7 @@
  * @icon calendar
  * @keywords calendar, date, picker
  * @example
- * <Calendar
- *   mode="single"
- *   selected={date}
- *   onSelect={setDate}
- * />
+ * <Calendar mode="single" />
  */
 "use client";
 

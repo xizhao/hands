@@ -7,10 +7,6 @@
  * @keywords toast, notification, sonner, alert, message
  * @example
  * <Toaster />
- * // In your component:
- * import { toast } from "sonner"
- *
- * toast("Event has been created")
  */
 "use client";
 

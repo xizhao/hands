@@ -8,7 +8,6 @@
  * @example
  * <Empty>
  *   <EmptyHeader>
- *     <EmptyMedia variant="icon"><InboxIcon /></EmptyMedia>
  *     <EmptyTitle>No messages</EmptyTitle>
  *     <EmptyDescription>You don't have any messages yet.</EmptyDescription>
  *   </EmptyHeader>

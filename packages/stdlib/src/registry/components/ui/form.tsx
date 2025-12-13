@@ -6,15 +6,11 @@
  * @icon file-input
  * @keywords form, validation, react-hook-form
  * @example
- * <Form {...form}>
- *   <FormField control={form.control} name="email" render={({ field }) => (
- *     <FormItem>
- *       <FormLabel>Email</FormLabel>
- *       <FormControl><Input {...field} /></FormControl>
- *       <FormMessage />
- *     </FormItem>
- *   )} />
- * </Form>
+ * <FormItem>
+ *   <FormLabel>Email</FormLabel>
+ *   <FormControl><Input placeholder="you@example.com" /></FormControl>
+ *   <FormMessage />
+ * </FormItem>
  */
 "use client";
 

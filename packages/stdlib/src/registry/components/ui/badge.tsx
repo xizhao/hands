@@ -6,8 +6,10 @@
  * @icon tag
  * @keywords badge, tag, label, chip
  * @example
- * <Badge>New</Badge>
- * <Badge variant="destructive">Error</Badge>
+ * <div className="flex gap-2">
+ *   <Badge>New</Badge>
+ *   <Badge variant="destructive">Error</Badge>
+ * </div>
  */
 import { cva, type VariantProps } from "class-variance-authority";
 import type * as React from "react";

@@ -6,10 +6,10 @@
  * @icon check-square
  * @keywords checkbox, check, toggle
  * @example
- * <Checkbox
- *   checked={isChecked}
- *   onCheckedChange={setIsChecked}
- * />
+ * <div className="flex items-center gap-2">
+ *   <Checkbox id="terms" />
+ *   <Label htmlFor="terms">Accept terms</Label>
+ * </div>
  */
 import * as CheckboxPrimitive from "@radix-ui/react-checkbox";
 import { Check } from "lucide-react";

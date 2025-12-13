@@ -6,10 +6,10 @@
  * @icon bar-chart-3
  * @keywords chart, graph, visualization
  * @example
- * <ChartContainer config={chartConfig}>
- *   <BarChart data={data}>
- *     <Bar dataKey="value" fill="var(--color-value)" />
- *   </BarChart>
+ * <ChartContainer config={{}} className="h-[200px]">
+ *   <div className="flex items-center justify-center h-full text-muted-foreground">
+ *     Chart visualization area
+ *   </div>
  * </ChartContainer>
  */
 "use client";
