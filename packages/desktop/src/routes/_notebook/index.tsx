@@ -2,32 +2,37 @@ import { createFileRoute } from "@tanstack/react-router";
 import { EmptyWorkbookState } from "@/components/Notebook/EmptyWorkbookState";
 import { NotebookSidebar } from "@/components/Notebook/sidebar/NotebookSidebar";
 import { useChatState } from "@/hooks/useChatState";
-import { useActiveWorkbookId, useDbSchema, useManifest } from "@/hooks/useWorkbook";
+import { useRuntimeState } from "@/hooks/useRuntimeState";
 
 export const Route = createFileRoute("/_notebook/")({
   component: IndexPage,
 });
 
 function IndexPage() {
-  const activeWorkbookId = useActiveWorkbookId();
-  const { data: manifest } = useManifest();
-  const { data: dbSchema } = useDbSchema(activeWorkbookId);
+  const { manifest, schema: dbSchema, isFullyReady, isDbBooting, isStarting } = useRuntimeState();
   const chatState = useChatState();
 
   const tableCount = dbSchema?.length ?? 0;
   const manifestTableCount = manifest?.tables?.length ?? 0;
   const blockCount = manifest?.blocks?.length ?? 0;
+  const sourceCount = manifest?.sources?.length ?? 0;
 
-  // Show getting started when manifest is loaded but empty (no tables or blocks)
+  // Still loading: no manifest yet OR db still booting (unless we have blocks to show)
+  const isLoading = !manifest || (isStarting || isDbBooting);
+
+  // Has content: blocks or sources exist (can show sidebar even if db loading)
+  const hasContent = blockCount > 0 || sourceCount > 0;
+
+  // Show getting started ONLY when fully ready AND everything is empty
   const showGettingStarted =
-    manifest !== undefined && manifestTableCount === 0 && tableCount === 0 && blockCount === 0;
+    isFullyReady && manifestTableCount === 0 && tableCount === 0 && blockCount === 0 && sourceCount === 0;
 
   const handleImportFile = () => {
     // TODO: Trigger file input
   };
 
-  if (manifest === undefined) {
-    // Loading state
+  // Case 1: Still loading and no content to show - full page loader
+  if (isLoading && !hasContent) {
     return (
       <div className="flex-1 flex items-center justify-center">
         <div className="space-y-3 w-48">
@@ -39,6 +44,7 @@ function IndexPage() {
     );
   }
 
+  // Case 2: Everything loaded and empty - show get started
   if (showGettingStarted) {
     return (
       <div className="flex-1 flex items-start justify-center overflow-y-auto">
@@ -47,6 +53,8 @@ function IndexPage() {
     );
   }
 
+  // Case 3: Has content (or db still loading with content) - show sidebar
+  // The sidebar handles its own loading states for the DB section
   return (
     <div className="flex-1 flex items-start justify-center overflow-y-auto">
       <div className="p-4 pt-8">

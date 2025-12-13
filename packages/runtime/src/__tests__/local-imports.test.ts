@@ -20,8 +20,8 @@ describe("blocks with local imports", () => {
 
     const loaded = await blockWithImport?.load();
     expect(loaded).toBeDefined();
-    expect(loaded!.default).toBeDefined();
-    expect(typeof loaded!.default).toBe("function");
+    expect(loaded?.default).toBeDefined();
+    expect(typeof loaded?.default).toBe("function");
   });
 });
 

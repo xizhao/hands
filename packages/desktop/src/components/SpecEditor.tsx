@@ -89,7 +89,7 @@ const SpecEditorKit = [
   TrailingBlockPlugin,
 ];
 
-type SpecEditorType = TPlateEditor<Value, (typeof SpecEditorKit)[number]>;
+type _SpecEditorType = TPlateEditor<Value, (typeof SpecEditorKit)[number]>;
 
 interface SpecEditorProps {
   /** Unique identifier for this editor instance */

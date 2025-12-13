@@ -1,18 +1,17 @@
 /**
- * Table Data Hook
+ * Table Data Hook - Infinite Scroll Edition
  *
  * Provides type-safe CRUD operations for source tables using tRPC.
- * Handles pagination, mutations, and schema-based column definitions.
+ * Supports infinite scroll with sparse data cache and ID-based selections.
  */
 
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useMemo, useRef, useState, useEffect } from "react";
 import { trpc } from "@/lib/trpc";
 
 export interface UseTableDataOptions {
   source: string;
   table: string;
   pageSize?: number;
-  initialPage?: number;
 }
 
 export interface ColumnDefinition {
@@ -24,38 +23,52 @@ export interface ColumnDefinition {
 }
 
 export interface TableRow {
-  id: string;
   [key: string]: unknown;
 }
 
-export interface PaginationState {
-  page: number;
-  pageSize: number;
+/** Sparse data cache for infinite scroll */
+interface DataCache {
+  rows: Map<number, TableRow>;
+  loadedRanges: Array<{ start: number; end: number }>;
   totalRows: number;
-  totalPages: number;
 }
 
+const CHUNK_SIZE = 100; // Load rows in chunks of 100
+
 export function useTableData(options: UseTableDataOptions) {
-  const { source, table, pageSize = 100, initialPage = 0 } = options;
+  const { source, table, pageSize = CHUNK_SIZE } = options;
 
-  // Pagination state
-  const [page, setPage] = useState(initialPage);
-
-  // Fetch table schema - tRPC schema returns columns with: name, type, nullable, isPrimaryKey, defaultValue
-  const schemaQuery = trpc.tables.schema.useQuery(
-    { table },
-    { staleTime: 60000 }, // Schema rarely changes
-  );
-
-  // Fetch table rows with pagination
-  const rowsQuery = trpc.tables.list.useQuery({
-    source,
-    table,
-    limit: pageSize,
-    offset: page * pageSize,
+  // Sparse data cache
+  const [cache, setCache] = useState<DataCache>({
+    rows: new Map(),
+    loadedRanges: [],
+    totalRows: 0,
   });
 
-  // Transform schema into column definitions (already in correct format from tRPC)
+  // Track in-flight requests to avoid duplicates
+  const pendingRequests = useRef<Set<string>>(new Set());
+
+  // Fetch table schema
+  const schemaQuery = trpc.tables.schema.useQuery(
+    { table },
+    { staleTime: 60000 },
+  );
+
+  // Get initial count via a list query with limit 1
+  const initialQuery = trpc.tables.list.useQuery(
+    { table, limit: 1, offset: 0 },
+    { staleTime: 5000 },
+  );
+
+  // Update total rows when initial query completes
+  useEffect(() => {
+    const total = initialQuery.data?.total;
+    if (total !== undefined) {
+      setCache((prev) => ({ ...prev, totalRows: total }));
+    }
+  }, [initialQuery.data?.total]);
+
+  // Transform schema into column definitions
   const columns = useMemo<ColumnDefinition[]>(() => {
     if (!schemaQuery.data) return [];
     return schemaQuery.data.columns;
@@ -68,30 +81,137 @@ export function useTableData(options: UseTableDataOptions) {
     return columns.find((c) => c.isPrimaryKey)?.name ?? "id";
   }, [columns, schemaQuery.data?.primaryKey]);
 
+  // tRPC utils for manual fetching
+  const utils = trpc.useUtils();
+
+  // Load a range of rows (called on demand)
+  const loadRange = useCallback(
+    async (startRow: number, endRow: number) => {
+      // Clamp to valid range
+      const start = Math.max(0, startRow);
+      const end = Math.min(endRow, cache.totalRows);
+      if (start >= end) return;
+
+      // Check which chunks we need to load
+      const chunkStart = Math.floor(start / pageSize) * pageSize;
+      const chunkEnd = Math.ceil(end / pageSize) * pageSize;
+
+      for (let offset = chunkStart; offset < chunkEnd; offset += pageSize) {
+        const requestKey = `${offset}-${offset + pageSize}`;
+
+        // Skip if already loaded or pending
+        if (pendingRequests.current.has(requestKey)) continue;
+        if (isRangeLoaded(cache.loadedRanges, offset, offset + pageSize)) continue;
+
+        pendingRequests.current.add(requestKey);
+
+        try {
+          const result = await utils.tables.list.fetch({
+            source,
+            table,
+            limit: pageSize,
+            offset,
+          });
+
+          if (result.rows) {
+            setCache((prev) => {
+              const newRows = new Map(prev.rows);
+              const rows = result.rows as TableRow[];
+              rows.forEach((row, i) => {
+                newRows.set(offset + i, row);
+              });
+
+              // Merge loaded range
+              const newRanges = mergeRanges([
+                ...prev.loadedRanges,
+                { start: offset, end: offset + rows.length },
+              ]);
+
+              return {
+                ...prev,
+                rows: newRows,
+                loadedRanges: newRanges,
+                totalRows: result.total ?? prev.totalRows,
+              };
+            });
+          }
+        } catch (error) {
+          console.error("Failed to load rows:", error);
+        } finally {
+          pendingRequests.current.delete(requestKey);
+        }
+      }
+    },
+    [source, table, pageSize, cache.totalRows, cache.loadedRanges, utils],
+  );
+
+  // Get a row from cache (or undefined if not loaded)
+  const getRow = useCallback(
+    (index: number): TableRow | undefined => {
+      return cache.rows.get(index);
+    },
+    [cache.rows],
+  );
+
+  // Check if a row is loaded
+  const isRowLoaded = useCallback(
+    (index: number): boolean => {
+      return cache.rows.has(index);
+    },
+    [cache.rows],
+  );
+
+  // Get row ID from row data
+  const getRowId = useCallback(
+    (row: TableRow): string => {
+      return String(row[primaryKeyColumn]);
+    },
+    [primaryKeyColumn],
+  );
+
+  // Get row index by ID (for selection mapping)
+  const getRowIndexById = useCallback(
+    (id: string): number | undefined => {
+      for (const [index, row] of cache.rows.entries()) {
+        if (String(row[primaryKeyColumn]) === id) {
+          return index;
+        }
+      }
+      return undefined;
+    },
+    [cache.rows, primaryKeyColumn],
+  );
+
   // Mutations
   const createMutation = trpc.tables.create.useMutation({
     onSuccess: () => {
-      rowsQuery.refetch();
+      invalidateCache();
     },
   });
 
   const updateMutation = trpc.tables.update.useMutation({
     onSuccess: () => {
-      rowsQuery.refetch();
+      invalidateCache();
     },
   });
 
   const deleteMutation = trpc.tables.delete.useMutation({
     onSuccess: () => {
-      rowsQuery.refetch();
+      invalidateCache();
     },
   });
 
   const bulkUpdateMutation = trpc.tables.bulkUpdate.useMutation({
     onSuccess: () => {
-      rowsQuery.refetch();
+      invalidateCache();
     },
   });
+
+  // Invalidate cache and refetch
+  const invalidateCache = useCallback(() => {
+    setCache({ rows: new Map(), loadedRanges: [], totalRows: 0 });
+    initialQuery.refetch();
+  }, [initialQuery]);
 
   // Mutation handlers
   const createRow = useCallback(
@@ -122,38 +242,19 @@ export function useTableData(options: UseTableDataOptions) {
     [table, bulkUpdateMutation],
   );
 
-  // Pagination helpers using total from API response
-  const totalRows = rowsQuery.data?.total ?? 0;
-  const totalPages = Math.ceil(totalRows / pageSize);
-
-  const goToPage = useCallback(
-    (newPage: number) => {
-      if (newPage >= 0 && newPage < totalPages) {
-        setPage(newPage);
-      }
+  const bulkDelete = useCallback(
+    async (ids: string[]) => {
+      await Promise.all(ids.map((id) => deleteMutation.mutateAsync({ source, table, id })));
     },
-    [totalPages],
+    [source, table, deleteMutation],
   );
 
-  const nextPage = useCallback(() => {
-    if (page < totalPages - 1) {
-      setPage((p) => p + 1);
-    }
-  }, [page, totalPages]);
-
-  const prevPage = useCallback(() => {
-    if (page > 0) {
-      setPage((p) => p - 1);
-    }
-  }, [page]);
-
   // Loading states
-  const isLoading = schemaQuery.isLoading || rowsQuery.isLoading;
-  const isFetching = schemaQuery.isFetching || rowsQuery.isFetching;
-  const isError = schemaQuery.isError || rowsQuery.isError;
-  const error = schemaQuery.error ?? rowsQuery.error;
+  const isLoading = schemaQuery.isLoading || initialQuery.isLoading;
+  const isFetching = schemaQuery.isFetching || initialQuery.isFetching;
+  const isError = schemaQuery.isError || initialQuery.isError;
+  const error = schemaQuery.error ?? initialQuery.error;
 
-  // Mutation states
   const isMutating =
     createMutation.isPending ||
     updateMutation.isPending ||
@@ -161,10 +262,20 @@ export function useTableData(options: UseTableDataOptions) {
     bulkUpdateMutation.isPending;
 
   return {
-    // Data - rows come from rowsQuery.data.rows
-    rows: (rowsQuery.data?.rows ?? []) as TableRow[],
-    columns,
+    // Data access
+    getRow,
+    isRowLoaded,
+    loadRange,
+    totalRows: cache.totalRows,
+    loadedCount: cache.rows.size,
+
+    // Row ID utilities
+    getRowId,
+    getRowIndexById,
     primaryKeyColumn,
+
+    // Schema
+    columns,
 
     // Loading states
     isLoading,
@@ -173,29 +284,54 @@ export function useTableData(options: UseTableDataOptions) {
     error,
     isMutating,
 
-    // Pagination
-    pagination: {
-      page,
-      pageSize,
-      totalRows,
-      totalPages,
-    } as PaginationState,
-    goToPage,
-    nextPage,
-    prevPage,
-
     // Mutations
     createRow,
     updateRow,
     deleteRow,
     bulkUpdate,
+    bulkDelete,
 
-    // Refetch
-    refetch: () => {
-      schemaQuery.refetch();
-      rowsQuery.refetch();
-    },
+    // Cache management
+    invalidateCache,
+    refetch: invalidateCache,
   };
+}
+
+// Helper: Check if a range is fully loaded
+function isRangeLoaded(
+  loadedRanges: Array<{ start: number; end: number }>,
+  start: number,
+  end: number,
+): boolean {
+  for (const range of loadedRanges) {
+    if (range.start <= start && range.end >= end) {
+      return true;
+    }
+  }
+  return false;
+}
+
+// Helper: Merge overlapping ranges
+function mergeRanges(
+  ranges: Array<{ start: number; end: number }>,
+): Array<{ start: number; end: number }> {
+  if (ranges.length === 0) return [];
+
+  const sorted = [...ranges].sort((a, b) => a.start - b.start);
+  const merged: Array<{ start: number; end: number }> = [sorted[0]];
+
+  for (let i = 1; i < sorted.length; i++) {
+    const current = sorted[i];
+    const last = merged[merged.length - 1];
+
+    if (current.start <= last.end) {
+      last.end = Math.max(last.end, current.end);
+    } else {
+      merged.push(current);
+    }
+  }
+
+  return merged;
 }
 
 /**

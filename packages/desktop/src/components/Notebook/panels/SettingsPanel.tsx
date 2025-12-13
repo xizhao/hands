@@ -15,13 +15,14 @@ import {
   Trash,
 } from "@phosphor-icons/react";
 import { useState } from "react";
-import { useActiveWorkbookId, useUpdateWorkbook, useWorkbook } from "@/hooks/useWorkbook";
+import { useRuntimeState } from "@/hooks/useRuntimeState";
+import { useUpdateWorkbook, useWorkbook } from "@/hooks/useWorkbook";
 import { cn } from "@/lib/utils";
 
 type SettingsSection = "general" | "secrets" | "database" | "deployment";
 
 export function SettingsPanel() {
-  const activeWorkbookId = useActiveWorkbookId();
+  const { workbookId: activeWorkbookId } = useRuntimeState();
   const { data: _workbook } = useWorkbook(activeWorkbookId);
   const [activeSection, setActiveSection] = useState<SettingsSection | null>(null);
 
@@ -92,7 +93,7 @@ export function SettingsPanel() {
 }
 
 function GeneralSettings() {
-  const activeWorkbookId = useActiveWorkbookId();
+  const { workbookId: activeWorkbookId } = useRuntimeState();
   const { data: workbook } = useWorkbook(activeWorkbookId);
   const updateWorkbook = useUpdateWorkbook();
 

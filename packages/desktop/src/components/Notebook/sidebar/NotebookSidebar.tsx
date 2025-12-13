@@ -54,13 +54,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { useSourceManagement } from "@/hooks/useSources";
-import {
-  useActiveWorkbookId,
-  useDbReady,
-  useDbSchema,
-  useManifest,
-  useRuntimePort,
-} from "@/hooks/useWorkbook";
+import { useRuntimeState, useRuntimePort } from "@/hooks/useRuntimeState";
 import { cn } from "@/lib/utils";
 
 interface NotebookSidebarProps {
@@ -200,11 +194,18 @@ export function NotebookSidebar({
   const navigate = useNavigate();
   const router = useRouter();
 
-  // Get all data from hooks (filesystem as source of truth via manifest)
-  const activeWorkbookId = useActiveWorkbookId();
-  const { data: manifest, isLoading: manifestLoading } = useManifest();
-  const { data: schema } = useDbSchema(activeWorkbookId);
-  const { isDbReady, isLoading: isDbLoading } = useDbReady();
+  // Consolidated runtime state - single source of truth
+  const {
+    workbookId: activeWorkbookId,
+    manifest,
+    schema,
+    isStarting,
+    isDbBooting,
+  } = useRuntimeState();
+
+  // Derived loading states
+  const manifestLoading = !manifest && !!activeWorkbookId;
+  const isDbLoading = isStarting || isDbBooting;
 
   // Source management hooks
   const { sources, availableSources, addSource, isAdding, syncSource, isSyncing, syncingSourceId } =

@@ -223,6 +223,7 @@ export function EmptyWorkbookState({
         <div className="grid grid-cols-3 gap-4 w-full items-stretch">
           {/* 1. Drag in data */}
           <button
+            type="button"
             onClick={onImportFile}
             className={cn(
               "group flex flex-col items-center justify-center gap-3 p-6 rounded-xl",
@@ -258,6 +259,7 @@ export function EmptyWorkbookState({
                 const Icon = getSourceIcon(source.name);
                 return (
                   <button
+                    type="button"
                     key={source.name}
                     onClick={() => handleAddSource(source)}
                     disabled={addSource.isPending}

@@ -79,8 +79,11 @@ export function LogViewer({ logs, isRunning, className, maxHeight = "300px" }: L
         {logs.length === 0 && isRunning && (
           <div className="text-muted-foreground/50 animate-pulse">Waiting for output...</div>
         )}
-        {logs.map((log, index) => (
-          <div key={index} className="flex gap-2 leading-relaxed">
+        {logs.map((log) => (
+          <div
+            key={`${log.timestamp}-${log.message.slice(0, 20)}`}
+            className="flex gap-2 leading-relaxed"
+          >
             <span className="text-muted-foreground/50 shrink-0">{formatTime(log.timestamp)}</span>
             <span className={cn("shrink-0", levelColors[log.level])}>{levelLabels[log.level]}</span>
             <span className="text-foreground/90 whitespace-pre-wrap break-all">{log.message}</span>
@@ -143,8 +146,11 @@ export function SyncLogViewer({ logs, isRunning, result, className }: SyncLogVie
             {logs.length === 0 && isRunning && (
               <div className="text-muted-foreground/50 animate-pulse">Waiting for output...</div>
             )}
-            {logs.map((log, index) => (
-              <div key={index} className="flex gap-2 leading-relaxed">
+            {logs.map((log) => (
+              <div
+                key={`${log.timestamp}-${log.message.slice(0, 20)}`}
+                className="flex gap-2 leading-relaxed"
+              >
                 <span className="text-muted-foreground/50 shrink-0">
                   {formatTime(log.timestamp)}
                 </span>

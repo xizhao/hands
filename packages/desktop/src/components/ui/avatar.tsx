@@ -55,6 +55,7 @@ function AvatarImage({
       <img
         className={cn("aspect-square size-full select-none object-cover", className)}
         fill="true"
+        // biome-ignore lint/suspicious/noExplicitAny: props spread requires any for img element compatibility
         {...(props as any)}
         alt=""
       />

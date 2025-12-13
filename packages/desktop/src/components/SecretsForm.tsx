@@ -2,7 +2,7 @@ import { motion } from "framer-motion";
 import { Check, CheckCircle2, Eye, EyeOff, Key, Loader2 } from "lucide-react";
 import { memo, useCallback, useState } from "react";
 import { Button } from "@/components/ui/button";
-import { useRuntimePort } from "@/hooks/useWorkbook";
+import { useRuntimeState } from "@/hooks/useRuntimeState";
 import { cn } from "@/lib/utils";
 
 interface SecretSpec {
@@ -100,7 +100,7 @@ SecretInput.displayName = "SecretInput";
  * SecretsForm component - renders when the secrets tool requests user input
  */
 export const SecretsForm = memo(({ output, onSaved }: SecretsFormProps) => {
-  const runtimePort = useRuntimePort();
+  const { port: runtimePort } = useRuntimeState();
   const [values, setValues] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);

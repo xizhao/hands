@@ -711,6 +711,7 @@ const ToolInvocation = memo(({ part, compact = false }: { part: ToolPart; compac
           </span>
         </div>
         <QueryResult
+          // biome-ignore lint/style/noNonNullAssertion: output is validated before render
           output={state.output!}
           query={(state.input as Record<string, unknown>)?.query as string}
           compact={compact}
@@ -1027,11 +1028,7 @@ const UserTextContent = memo(({ text, compact = false }: { text: string; compact
   // Check if this is a standard prompt first
   const promptMatch = useMemo(() => matchPrompt(text), [text]);
 
-  // If it's a standard prompt, render as action chip
-  if (promptMatch) {
-    return <ActionChip match={promptMatch} compact={compact} />;
-  }
-
+  // Parse file paths from text (must call before any early returns per Rules of Hooks)
   const parts = useMemo(() => {
     const result: Array<{ type: "text" | "file"; content: string }> = [];
     let lastIndex = 0;
@@ -1060,6 +1057,11 @@ const UserTextContent = memo(({ text, compact = false }: { text: string; compact
 
     return result;
   }, [text]);
+
+  // If it's a standard prompt, render as action chip
+  if (promptMatch) {
+    return <ActionChip match={promptMatch} compact={compact} />;
+  }
 
   // If no file paths found, just render text normally
   if (parts.length === 1 && parts[0].type === "text") {

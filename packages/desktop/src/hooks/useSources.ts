@@ -9,7 +9,10 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useCallback, useState } from "react";
 import { toast } from "sonner";
 import { useBackgroundTask } from "@/hooks/useBackgroundTask";
-import { useManifest, useRuntimePort, type WorkbookSource } from "@/hooks/useWorkbook";
+import { useRuntimeState, useRuntimePort, useManifest, type WorkbookManifest } from "@/hooks/useRuntimeState";
+
+// Extract source type from manifest
+type WorkbookSource = NonNullable<WorkbookManifest["sources"]>[number];
 
 // Re-export for convenience
 export type Source = WorkbookSource;

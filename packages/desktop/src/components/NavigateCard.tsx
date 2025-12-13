@@ -50,6 +50,7 @@ export const NavigateCard = memo(({ output }: NavigateCardProps) => {
   // Minimal inline link
   return (
     <button
+      type="button"
       onClick={handleClick}
       className={cn(
         "inline-flex items-center gap-1 text-xs",

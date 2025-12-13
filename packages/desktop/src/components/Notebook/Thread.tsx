@@ -1,6 +1,6 @@
 import { AnimatePresence, motion } from "framer-motion";
 import { Layers, X } from "lucide-react";
-import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { ChatMessage } from "@/components/ChatMessage";
 import { ShimmerText } from "@/components/ui/thinking-indicator";
 import { useActiveSession } from "@/hooks/useNavState";
@@ -65,9 +65,9 @@ export function Thread({ expanded, onCollapse, onExpand }: ThreadProps) {
   const hasScrolledRef = useRef(false);
 
   // Scroll to bottom helper
-  const scrollToBottom = (behavior: ScrollBehavior = "smooth") => {
+  const scrollToBottom = useCallback((behavior: ScrollBehavior = "smooth") => {
     bottomRef.current?.scrollIntoView({ behavior, block: "end" });
-  };
+  }, []);
 
   // Auto-scroll to bottom on new messages
   useEffect(() => {

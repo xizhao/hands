@@ -16,20 +16,15 @@ import {
 import { useIsMutating } from "@tanstack/react-query";
 import { useState } from "react";
 import { useServer } from "@/hooks/useServer";
-import {
-  useActiveWorkbookId,
-  useEvalResult,
-  useRuntimeEval,
-  useRuntimePort,
-} from "@/hooks/useWorkbook";
+import { useRuntimeState } from "@/hooks/useRuntimeState";
+import { useEvalResult, useRuntimeEval } from "@/hooks/useWorkbook";
 import { cn } from "@/lib/utils";
 
 type Category = "app" | "runtime" | "code";
 
 export function AlertsPanel() {
-  const activeWorkbookId = useActiveWorkbookId();
+  const { workbookId: activeWorkbookId, port: runtimePort } = useRuntimeState();
   const { data: evalResult, isLoading } = useEvalResult(activeWorkbookId);
-  const runtimePort = useRuntimePort();
   const runtimeRunning = !!runtimePort;
   const { isConnected: agentConnected, isConnecting: agentConnecting } = useServer();
   const runtimeEval = useRuntimeEval();

@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useRef } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef } from "react";
 import { ChatMessage } from "@/components/ChatMessage";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { useActiveSession } from "@/hooks/useNavState";
@@ -15,9 +15,9 @@ export function ChatThread({ onCollapse: _onCollapse }: ChatThreadProps) {
   const hasScrolledRef = useRef(false);
 
   // Scroll to bottom helper
-  const scrollToBottom = (behavior: ScrollBehavior = "smooth") => {
+  const scrollToBottom = useCallback((behavior: ScrollBehavior = "smooth") => {
     bottomRef.current?.scrollIntoView({ behavior, block: "end" });
-  };
+  }, []);
 
   // Scroll to bottom on new messages
   useEffect(() => {

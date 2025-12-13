@@ -1,6 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { invoke } from "@tauri-apps/api/core";
-import { useEffect, useRef } from "react";
 import type { Workbook } from "@/lib/workbook";
 
 // Tauri command response type (matches Rust backend)
@@ -27,18 +26,7 @@ export function useActiveRuntime() {
   });
 }
 
-// Derived hooks for convenience
-export function useActiveWorkbookId() {
-  const { data } = useActiveRuntime();
-  return data?.workbook_id ?? null;
-}
-
-export function useActiveWorkbookDirectory() {
-  const { data } = useActiveRuntime();
-  return data?.directory ?? null;
-}
-
-// Types for manifest
+// Types for manifest (deprecated - use types from useRuntimeState)
 export interface WorkbookBlock {
   id: string;
   title: string;
@@ -69,27 +57,11 @@ export interface WorkbookManifest {
   isEmpty: boolean;
 }
 
-// Simple hook to get runtime port from Tauri
-export function useRuntimePort() {
+// Internal helper - useRuntimePort wrapper for hooks in this file
+// (Consumers should use useRuntimeState().port instead)
+function useRuntimePort() {
   const { data } = useActiveRuntime();
   return data?.runtime_port ?? null;
-}
-
-// Manifest hook - polls runtime for workbook manifest
-export function useManifest() {
-  const port = useRuntimePort();
-
-  return useQuery({
-    queryKey: ["manifest", port],
-    queryFn: async (): Promise<WorkbookManifest> => {
-      const res = await fetch(`http://localhost:${port}/workbook/manifest`);
-      if (!res.ok) throw new Error("Failed to fetch manifest");
-      return res.json();
-    },
-    enabled: !!port,
-    refetchInterval: 1000,
-    staleTime: 0,
-  });
 }
 
 interface CreateWorkbookRequest {
@@ -220,12 +192,22 @@ export function useOpenWorkbook() {
       // This ensures consumers show loaders during workbook switch
       queryClient.setQueryData(["active-runtime"], null);
 
-      // Clear workbook-specific caches to avoid showing stale data
+      // CANCEL in-flight queries FIRST to prevent race conditions
+      // (in-flight queries can restore stale data after removeQueries)
+      await queryClient.cancelQueries({ queryKey: ["manifest"] });
+      await queryClient.cancelQueries({ queryKey: ["runtime-status"] });
+      await queryClient.cancelQueries({ queryKey: ["runtime-status-services"] });
+      await queryClient.cancelQueries({ queryKey: ["db-schema"] });
+      await queryClient.cancelQueries({ queryKey: ["runtime-health"] });
+      await queryClient.cancelQueries({ queryKey: ["runtime-eval"] });
+
+      // THEN remove stale caches
       queryClient.removeQueries({ queryKey: ["manifest"] });
       queryClient.removeQueries({ queryKey: ["block"] });
       queryClient.removeQueries({ queryKey: ["blockSource"] });
       queryClient.removeQueries({ queryKey: ["runtime-eval"] });
       queryClient.removeQueries({ queryKey: ["runtime-health"] });
+      queryClient.removeQueries({ queryKey: ["runtime-status"] });
       queryClient.removeQueries({ queryKey: ["runtime-status-services"] });
       queryClient.removeQueries({ queryKey: ["db-schema"] });
 
@@ -266,32 +248,7 @@ export function useOpenWorkbook() {
   });
 }
 
-// Runtime health - simple ready/booting status
-// Single process architecture: ready when runtime is fully operational
-export interface RuntimeHealth {
-  ready: boolean;
-  status: "ready" | "booting"; // backward compat
-}
-
-// Get runtime health for progressive loading (instant manifest, delayed blocks)
-export function useRuntimeHealth(runtimePort: number | null) {
-  return useQuery({
-    queryKey: ["runtime-health", runtimePort],
-    queryFn: async (): Promise<RuntimeHealth> => {
-      if (!runtimePort) throw new Error("No runtime port");
-      const response = await fetch(`http://localhost:${runtimePort}/health`);
-      if (!response.ok) throw new Error("Failed to get health");
-      return response.json();
-    },
-    enabled: !!runtimePort && runtimePort > 0,
-    refetchInterval: (query) => {
-      // Poll frequently during boot, less often when ready
-      const data = query.state.data;
-      return data?.ready ? 10000 : 1000;
-    },
-    staleTime: 0,
-  });
-}
+// Note: useRuntimeHealth moved to useRuntimeState.ts
 
 // Start runtime
 export function useStartRuntime() {
@@ -390,138 +347,8 @@ export function useWorkbookDatabase(workbookId: string | null) {
   });
 }
 
-// Database schema for agent context
-export interface TableSchema {
-  table_name: string;
-  columns: { name: string; type: string; nullable: boolean }[];
-}
-
-// Get database schema for a workbook (from runtime)
-export function useDbSchema(workbookId: string | null) {
-  const port = useRuntimePort();
-
-  return useQuery({
-    queryKey: ["db-schema", workbookId, port],
-    queryFn: async (): Promise<TableSchema[]> => {
-      if (!port) return [];
-
-      const response = await fetch(`http://localhost:${port}/postgres/schema`);
-      if (!response.ok) return [];
-
-      return response.json();
-    },
-    enabled: !!workbookId && !!port,
-    staleTime: 30000,
-    refetchInterval: 60000,
-  });
-}
-
-// Runtime service status - check if individual services are ready
-export interface RuntimeServiceStatus {
-  db: { ready: boolean };
-  vite: { ready: boolean; port?: number; error?: string };
-  editor: { ready: boolean; port?: number; restartCount?: number };
-}
-
-export interface RuntimeStatus {
-  port: number;
-  workbookId: string;
-  workbookDir: string;
-  services: RuntimeServiceStatus;
-}
-
-// Get runtime status including service readiness
-export function useRuntimeStatus() {
-  const port = useRuntimePort();
-
-  return useQuery({
-    queryKey: ["runtime-status-services", port],
-    queryFn: async (): Promise<RuntimeStatus | null> => {
-      if (!port) return null;
-
-      const response = await fetch(`http://localhost:${port}/status`);
-      if (!response.ok) return null;
-
-      return response.json();
-    },
-    enabled: !!port,
-    staleTime: 0,
-    refetchInterval: (query) => {
-      // Poll frequently until all services are ready, then slow down
-      const data = query.state.data;
-      const allReady = data?.services?.db?.ready && data?.services?.vite?.ready;
-      return allReady ? 10000 : 1000;
-    },
-  });
-}
-
-// Convenience hook for DB readiness
-export function useDbReady() {
-  const port = useRuntimePort();
-  const { data: status, isLoading, isFetching } = useRuntimeStatus();
-
-  // Loading if:
-  // 1. No port yet (runtime not connected)
-  // 2. Query is loading/fetching
-  // 3. We have status but DB service isn't ready yet
-  const isDbLoading = !port || isLoading || isFetching || (!!port && !status?.services?.db?.ready);
-
-  return {
-    isDbReady: !!port && (status?.services?.db?.ready ?? false),
-    isLoading: isDbLoading,
-  };
-}
-
-/**
- * Prefetch critical data when runtime connects
- * Call this once when runtime becomes available to eagerly load:
- * - Database schema (tables)
- * - Manifest (already polled, but ensures it's cached)
- */
-export function usePrefetchRuntimeData(workbookId: string | null) {
-  const port = useRuntimePort();
-  const queryClient = useQueryClient();
-  const hasPrefetched = useRef(false);
-
-  useEffect(() => {
-    if (!port || !workbookId || hasPrefetched.current) return;
-
-    // Prefetch schema as soon as runtime is available
-    const prefetch = async () => {
-      try {
-        // Check if DB is ready first
-        const statusRes = await fetch(`http://localhost:${port}/status`);
-        if (!statusRes.ok) return;
-
-        const status = await statusRes.json();
-        if (!status.services?.db?.ready) {
-          // DB not ready, retry in 500ms
-          setTimeout(prefetch, 500);
-          return;
-        }
-
-        // DB is ready, prefetch schema
-        console.log("[usePrefetchRuntimeData] Prefetching database schema...");
-        await queryClient.prefetchQuery({
-          queryKey: ["db-schema", workbookId, port],
-          queryFn: async () => {
-            const response = await fetch(`http://localhost:${port}/postgres/schema`);
-            if (!response.ok) return [];
-            return response.json();
-          },
-          staleTime: 30000,
-        });
-
-        hasPrefetched.current = true;
-        console.log("[usePrefetchRuntimeData] Schema prefetched");
-      } catch (err) {
-        console.error("[usePrefetchRuntimeData] Failed to prefetch:", err);
-      }
-    };
-
-    prefetch();
-  }, [port, workbookId, queryClient]);
-}
+// Note: useDbSchema, useRuntimeStatus, useDbReady, usePrefetchRuntimeData
+// moved to useRuntimeState.ts
 
 // Save database snapshot (dumps to db.tar.gz)
 export function useSaveDatabase() {

@@ -20,7 +20,7 @@ const FIXTURES = {
 export function App() {
   const [fixture, setFixture] = useState<keyof typeof FIXTURES>("simple");
   const editor = useEditor(FIXTURES[fixture].source);
-  const { init, ready } = useRsc();
+  const { init, ready: _ready } = useRsc();
 
   // Initialize RSC on mount
   useEffect(() => {

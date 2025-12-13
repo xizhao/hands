@@ -109,10 +109,11 @@ export function MermaidDiagram({ code, className }: MermaidDiagramProps) {
 export function extractMermaidBlocks(markdown: string): string[] {
   const mermaidRegex = /```mermaid\n([\s\S]*?)```/g;
   const blocks: string[] = [];
-  let match;
+  let match: RegExpExecArray | null = mermaidRegex.exec(markdown);
 
-  while ((match = mermaidRegex.exec(markdown)) !== null) {
+  while (match !== null) {
     blocks.push(match[1].trim());
+    match = mermaidRegex.exec(markdown);
   }
 
   return blocks;

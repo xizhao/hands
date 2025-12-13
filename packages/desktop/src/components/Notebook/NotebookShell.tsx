@@ -41,18 +41,14 @@ import { useChatState } from "@/hooks/useChatState";
 import { useActiveSession, useRightPanel } from "@/hooks/useNavState";
 import { useImportWithAgent } from "@/hooks/useSession";
 import {
-  useActiveWorkbookId,
   useCreateWorkbook,
-  useDbReady,
-  useDbSchema,
   useEvalResult,
-  useManifest,
   useOpenWorkbook,
-  useRuntimePort,
   useSaveDatabase,
   useUpdateWorkbook,
   useWorkbooks,
 } from "@/hooks/useWorkbook";
+import { useRuntimeState } from "@/hooks/useRuntimeState";
 import { cn } from "@/lib/utils";
 import type { Workbook } from "@/lib/workbook";
 import { RightPanel } from "./panels/RightPanel";
@@ -82,30 +78,37 @@ export function NotebookShell({ children }: NotebookShellProps) {
   // Check if we're on any content route (block, source, or table) that needs the editor layout
   const isOnContentRoute = isOnBlock || isOnSource || isOnTable;
 
-  const activeWorkbookId = useActiveWorkbookId();
+  // Consolidated runtime state - single source of truth
+  const {
+    workbookId: activeWorkbookId,
+    port: runtimePort,
+    manifest,
+    schema: dbSchema,
+    isDbReady,
+    isDbBooting,
+    isStarting,
+    isFullyReady: _isFullyReady,
+  } = useRuntimeState();
+
   const { panel: rightPanel, togglePanel: toggleRightPanel } = useRightPanel();
-  const { setSession: setActiveSession } = useActiveSession();
+  const { setSession: _setActiveSession } = useActiveSession();
   const { data: workbooks } = useWorkbooks();
   const createWorkbook = useCreateWorkbook();
   const openWorkbook = useOpenWorkbook();
   const updateWorkbook = useUpdateWorkbook();
 
-  // Data for titlebar indicators and empty state detection
-  const { data: dbSchema } = useDbSchema(activeWorkbookId);
+  // Eval result (still separate - not part of runtime state machine)
   const { data: evalResult } = useEvalResult(activeWorkbookId);
-  const { isDbReady, isLoading: isDbLoading } = useDbReady();
 
-  // Get runtime state from hooks
-  const runtimePort = useRuntimePort();
-  const { data: manifest, isLoading: isManifestLoading } = useManifest();
-
-  // Derive connection state from port and manifest
+  // Derive connection state from runtime state
   const isRuntimeReady = !!runtimePort;
-  const isConnecting = isManifestLoading && !!runtimePort;
+  const isManifestLoading = !manifest && !!runtimePort;
+  const isConnecting = isManifestLoading;
+  const isDbLoading = isStarting || isDbBooting;
 
   // Runtime connection status
   const runtimeConnected = isRuntimeReady;
-  const dbConnected = runtimeConnected && !!runtimePort;
+  const dbConnected = runtimeConnected && isDbReady;
 
   // Mutations for empty state actions
   const saveDatabase = useSaveDatabase();

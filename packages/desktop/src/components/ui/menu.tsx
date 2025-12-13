@@ -419,7 +419,6 @@ export function ComboboxEmpty() {
   );
 }
 
-// biome-ignore lint/performance/noBarrelFile: re-export for convenience
 export * as Ariakit from "@ariakit/react";
 
 export function filterMenuItems({ items = [], ...group }: Action, searchValue: string): Action[] {

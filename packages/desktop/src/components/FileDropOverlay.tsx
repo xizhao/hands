@@ -49,8 +49,8 @@ export function FileDropOverlay({ onFileDrop, disabled = false }: FileDropOverla
 
     const handleDragOver = (e: DragEvent) => {
       e.preventDefault();
-      if (isExternalFileDrag(e)) {
-        e.dataTransfer!.dropEffect = "copy";
+      if (isExternalFileDrag(e) && e.dataTransfer) {
+        e.dataTransfer.dropEffect = "copy";
       }
     };
 
@@ -74,9 +74,13 @@ export function FileDropOverlay({ onFileDrop, disabled = false }: FileDropOverla
 
       // Get the element under the drop point by temporarily hiding all overlays
       const overlays = document.querySelectorAll("[data-file-drop-overlay]");
-      overlays.forEach((el) => ((el as HTMLElement).style.pointerEvents = "none"));
+      overlays.forEach((el) => {
+        (el as HTMLElement).style.pointerEvents = "none";
+      });
       const dropTarget = document.elementFromPoint(e.clientX, e.clientY);
-      overlays.forEach((el) => ((el as HTMLElement).style.pointerEvents = ""));
+      overlays.forEach((el) => {
+        (el as HTMLElement).style.pointerEvents = "";
+      });
       console.log("[FileDropOverlay] Drop target (under overlay):", dropTarget);
 
       if (file) {

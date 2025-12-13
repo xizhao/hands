@@ -118,12 +118,15 @@ export function ChatSettings({ children }: ChatSettingsProps) {
         <div className="p-3 space-y-3">
           {/* Provider dropdown */}
           <div className="space-y-1.5">
-            <label className="text-[10px] uppercase tracking-wide text-muted-foreground">
+            <span className="text-[10px] uppercase tracking-wide text-muted-foreground block">
               Provider
-            </label>
+            </span>
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <button className="w-full flex items-center justify-between h-8 px-2 text-sm bg-muted rounded-md border border-border hover:bg-muted/80 transition-colors">
+                <button
+                  type="button"
+                  className="w-full flex items-center justify-between h-8 px-2 text-sm bg-muted rounded-md border border-border hover:bg-muted/80 transition-colors"
+                >
                   <span>{providerOptions.find((p) => p.value === settings.provider)?.label}</span>
                   <ChevronDown className="h-3 w-3 text-muted-foreground" />
                 </button>
@@ -148,12 +151,15 @@ export function ChatSettings({ children }: ChatSettingsProps) {
 
           {/* Model dropdown */}
           <div className="space-y-1.5">
-            <label className="text-[10px] uppercase tracking-wide text-muted-foreground">
+            <span className="text-[10px] uppercase tracking-wide text-muted-foreground block">
               Model
-            </label>
+            </span>
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <button className="w-full flex items-center justify-between h-8 px-2 text-sm bg-muted rounded-md border border-border hover:bg-muted/80 transition-colors">
+                <button
+                  type="button"
+                  className="w-full flex items-center justify-between h-8 px-2 text-sm bg-muted rounded-md border border-border hover:bg-muted/80 transition-colors"
+                >
                   <span className="truncate">{currentModel?.label || settings.model}</span>
                   <ChevronDown className="h-3 w-3 text-muted-foreground shrink-0" />
                 </button>
@@ -179,10 +185,14 @@ export function ChatSettings({ children }: ChatSettingsProps) {
           {/* API Key */}
           {apiKeyField && (
             <div className="space-y-1.5">
-              <label className="text-[10px] uppercase tracking-wide text-muted-foreground">
+              <label
+                htmlFor="api-key-input"
+                className="text-[10px] uppercase tracking-wide text-muted-foreground"
+              >
                 API Key
               </label>
               <input
+                id="api-key-input"
                 type="password"
                 value={currentApiKey}
                 onChange={(e) => updateApiKey(apiKeyField, e.target.value)}
@@ -207,6 +217,7 @@ export function ChatSettings({ children }: ChatSettingsProps) {
         {isConnected && (agents.length > 0 || tools.length > 0) && (
           <div className="border-t border-border">
             <button
+              type="button"
               onClick={() => setAdvancedOpen(!advancedOpen)}
               className="w-full flex items-center gap-2 px-3 py-2 text-xs text-muted-foreground hover:text-foreground transition-colors"
             >
@@ -223,10 +234,10 @@ export function ChatSettings({ children }: ChatSettingsProps) {
                 {/* Agents */}
                 {agents.length > 0 && (
                   <div className="space-y-1.5">
-                    <label className="text-[10px] uppercase tracking-wide text-muted-foreground flex items-center gap-1.5">
+                    <span className="text-[10px] uppercase tracking-wide text-muted-foreground flex items-center gap-1.5">
                       <Bot className="h-3 w-3" />
                       Agents ({agents.length})
-                    </label>
+                    </span>
                     <div className="flex flex-wrap gap-1">
                       {agents.map((agent) => (
                         <span
@@ -244,10 +255,10 @@ export function ChatSettings({ children }: ChatSettingsProps) {
                 {/* Tools */}
                 {tools.length > 0 && (
                   <div className="space-y-1.5">
-                    <label className="text-[10px] uppercase tracking-wide text-muted-foreground flex items-center gap-1.5">
+                    <span className="text-[10px] uppercase tracking-wide text-muted-foreground flex items-center gap-1.5">
                       <Wrench className="h-3 w-3" />
                       Tools ({tools.length})
-                    </label>
+                    </span>
                     <div className="flex flex-wrap gap-1 max-h-20 overflow-y-auto">
                       {tools.map((tool) => (
                         <span

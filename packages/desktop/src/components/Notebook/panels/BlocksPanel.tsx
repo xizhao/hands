@@ -7,8 +7,10 @@ import { CaretRight, Sparkle, SquaresFour } from "@phosphor-icons/react";
 import { useNavigate } from "@tanstack/react-router";
 import { ChevronRight } from "lucide-react";
 import { useMemo, useState } from "react";
-import { useManifest, type WorkbookBlock } from "@/hooks/useWorkbook";
+import { useRuntimeState, type WorkbookManifest } from "@/hooks/useRuntimeState";
 import { cn } from "@/lib/utils";
+
+type WorkbookBlock = NonNullable<WorkbookManifest["blocks"]>[number];
 
 // Group blocks by parentDir
 function groupBlocksByFolder(blocks: WorkbookBlock[]): Map<string, WorkbookBlock[]> {
@@ -33,7 +35,7 @@ function groupBlocksByFolder(blocks: WorkbookBlock[]): Map<string, WorkbookBlock
 }
 
 export function BlocksPanel() {
-  const { data: manifest } = useManifest();
+  const { manifest } = useRuntimeState();
   const navigate = useNavigate();
   const blocks = manifest?.blocks ?? [];
   const [expandedDirs, setExpandedDirs] = useState<Set<string>>(new Set());

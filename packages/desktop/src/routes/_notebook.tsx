@@ -6,12 +6,11 @@ import type { NavSearchParams } from "@/hooks/useNavState";
 import { useActiveSession } from "@/hooks/useNavState";
 import { useSessions } from "@/hooks/useSession";
 import {
-  useActiveRuntime,
   useCreateWorkbook,
   useOpenWorkbook,
-  usePrefetchRuntimeData,
   useWorkbooks,
 } from "@/hooks/useWorkbook";
+import { useRuntimeState, usePrefetchOnDbReady } from "@/hooks/useRuntimeState";
 import { setNavigateCallback, startSSESync } from "@/lib/sse";
 
 export const Route = createFileRoute("/_notebook")({
@@ -25,11 +24,14 @@ export const Route = createFileRoute("/_notebook")({
 
 function NotebookLayout() {
   const navigate = useNavigate();
-  const { data: activeRuntime, isLoading: runtimeLoading } = useActiveRuntime();
+  const { workbookId, port } = useRuntimeState();
   const { sessionId: activeSessionId, setSession: setActiveSession } = useActiveSession();
 
-  // Prefetch critical runtime data (schema, etc.) as soon as runtime connects
-  usePrefetchRuntimeData(activeRuntime?.workbook_id ?? null);
+  // Prefetch schema when DB becomes ready (workbook-aware, no stale ref)
+  usePrefetchOnDbReady();
+
+  // For backward compatibility in the effect below
+  const activeRuntime = port ? { workbook_id: workbookId } : null;
 
   // Set up navigate callback for SSE - navigates to blocks by ID
   useEffect(() => {

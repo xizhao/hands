@@ -9,7 +9,7 @@
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { invoke } from "@tauri-apps/api/core";
-import { useActiveWorkbookDirectory, useActiveWorkbookId } from "@/hooks/useWorkbook";
+import { useActiveWorkbookDirectory, useActiveWorkbookId } from "@/hooks/useRuntimeState";
 import { api, type MessageWithParts, type PermissionResponse, type Session } from "@/lib/api";
 import { fillTemplate } from "@/lib/prompts";
 
@@ -108,6 +108,7 @@ export function useMessages(sessionId: string | null) {
     queryFn: async () => {
       console.log("[useMessages] Fetching messages for session:", sessionId);
       try {
+        // biome-ignore lint/style/noNonNullAssertion: sessionId is checked via enabled option
         const result = await api.messages.list(sessionId!, directory);
         console.log("[useMessages] Fetched", result.length, "messages");
         return result;

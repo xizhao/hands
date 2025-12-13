@@ -11,7 +11,7 @@ import { AlertTriangle, RefreshCw } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
-import { useRuntimePort } from "@/hooks/useWorkbook";
+import { useRuntimeState } from "@/hooks/useRuntimeState";
 import { cn } from "@/lib/utils";
 
 // Editor error event types (must match packages/editor/src/overlay/errors.ts)
@@ -61,7 +61,7 @@ export function EditorSandbox({ blockId, className, readOnly = false }: EditorSa
   const iframeKey = useRef(0);
 
   // Runtime port for the editor to connect to
-  const runtimePort = useRuntimePort();
+  const { port: runtimePort } = useRuntimeState();
 
   // Editor runs on runtime port + 400 (e.g., 55000 -> 55400)
   const editorPort = runtimePort ? runtimePort + 400 : null;
@@ -356,6 +356,7 @@ export function EditorSandbox({ blockId, className, readOnly = false }: EditorSa
       <iframe
         key={iframeKey.current}
         ref={iframeRef}
+        // biome-ignore lint/style/noNonNullAssertion: iframeSrc is guaranteed when component renders
         src={iframeSrc!}
         className={cn(
           "w-full h-full border-0 transition-opacity duration-75",

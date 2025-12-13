@@ -28,6 +28,7 @@ export function HeadingElement({
 
   return (
     <PlateElement
+      // biome-ignore lint/style/noNonNullAssertion: variant has default value "h1" and is always defined
       as={variant!}
       attributes={{
         id: props.element.id as string,

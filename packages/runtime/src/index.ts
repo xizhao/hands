@@ -331,13 +331,60 @@ export const meta: BlockMeta = {
 }
 
 /**
+ * Get list of block IDs from filesystem
+ */
+function getBlockIds(blocksDir: string): Set<string> {
+  const blockIds = new Set<string>();
+  if (!existsSync(blocksDir)) return blockIds;
+
+  walkDirectory(blocksDir, blocksDir, (filePath, relativePath) => {
+    const filename = filePath.split("/").pop() || "";
+    if ((filename.endsWith(".tsx") || filename.endsWith(".ts")) && !filename.startsWith("_")) {
+      // ID is relative path without extension (e.g., "ui/email-events")
+      const id = relativePath.replace(/\.tsx?$/, "");
+      blockIds.add(id);
+    }
+  });
+
+  return blockIds;
+}
+
+// Track known block IDs for restart detection
+let knownBlockIds: Set<string> = new Set();
+
+/**
+ * Restart Vite worker when block list changes
+ * This is necessary because blocks are statically imported - see worker-template.ts
+ */
+async function restartViteWorker(config: RuntimeConfig) {
+  console.log("[runtime] Block list changed, restarting Vite worker...");
+
+  // Kill existing Vite process
+  if (state.viteProc) {
+    state.viteProc.kill();
+    state.viteProc = null;
+    state.viteReady = false;
+    state.vitePort = null;
+  }
+
+  // Rebuild and restart Vite (this regenerates worker.tsx with new static imports)
+  await bootVite(config);
+}
+
+/**
  * Start watching blocks/ directory for changes
  * Uses fs.watch for real-time updates (not polling)
- * Triggers pgtyped type generation on .ts/.tsx file changes
+ * - Triggers pgtyped type generation on .ts/.tsx file changes
+ * - Restarts Vite when blocks are added/removed (static imports require rebuild)
+ * - Edits to existing blocks use Vite's HMR (no restart needed)
  */
 function startFileWatcher(config: RuntimeConfig) {
   const { workbookDir } = config;
   const blocksDir = join(workbookDir, "blocks");
+
+  // Initialize known block IDs
+  knownBlockIds = getBlockIds(blocksDir);
+  console.log(`[runtime] Initial blocks: ${[...knownBlockIds].join(", ") || "(none)"}`);
 
   // Watch blocks directory
   if (existsSync(blocksDir)) {
@@ -347,21 +394,39 @@ function startFileWatcher(config: RuntimeConfig) {
           // Skip .types.ts files to avoid infinite loops
           if (filename.endsWith(".types.ts")) return;
 
-          console.log(`[runtime] Block changed: ${filename}`);
+          console.log(`[runtime] Block file event: ${filename}`);
 
-          // Run pgtyped type generation on file change
-          if (state.pgTypedRunner && state.dbReady) {
-            const filePath = join(blocksDir, filename);
-            try {
-              await state.pgTypedRunner.runFile(filePath);
-            } catch (err) {
-              console.warn(`[runtime] pgtyped failed for ${filename}:`, err);
+          // Check if block list changed (add/remove)
+          const currentBlockIds = getBlockIds(blocksDir);
+          const added = [...currentBlockIds].filter((id) => !knownBlockIds.has(id));
+          const removed = [...knownBlockIds].filter((id) => !currentBlockIds.has(id));
+
+          if (added.length > 0 || removed.length > 0) {
+            if (added.length > 0) console.log(`[runtime] Blocks added: ${added.join(", ")}`);
+            if (removed.length > 0) console.log(`[runtime] Blocks removed: ${removed.join(", ")}`);
+
+            // Update known blocks
+            knownBlockIds = currentBlockIds;
+
+            // Restart Vite to pick up new static imports
+            await restartViteWorker(config);
+          } else {
+            // Just a file edit - pgtyped only, Vite handles HMR
+            if (state.pgTypedRunner && state.dbReady) {
+              const filePath = join(blocksDir, filename);
+              if (existsSync(filePath)) {
+                try {
+                  await state.pgTypedRunner.runFile(filePath);
+                } catch (err) {
+                  console.warn(`[runtime] pgtyped failed for ${filename}:`, err);
+                }
+              }
             }
           }
         }
       });
       state.fileWatchers.push(watcher);
-      console.log("[runtime] Watching blocks/ for changes");
+      console.log("[runtime] Watching blocks/ for changes (restarts Vite on add/remove)");
     } catch (err) {
       console.warn("[runtime] Could not watch blocks/:", err);
     }

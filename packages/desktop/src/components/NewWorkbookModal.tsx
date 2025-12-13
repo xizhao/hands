@@ -142,7 +142,7 @@ export function NewWorkbookModal({
         <form onSubmit={handleSubmit} className="space-y-6">
           {/* Template Selection */}
           <div className="space-y-3">
-            <label className="text-sm font-medium">Template</label>
+            <span className="text-sm font-medium block">Template</span>
             <div className="grid grid-cols-3 gap-2">
               {templates.map((template) => (
                 <button
@@ -179,8 +179,11 @@ export function NewWorkbookModal({
 
           {/* Name Input */}
           <div className="space-y-2">
-            <label className="text-sm font-medium">Name</label>
+            <label htmlFor="workbook-name" className="text-sm font-medium">
+              Name
+            </label>
             <Input
+              id="workbook-name"
               value={name}
               onChange={(e) => setName(e.target.value)}
               placeholder="My Workbook"
@@ -190,10 +193,11 @@ export function NewWorkbookModal({
 
           {/* Description Input */}
           <div className="space-y-2">
-            <label className="text-sm font-medium">
+            <label htmlFor="workbook-description" className="text-sm font-medium">
               Description <span className="text-muted-foreground font-normal">(optional)</span>
             </label>
             <Input
+              id="workbook-description"
               value={description}
               onChange={(e) => setDescription(e.target.value)}
               placeholder="What is this workbook for?"

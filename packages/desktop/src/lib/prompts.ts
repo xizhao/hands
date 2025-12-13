@@ -17,17 +17,21 @@ function template<T extends string>(str: T): PromptTemplate<T> {
 }
 
 // Standard prompt definitions
+// NOTE: Template curly syntax is intentional - these are string patterns for matching
 export const PROMPTS = {
   // File import - matches the first line of the import prompt
+  // biome-ignore lint/suspicious/noTemplateCurlyInString: Intentional template pattern
   IMPORT_FILE: template("Import and integrate this data file: ${filePath}"),
 
   // Block error fix - has variable
+  // biome-ignore lint/suspicious/noTemplateCurlyInString: Intentional template pattern
   FIX_BLOCK_ERROR: template('Fix the error in block "${blockId}": ${errorContext}'),
 
   // Page context
   ANALYZE_PAGE: template("Analyze this page and suggest improvements"),
 
   // Data operations
+  // biome-ignore lint/suspicious/noTemplateCurlyInString: Intentional template pattern
   QUERY_DATA: template("Query this data: ${query}"),
 
   // General

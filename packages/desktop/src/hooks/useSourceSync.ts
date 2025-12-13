@@ -10,7 +10,7 @@ import { useCallback } from "react";
 import { toast } from "sonner";
 import { useBackgroundTask } from "@/hooks/useBackgroundTask";
 import type { Source } from "@/hooks/useSources";
-import { useRuntimePort } from "@/hooks/useWorkbook";
+import { useRuntimePort } from "@/hooks/useRuntimeState";
 
 // Git sync status from runtime
 export interface GitSyncStatus {

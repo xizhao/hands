@@ -12,7 +12,8 @@ import {
   useSendMessage,
   useSessionStatuses,
 } from "@/hooks/useSession";
-import { useActiveWorkbookId, useWorkbook, useWorkbookDatabase } from "@/hooks/useWorkbook";
+import { useRuntimeState } from "@/hooks/useRuntimeState";
+import { useWorkbook, useWorkbookDatabase } from "@/hooks/useWorkbook";
 import { fillTemplate, PROMPTS } from "@/lib/prompts";
 import { cn } from "@/lib/utils";
 
@@ -42,7 +43,7 @@ export function ChatBar({
   const [isUploadingFile, setIsUploadingFile] = useState(false);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const { sessionId: activeSessionId, setSession: setActiveSession } = useActiveSession();
-  const activeWorkbookId = useActiveWorkbookId();
+  const { workbookId: activeWorkbookId } = useRuntimeState();
   const setPendingAttachment = onPendingAttachmentChange ?? (() => {});
   const setAutoSubmitPending = onAutoSubmitPendingChange ?? (() => {});
   const { data: sessionStatuses = {} } = useSessionStatuses();
@@ -61,7 +62,7 @@ export function ChatBar({
   const isBusy = status?.type === "busy" || status?.type === "running";
 
   // Dynamic context for the current workbook session
-  const getSystemPrompt = () => {
+  const getSystemPrompt = useCallback(() => {
     if (!activeWorkbook) return undefined;
 
     const dbInfo = workbookDatabase
@@ -72,7 +73,7 @@ export function ChatBar({
 - **Workbook**: ${activeWorkbook.name}${activeWorkbook.description ? ` - ${activeWorkbook.description}` : ""}
 - **Directory**: ${activeWorkbook.directory}
 - **Database**: ${dbInfo}`;
-  };
+  }, [activeWorkbook, workbookDatabase]);
 
   const handleSubmit = useCallback(async () => {
     // Allow sending with just attachment (no text required)

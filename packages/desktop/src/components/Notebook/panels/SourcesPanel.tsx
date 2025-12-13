@@ -25,7 +25,7 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { type AvailableSource, type Source, useSourceManagement } from "@/hooks/useSources";
-import { useDbSchema } from "@/hooks/useWorkbook";
+import { useRuntimeState } from "@/hooks/useRuntimeState";
 import { cn } from "@/lib/utils";
 
 // Map icon names to Phosphor icons
@@ -164,7 +164,8 @@ function AddSourceDialog({
 }
 
 export function SourcesPanel() {
-  const { data: schema, isLoading: schemaLoading } = useDbSchema(null);
+  const { schema, isDbBooting, isStarting } = useRuntimeState();
+  const schemaLoading = isStarting || isDbBooting;
   const {
     sources,
     isLoading: sourcesLoading,

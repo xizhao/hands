@@ -10,7 +10,7 @@
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { useActiveWorkbookDirectory } from "@/hooks/useWorkbook";
+import { useActiveWorkbookDirectory } from "@/hooks/useRuntimeState";
 import { api, type MessageWithParts, type Session, type SessionStatus } from "@/lib/api";
 
 export type BackgroundTaskStatus = "idle" | "running" | "success" | "failure";

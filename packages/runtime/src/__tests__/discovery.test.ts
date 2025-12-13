@@ -18,9 +18,9 @@ describe("discoverBlocks", () => {
 
     const loaded = await simpleBlock?.load();
     expect(loaded).toBeDefined();
-    expect(loaded!.default).toBeDefined();
-    expect(typeof loaded!.default).toBe("function");
-    expect(loaded!.meta?.title).toBe("Simple Block");
+    expect(loaded?.default).toBeDefined();
+    expect(typeof loaded?.default).toBe("function");
+    expect(loaded?.meta?.title).toBe("Simple Block");
   });
 
   test("excludes directories matching exclude patterns", async () => {

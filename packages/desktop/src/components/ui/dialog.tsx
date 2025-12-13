@@ -129,7 +129,9 @@ function DialogModalContent({
   hideClose?: boolean;
 } & VariantProps<typeof dialogContentVariants> &
   React.ComponentProps<typeof DialogPrimitive.Content>) {
+  // biome-ignore lint/suspicious/noExplicitAny: variant type from context needs coercion
   let variant = useDialogValue("variant") as any;
+  // biome-ignore lint/style/noNonNullAssertion: variantProp is guaranteed when variant is "modal"
   variant = variant === "modal" ? variantProp! : variant;
   const fixed = useDialogContentValue("fixed");
 
@@ -278,6 +280,7 @@ export function DialogContent({
   return (
     <DialogContentProvider fixed={fixed}>
       {variant === "drawer" ? (
+        // biome-ignore lint/suspicious/noExplicitAny: props spread requires any for DrawerContent compatibility
         <DrawerContent dismissible={dismissible} {...(props as any)} />
       ) : (
         <DialogModalContent
