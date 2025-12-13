@@ -38,11 +38,10 @@ import {
 import { HoverCard, HoverCardContent, HoverCardTrigger } from "@/components/ui/hover-card";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import { useChatState } from "@/hooks/useChatState";
+import { ATTACHMENT_TYPE, useChatState } from "@/hooks/useChatState";
 import { useNeedsTrafficLightOffset } from "@/hooks/useFullscreen";
 import { useActiveSession, useClearNavigation, useRightPanel } from "@/hooks/useNavState";
 import { useRuntimeState } from "@/hooks/useRuntimeState";
-import { useImportWithAgent } from "@/hooks/useSession";
 import {
   useCreateWorkbook,
   useEvalResult,
@@ -89,7 +88,7 @@ export function NotebookShell({ children }: NotebookShellProps) {
     isDbReady,
     isDbBooting,
     isStarting,
-    isFullyReady: _isFullyReady,
+    isFullyReady,
   } = useRuntimeState();
 
   const { panel: rightPanel, togglePanel: toggleRightPanel } = useRightPanel();
@@ -274,7 +273,7 @@ export function NotebookShell({ children }: NotebookShellProps) {
       if (!file) return;
 
       // Set as pending attachment
-      chatState.setPendingAttachment({ type: "file", file, name: file.name });
+      chatState.setPendingAttachment({ type: ATTACHMENT_TYPE.FILE, file, name: file.name });
       // Expand chat to show the attachment
       chatState.setChatExpanded(true);
 
@@ -294,13 +293,13 @@ export function NotebookShell({ children }: NotebookShellProps) {
   useEffect(() => {
     if (isOnBlock && blockId && currentBlock) {
       chatState.setPendingAttachment({
-        type: "block",
+        type: ATTACHMENT_TYPE.BLOCK,
         blockId,
         name: currentBlock.title || blockId,
       });
     } else if (isOnSource && sourceId && currentSource) {
       chatState.setPendingAttachment({
-        type: "source",
+        type: ATTACHMENT_TYPE.SOURCE,
         sourceId,
         name: currentSource.title || sourceId,
       });
@@ -308,7 +307,7 @@ export function NotebookShell({ children }: NotebookShellProps) {
       // Clear attachment when navigating to index or other routes
       // Only clear if it's a block/source attachment (not a file)
       const current = pendingAttachmentRef.current;
-      if (current?.type === "block" || current?.type === "source") {
+      if (current?.type === ATTACHMENT_TYPE.BLOCK || current?.type === ATTACHMENT_TYPE.SOURCE) {
         chatState.setPendingAttachment(null);
       }
     }
@@ -322,41 +321,24 @@ export function NotebookShell({ children }: NotebookShellProps) {
     chatState.setPendingAttachment,
   ]);
 
-  // Import with agent hook for workspace drops
-  const importWithAgent = useImportWithAgent();
-
   // New workbook modal state
   const [showNewWorkbookModal, setShowNewWorkbookModal] = useState(false);
 
-  // File drop handler for external files
-  // - Dropped on chatbar: attach file, expand chat, no auto-submit
-  // - Dropped elsewhere (workspace): start background import with agent
+  // File drop handler - sets filepath attachment and auto-submits
+  // Lightweight: no file loading, no copying - agent handles everything
   const handleFileDrop = useCallback(
-    (file: File, dropTarget: Element | null) => {
-      // Check if the drop target is inside the chatbar (has data-chat-bar attribute)
-      const isOnChatbar = dropTarget?.closest("[data-chat-bar]") !== null;
-
-      if (isOnChatbar) {
-        // Chatbar drop: attach file, expand chat, but don't auto-submit
-        console.log("[handleFileDrop] File dropped on chatbar, attaching:", file.name);
-        chatState.setPendingAttachment({ type: "file", file, name: file.name });
-        chatState.setChatExpanded(true);
-        // Note: NOT setting autoSubmitPending - user must manually submit
-      } else {
-        // Workspace drop: start import with agent and focus on it
-        console.log("[handleFileDrop] File dropped on workspace, starting import:", file.name);
-        importWithAgent.mutate({
-          file,
-          onSessionCreated: (sessionId) => {
-            console.log("[handleFileDrop] Import session created, focusing:", sessionId);
-            // Focus on the import thread and expand chat
-            setActiveSession(sessionId);
-            chatState.setChatExpanded(true);
-          },
-        });
-      }
+    (filePath: string) => {
+      console.log("[NotebookShell.handleFileDrop] File dropped:", filePath);
+      console.log("[NotebookShell.handleFileDrop] activeWorkbookId:", activeWorkbookId);
+      console.log("[NotebookShell.handleFileDrop] isRuntimeReady:", isRuntimeReady);
+      const fileName = filePath.split("/").pop() || filePath;
+      console.log("[NotebookShell.handleFileDrop] Setting attachment:", { type: ATTACHMENT_TYPE.FILEPATH, filePath, name: fileName });
+      chatState.setPendingAttachment({ type: ATTACHMENT_TYPE.FILEPATH, filePath, name: fileName });
+      chatState.setChatExpanded(true);
+      chatState.setAutoSubmitPending(true);
+      console.log("[NotebookShell.handleFileDrop] State set complete");
     },
-    [chatState, importWithAgent, setActiveSession],
+    [chatState, activeWorkbookId, isRuntimeReady],
   );
 
   return (
@@ -864,6 +846,8 @@ export function NotebookShell({ children }: NotebookShellProps) {
               onPendingAttachmentChange={chatState.setPendingAttachment}
               autoSubmitPending={chatState.autoSubmitPending}
               onAutoSubmitPendingChange={chatState.setAutoSubmitPending}
+              sessionError={chatState.sessionError}
+              onSessionErrorClear={chatState.clearSessionError}
             />
           </div>
         )}
@@ -877,10 +861,10 @@ export function NotebookShell({ children }: NotebookShellProps) {
           className="hidden"
         />
 
-        {/* File drop overlay for external drag & drop - disabled until runtime fully ready */}
+        {/* File drop overlay for external drag & drop - only needs active workbook */}
         <FileDropOverlay
           onFileDrop={handleFileDrop}
-          disabled={!activeWorkbookId || !isRuntimeReady}
+          disabled={!activeWorkbookId}
         />
 
         {/* New workbook modal */}

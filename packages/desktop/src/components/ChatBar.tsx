@@ -3,7 +3,7 @@ import { ArrowUp, Blocks, Database, Hand, Loader2, Paperclip, Square, X } from "
 import { useCallback, useEffect, useRef, useState } from "react";
 import { ChatSettings } from "@/components/ChatSettings";
 import { Button } from "@/components/ui/button";
-import type { AnyPendingAttachment } from "@/hooks/useChatState";
+import { ATTACHMENT_TYPE, type AnyPendingAttachment, type SessionError } from "@/hooks/useChatState";
 import { useActiveSession } from "@/hooks/useNavState";
 import { useRuntimeState } from "@/hooks/useRuntimeState";
 import { useServer } from "@/hooks/useServer";
@@ -24,6 +24,8 @@ interface ChatBarProps {
   onPendingAttachmentChange?: (attachment: AnyPendingAttachment | null) => void;
   autoSubmitPending?: boolean;
   onAutoSubmitPendingChange?: (pending: boolean) => void;
+  sessionError?: SessionError | null;
+  onSessionErrorClear?: () => void;
 }
 
 interface CopyFilesResult {
@@ -38,6 +40,8 @@ export function ChatBar({
   onPendingAttachmentChange,
   autoSubmitPending = false,
   onAutoSubmitPendingChange,
+  sessionError = null,
+  onSessionErrorClear,
 }: ChatBarProps) {
   const [input, setInput] = useState("");
   const [isUploadingFile, setIsUploadingFile] = useState(false);
@@ -98,21 +102,21 @@ export function ChatBar({
     // Build message content based on attachment type
     let finalMessage = userText;
     if (pendingAttachment) {
-      if (pendingAttachment.type === "block") {
+      if (pendingAttachment.type === ATTACHMENT_TYPE.BLOCK) {
         // Block attachment - include block:// URI
         const blockUri = `block://${pendingAttachment.blockId}`;
         finalMessage = userText
           ? `${userText}\n\n[Context: ${blockUri}]`
           : `[Context: ${blockUri}]`;
         setPendingAttachment(null);
-      } else if (pendingAttachment.type === "source") {
+      } else if (pendingAttachment.type === ATTACHMENT_TYPE.SOURCE) {
         // Source attachment - include source:// URI
         const sourceUri = `source://${pendingAttachment.sourceId}`;
         finalMessage = userText
           ? `${userText}\n\n[Context: ${sourceUri}]`
           : `[Context: ${sourceUri}]`;
         setPendingAttachment(null);
-      } else if (pendingAttachment.type === "file" && activeWorkbookId) {
+      } else if (pendingAttachment.type === ATTACHMENT_TYPE.FILE && activeWorkbookId) {
         // File attachment - copy to workbook and include path
         try {
           const buffer = await pendingAttachment.file.arrayBuffer();
@@ -131,6 +135,10 @@ export function ChatBar({
         } catch (err) {
           console.error("[ChatBar] Failed to copy attachment:", err);
         }
+        setPendingAttachment(null);
+      } else if (pendingAttachment.type === ATTACHMENT_TYPE.FILEPATH) {
+        // Filepath attachment (from drag-drop) - use import template, no file copying
+        finalMessage = fillTemplate("IMPORT_FILE", { filePath: pendingAttachment.filePath });
         setPendingAttachment(null);
       }
     }
@@ -179,10 +187,16 @@ export function ChatBar({
     if (autoSubmitPending && pendingAttachment && isConnected && !isBusy) {
       setAutoSubmitPending(false);
 
-      if (pendingAttachment.type === "file") {
+      if (pendingAttachment.type === ATTACHMENT_TYPE.FILEPATH) {
+        // Filepath drops (from Tauri): auto-submit immediately
+        // The handleSubmit will use fillTemplate("IMPORT_FILE") for filepath attachments
+        console.log("[ChatBar] Auto-submitting filepath attachment:", pendingAttachment.filePath);
+        setTimeout(() => handleSubmit(), 0);
+      } else if (pendingAttachment.type === ATTACHMENT_TYPE.FILE) {
         // File drops: import prompt
         setInput(PROMPTS.IMPORT_FILE);
-      } else if (pendingAttachment.type === "block" && pendingAttachment.errorContext) {
+        setTimeout(() => handleSubmit(), 0);
+      } else if (pendingAttachment.type === ATTACHMENT_TYPE.BLOCK && pendingAttachment.errorContext) {
         // Block error fix: include block ID and error context in prompt
         setInput(
           fillTemplate("FIX_BLOCK_ERROR", {
@@ -190,13 +204,9 @@ export function ChatBar({
             errorContext: pendingAttachment.errorContext,
           }),
         );
-      } else {
-        // Other cases: don't auto-submit
-        return;
+        setTimeout(() => handleSubmit(), 0);
       }
-
-      // Submit on next tick after input is set
-      setTimeout(() => handleSubmit(), 0);
+      // Other cases (block without error, source): don't auto-submit
     }
   }, [
     autoSubmitPending,
@@ -225,18 +235,46 @@ export function ChatBar({
 
   const hasContent = input.trim() || pendingAttachment;
 
+  // Check for send errors or session errors
+  const sendError = sendMessage.error || createSession.error;
+  const displayError = sendError || sessionError;
+
   return (
     <div
       data-chat-bar
       className="flex flex-col gap-1 px-2 py-2 rounded-xl border border-border/40 bg-background/80 backdrop-blur-sm overflow-visible"
     >
+      {/* Error message */}
+      {displayError && (
+        <div className="flex items-center gap-1.5 px-2 py-1.5 rounded-md bg-red-500/10 text-xs text-red-500">
+          <span className="truncate">
+            {sendError instanceof Error
+              ? sendError.message
+              : sessionError
+                ? sessionError.message
+                : "Failed to send message"}
+          </span>
+          <button
+            type="button"
+            onClick={() => {
+              sendMessage.reset();
+              createSession.reset();
+              onSessionErrorClear?.();
+            }}
+            className="p-0.5 rounded hover:bg-red-500/20 transition-colors shrink-0"
+          >
+            <X className="h-3 w-3" />
+          </button>
+        </div>
+      )}
+
       {/* Attachment chip - show when file, block, or source is attached */}
       {pendingAttachment && (
         <div className="flex items-center gap-1 px-1">
           <div className="flex items-center gap-1.5 px-2 py-1 rounded-md bg-accent/50 text-xs">
-            {pendingAttachment.type === "block" ? (
+            {pendingAttachment.type === ATTACHMENT_TYPE.BLOCK ? (
               <Blocks className="h-3 w-3 text-muted-foreground" />
-            ) : pendingAttachment.type === "source" ? (
+            ) : pendingAttachment.type === ATTACHMENT_TYPE.SOURCE ? (
               <Database className="h-3 w-3 text-muted-foreground" />
             ) : (
               <Paperclip className="h-3 w-3 text-muted-foreground" />

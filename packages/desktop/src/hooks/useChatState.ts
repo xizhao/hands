@@ -7,22 +7,38 @@
 
 import { useSyncExternalStore } from "react";
 
+// Attachment type constants - use these instead of string literals
+export const ATTACHMENT_TYPE = {
+  FILE: "file",
+  FILEPATH: "filepath",
+  BLOCK: "block",
+  SOURCE: "source",
+} as const;
+
+export type AttachmentType = (typeof ATTACHMENT_TYPE)[keyof typeof ATTACHMENT_TYPE];
+
 // Types
 export interface PendingAttachment {
-  type: "file";
+  type: typeof ATTACHMENT_TYPE.FILE;
   file: File;
   name: string;
 }
 
+export interface PendingFilePathAttachment {
+  type: typeof ATTACHMENT_TYPE.FILEPATH;
+  filePath: string;
+  name: string;
+}
+
 export interface PendingBlockAttachment {
-  type: "block";
+  type: typeof ATTACHMENT_TYPE.BLOCK;
   blockId: string;
   name: string;
   errorContext?: string;
 }
 
 export interface PendingSourceAttachment {
-  type: "source";
+  type: typeof ATTACHMENT_TYPE.SOURCE;
   sourceId: string;
   name: string;
 }
@@ -30,14 +46,23 @@ export interface PendingSourceAttachment {
 // Combined attachment type
 export type AnyPendingAttachment =
   | PendingAttachment
+  | PendingFilePathAttachment
   | PendingBlockAttachment
   | PendingSourceAttachment;
+
+// Session error type
+export interface SessionError {
+  sessionId: string;
+  message: string;
+  timestamp: number;
+}
 
 // Module-level state
 let pendingAttachment: AnyPendingAttachment | null = null;
 let chatExpanded: boolean = false;
 let autoSubmitPending: boolean = false;
 let chatBarHidden: boolean = false;
+let sessionError: SessionError | null = null;
 
 // Snapshot type
 interface ChatStateSnapshot {
@@ -45,6 +70,7 @@ interface ChatStateSnapshot {
   chatExpanded: boolean;
   autoSubmitPending: boolean;
   chatBarHidden: boolean;
+  sessionError: SessionError | null;
 }
 
 // Cached snapshot - only recreate when state changes
@@ -53,6 +79,7 @@ let snapshot: ChatStateSnapshot = {
   chatExpanded,
   autoSubmitPending,
   chatBarHidden,
+  sessionError,
 };
 
 // Subscribers for useSyncExternalStore
@@ -71,7 +98,7 @@ function getSnapshot() {
 
 function emitChange() {
   // Create new snapshot object so React detects the change
-  snapshot = { pendingAttachment, chatExpanded, autoSubmitPending, chatBarHidden };
+  snapshot = { pendingAttachment, chatExpanded, autoSubmitPending, chatBarHidden, sessionError };
   for (const listener of listeners) {
     listener();
   }
@@ -102,6 +129,17 @@ export function setChatBarHidden(hidden: boolean) {
   emitChange();
 }
 
+export function setSessionError(error: SessionError | null) {
+  sessionError = error;
+  emitChange();
+}
+
+export function clearSessionError() {
+  if (sessionError === null) return;
+  sessionError = null;
+  emitChange();
+}
+
 // Hook
 export function useChatState() {
   const state = useSyncExternalStore(subscribe, getSnapshot, getSnapshot);
@@ -112,5 +150,7 @@ export function useChatState() {
     setChatExpanded,
     setAutoSubmitPending,
     setChatBarHidden,
+    setSessionError,
+    clearSessionError,
   };
 }

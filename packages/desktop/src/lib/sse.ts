@@ -19,6 +19,7 @@ import {
   subscribeToEvents,
   type Todo,
 } from "@/lib/api";
+import { setSessionError } from "@/hooks/useChatState";
 
 // Navigation callback - set by the app to handle navigate tool
 let navigateCallback: ((page: string) => void) | null = null;
@@ -136,6 +137,23 @@ function handleSessionUpdated(session: Session, queryClient: QueryClient, direct
 
 function handleSessionDeleted(sessionId: string, queryClient: QueryClient, directory?: string) {
   console.log("[sse] session.deleted:", sessionId, "directory:", directory);
+
+  // Check if session was busy (indicates unexpected termination)
+  const statuses = queryClient.getQueryData<Record<string, SessionStatus>>([
+    "session-statuses",
+    directory,
+  ]);
+  const wasActive = statuses?.[sessionId];
+  const wasBusy = wasActive?.type === "busy" || wasActive?.type === "running";
+
+  if (wasBusy) {
+    console.error("[sse] session.deleted while busy - setting error:", sessionId);
+    setSessionError({
+      sessionId,
+      message: "Session was terminated unexpectedly",
+      timestamp: Date.now(),
+    });
+  }
 
   // Remove from sessions list
   queryClient.setQueriesData<Session[]>({ queryKey: ["sessions"], exact: false }, (old) =>

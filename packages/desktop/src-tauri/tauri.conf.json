@@ -28,7 +28,7 @@
         "center": true,
         "visible": true,
         "shadow": true,
-        "dragDropEnabled": false,
+        "dragDropEnabled": true,
         "titleBarStyle": "Overlay",
         "hiddenTitle": true,
         "trafficLightPosition": {
