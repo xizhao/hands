@@ -172,3 +172,90 @@ export async function generateSchema(db: PGlite): Promise<string> {
   const tables = await introspectSchema(db)
   return generateSchemaTs(tables)
 }
+
+/**
+ * Map TypeScript/pgType back to SQL type for CREATE TABLE
+ */
+function pgTypeToSQL(pgType: string): string {
+  switch (pgType.toLowerCase()) {
+    case "integer":
+    case "smallint":
+    case "bigint":
+    case "numeric":
+    case "real":
+    case "double precision":
+    case "serial":
+    case "bigserial":
+      return pgType.toUpperCase()
+    case "boolean":
+      return "BOOLEAN"
+    case "json":
+    case "jsonb":
+      return pgType.toUpperCase()
+    case "timestamp with time zone":
+      return "TIMESTAMPTZ"
+    case "timestamp without time zone":
+      return "TIMESTAMP"
+    case "date":
+      return "DATE"
+    case "time":
+      return "TIME"
+    case "uuid":
+      return "UUID"
+    case "text":
+      return "TEXT"
+    case "varchar":
+    case "character varying":
+      return "VARCHAR"
+    case "char":
+    case "character":
+      return "CHAR"
+    case "bytea":
+      return "BYTEA"
+    default:
+      if (pgType.toLowerCase().includes("[]")) return pgType.toUpperCase()
+      return pgType.toUpperCase()
+  }
+}
+
+/**
+ * Generate SQL CREATE TABLE statements from introspected schema
+ * Used for debugging and documentation
+ */
+export function generateSchemaSQL(tables: TableInfo[]): string {
+  const lines: string[] = [
+    "-- Auto-generated schema.sql",
+    "-- DO NOT EDIT - regenerated on schema changes",
+    "",
+  ]
+
+  if (tables.length === 0) {
+    lines.push("-- No tables found in database")
+    return lines.join("\n")
+  }
+
+  for (const table of tables) {
+    lines.push(`CREATE TABLE ${table.name} (`)
+
+    const columnDefs: string[] = []
+    for (const col of table.columns) {
+      const nullable = col.is_nullable === "YES" ? "" : " NOT NULL"
+      const defaultVal = col.column_default ? ` DEFAULT ${col.column_default}` : ""
+      columnDefs.push(`  ${col.column_name} ${pgTypeToSQL(col.data_type)}${nullable}${defaultVal}`)
+    }
+
+    lines.push(columnDefs.join(",\n"))
+    lines.push(");")
+    lines.push("")
+  }
+
+  return lines.join("\n")
+}
+
+/**
+ * Full pipeline: introspect DB and generate schema.sql content
+ */
+export async function generateSchemaSQLFromDb(db: PGlite): Promise<string> {
+  const tables = await introspectSchema(db)
+  return generateSchemaSQL(tables)
+}

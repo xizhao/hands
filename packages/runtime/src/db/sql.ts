@@ -10,6 +10,7 @@
 
 import type { PGlite } from "@electric-sql/pglite"
 import type { DbContext } from "@hands/stdlib"
+import { Roles, type RoleName } from "./roles.js"
 
 export interface Query {
   text: string
@@ -31,7 +32,7 @@ export function sql(strings: TemplateStringsArray, ...values: any[]): Query {
 export type { DbContext } from "@hands/stdlib"
 
 /**
- * Create the db context wrapper for a PGlite instance
+ * Create the db context wrapper for a PGlite instance (admin context - no role switch)
  */
 export function createDbContext(pglite: PGlite): DbContext {
   return {
@@ -44,4 +45,42 @@ export function createDbContext(pglite: PGlite): DbContext {
       return result.rows
     },
   }
+}
+
+/**
+ * Create a role-aware db context wrapper
+ * Wraps queries with SET ROLE / RESET ROLE for permission enforcement
+ */
+function createRoleContext(pglite: PGlite, role: RoleName): DbContext {
+  return {
+    sql: async <T = Record<string, unknown>>(
+      strings: TemplateStringsArray,
+      ...values: unknown[]
+    ): Promise<T[]> => {
+      await pglite.exec(`SET ROLE ${role}`)
+      try {
+        const query = sql(strings, ...values)
+        const result = await pglite.query<T>(query.text, query.values)
+        return result.rows
+      } finally {
+        await pglite.exec("RESET ROLE")
+      }
+    },
+  }
+}
+
+/**
+ * Create a reader context (hands_reader role)
+ * Used for block rendering - read-only access to public schema
+ */
+export function createReaderContext(pglite: PGlite): DbContext {
+  return createRoleContext(pglite, Roles.READER)
+}
+
+/**
+ * Create a writer context (hands_writer role)
+ * Used for actions/sources - full DML on public schema
+ */
+export function createWriterContext(pglite: PGlite): DbContext {
+  return createRoleContext(pglite, Roles.WRITER)
 }

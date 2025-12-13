@@ -18,14 +18,16 @@ const MODEL = process.env.HANDS_MODEL || "anthropic/claude-sonnet-4-20250514";
 // Paths
 const AGENT_PKG_DIR = resolve(dirname(import.meta.dirname), ".");
 const TOOLS_SOURCE = resolve(AGENT_PKG_DIR, "tool");
+const PLUGINS_SOURCE = resolve(AGENT_PKG_DIR, "plugin");
 
 /**
- * Symlink our tools directory to the working directory's .opencode/tool/
+ * Symlink a source directory to a target in .opencode/
  * OpenCode discovers tools from $CWD/.opencode/tool/*.ts
+ * OpenCode discovers plugins from $CWD/.opencode/plugin/*.ts
  */
-function setupToolsSymlink(workingDir: string) {
+function setupSymlink(workingDir: string, source: string, name: string) {
   const opencodeDir = resolve(workingDir, ".opencode");
-  const toolsTarget = resolve(opencodeDir, "tool");
+  const target = resolve(opencodeDir, name);
 
   // Create .opencode directory if needed
   if (!existsSync(opencodeDir)) {
@@ -33,23 +35,25 @@ function setupToolsSymlink(workingDir: string) {
   }
 
   // Remove existing symlink/dir if it exists
-  if (existsSync(toolsTarget)) {
-    const stat = lstatSync(toolsTarget);
+  if (existsSync(target)) {
+    const stat = lstatSync(target);
     if (stat.isSymbolicLink()) {
-      unlinkSync(toolsTarget);
+      unlinkSync(target);
     } else {
-      console.warn(`[agent] Warning: ${toolsTarget} exists and is not a symlink`);
+      console.warn(`[agent] Warning: ${target} exists and is not a symlink`);
       return;
     }
   }
 
   // Create symlink
-  symlinkSync(TOOLS_SOURCE, toolsTarget, "dir");
+  symlinkSync(source, target, "dir");
 }
 
 // Build config
 const config: Config = {
   model: MODEL,
+  // Register plugins by path - OpenCode will load from .opencode/plugin/ directory
+  plugin: ["diagnostics"],
   agent: {
     // Disable general and build, keep plan/explore
     general: { disable: true },
@@ -65,8 +69,9 @@ async function main() {
   // Get working directory from env (set by Tauri) or use cwd
   const workingDir = process.env.HANDS_WORKBOOK_DIR || process.cwd();
 
-  // Setup tools symlink so OpenCode can discover our custom tools
-  setupToolsSymlink(workingDir);
+  // Setup symlinks so OpenCode can discover our custom tools and plugins
+  setupSymlink(workingDir, TOOLS_SOURCE, "tool");
+  setupSymlink(workingDir, PLUGINS_SOURCE, "plugin");
 
   try {
     const { server, client } = await createOpencode({

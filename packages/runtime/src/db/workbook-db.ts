@@ -11,11 +11,17 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from "fs"
 import { join } from "path"
 import { PGlite } from "@electric-sql/pglite"
 import { generateSchema } from "./schema-gen.js"
-import { createDbContext, type DbContext } from "./sql.js"
+import { createDbContext, createReaderContext, createWriterContext, type DbContext } from "./sql.js"
+import { ensureRoles } from "./roles.js"
 
 export interface WorkbookDb {
   db: PGlite
+  /** Admin context - full access (for runtime internals) */
   ctx: DbContext
+  /** Reader context - read-only access to public schema (for blocks) */
+  readerCtx: DbContext
+  /** Writer context - full DML on public schema (for actions/sources) */
+  writerCtx: DbContext
   save: () => Promise<void>
   regenerateSchema: () => Promise<void>
   close: () => Promise<void>
@@ -56,7 +62,12 @@ export async function initWorkbookDb(workbookDir: string): Promise<WorkbookDb> {
   await db.waitReady
   console.log("[db] Database ready")
 
+  // Set up roles for permission enforcement
+  await ensureRoles(db)
+
   const ctx = createDbContext(db)
+  const readerCtx = createReaderContext(db)
+  const writerCtx = createWriterContext(db)
 
   // Generate schema (derived, gitignored)
   const schemaTs = await generateSchema(db)
@@ -66,6 +77,8 @@ export async function initWorkbookDb(workbookDir: string): Promise<WorkbookDb> {
   return {
     db,
     ctx,
+    readerCtx,
+    writerCtx,
 
     /**
      * Save database to workbook/db.tar.gz (git-tracked)

@@ -7,6 +7,15 @@
 import type { ReactElement } from "react"
 
 /**
+ * pgtyped prepared query interface
+ * Compatible with queries created by sql`` tagged template from @pgtyped/runtime
+ */
+export interface PreparedQuery<TParams, TResult> {
+  /** Execute the prepared query with params */
+  run(params: TParams, client: unknown): Promise<TResult[]>
+}
+
+/**
  * SQL query interface - tagged template literal for safe queries
  */
 export interface DbContext {
@@ -19,6 +28,17 @@ export interface DbContext {
     strings: TemplateStringsArray,
     ...values: unknown[]
   ): Promise<T[]>
+
+  /**
+   * Execute a pgtyped prepared query with type-safe params and results
+   * @example
+   * import { getActiveUsers } from './my-block.types'
+   * const users = await ctx.db.query(getActiveUsers, { active: true })
+   */
+  query<TParams, TResult>(
+    preparedQuery: PreparedQuery<TParams, TResult>,
+    params: TParams
+  ): Promise<TResult[]>
 }
 
 /**
@@ -37,6 +57,17 @@ export interface BlockContext<TParams = Record<string, unknown>> {
     strings: TemplateStringsArray,
     ...values: unknown[]
   ): Promise<T[]>
+
+  /**
+   * Execute a pgtyped prepared query (shorthand for db.query)
+   * @example
+   * import { getActiveUsers } from './my-block.types'
+   * const users = await ctx.query(getActiveUsers, { active: true })
+   */
+  query<TParams, TResult>(
+    preparedQuery: PreparedQuery<TParams, TResult>,
+    params: TParams
+  ): Promise<TResult[]>
 
   /** URL params, form values, user inputs */
   params: TParams

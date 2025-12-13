@@ -465,11 +465,16 @@ export const meta: BlockMeta = {
   refreshable: false
 }
 
-const WelcomeBlock: BlockFn<{ name?: string }> = async (props, ctx) => {
+const WelcomeBlock: BlockFn<{ name?: string }> = async ({ ctx, name }) => {
+  // Query example using ctx.sql tagged template
+  // const users = await ctx.sql<{ id: number; name: string }>\`
+  //   SELECT id, name FROM users LIMIT 5
+  // \`
+
   return (
     <div className="p-6 bg-gradient-to-br from-blue-50 to-indigo-100 rounded-xl">
       <h1 className="text-2xl font-bold text-gray-900">
-        Welcome to {props.name || "${name}"}
+        Welcome to {name || "${name}"}
       </h1>
       <p className="mt-2 text-gray-600">
         Create blocks to visualize your data.

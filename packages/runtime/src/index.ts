@@ -26,6 +26,7 @@ import type { BlockContext } from "./ctx.js"
 import { registerSourceRoutes, checkMissingSecrets } from "./sources/index.js"
 import type { SourceDefinition } from "@hands/stdlib/sources"
 import { ensureStdlibSymlink, ensureWorkbookStdlibSymlink, getEditorSourcePath } from "./config/index.js"
+import { createPgTypedRunner, type PgTypedRunner } from "./db/pgtyped/index.js"
 
 interface RuntimeConfig {
   workbookId: string
@@ -41,12 +42,15 @@ interface RuntimeState {
   editorPort: number | null
   editorProc: ChildProcess | null
   editorRestartCount: number
+  editorReadyPromise: Promise<void> | null
+  editorReadyResolve: (() => void) | null
   editorConfig: RuntimeConfig | null
   workbookDb: WorkbookDb | null
   viteProc: ChildProcess | null
   fileWatchers: FSWatcher[]
   buildErrors: string[]
   viteError: string | null
+  pgTypedRunner: PgTypedRunner | null
 }
 
 // Global state for progressive readiness
@@ -58,12 +62,15 @@ const state: RuntimeState = {
   editorPort: null,
   editorProc: null,
   editorRestartCount: 0,
+  editorReadyPromise: null,
+  editorReadyResolve: null,
   editorConfig: null,
   workbookDb: null,
   viteProc: null,
   buildErrors: [],
   viteError: null,
   fileWatchers: [],
+  pgTypedRunner: null,
 }
 
 // Max restarts before giving up
@@ -322,6 +329,7 @@ export const meta: BlockMeta = {
 /**
  * Start watching blocks/ directory for changes
  * Uses fs.watch for real-time updates (not polling)
+ * Triggers pgtyped type generation on .ts/.tsx file changes
  */
 function startFileWatcher(config: RuntimeConfig) {
   const { workbookDir } = config
@@ -330,9 +338,22 @@ function startFileWatcher(config: RuntimeConfig) {
   // Watch blocks directory
   if (existsSync(blocksDir)) {
     try {
-      const watcher = watch(blocksDir, { recursive: true }, (event, filename) => {
+      const watcher = watch(blocksDir, { recursive: true }, async (event, filename) => {
         if (filename && (filename.endsWith(".ts") || filename.endsWith(".tsx"))) {
+          // Skip .types.ts files to avoid infinite loops
+          if (filename.endsWith(".types.ts")) return
+
           console.log(`[runtime] Block changed: ${filename}`)
+
+          // Run pgtyped type generation on file change
+          if (state.pgTypedRunner && state.dbReady) {
+            const filePath = join(blocksDir, filename)
+            try {
+              await state.pgTypedRunner.runFile(filePath)
+            } catch (err) {
+              console.warn(`[runtime] pgtyped failed for ${filename}:`, err)
+            }
+          }
         }
       })
       state.fileWatchers.push(watcher)
@@ -695,9 +716,13 @@ function createApp(config: RuntimeConfig) {
     try {
       const result = await state.workbookDb.db.query(query)
 
-      // Check if DDL - regenerate schema
+      // Check if DDL - regenerate schema and pgtyped types
       if (isDDL(query)) {
         await state.workbookDb.regenerateSchema()
+        if (state.pgTypedRunner) {
+          await state.pgTypedRunner.refreshSchema()
+          await state.pgTypedRunner.runAll()
+        }
       }
 
       return c.json({ rows: result.rows, rowCount: result.rows.length })
@@ -734,8 +759,13 @@ function createApp(config: RuntimeConfig) {
     try {
       const result = await state.workbookDb.db.query(query)
 
+      // Check if DDL - regenerate schema and pgtyped types
       if (isDDL(query)) {
         await state.workbookDb.regenerateSchema()
+        if (state.pgTypedRunner) {
+          await state.pgTypedRunner.refreshSchema()
+          await state.pgTypedRunner.runAll()
+        }
       }
 
       return c.json({ rows: result.rows, rowCount: result.rows.length })
@@ -1208,14 +1238,10 @@ export const __SECRET_INTERNALS_DO_NOT_USE_OR_YOU_WILL_BE_FIRED = RD.__SECRET_IN
 
   // Proxy editor sandbox routes to editor Vite dev server
   // Desktop loads editor via /sandbox/sandbox.html
-  // If editor isn't ready, poll until it is (or timeout)
+  // Awaits the editor ready promise if not yet ready
   app.all("/sandbox/*", async (c) => {
-    // If editor not ready, poll for up to 10 seconds
+    // If editor not ready, await the readiness promise
     if (!state.editorReady || !state.editorPort) {
-      const pollTimeout = 10000
-      const pollInterval = 250
-      const startTime = Date.now()
-
       // If editor is down and we have config, try to restart it
       if (!state.editorProc && state.editorConfig && state.editorRestartCount < MAX_EDITOR_RESTARTS) {
         console.log("[runtime] Editor down on request, triggering restart...")
@@ -1223,18 +1249,22 @@ export const __SECRET_INTERNALS_DO_NOT_USE_OR_YOU_WILL_BE_FIRED = RD.__SECRET_IN
         bootEditor(state.editorConfig, true)
       }
 
-      // Poll until ready or timeout
-      while (Date.now() - startTime < pollTimeout) {
-        if (state.editorReady && state.editorPort) {
-          break
+      // Await the editor ready promise with a timeout
+      if (state.editorReadyPromise) {
+        const timeoutPromise = new Promise<void>((_, reject) => {
+          setTimeout(() => reject(new Error("Editor startup timeout")), 30000)
+        })
+        try {
+          await Promise.race([state.editorReadyPromise, timeoutPromise])
+        } catch {
+          // Timeout or error - fall through to check state
         }
-        await new Promise((resolve) => setTimeout(resolve, pollInterval))
       }
 
-      // Final check after polling
+      // Final check after awaiting
       if (!state.editorReady || !state.editorPort) {
         return c.json({
-          error: "Editor not ready after timeout",
+          error: "Editor not ready",
           booting: !!state.editorProc,
           restartCount: state.editorRestartCount,
         }, 503)
@@ -1276,6 +1306,7 @@ export const __SECRET_INTERNALS_DO_NOT_USE_OR_YOU_WILL_BE_FIRED = RD.__SECRET_IN
 /**
  * Boot PGlite in background
  * Loads from .hands/db.tar.gz if exists, generates schema.ts
+ * Also initializes pgtyped runner for type-safe SQL queries
  */
 async function bootPGlite(workbookDir: string) {
   console.log(`[runtime] Booting database for ${workbookDir}...`)
@@ -1284,6 +1315,14 @@ async function bootPGlite(workbookDir: string) {
     state.workbookDb = await initWorkbookDb(workbookDir)
     state.dbReady = true
     console.log("[runtime] Database ready")
+
+    // Initialize pgtyped runner for type-safe SQL queries
+    state.pgTypedRunner = createPgTypedRunner(workbookDir, state.workbookDb.db)
+
+    // Run initial type generation for all block files (non-blocking)
+    state.pgTypedRunner.runAll().catch((err) => {
+      console.warn("[runtime] Initial pgtyped generation failed:", err)
+    })
   } catch (err) {
     console.error("[runtime] Database failed:", err)
   }
@@ -1291,14 +1330,17 @@ async function bootPGlite(workbookDir: string) {
 
 /**
  * Create block context for execution
+ * Uses reader context (hands_reader role) for read-only access
  */
 function createBlockContext(params: Record<string, any> = {}): BlockContext {
   if (!state.workbookDb) {
     throw new Error("Database not ready")
   }
+  // Use reader context for block rendering (read-only access to public schema)
+  const dbCtx = state.workbookDb.readerCtx
   return {
-    db: state.workbookDb.ctx,
-    sql: state.workbookDb.ctx.sql,
+    db: dbCtx,
+    sql: dbCtx.sql,
     params,
   }
 }
@@ -1415,6 +1457,9 @@ async function bootVite(config: RuntimeConfig) {
  * Boot the editor sandbox Vite dev server
  * This serves the visual editor UI that runs inside the iframe
  * Supports automatic restart on crash (up to MAX_EDITOR_RESTARTS times)
+ *
+ * Returns a promise that resolves when the editor is ready.
+ * Also stores the promise in state.editorReadyPromise for request handlers to await.
  */
 async function bootEditor(config: RuntimeConfig, isRestart = false) {
   // Store config for potential restarts
@@ -1425,8 +1470,16 @@ async function bootEditor(config: RuntimeConfig, isRestart = false) {
 
   if (!existsSync(editorPath)) {
     console.warn(`[runtime] Editor package not found at ${editorPath}, skipping editor server`)
+    // Resolve promise immediately since there's nothing to wait for
+    state.editorReadyPromise = Promise.resolve()
     return
   }
+
+  // Create a new promise that will resolve when the editor is ready
+  // This allows request handlers to await editor readiness
+  state.editorReadyPromise = new Promise<void>((resolve) => {
+    state.editorReadyResolve = resolve
+  })
 
   if (isRestart) {
     console.log(`[runtime] Restarting editor sandbox (attempt ${state.editorRestartCount + 1}/${MAX_EDITOR_RESTARTS})...`)
@@ -1507,6 +1560,11 @@ async function bootEditor(config: RuntimeConfig, isRestart = false) {
             console.log(`[runtime] Editor ready on port ${editorPort}`)
           }
           state.editorRestartCount = 0
+          // Resolve the promise so any waiting requests can proceed
+          if (state.editorReadyResolve) {
+            state.editorReadyResolve()
+            state.editorReadyResolve = null
+          }
           return
         }
       } catch {
