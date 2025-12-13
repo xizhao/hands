@@ -63,7 +63,20 @@ function blendWithBackground(colorVar: string, bgVar: string, opacity: number): 
   return `hsl(${blendedH} ${blendedS}% ${blendedL}%)`;
 }
 
-import { CircleNotch, FloppyDisk, Plus, Table as TableIcon, Trash } from "@phosphor-icons/react";
+import {
+  ArrowDown,
+  ArrowUp,
+  ArrowsDownUp,
+  Broadcast,
+  CircleNotch,
+  DotsThreeVertical,
+  FloppyDisk,
+  Funnel,
+  Plus,
+  Table as TableIcon,
+  Trash,
+  X,
+} from "@phosphor-icons/react";
 import { toast } from "sonner";
 import { type ColumnDefinition, useTableData } from "@/hooks/useTableData";
 import { cn } from "@/lib/utils";
@@ -99,6 +112,9 @@ export function DataBrowser({ source, table, className, editable = false }: Data
   const [sortDirection, setSortDirection] = useState<"asc" | "desc">("asc");
   // Column order for reordering (stores column indices in display order)
   const [columnOrder, setColumnOrder] = useState<number[] | null>(null);
+  // Header menu state
+  const [menuColumnIndex, setMenuColumnIndex] = useState<number | null>(null);
+  const [menuPosition, setMenuPosition] = useState<{ x: number; y: number } | null>(null);
 
   // Measure container size - use layout effect to measure before paint
   useEffect(() => {
@@ -173,6 +189,8 @@ export function DataBrowser({ source, table, className, editable = false }: Data
     setSortColumn(null);
     setSortDirection("asc");
     setColumnOrder(null); // Reset column order to default
+    setMenuColumnIndex(null);
+    setMenuPosition(null);
   }, [source, table]);
 
   // Apply column order (for reordering) and build ordered columns list
@@ -185,17 +203,16 @@ export function DataBrowser({ source, table, className, editable = false }: Data
   }, [columns, columnOrder]);
 
   // Build columns for glide-data-grid with resize and reorder support
-  // Uses minimal sort indicators like Google Sheets
+  // Clean column headers with menu for sort/filter/subscribe
   const gridColumns = useMemo<GridColumn[]>(() => {
     return orderedColumns.map((col) => {
       const isSorted = sortColumn === col.name;
-      // Add subtle sort indicator to title (↑ or ↓)
       const sortIndicator = isSorted ? (sortDirection === "asc" ? " ↑" : " ↓") : "";
       return {
         id: col.name,
         title: col.name + sortIndicator,
         width: columnWidths.get(col.name) ?? getColumnWidth(col),
-        // No icon - cleaner look like Google Sheets
+        hasMenu: true, // Show menu dropdown (sort/filter/subscribe)
       };
     });
   }, [orderedColumns, columnWidths, sortColumn, sortDirection]);
@@ -494,29 +511,54 @@ export function DataBrowser({ source, table, className, editable = false }: Data
     [],
   );
 
-  // Handle header click for sorting
-  const onHeaderClicked = useCallback(
-    (col: number) => {
+  // Handle header menu click (for sort/filter dropdown)
+  const onHeaderMenuClick = useCallback(
+    (col: number, bounds: Rectangle) => {
       const columnName = columnNames[col];
       if (!columnName) return;
 
-      if (sortColumn === columnName) {
-        // Toggle direction or clear sort
-        if (sortDirection === "asc") {
-          setSortDirection("desc");
-        } else {
-          // Clear sort on third click
-          setSortColumn(null);
-          setSortDirection("asc");
-        }
-      } else {
-        // New column - sort ascending
-        setSortColumn(columnName);
-        setSortDirection("asc");
-      }
+      // Set menu position based on header bounds
+      setMenuColumnIndex(col);
+      setMenuPosition({
+        x: bounds.x + bounds.width - 10,
+        y: bounds.y + bounds.height,
+      });
     },
-    [columnNames, sortColumn, sortDirection],
+    [columnNames],
   );
+
+  // Close menu when clicking outside
+  const closeMenu = useCallback(() => {
+    setMenuColumnIndex(null);
+    setMenuPosition(null);
+  }, []);
+
+  // Sort handlers for menu
+  const handleSortAsc = useCallback(() => {
+    if (menuColumnIndex === null) return;
+    const columnName = columnNames[menuColumnIndex];
+    if (columnName) {
+      setSortColumn(columnName);
+      setSortDirection("asc");
+    }
+    closeMenu();
+  }, [menuColumnIndex, columnNames, closeMenu]);
+
+  const handleSortDesc = useCallback(() => {
+    if (menuColumnIndex === null) return;
+    const columnName = columnNames[menuColumnIndex];
+    if (columnName) {
+      setSortColumn(columnName);
+      setSortDirection("desc");
+    }
+    closeMenu();
+  }, [menuColumnIndex, columnNames, closeMenu]);
+
+  const handleClearSort = useCallback(() => {
+    setSortColumn(null);
+    setSortDirection("asc");
+    closeMenu();
+  }, [closeMenu]);
 
   // Handle column reordering via drag-and-drop
   const onColumnMoved = useCallback(
@@ -628,49 +670,126 @@ export function DataBrowser({ source, table, className, editable = false }: Data
             <CircleNotch weight="bold" className="h-6 w-6 animate-spin text-muted-foreground/50" />
           </div>
         ) : (
-          <DataEditor
-            key={`${source}/${table}`} // Force remount on table change (fixes ghost trails)
-            columns={gridColumns}
-            rows={totalRows}
-            getCellContent={getCellContent}
-            getCellsForSelection={true}
-            // Editing - double-click or Enter opens editor, Escape/Enter commits
-            onCellEdited={editable ? onCellEdited : undefined}
-            // Scrolling and visibility
-            onVisibleRegionChanged={onVisibleRegionChanged}
-            // Selection
-            gridSelection={gridSelection}
-            onGridSelectionChange={onGridSelectionChange}
-            rowSelectionMode="multi"
-            rangeSelect="rect" // Single rect like spreadsheets
-            columnSelect="single" // Click header to select column
-            // Column interactions
-            onColumnResize={onColumnResize}
-            onColumnMoved={onColumnMoved}
-            onHeaderClicked={onHeaderClicked}
-            // Smooth scrolling like Google Sheets
-            smoothScrollX
-            smoothScrollY
-            // Sizing
-            scaleToRem
-            width={containerSize.width}
-            height={containerSize.height}
-            rowHeight={28} // Compact like spreadsheets
-            headerHeight={32} // Slightly taller header
-            // Theme
-            theme={gridTheme}
-            // Row markers - minimal, just for selection
-            rowMarkers="clickable-number"
-            // Keyboard handling - Enter moves down after edit (like Excel)
-            keybindings={{
-              selectAll: true,
-              copy: true,
-              paste: true,
-              search: true,
-              downFill: true,
-              rightFill: true,
-            }}
-          />
+          <>
+            <DataEditor
+              key={`${source}/${table}`} // Force remount on table change (fixes ghost trails)
+              columns={gridColumns}
+              rows={totalRows}
+              getCellContent={getCellContent}
+              getCellsForSelection={true}
+              // Editing - double-click or Enter opens editor, Escape/Enter commits
+              onCellEdited={editable ? onCellEdited : undefined}
+              // Scrolling and visibility
+              onVisibleRegionChanged={onVisibleRegionChanged}
+              // Selection
+              gridSelection={gridSelection}
+              onGridSelectionChange={onGridSelectionChange}
+              rowSelectionMode="multi"
+              rangeSelect="rect" // Single rect like spreadsheets
+              columnSelect="single" // Click header to select column
+              // Column interactions
+              onColumnResize={onColumnResize}
+              onColumnMoved={onColumnMoved}
+              onHeaderMenuClick={onHeaderMenuClick}
+              // Smooth scrolling like Google Sheets
+              smoothScrollX
+              smoothScrollY
+              // Sizing
+              scaleToRem
+              width={containerSize.width}
+              height={containerSize.height}
+              rowHeight={28} // Compact like spreadsheets
+              headerHeight={32} // Slightly taller header
+              // Theme
+              theme={gridTheme}
+              // Row markers - minimal, just for selection
+              rowMarkers="clickable-number"
+            />
+            {/* Column header menu dropdown */}
+            {menuPosition && menuColumnIndex !== null && (
+              <div
+                className="fixed z-50"
+                style={{ left: menuPosition.x, top: menuPosition.y }}
+              >
+                <div
+                  className="absolute inset-0 fixed"
+                  onClick={closeMenu}
+                  onKeyDown={(e) => e.key === "Escape" && closeMenu()}
+                />
+                <div className="relative bg-popover border rounded-md shadow-lg py-1 min-w-[180px]">
+                  {/* Sort */}
+                  <div className="px-3 py-1.5">
+                    <div className="flex items-center gap-2 text-xs font-medium text-muted-foreground mb-1">
+                      <ArrowsDownUp weight="bold" className="h-3.5 w-3.5" />
+                      Sort
+                    </div>
+                    <div className="flex gap-1 ml-5">
+                      <button
+                        type="button"
+                        onClick={handleSortAsc}
+                        className={cn(
+                          "flex items-center gap-1 px-2 py-1 text-xs rounded hover:bg-accent",
+                          sortColumn === columnNames[menuColumnIndex] &&
+                            sortDirection === "asc" &&
+                            "bg-accent text-primary"
+                        )}
+                      >
+                        <ArrowUp weight="bold" className="h-3 w-3" />
+                        Asc
+                      </button>
+                      <button
+                        type="button"
+                        onClick={handleSortDesc}
+                        className={cn(
+                          "flex items-center gap-1 px-2 py-1 text-xs rounded hover:bg-accent",
+                          sortColumn === columnNames[menuColumnIndex] &&
+                            sortDirection === "desc" &&
+                            "bg-accent text-primary"
+                        )}
+                      >
+                        <ArrowDown weight="bold" className="h-3 w-3" />
+                        Desc
+                      </button>
+                      {sortColumn === columnNames[menuColumnIndex] && (
+                        <button
+                          type="button"
+                          onClick={handleClearSort}
+                          className="flex items-center gap-1 px-2 py-1 text-xs rounded hover:bg-accent text-muted-foreground"
+                        >
+                          <X weight="bold" className="h-3 w-3" />
+                        </button>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="border-t my-1" />
+
+                  {/* Filter */}
+                  <button
+                    type="button"
+                    onClick={closeMenu}
+                    className="w-full flex items-center gap-2 px-3 py-1.5 text-sm hover:bg-accent"
+                  >
+                    <Funnel weight="bold" className="h-4 w-4" />
+                    Filter
+                  </button>
+
+                  <div className="border-t my-1" />
+
+                  {/* Subscribe (ElectricSQL shape) */}
+                  <button
+                    type="button"
+                    onClick={closeMenu}
+                    className="w-full flex items-center gap-2 px-3 py-1.5 text-sm hover:bg-accent"
+                  >
+                    <Broadcast weight="fill" className="h-4 w-4 text-purple-500" />
+                    <span>Subscribe</span>
+                    <span className="ml-auto text-xs text-purple-500/70">shape</span>
+                  </button>
+                </div>
+              </div>
+            )}
+          </>
         )}
       </div>
     </div>

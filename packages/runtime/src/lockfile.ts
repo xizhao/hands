@@ -9,6 +9,7 @@
 
 import { existsSync, mkdirSync, unlinkSync } from "node:fs";
 import { dirname, join } from "node:path";
+import { killProcessOnPort } from "./ports.js";
 
 export interface RuntimeLock {
   pid: number;
@@ -174,28 +175,7 @@ export async function cleanupOrphanedProcesses(): Promise<{
   return { cleaned: true, orphanedLock: lock, killedPids };
 }
 
-/**
- * Kill any process listening on a port
- */
-async function killProcessOnPort(port: number): Promise<void> {
-  try {
-    const result = Bun.spawnSync(["lsof", "-ti", `:${port}`]);
-    const pids = new TextDecoder()
-      .decode(result.stdout)
-      .trim()
-      .split("\n")
-      .filter(Boolean)
-      .map((p) => parseInt(p, 10));
-
-    for (const pid of pids) {
-      if (pid === process.pid) continue;
-      console.log(`Killing process ${pid} on port ${port}`);
-      killProcess(pid, "SIGTERM");
-    }
-  } catch {
-    // lsof not available or failed
-  }
-}
+// killProcessOnPort is now imported from "./ports.js"
 
 /**
  * Acquire the runtime lock

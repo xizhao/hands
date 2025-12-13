@@ -45,6 +45,14 @@ export interface WorkbookManifest {
     path: string;
     spec?: string;
   }>;
+  actions?: Array<{
+    id: string;
+    name: string;
+    description?: string;
+    schedule?: string;
+    triggers: Array<"manual" | "webhook" | "schedule" | "pg_notify">;
+    path: string;
+  }>;
   tables?: string[];
   isEmpty: boolean;
 }

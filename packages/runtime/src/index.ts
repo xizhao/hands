@@ -21,16 +21,20 @@ import { join } from "node:path";
 import type { SourceDefinitionV2 } from "@hands/stdlib/sources";
 import { Hono } from "hono";
 import { cors } from "hono/cors";
-import { buildRSC } from "./build/rsc.js";
 import {
-  ensureStdlibSymlink,
-  ensureWorkbookStdlibSymlink,
-  getEditorSourcePath,
-} from "./config/index.js";
+  discoverActions,
+  initActionRunsTable,
+  registerWebhookRoutes,
+  startScheduler,
+  stopScheduler,
+} from "./actions/index.js";
+import { discoverSources } from "./sources/discovery.js";
+import { buildRSC } from "./build/rsc.js";
+import { getEditorSourcePath } from "./config/index.js";
 import type { BlockContext } from "./ctx.js";
 import { initWorkbookDb, type WorkbookDb } from "./db/index.js";
 import { createPgTypedRunner, type PgTypedRunner } from "./db/pgtyped/index.js";
-import { PORTS } from "./ports.js";
+import { PORTS, waitForPortFree } from "./ports.js";
 import { registerSourceRoutes } from "./sources/index.js";
 import { registerTRPCRoutes } from "./trpc/index.js";
 
@@ -81,6 +85,7 @@ const state: RuntimeState = {
 
 // Max restarts before giving up
 const MAX_EDITOR_RESTARTS = 3;
+
 
 /**
  * Format a block source file with Biome + TypeScript import organization
@@ -254,13 +259,43 @@ async function getManifest(workbookDir: string, workbookId: string) {
     } catch {}
   }
 
+  // Discover actions
+  const actionsDir = join(workbookDir, "actions");
+  const actions: Array<{
+    id: string;
+    name: string;
+    description?: string;
+    schedule?: string;
+    triggers: string[];
+    path: string;
+  }> = [];
+
+  if (existsSync(actionsDir)) {
+    try {
+      const discoveredActions = await discoverActions(workbookDir);
+      for (const action of discoveredActions) {
+        actions.push({
+          id: action.id,
+          name: action.definition.name,
+          description: action.definition.description,
+          schedule: action.definition.schedule,
+          triggers: action.definition.triggers ?? ["manual"],
+          path: action.path,
+        });
+      }
+    } catch (err) {
+      console.error("[manifest] Failed to discover actions:", err);
+    }
+  }
+
   return {
     workbookId,
     workbookDir,
     blocks,
     sources,
+    actions,
     config,
-    isEmpty: blocks.length === 0 && sources.length === 0,
+    isEmpty: blocks.length === 0 && sources.length === 0 && actions.length === 0,
   };
 }
 
@@ -569,8 +604,10 @@ function createApp(config: RuntimeConfig) {
     }
 
     try {
-      // Write the source
-      const { writeFileSync, mkdirSync, readFileSync } = await import("node:fs");
+      // Write the source with fsync to ensure it's flushed to disk
+      const { mkdirSync, readFileSync, openSync, writeSync, fsyncSync, closeSync } = await import(
+        "node:fs"
+      );
 
       // Ensure parent directories exist (for nested blocks like ui/email-events)
       const parentDir = filePath.substring(0, filePath.lastIndexOf("/"));
@@ -578,7 +615,12 @@ function createApp(config: RuntimeConfig) {
         mkdirSync(parentDir, { recursive: true });
       }
 
-      writeFileSync(filePath, source, "utf-8");
+      // Write with explicit fsync to guarantee file is flushed to disk
+      // This prevents race conditions where Vite reads before write completes
+      const fd = openSync(filePath, "w");
+      writeSync(fd, source, 0, "utf-8");
+      fsyncSync(fd);
+      closeSync(fd);
 
       // Auto-format after save (non-blocking, errors don't fail the save)
       await formatBlockSource(filePath, config.workbookDir);
@@ -889,7 +931,7 @@ function createApp(config: RuntimeConfig) {
     }
 
     try {
-      // Get columns for all tables
+      // Get columns for all public tables (excluding internal hands_admin tables)
       const result = await state.workbookDb.db.query(`
         SELECT
           t.table_name,
@@ -898,8 +940,11 @@ function createApp(config: RuntimeConfig) {
           c.is_nullable,
           c.column_default
         FROM information_schema.tables t
-        JOIN information_schema.columns c ON t.table_name = c.table_name
-        WHERE t.table_schema = 'public' AND t.table_type = 'BASE TABLE'
+        JOIN information_schema.columns c
+          ON t.table_name = c.table_name
+          AND t.table_schema = c.table_schema
+        WHERE t.table_schema = 'public'
+          AND t.table_type = 'BASE TABLE'
         ORDER BY t.table_name, c.ordinal_position
       `);
 
@@ -968,6 +1013,20 @@ function createApp(config: RuntimeConfig) {
     workbookDir: config.workbookDir,
     isDbReady: () => state.dbReady,
     getDb: () => state.workbookDb?.db ?? null,
+  });
+
+  // ============================================
+  // Action Webhook Routes
+  // ============================================
+  registerWebhookRoutes(app, {
+    workbookDir: config.workbookDir,
+    isDbReady: () => state.dbReady,
+    getDb: () => state.workbookDb?.db ?? null,
+    getSources: () => {
+      // Discover sources synchronously from cache or return empty
+      // The scheduler will have the latest sources
+      return [];
+    },
   });
 
   // ============================================
@@ -1433,6 +1492,10 @@ async function bootPGlite(workbookDir: string) {
     state.dbReady = true;
     console.log("[runtime] Database ready");
 
+    // Initialize action runs table
+    await initActionRunsTable(state.workbookDb.db);
+    console.log("[runtime] Action runs table initialized");
+
     // Initialize pgtyped runner for type-safe SQL queries
     state.pgTypedRunner = createPgTypedRunner(workbookDir, state.workbookDb.db);
 
@@ -1440,6 +1503,17 @@ async function bootPGlite(workbookDir: string) {
     state.pgTypedRunner.runAll().catch((err) => {
       console.warn("[runtime] Initial pgtyped generation failed:", err);
     });
+
+    // Start the action scheduler for cron-based actions
+    startScheduler({
+      workbookDir,
+      getDb: () => state.workbookDb?.db ?? null,
+      getSources: () => {
+        // Return empty array - actions can discover sources dynamically
+        return [];
+      },
+    });
+    console.log("[runtime] Action scheduler started");
   } catch (err) {
     console.error("[runtime] Database failed:", err);
   }
@@ -1493,15 +1567,21 @@ async function bootVite(config: RuntimeConfig) {
     if (!existsSync(nodeModules)) {
       console.log("[runtime] Installing dependencies...");
       await new Promise<void>((resolve, reject) => {
-        const proc = spawn("npm", ["install", "--legacy-peer-deps"], {
+        const proc = spawn("bun", ["install"], {
           cwd: handsDir,
           stdio: "inherit",
         });
         proc.on("close", (code) => {
           if (code === 0) resolve();
-          else reject(new Error(`npm install failed with code ${code}`));
+          else reject(new Error(`bun install failed with code ${code}`));
         });
       });
+    }
+
+    // Ensure Vite port is free before starting
+    const portFree = await waitForPortFree(vitePort, 3000, true);
+    if (!portFree) {
+      throw new Error(`Port ${vitePort} is still in use after cleanup attempt`);
     }
 
     // Start Vite
@@ -1589,6 +1669,12 @@ async function bootEditor(config: RuntimeConfig, isRestart = false) {
 
   const editorPort = PORTS.EDITOR;
   const editorPath = getEditorSourcePath();
+
+  // Ensure editor port is free before starting
+  const portFree = await waitForPortFree(editorPort, 3000, true);
+  if (!portFree) {
+    console.error(`[runtime] Editor port ${editorPort} is still in use after cleanup attempt`);
+  }
 
   if (!existsSync(editorPath)) {
     console.warn(`[runtime] Editor package not found at ${editorPath}, skipping editor server`);
@@ -1716,20 +1802,23 @@ async function bootEditor(config: RuntimeConfig, isRestart = false) {
 /**
  * Run the check command - diagnostics without starting server
  *
- * Usage: hands-runtime check <workbook-dir> [--json]
+ * Usage: hands-runtime check <workbook-dir> [--json] [--fix]
  */
 async function runCheck() {
   const args = process.argv.slice(2);
   // Remove 'check' command
   const restArgs = args.slice(1);
 
-  // Parse workbook dir (first positional arg or current directory)
+  // Parse args
   let workbookDir = process.cwd();
   let jsonOutput = false;
+  let autoFix = false;
 
   for (const arg of restArgs) {
     if (arg === "--json") {
       jsonOutput = true;
+    } else if (arg === "--fix") {
+      autoFix = true;
     } else if (!arg.startsWith("-")) {
       workbookDir = arg;
     }
@@ -1740,66 +1829,40 @@ async function runCheck() {
     workbookDir = join(process.cwd(), workbookDir);
   }
 
-  // Check workbook exists
-  if (!existsSync(workbookDir)) {
-    const result = {
-      success: false,
-      error: `Workbook directory not found: ${workbookDir}`,
-    };
-    if (jsonOutput) {
-      console.log(JSON.stringify(result, null, 2));
-    } else {
-      console.error(`Error: ${result.error}`);
-    }
-    process.exit(1);
-  }
-
-  // Check for hands.json
-  const handsJsonPath = join(workbookDir, "hands.json");
-  if (!existsSync(handsJsonPath)) {
-    const result = {
-      success: false,
-      error: `No hands.json found in ${workbookDir}`,
-    };
-    if (jsonOutput) {
-      console.log(JSON.stringify(result, null, 2));
-    } else {
-      console.error(`Error: ${result.error}`);
-    }
-    process.exit(1);
-  }
-
-  // Count blocks
-  const blocksDir = join(workbookDir, "blocks");
-  let blockCount = 0;
-  if (existsSync(blocksDir)) {
-    walkDirectory(blocksDir, blocksDir, (filePath) => {
-      const filename = filePath.split("/").pop() || "";
-      if ((filename.endsWith(".tsx") || filename.endsWith(".ts")) && !filename.startsWith("_")) {
-        blockCount++;
-      }
-    });
-  }
-
-  // Build result
-  const result = {
-    success: true,
+  // Use preflight system for all checks
+  const { runPreflight, printPreflightResults } = await import("./preflight.js");
+  const result = await runPreflight({
     workbookDir,
-    timestamp: Date.now(),
-    summary: {
-      blocks: blockCount,
-    },
-  };
+    autoFix,
+    verbose: !jsonOutput,
+  });
 
-  // Output
   if (jsonOutput) {
-    console.log(JSON.stringify(result, null, 2));
+    // JSON output for scripting
+    console.log(
+      JSON.stringify(
+        {
+          success: result.ok,
+          workbookDir,
+          duration: result.duration,
+          checks: result.checks.map((c) => ({
+            name: c.name,
+            ok: c.ok,
+            message: c.message,
+            required: c.required,
+            fixed: c.fixed ?? false,
+          })),
+        },
+        null,
+        2,
+      ),
+    );
   } else {
-    console.log("✓ Workbook structure valid");
-    console.log(`  ${blockCount} blocks available`);
+    // Human-readable output
+    printPreflightResults(result);
   }
 
-  process.exit(0);
+  process.exit(result.ok ? 0 : 1);
 }
 
 /**
@@ -1818,26 +1881,27 @@ async function main() {
 
   console.log(`[runtime] Starting workbook: ${workbookId}`);
 
-  // Ensure stdlib symlink exists at ~/.hands/stdlib
-  ensureStdlibSymlink();
+  // Run comprehensive preflight checks (validates environment, fixes issues)
+  const { runPreflight, printPreflightResults } = await import("./preflight.js");
+  const preflightResult = await runPreflight({
+    workbookDir,
+    port,
+    autoFix: true,
+    verbose: true,
+  });
 
-  // Repair workbook's node_modules/@hands/stdlib symlink if broken
-  ensureWorkbookStdlibSymlink(workbookDir);
-
-  // Preflight: Check for hands.json before starting anything
-  const handsJsonPath = join(workbookDir, "hands.json");
-  if (!existsSync(handsJsonPath)) {
-    console.error(`\n[runtime] ERROR: No hands.json found in ${workbookDir}`);
-    console.error(`[runtime] A hands.json file is required to run blocks.`);
-    console.error(`[runtime] Create one with minimal config:`);
-    console.error(`\n  {`);
-    console.error(`    "name": "${workbookId}",`);
-    console.error(`    "blocks": { "dir": "./blocks" }`);
-    console.error(`  }\n`);
+  if (!preflightResult.ok) {
+    printPreflightResults(preflightResult);
     process.exit(1);
   }
 
-  // 1. IMMEDIATELY start HTTP server using Node's http module with Hono
+  // Log any auto-fixed issues
+  const fixedChecks = preflightResult.checks.filter((c) => c.fixed);
+  if (fixedChecks.length > 0) {
+    console.log(`[runtime] Auto-fixed ${fixedChecks.length} issue(s)`);
+  }
+
+  // 1. Start HTTP server using Node's http module with Hono
   const app = createApp(config);
   const server = createServer(async (req, res) => {
     try {
@@ -1896,18 +1960,20 @@ async function main() {
     );
   });
 
-  // 2. Boot critical services in parallel (non-blocking)
+  // 3. Boot critical services in parallel (non-blocking)
   // All three are independent and can start simultaneously
   bootPGlite(workbookDir);
   bootVite(config);
   bootEditor(config);
 
-  // 3. Start file watcher for real-time manifest updates
+  // 4. Start file watcher for real-time manifest updates
   startFileWatcher(config);
 
   // Handle shutdown
   const shutdown = async () => {
     console.log("[runtime] Shutting down...");
+    // Stop the action scheduler
+    stopScheduler();
     // Close file watchers
     for (const watcher of state.fileWatchers) {
       watcher.close();

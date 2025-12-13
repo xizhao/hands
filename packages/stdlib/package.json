@@ -52,23 +52,23 @@
   },
   "exports": {
     ".": "./src/index.ts",
-    "./ui/*": "./src/registry/components/ui/*",
-    "./data/*": "./src/registry/components/data/*",
     "./charts/*": "./src/registry/components/charts/*",
+    "./data/*": "./src/registry/components/data/*",
     "./registry": "./src/registry/index.ts",
     "./registry/*": "./src/registry/*",
     "./registry/json": "./src/registry.json",
     "./server": "./src/server.ts",
     "./sources": "./src/sources/index.ts",
-    "./types": "./src/types/index.ts"
+    "./types": "./src/types/index.ts",
+    "./ui/*": "./src/registry/components/ui/*"
   },
   "hands": {
     "createdAt": 1765069644297,
     "description": null,
     "id": "stdlib",
-    "lastOpenedAt": 1765523552029,
+    "lastOpenedAt": 1765641919511,
     "name": "stdlib",
-    "updatedAt": 1765523552029
+    "updatedAt": 1765641919511
   },
   "main": "./src/index.ts",
   "name": "@hands/stdlib",

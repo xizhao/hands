@@ -6,8 +6,10 @@
  */
 
 import type { PGlite } from "@electric-sql/pglite";
+import { initTRPC } from "@trpc/server";
 import { fetchRequestHandler } from "@trpc/server/adapters/fetch";
 import type { Hono } from "hono";
+import { actionsRouter } from "../actions/trpc.js";
 import { sourcesRouter, type TRPCContext } from "../sources/trpc.js";
 
 export interface TRPCConfig {
@@ -15,6 +17,18 @@ export interface TRPCConfig {
   getDb: () => PGlite | null;
   isDbReady: () => boolean;
 }
+
+// Create a merged router that includes both sources and actions
+const t = initTRPC.context<TRPCContext>().create();
+
+const appRouter = t.router({
+  // Sources routes (tables, subscriptions, etc.)
+  sources: sourcesRouter,
+  // Actions routes (list, run, history)
+  actions: actionsRouter,
+});
+
+export type AppRouter = typeof appRouter;
 
 /**
  * Register tRPC routes on a Hono app
@@ -37,7 +51,7 @@ export function registerTRPCRoutes(app: Hono, config: TRPCConfig) {
     const response = await fetchRequestHandler({
       endpoint: "/trpc",
       req: c.req.raw,
-      router: sourcesRouter,
+      router: appRouter,
       createContext: () => ctx,
     });
 
@@ -45,5 +59,6 @@ export function registerTRPCRoutes(app: Hono, config: TRPCConfig) {
   });
 }
 
-// Re-export router type for client usage
+// Re-export router types for client usage
 export type { SourcesRouter } from "../sources/trpc.js";
+export type { ActionsRouter } from "../actions/trpc.js";

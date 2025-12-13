@@ -137,8 +137,8 @@ export function useEditorSource({
       // Update local state immediately for fast feedback
       setSourceState(newSource);
 
-      // Increment version to trigger RSC re-render
-      setVersion((v) => v + 1);
+      // NOTE: Don't increment version here - wait for server to confirm
+      // Otherwise RSC refetch reads old file before PUT completes
 
       try {
         const res = await fetch(
@@ -153,6 +153,8 @@ export function useEditorSource({
         if (res.ok) {
           // Only update confirmed source AFTER server confirms
           confirmedServerSource.current = newSource;
+          // NOW trigger RSC re-render - file is written
+          setVersion((v) => v + 1);
           console.log("[useEditorSource] Saved successfully");
           return true;
         }

@@ -13,16 +13,21 @@
 
 import {
   ArrowsClockwise,
+  ArrowSquareOut,
   CaretLeft,
   CaretRight,
   CircleNotch,
+  Clock,
   Code,
   Copy,
   Database,
   Folder,
   FolderOpen,
+  Globe,
   Key,
   Newspaper,
+  Play,
+  Table,
   Trash,
   Warning,
 } from "@phosphor-icons/react";
@@ -114,24 +119,137 @@ function SourceItemIcon({ className, empty }: { className?: string; empty?: bool
   );
 }
 
-function DataIcon({ className, empty }: { className?: string; empty?: boolean }) {
+function DataIcon({
+  className,
+  empty,
+  colored = true,
+}: { className?: string; empty?: boolean; colored?: boolean }) {
   return (
-    <span
+    <Table
+      weight="duotone"
       className={cn(
+        "h-4 w-4",
         listItemIconStyles,
-        empty ? "opacity-50" : "group-hover:text-purple-400",
+        empty
+          ? "opacity-50"
+          : colored
+            ? "text-purple-400"
+            : "text-muted-foreground group-hover:text-foreground",
         className,
       )}
-    >
-      &#x25CF;
-    </span>
+    />
   );
 }
 
-// Reusable dropdown for item actions (copy, delete)
+function ActionIcon({ className, empty }: { className?: string; empty?: boolean }) {
+  return (
+    <Play
+      weight="fill"
+      className={cn(
+        "h-4 w-4",
+        listItemIconStyles,
+        empty ? "opacity-50" : "text-green-500",
+        className,
+      )}
+    />
+  );
+}
+
+// Action list item with run functionality
+interface ActionListItemProps {
+  action: {
+    id: string;
+    name: string;
+    schedule?: string;
+    triggers: string[];
+  };
+  onSelect: () => void;
+  runtimePort: number | null;
+}
+
+function ActionListItem({ action, onSelect, runtimePort }: ActionListItemProps) {
+  const [isRunning, setIsRunning] = useState(false);
+
+  const handleRun = async (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!runtimePort || isRunning) return;
+
+    setIsRunning(true);
+    try {
+      const res = await fetch(`http://localhost:${runtimePort}/trpc/actions.run`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: action.id }),
+      });
+      if (!res.ok) {
+        console.error("[sidebar] Failed to run action:", await res.text());
+      } else {
+        console.log("[sidebar] Action started:", action.id);
+      }
+    } catch (err) {
+      console.error("[sidebar] Error running action:", err);
+    } finally {
+      setIsRunning(false);
+    }
+  };
+
+  return (
+    <div className={listItemStyles}>
+      <ActionIcon />
+      <button onClick={onSelect} className="flex-1 truncate text-left hover:underline">
+        {action.name}
+      </button>
+      {/* Trigger indicators */}
+      <div className="flex items-center gap-0.5">
+        {action.schedule && (
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <span className="text-muted-foreground/60">
+                <Clock weight="duotone" className="h-3 w-3" />
+              </span>
+            </TooltipTrigger>
+            <TooltipContent side="top">Schedule: {action.schedule}</TooltipContent>
+          </Tooltip>
+        )}
+        {action.triggers.includes("webhook") && (
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <span className="text-muted-foreground/60">
+                <Globe weight="duotone" className="h-3 w-3" />
+              </span>
+            </TooltipTrigger>
+            <TooltipContent side="top">Webhook trigger</TooltipContent>
+          </Tooltip>
+        )}
+      </div>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <button
+            onClick={handleRun}
+            disabled={isRunning || !runtimePort}
+            className={cn(
+              "p-0.5 rounded opacity-0 group-hover:opacity-100 hover:bg-accent transition-all",
+              (isRunning || !runtimePort) && "opacity-50 cursor-not-allowed",
+            )}
+          >
+            {isRunning ? (
+              <CircleNotch weight="bold" className="h-3.5 w-3.5 animate-spin text-green-500" />
+            ) : (
+              <Play weight="fill" className="h-3.5 w-3.5 text-green-500" />
+            )}
+          </button>
+        </TooltipTrigger>
+        <TooltipContent side="top">Run now</TooltipContent>
+      </Tooltip>
+    </div>
+  );
+}
+
+// Reusable dropdown for item actions (copy, delete, convert to source)
 interface ItemActionsProps {
   onCopy?: () => void;
   onDelete?: () => void;
+  onConvertToSource?: () => void;
   copyLabel?: string;
   deleteLabel?: string;
   onOpenChange?: (open: boolean) => void;
@@ -140,6 +258,7 @@ interface ItemActionsProps {
 function ItemActions({
   onCopy,
   onDelete,
+  onConvertToSource,
   copyLabel = "Duplicate",
   deleteLabel = "Delete",
   onOpenChange,
@@ -154,7 +273,19 @@ function ItemActions({
           <MoreHorizontal className="h-3.5 w-3.5" />
         </button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" className="w-32">
+      <DropdownMenuContent align="end" className="w-40">
+        {onConvertToSource && (
+          <DropdownMenuItem
+            onClick={(e) => {
+              e.stopPropagation();
+              onConvertToSource();
+            }}
+          >
+            <ArrowSquareOut weight="duotone" className="h-3.5 w-3.5 mr-2" />
+            Convert to Source
+          </DropdownMenuItem>
+        )}
+        {onConvertToSource && (onCopy || onDelete) && <DropdownMenuSeparator />}
         {onCopy && (
           <DropdownMenuItem
             onClick={(e) => {
@@ -219,7 +350,6 @@ export function NotebookSidebar({
   const [dataExpanded, setDataExpanded] = useState(true);
   const [expandedDirs, setExpandedDirs] = useState<Set<string>>(new Set()); // Track expanded directories
   const [expandedSources, setExpandedSources] = useState<Set<string>>(new Set()); // Track expanded sources
-  const [unassociatedExpanded, setUnassociatedExpanded] = useState(true); // Track unassociated tables folder
 
   // Toggle directory expansion
   const toggleDir = useCallback((dir: string) => {
@@ -448,6 +578,30 @@ export function NotebookSidebar({
     [runtimePort, navigate],
   );
 
+  const handleConvertToSource = useCallback(
+    async (tableName: string) => {
+      if (!runtimePort) return;
+      try {
+        const res = await fetch(
+          `http://localhost:${runtimePort}/workbook/sources/from-table/${tableName}`,
+          {
+            method: "POST",
+          },
+        );
+        if (!res.ok) throw new Error("Failed to convert table to source");
+        const data = await res.json();
+        console.log("[sidebar] converted table to source:", tableName, data);
+        // Navigate to the new source
+        if (data.id) {
+          navigate({ to: "/sources/$sourceId", params: { sourceId: data.id } });
+        }
+      } catch (err) {
+        console.error("[sidebar] failed to convert table to source:", err);
+      }
+    },
+    [runtimePort, navigate],
+  );
+
   if (collapsed) {
     return (
       <TooltipProvider delayDuration={0}>
@@ -497,15 +651,15 @@ export function NotebookSidebar({
                   </TooltipContent>
                 </Tooltip>
               ))}
-              {/* Show unassociated tables */}
+              {/* Show unassigned tables (muted icon) */}
               {unassociatedTables.slice(0, sources.length > 0 ? 1 : 3).map((tableName) => (
                 <Tooltip key={tableName}>
                   <TooltipTrigger asChild>
                     <button
                       onClick={() => handleTableClick(tableName)}
-                      className="w-full flex items-center justify-center p-1.5 text-muted-foreground hover:text-purple-400 transition-all"
+                      className="w-full flex items-center justify-center p-1.5 text-muted-foreground hover:text-foreground transition-all"
                     >
-                      <span className="text-sm">&#x25CF;</span>
+                      <Table weight="duotone" className="h-4 w-4" />
                     </button>
                   </TooltipTrigger>
                   <TooltipContent side="right">
@@ -520,6 +674,20 @@ export function NotebookSidebar({
               )}
             </div>
           )}
+
+          {/* Actions section - collapsed */}
+          <div className="space-y-0.5 pt-2 border-t border-border/50">
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <button className="w-full flex items-center justify-center p-1.5 text-muted-foreground/50 transition-all cursor-default">
+                  <Play weight="fill" className="h-4 w-4 text-green-500/50" />
+                </button>
+              </TooltipTrigger>
+              <TooltipContent side="right">
+                <p>No actions</p>
+              </TooltipContent>
+            </Tooltip>
+          </div>
         </div>
       </TooltipProvider>
     );
@@ -844,54 +1012,6 @@ export function NotebookSidebar({
                   </div>
                 ) : (
                   <>
-                    {/* Unassociated Tables folder */}
-                    {unassociatedTables.length > 0 && (
-                      <div>
-                        <button
-                          onClick={() => setUnassociatedExpanded(!unassociatedExpanded)}
-                          className={cn(listItemStyles, "group")}
-                        >
-                          {unassociatedExpanded ? (
-                            <FolderOpen
-                              weight="duotone"
-                              className="h-4 w-4 shrink-0 text-purple-400"
-                            />
-                          ) : (
-                            <Folder weight="duotone" className="h-4 w-4 shrink-0 text-purple-400" />
-                          )}
-                          <span className="flex-1 truncate text-left">Unassociated Tables</span>
-                          <span className="text-xs text-muted-foreground/60">
-                            {unassociatedTables.length}
-                          </span>
-                        </button>
-                        {unassociatedExpanded && (
-                          <div className="ml-4 border-l border-border/50 pl-2">
-                            {(searchQuery
-                              ? unassociatedTables.filter((t) =>
-                                  t.toLowerCase().includes(searchQuery.toLowerCase()),
-                                )
-                              : unassociatedTables
-                            ).map((tableName) => (
-                              <div key={tableName} className={listItemStyles}>
-                                <DataIcon />
-                                <button
-                                  onClick={() => handleTableClick(tableName)}
-                                  className="flex-1 truncate text-left hover:underline"
-                                >
-                                  {tableName}
-                                </button>
-                                <ItemActions
-                                  onDelete={() => handleDeleteTable(tableName)}
-                                  deleteLabel="Drop table"
-                                  onOpenChange={onMenuOpenChange}
-                                />
-                              </div>
-                            ))}
-                          </div>
-                        )}
-                      </div>
-                    )}
-
                     {/* Sources with their tables */}
                     {sources.length > 0 ? (
                       sources.map((source) => {
@@ -983,14 +1103,79 @@ export function NotebookSidebar({
                           </div>
                         );
                       })
-                    ) : unassociatedTables.length === 0 ? (
+                    ) : null}
+
+                    {/* Unassigned tables (flat list, no folder) */}
+                    {(searchQuery
+                      ? unassociatedTables.filter((t) =>
+                          t.toLowerCase().includes(searchQuery.toLowerCase()),
+                        )
+                      : unassociatedTables
+                    ).map((tableName) => (
+                      <div key={tableName} className={listItemStyles}>
+                        <DataIcon colored={false} />
+                        <button
+                          onClick={() => handleTableClick(tableName)}
+                          className="flex-1 truncate text-left hover:underline"
+                        >
+                          {tableName}
+                        </button>
+                        <ItemActions
+                          onConvertToSource={() => handleConvertToSource(tableName)}
+                          onDelete={() => handleDeleteTable(tableName)}
+                          deleteLabel="Drop table"
+                          onOpenChange={onMenuOpenChange}
+                        />
+                      </div>
+                    ))}
+
+                    {/* Empty state */}
+                    {sources.length === 0 && unassociatedTables.length === 0 && (
                       <div className={emptyStateStyles}>
                         <DataIcon empty />
                         <span>No data</span>
                       </div>
-                    ) : null}
+                    )}
                   </>
                 )}
+              </div>
+            )}
+          </div>
+
+          {/* Actions Section */}
+          <div className="space-y-1">
+            <div className="flex items-center justify-between">
+              <span className="flex items-center gap-1 text-[10px] font-medium text-muted-foreground/80 uppercase tracking-wider">
+                <ActionIcon className="h-3 w-3" />
+                Actions
+              </span>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <button
+                    className="p-0.5 text-muted-foreground/60 hover:text-muted-foreground transition-colors"
+                    title="New action"
+                  >
+                    <Plus className="h-3 w-3" />
+                  </button>
+                </TooltipTrigger>
+                <TooltipContent side="right">New action</TooltipContent>
+              </Tooltip>
+            </div>
+            {(manifest?.actions ?? []).length > 0 ? (
+              <div className="space-y-0">
+                {(manifest?.actions ?? []).map((action) => (
+                  <ActionListItem
+                    key={action.id}
+                    action={action}
+                    onSelect={() => navigate({ to: "/actions/$actionId", params: { actionId: action.id } })}
+                    runtimePort={runtimePort}
+                  />
+                ))}
+              </div>
+            ) : (
+              <div className={emptyStateStyles}>
+                <ActionIcon empty />
+                <span>No actions</span>
               </div>
             )}
           </div>

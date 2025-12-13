@@ -476,10 +476,32 @@ function findJsxInExpression(node: any): OxcJSXElement | OxcJSXFragment | null {
 function findJsxReturn(
   program: any,
 ): { node: OxcJSXElement | OxcJSXFragment; loc: SourceLocation } | null {
+  // Build a map of variable declarations for lookup
+  const declarations = new Map<string, any>();
+  for (const statement of program.body) {
+    if (statement.type === "VariableDeclaration") {
+      for (const decl of statement.declarations) {
+        if (decl.id?.type === "Identifier" && decl.init) {
+          declarations.set(decl.id.name, decl.init);
+        }
+      }
+    }
+  }
+
   // Walk the AST to find export default with JSX return
   for (const statement of program.body) {
     if (statement.type === "ExportDefaultDeclaration") {
-      const jsx = findJsxInExpression(statement.declaration);
+      let declaration = statement.declaration;
+
+      // If export default is an identifier, look up the variable
+      if (declaration.type === "Identifier") {
+        const varInit = declarations.get(declaration.name);
+        if (varInit) {
+          declaration = varInit;
+        }
+      }
+
+      const jsx = findJsxInExpression(declaration);
       if (jsx) {
         return {
           node: jsx,

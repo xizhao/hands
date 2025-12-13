@@ -63,10 +63,11 @@ export function EditorSandbox({ blockId, className, readOnly = false }: EditorSa
   // Runtime port for the editor to connect to
   const { port: runtimePort } = useRuntimeState();
 
-  // Editor runs on runtime port + 400 (e.g., 55000 -> 55400)
-  const editorPort = runtimePort ? runtimePort + 400 : null;
+  // Actual ports from runtime status (populated by polling)
+  const [editorPort, setEditorPort] = useState<number | null>(null);
+  const [workerPort, setWorkerPort] = useState<number | null>(null);
 
-  // Poll runtime to check if editor is ready before loading iframe
+  // Poll runtime to check if editor is ready and get actual ports
   useEffect(() => {
     if (!runtimePort || editorReady) return;
 
@@ -83,7 +84,10 @@ export function EditorSandbox({ blockId, className, readOnly = false }: EditorSa
           });
           if (res.ok) {
             const data = await res.json();
-            if (data.services?.editor?.ready) {
+            if (data.services?.editor?.ready && data.services?.vite?.ready) {
+              // Get actual ports from status
+              setEditorPort(data.services.editor.port);
+              setWorkerPort(data.services.vite.port);
               setEditorReady(true);
               setState("loading");
               return;
@@ -110,10 +114,16 @@ export function EditorSandbox({ blockId, className, readOnly = false }: EditorSa
 
   // Build iframe URL - load directly from editor Vite for proper module resolution
   // Vite needs to serve its own assets (/@vite, /src, /@react-refresh, etc.)
-  const iframeSrc =
-    editorPort && editorReady
-      ? `http://localhost:${editorPort}/sandbox.html?blockId=${encodeURIComponent(blockId)}&runtimePort=${runtimePort}&readOnly=${readOnly}`
-      : null;
+  const iframeSrc = (() => {
+    if (!editorPort || !editorReady || !runtimePort || !workerPort) return null;
+    const params = new URLSearchParams({
+      blockId,
+      runtimePort: String(runtimePort),
+      workerPort: String(workerPort),
+    });
+    if (readOnly) params.set("readOnly", "true");
+    return `http://localhost:${editorPort}/sandbox.html?${params}`;
+  })();
 
   // Generate CSS to inject into iframe - copy ALL CSS variables
   const generateStyles = useCallback(() => {

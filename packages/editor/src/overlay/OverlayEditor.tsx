@@ -235,6 +235,7 @@ function OverlayEditorInner({
   }, [source, parseResult.root]);
 
   // Fetch RSC when source/version changes
+  // IMPORTANT: version is included in deps to trigger refetch after mutations
   useEffect(() => {
     let mounted = true;
 
@@ -244,7 +245,13 @@ function OverlayEditorInner({
 
       try {
         await initFlightClient();
-        const result = await renderBlockViaRsc(workerPort, blockId, { edit: "true" });
+        // Pass _ts (cache-busting timestamp) when version > 0 (after mutations)
+        // This tells the worker to use dynamic imports instead of static registry
+        const props: Record<string, unknown> = { edit: "true" };
+        if (version > 0) {
+          props._ts = Date.now().toString();
+        }
+        const result = await renderBlockViaRsc(workerPort, blockId, props);
 
         if (!mounted) return;
 
@@ -265,7 +272,7 @@ function OverlayEditorInner({
     return () => {
       mounted = false;
     };
-  }, [blockId, workerPort]);
+  }, [blockId, workerPort, version]);
 
   // Cache rendered HTML after RSC settles
   useEffect(() => {
@@ -281,14 +288,25 @@ function OverlayEditorInner({
 
   // Inject node IDs after RSC renders
   useEffect(() => {
+    console.log("[OverlayEditor] Node injection check:", {
+      isLoading,
+      hasContainer: !!containerRef.current,
+      hasParseRoot: !!parseResult.root,
+      parseErrors: parseResult.errors,
+      sourceLength: source?.length,
+      sourcePreview: source?.slice(0, 200),
+    });
+
     if (isLoading || !containerRef.current || !parseResult.root) return;
 
     const timeout = setTimeout(() => {
+      console.log("[OverlayEditor] Injecting node IDs, root:", parseResult.root);
       injectNodeIdsIntoDom(containerRef.current!, parseResult.root!);
+      console.log("[OverlayEditor] After injection, nodeIds:", getAllNodeIds(containerRef.current!));
     }, 50);
 
     return () => clearTimeout(timeout);
-  }, [isLoading, parseResult.root, containerRef]);
+  }, [isLoading, parseResult.root, containerRef, source]);
 
   // Apply operation with history
   const applyOperation = useCallback(
@@ -402,9 +420,10 @@ function OverlayEditorInner({
 
   const handleTextEdit = useCallback(
     (nodeId: string, text: string) => {
+      console.log("[OverlayEditor] handleTextEdit:", { nodeId, text, sourceLength: source.length });
       applyOperation({ type: "set-text", nodeId, text });
     },
-    [applyOperation],
+    [applyOperation, source],
   );
 
   // Text elements that support inline editing (Linear-style: click to edit)

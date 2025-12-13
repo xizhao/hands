@@ -229,6 +229,15 @@ const app = new Hono<{ Bindings: Bindings; Variables: Variables }>();
 // CORS
 app.use("/*", cors());
 
+// Request logging
+app.use("/*", async (c, next) => {
+  const start = Date.now();
+  console.log(\`[worker] → \${c.req.method} \${c.req.path}\`);
+  await next();
+  const ms = Date.now() - start;
+  console.log(\`[worker] ← \${c.req.method} \${c.req.path} \${c.res.status} (\${ms}ms)\`);
+});
+
 // Initialize context
 // Runtime port defaults to 55000 (PORTS.RUNTIME) for local dev
 // In production, this would come from wrangler bindings
@@ -277,17 +286,52 @@ app.get("/blocks", (c) => {
 // Use :blockId{.+} for multi-segment path matching (e.g., "charts/bar-chart")
 app.get("/blocks/:blockId{.+}", async (c) => {
   const blockId = c.req.param("blockId");
-  const Block = BLOCKS[blockId];
+
+  // Check if this is an editor request that needs fresh content
+  // Editor passes ?_ts=timestamp to bust the module cache
+  const url = new URL(c.req.url);
+  const cacheBust = url.searchParams.get("_ts");
+
+  let Block: React.FC<any> | undefined;
+
+  if (cacheBust) {
+    // Dynamic import with cache-busting for editor requests
+    // This bypasses the static BLOCKS registry to get fresh content
+    // Note: "use client" components may not work correctly with dynamic imports
+    // but for editor preview this is acceptable - we just need to see the changes
+    const blocksDir = "${blocksDir}";
+    const blockPath = join(c.get("workbookDir"), blocksDir, blockId);
+
+    try {
+      // Try .tsx first, then .ts
+      let modulePath = \`\${blockPath}.tsx?t=\${cacheBust}\`;
+      try {
+        const mod = await import(modulePath);
+        Block = mod.default;
+      } catch {
+        modulePath = \`\${blockPath}.ts?t=\${cacheBust}\`;
+        const mod = await import(modulePath);
+        Block = mod.default;
+      }
+    } catch (err) {
+      console.error(\`[worker] Dynamic import failed for \${blockId}:\`, err);
+      // Fall back to static registry
+      Block = BLOCKS[blockId];
+    }
+  } else {
+    // Normal request - use static registry (fast, supports "use client")
+    Block = BLOCKS[blockId];
+  }
 
   if (!Block) {
     return c.json({ error: \`Block not found: \${blockId}\` }, 404);
   }
 
-  const url = new URL(c.req.url);
   const props = Object.fromEntries(url.searchParams);
 
-  // Remove edit param from props passed to component
+  // Remove internal params from props passed to component
   delete props.edit;
+  delete props._ts;
 
   const db = c.get("db");
   const ctx = {

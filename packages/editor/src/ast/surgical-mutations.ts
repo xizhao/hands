@@ -147,6 +147,8 @@ function applySetText(
   text: string,
 ): string | null {
   const node = getNodeById(root, nodeId);
+  console.log("[surgical] applySetText:", { nodeId, text, node: node ? { tagName: node.tagName, isText: node.isText, childrenLoc: node.childrenLoc, loc: node.loc } : null });
+
   if (!node) {
     console.error(`[surgical] Node not found: ${nodeId}`);
     return null;
@@ -154,11 +156,13 @@ function applySetText(
 
   if (node.isText) {
     // Replace text content directly
+    console.log("[surgical] Replacing text node content");
     return applyTextEdit(source, node.loc.start, node.loc.end, text);
   }
 
   // For elements, replace children area with text
   if (node.childrenLoc) {
+    console.log("[surgical] Replacing element children area:", node.childrenLoc);
     return applyTextEdit(source, node.childrenLoc.start, node.childrenLoc.end, text);
   }
 

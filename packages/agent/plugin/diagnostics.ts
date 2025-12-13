@@ -8,7 +8,7 @@ import type { Plugin } from "@opencode-ai/plugin";
 const plugin: Plugin = async ({ directory }) => {
   return {
     tool: {
-      "hands.diagnostics": {
+      "hands_diagnostics": {
         description:
           "Get diagnostics information about the Hands runtime and workbook. " +
           "Returns system status including database connection, worker state, and available sources.",

@@ -1,5 +1,21 @@
 // Core types
 
+// Action utilities
+export {
+  type ActionContext,
+  type ActionDefinition,
+  type ActionLogger,
+  type ActionNotify,
+  type ActionRun,
+  type ActionRunMeta,
+  type ActionRunStatus,
+  type ActionTrigger,
+  type ActionTriggerType,
+  defineAction,
+  type DiscoveredAction,
+  type SelectOptions,
+  type TableClient,
+} from "./actions/index.js";
 // Component types
 export type {
   BarChartProps,
