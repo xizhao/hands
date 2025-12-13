@@ -287,46 +287,37 @@ app.get("/blocks", (c) => {
 app.get("/blocks/:blockId{.+}", async (c) => {
   const blockId = c.req.param("blockId");
 
-  // Check if this is an editor request that needs fresh content
-  // Editor passes ?_ts=timestamp to bust the module cache
-  const url = new URL(c.req.url);
-  const cacheBust = url.searchParams.get("_ts");
+  // ============================================================================
+  // ARCHITECTURE NOTE: Why Static Imports Can't Be Dynamically Invalidated
+  // ============================================================================
+  //
+  // We use static BLOCKS registry here (not dynamic imports) because:
+  //
+  // 1. Vite's SSR module runner doesn't support dynamic imports with variables
+  //    (throws "cannot be analyzed" warnings and crashes with pre-bundle errors)
+  //
+  // 2. The static imports are processed once at Vite startup. File changes trigger
+  //    Vite's HMR which updates the modules, but there's a race condition between
+  //    file write and HMR propagation.
+  //
+  // 3. For now, the editor shows a loading state during mutations and refetches
+  //    after the PUT succeeds. If the HMR hasn't propagated yet, users may need
+  //    to wait or refresh. This is a known limitation.
+  //
+  // Future options to fix this properly:
+  // - Use Vite's server.moduleGraph.invalidateModule() API
+  // - Add a /invalidate endpoint that the runtime calls after file writes
+  // - Switch to a non-RSC rendering path for editor preview
+  //
+  // ============================================================================
 
-  let Block: React.FC<any> | undefined;
-
-  if (cacheBust) {
-    // Dynamic import with cache-busting for editor requests
-    // This bypasses the static BLOCKS registry to get fresh content
-    // Note: "use client" components may not work correctly with dynamic imports
-    // but for editor preview this is acceptable - we just need to see the changes
-    const blocksDir = "${blocksDir}";
-    const blockPath = join(c.get("workbookDir"), blocksDir, blockId);
-
-    try {
-      // Try .tsx first, then .ts
-      let modulePath = \`\${blockPath}.tsx?t=\${cacheBust}\`;
-      try {
-        const mod = await import(modulePath);
-        Block = mod.default;
-      } catch {
-        modulePath = \`\${blockPath}.ts?t=\${cacheBust}\`;
-        const mod = await import(modulePath);
-        Block = mod.default;
-      }
-    } catch (err) {
-      console.error(\`[worker] Dynamic import failed for \${blockId}:\`, err);
-      // Fall back to static registry
-      Block = BLOCKS[blockId];
-    }
-  } else {
-    // Normal request - use static registry (fast, supports "use client")
-    Block = BLOCKS[blockId];
-  }
+  const Block = BLOCKS[blockId];
 
   if (!Block) {
     return c.json({ error: \`Block not found: \${blockId}\` }, 404);
   }
 
+  const url = new URL(c.req.url);
   const props = Object.fromEntries(url.searchParams);
 
   // Remove internal params from props passed to component

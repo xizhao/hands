@@ -323,8 +323,10 @@ export default defineConfig({
     redwood(),
   ],
   optimizeDeps: {
-    // Exclude React from pre-bundling - plugin provides virtual modules
-    exclude: ["bun", ...REACT_EXTERNALS],
+    // Disable pre-bundling in dev - avoids "new version of pre-bundle" race conditions
+    // in SSR module runner. Slower cold start but more reliable.
+    noDiscovery: true,
+    include: [],
   },
   build: {
     rollupOptions: {

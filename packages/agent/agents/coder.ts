@@ -6,7 +6,11 @@
  */
 
 import type { AgentConfig } from "@opencode-ai/sdk";
-import { BLOCK_ANTI_PATTERNS, BLOCK_API_DOCS, BLOCK_CONTEXT_DOCS } from "../docs/stdlib.js";
+import {
+  BLOCK_ANTI_PATTERNS,
+  BLOCK_API_DOCS,
+  BLOCK_CONTEXT_DOCS,
+} from "../docs/stdlib.js";
 
 const CODER_PROMPT = `You are the technical implementation specialist for Hands. You create blocks (TSX) and pages (MDX) when delegated by the primary agent.
 
@@ -139,6 +143,7 @@ Keep responses concise - the primary agent will communicate with the user.`;
 export const coderAgent: AgentConfig = {
   description: "Technical specialist for creating blocks (TSX) and pages (MDX)",
   mode: "subagent",
+  model: "anthropic/claude-opus-4-5-20251101",
   prompt: CODER_PROMPT,
   tools: {
     // Files

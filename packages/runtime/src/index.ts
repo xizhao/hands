@@ -1624,6 +1624,18 @@ async function bootVite(config: RuntimeConfig) {
         state.viteReady = false;
         state.viteError = stderrBuffer || `Vite exited with code ${code}`;
         state.viteProc = null;
+
+        // Clear Vite cache on crash - often fixes pre-bundle errors
+        const viteCacheDir = join(handsDir, "node_modules", ".vite");
+        if (existsSync(viteCacheDir)) {
+          console.log("[runtime] Clearing Vite cache after crash...");
+          try {
+            const { rmSync } = require("node:fs");
+            rmSync(viteCacheDir, { recursive: true, force: true });
+          } catch (err) {
+            console.warn("[runtime] Failed to clear Vite cache:", err);
+          }
+        }
       }
     });
 

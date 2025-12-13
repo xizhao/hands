@@ -200,6 +200,7 @@ Always report:
 export const importAgent: AgentConfig = {
   description: "Data ingestion specialist - gets files into the database",
   mode: "subagent",
+  model: "anthropic/claude-haiku-4-5",
   temperature: 0.1,
   prompt: IMPORT_PROMPT,
   permission: {
