@@ -29,24 +29,17 @@ Use this after creating or modifying a block to verify it works end-to-end.`,
     blockId: tool.schema
       .string()
       .describe("The block ID to test (e.g., 'revenue-chart' or 'charts/bar-chart')"),
-    props: tool.schema
-      .record(tool.schema.string())
-      .optional()
-      .describe("Optional props to pass to the block as query params"),
   },
 
   async execute(args, _ctx) {
-    const { blockId, props = {} } = args;
+    const { blockId } = args;
 
-    // Build URL with optional props as query params
+    // Build URL
     const port = process.env.HANDS_RUNTIME_PORT || DEFAULT_RUNTIME_PORT;
-    const url = new URL(`http://localhost:${port}/blocks/${blockId}`);
-    for (const [key, value] of Object.entries(props)) {
-      url.searchParams.set(key, String(value));
-    }
+    const url = `http://localhost:${port}/blocks/${blockId}`;
 
     try {
-      const response = await fetch(url.toString(), {
+      const response = await fetch(url, {
         method: "GET",
         headers: {
           Accept: "text/x-component, application/json",

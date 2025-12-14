@@ -60,7 +60,7 @@
     "./charts/*": "./src/registry/components/charts/*",
     "./data/*": "./src/registry/components/data/*",
     "./maps/*": "./src/registry/components/maps/*",
-    "./registry": "./src/registry.generated.ts",
+    "./registry": "./src/registry/index.ts",
     "./previews": "./src/previews.generated.tsx",
     "./ui/*": "./src/registry/components/ui/*",
     "./server": "./src/server.ts",
