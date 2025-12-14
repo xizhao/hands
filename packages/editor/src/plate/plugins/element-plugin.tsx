@@ -29,6 +29,7 @@ import type { RenderElementProps } from "slate-react";
 import { cn } from "../../lib/utils";
 // RSC context for portaling in rendered content
 import { useRscBlock } from "../../rsc/context";
+import { BlockSkeleton } from "../../rsc/skeleton-generator";
 import { Button as UIButton } from "../ui/button";
 
 // NOTE: No direct stdlib component imports here.
@@ -633,15 +634,24 @@ function StructuralComponentRenderer({
   element: TElement;
   isLoading?: boolean;
 }) {
+  // Show skeleton during loading
+  if (isLoading) {
+    return (
+      <div {...attributes} className="my-2">
+        <div contentEditable={false} className="rounded-lg border border-border/50 bg-card/30">
+          <BlockSkeleton />
+        </div>
+        {plateChildren}
+      </div>
+    );
+  }
+
   // In structural view, show a styled placeholder that indicates the component
   return (
     <div {...attributes} className="my-2">
       <div
         contentEditable={false}
-        className={cn(
-          "rounded-lg border border-border/50 bg-card/30 p-3",
-          isLoading && "animate-pulse",
-        )}
+        className="rounded-lg border border-border/50 bg-card/30 p-3"
       >
         {/* Component header */}
         <div className="flex items-center gap-2 mb-2 pb-2 border-b border-border/30">
@@ -649,17 +659,14 @@ function StructuralComponentRenderer({
             <span className="text-xs font-bold text-primary/70">{componentName.charAt(0)}</span>
           </div>
           <code className="text-xs font-mono text-muted-foreground">&lt;{componentName}&gt;</code>
-          {isLoading && (
-            <span className="text-xs text-muted-foreground/50 ml-auto">Loading...</span>
-          )}
-          {!isLoading && Object.keys(props).length > 0 && (
+          {Object.keys(props).length > 0 && (
             <span className="text-xs text-muted-foreground/50">
               {Object.keys(props).length} props
             </span>
           )}
         </div>
-        {/* Show props preview when not loading */}
-        {!isLoading && Object.keys(props).length > 0 && (
+        {/* Show props preview */}
+        {Object.keys(props).length > 0 && (
           <div className="space-y-1">
             {Object.entries(props)
               .slice(0, 3)

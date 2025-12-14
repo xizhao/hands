@@ -37,11 +37,13 @@ import { PORTS, waitForPortFree } from "./ports.js";
 import { discoverSources } from "./sources/discovery.js";
 import { registerSourceRoutes } from "./sources/index.js";
 import { registerTRPCRoutes } from "./trpc/index.js";
+import { PageRegistry, createPageRegistry, renderPage, type PageRenderContext } from "./pages/index.js";
 
 interface RuntimeConfig {
   workbookId: string;
   workbookDir: string;
   port: number;
+  noEditor?: boolean;
 }
 
 interface RuntimeState {
@@ -61,6 +63,7 @@ interface RuntimeState {
   buildErrors: string[];
   viteError: string | null;
   pgTypedRunner: PgTypedRunner | null;
+  pageRegistry: PageRegistry | null;
 }
 
 // Global state for progressive readiness
@@ -81,6 +84,7 @@ const state: RuntimeState = {
   viteError: null,
   fileWatchers: [],
   pgTypedRunner: null,
+  pageRegistry: null,
 };
 
 // Max restarts before giving up
@@ -158,7 +162,9 @@ function parseArgs(): RuntimeConfig {
   }
 
   if (!args.workbook_id || !args.workbook_dir) {
-    console.error("Usage: hands-runtime --workbook-id=<id> --workbook-dir=<dir> [--port=<port>]");
+    console.error(
+      "Usage: hands-runtime --workbook-id=<id> --workbook-dir=<dir> [--port=<port>] [--no-editor]",
+    );
     process.exit(1);
   }
 
@@ -166,6 +172,7 @@ function parseArgs(): RuntimeConfig {
     workbookId: args.workbook_id,
     workbookDir: args.workbook_dir,
     port: args.port ? parseInt(args.port, 10) : PORTS.RUNTIME,
+    noEditor: "no_editor" in args,
   };
 }
 
@@ -852,6 +859,158 @@ function createApp(config: RuntimeConfig) {
     return c.json({ success });
   });
 
+  // ============================================
+  // Page (MDX) Routes - for MDX editor testing
+  // ============================================
+
+  // List all pages
+  app.get("/workbook/pages", async (c) => {
+    if (!state.pageRegistry) {
+      return c.json({ pages: [], errors: [], message: "Page registry not initialized" });
+    }
+
+    return c.json({
+      pages: state.pageRegistry.list(),
+      routes: state.pageRegistry.routes(),
+      errors: state.pageRegistry.getErrors(),
+    });
+  });
+
+  // Get page source code
+  app.get("/workbook/pages/:path{.+}/source", async (c) => {
+    if (!state.pageRegistry) {
+      return c.json({ error: "Page registry not initialized" }, 503);
+    }
+
+    const pagePath = c.req.param("path");
+    const route = pagePath.startsWith("/") ? pagePath : `/${pagePath}`;
+    const page = state.pageRegistry.match(route);
+
+    if (!page) {
+      return c.json({ error: `Page not found: ${route}` }, 404);
+    }
+
+    const source = await state.pageRegistry.getSource(page.route);
+    if (!source) {
+      return c.json({ error: "Failed to read page source" }, 500);
+    }
+
+    return c.json({
+      success: true,
+      route: page.route,
+      path: page.path,
+      source,
+    });
+  });
+
+  // Save page source code
+  app.put("/workbook/pages/:path{.+}/source", async (c) => {
+    if (!state.pageRegistry) {
+      return c.json({ error: "Page registry not initialized" }, 503);
+    }
+
+    const pagePath = c.req.param("path");
+    const route = pagePath.startsWith("/") ? pagePath : `/${pagePath}`;
+    const { source } = await c.req.json<{ source: string }>();
+
+    if (!source || typeof source !== "string") {
+      return c.json({ error: "Missing source in request body" }, 400);
+    }
+
+    const page = state.pageRegistry.match(route);
+    if (!page) {
+      return c.json({ error: `Page not found: ${route}` }, 404);
+    }
+
+    // Write source to file
+    const pagesDir = state.pageRegistry.getPagesDir();
+    const filePath = join(pagesDir, page.path);
+
+    try {
+      const { openSync, writeSync, fsyncSync, closeSync } = await import("node:fs");
+      const fd = openSync(filePath, "w");
+      writeSync(fd, source, 0, "utf-8");
+      fsyncSync(fd);
+      closeSync(fd);
+
+      // Invalidate cached compilation
+      state.pageRegistry.invalidate(page.route);
+
+      return c.json({
+        success: true,
+        route: page.route,
+        path: page.path,
+      });
+    } catch (err) {
+      return c.json(
+        { error: `Failed to write page: ${err instanceof Error ? err.message : String(err)}` },
+        500,
+      );
+    }
+  });
+
+  // Render a page (server-side)
+  app.get("/pages/:path{.+}", async (c) => {
+    if (!state.pageRegistry) {
+      return c.html("<html><body><h1>Page registry not initialized</h1></body></html>", 503);
+    }
+
+    const pagePath = c.req.param("path");
+    const route = pagePath.startsWith("/") ? pagePath : `/${pagePath}`;
+    const page = state.pageRegistry.match(route);
+
+    if (!page) {
+      return c.html("<html><body><h1>Page not found</h1></body></html>", 404);
+    }
+
+    // Create render context
+    const renderContext: PageRenderContext = {
+      pagesDir: state.pageRegistry.getPagesDir(),
+      blockServerPort: state.vitePort ?? undefined,
+      useRsc: state.viteReady,
+    };
+
+    try {
+      const result = await renderPage({
+        pagePath: page.path,
+        context: renderContext,
+      });
+
+      if (result.error) {
+        console.warn(`[runtime] Page render warning: ${result.error}`);
+      }
+
+      return c.html(result.html);
+    } catch (err) {
+      console.error("[runtime] Page render failed:", err);
+      return c.html(
+        `<html><body><h1>Render Error</h1><pre>${err instanceof Error ? err.message : String(err)}</pre></body></html>`,
+        500,
+      );
+    }
+  });
+
+  // Reload page registry
+  app.post("/workbook/pages/reload", async (c) => {
+    if (!state.pageRegistry) {
+      return c.json({ error: "Page registry not initialized" }, 503);
+    }
+
+    try {
+      const result = await state.pageRegistry.load();
+      return c.json({
+        success: true,
+        pages: result.pages.length,
+        errors: result.errors,
+      });
+    } catch (err) {
+      return c.json(
+        { error: `Failed to reload: ${err instanceof Error ? err.message : String(err)}` },
+        500,
+      );
+    }
+  });
+
   // DB routes - require DB ready
   app.post("/db/query", async (c) => {
     if (!state.dbReady || !state.workbookDb) {
@@ -1489,6 +1648,21 @@ export const __SECRET_INTERNALS_DO_NOT_USE_OR_YOU_WILL_BE_FIRED = RD.__SECRET_IN
       const headers = new Headers(response.headers);
       headers.delete("transfer-encoding");
 
+      // For HTML responses, rewrite Vite's internal paths to use /sandbox prefix
+      // This ensures /@vite/client and /@react-refresh resolve correctly
+      const contentType = response.headers.get("content-type") || "";
+      if (contentType.includes("text/html")) {
+        let html = await response.text();
+        // Rewrite absolute Vite paths to use /sandbox prefix
+        html = html.replace(/"\/@vite\//g, '"/sandbox/@vite/');
+        html = html.replace(/"\/@react-refresh/g, '"/sandbox/@react-refresh');
+        html = html.replace(/"\/@fs\//g, '"/sandbox/@fs/');
+        return new Response(html, {
+          status: response.status,
+          headers,
+        });
+      }
+
       return new Response(response.body, {
         status: response.status,
         headers,
@@ -1543,6 +1717,41 @@ async function bootPGlite(workbookDir: string) {
     console.log("[runtime] Action scheduler started");
   } catch (err) {
     console.error("[runtime] Database failed:", err);
+  }
+}
+
+/**
+ * Boot page registry for MDX pages
+ * Discovers pages from workbookDir/pages/
+ */
+async function bootPages(workbookDir: string) {
+  const pagesDir = join(workbookDir, "pages");
+
+  // Only initialize if pages directory exists
+  if (!existsSync(pagesDir)) {
+    console.log("[runtime] No pages/ directory found, skipping page registry");
+    return;
+  }
+
+  console.log(`[runtime] Booting page registry for ${pagesDir}...`);
+
+  try {
+    state.pageRegistry = createPageRegistry({
+      pagesDir,
+      precompile: false, // Compile on demand for faster startup
+    });
+
+    const result = await state.pageRegistry.load();
+    console.log(`[runtime] Page registry ready: ${result.pages.length} pages`);
+
+    if (result.errors.length > 0) {
+      console.warn("[runtime] Page discovery errors:");
+      for (const err of result.errors) {
+        console.warn(`  - ${err.file}: ${err.error}`);
+      }
+    }
+  } catch (err) {
+    console.error("[runtime] Page registry failed:", err);
   }
 }
 
@@ -2091,10 +2300,15 @@ async function main() {
   });
 
   // 3. Boot critical services in parallel (non-blocking)
-  // All three are independent and can start simultaneously
+  // All are independent and can start simultaneously
   bootPGlite(workbookDir);
   bootVite(config);
-  bootEditor(config);
+  if (!config.noEditor) {
+    bootEditor(config);
+  } else {
+    console.log("[runtime] Editor disabled (--no-editor)");
+  }
+  bootPages(workbookDir);
 
   // 4. Start file watcher for real-time manifest updates
   startFileWatcher(config);

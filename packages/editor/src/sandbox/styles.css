@@ -44,26 +44,3 @@ body {
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
   color: hsl(var(--foreground));
 }
-
-/* Plate editor styling */
-[data-slate-editor] {
-  color: hsl(var(--foreground, 220 9% 12%));
-}
-
-.slate-gutterLeft {
-  left: -60px;
-  width: 60px;
-}
-
-.slate-selectable {
-  position: relative;
-}
-
-.group:hover .slate-gutterLeft {
-  opacity: 1;
-}
-
-.slate-blockWrapper {
-  margin-top: 1px;
-  margin-bottom: 1px;
-}

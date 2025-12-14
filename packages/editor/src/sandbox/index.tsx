@@ -1,10 +1,9 @@
 /**
- * Sandbox Entry Point - RSC-First Block Editor
+ * Sandbox Entry Point - Block & Page Editor
  *
- * Uses the new RSC-first editor architecture:
- * - RSC renders the live block output
- * - Edit overlay provides selection and interaction
- * - No Plate - direct AST ↔ DOM mapping
+ * Supports two modes:
+ * 1. Block mode (blockId param): RSC-first editor for TSX blocks
+ * 2. Page mode (pageId param): MDX visual editor for pages
  */
 
 // MUST BE FIRST: Initialize shared React for RSC client components
@@ -12,6 +11,7 @@ import "../rsc/shared-react";
 
 import { StrictMode, useCallback, useEffect, useState } from "react";
 import { createRoot } from "react-dom/client";
+import { MdxVisualEditor } from "../mdx/MdxVisualEditor";
 import { OverlayEditor } from "../overlay";
 import { installGlobalErrorHandler } from "../overlay/errors";
 import { initFlightClient, RscProvider, setRuntimePort } from "../rsc";
@@ -20,6 +20,7 @@ import "./styles.css";
 
 const params = new URLSearchParams(window.location.search);
 const blockId = params.get("blockId");
+const pageId = params.get("pageId");
 // runtimePort is the main API port (55100) for /workbook/* endpoints
 const runtimePort = params.get("runtimePort");
 const runtimePortNum = runtimePort ? parseInt(runtimePort, 10) : null;
@@ -27,6 +28,9 @@ const runtimePortNum = runtimePort ? parseInt(runtimePort, 10) : null;
 const workerPort = params.get("workerPort");
 const workerPortNum = workerPort ? parseInt(workerPort, 10) : runtimePortNum;
 const readOnly = params.get("readOnly") === "true";
+
+// Determine editor mode
+const editorMode = pageId ? "page" : blockId ? "block" : null;
 
 // Listen for styles from parent
 window.addEventListener("message", (e) => {
@@ -56,7 +60,7 @@ if (runtimePortNum) {
 }
 
 // Install global error handler to stream runtime errors to parent
-installGlobalErrorHandler(blockId ?? undefined);
+installGlobalErrorHandler(blockId ?? pageId ?? undefined);
 
 function SandboxApp() {
   const [source, setSource] = useState<string | null>(null);
@@ -71,24 +75,44 @@ function SandboxApp() {
     });
   }, []);
 
-  // Fetch block source
+  // Fetch source (block or page)
   useEffect(() => {
-    if (!blockId || !runtimePortNum) {
-      setError("Missing blockId or runtimePort");
+    if (!runtimePortNum) {
+      setError("Missing runtimePort");
       return;
     }
 
-    fetch(`http://localhost:${runtimePortNum}/workbook/blocks/${blockId}/source`)
-      .then((res) => (res.ok ? res.json() : Promise.reject("Failed to load")))
-      .then((data) => setSource(data.source))
-      .catch((err) => setError(String(err)));
+    if (editorMode === "block" && blockId) {
+      fetch(`http://localhost:${runtimePortNum}/workbook/blocks/${blockId}/source`)
+        .then((res) => (res.ok ? res.json() : Promise.reject("Failed to load block")))
+        .then((data) => setSource(data.source))
+        .catch((err) => setError(String(err)));
+    } else if (editorMode === "page" && pageId) {
+      fetch(`http://localhost:${runtimePortNum}/workbook/pages/${pageId}/source`)
+        .then((res) => (res.ok ? res.json() : Promise.reject("Failed to load page")))
+        .then((data) => setSource(data.source))
+        .catch((err) => setError(String(err)));
+    } else {
+      setError("Missing blockId or pageId");
+    }
   }, []);
 
-  // Save source changes
-  const _handleSave = useCallback((newSource: string) => {
+  // Save source changes (for blocks)
+  const handleBlockSave = useCallback((newSource: string) => {
     if (readOnly || !blockId || !runtimePortNum) return;
 
     fetch(`http://localhost:${runtimePortNum}/workbook/blocks/${blockId}/source`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ source: newSource }),
+    }).catch(console.error);
+  }, []);
+
+  // Save source changes (for pages)
+  const handlePageSave = useCallback((newSource: string) => {
+    if (readOnly || !pageId || !runtimePortNum) return;
+
+    fetch(`http://localhost:${runtimePortNum}/workbook/pages/${pageId}/source`, {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ source: newSource }),
@@ -110,6 +134,22 @@ function SandboxApp() {
     );
   }
 
+  // Page mode: Use MDX Visual Editor
+  if (editorMode === "page") {
+    return (
+      <RscProvider port={workerPortNum!} enabled>
+        <MdxVisualEditor
+          source={source}
+          onSourceChange={handlePageSave}
+          runtimePort={runtimePortNum!}
+          workerPort={workerPortNum!}
+          className="h-screen"
+        />
+      </RscProvider>
+    );
+  }
+
+  // Block mode: Use Overlay Editor
   return (
     <RscProvider port={workerPortNum!} enabled>
       <OverlayEditor

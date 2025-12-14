@@ -16,3 +16,8 @@ export { PlateVisualEditor } from "./plate";
 export * as scene from "./scene";
 // Core types
 export * from "./types";
+
+// MDX editor module
+export * as mdx from "./mdx";
+// MDX visual editor (re-exported for convenience)
+export { MdxVisualEditor } from "./mdx";

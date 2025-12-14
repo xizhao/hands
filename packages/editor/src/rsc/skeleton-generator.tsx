@@ -6,8 +6,44 @@
  * data-node-id from RSC render for hot-swapping.
  */
 
-import type * as React from "react";
+import * as React from "react";
 import type { EditableNode } from "../ast/oxc-parser";
+
+// ============================================================================
+// Simple Block Skeleton (for initial loading before AST is available)
+// ============================================================================
+
+/**
+ * Generic block skeleton for loading states.
+ * Use this when you don't have AST data yet.
+ */
+export function BlockSkeleton({ className }: { className?: string }) {
+  return (
+    <div className={`p-4 space-y-3 animate-pulse ${className || ""}`}>
+      {/* Header skeleton */}
+      <div className="flex items-center gap-3">
+        <div className="w-8 h-8 rounded-lg bg-muted/60" />
+        <div className="h-4 w-32 rounded bg-muted/60" />
+      </div>
+      {/* Content skeleton */}
+      <div className="space-y-2">
+        <div className="h-3 w-full rounded bg-muted/40" />
+        <div className="h-3 w-4/5 rounded bg-muted/40" />
+        <div className="h-3 w-3/5 rounded bg-muted/40" />
+      </div>
+      {/* Chart-like skeleton */}
+      <div className="flex items-end gap-1 h-24 pt-4">
+        {[40, 65, 45, 80, 55, 70, 50, 85, 60, 75].map((h, i) => (
+          <div
+            key={i}
+            className="flex-1 rounded-t bg-muted/50"
+            style={{ height: `${h}%` }}
+          />
+        ))}
+      </div>
+    </div>
+  );
+}
 
 // ============================================================================
 // Skeleton Configs - Estimated dimensions for common components

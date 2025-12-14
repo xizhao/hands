@@ -28,11 +28,17 @@ export const blockSelectionVariants = cva(
   },
 );
 
-export function BlockSelection(_props: PlateElementProps) {
+export function BlockSelection(props: PlateElementProps) {
   const isBlockSelected = useBlockSelected();
   const isDragging = usePluginOption(DndPlugin, "isDragging");
 
-  if (!isBlockSelected) return null;
+  // Skip selection highlight for table rows and tables themselves
+  if (
+    !isBlockSelected ||
+    props.plugin.key === "tr" ||
+    props.plugin.key === "table"
+  )
+    return null;
 
   return (
     <div

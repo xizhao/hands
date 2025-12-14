@@ -16,12 +16,11 @@
 
 import { Database } from "@phosphor-icons/react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { DndProvider } from "react-dnd";
-import { HTML5Backend } from "react-dnd-html5-backend";
 import type { EditableNode } from "../ast/oxc-parser";
 import { parseSourceWithLocations } from "../ast/oxc-parser";
 import { extractDataDependencies } from "../ast/sql-extractor";
 import { initFlightClient, renderBlockViaRsc } from "../rsc/client";
+import { BlockSkeleton } from "../rsc/skeleton-generator";
 import { useRscCache } from "./cache";
 import { DragSelect } from "./DragSelect";
 import { DragHandle, DropZone, NodeHighlight } from "./dnd";
@@ -154,6 +153,8 @@ interface OverlayEditorProps {
   workerPort: number;
   initialSource: string;
   readOnly?: boolean;
+  /** Called when user presses Escape with no selection (to exit editing mode) */
+  onExit?: () => void;
 }
 
 // ============================================================================
@@ -170,6 +171,7 @@ function OverlayEditorInner({
   workerPort,
   initialSource,
   readOnly = false,
+  onExit,
   containerRef,
 }: OverlayEditorInnerProps) {
   const { state, dispatch } = useEditor();
@@ -605,19 +607,7 @@ function OverlayEditorInner({
         return;
       }
 
-      // Linear-style: single click on text elements starts editing immediately
-      if (isTextElement(editableEl, nodeId)) {
-        e.preventDefault();
-        e.stopPropagation();
-        select(nodeId, false);
-        // Small delay so selection renders, then start editing
-        requestAnimationFrame(() => {
-          startInlineEdit(editableEl, nodeId, false);
-        });
-        return;
-      }
-
-      // Non-text elements: just select
+      // Click = select only (double-click to edit text)
       e.preventDefault();
       e.stopPropagation();
       select(nodeId, false);
@@ -631,13 +621,11 @@ function OverlayEditorInner({
       dispatch,
       handleTextEdit,
       stopEditing,
-      isTextElement,
       isSelectableNode,
-      startInlineEdit,
     ],
   );
 
-  // Double-click: select all text in element
+  // Double-click: enter edit mode for text elements
   const handleDoubleClick = useCallback(
     (e: React.MouseEvent) => {
       if (readOnly) return;
@@ -649,12 +637,16 @@ function OverlayEditorInner({
       const nodeId = editableEl.getAttribute("data-node-id");
       if (!nodeId) return;
 
+      // Only text elements can be edited
       if (!isTextElement(editableEl, nodeId)) return;
 
       e.preventDefault();
       e.stopPropagation();
 
-      // If already editing, select all text (like double-click to select word, then all)
+      // Select this node first
+      select(nodeId, false);
+
+      // If already editing, select all text
       if (editingNodeId === nodeId) {
         const selection = window.getSelection();
         const range = document.createRange();
@@ -667,11 +659,18 @@ function OverlayEditorInner({
       // Start editing with all text selected
       startInlineEdit(editableEl, nodeId, true);
     },
-    [readOnly, editingNodeId, isTextElement, startInlineEdit],
+    [readOnly, editingNodeId, isTextElement, startInlineEdit, select],
   );
 
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent) => {
+      // IMPORTANT: When overlay has selection or is editing, absorb ALL keyboard events
+      // to prevent them from reaching Plate editor
+      const hasOverlayFocus = selectedNodeIds.length > 0 || editingNodeId;
+      if (hasOverlayFocus) {
+        e.stopPropagation();
+      }
+
       // Handle inline editing
       if (editingNodeId) {
         const editingEl = containerRef.current?.querySelector(
@@ -700,12 +699,22 @@ function OverlayEditorInner({
           stopEditing();
           return;
         }
-        // Let other keys pass through for editing
+        // Let other keys pass through for editing (but propagation already stopped)
         return;
       }
 
-      // Global shortcuts (when not editing)
+      // No selection - Escape exits to parent (document mode)
+      if (selectedNodeIds.length === 0) {
+        if (e.key === "Escape" && onExit) {
+          e.preventDefault();
+          onExit();
+        }
+        return;
+      }
+
+      // Global shortcuts (when selected but not editing)
       if (e.key === "Escape") {
+        e.preventDefault();
         clearSelection();
         return;
       }
@@ -848,6 +857,7 @@ function OverlayEditorInner({
       applyOperation,
       isTextElement,
       startInlineEdit,
+      onExit,
     ],
   );
 
@@ -872,24 +882,14 @@ function OverlayEditorInner({
 
   // Loading state (only show if no cached content)
   if (isLoading && !hasCachedContent) {
-    return (
-      <div className="flex items-center justify-center h-full p-8">
-        <div className="flex items-center gap-2 text-muted-foreground">
-          <div className="w-4 h-4 border-2 border-muted-foreground/30 border-t-muted-foreground rounded-full animate-spin" />
-          <span className="text-sm">Loading...</span>
-        </div>
-      </div>
-    );
+    return <BlockSkeleton />;
   }
 
   // Error state
   if (error) {
     return (
-      <div className="p-4">
-        <div className="rounded-lg border border-red-500/30 bg-red-500/10 p-4">
-          <div className="text-sm font-medium text-red-400">Render Error</div>
-          <div className="text-xs text-red-400/70 mt-1 font-mono">{error}</div>
-        </div>
+      <div className="text-sm text-red-400 bg-red-500/10 rounded p-2">
+        <span className="font-medium">Error:</span> {error}
       </div>
     );
   }
@@ -898,9 +898,7 @@ function OverlayEditorInner({
   const primarySelectedId = selectedNodeIds[0] ?? null;
 
   return (
-    <div className="h-full pl-10 relative">
-      {/* Overlays positioned relative to this outer wrapper (in pl-10 area) */}
-
+    <div className="relative" onKeyDown={handleKeyDown}>
       {/* Selection highlight - only for non-editing elements */}
       {selectedNodeIds
         .filter((nodeId) => nodeId !== editingNodeId)
@@ -954,25 +952,23 @@ function OverlayEditorInner({
         disabled={readOnly || isRefreshing || !!editingNodeId}
       />
 
-      <div className="overlay-editor h-full" onKeyDown={handleKeyDown}>
-        {/* RSC content */}
-        <div
-          ref={containerRef}
-          className={`overlay-content h-full overflow-auto p-4 transition-opacity duration-150 ${
-            isRefreshing ? "opacity-60 pointer-events-none" : ""
-          }`}
-          onClick={!isRefreshing ? handleClick : undefined}
-          onDoubleClick={!isRefreshing ? handleDoubleClick : undefined}
-          onMouseMove={!isRefreshing ? handleMouseMove : undefined}
-          onMouseLeave={!isRefreshing ? handleMouseLeave : undefined}
-        >
-          {/* Show cached HTML during refresh, otherwise RSC element */}
-          {isRefreshing && cachedHtml ? (
-            <div dangerouslySetInnerHTML={{ __html: cachedHtml }} />
-          ) : (
-            rscElement
-          )}
-        </div>
+      {/* RSC content */}
+      <div
+        ref={containerRef}
+        className={`transition-opacity duration-150 ${
+          isRefreshing ? "opacity-60 pointer-events-none" : ""
+        }`}
+        onClick={!isRefreshing ? handleClick : undefined}
+        onDoubleClick={!isRefreshing ? handleDoubleClick : undefined}
+        onMouseMove={!isRefreshing ? handleMouseMove : undefined}
+        onMouseLeave={!isRefreshing ? handleMouseLeave : undefined}
+      >
+        {/* Show cached HTML during refresh, otherwise RSC element */}
+        {isRefreshing && cachedHtml ? (
+          <div dangerouslySetInnerHTML={{ __html: cachedHtml }} />
+        ) : (
+          rscElement
+        )}
       </div>
     </div>
   );
@@ -989,10 +985,8 @@ export function OverlayEditor(props: OverlayEditorProps) {
   const containerRef = useRef<HTMLDivElement>(null);
 
   return (
-    <DndProvider backend={HTML5Backend}>
-      <EditorProvider>
-        <OverlayEditorInner {...props} containerRef={containerRef} />
-      </EditorProvider>
-    </DndProvider>
+    <EditorProvider>
+      <OverlayEditorInner {...props} containerRef={containerRef} />
+    </EditorProvider>
   );
 }

@@ -164,7 +164,7 @@ export function PlateVisualEditor({ source, onSourceChange, className }: PlateVi
   }, []);
 
   return (
-    <div className={cn("h-full overflow-auto", className)}>
+    <div className={cn("h-full", className)}>
       <Plate editor={editor} onChange={handleChange}>
         <PlateContainer
           id="plate-editor-container"
@@ -172,7 +172,7 @@ export function PlateVisualEditor({ source, onSourceChange, className }: PlateVi
         >
           <PlateContent
             className={cn(
-              // Add extra left padding for drag handles
+              // Add extra left padding for drag handles (pl-16 = 64px)
               "py-6 pl-16 pr-6 min-h-full outline-none",
               // Add selectable class to blocks
               "[&_.slate-selectable]:relative",

@@ -56,11 +56,9 @@ export function DragHandle({ nodeId, containerRef, onDelete, onHoverChange }: Dr
       const containerRect = container.getBoundingClientRect();
       const elementRect = element.getBoundingClientRect();
 
-      // Overlays are outside scroll container, positioned relative to outer wrapper (which has pl-10 = 40px)
-      // Container is 40px to the right of the outer wrapper, so add 40 to get correct position
       setRect(
         new DOMRect(
-          elementRect.left - containerRect.left + 40,
+          elementRect.left - containerRect.left,
           elementRect.top - containerRect.top,
           elementRect.width,
           elementRect.height,
@@ -243,12 +241,11 @@ export function DropZone({ containerRef, onDrop }: DropZoneProps) {
           const elMidY = elRect.top + elRect.height / 2;
           const position: "before" | "after" = clientOffset.y < elMidY ? "before" : "after";
 
-          // Overlays are outside scroll container, add 40px for pl-10 offset
           setDropInfo({
             targetId,
             position,
             rect: new DOMRect(
-              elRect.left - containerRect.left + 40,
+              elRect.left - containerRect.left,
               position === "before"
                 ? elRect.top - containerRect.top
                 : elRect.bottom - containerRect.top,
@@ -331,10 +328,9 @@ export function NodeHighlight({ nodeId, containerRef, mode }: NodeHighlightProps
       const containerRect = container.getBoundingClientRect();
       const elementRect = element.getBoundingClientRect();
 
-      // Overlays are outside scroll container, add 40px for pl-10 offset
       setRect(
         new DOMRect(
-          elementRect.left - containerRect.left + 40,
+          elementRect.left - containerRect.left,
           elementRect.top - containerRect.top,
           elementRect.width,
           elementRect.height,

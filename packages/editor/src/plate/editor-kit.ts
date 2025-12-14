@@ -34,6 +34,7 @@ import { BlockSelectionKit } from "./plugins/block-selection-kit";
 // Plugin kits
 import { DndKit } from "./plugins/dnd-kit";
 import { ElementPlugin } from "./plugins/element-plugin";
+import { FloatingToolbarKit } from "./plugins/floating-toolbar-kit";
 import { SlashKit } from "./plugins/slash-kit";
 
 export const EditorKit = [
@@ -75,6 +76,9 @@ export const EditorKit = [
 
   // Slash Menu - Command palette
   ...SlashKit,
+
+  // Floating Toolbar - Selection formatting
+  ...FloatingToolbarKit,
 
   // Utilities
   TrailingBlockPlugin,

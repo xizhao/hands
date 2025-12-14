@@ -292,6 +292,11 @@ function InlineComboboxGroupLabel({ className, ...props }: React.ComponentProps<
   );
 }
 
+function useInlineComboboxSearchValue() {
+  const { searchValue } = React.useContext(InlineComboboxContext);
+  return searchValue;
+}
+
 export {
   InlineCombobox,
   InlineComboboxContent,
@@ -300,4 +305,5 @@ export {
   InlineComboboxGroupLabel,
   InlineComboboxInput,
   InlineComboboxItem,
+  useInlineComboboxSearchValue,
 };
