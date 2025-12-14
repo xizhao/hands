@@ -1,0 +1,22 @@
+{
+  "compilerOptions": {
+    "target": "ESNext",
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "strict": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "noEmit": true,
+    "resolveJsonModule": true,
+    "isolatedModules": true,
+    "types": ["bun"]
+  },
+  "include": [
+    "src/**/*.ts",
+    "lib/**/*.ts",
+    "tool/**/*.ts",
+    "plugin/**/*.ts",
+    "agents/**/*.ts"
+  ],
+  "exclude": ["node_modules", "dist"]
+}

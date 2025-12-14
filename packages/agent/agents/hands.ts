@@ -250,6 +250,10 @@ export const handsAgent: AgentConfig = {
   mode: "primary",
   model: "anthropic/claude-opus-4-5-20251101",
   prompt: HANDS_PROMPT,
+  permission: {
+    bash: { "*": "allow" },
+    edit: "allow",
+  },
   tools: {
     // Data tools (hands uses directly)
     psql: true,

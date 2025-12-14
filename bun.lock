@@ -26,9 +26,12 @@
       "name": "@hands/agent",
       "version": "0.0.1",
       "dependencies": {
+        "@hands/runtime": "workspace:*",
         "@hands/stdlib": "workspace:*",
         "@opencode-ai/plugin": "^1.0.152",
         "@opencode-ai/sdk": "^1.0.152",
+        "@trpc/client": "^11.8.0",
+        "zod": "^3.24.0",
       },
       "devDependencies": {
         "@oxc-parser/binding-wasm32-wasi": "0.102.0",

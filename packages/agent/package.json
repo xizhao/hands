@@ -13,9 +13,11 @@
     "build": "bun build src/index.ts --outdir dist --target node"
   },
   "dependencies": {
+    "@hands/runtime": "workspace:*",
     "@hands/stdlib": "workspace:*",
     "@opencode-ai/sdk": "^1.0.152",
-    "@opencode-ai/plugin": "^1.0.152"
+    "@opencode-ai/plugin": "^1.0.152",
+    "@trpc/client": "^11.8.0"
   },
   "devDependencies": {
     "@oxc-parser/binding-wasm32-wasi": "0.102.0",

@@ -1,38 +1,10 @@
 import { tool } from "@opencode-ai/plugin";
+import { getRuntimePort, getTRPCClient } from "../lib/trpc";
 
-// Default runtime port (matches packages/runtime/src/ports.ts)
-const DEFAULT_RUNTIME_PORT = 55000;
-
-// Get runtime port from env or use default
-function getRuntimePort(): number {
-  // HANDS_RUNTIME_PORT is set by Tauri when starting the agent
-  const envPort = process.env.HANDS_RUNTIME_PORT;
-  if (envPort) {
-    return parseInt(envPort, 10);
-  }
-  return DEFAULT_RUNTIME_PORT;
-}
-
-// Execute query via HTTP API to runtime
-async function executeQuery(query: string): Promise<{ rows: unknown[]; rowCount: number }> {
-  const port = getRuntimePort();
-  const url = `http://localhost:${port}/postgres/query`;
-
-  const response = await fetch(url, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ query }),
-  });
-
-  if (!response.ok) {
-    const error = await response.json().catch(() => ({ error: response.statusText }));
-    if (error.booting) {
-      throw new Error("Database is still booting. Please wait a moment and try again.");
-    }
-    throw new Error(error.error || `HTTP ${response.status}`);
-  }
-
-  return response.json();
+// Execute query via tRPC
+async function executeQuery(sql: string): Promise<{ rows: unknown[]; rowCount: number }> {
+  const trpc = getTRPCClient();
+  return trpc.db.query.mutate({ query: sql });
 }
 
 function formatTable(rows: Record<string, unknown>[]): string {
@@ -146,7 +118,7 @@ Runtime port: ${getRuntimePort()}`;
       }
 
       // Check for booting database
-      if (message.includes("booting")) {
+      if (message.includes("booting") || message.includes("not ready")) {
         return `⏳ Database is starting up.
 
 ${message}

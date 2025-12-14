@@ -71,9 +71,9 @@
     "createdAt": 1765069644297,
     "description": null,
     "id": "stdlib",
-    "lastOpenedAt": 1765699525091,
+    "lastOpenedAt": 1765702352805,
     "name": "stdlib",
-    "updatedAt": 1765699525091
+    "updatedAt": 1765702352805
   },
   "main": "./src/index.ts",
   "name": "@hands/stdlib",
