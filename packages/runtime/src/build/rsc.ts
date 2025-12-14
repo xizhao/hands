@@ -156,6 +156,7 @@ function generatePackageJson(config: HandsConfig, stdlibPath: string): string {
       rwsdk: "1.0.0-beta.39",
       hono: "^4.7.0",
       "@electric-sql/pglite": "0.2.17",
+      "@trpc/client": "^11.0.0",
       "@hands/stdlib": `file:${stdlibPath}`,
     },
     devDependencies: {

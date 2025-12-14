@@ -411,9 +411,13 @@ export async function initWorkbook(options: InitWorkbookOptions): Promise<void> 
     },
     dependencies: {
       "@hands/stdlib": `file:${stdlibPath}`,
+      "react": "^19.0.0",
+      "react-dom": "^19.0.0",
     },
     devDependencies: {
-      typescript: "^5",
+      "@types/react": "^19.0.0",
+      "@types/react-dom": "^19.0.0",
+      "typescript": "^5",
     },
   };
   writeFileSync(join(directory, "package.json"), `${JSON.stringify(packageJson, null, 2)}\n`);
@@ -446,7 +450,7 @@ db/
 
   // Create lib/db.ts helper
   const dbHelper = `// Database helper - re-exported from context for convenience
-export type { SqlClient, BlockContext } from "@hands/stdlib"
+export type { BlockContext, DbContext, BlockFn, BlockProps } from "@hands/stdlib"
 `;
   writeFileSync(join(directory, "lib/db.ts"), dbHelper);
 }

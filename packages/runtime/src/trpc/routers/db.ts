@@ -42,6 +42,7 @@ const dbReadyProcedure = t.procedure.use(async ({ ctx, next }) => {
 
 const queryInput = z.object({
   query: z.string(),
+  params: z.array(z.unknown()).optional(),
 });
 
 const dropTableInput = z.object({
@@ -67,7 +68,7 @@ export const dbRouter = t.router({
   query: dbReadyProcedure
     .input(queryInput)
     .mutation(async ({ ctx, input }) => {
-      const result = await ctx.db.query(input.query);
+      const result = await ctx.db.query(input.query, input.params);
 
       // Trigger schema regeneration if DDL detected
       if (isDDL(input.query) && ctx.onDdlQuery) {

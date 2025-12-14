@@ -112,6 +112,9 @@ export async function runPreflight(options: PreflightOptions): Promise<Preflight
   // 7. Ensure .hands/tsconfig.json is correct (auto-fix always)
   checks.push(await checkHandsTsConfig(workbookDir, autoFix));
 
+  // 8. Ensure workbook has required dependencies in package.json
+  checks.push(await checkWorkbookDependencies(workbookDir, autoFix));
+
   const ok = checks.filter((c) => c.required).every((c) => c.ok);
   const duration = Date.now() - startTime;
 
@@ -723,4 +726,105 @@ async function checkHandsTsConfig(workbookDir: string, autoFix: boolean): Promis
     message: "Outdated - run with --fix to update",
     required: false,
   };
+}
+
+/**
+ * Required dependencies for workbook package.json
+ */
+const REQUIRED_WORKBOOK_DEPS = {
+  dependencies: {
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0",
+  },
+  devDependencies: {
+    "@types/react": "^19.0.0",
+    "@types/react-dom": "^19.0.0",
+  },
+};
+
+async function checkWorkbookDependencies(workbookDir: string, autoFix: boolean): Promise<PreflightCheck> {
+  const packageJsonPath = join(workbookDir, "package.json");
+
+  if (!existsSync(packageJsonPath)) {
+    return {
+      name: "Workbook dependencies",
+      ok: false,
+      message: "package.json not found",
+      required: true,
+    };
+  }
+
+  try {
+    const content = readFileSync(packageJsonPath, "utf-8");
+    const pkg = JSON.parse(content);
+
+    const missingDeps: string[] = [];
+    const missingDevDeps: string[] = [];
+
+    // Check dependencies
+    for (const [name, version] of Object.entries(REQUIRED_WORKBOOK_DEPS.dependencies)) {
+      if (!pkg.dependencies?.[name]) {
+        missingDeps.push(`${name}@${version}`);
+      }
+    }
+
+    // Check devDependencies
+    for (const [name, version] of Object.entries(REQUIRED_WORKBOOK_DEPS.devDependencies)) {
+      if (!pkg.devDependencies?.[name]) {
+        missingDevDeps.push(`${name}@${version}`);
+      }
+    }
+
+    if (missingDeps.length === 0 && missingDevDeps.length === 0) {
+      return {
+        name: "Workbook dependencies",
+        ok: true,
+        message: "All required dependencies present",
+        required: true,
+      };
+    }
+
+    // Auto-fix: add missing dependencies
+    if (autoFix) {
+      pkg.dependencies = pkg.dependencies || {};
+      pkg.devDependencies = pkg.devDependencies || {};
+
+      for (const [name, version] of Object.entries(REQUIRED_WORKBOOK_DEPS.dependencies)) {
+        if (!pkg.dependencies[name]) {
+          pkg.dependencies[name] = version;
+        }
+      }
+
+      for (const [name, version] of Object.entries(REQUIRED_WORKBOOK_DEPS.devDependencies)) {
+        if (!pkg.devDependencies[name]) {
+          pkg.devDependencies[name] = version;
+        }
+      }
+
+      writeFileSync(packageJsonPath, `${JSON.stringify(pkg, null, 2)}\n`);
+
+      return {
+        name: "Workbook dependencies",
+        ok: true,
+        message: "Added missing dependencies (run bun install)",
+        required: true,
+        fixed: true,
+      };
+    }
+
+    const allMissing = [...missingDeps, ...missingDevDeps];
+    return {
+      name: "Workbook dependencies",
+      ok: false,
+      message: `Missing: ${allMissing.join(", ")}`,
+      required: true,
+    };
+  } catch (err) {
+    return {
+      name: "Workbook dependencies",
+      ok: false,
+      message: `Error reading package.json: ${err instanceof Error ? err.message : String(err)}`,
+      required: true,
+    };
+  }
 }

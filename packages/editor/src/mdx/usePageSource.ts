@@ -3,12 +3,12 @@
  *
  * Handles:
  * - Source polling for external changes (linter, auto-formatter)
- * - Source mutations
- * - Version tracking for refreshes
+ * - Debounced source mutations (400ms) to avoid per-keystroke saves
+ * - Version tracking for refreshes and conflict detection
  * - Conflict-free save/poll coordination
  */
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { getTRPCClient } from "../trpc";
 import { getCachedPageSource, setCachedPageSource } from "./cache";
 
@@ -22,6 +22,8 @@ export interface UsePageSourceOptions {
   initialSource?: string | null;
   pollInterval?: number;
   readOnly?: boolean;
+  /** Debounce delay in ms (default: 400) */
+  debounceMs?: number;
 }
 
 export interface UsePageSourceReturn {
@@ -34,17 +36,63 @@ export interface UsePageSourceReturn {
   /** Whether we're refreshing (have cached, fetching fresh) */
   isRefreshing: boolean;
 
+  /** Whether there are unsaved local changes */
+  isDirty: boolean;
+
   /** Version number (increments on external changes) */
   version: number;
 
   /** Current page ID (may change after rename) */
   currentPageId: string;
 
-  /** Save source changes */
-  saveSource: (newSource: string) => Promise<boolean>;
+  /** Save source changes (debounced) */
+  saveSource: (newSource: string) => void;
+
+  /** Force immediate save (bypasses debounce) */
+  saveSourceImmediate: (newSource: string) => Promise<boolean>;
 
   /** Rename the page */
   renamePage: (newSlug: string) => Promise<boolean>;
+}
+
+// ============================================================================
+// Debounce Utility
+// ============================================================================
+
+function debounce<T extends (...args: any[]) => any>(
+  fn: T,
+  delay: number,
+): T & { cancel: () => void; flush: () => void } {
+  let timeoutId: ReturnType<typeof setTimeout> | null = null;
+  let lastArgs: Parameters<T> | null = null;
+
+  const debounced = ((...args: Parameters<T>) => {
+    lastArgs = args;
+    if (timeoutId) clearTimeout(timeoutId);
+    timeoutId = setTimeout(() => {
+      timeoutId = null;
+      fn(...args);
+    }, delay);
+  }) as T & { cancel: () => void; flush: () => void };
+
+  debounced.cancel = () => {
+    if (timeoutId) {
+      clearTimeout(timeoutId);
+      timeoutId = null;
+    }
+    lastArgs = null;
+  };
+
+  debounced.flush = () => {
+    if (timeoutId && lastArgs) {
+      clearTimeout(timeoutId);
+      timeoutId = null;
+      fn(...lastArgs);
+      lastArgs = null;
+    }
+  };
+
+  return debounced;
 }
 
 // ============================================================================
@@ -57,6 +105,7 @@ export function usePageSource({
   initialSource = null,
   pollInterval = 1000,
   readOnly = false,
+  debounceMs = 400,
 }: UsePageSourceOptions): UsePageSourceReturn {
   // Initialize with cached source if available
   const cachedSource = getCachedPageSource(pageId);
@@ -69,11 +118,21 @@ export function usePageSource({
   // Track the source that's confirmed saved on server
   const confirmedServerSource = useRef<string | null>(initialSource ?? cachedSource);
 
+  // Track current local source (for version conflict detection)
+  const currentLocalSource = useRef<string | null>(initialSource ?? cachedSource);
+
+  // Version tracking for conflict detection
+  const localEditVersion = useRef(0); // Increments on each local edit
+  const savedVersion = useRef(0); // Version that was last saved successfully
+
   // Track pending source during save (to prevent poll overwrites)
   const pendingSource = useRef<string | null>(null);
 
   // Get tRPC client
   const trpcRef = useRef(getTRPCClient(runtimePort));
+
+  // Compute isDirty - true if local edits haven't been saved yet
+  const isDirty = localEditVersion.current > savedVersion.current;
 
   // ============================================================================
   // Initial Fetch
@@ -116,11 +175,22 @@ export function usePageSource({
         if (active && pendingSource.current === null) {
           // Only update if source changed externally
           if (data.source !== confirmedServerSource.current) {
-            console.log("[usePageSource] Source changed externally, updating");
-            setSourceState(data.source);
-            setCachedPageSource(currentPageId, data.source);
-            confirmedServerSource.current = data.source;
-            setVersion((v) => v + 1);
+            // Check if we have unsaved local edits
+            if (localEditVersion.current > savedVersion.current) {
+              // Conflict: external change while user has unsaved edits
+              // Keep local edits (user's work wins)
+              console.log("[usePageSource] External change detected but local edits pending - keeping local");
+              // Update server source ref so we don't keep logging this
+              confirmedServerSource.current = data.source;
+            } else {
+              // No local edits - safe to apply external change
+              console.log("[usePageSource] Source changed externally, updating");
+              setSourceState(data.source);
+              setCachedPageSource(currentPageId, data.source);
+              confirmedServerSource.current = data.source;
+              currentLocalSource.current = data.source;
+              setVersion((v) => v + 1);
+            }
           }
         }
       } catch (_e) {
@@ -142,20 +212,22 @@ export function usePageSource({
   }, [currentPageId, pollInterval, readOnly]);
 
   // ============================================================================
-  // Save Source
+  // Save Source (Internal - performs actual network save)
   // ============================================================================
 
-  const saveSource = useCallback(
-    async (newSource: string): Promise<boolean> => {
+  const performSave = useCallback(
+    async (newSource: string, editVersion: number): Promise<boolean> => {
       if (readOnly) return false;
+
+      // Skip if a newer edit came in (stale save)
+      if (editVersion < localEditVersion.current) {
+        console.log("[usePageSource] Skipping stale save (version", editVersion, "< current", localEditVersion.current, ")");
+        return false;
+      }
 
       // Mark as pending - blocks polling
       pendingSource.current = newSource;
       setIsSaving(true);
-
-      // Update local state immediately
-      setSourceState(newSource);
-      setCachedPageSource(currentPageId, newSource);
 
       try {
         const trpc = trpcRef.current;
@@ -163,18 +235,95 @@ export function usePageSource({
 
         // Update confirmed source after server confirms
         confirmedServerSource.current = newSource;
-        console.log("[usePageSource] Saved successfully");
+        savedVersion.current = editVersion;
+        console.log("[usePageSource] Saved successfully (version", editVersion, ")");
+
+        // Check if more edits came in during the save
+        if (localEditVersion.current > editVersion && currentLocalSource.current) {
+          console.log("[usePageSource] More edits during save, queueing another save");
+          // Don't clear pending yet - queue another save
+          performSave(currentLocalSource.current, localEditVersion.current);
+        }
+
         return true;
       } catch (err) {
         console.error("[usePageSource] Save failed:", err);
         return false;
       } finally {
-        // Clear pending - allows polling to resume
-        pendingSource.current = null;
-        setIsSaving(false);
+        // Only clear pending if no follow-up save was queued
+        if (savedVersion.current >= localEditVersion.current) {
+          pendingSource.current = null;
+          setIsSaving(false);
+        }
       }
     },
     [currentPageId, readOnly],
+  );
+
+  // ============================================================================
+  // Debounced Save
+  // ============================================================================
+
+  const debouncedSave = useMemo(
+    () =>
+      debounce((newSource: string, editVersion: number) => {
+        performSave(newSource, editVersion);
+      }, debounceMs),
+    [performSave, debounceMs],
+  );
+
+  // Cleanup debounce on unmount
+  useEffect(() => {
+    return () => {
+      debouncedSave.cancel();
+    };
+  }, [debouncedSave]);
+
+  // ============================================================================
+  // Public Save API
+  // ============================================================================
+
+  /** Debounced save - call on every keystroke */
+  const saveSource = useCallback(
+    (newSource: string): void => {
+      if (readOnly) return;
+
+      // Increment local version
+      localEditVersion.current++;
+      const editVersion = localEditVersion.current;
+
+      // Update local state immediately for responsive UI
+      currentLocalSource.current = newSource;
+      setSourceState(newSource);
+      setCachedPageSource(currentPageId, newSource);
+
+      // Queue debounced save
+      debouncedSave(newSource, editVersion);
+    },
+    [currentPageId, readOnly, debouncedSave],
+  );
+
+  /** Immediate save - bypasses debounce (for blur events, navigation, etc.) */
+  const saveSourceImmediate = useCallback(
+    async (newSource: string): Promise<boolean> => {
+      if (readOnly) return false;
+
+      // Cancel any pending debounced save
+      debouncedSave.cancel();
+
+      // Increment local version
+      localEditVersion.current++;
+      const editVersion = localEditVersion.current;
+
+      // Update local state immediately
+      currentLocalSource.current = newSource;
+      setSourceState(newSource);
+      setCachedPageSource(currentPageId, newSource);
+
+      // Perform save immediately
+      return performSave(newSource, editVersion);
+    },
+    [currentPageId, readOnly, debouncedSave, performSave],
   );
 
   // ============================================================================
@@ -218,9 +367,11 @@ export function usePageSource({
     source,
     isSaving,
     isRefreshing,
+    isDirty,
     version,
     currentPageId,
     saveSource,
+    saveSourceImmediate,
     renamePage,
   };
 }

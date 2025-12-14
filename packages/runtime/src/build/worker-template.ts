@@ -51,6 +51,7 @@ import { runWithRequestInfo } from "rwsdk/worker";
 import { existsSync } from "node:fs";
 import { readFile, writeFile, readdir, mkdir } from "node:fs/promises";
 import { join } from "node:path";
+import { createTRPCClient, httpBatchLink } from "@trpc/client";
 
 // ============================================================================
 // ARCHITECTURE NOTE: Why Static Block Imports?
@@ -458,44 +459,28 @@ export default app;
 
 // === Helpers ===
 
-// DB proxy that forwards queries to the runtime's PGlite instance
+// tRPC client cache
+let trpcClient: ReturnType<typeof createTRPCClient<any>> | null = null;
+let trpcPort: number | null = null;
+
+function getTRPC(runtimePort: number) {
+  if (trpcClient && trpcPort === runtimePort) {
+    return trpcClient;
+  }
+  trpcClient = createTRPCClient<any>({
+    links: [
+      httpBatchLink({
+        url: \`http://localhost:\${runtimePort}/trpc\`,
+      }),
+    ],
+  });
+  trpcPort = runtimePort;
+  return trpcClient;
+}
+
+// DB proxy that forwards queries to the runtime's PGlite instance via tRPC
 function createDbProxy(runtimePort: number) {
-  const baseUrl = \`http://localhost:\${runtimePort}\`;
-
-  const query = async (sql: string, params?: unknown[]) => {
-    let response: Response;
-    try {
-      response = await fetch(\`\${baseUrl}/db/query\`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ query: sql, params }),
-      });
-    } catch (fetchError) {
-      // Network error - runtime not reachable
-      const err = new Error(\`Database connection failed: \${fetchError instanceof Error ? fetchError.message : String(fetchError)}\`);
-      (err as any).cause = fetchError;
-      throw err;
-    }
-
-    if (!response.ok) {
-      let errorMessage = "Database query failed";
-      try {
-        const errorBody = await response.json();
-        errorMessage = errorBody.error || errorBody.message || errorMessage;
-      } catch {
-        // Response wasn't JSON, try text
-        try {
-          errorMessage = await response.text() || errorMessage;
-        } catch {
-          // Ignore
-        }
-      }
-      throw new Error(errorMessage);
-    }
-
-    const result = await response.json();
-    return result.rows;
-  };
+  const trpc = getTRPC(runtimePort);
 
   // Tagged template literal for SQL queries
   const sql = async <T = Record<string, unknown>>(
@@ -504,43 +489,22 @@ function createDbProxy(runtimePort: number) {
   ): Promise<T[]> => {
     // Build parameterized query: "SELECT * FROM users WHERE id = $1"
     let queryText = strings[0];
-    const params: unknown[] = [];
-
     for (let i = 0; i < values.length; i++) {
-      params.push(values[i]);
       queryText += \`$\${i + 1}\` + strings[i + 1];
     }
 
-    return query(queryText, params) as Promise<T[]>;
+    const result = await trpc.db.query.mutate({ query: queryText, params: values });
+    return result.rows as T[];
   };
 
   return {
-    query,
     sql,
+    query: async (queryText: string, params?: unknown[]) => {
+      const result = await trpc.db.query.mutate({ query: queryText, params });
+      return result.rows;
+    },
     tables: async () => {
-      let response: Response;
-      try {
-        response = await fetch(\`\${baseUrl}/db/tables\`);
-      } catch (fetchError) {
-        const err = new Error(\`Failed to fetch tables: \${fetchError instanceof Error ? fetchError.message : String(fetchError)}\`);
-        (err as any).cause = fetchError;
-        throw err;
-      }
-      if (!response.ok) {
-        let errorMessage = "Failed to fetch tables";
-        try {
-          const errorBody = await response.json();
-          errorMessage = errorBody.error || errorBody.message || errorMessage;
-        } catch {
-          try {
-            errorMessage = await response.text() || errorMessage;
-          } catch {
-            // Ignore
-          }
-        }
-        throw new Error(errorMessage);
-      }
-      return response.json();
+      return await trpc.db.tables.query();
     },
   };
 }

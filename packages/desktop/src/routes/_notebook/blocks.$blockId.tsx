@@ -49,6 +49,6 @@ function BlockView() {
     return <EmptyBlockView blockId={blockId} onInitialized={handleInitialized} />;
   }
 
-  // Non-empty block - show editor
+  // Non-empty block - sandbox handles canvas styling
   return <EditorSandbox blockId={blockId} className="h-full" />;
 }

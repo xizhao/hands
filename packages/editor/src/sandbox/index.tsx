@@ -249,16 +249,22 @@ function SandboxApp() {
     return null;
   }
 
-  // Block mode: Use Overlay Editor
+  // Block mode: Use Overlay Editor in canvas view
+  // Slightly dimmed background, block container is centered and sized to content
   return (
     <RscProvider port={workerPortNum!} enabled>
-      <OverlayEditor
-        blockId={blockId!}
-        initialSource={source}
-        runtimePort={runtimePortNum!}
-        workerPort={workerPortNum!}
-        readOnly={readOnly}
-      />
+      <div className="relative min-h-screen w-full bg-background flex items-center justify-center p-8 overflow-auto">
+        <div className="absolute inset-0 bg-black/[0.03] dark:bg-black/[0.15] pointer-events-none" />
+        <div className="relative bg-background rounded-xl shadow-md">
+          <OverlayEditor
+            blockId={blockId!}
+            initialSource={source}
+            runtimePort={runtimePortNum!}
+            workerPort={workerPortNum!}
+            readOnly={readOnly}
+          />
+        </div>
+      </div>
     </RscProvider>
   );
 }
