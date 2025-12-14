@@ -378,10 +378,7 @@ export async function initWorkbook(options: InitWorkbookOptions): Promise<void> 
 
   const slug = slugify(name);
 
-  // Create directory structure
-  mkdirSync(join(directory, "blocks"), { recursive: true });
-  mkdirSync(join(directory, "blocks/ui"), { recursive: true });
-  mkdirSync(join(directory, "pages"), { recursive: true });
+  // Create directory structure (no pages/ or blocks/ - user creates on demand)
   mkdirSync(join(directory, "migrations"), { recursive: true });
   mkdirSync(join(directory, "lib"), { recursive: true });
   mkdirSync(join(directory, "sources"), { recursive: true });
@@ -445,52 +442,7 @@ db/
 `;
   writeFileSync(join(directory, ".gitignore"), gitignore);
 
-  // Create blocks/welcome.tsx
-  const welcomeBlock = `import type { BlockFn, BlockMeta } from "@hands/stdlib"
-
-export const meta: BlockMeta = {
-  title: "Welcome",
-  description: "Welcome block for new workbooks",
-  refreshable: false
-}
-
-const WelcomeBlock: BlockFn<{ name?: string }> = async ({ ctx, name }) => {
-  // Query example using ctx.sql tagged template
-  // const users = await ctx.sql<{ id: number; name: string }>\`
-  //   SELECT id, name FROM users LIMIT 5
-  // \`
-
-  return (
-    <div className="p-6 bg-gradient-to-br from-blue-50 to-indigo-100 rounded-xl">
-      <h1 className="text-2xl font-bold text-gray-900">
-        Welcome to {name || "${name}"}
-      </h1>
-      <p className="mt-2 text-gray-600">
-        Create blocks to visualize your data.
-      </p>
-    </div>
-  )
-}
-
-export default WelcomeBlock
-`;
-  writeFileSync(join(directory, "blocks/welcome.tsx"), welcomeBlock);
-
-  // Create blocks/ui/.gitkeep
-  writeFileSync(join(directory, "blocks/ui/.gitkeep"), "");
-
-  // Create pages/index.md
-  const indexPage = `---
-title: ${name}
----
-
-# ${name}
-
-<Block src="welcome" name="${name}" />
-
-Start by creating blocks in the \`blocks/\` directory.
-`;
-  writeFileSync(join(directory, "pages/index.md"), indexPage);
+  // Note: No starter blocks or pages - user creates them on demand via the UI
 
   // Create lib/db.ts helper
   const dbHelper = `// Database helper - re-exported from context for convenience

@@ -2,7 +2,7 @@ import { motion } from "framer-motion";
 import { Check, CheckCircle2, Eye, EyeOff, Key, Loader2 } from "lucide-react";
 import { memo, useCallback, useState } from "react";
 import { Button } from "@/components/ui/button";
-import { useRuntimeState } from "@/hooks/useRuntimeState";
+import { trpc } from "@/lib/trpc";
 import { cn } from "@/lib/utils";
 
 interface SecretSpec {
@@ -100,11 +100,19 @@ SecretInput.displayName = "SecretInput";
  * SecretsForm component - renders when the secrets tool requests user input
  */
 export const SecretsForm = memo(({ output, onSaved }: SecretsFormProps) => {
-  const { port: runtimePort } = useRuntimeState();
   const [values, setValues] = useState<Record<string, string>>({});
-  const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  const saveSecretsMutation = trpc.secrets.save.useMutation({
+    onSuccess: () => {
+      setSaved(true);
+      onSaved?.();
+    },
+    onError: (err) => {
+      setError(err.message || "Failed to save secrets");
+    },
+  });
 
   const missingSecrets = output.secrets.filter((s) => !s.exists);
   const existingSecrets = output.secrets.filter((s) => s.exists);
@@ -118,11 +126,6 @@ export const SecretsForm = memo(({ output, onSaved }: SecretsFormProps) => {
     async (e: React.FormEvent) => {
       e.preventDefault();
       setError(null);
-
-      if (!runtimePort) {
-        setError("Runtime not connected");
-        return;
-      }
 
       // Filter out empty values (don't overwrite existing secrets with empty)
       const secretsToSave: Record<string, string> = {};
@@ -144,29 +147,12 @@ export const SecretsForm = memo(({ output, onSaved }: SecretsFormProps) => {
         return;
       }
 
-      setSaving(true);
-      try {
-        const response = await fetch(`http://localhost:${runtimePort}/secrets`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ secrets: secretsToSave }),
-        });
-
-        if (!response.ok) {
-          const data = await response.json();
-          throw new Error(data.error || "Failed to save secrets");
-        }
-
-        setSaved(true);
-        onSaved?.();
-      } catch (err) {
-        setError(err instanceof Error ? err.message : "Failed to save secrets");
-      } finally {
-        setSaving(false);
-      }
+      saveSecretsMutation.mutate({ secrets: secretsToSave });
     },
-    [values, missingSecrets, onSaved, runtimePort],
+    [values, missingSecrets, saveSecretsMutation],
   );
+
+  const saving = saveSecretsMutation.isPending;
 
   // Already saved state
   if (saved) {

@@ -195,62 +195,16 @@ export function SandboxFrame({
   // Fetch LQIP for loading placeholder
   const { data: thumbnail } = useThumbnail(mode, contentId);
 
-  // Actual ports from runtime status (populated by polling)
-  const [editorPort, setEditorPort] = useState<number | null>(null);
-  const [workerPort, setWorkerPort] = useState<number | null>(null);
+  // Derive ports from runtime port (they're deterministic: editor = runtime + 400, worker = runtime + 200)
+  const editorPort = runtimePort ? runtimePort + 400 : null;
+  const workerPort = runtimePort ? runtimePort + 200 : null;
 
-  // Poll runtime to check if editor is ready and get actual ports
+  // Mark ready when we have ports - iframe will handle its own loading/retry
   useEffect(() => {
-    if (!runtimePort || editorReady) return;
-
-    let cancelled = false;
-    const pollTimeout = 30000; // 30 second total timeout
-    const pollInterval = 500;
-    const startTime = Date.now();
-
-    const poll = async () => {
-      while (!cancelled && Date.now() - startTime < pollTimeout) {
-        try {
-          const res = await fetch(`http://localhost:${runtimePort}/status`, {
-            signal: AbortSignal.timeout(2000),
-          });
-          if (res.ok) {
-            const data = await res.json();
-            const editorIsReady = data.services?.editor?.ready;
-            const blockServerIsReady = data.services?.blockServer?.ready;
-
-            // Check readiness based on requirements
-            const isReady = requireBlockServer
-              ? editorIsReady && blockServerIsReady
-              : editorIsReady;
-
-            if (isReady) {
-              setEditorPort(data.services.editor.port);
-              // Worker port may not be ready yet for page mode
-              setWorkerPort(data.services.blockServer?.port ?? null);
-              setEditorReady(true);
-              setState("loading");
-              return;
-            }
-          }
-        } catch {
-          // Runtime not ready yet, keep polling
-        }
-        await new Promise((resolve) => setTimeout(resolve, pollInterval));
-      }
-
-      // Timeout - show error
-      if (!cancelled) {
-        setState("error");
-        setError("Editor server took too long to start. Check the runtime logs.");
-      }
-    };
-
-    poll();
-    return () => {
-      cancelled = true;
-    };
-  }, [runtimePort, editorReady, requireBlockServer]);
+    if (editorReady || !editorPort) return;
+    setEditorReady(true);
+    setState("loading");
+  }, [editorReady, editorPort]);
 
   // Build iframe URL - load directly from editor Vite for proper module resolution
   const iframeSrc = (() => {

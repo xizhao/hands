@@ -67,7 +67,7 @@ import { useCreateBlock, useCreatePage } from "@/hooks/useWorkbook";
 import { cn } from "@/lib/utils";
 import { ThumbnailPreview } from "./ThumbnailPreview";
 
-// HoverCard wrapper - only shows if thumbnail exists
+// HoverCard wrapper - shows thumbnail preview on hover
 function ThumbnailHoverCard({
   type,
   contentId,
@@ -1450,16 +1450,9 @@ export default function Placeholder() {
               </DialogContent>
             </Dialog>
 
-            {dataExpanded && (
+            {dataExpanded && !isDbLoading && (
               <div className="space-y-0">
-                {isDbLoading ? (
-                  <div className="space-y-1 py-1">
-                    <div className="h-5 bg-muted/50 rounded animate-pulse" />
-                    <div className="h-5 bg-muted/50 rounded animate-pulse w-3/4" />
-                    <div className="h-5 bg-muted/50 rounded animate-pulse w-1/2" />
-                  </div>
-                ) : (
-                  <>
+                <>
                     {/* Sources with their tables */}
                     {sources.length > 0
                       ? sources.map((source) => {
@@ -1590,8 +1583,7 @@ export default function Placeholder() {
                         <span>No data</span>
                       </div>
                     )}
-                  </>
-                )}
+                </>
               </div>
             )}
           </div>

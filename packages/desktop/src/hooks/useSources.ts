@@ -15,6 +15,7 @@ import {
   useRuntimeState,
   type WorkbookManifest,
 } from "@/hooks/useRuntimeState";
+import { trpc } from "@/lib/trpc";
 
 // Extract source type from manifest
 type WorkbookSource = NonNullable<WorkbookManifest["sources"]>[number];
@@ -207,27 +208,9 @@ export function useValidateSource() {
  * Save secrets to .env.local
  */
 export function useSaveSecrets() {
-  const port = useRuntimePort();
   const queryClient = useQueryClient();
 
-  return useMutation({
-    mutationFn: async (
-      secrets: Record<string, string>,
-    ): Promise<{ success: boolean; saved: string[] }> => {
-      if (!port) throw new Error("Runtime not available");
-
-      const res = await fetch(`http://localhost:${port}/secrets`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ secrets }),
-      });
-
-      const data = await res.json();
-      if (!res.ok) {
-        throw new Error(data.error || "Failed to save secrets");
-      }
-      return data;
-    },
+  return trpc.secrets.save.useMutation({
     onSuccess: () => {
       // Refresh manifest to update missingSecrets
       queryClient.invalidateQueries({ queryKey: ["manifest"] });

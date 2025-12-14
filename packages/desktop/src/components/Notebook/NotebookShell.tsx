@@ -39,14 +39,14 @@ import { HoverCard, HoverCardContent, HoverCardTrigger } from "@/components/ui/h
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { ATTACHMENT_TYPE, useChatState } from "@/hooks/useChatState";
+import { useDatabase } from "@/hooks/useDatabase";
 import { useNeedsTrafficLightOffset } from "@/hooks/useFullscreen";
-import { useActiveSession, useClearNavigation, useRightPanel } from "@/hooks/useNavState";
-import { useRuntimeState } from "@/hooks/useRuntimeState";
+import { useActiveSession, useClearNavigation, useRightPanel, type RightPanelId } from "@/hooks/useNavState";
+import { usePrefetchOnDbReady, useRuntimeState } from "@/hooks/useRuntimeState";
 import {
   useCreateWorkbook,
   useEvalResult,
   useOpenWorkbook,
-  useSaveDatabase,
   useUpdateWorkbook,
   useWorkbooks,
 } from "@/hooks/useWorkbook";
@@ -54,6 +54,117 @@ import { cn } from "@/lib/utils";
 import type { Workbook } from "@/lib/workbook";
 import { RightPanel } from "./panels/RightPanel";
 import { NotebookSidebar } from "./sidebar/NotebookSidebar";
+
+// ============================================================================
+// tRPC-dependent sub-components (only render when runtime connected)
+// ============================================================================
+
+/**
+ * Database status button with save action
+ * Requires TRPCProvider - only render when runtimePort exists
+ */
+function DatabaseButton({
+  rightPanel,
+  toggleRightPanel,
+  isDbLoading,
+}: {
+  rightPanel: RightPanelId;
+  toggleRightPanel: (panel: Exclude<RightPanelId, null>) => void;
+  isDbLoading: boolean;
+}) {
+  const database = useDatabase();
+  const dbConnected = database.isReady;
+  const tableCount = database.tableCount;
+
+  return (
+    <HoverCard openDelay={0} closeDelay={100}>
+      <HoverCardTrigger asChild>
+        <button
+          onClick={() => toggleRightPanel("database")}
+          className={cn(
+            "flex items-center gap-1 px-1.5 py-1 rounded-md text-[11px] transition-colors",
+            rightPanel === "database"
+              ? "bg-accent text-foreground"
+              : dbConnected && tableCount > 0
+                ? "text-muted-foreground hover:bg-accent/50 hover:text-foreground"
+                : "text-muted-foreground/70 hover:bg-accent/50 hover:text-muted-foreground",
+          )}
+        >
+          <Database
+            weight="duotone"
+            className={cn(
+              "h-3.5 w-3.5",
+              !isDbLoading && dbConnected && tableCount > 0 && "text-blue-500",
+            )}
+          />
+          {isDbLoading ? (
+            <div className="w-4 h-3 bg-muted/50 rounded animate-pulse" />
+          ) : (
+            <span
+              className={cn(
+                "tabular-nums",
+                dbConnected && tableCount > 0
+                  ? "text-foreground"
+                  : "text-muted-foreground/70",
+              )}
+            >
+              {tableCount}
+            </span>
+          )}
+        </button>
+      </HoverCardTrigger>
+      <HoverCardContent side="bottom" align="center" className="w-auto p-1">
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
+            database.save?.();
+          }}
+          disabled={!database.save || database.isSaving}
+          className={cn(
+            "flex items-center gap-1.5 px-2 py-1 rounded text-xs transition-colors",
+            "hover:bg-accent text-muted-foreground hover:text-foreground",
+            "disabled:opacity-50 disabled:cursor-not-allowed",
+          )}
+        >
+          {database.isSaving ? (
+            <CircleNotch weight="bold" className="h-3 w-3 animate-spin" />
+          ) : (
+            <FloppyDisk weight="duotone" className="h-3 w-3" />
+          )}
+          <span>{database.isSaving ? "Saving..." : "Save"}</span>
+        </button>
+      </HoverCardContent>
+    </HoverCard>
+  );
+}
+
+/**
+ * Database spine indicators (circles showing tables)
+ * Requires TRPCProvider - only render when runtimePort exists
+ */
+function DatabaseSpineIndicators({ tableId }: { tableId: string | undefined }) {
+  const database = useDatabase();
+
+  if (database.schema.length === 0) return null;
+
+  return (
+    <div className="flex flex-col items-center gap-1 mt-2">
+      {database.schema.slice(0, 3).map((table) => (
+        <div
+          key={`table-${table.table_name}`}
+          className={cn(
+            "w-1.5 h-1.5 rounded-full transition-colors",
+            table.table_name === tableId ? "bg-foreground/60" : "bg-foreground/15",
+          )}
+        />
+      ))}
+    </div>
+  );
+}
+
+// ============================================================================
+// Main Component
+// ============================================================================
 
 interface NotebookShellProps {
   children: ReactNode;
@@ -92,12 +203,11 @@ export function NotebookShell({ children }: NotebookShellProps) {
     workbookId: activeWorkbookId,
     port: runtimePort,
     manifest,
-    schema: dbSchema,
-    isDbReady,
-    isDbBooting,
     isStarting,
-    isFullyReady,
   } = useRuntimeState();
+
+  // Prefetch schema when DB becomes ready
+  usePrefetchOnDbReady();
 
   const { panel: rightPanel, togglePanel: toggleRightPanel } = useRightPanel();
   const { setSession: setActiveSession } = useActiveSession();
@@ -108,23 +218,15 @@ export function NotebookShell({ children }: NotebookShellProps) {
   const openWorkbook = useOpenWorkbook();
   const updateWorkbook = useUpdateWorkbook();
 
-  // Eval result (still separate - not part of runtime state machine)
+  // Eval result (still separate - uses Tauri IPC, not tRPC)
   const { data: evalResult } = useEvalResult(activeWorkbookId);
 
   // Derive connection state from runtime state
   const isRuntimeReady = !!runtimePort;
   const isManifestLoading = !manifest && !!runtimePort;
   const isConnecting = isManifestLoading;
-  const isDbLoading = isStarting || isDbBooting;
-
-  // Runtime connection status
   const runtimeConnected = isRuntimeReady;
-  const dbConnected = runtimeConnected && isDbReady;
-
-  // Mutations for empty state actions
-  const saveDatabase = useSaveDatabase();
-
-  const tableCount = dbSchema?.length ?? 0;
+  const isDbLoading = isStarting;
   const _blockCount = manifest?.blocks?.length ?? 0;
 
   // Compute alert counts from eval result
@@ -141,9 +243,6 @@ export function NotebookShell({ children }: NotebookShellProps) {
 
   // Current source (for breadcrumb) - from manifest
   const currentSource = manifest?.sources?.find((s) => s.id === sourceId);
-
-  // Current table (for breadcrumb) - from schema
-  const currentTable = dbSchema?.find((t) => t.table_name === tableId);
 
   // Current page (for breadcrumb) - from manifest
   const currentPage = manifest?.pages?.find((p) => p.id === pageId || p.route === `/${pageId}`);
@@ -510,7 +609,7 @@ export function NotebookShell({ children }: NotebookShellProps) {
                     "hover:bg-accent/50 hover:text-foreground",
                   )}
                 >
-                  {currentTable?.table_name || tableId}
+                  {tableId}
                 </span>
                 <Tooltip>
                   <TooltipTrigger asChild>
@@ -584,65 +683,13 @@ export function NotebookShell({ children }: NotebookShellProps) {
             )}
 
             {/* Database - table browser with quick actions on hover when active */}
-            {!isConnecting && (
-              <HoverCard openDelay={0} closeDelay={100}>
-                <HoverCardTrigger asChild>
-                  <button
-                    onClick={() => toggleRightPanel("database")}
-                    className={cn(
-                      "flex items-center gap-1 px-1.5 py-1 rounded-md text-[11px] transition-colors",
-                      rightPanel === "database"
-                        ? "bg-accent text-foreground"
-                        : dbConnected && tableCount > 0
-                          ? "text-muted-foreground hover:bg-accent/50 hover:text-foreground"
-                          : "text-muted-foreground/70 hover:bg-accent/50 hover:text-muted-foreground",
-                    )}
-                  >
-                    <Database
-                      weight="duotone"
-                      className={cn(
-                        "h-3.5 w-3.5",
-                        !isDbLoading && dbConnected && tableCount > 0 && "text-blue-500",
-                      )}
-                    />
-                    {isDbLoading ? (
-                      <div className="w-4 h-3 bg-muted/50 rounded animate-pulse" />
-                    ) : (
-                      <span
-                        className={cn(
-                          "tabular-nums",
-                          dbConnected && tableCount > 0
-                            ? "text-foreground"
-                            : "text-muted-foreground/70",
-                        )}
-                      >
-                        {tableCount}
-                      </span>
-                    )}
-                  </button>
-                </HoverCardTrigger>
-                <HoverCardContent side="bottom" align="center" className="w-auto p-1">
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      saveDatabase.mutate();
-                    }}
-                    disabled={saveDatabase.isPending || !dbConnected || isDbLoading}
-                    className={cn(
-                      "flex items-center gap-1.5 px-2 py-1 rounded text-xs transition-colors",
-                      "hover:bg-accent text-muted-foreground hover:text-foreground",
-                      "disabled:opacity-50 disabled:cursor-not-allowed",
-                    )}
-                  >
-                    {saveDatabase.isPending ? (
-                      <CircleNotch weight="bold" className="h-3 w-3 animate-spin" />
-                    ) : (
-                      <FloppyDisk weight="duotone" className="h-3 w-3" />
-                    )}
-                    <span>{saveDatabase.isPending ? "Saving..." : "Save"}</span>
-                  </button>
-                </HoverCardContent>
-              </HoverCard>
+            {/* Only render when runtime connected (tRPC available) */}
+            {!isConnecting && runtimePort && (
+              <DatabaseButton
+                rightPanel={rightPanel}
+                toggleRightPanel={toggleRightPanel}
+                isDbLoading={isDbLoading}
+              />
             )}
 
             {/* Runtime/Alerts */}
@@ -826,20 +873,8 @@ export function NotebookShell({ children }: NotebookShellProps) {
                       ))}
                     </div>
                   )}
-                  {/* Data/Tables - circles */}
-                  {dbSchema && dbSchema.length > 0 && (
-                    <div className="flex flex-col items-center gap-1 mt-2">
-                      {dbSchema.slice(0, 3).map((table) => (
-                        <div
-                          key={`table-${table.table_name}`}
-                          className={cn(
-                            "w-1.5 h-1.5 rounded-full transition-colors",
-                            table.table_name === tableId ? "bg-foreground/60" : "bg-foreground/15",
-                          )}
-                        />
-                      ))}
-                    </div>
-                  )}
+                  {/* Data/Tables - circles (only when runtime connected) */}
+                  {runtimePort && <DatabaseSpineIndicators tableId={tableId} />}
                   {/* Pages - horizontal lines */}
                   {manifest?.pages && manifest.pages.length > 0 && (
                     <div className="flex flex-col items-center gap-1 mt-2">

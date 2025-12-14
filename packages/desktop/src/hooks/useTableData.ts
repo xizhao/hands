@@ -54,12 +54,15 @@ export function useTableData(options: UseTableDataOptions) {
   const pendingRequests = useRef<Set<string>>(new Set());
 
   // Fetch table schema
-  const schemaQuery = trpc.sources.tables.schema.useQuery({ table }, { staleTime: 60000 });
+  const schemaQuery = trpc.sources.tables.schema.useQuery(
+    { table },
+    { staleTime: 60000, enabled: !!table },
+  );
 
   // Get initial count via a list query with limit 1
   const initialQuery = trpc.sources.tables.list.useQuery(
     { table, limit: 1, offset: 0, sort: sortParam },
-    { staleTime: 5000 },
+    { staleTime: 5000, enabled: !!table },
   );
 
   // Clear cache when sort changes (need to refetch all data with new order)
@@ -353,7 +356,10 @@ export function useSourceTables() {
  * Hook to get table schema only
  */
 export function useTableSchema(table: string) {
-  const query = trpc.sources.tables.schema.useQuery({ table }, { enabled: !!table });
+  const query = trpc.sources.tables.schema.useQuery(
+    { table },
+    { enabled: !!table },
+  );
 
   return {
     ...query,
@@ -373,5 +379,8 @@ export function useSources() {
  * Hook to get a single source by name
  */
 export function useSource(name: string) {
-  return trpc.sources.sources.get.useQuery({ source: name }, { enabled: !!name });
+  return trpc.sources.sources.get.useQuery(
+    { source: name },
+    { enabled: !!name },
+  );
 }

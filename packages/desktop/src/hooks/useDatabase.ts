@@ -1,36 +1,61 @@
-import { useQuery } from "@tanstack/react-query";
-import { invoke } from "@tauri-apps/api/core";
+/**
+ * useDatabase - Consolidated database state and operations
+ *
+ * Combines:
+ * - DB readiness from useRuntimeState
+ * - Save mutation from tRPC (only available when DB is ready)
+ * - Schema from useRuntimeState
+ */
 
-export interface DatabaseStats {
-  size_bytes: number;
-  size_formatted: string;
-  table_count: number;
-  connection_count: number;
+import { useCallback, useMemo } from "react";
+import { trpc } from "@/lib/trpc";
+import { useRuntimeState } from "./useRuntimeState";
+
+export interface UseDatabase {
+  // State
+  isReady: boolean;
+  isBooting: boolean;
+  schema: Array<{
+    table_name: string;
+    columns: Array<{ name: string; type: string; nullable: boolean }>;
+  }>;
+  tableCount: number;
+
+  // Mutations (null when DB not ready)
+  save: (() => void) | null;
+  isSaving: boolean;
 }
 
-export interface DatabaseStatus {
-  connected: boolean;
-  message: string;
-  port: number;
-  database: string;
-  stats: DatabaseStats | null;
-}
+/**
+ * Hook for database operations
+ *
+ * Returns save function only when DB is ready.
+ * Consumers don't need to check readiness separately.
+ */
+export function useDatabase(): UseDatabase {
+  const { isDbReady, isDbBooting, schema } = useRuntimeState();
 
-export function useDatabase() {
-  const status = useQuery({
-    queryKey: ["database-status"],
-    queryFn: () => invoke<DatabaseStatus>("get_database_status"),
-    retry: true,
-    retryDelay: (attemptIndex) => Math.min(1000 * (attemptIndex + 1), 5000),
-    refetchInterval: (query) => (query.state.data?.connected ? 30000 : 5000),
-    staleTime: 5000,
-  });
+  // tRPC mutation - only call when DB is ready
+  const saveMutation = trpc.db.save.useMutation();
 
-  return {
-    isConnected: status.data?.connected ?? false,
-    isConnecting: status.isPending,
-    error: status.error,
-    status: status.data,
-    refetch: status.refetch,
-  };
+  // Wrap save to only work when ready
+  const save = useCallback(() => {
+    if (!isDbReady) {
+      console.warn("[useDatabase] Cannot save - DB not ready");
+      return;
+    }
+    saveMutation.mutate();
+  }, [isDbReady, saveMutation]);
+
+  return useMemo(
+    () => ({
+      isReady: isDbReady,
+      isBooting: isDbBooting,
+      schema,
+      tableCount: schema.length,
+      save: isDbReady ? save : null,
+      isSaving: saveMutation.isPending,
+    }),
+    [isDbReady, isDbBooting, schema, save, saveMutation.isPending],
+  );
 }

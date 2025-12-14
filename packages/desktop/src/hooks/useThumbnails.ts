@@ -1,13 +1,12 @@
 /**
- * useThumbnail - React Query hook for fetching page/block thumbnails
+ * useThumbnail - tRPC hook for fetching page/block thumbnails
  *
  * Thumbnails are stored in the runtime's hands_admin.thumbnails table,
  * captured from iframe renders. Returns theme-appropriate thumbnail.
  */
 
-import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
-import { useRuntimeState } from "./useRuntimeState";
+import { trpc } from "@/lib/trpc";
 
 // ============================================================================
 // Types
@@ -71,28 +70,26 @@ function useCurrentTheme(): "light" | "dark" {
  * Uses staleTime: Infinity since we invalidate on save.
  */
 export function useThumbnail(type: "page" | "block", contentId: string | undefined) {
-  const { port } = useRuntimeState();
   const theme = useCurrentTheme();
 
-  return useQuery({
-    queryKey: ["thumbnail", type, contentId, theme],
-    queryFn: async (): Promise<Thumbnail | null> => {
-      if (!port || !contentId) return null;
-
-      const res = await fetch(`http://localhost:${port}/workbook/thumbnails/${type}/${contentId}`);
-      if (!res.ok) {
-        if (res.status === 404) return null;
-        throw new Error(`Failed to fetch thumbnail: ${res.status}`);
-      }
-
-      const data: ThumbnailResult = await res.json();
-      // Return theme-specific thumbnail, fallback to other theme if not available
-      return data[theme] ?? data[theme === "dark" ? "light" : "dark"] ?? null;
+  const query = trpc.thumbnails.get.useQuery(
+    { type, contentId: contentId! },
+    {
+      enabled: !!contentId,
+      staleTime: Infinity, // Don't refetch - we invalidate on save
+      gcTime: 1000 * 60 * 30, // Keep in cache for 30 minutes
     },
-    enabled: !!port && !!contentId,
-    staleTime: Infinity, // Don't refetch - we invalidate on save
-    gcTime: 1000 * 60 * 30, // Keep in cache for 30 minutes
-  });
+  );
+
+  // Return theme-specific thumbnail, fallback to other theme if not available
+  const thumbnail = query.data
+    ? query.data[theme] ?? query.data[theme === "dark" ? "light" : "dark"] ?? null
+    : null;
+
+  return {
+    ...query,
+    data: thumbnail,
+  };
 }
 
 /**
@@ -101,25 +98,14 @@ export function useThumbnail(type: "page" | "block", contentId: string | undefin
  * Useful when you need to show both variants (e.g., in settings preview).
  */
 export function useThumbnails(type: "page" | "block", contentId: string | undefined) {
-  const { port } = useRuntimeState();
-
-  return useQuery({
-    queryKey: ["thumbnails", type, contentId],
-    queryFn: async (): Promise<ThumbnailResult> => {
-      if (!port || !contentId) return {};
-
-      const res = await fetch(`http://localhost:${port}/workbook/thumbnails/${type}/${contentId}`);
-      if (!res.ok) {
-        if (res.status === 404) return {};
-        throw new Error(`Failed to fetch thumbnails: ${res.status}`);
-      }
-
-      return res.json();
+  return trpc.thumbnails.get.useQuery(
+    { type, contentId: contentId! },
+    {
+      enabled: !!contentId,
+      staleTime: Infinity,
+      gcTime: 1000 * 60 * 30,
     },
-    enabled: !!port && !!contentId,
-    staleTime: Infinity,
-    gcTime: 1000 * 60 * 30,
-  });
+  );
 }
 
 /**
@@ -128,23 +114,21 @@ export function useThumbnails(type: "page" | "block", contentId: string | undefi
  * Call this after saving page/block content to trigger re-capture.
  */
 export function useInvalidateThumbnails() {
-  const queryClient = useQueryClient();
+  const utils = trpc.useUtils();
 
   return {
     /**
      * Invalidate thumbnails for a specific content item
      */
     invalidate: (type: "page" | "block", contentId: string) => {
-      queryClient.invalidateQueries({ queryKey: ["thumbnail", type, contentId] });
-      queryClient.invalidateQueries({ queryKey: ["thumbnails", type, contentId] });
+      utils.thumbnails.get.invalidate({ type, contentId });
     },
 
     /**
      * Invalidate all thumbnails (e.g., after theme change causes re-render)
      */
     invalidateAll: () => {
-      queryClient.invalidateQueries({ queryKey: ["thumbnail"] });
-      queryClient.invalidateQueries({ queryKey: ["thumbnails"] });
+      utils.thumbnails.get.invalidate();
     },
   };
 }
@@ -155,26 +139,14 @@ export function useInvalidateThumbnails() {
  * Call this when hovering near an item to preload the thumbnail.
  */
 export function usePrefetchThumbnail() {
-  const { port } = useRuntimeState();
-  const queryClient = useQueryClient();
-  const theme = useCurrentTheme();
+  const utils = trpc.useUtils();
 
   return (type: "page" | "block", contentId: string) => {
-    if (!port || !contentId) return;
+    if (!contentId) return;
 
-    queryClient.prefetchQuery({
-      queryKey: ["thumbnail", type, contentId, theme],
-      queryFn: async (): Promise<Thumbnail | null> => {
-        const res = await fetch(`http://localhost:${port}/workbook/thumbnails/${type}/${contentId}`);
-        if (!res.ok) {
-          if (res.status === 404) return null;
-          throw new Error(`Failed to fetch thumbnail: ${res.status}`);
-        }
-
-        const data: ThumbnailResult = await res.json();
-        return data[theme] ?? data[theme === "dark" ? "light" : "dark"] ?? null;
-      },
-      staleTime: Infinity,
-    });
+    utils.thumbnails.get.prefetch(
+      { type, contentId },
+      { staleTime: Infinity },
+    );
   };
 }

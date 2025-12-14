@@ -57,15 +57,12 @@ export const queryClient = new QueryClient({
 });
 
 /**
- * Inner app content - requires runtime to be connected for tRPC
+ * Shared UI shell (Toaster, Tooltips) - no tRPC dependency
  */
-function AppContent() {
-  const { data: runtime } = useActiveRuntime();
-
-  // Base app shell without tRPC (for when runtime isn't ready)
-  const appShell = (
+function AppShell({ children }: { children: React.ReactNode }) {
+  return (
     <TooltipProvider>
-      <RouterProvider router={router} />
+      {children}
       <Toaster
         position="top-right"
         offset={16}
@@ -87,19 +84,38 @@ function AppContent() {
       />
     </TooltipProvider>
   );
+}
 
-  // Only wrap with TRPCProvider when runtime is connected
-  if (runtime?.runtime_port) {
+/**
+ * Inner app content - gates tRPC on runtime connection
+ *
+ * tRPC is only available when runtime is connected. The router renders
+ * regardless, allowing workbook initialization to happen without tRPC.
+ * Components using tRPC must be inside routes that only render when connected.
+ */
+function AppContent() {
+  const { data: runtime } = useActiveRuntime();
+  const runtimePort = runtime?.runtime_port ?? null;
+
+  // Always render the router - workbook init logic needs it
+  // tRPC provider only mounts when runtime is connected
+  if (runtimePort) {
     return (
-      <TRPCProvider queryClient={queryClient} runtimePort={runtime.runtime_port}>
-        {appShell}
+      <TRPCProvider queryClient={queryClient} runtimePort={runtimePort}>
+        <AppShell>
+          <RouterProvider router={router} />
+        </AppShell>
       </TRPCProvider>
     );
   }
 
-  // Render without tRPC when runtime isn't ready
-  // Components using tRPC hooks should handle this gracefully
-  return appShell;
+  // No runtime yet - render without tRPC
+  // Workbook picker and initialization work via Tauri IPC
+  return (
+    <AppShell>
+      <RouterProvider router={router} />
+    </AppShell>
+  );
 }
 
 export default function App() {

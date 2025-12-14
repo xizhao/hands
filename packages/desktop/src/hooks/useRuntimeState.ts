@@ -10,9 +10,10 @@
  *                                                          error
  */
 
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import { invoke } from "@tauri-apps/api/core";
 import { useEffect, useMemo, useRef } from "react";
+import { trpc } from "@/lib/trpc";
 
 // ============================================================================
 // Types
@@ -57,7 +58,7 @@ export interface WorkbookManifest {
     name: string;
     description?: string;
     schedule?: string;
-    triggers: Array<"manual" | "webhook" | "schedule" | "pg_notify">;
+    triggers: string[];
     path: string;
   }>;
   pages?: Array<{
@@ -76,19 +77,8 @@ export interface TableSchema {
   columns: Array<{ name: string; type: string; nullable: boolean }>;
 }
 
-/** Runtime service status from /status endpoint */
-interface RuntimeServiceStatus {
-  db: { ready: boolean };
-  blockServer: { ready: boolean; port?: number; error?: string };
-  editor: { ready: boolean; port?: number; restartCount?: number };
-}
-
-interface RuntimeStatusResponse {
-  workbookId: string;
-  workbookDir: string;
-  services: RuntimeServiceStatus;
-  buildErrors: string[];
-}
+// Note: Runtime status and manifest types are now provided by tRPC
+// via @hands/runtime/trpc (AppRouter)
 
 /**
  * Runtime lifecycle phases - explicit discriminated union
@@ -174,15 +164,8 @@ export function useRuntimeState(): RuntimeState {
   const workbookId = tauriQuery.data?.workbook_id ?? null;
   const workbookDirectory = tauriQuery.data?.directory ?? null;
 
-  // 2. Runtime status - polls for service readiness
-  const statusQuery = useQuery({
-    queryKey: ["runtime-status", port],
-    queryFn: async (): Promise<RuntimeStatusResponse | null> => {
-      if (!port) return null;
-      const response = await fetch(`http://localhost:${port}/status`);
-      if (!response.ok) return null;
-      return response.json();
-    },
+  // 2. Runtime status - polls for service readiness (tRPC)
+  const statusQuery = trpc.status.get.useQuery(undefined, {
     enabled: !!port,
     staleTime: 0,
     refetchInterval: (query) => {
@@ -192,44 +175,22 @@ export function useRuntimeState(): RuntimeState {
     },
   });
 
-  // 3. Manifest - fetch when port is available
-  const manifestQuery = useQuery({
-    queryKey: ["manifest", port],
-    queryFn: async (): Promise<WorkbookManifest> => {
-      const res = await fetch(`http://localhost:${port}/workbook/manifest`);
-      if (!res.ok) throw new Error("Failed to fetch manifest");
-      return res.json();
-    },
+  // 3. Manifest - fetch when port is available (tRPC)
+  const manifestQuery = trpc.workbook.manifest.useQuery(undefined, {
     enabled: !!port,
     staleTime: 0,
     refetchInterval: 1_000,
   });
 
-  // 4. Schema - ONLY fetch when DB is confirmed ready
+  // 4. Schema - ONLY fetch when DB is confirmed ready (tRPC)
+  // The db.schema procedure has its own dbReadyProcedure middleware,
+  // but we still guard here to avoid unnecessary failed requests
   const dbReady = statusQuery.data?.services?.db?.ready ?? false;
-  const schemaQuery = useQuery({
-    queryKey: ["db-schema", workbookId, port],
-    queryFn: async (): Promise<TableSchema[]> => {
-      const response = await fetch(`http://localhost:${port}/postgres/schema`);
-      if (!response.ok) {
-        // Throw on 503 to trigger retry (don't cache empty array!)
-        if (response.status === 503) {
-          throw new Error("Database not ready");
-        }
-        throw new Error(`Schema fetch failed: ${response.status}`);
-      }
-      return response.json();
-    },
-    enabled: !!port && !!workbookId && dbReady, // Guard on dbReady!
+  const schemaQuery = trpc.db.schema.useQuery(undefined, {
+    enabled: !!port && !!workbookId && dbReady,
     staleTime: 30_000,
     refetchInterval: 60_000,
-    retry: (failureCount, error) => {
-      // Retry 503s (DB booting) up to 5 times with backoff
-      if (error instanceof Error && error.message === "Database not ready") {
-        return failureCount < 5;
-      }
-      return failureCount < 2;
-    },
+    retry: 3,
     retryDelay: (attemptIndex) => Math.min(1000 * (attemptIndex + 1), 5000),
   });
 
@@ -322,18 +283,18 @@ export function useRuntimeState(): RuntimeState {
  * Prefetch schema when DB becomes ready
  *
  * Uses workbookId as key to ensure it runs exactly once per workbook.
- * Fixes the bug where hasPrefetched ref persisted across workbook switches.
+ * The schema is now fetched via tRPC, so we just need to ensure the query runs.
  */
 export function usePrefetchOnDbReady() {
-  const queryClient = useQueryClient();
-  const { port, workbookId, isDbReady } = useRuntimeState();
+  const utils = trpc.useUtils();
+  const { workbookId, isDbReady } = useRuntimeState();
 
   // Track which workbook we've prefetched for (not just "have we prefetched")
   const prefetchedForRef = useRef<string | null>(null);
 
   useEffect(() => {
     // Skip if missing required state
-    if (!workbookId || !port || !isDbReady) return;
+    if (!workbookId || !isDbReady) return;
 
     // Skip if already prefetched for THIS workbook
     if (prefetchedForRef.current === workbookId) return;
@@ -342,19 +303,7 @@ export function usePrefetchOnDbReady() {
       console.log("[usePrefetchOnDbReady] Prefetching schema for:", workbookId);
 
       try {
-        await queryClient.prefetchQuery({
-          queryKey: ["db-schema", workbookId, port],
-          queryFn: async () => {
-            const response = await fetch(`http://localhost:${port}/postgres/schema`);
-            if (!response.ok) {
-              throw new Error(`Schema fetch failed: ${response.status}`);
-            }
-            return response.json();
-          },
-          staleTime: 30_000,
-        });
-
-        // Mark as prefetched for THIS workbook
+        await utils.db.schema.prefetch();
         prefetchedForRef.current = workbookId;
         console.log("[usePrefetchOnDbReady] Schema prefetched for:", workbookId);
       } catch (err) {
@@ -363,7 +312,32 @@ export function usePrefetchOnDbReady() {
     };
 
     prefetch();
-  }, [workbookId, port, isDbReady, queryClient]);
+  }, [workbookId, isDbReady, utils]);
+}
+
+// ============================================================================
+// Minimal Tauri-only Hook (works outside TRPCProvider)
+// ============================================================================
+
+/**
+ * Minimal runtime process info from Tauri IPC only.
+ * Use this when you only need port/workbookId and are outside TRPCProvider.
+ * Does NOT fetch status/manifest/schema (those require tRPC).
+ */
+export function useRuntimeProcess() {
+  const tauriQuery = useQuery({
+    queryKey: ["active-runtime"],
+    queryFn: () => invoke<TauriRuntimeStatus | null>("get_active_runtime"),
+    staleTime: Infinity,
+    refetchOnWindowFocus: false,
+  });
+
+  return {
+    port: tauriQuery.data?.runtime_port ?? null,
+    workbookId: tauriQuery.data?.workbook_id ?? null,
+    workbookDirectory: tauriQuery.data?.directory ?? null,
+    isLoading: tauriQuery.isPending,
+  };
 }
 
 // ============================================================================
@@ -372,19 +346,19 @@ export function usePrefetchOnDbReady() {
 
 /**
  * Get just the runtime port
- * @deprecated Prefer useRuntimeState().port
+ * Works outside TRPCProvider (uses Tauri IPC only)
  */
 export function useRuntimePort(): number | null {
-  const { port } = useRuntimeState();
+  const { port } = useRuntimeProcess();
   return port;
 }
 
 /**
  * Get just the active workbook ID
- * @deprecated Prefer useRuntimeState().workbookId
+ * Works outside TRPCProvider (uses Tauri IPC only)
  */
 export function useActiveWorkbookId(): string | null {
-  const { workbookId } = useRuntimeState();
+  const { workbookId } = useRuntimeProcess();
   return workbookId;
 }
 
@@ -436,9 +410,9 @@ export function useDbReady() {
 
 /**
  * Get just the active workbook directory
- * @deprecated Prefer useRuntimeState().workbookDirectory
+ * Works outside TRPCProvider (uses Tauri IPC only)
  */
 export function useActiveWorkbookDirectory(): string | null {
-  const { workbookDirectory } = useRuntimeState();
+  const { workbookDirectory } = useRuntimeProcess();
   return workbookDirectory;
 }

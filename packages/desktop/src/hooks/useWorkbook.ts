@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { invoke } from "@tauri-apps/api/core";
 import type { Workbook } from "@/lib/workbook";
+import { trpc } from "@/lib/trpc";
 
 // Tauri command response type (matches Rust backend)
 interface TauriRuntimeStatus {
@@ -194,6 +195,9 @@ export function useDeleteWorkbook() {
   });
 }
 
+// Tauri-sourced query keys that should NOT be cleared on workbook switch
+const TAURI_QUERY_KEYS = ["workbooks", "workbook", "active-runtime"];
+
 // Mark workbook as opened (updates last_opened_at) and start runtime
 export function useOpenWorkbook() {
   const updateWorkbook = useUpdateWorkbook();
@@ -202,30 +206,35 @@ export function useOpenWorkbook() {
   return useMutation({
     mutationKey: ["workbook", "open"],
     mutationFn: async (workbook: Workbook) => {
-      // IMMEDIATELY clear active runtime to trigger loading states in UI
-      // This ensures consumers show loaders during workbook switch
-      queryClient.setQueryData(["active-runtime"], null);
+      // 1. Optimistically set workbook_id (so UI shows correct name immediately)
+      //    but clear port to trigger loading state (TRPCProvider won't mount)
+      queryClient.setQueryData<TauriRuntimeStatus | null>(["active-runtime"], {
+        running: false,
+        workbook_id: workbook.id,
+        directory: workbook.directory,
+        runtime_port: 0,
+        postgres_port: 0,
+        worker_port: 0,
+        message: "Starting...",
+      });
 
-      // CANCEL in-flight queries FIRST to prevent race conditions
-      // (in-flight queries can restore stale data after removeQueries)
-      await queryClient.cancelQueries({ queryKey: ["manifest"] });
-      await queryClient.cancelQueries({ queryKey: ["runtime-status"] });
-      await queryClient.cancelQueries({ queryKey: ["runtime-status-services"] });
-      await queryClient.cancelQueries({ queryKey: ["db-schema"] });
-      await queryClient.cancelQueries({ queryKey: ["runtime-health"] });
-      await queryClient.cancelQueries({ queryKey: ["runtime-eval"] });
+      // 2. Cancel ALL in-flight queries to prevent race conditions
+      await queryClient.cancelQueries();
 
-      // THEN remove stale caches
-      queryClient.removeQueries({ queryKey: ["manifest"] });
-      queryClient.removeQueries({ queryKey: ["block"] });
-      queryClient.removeQueries({ queryKey: ["blockSource"] });
-      queryClient.removeQueries({ queryKey: ["runtime-eval"] });
-      queryClient.removeQueries({ queryKey: ["runtime-health"] });
-      queryClient.removeQueries({ queryKey: ["runtime-status"] });
-      queryClient.removeQueries({ queryKey: ["runtime-status-services"] });
-      queryClient.removeQueries({ queryKey: ["db-schema"] });
+      // 3. Clear all runtime-related caches (everything except Tauri-sourced data)
+      // This includes all tRPC queries which have structured keys like [['workbook', 'manifest'], ...]
+      queryClient.removeQueries({
+        predicate: (query) => {
+          const key = query.queryKey[0];
+          // Keep Tauri-sourced queries (workbooks list, individual workbook metadata)
+          if (typeof key === "string" && TAURI_QUERY_KEYS.includes(key)) {
+            return false;
+          }
+          return true; // Remove everything else (tRPC, runtime data, etc.)
+        },
+      });
 
-      // Update last opened timestamp
+      // 4. Update last opened timestamp
       const updated: Workbook = {
         ...workbook,
         last_opened_at: Date.now(),
@@ -233,7 +242,7 @@ export function useOpenWorkbook() {
       };
       await updateWorkbook.mutateAsync(updated);
 
-      // Start runtime FIRST - it's the priority (provides database, blocks, etc.)
+      // 5. Start runtime (provides database, blocks, etc.)
       try {
         console.log("[useOpenWorkbook] Starting runtime for:", workbook.id);
         const status = await invoke<TauriRuntimeStatus>("start_runtime", {
@@ -241,14 +250,12 @@ export function useOpenWorkbook() {
           directory: workbook.directory,
         });
         console.log("[useOpenWorkbook] Runtime started:", status.runtime_port);
-        queryClient.setQueryData(["runtime-status", workbook.id], status);
-        // Update active-runtime query so useRuntimePort() etc. get the new value
         queryClient.setQueryData(["active-runtime"], status);
       } catch (err) {
         console.error("[useOpenWorkbook] Failed to start runtime:", err);
       }
 
-      // Now restart OpenCode with workbook directory
+      // 6. Restart OpenCode with workbook directory
       try {
         console.log("[useOpenWorkbook] Setting active workbook (restarts OpenCode):", workbook.id);
         await invoke("set_active_workbook", { workbookId: workbook.id });
@@ -364,27 +371,12 @@ export function useWorkbookDatabase(workbookId: string | null) {
 // Note: useDbSchema, useRuntimeStatus, useDbReady, usePrefetchRuntimeData
 // moved to useRuntimeState.ts
 
-// Save database snapshot (dumps to db.tar.gz)
+/**
+ * Save database snapshot (dumps to db.tar.gz)
+ * @deprecated Use useDatabase().save instead - it handles DB readiness checks
+ */
 export function useSaveDatabase() {
-  const port = useRuntimePort();
-
-  return useMutation({
-    mutationKey: ["db", "save"],
-    mutationFn: async () => {
-      if (!port) throw new Error("Runtime not connected");
-
-      const response = await fetch(`http://localhost:${port}/db/save`, {
-        method: "POST",
-      });
-
-      if (!response.ok) {
-        const error = await response.json().catch(() => ({ error: "Failed to save database" }));
-        throw new Error(error.error || "Failed to save database");
-      }
-
-      return response.json() as Promise<{ success: boolean }>;
-    },
-  });
+  return trpc.db.save.useMutation();
 }
 
 // ============================================================================
@@ -393,235 +385,70 @@ export function useSaveDatabase() {
 
 // Get block source (TSX) by blockId
 export function useBlockContent(blockId: string | null) {
-  const port = useRuntimePort();
-
-  return useQuery({
-    queryKey: ["block-content", blockId, port],
-    queryFn: async (): Promise<string> => {
-      if (!port || !blockId) throw new Error("Not ready");
-
-      const response = await fetch(`http://localhost:${port}/workbook/blocks/${blockId}/source`);
-      if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.error || "Failed to load block");
-      }
-
-      const data = await response.json();
-      return data.source;
+  const query = trpc.workbook.blocks.getSource.useQuery(
+    { blockId: blockId! },
+    {
+      enabled: !!blockId,
+      staleTime: 0,
+      refetchInterval: 2000,
     },
-    enabled: !!port && !!blockId,
-    staleTime: 0,
-    refetchInterval: 2000,
-  });
+  );
+
+  // Return source string for backward compatibility
+  return {
+    ...query,
+    data: query.data?.source,
+  };
 }
 
 // Save block source (TSX)
 export function useSaveBlockContent() {
-  const port = useRuntimePort();
-  const queryClient = useQueryClient();
+  const utils = trpc.useUtils();
 
-  return useMutation({
-    mutationKey: ["block-content", "save"],
-    mutationFn: async ({ blockId, source }: { blockId: string; source: string }) => {
-      if (!port) throw new Error("No runtime connected");
-
-      const response = await fetch(`http://localhost:${port}/workbook/blocks/${blockId}/source`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ source }),
-      });
-
-      if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.error || "Failed to save block");
-      }
-
-      return response.json();
-    },
+  return trpc.workbook.blocks.saveSource.useMutation({
     onSuccess: (_, { blockId }) => {
-      queryClient.invalidateQueries({ queryKey: ["block-content", blockId] });
-      queryClient.invalidateQueries({ queryKey: ["manifest"] });
+      utils.workbook.blocks.getSource.invalidate({ blockId });
+      utils.workbook.manifest.invalidate();
     },
   });
 }
 
 // Create a new block
 export interface CreateBlockResult {
-  success: boolean;
   blockId: string;
   filePath: string;
 }
 
 export function useCreateBlock() {
-  const port = useRuntimePort();
-  const queryClient = useQueryClient();
+  const utils = trpc.useUtils();
 
-  return useMutation({
-    mutationKey: ["block", "create"],
-    mutationFn: async ({ blockId, source }: { blockId: string; source?: string }) => {
-      if (!port) throw new Error("Runtime not connected");
-
-      const response = await fetch(`http://localhost:${port}/workbook/blocks`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ blockId, source }),
-      });
-
-      if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.error || "Failed to create block");
-      }
-
-      return response.json() as Promise<CreateBlockResult>;
-    },
+  return trpc.workbook.blocks.create.useMutation({
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["workbook-manifest"] });
-      queryClient.invalidateQueries({ queryKey: ["manifest"] });
+      utils.workbook.manifest.invalidate();
     },
   });
 }
 
 // Create a new page
 export interface CreatePageResult {
-  success: boolean;
   pageId: string;
   filePath: string;
 }
 
 export function useCreatePage() {
-  const port = useRuntimePort();
-  const queryClient = useQueryClient();
+  const utils = trpc.useUtils();
 
-  return useMutation({
-    mutationKey: ["page", "create"],
-    mutationFn: async ({ pageId, source }: { pageId: string; source?: string }) => {
-      if (!port) throw new Error("Runtime not connected");
-
-      const response = await fetch(`http://localhost:${port}/workbook/pages`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ pageId, source }),
-      });
-
-      if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.error || "Failed to create page");
-      }
-
-      return response.json() as Promise<CreatePageResult>;
-    },
+  return trpc.pages.create.useMutation({
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["workbook-manifest"] });
-      queryClient.invalidateQueries({ queryKey: ["manifest"] });
+      utils.workbook.manifest.invalidate();
+      utils.pages.list.invalidate();
     },
   });
 }
 
 // ============================================================================
-// Source Hooks
+// Source Hooks - See useSources.ts for source management hooks
 // ============================================================================
 
-// Add source from registry
-export interface AddSourceResult {
-  success: boolean;
-  filesCreated: string[];
-  errors: string[];
-  nextSteps: string[];
-}
-
-export function useAddSource() {
-  const port = useRuntimePort();
-  const queryClient = useQueryClient();
-
-  return useMutation({
-    mutationKey: ["source", "add"],
-    mutationFn: async ({ sourceName, schedule }: { sourceName: string; schedule?: string }) => {
-      if (!port) throw new Error("Runtime not connected");
-
-      const response = await fetch(`http://localhost:${port}/workbook/sources/add`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ sourceName, schedule }),
-      });
-
-      if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.error || "Failed to add source");
-      }
-
-      return response.json() as Promise<AddSourceResult>;
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["workbook-manifest"] });
-      queryClient.invalidateQueries({ queryKey: ["db-schema"] });
-    },
-  });
-}
-
-// Get available sources from registry
-// NOTE: Disabled until the /workbook/sources/available endpoint is implemented
-export interface AvailableSource {
-  name: string;
-  title: string;
-  description: string;
-  secrets: string[];
-  streams: string[];
-}
-
-export function useAvailableSources() {
-  const port = useRuntimePort();
-
-  return useQuery({
-    queryKey: ["available-sources", port],
-    queryFn: async (): Promise<AvailableSource[]> => {
-      if (!port) return [];
-
-      const response = await fetch(`http://localhost:${port}/workbook/sources/available`);
-      if (!response.ok) return [];
-
-      const data = await response.json();
-      return data.sources ?? [];
-    },
-    enabled: false, // Disabled until endpoint exists
-    staleTime: 60000,
-  });
-}
-
-// Import a file (CSV, JSON, Parquet)
-export interface ImportFileResult {
-  success: boolean;
-  tableName?: string;
-  rowCount?: number;
-  error?: string;
-}
-
-export function useImportFile() {
-  const port = useRuntimePort();
-  const queryClient = useQueryClient();
-
-  return useMutation({
-    mutationKey: ["file", "import"],
-    mutationFn: async ({ file }: { file: File }) => {
-      if (!port) throw new Error("Runtime not connected");
-
-      const formData = new FormData();
-      formData.append("file", file);
-
-      const response = await fetch(`http://localhost:${port}/workbook/files/import`, {
-        method: "POST",
-        body: formData,
-      });
-
-      if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.error || "Failed to import file");
-      }
-
-      return response.json() as Promise<ImportFileResult>;
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["workbook-manifest"] });
-      queryClient.invalidateQueries({ queryKey: ["db-schema"] });
-    },
-  });
-}
+// NOTE: useAddSource, useAvailableSources moved to useSources.ts
+// NOTE: useImportFile removed - file import not yet implemented

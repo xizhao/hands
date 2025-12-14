@@ -5,7 +5,7 @@ import { ChatSettings } from "@/components/ChatSettings";
 import { Button } from "@/components/ui/button";
 import { ATTACHMENT_TYPE, type AnyPendingAttachment, type SessionError } from "@/hooks/useChatState";
 import { useActiveSession } from "@/hooks/useNavState";
-import { useRuntimeState } from "@/hooks/useRuntimeState";
+import { useRuntimeProcess } from "@/hooks/useRuntimeState";
 import { useServer } from "@/hooks/useServer";
 import {
   useAbortSession,
@@ -47,7 +47,7 @@ export function ChatBar({
   const [isUploadingFile, setIsUploadingFile] = useState(false);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const { sessionId: activeSessionId, setSession: setActiveSession } = useActiveSession();
-  const { workbookId: activeWorkbookId } = useRuntimeState();
+  const { workbookId: activeWorkbookId } = useRuntimeProcess();
   const setPendingAttachment = onPendingAttachmentChange ?? (() => {});
   const setAutoSubmitPending = onAutoSubmitPendingChange ?? (() => {});
   const { data: sessionStatuses = {} } = useSessionStatuses();

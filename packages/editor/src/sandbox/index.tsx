@@ -19,6 +19,7 @@ import { MdxVisualEditor } from "../mdx/MdxVisualEditor";
 import { OverlayEditor } from "../overlay";
 import { installGlobalErrorHandler } from "../overlay/errors";
 import { initFlightClient, RscProvider, setRuntimePort } from "../rsc";
+import { getTRPCClient } from "../trpc";
 
 import "./styles.css";
 
@@ -141,21 +142,21 @@ function SandboxApp() {
     return () => clearTimeout(timer);
   }, [rscReady, source, isRefreshing]);
 
-  // Fetch source (block or page)
+  // Fetch source (block or page) via tRPC
   useEffect(() => {
     if (!runtimePortNum) {
       setError("Missing runtimePort");
       return;
     }
 
+    const trpc = getTRPCClient(runtimePortNum);
+
     if (editorMode === "block" && blockId) {
-      fetch(`http://localhost:${runtimePortNum}/workbook/blocks/${blockId}/source`)
-        .then((res) => (res.ok ? res.json() : Promise.reject("Failed to load block")))
+      trpc.workbook.blocks.getSource.query({ blockId })
         .then((data) => setSource(data.source))
         .catch((err) => setError(String(err)));
     } else if (editorMode === "page" && pageId) {
-      fetch(`http://localhost:${runtimePortNum}/workbook/pages/${pageId}/source`)
-        .then((res) => (res.ok ? res.json() : Promise.reject("Failed to load page")))
+      trpc.pages.getSource.query({ route: pageId })
         .then((data) => {
           setSource(data.source);
           // Update cache with fresh source
@@ -169,52 +170,38 @@ function SandboxApp() {
     }
   }, []);
 
-  // Save source changes (for blocks)
+  // Save source changes (for blocks) via tRPC
   const handleBlockSave = useCallback((newSource: string) => {
     if (readOnly || !blockId || !runtimePortNum) return;
 
-    fetch(`http://localhost:${runtimePortNum}/workbook/blocks/${blockId}/source`, {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ source: newSource }),
-    }).catch(console.error);
+    const trpc = getTRPCClient(runtimePortNum);
+    trpc.workbook.blocks.saveSource.mutate({ blockId, source: newSource })
+      .catch(console.error);
   }, []);
 
   // Track current page ID (may change after rename)
   const [currentPageId, setCurrentPageId] = useState(pageId);
 
-  // Save source changes (for pages)
+  // Save source changes (for pages) via tRPC
   const handlePageSave = useCallback((newSource: string) => {
     if (readOnly || !currentPageId || !runtimePortNum) return;
 
     // Update cache immediately on save
     setCachedPageSource(currentPageId, newSource);
 
-    fetch(`http://localhost:${runtimePortNum}/workbook/pages/${currentPageId}/source`, {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ source: newSource }),
-    }).catch(console.error);
+    const trpc = getTRPCClient(runtimePortNum);
+    trpc.pages.saveSource.mutate({ route: currentPageId, source: newSource })
+      .catch(console.error);
   }, [currentPageId]);
 
-  // Handle page rename (title → slug sync)
+  // Handle page rename (title → slug sync) via tRPC
   const handlePageRename = useCallback(async (newSlug: string): Promise<boolean> => {
     if (readOnly || !currentPageId || !runtimePortNum) return false;
 
     try {
-      const res = await fetch(`http://localhost:${runtimePortNum}/workbook/pages/${currentPageId}/rename`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ newSlug }),
-      });
+      const trpc = getTRPCClient(runtimePortNum);
+      const result = await trpc.pages.rename.mutate({ route: currentPageId, newSlug });
 
-      if (!res.ok) {
-        const error = await res.json();
-        console.error("[Sandbox] Rename failed:", error);
-        return false;
-      }
-
-      const result = await res.json();
       console.log("[Sandbox] Page renamed:", result);
 
       // Update local state
