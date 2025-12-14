@@ -23,6 +23,7 @@ reqwest = { version = "0.12", features = ["json"] }
 tauri-plugin-store = "2.0.0-beta.0"
 dirs = "5"
 urlencoding = "2"
+tauri-plugin-clipboard = "2.1.11"
 
 [target.'cfg(target_os = "macos")'.dependencies]
 objc2 = "0.6"

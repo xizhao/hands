@@ -5,6 +5,10 @@
  *
  * Full-featured editor based on Potion template with custom ElementPlugin for MDX rendering.
  * Note: AI, Comment, and Suggestion features are disabled - they require additional setup.
+ *
+ * IMPORTANT: Uses DndKitWithoutProvider because sandbox provides a shared
+ * DndProvider at root level. This prevents "Cannot have two HTML5 backends"
+ * errors when the editor is rendered inside the sandbox iframe.
  */
 
 import { TrailingBlockPlugin, type Value } from "platejs";
@@ -17,7 +21,7 @@ import { BasicMarksKit } from "./plugins/basic-marks-kit";
 import { BlockSelectionKit } from "./plugins/block-selection-kit";
 import { CalloutKit } from "./plugins/callout-kit";
 import { CodeBlockKit } from "./plugins/code-block-kit";
-import { DndKit } from "./plugins/dnd-kit";
+import { DndKitWithoutProvider } from "./plugins/dnd-kit";
 import { ExitBreakKit } from "./plugins/exit-break-kit";
 import { FloatingToolbarKit } from "./plugins/floating-toolbar-kit";
 import { FontKit } from "./plugins/font-kit";
@@ -51,7 +55,7 @@ export const EditorKit = [
   // Editing
   ...SlashKit,
   ...AutoformatKit,
-  ...DndKit,
+  ...DndKitWithoutProvider,
   ...ExitBreakKit,
   TrailingBlockPlugin,
 

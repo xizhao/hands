@@ -39,6 +39,8 @@ import { DndKitWithoutProvider } from "./dnd-kit";
 import { ElementPlugin } from "./element-plugin";
 import { FloatingToolbarKit } from "./floating-toolbar-kit";
 import { ListKit } from "./list-kit";
+import { MarkdownKit } from "./markdown-kit";
+import { MediaKit } from "./media-kit";
 import { RscBlockPlugin } from "./rsc-block-plugin";
 import { SlashKit } from "./slash-kit";
 
@@ -90,8 +92,14 @@ export const MdxEditorKit = [
   // Lists - Bullet, numbered, todo lists
   ...ListKit,
 
+  // Media - Images, videos, files, embeds
+  ...MediaKit,
+
   // Floating Toolbar - Selection formatting
   ...FloatingToolbarKit,
+
+  // Markdown - Serialization/deserialization
+  ...MarkdownKit,
 
   // Utilities
   TrailingBlockPlugin,

@@ -39,6 +39,12 @@
   --brand: hsl(211 77% 51%);
   --brand-foreground: hsl(0 0% 100%);
   --brand-active: hsl(211 77% 41%);
+  --brand-10: hsl(211 77% 51% / 0.10);
+  --brand-15: hsl(211 77% 51% / 0.15);
+  --brand-25: hsl(211 77% 51% / 0.25);
+  --brand-50: hsl(211 77% 51% / 0.50);
+  --brand-80: hsl(211 77% 51% / 0.80);
+  --brand-90: hsl(211 77% 51% / 0.90);
   --highlight: hsl(48 100% 50%);
   --subtle-foreground: hsl(240 5% 34%);
 
@@ -79,6 +85,12 @@
   --brand: hsl(211 77% 51%);
   --brand-foreground: hsl(0 0% 100%);
   --brand-active: hsl(211 77% 41%);
+  --brand-10: hsl(211 77% 51% / 0.10);
+  --brand-15: hsl(211 77% 51% / 0.15);
+  --brand-25: hsl(211 77% 51% / 0.25);
+  --brand-50: hsl(211 77% 51% / 0.50);
+  --brand-80: hsl(211 77% 51% / 0.80);
+  --brand-90: hsl(211 77% 51% / 0.90);
   --highlight: hsl(48 100% 50%);
   --subtle-foreground: hsl(240 5% 34%);
 }
@@ -106,6 +118,12 @@
   --color-brand: var(--brand);
   --color-brand-foreground: var(--brand-foreground);
   --color-brand-active: var(--brand-active);
+  --color-brand-10: var(--brand-10);
+  --color-brand-15: var(--brand-15);
+  --color-brand-25: var(--brand-25);
+  --color-brand-50: var(--brand-50);
+  --color-brand-80: var(--brand-80);
+  --color-brand-90: var(--brand-90);
   --color-highlight: var(--highlight);
   --color-subtle-foreground: var(--subtle-foreground);
   --radius-xs: calc(var(--radius) - 6px);
@@ -230,7 +248,7 @@
   }
 
   ::selection {
-    @apply bg-brand/25;
+    background-color: var(--brand-25);
   }
 }
 

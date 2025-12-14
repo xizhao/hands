@@ -13,7 +13,7 @@ import * as React from 'react';
 import { cn } from '../../lib/utils';
 
 const editorContainerVariants = cva(
-  'relative w-full cursor-text overflow-y-auto font-[ui-sans-serif,_-apple-system,_BlinkMacSystemFont,_"Segoe_UI_Variable_Display",_"Segoe_UI",_Helvetica,_"Apple_Color_Emoji",_Arial,_sans-serif,_"Segoe_UI_Emoji",_"Segoe_UI_Symbol"] caret-primary selection:bg-brand/25 focus-visible:outline-hidden [&_.slate-selection-area]:bg-brand/15',
+  'relative w-full cursor-text overflow-y-auto font-[ui-sans-serif,_-apple-system,_BlinkMacSystemFont,_"Segoe_UI_Variable_Display",_"Segoe_UI",_Helvetica,_"Apple_Color_Emoji",_Arial,_sans-serif,_"Segoe_UI_Emoji",_"Segoe_UI_Symbol"] caret-primary selection:bg-brand-25 focus-visible:outline-hidden [&_.slate-selection-area]:bg-brand-15',
   {
     defaultVariants: {
       variant: 'default',

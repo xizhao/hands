@@ -145,6 +145,9 @@ const CSS_VARS = [
   "brand",
   "brand-foreground",
   "brand-active",
+  "brand-15",
+  "brand-25",
+  "brand-50",
   "highlight",
   "subtle-foreground",
   // Sidebar vars if they exist

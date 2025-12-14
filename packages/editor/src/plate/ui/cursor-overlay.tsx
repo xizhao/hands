@@ -38,7 +38,7 @@ export function Cursor({
         <div
           className={cn(
             'pointer-events-none absolute z-10',
-            id === 'selection' && 'bg-brand/25',
+            id === 'selection' && 'bg-brand-25',
             id === 'selection' && isCursor && 'bg-primary'
           )}
           id={OVERLAY_ID}

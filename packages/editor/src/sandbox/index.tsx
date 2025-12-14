@@ -9,7 +9,7 @@
 // MUST BE FIRST: Initialize shared React for RSC client components
 import "../rsc/shared-react";
 
-import html2canvas from "html2canvas";
+import { domToPng } from "modern-screenshot";
 import { StrictMode, useCallback, useEffect, useRef, useState } from "react";
 import { DndProvider } from "react-dnd";
 import { HTML5Backend } from "react-dnd-html5-backend";
@@ -57,8 +57,8 @@ window.addEventListener("message", (e) => {
   }
 });
 
-// Tell parent we're ready
-window.parent.postMessage({ type: "sandbox-ready" }, "*");
+// Note: We send "sandbox-ready" only after content is loaded, not here at script init.
+// This is done in the components after RSC/source is ready.
 
 // Set runtime port for RSC client module loading (vite-proxy is on main runtime port)
 if (runtimePortNum) {
@@ -74,18 +74,13 @@ async function captureThumbnail() {
   if (!root) return;
 
   try {
-    const canvas = await html2canvas(root, {
+    const thumbnail = await domToPng(root, {
       width: 800,
       height: 600,
-      windowWidth: 800,
-      windowHeight: 600,
       scale: 1,
-      useCORS: true,
       backgroundColor: null,
-      logging: false,
     });
 
-    const thumbnail = canvas.toDataURL("image/png");
     const theme = document.documentElement.classList.contains("dark") ? "dark" : "light";
     const contentId = pageId || blockId;
     const contentType = pageId ? "page" : "block";
@@ -153,6 +148,13 @@ function PageEditor({
     return () => clearTimeout(timer);
   }, [rscReady, source, isRefreshing]);
 
+  // Signal ready to parent when content is loaded
+  useEffect(() => {
+    if (source !== null && rscReady) {
+      window.parent.postMessage({ type: "sandbox-ready" }, "*");
+    }
+  }, [source, rscReady]);
+
   if (source !== null) {
     return (
       <RscProvider port={workerPort} enabled>
@@ -170,14 +172,8 @@ function PageEditor({
     );
   }
 
-  return (
-    <div className="flex items-center justify-center h-screen text-muted-foreground">
-      <div className="flex items-center gap-2">
-        <div className="w-4 h-4 border-2 border-muted-foreground/30 border-t-muted-foreground rounded-full animate-spin" />
-        <span className="text-sm">Loading...</span>
-      </div>
-    </div>
-  );
+  // Show blank until content is ready
+  return null;
 }
 
 function SandboxApp() {
@@ -224,6 +220,13 @@ function SandboxApp() {
     return () => clearTimeout(timer);
   }, [rscReady, source]);
 
+  // Signal ready to parent when block content is loaded
+  useEffect(() => {
+    if (editorMode === "block" && rscReady && source !== null) {
+      window.parent.postMessage({ type: "sandbox-ready" }, "*");
+    }
+  }, [rscReady, source]);
+
   if (error) {
     return <div className="flex items-center justify-center h-screen text-red-500">{error}</div>;
   }
@@ -241,16 +244,9 @@ function SandboxApp() {
     );
   }
 
-  // Block mode: Wait for both RSC and source
+  // Block mode: Show blank until both RSC and source are ready
   if (!rscReady || source === null) {
-    return (
-      <div className="flex items-center justify-center h-screen text-muted-foreground">
-        <div className="flex items-center gap-2">
-          <div className="w-4 h-4 border-2 border-muted-foreground/30 border-t-muted-foreground rounded-full animate-spin" />
-          <span className="text-sm">Loading...</span>
-        </div>
-      </div>
-    );
+    return null;
   }
 
   // Block mode: Use Overlay Editor

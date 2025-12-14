@@ -8,6 +8,53 @@
  * - Floating chat overlay
  */
 
+import { ChatBar } from "@/components/ChatBar";
+import { FileDropOverlay } from "@/components/FileDropOverlay";
+import { NewWorkbookModal } from "@/components/NewWorkbookModal";
+import { Thread } from "@/components/Notebook/Thread";
+import { SaveStatusIndicator } from "@/components/SaveStatusIndicator";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import {
+  HoverCard,
+  HoverCardContent,
+  HoverCardTrigger,
+} from "@/components/ui/hover-card";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
+import { ATTACHMENT_TYPE, useChatState } from "@/hooks/useChatState";
+import { useDatabase } from "@/hooks/useDatabase";
+import { useNeedsTrafficLightOffset } from "@/hooks/useFullscreen";
+import {
+  useActiveSession,
+  useClearNavigation,
+  useRightPanel,
+  type RightPanelId,
+} from "@/hooks/useNavState";
+import { usePrefetchOnDbReady, useRuntimeState } from "@/hooks/useRuntimeState";
+import {
+  useCreateWorkbook,
+  useEvalResult,
+  useOpenWorkbook,
+  useUpdateWorkbook,
+  useWorkbooks,
+} from "@/hooks/useWorkbook";
+import { cn } from "@/lib/utils";
+import type { Workbook } from "@/lib/workbook";
 import {
   CaretDown,
   Check,
@@ -22,36 +69,13 @@ import {
   X,
 } from "@phosphor-icons/react";
 import { useRouter, useRouterState } from "@tanstack/react-router";
-import { type ReactNode, useCallback, useEffect, useRef, useState } from "react";
-import { ChatBar } from "@/components/ChatBar";
-import { FileDropOverlay } from "@/components/FileDropOverlay";
-import { NewWorkbookModal } from "@/components/NewWorkbookModal";
-import { Thread } from "@/components/Notebook/Thread";
-import { SaveStatusIndicator } from "@/components/SaveStatusIndicator";
 import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
-import { HoverCard, HoverCardContent, HoverCardTrigger } from "@/components/ui/hover-card";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import { ATTACHMENT_TYPE, useChatState } from "@/hooks/useChatState";
-import { useDatabase } from "@/hooks/useDatabase";
-import { useNeedsTrafficLightOffset } from "@/hooks/useFullscreen";
-import { useActiveSession, useClearNavigation, useRightPanel, type RightPanelId } from "@/hooks/useNavState";
-import { usePrefetchOnDbReady, useRuntimeState } from "@/hooks/useRuntimeState";
-import {
-  useCreateWorkbook,
-  useEvalResult,
-  useOpenWorkbook,
-  useUpdateWorkbook,
-  useWorkbooks,
-} from "@/hooks/useWorkbook";
-import { cn } from "@/lib/utils";
-import type { Workbook } from "@/lib/workbook";
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+  type ReactNode,
+} from "react";
 import { RightPanel } from "./panels/RightPanel";
 import { NotebookSidebar } from "./sidebar/NotebookSidebar";
 
@@ -86,15 +110,15 @@ function DatabaseButton({
             rightPanel === "database"
               ? "bg-accent text-foreground"
               : dbConnected && tableCount > 0
-                ? "text-muted-foreground hover:bg-accent/50 hover:text-foreground"
-                : "text-muted-foreground/70 hover:bg-accent/50 hover:text-muted-foreground",
+              ? "text-muted-foreground hover:bg-accent/50 hover:text-foreground"
+              : "text-muted-foreground/70 hover:bg-accent/50 hover:text-muted-foreground"
           )}
         >
           <Database
             weight="duotone"
             className={cn(
               "h-3.5 w-3.5",
-              !isDbLoading && dbConnected && tableCount > 0 && "text-blue-500",
+              !isDbLoading && dbConnected && tableCount > 0 && "text-blue-500"
             )}
           />
           {isDbLoading ? (
@@ -105,7 +129,7 @@ function DatabaseButton({
                 "tabular-nums",
                 dbConnected && tableCount > 0
                   ? "text-foreground"
-                  : "text-muted-foreground/70",
+                  : "text-muted-foreground/70"
               )}
             >
               {tableCount}
@@ -123,7 +147,7 @@ function DatabaseButton({
           className={cn(
             "flex items-center gap-1.5 px-2 py-1 rounded text-xs transition-colors",
             "hover:bg-accent text-muted-foreground hover:text-foreground",
-            "disabled:opacity-50 disabled:cursor-not-allowed",
+            "disabled:opacity-50 disabled:cursor-not-allowed"
           )}
         >
           {database.isSaving ? (
@@ -154,7 +178,9 @@ function DatabaseSpineIndicators({ tableId }: { tableId: string | undefined }) {
           key={`table-${table.table_name}`}
           className={cn(
             "w-1.5 h-1.5 rounded-full transition-colors",
-            table.table_name === tableId ? "bg-foreground/60" : "bg-foreground/15",
+            table.table_name === tableId
+              ? "bg-foreground/60"
+              : "bg-foreground/15"
           )}
         />
       ))}
@@ -196,7 +222,8 @@ export function NotebookShell({ children }: NotebookShellProps) {
   const actionId = actionMatch?.[1];
   const isOnAction = !!actionId;
   // Check if we're on any content route that needs the editor layout with sidebar
-  const isOnContentRoute = isOnBlock || isOnSource || isOnTable || isOnPage || isOnAction;
+  const isOnContentRoute =
+    isOnBlock || isOnSource || isOnTable || isOnPage || isOnAction;
 
   // Consolidated runtime state - single source of truth
   const {
@@ -231,7 +258,8 @@ export function NotebookShell({ children }: NotebookShellProps) {
 
   // Compute alert counts from eval result
   const alertErrors =
-    (evalResult?.typescript?.errors?.length ?? 0) + (evalResult?.format?.errors?.length ?? 0);
+    (evalResult?.typescript?.errors?.length ?? 0) +
+    (evalResult?.format?.errors?.length ?? 0);
   const alertWarnings = evalResult?.typescript?.warnings?.length ?? 0;
   const alertCount = alertErrors + alertWarnings;
 
@@ -245,7 +273,9 @@ export function NotebookShell({ children }: NotebookShellProps) {
   const currentSource = manifest?.sources?.find((s) => s.id === sourceId);
 
   // Current page (for breadcrumb) - from manifest
-  const currentPage = manifest?.pages?.find((p) => p.id === pageId || p.route === `/${pageId}`);
+  const currentPage = manifest?.pages?.find(
+    (p) => p.id === pageId || p.route === `/${pageId}`
+  );
 
   // Current action (for breadcrumb) - from manifest
   const currentAction = manifest?.actions?.find((a) => a.id === actionId);
@@ -286,7 +316,7 @@ export function NotebookShell({ children }: NotebookShellProps) {
       resizeStartX.current = e.clientX;
       resizeStartWidth.current = sidebarWidth;
     },
-    [sidebarWidth],
+    [sidebarWidth]
   );
 
   useEffect(() => {
@@ -297,7 +327,10 @@ export function NotebookShell({ children }: NotebookShellProps) {
 
     const handleMouseMove = (e: MouseEvent) => {
       const delta = e.clientX - resizeStartX.current;
-      const newWidth = Math.min(Math.max(resizeStartWidth.current + delta, 160), 400);
+      const newWidth = Math.min(
+        Math.max(resizeStartWidth.current + delta, 160),
+        400
+      );
       setSidebarWidth(newWidth);
     };
 
@@ -328,7 +361,7 @@ export function NotebookShell({ children }: NotebookShellProps) {
       clearNavigation();
       openWorkbook.mutate(workbook as Workbook);
     },
-    [clearNavigation, openWorkbook],
+    [clearNavigation, openWorkbook]
   );
 
   // Handle create new workbook - opens modal
@@ -352,10 +385,10 @@ export function NotebookShell({ children }: NotebookShellProps) {
               console.log(`Applying template: ${templateId}`);
             }
           },
-        },
+        }
       );
     },
-    [clearNavigation, createWorkbook, openWorkbook],
+    [clearNavigation, createWorkbook, openWorkbook]
   );
 
   // Handle close page (navigate back to index)
@@ -386,14 +419,18 @@ export function NotebookShell({ children }: NotebookShellProps) {
       if (!file) return;
 
       // Set as pending attachment
-      chatState.setPendingAttachment({ type: ATTACHMENT_TYPE.FILE, file, name: file.name });
+      chatState.setPendingAttachment({
+        type: ATTACHMENT_TYPE.FILE,
+        file,
+        name: file.name,
+      });
       // Expand chat to show the attachment
       chatState.setChatExpanded(true);
 
       // Reset input so same file can be selected again
       e.target.value = "";
     },
-    [chatState.setChatExpanded, chatState.setPendingAttachment],
+    [chatState.setChatExpanded, chatState.setPendingAttachment]
   );
 
   // Auto-attach current block/source context when route changes
@@ -420,7 +457,10 @@ export function NotebookShell({ children }: NotebookShellProps) {
       // Clear attachment when navigating to index or other routes
       // Only clear if it's a block/source attachment (not a file)
       const current = pendingAttachmentRef.current;
-      if (current?.type === ATTACHMENT_TYPE.BLOCK || current?.type === ATTACHMENT_TYPE.SOURCE) {
+      if (
+        current?.type === ATTACHMENT_TYPE.BLOCK ||
+        current?.type === ATTACHMENT_TYPE.SOURCE
+      ) {
         chatState.setPendingAttachment(null);
       }
     }
@@ -442,16 +482,30 @@ export function NotebookShell({ children }: NotebookShellProps) {
   const handleFileDrop = useCallback(
     (filePath: string) => {
       console.log("[NotebookShell.handleFileDrop] File dropped:", filePath);
-      console.log("[NotebookShell.handleFileDrop] activeWorkbookId:", activeWorkbookId);
-      console.log("[NotebookShell.handleFileDrop] isRuntimeReady:", isRuntimeReady);
+      console.log(
+        "[NotebookShell.handleFileDrop] activeWorkbookId:",
+        activeWorkbookId
+      );
+      console.log(
+        "[NotebookShell.handleFileDrop] isRuntimeReady:",
+        isRuntimeReady
+      );
       const fileName = filePath.split("/").pop() || filePath;
-      console.log("[NotebookShell.handleFileDrop] Setting attachment:", { type: ATTACHMENT_TYPE.FILEPATH, filePath, name: fileName });
-      chatState.setPendingAttachment({ type: ATTACHMENT_TYPE.FILEPATH, filePath, name: fileName });
+      console.log("[NotebookShell.handleFileDrop] Setting attachment:", {
+        type: ATTACHMENT_TYPE.FILEPATH,
+        filePath,
+        name: fileName,
+      });
+      chatState.setPendingAttachment({
+        type: ATTACHMENT_TYPE.FILEPATH,
+        filePath,
+        name: fileName,
+      });
       chatState.setChatExpanded(true);
       chatState.setAutoSubmitPending(true);
       console.log("[NotebookShell.handleFileDrop] State set complete");
     },
-    [chatState, activeWorkbookId, isRuntimeReady],
+    [chatState, activeWorkbookId, isRuntimeReady]
   );
 
   return (
@@ -468,7 +522,7 @@ export function NotebookShell({ children }: NotebookShellProps) {
           data-tauri-drag-region
           className={cn(
             "h-11 flex items-center justify-between pr-4 border-b border-border/50 bg-background shrink-0",
-            needsTrafficLightOffset ? "pl-[80px]" : "pl-4",
+            needsTrafficLightOffset ? "pl-[80px]" : "pl-4"
           )}
         >
           {/* Left: Workbook title + breadcrumb */}
@@ -483,7 +537,11 @@ export function NotebookShell({ children }: NotebookShellProps) {
               suppressContentEditableWarning
               onBlur={(e) => {
                 const newName = e.currentTarget.textContent?.trim() || "";
-                if (currentWorkbook && newName && newName !== currentWorkbook.name) {
+                if (
+                  currentWorkbook &&
+                  newName &&
+                  newName !== currentWorkbook.name
+                ) {
                   updateWorkbook.mutate({
                     ...currentWorkbook,
                     name: newName,
@@ -496,7 +554,8 @@ export function NotebookShell({ children }: NotebookShellProps) {
                   e.preventDefault();
                   e.currentTarget.blur();
                 } else if (e.key === "Escape") {
-                  e.currentTarget.textContent = currentWorkbook?.name ?? "Untitled";
+                  e.currentTarget.textContent =
+                    currentWorkbook?.name ?? "Untitled";
                   e.currentTarget.blur();
                 }
               }}
@@ -504,7 +563,7 @@ export function NotebookShell({ children }: NotebookShellProps) {
                 "px-1 py-0.5 text-sm font-medium bg-transparent rounded-sm cursor-text",
                 "outline-none",
                 "hover:bg-accent/50",
-                "focus:bg-background focus:ring-1 focus:ring-ring/20",
+                "focus:bg-background focus:ring-1 focus:ring-ring/20"
               )}
               spellCheck={false}
             >
@@ -527,7 +586,7 @@ export function NotebookShell({ children }: NotebookShellProps) {
                     "text-muted-foreground/70 hover:text-muted-foreground hover:bg-accent/50",
                     isOnContentRoute
                       ? "opacity-0 group-hover/titlebar:opacity-100 focus:opacity-100"
-                      : "opacity-100",
+                      : "opacity-100"
                   )}
                 >
                   <CaretDown weight="bold" className="h-3 w-3" />
@@ -541,7 +600,10 @@ export function NotebookShell({ children }: NotebookShellProps) {
                     >
                       <span className="truncate text-[13px]">{wb.name}</span>
                       {wb.id === activeWorkbookId && (
-                        <Check weight="bold" className="h-3.5 w-3.5 text-primary shrink-0" />
+                        <Check
+                          weight="bold"
+                          className="h-3.5 w-3.5 text-primary shrink-0"
+                        />
                       )}
                     </DropdownMenuItem>
                   ))}
@@ -560,7 +622,7 @@ export function NotebookShell({ children }: NotebookShellProps) {
                 <span
                   className={cn(
                     "px-1 py-0.5 text-sm text-muted-foreground bg-transparent rounded-sm",
-                    "hover:bg-accent/50 hover:text-foreground",
+                    "hover:bg-accent/50 hover:text-foreground"
                   )}
                 >
                   {currentBlock?.title || blockId}
@@ -583,7 +645,7 @@ export function NotebookShell({ children }: NotebookShellProps) {
                 <span
                   className={cn(
                     "px-1 py-0.5 text-sm text-muted-foreground bg-transparent rounded-sm",
-                    "hover:bg-accent/50 hover:text-foreground",
+                    "hover:bg-accent/50 hover:text-foreground"
                   )}
                 >
                   {currentSource?.title || sourceId}
@@ -606,7 +668,7 @@ export function NotebookShell({ children }: NotebookShellProps) {
                 <span
                   className={cn(
                     "px-1 py-0.5 text-sm text-muted-foreground bg-transparent rounded-sm",
-                    "hover:bg-accent/50 hover:text-foreground",
+                    "hover:bg-accent/50 hover:text-foreground"
                   )}
                 >
                   {tableId}
@@ -629,7 +691,7 @@ export function NotebookShell({ children }: NotebookShellProps) {
                 <span
                   className={cn(
                     "px-1 py-0.5 text-sm text-muted-foreground bg-transparent rounded-sm",
-                    "hover:bg-accent/50 hover:text-foreground",
+                    "hover:bg-accent/50 hover:text-foreground"
                   )}
                 >
                   {currentPage?.title || pageId}
@@ -652,7 +714,7 @@ export function NotebookShell({ children }: NotebookShellProps) {
                 <span
                   className={cn(
                     "px-1 py-0.5 text-sm text-muted-foreground bg-transparent rounded-sm",
-                    "hover:bg-accent/50 hover:text-foreground",
+                    "hover:bg-accent/50 hover:text-foreground"
                   )}
                 >
                   {currentAction?.name || actionId}
@@ -703,10 +765,10 @@ export function NotebookShell({ children }: NotebookShellProps) {
                       rightPanel === "alerts"
                         ? "bg-accent text-foreground"
                         : !runtimeConnected
-                          ? "text-muted-foreground/70 hover:bg-accent/50 hover:text-muted-foreground"
-                          : alertCount > 0
-                            ? "text-muted-foreground hover:bg-accent/50 hover:text-foreground"
-                            : "text-muted-foreground hover:bg-accent/50 hover:text-foreground",
+                        ? "text-muted-foreground/70 hover:bg-accent/50 hover:text-muted-foreground"
+                        : alertCount > 0
+                        ? "text-muted-foreground hover:bg-accent/50 hover:text-foreground"
+                        : "text-muted-foreground hover:bg-accent/50 hover:text-foreground"
                     )}
                   >
                     <Warning
@@ -716,10 +778,10 @@ export function NotebookShell({ children }: NotebookShellProps) {
                         !runtimeConnected
                           ? ""
                           : alertErrors > 0
-                            ? "text-red-500"
-                            : alertWarnings > 0
-                              ? "text-yellow-500"
-                              : "",
+                          ? "text-red-500"
+                          : alertWarnings > 0
+                          ? "text-yellow-500"
+                          : ""
                       )}
                     />
                     {runtimeConnected ? (
@@ -729,8 +791,8 @@ export function NotebookShell({ children }: NotebookShellProps) {
                           alertErrors > 0
                             ? "text-red-500"
                             : alertWarnings > 0
-                              ? "text-yellow-500"
-                              : "text-muted-foreground/70",
+                            ? "text-yellow-500"
+                            : "text-muted-foreground/70"
                         )}
                       >
                         {alertCount}
@@ -744,8 +806,8 @@ export function NotebookShell({ children }: NotebookShellProps) {
                   {!runtimeConnected
                     ? "Runtime (not connected)"
                     : alertCount > 0
-                      ? "Alerts"
-                      : "All clear"}
+                    ? "Alerts"
+                    : "All clear"}
                 </TooltipContent>
               </Tooltip>
             )}
@@ -759,7 +821,7 @@ export function NotebookShell({ children }: NotebookShellProps) {
                     "flex items-center justify-center w-6 h-6 rounded-md transition-colors",
                     rightPanel === "settings"
                       ? "bg-accent text-foreground"
-                      : "text-muted-foreground hover:bg-accent/50 hover:text-foreground",
+                      : "text-muted-foreground hover:bg-accent/50 hover:text-foreground"
                   )}
                 >
                   <Gear weight="duotone" className="h-4 w-4" />
@@ -781,7 +843,9 @@ export function NotebookShell({ children }: NotebookShellProps) {
               <PopoverContent align="end" className="w-64 p-3">
                 <div className="space-y-3">
                   <div>
-                    <div className="text-sm font-medium mb-1">Share workbook</div>
+                    <div className="text-sm font-medium mb-1">
+                      Share workbook
+                    </div>
                     <p className="text-xs text-muted-foreground">
                       Anyone with the link can view this workbook.
                     </p>
@@ -796,12 +860,15 @@ export function NotebookShell({ children }: NotebookShellProps) {
                         <button
                           onClick={() => {
                             navigator.clipboard.writeText(
-                              `https://hands.app/w/${activeWorkbookId}`,
+                              `https://hands.app/w/${activeWorkbookId}`
                             );
                           }}
                           className="p-1.5 rounded-md hover:bg-accent transition-colors"
                         >
-                          <Copy weight="duotone" className="h-3.5 w-3.5 text-muted-foreground" />
+                          <Copy
+                            weight="duotone"
+                            className="h-3.5 w-3.5 text-muted-foreground"
+                          />
                         </button>
                       </TooltipTrigger>
                       <TooltipContent>Copy link</TooltipContent>
@@ -810,7 +877,10 @@ export function NotebookShell({ children }: NotebookShellProps) {
 
                   <div className="pt-2 border-t border-border">
                     <button className="w-full flex items-center gap-2 px-2 py-1.5 text-xs rounded-md hover:bg-accent transition-colors">
-                      <LinkIcon weight="duotone" className="h-3.5 w-3.5 text-muted-foreground" />
+                      <LinkIcon
+                        weight="duotone"
+                        className="h-3.5 w-3.5 text-muted-foreground"
+                      />
                       <span>Copy link</span>
                     </button>
                   </div>
@@ -829,10 +899,12 @@ export function NotebookShell({ children }: NotebookShellProps) {
               <div
                 onMouseEnter={handleMouseEnterLeftEdge}
                 onMouseLeave={handleMouseLeaveSidebar}
-                style={{ width: sidebarShown || isResizing ? sidebarWidth : 24 }}
+                style={{
+                  width: sidebarShown || isResizing ? sidebarWidth : 24,
+                }}
                 className={cn(
                   "shrink-0 relative transition-[width] duration-200 ease-out border-r border-border/50",
-                  isResizing && "transition-none",
+                  isResizing && "transition-none"
                 )}
               >
                 {/* Spine indicators (when collapsed) - squares: blocks, triangles: sources */}
@@ -840,18 +912,38 @@ export function NotebookShell({ children }: NotebookShellProps) {
                   className={cn(
                     "absolute inset-0 flex flex-col items-center pt-4",
                     "transition-opacity duration-200",
-                    sidebarShown ? "opacity-0 pointer-events-none" : "opacity-100",
+                    sidebarShown
+                      ? "opacity-0 pointer-events-none"
+                      : "opacity-100"
                   )}
                 >
+                  {/* Pages - horizontal lines */}
+                  {manifest?.pages && manifest.pages.length > 0 && (
+                    <div className="flex flex-col items-center gap-1">
+                      {manifest.pages.slice(0, 3).map((page) => (
+                        <div
+                          key={`page-${page.id}`}
+                          className={cn(
+                            "w-2 h-0.5 transition-colors",
+                            page.id === pageId || page.route === `/${pageId}`
+                              ? "bg-foreground/60"
+                              : "bg-foreground/15"
+                          )}
+                        />
+                      ))}
+                    </div>
+                  )}
                   {/* Blocks - squares */}
                   {manifest?.blocks && manifest.blocks.length > 0 && (
-                    <div className="flex flex-col items-center gap-1">
+                    <div className="flex flex-col items-center gap-1 mt-2">
                       {manifest.blocks.slice(0, 3).map((block) => (
                         <div
                           key={`block-${block.id}`}
                           className={cn(
                             "w-1.5 h-1.5 transition-colors",
-                            block.id === blockId ? "bg-foreground/60" : "bg-foreground/15",
+                            block.id === blockId
+                              ? "bg-foreground/60"
+                              : "bg-foreground/15"
                           )}
                         />
                       ))}
@@ -867,7 +959,7 @@ export function NotebookShell({ children }: NotebookShellProps) {
                             "w-0 h-0 border-l-[3px] border-r-[3px] border-b-[5px] border-l-transparent border-r-transparent transition-colors",
                             source.id === sourceId
                               ? "border-b-foreground/60"
-                              : "border-b-foreground/15",
+                              : "border-b-foreground/15"
                           )}
                         />
                       ))}
@@ -875,22 +967,6 @@ export function NotebookShell({ children }: NotebookShellProps) {
                   )}
                   {/* Data/Tables - circles (only when runtime connected) */}
                   {runtimePort && <DatabaseSpineIndicators tableId={tableId} />}
-                  {/* Pages - horizontal lines */}
-                  {manifest?.pages && manifest.pages.length > 0 && (
-                    <div className="flex flex-col items-center gap-1 mt-2">
-                      {manifest.pages.slice(0, 3).map((page) => (
-                        <div
-                          key={`page-${page.id}`}
-                          className={cn(
-                            "w-2 h-0.5 transition-colors",
-                            page.id === pageId || page.route === `/${pageId}`
-                              ? "bg-foreground/60"
-                              : "bg-foreground/15",
-                          )}
-                        />
-                      ))}
-                    </div>
-                  )}
                   {/* Actions - diamonds (rotated squares) */}
                   {manifest?.actions && manifest.actions.length > 0 && (
                     <div className="flex flex-col items-center gap-1 mt-2">
@@ -899,7 +975,9 @@ export function NotebookShell({ children }: NotebookShellProps) {
                           key={`action-${action.id}`}
                           className={cn(
                             "w-1.5 h-1.5 rotate-45 transition-colors",
-                            action.id === actionId ? "bg-foreground/60" : "bg-foreground/15",
+                            action.id === actionId
+                              ? "bg-foreground/60"
+                              : "bg-foreground/15"
                           )}
                         />
                       ))}
@@ -912,7 +990,9 @@ export function NotebookShell({ children }: NotebookShellProps) {
                   className={cn(
                     "absolute inset-0 p-4 overflow-y-auto",
                     "transition-opacity duration-200 ease-out",
-                    sidebarShown ? "opacity-100" : "opacity-0 pointer-events-none",
+                    sidebarShown
+                      ? "opacity-100"
+                      : "opacity-0 pointer-events-none"
                   )}
                 >
                   <NotebookSidebar
@@ -932,7 +1012,7 @@ export function NotebookShell({ children }: NotebookShellProps) {
                     sidebarShown
                       ? "opacity-100 hover:bg-border/50 active:bg-border"
                       : "opacity-0 pointer-events-none",
-                    isResizing && "bg-border",
+                    isResizing && "bg-border"
                   )}
                 />
               </div>
@@ -957,7 +1037,9 @@ export function NotebookShell({ children }: NotebookShellProps) {
         {!chatState.chatBarHidden && (
           <div
             className="fixed bottom-4 right-4 z-50 max-w-2xl mx-auto flex flex-col transition-[left] duration-200"
-            style={{ left: isOnContentRoute && sidebarShown ? sidebarWidth + 16 : 16 }}
+            style={{
+              left: isOnContentRoute && sidebarShown ? sidebarWidth + 16 : 16,
+            }}
           >
             <Thread
               expanded={chatState.chatExpanded}

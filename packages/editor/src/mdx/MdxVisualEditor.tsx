@@ -12,7 +12,6 @@
  *   above the Plate editor (single-line, unstyled)
  */
 
-import type { Value } from "platejs";
 import {
   createPlatePlugin,
   Plate,
@@ -26,7 +25,7 @@ import { cn } from "../lib/utils";
 import { elementFallbackRenderer } from "../plate/plugins/element-plugin";
 import { MdxEditorKit } from "../plate/plugins/mdx-kit";
 import { parseMdx } from "./parser";
-import { serializeMdx } from "./serializer";
+import { serializeMdxWithEditor } from "./serializer";
 import type { MdxFrontmatter, MdxParseResult } from "./types";
 
 // ============================================================================
@@ -119,24 +118,11 @@ export function MdxVisualEditor({
   }, [source]);
 
   // Handle frontmatter field changes
+  // Note: This needs editor access, so we'll update it after editor is created
+  const handleFrontmatterChangeRef = useRef<(field: "title" | "description", value: string) => void>(() => {});
+
   const handleFrontmatterChange = useCallback((field: "title" | "description", value: string) => {
-    const state = stateRef.current;
-    const newFrontmatter = { ...state.parseResult.frontmatter };
-
-    if (value) {
-      newFrontmatter[field] = value;
-    } else {
-      delete newFrontmatter[field];
-    }
-
-    // Update parse result
-    state.parseResult = { ...state.parseResult, frontmatter: newFrontmatter };
-
-    // Reserialize with new frontmatter
-    const newSource = serializeMdx(state.parseResult.value, newFrontmatter);
-    state.source = newSource;
-    state.onSourceChange(newSource);
-    state.onFrontmatterChange?.(newFrontmatter);
+    handleFrontmatterChangeRef.current(field, value);
   }, []);
 
   // Handle title blur - update frontmatter and trigger rename if needed
@@ -255,9 +241,8 @@ export function MdxVisualEditor({
 
             // For significant changes, serialize back to MDX
             if (shouldSerialize(op)) {
-              // Serialize current Plate value to MDX
-              const value = editor.children as Value;
-              const newSource = serializeMdx(value, state.parseResult.frontmatter);
+              // Serialize current Plate value to MDX using MarkdownPlugin
+              const newSource = serializeMdxWithEditor(editor, state.parseResult.frontmatter);
 
               if (newSource !== state.source) {
                 state.source = newSource;
@@ -283,6 +268,27 @@ export function MdxVisualEditor({
 
   // Store editor ref for keyboard handlers
   editorRef.current = editor;
+
+  // Update handleFrontmatterChange to use editor
+  handleFrontmatterChangeRef.current = (field: "title" | "description", value: string) => {
+    const state = stateRef.current;
+    const newFrontmatter = { ...state.parseResult.frontmatter };
+
+    if (value) {
+      newFrontmatter[field] = value;
+    } else {
+      delete newFrontmatter[field];
+    }
+
+    // Update parse result
+    state.parseResult = { ...state.parseResult, frontmatter: newFrontmatter };
+
+    // Reserialize with new frontmatter using MarkdownPlugin
+    const newSource = serializeMdxWithEditor(editor, newFrontmatter);
+    state.source = newSource;
+    state.onSourceChange(newSource);
+    state.onFrontmatterChange?.(newFrontmatter);
+  };
 
   // SOURCE IS TRUTH: When source changes externally, overwrite Plate
   useEffect(() => {

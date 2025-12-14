@@ -399,7 +399,7 @@ function DocumentMentionElement(
                 }}
                 className={cn(
                   'inline-block cursor-pointer rounded px-0.5 hover:bg-muted',
-                  selected && focused && 'bg-brand/25'
+                  selected && focused && 'bg-brand-25'
                 )}
               >
                 {props.prefix}

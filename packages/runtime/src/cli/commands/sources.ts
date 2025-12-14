@@ -4,6 +4,7 @@
 
 import { existsSync } from "node:fs";
 import { join, resolve } from "node:path";
+import { getStdlibSourcePath } from "../../config/index.js";
 
 interface RegistryItem {
   name: string;
@@ -62,8 +63,8 @@ export async function sourcesCommand() {
 /**
  * Load the source registry from @hands/stdlib
  */
-async function loadRegistry(): Promise<Registry> {
-  const stdlibPath = getStdlibPath();
+export async function loadRegistry(): Promise<Registry> {
+  const stdlibPath = getStdlibSourcePath();
   const registryPath = join(stdlibPath, "src/registry/sources/registry.json");
 
   try {
@@ -73,24 +74,4 @@ async function loadRegistry(): Promise<Registry> {
     console.error(`Failed to load registry: ${error}`);
     process.exit(1);
   }
-}
-
-/**
- * Get the path to the stdlib package
- */
-function getStdlibPath(): string {
-  // Try workspace path (development)
-  const devPath = resolve(import.meta.dir, "../../../stdlib");
-  if (existsSync(join(devPath, "src/registry/sources/registry.json"))) {
-    return devPath;
-  }
-
-  // Try node_modules path
-  const nodeModulesPath = join(process.cwd(), "node_modules/@hands/stdlib");
-  if (existsSync(nodeModulesPath)) {
-    return nodeModulesPath;
-  }
-
-  // Fall back to dev path
-  return devPath;
 }

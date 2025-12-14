@@ -3,18 +3,16 @@
  *
  * Structure:
  * 1. Actions - AI generation, always visible
- * 2. In-Project Blocks - Blocks from current workbook
- * 3. Template Blocks - Components from stdlib registry
+ * 2. My Blocks - Blocks from current workbook
  */
 
-import { listComponents } from "@hands/stdlib/registry";
-import * as icons from "lucide-react";
-import { PilcrowIcon } from "lucide-react";
+import { BoxIcon } from "lucide-react";
 import type { TElement } from "platejs";
 import type { PlateEditor, PlateElementProps } from "platejs/react";
 import { PlateElement } from "platejs/react";
 import type * as React from "react";
-import { useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { getTRPCClient } from "../../trpc";
 import {
   InlineCombobox,
   InlineComboboxContent,
@@ -48,82 +46,79 @@ type SlashMenuItem = {
   alwaysShow?: boolean; // Always show regardless of filter
 };
 
-function insertStdlibComponent(
-  editor: PlateEditor,
-  componentName: string,
-  isVoid: boolean = false,
-) {
+function insertBlock(editor: PlateEditor, blockId: string) {
+  // Insert an RSC block element that renders via <Block src="blockId" />
   const node: TElement = {
-    type: componentName,
-    children: isVoid ? [{ text: "" }] : [{ type: "p", children: [{ text: "" }] }],
-    ...(isVoid ? { isVoid: true } : {}),
+    type: "rsc-block",
+    blockId,
+    source: "", // Source is fetched from runtime by blockId
+    blockProps: {},
+    id: crypto.randomUUID(),
+    children: [{ text: "" }],
   };
   editor.tf.insertNodes(node);
 }
 
-/**
- * Get a Lucide icon by name (kebab-case or PascalCase)
- */
-function getIcon(iconName?: string): React.ReactNode {
-  if (!iconName) return <PilcrowIcon />;
-
-  // Convert kebab-case to PascalCase for Lucide
-  const pascalCase = `${iconName
-    .split("-")
-    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
-    .join("")}Icon`;
-
-  const IconComponent = (icons as any)[pascalCase];
-  if (IconComponent) {
-    return <IconComponent />;
-  }
-
-  return <PilcrowIcon />;
+interface BlockWithThumbnail {
+  id: string;
+  title: string;
+  thumbnail?: string; // base64 data URL
 }
 
 /**
- * Build template blocks from stdlib registry
+ * Hook to fetch workbook blocks with thumbnails via tRPC
  */
-function buildTemplateBlocks(): SlashMenuItem[] {
-  const allComponents = listComponents();
-  const items: SlashMenuItem[] = [];
+function useWorkbookBlocks(runtimePort: number | undefined) {
+  const [blocks, setBlocks] = useState<BlockWithThumbnail[]>([]);
 
-  // Void components (self-closing, no children)
-  const voidComponents = new Set([
-    "MetricCard",
-    "DataTable",
-    "BarChart",
-    "LineChart",
-    "Avatar",
-    "Badge",
-    "Progress",
-    "Skeleton",
-    "Spinner",
-    "Separator",
-    "Input",
-    "Textarea",
-    "Checkbox",
-    "Switch",
-    "Slider",
-    "Calendar",
-  ]);
+  useEffect(() => {
+    if (!runtimePort) return;
 
-  for (const comp of allComponents) {
-    if (comp.files && comp.files.length > 0) {
-      // Stdlib component
-      const isVoid = voidComponents.has(comp.name);
-      items.push({
-        icon: getIcon(comp.icon),
-        label: comp.name,
-        value: `stdlib:${comp.name}`,
-        description: comp.description,
-        keywords: [...(comp.keywords || []), comp.category],
-        onSelect: (editor) => insertStdlibComponent(editor, comp.name, isVoid),
+    const trpc = getTRPCClient(runtimePort);
+
+    // Fetch manifest first
+    trpc.workbook.manifest
+      .query()
+      .then(async (manifest) => {
+        const blocksWithThumbnails: BlockWithThumbnail[] = [];
+
+        // Detect current theme
+        const isDark = document.documentElement.classList.contains("dark");
+        const theme = isDark ? "dark" : "light";
+
+        // Fetch thumbnails for each block
+        for (const block of manifest.blocks) {
+          let thumbnail: string | undefined;
+
+          try {
+            const thumbs = await trpc.thumbnails.get.query({
+              type: "block",
+              contentId: block.id,
+            });
+            // Use LQIP (tiny blurred version) for menu items - faster to render
+            const thumb = thumbs[theme] || thumbs.light || thumbs.dark;
+            if (thumb?.lqip) {
+              thumbnail = thumb.lqip;
+            }
+          } catch {
+            // Thumbnail not available, use icon fallback
+          }
+
+          blocksWithThumbnails.push({
+            id: block.id,
+            title: block.title,
+            thumbnail,
+          });
+        }
+
+        setBlocks(blocksWithThumbnails);
+      })
+      .catch((err) => {
+        console.error("[SlashMenu] Failed to fetch blocks:", err);
       });
-    }
-  }
+  }, [runtimePort]);
 
-  return items;
+  return blocks;
 }
 
 /**
@@ -135,12 +130,14 @@ function SlashMenuItemContent({
   value,
   description,
   variant = "default",
+  hasThumbnail = false,
 }: {
   icon: React.ReactNode;
   label?: string;
   value: string;
   description?: string;
   variant?: "default" | "action";
+  hasThumbnail?: boolean;
 }) {
   if (variant === "action") {
     return (
@@ -153,6 +150,20 @@ function SlashMenuItemContent({
           {description && (
             <span className="truncate text-muted-foreground text-xs">{description}</span>
           )}
+        </div>
+      </>
+    );
+  }
+
+  // Thumbnail items: show image directly without border/background
+  if (hasThumbnail) {
+    return (
+      <>
+        <div className="size-8 shrink-0 overflow-hidden rounded">
+          {icon}
+        </div>
+        <div className="ml-2 flex flex-1 flex-col truncate">
+          <span className="text-foreground text-sm">{label ?? value}</span>
         </div>
       </>
     );
@@ -228,8 +239,98 @@ function SlashMenuSection({
   );
 }
 
+/**
+ * Block thumbnail component - shows image or fallback icon
+ */
+function BlockThumbnail({ thumbnail }: { thumbnail?: string }) {
+  if (thumbnail) {
+    return (
+      <img
+        src={thumbnail}
+        alt=""
+        className="size-8 rounded object-cover"
+      />
+    );
+  }
+  return <BoxIcon className="size-4" />;
+}
+
+/**
+ * My Blocks section - shows existing blocks from workbook
+ * "Make with Hands" is always visible at top as the primary way to create new blocks
+ */
+function MyBlocksSection({
+  blocks,
+  editor,
+}: {
+  blocks: BlockWithThumbnail[];
+  editor: PlateEditor;
+}) {
+  const searchValue = useInlineComboboxSearchValue();
+
+  // Convert blocks to menu items
+  const blockItems = useMemo(
+    () =>
+      blocks.map((block) => ({
+        icon: <BlockThumbnail thumbnail={block.thumbnail} />,
+        label: block.title,
+        value: `block:${block.id}`,
+        keywords: [block.id, block.title],
+        onSelect: (ed: PlateEditor) => insertBlock(ed, block.id),
+        hasThumbnail: !!block.thumbnail,
+      })),
+    [blocks],
+  );
+
+  // Filter items based on search
+  const visibleItems = useMemo(() => {
+    if (!searchValue) return blockItems;
+    const search = searchValue.toLowerCase();
+    return blockItems.filter(({ value, keywords = [], label }) => {
+      const terms = [value, ...keywords, label].filter(Boolean);
+      return terms.some((term) => term?.toLowerCase().includes(search));
+    });
+  }, [blockItems, searchValue]);
+
+  // Don't show section if no blocks exist or none match search
+  if (visibleItems.length === 0) {
+    return null;
+  }
+
+  return (
+    <InlineComboboxGroup>
+      <div className="mt-1.5 mb-2 px-3 font-medium text-muted-foreground text-xs uppercase tracking-wider">
+        My Blocks
+      </div>
+      {visibleItems.map(({ icon, keywords, label, value, onSelect, hasThumbnail }) => (
+        <InlineComboboxItem
+          key={value}
+          keywords={keywords}
+          label={label}
+          onClick={() => onSelect(editor)}
+          value={value}
+        >
+          <SlashMenuItemContent
+            icon={icon}
+            label={label}
+            value={value}
+            variant="default"
+            hasThumbnail={hasThumbnail}
+          />
+        </InlineComboboxItem>
+      ))}
+    </InlineComboboxGroup>
+  );
+}
+
 export function SlashInputElement(props: PlateElementProps) {
   const { children, editor, element } = props;
+
+  // Get runtime port from editor
+  const runtimePort = (editor as any).runtimePort as number | undefined;
+
+  // Fetch workbook blocks
+  const workbookBlocks = useWorkbookBlocks(runtimePort);
 
   // Actions - always visible
   const actions: SlashMenuItem[] = useMemo(
@@ -238,7 +339,6 @@ export function SlashInputElement(props: PlateElementProps) {
         icon: <HandsLogo className="size-4" />,
         label: "Make with Hands",
         value: "hands:make",
-        description: "Generate a component with AI",
         keywords: ["ai", "generate", "create", "make", "hands", "build", "new"],
         alwaysShow: true,
         onSelect: (_editor) => {
@@ -250,15 +350,6 @@ export function SlashInputElement(props: PlateElementProps) {
     [],
   );
 
-  // In-project blocks (TODO: fetch from workbook manifest)
-  const projectBlocks: SlashMenuItem[] = useMemo(() => {
-    // TODO: Get blocks from editor.runtimePort via manifest
-    return [];
-  }, []);
-
-  // Template blocks from stdlib
-  const templateBlocks = useMemo(() => buildTemplateBlocks(), []);
-
   return (
     <PlateElement {...props} as="span">
       <InlineCombobox element={element} trigger="/">
@@ -268,13 +359,8 @@ export function SlashInputElement(props: PlateElementProps) {
           {/* Actions - always first */}
           <SlashMenuSection title="Actions" items={actions} editor={editor} />
 
-          {/* In-project blocks */}
-          {projectBlocks.length > 0 && (
-            <SlashMenuSection title="Project Blocks" items={projectBlocks} editor={editor} />
-          )}
-
-          {/* Template blocks */}
-          <SlashMenuSection title="Templates" items={templateBlocks} editor={editor} />
+          {/* My Blocks - from workbook */}
+          <MyBlocksSection blocks={workbookBlocks} editor={editor} />
         </InlineComboboxContent>
       </InlineCombobox>
 

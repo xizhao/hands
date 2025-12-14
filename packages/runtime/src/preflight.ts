@@ -11,7 +11,7 @@
  * Auto-fixes issues where possible (install deps, create dirs, fix symlinks).
  */
 
-import { existsSync, mkdirSync, readFileSync, rmSync, statSync, symlinkSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, rmSync, statSync, symlinkSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { $ } from "bun";
 import {
@@ -108,6 +108,9 @@ export async function runPreflight(options: PreflightOptions): Promise<Preflight
 
   // 6. Dependencies in .hands directory
   checks.push(await checkHandsDependencies(workbookDir, autoFix));
+
+  // 7. Ensure .hands/tsconfig.json is correct (auto-fix always)
+  checks.push(await checkHandsTsConfig(workbookDir, autoFix));
 
   const ok = checks.filter((c) => c.required).every((c) => c.ok);
   const duration = Date.now() - startTime;
@@ -633,5 +636,91 @@ async function checkHandsDependencies(
     ok: true,
     message: "All present",
     required: true,
+  };
+}
+
+/**
+ * Expected tsconfig.json content for .hands directory
+ * Must match generateTsConfig() in build/rsc.ts
+ */
+const EXPECTED_HANDS_TSCONFIG = `{
+  "compilerOptions": {
+    "target": "ES2022",
+    "lib": ["ES2022"],
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "strict": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "jsx": "react-jsx",
+    "jsxImportSource": "react",
+    "types": ["@cloudflare/workers-types"]
+  },
+  "include": ["src/**/*", "../blocks/**/*"],
+  "exclude": ["node_modules"]
+}
+`;
+
+async function checkHandsTsConfig(workbookDir: string, autoFix: boolean): Promise<PreflightCheck> {
+  const handsDir = join(workbookDir, ".hands");
+  const tsconfigPath = join(handsDir, "tsconfig.json");
+
+  // If .hands doesn't exist yet, skip - it will be created on first build
+  if (!existsSync(handsDir)) {
+    return {
+      name: ".hands/tsconfig.json",
+      ok: true,
+      message: "Will be created on first build",
+      required: false,
+    };
+  }
+
+  // Check if tsconfig exists and matches expected content
+  if (existsSync(tsconfigPath)) {
+    try {
+      const current = readFileSync(tsconfigPath, "utf-8");
+      // Normalize whitespace for comparison
+      const currentNorm = JSON.stringify(JSON.parse(current));
+      const expectedNorm = JSON.stringify(JSON.parse(EXPECTED_HANDS_TSCONFIG));
+
+      if (currentNorm === expectedNorm) {
+        return {
+          name: ".hands/tsconfig.json",
+          ok: true,
+          message: "Up to date",
+          required: false,
+        };
+      }
+    } catch {
+      // JSON parse failed, needs fixing
+    }
+  }
+
+  // Needs fixing
+  if (autoFix) {
+    try {
+      writeFileSync(tsconfigPath, EXPECTED_HANDS_TSCONFIG);
+      return {
+        name: ".hands/tsconfig.json",
+        ok: true,
+        message: "Updated",
+        required: false,
+        fixed: true,
+      };
+    } catch (err) {
+      return {
+        name: ".hands/tsconfig.json",
+        ok: false,
+        message: `Could not update: ${err instanceof Error ? err.message : String(err)}`,
+        required: false,
+      };
+    }
+  }
+
+  return {
+    name: ".hands/tsconfig.json",
+    ok: false,
+    message: "Outdated - run with --fix to update",
+    required: false,
   };
 }

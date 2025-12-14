@@ -1,95 +1,107 @@
-import { generateReactHelpers } from '@uploadthing/react';
 import React from 'react';
 import { toast } from 'sonner';
-import type {
-  ClientUploadedFileData,
-  UploadFilesOptions,
-} from 'uploadthing/types';
 import { z } from 'zod';
-import type { OurFileRouter } from '../../lib/uploadthing';
 
-export const { uploadFiles, useUploadThing } =
-  generateReactHelpers<OurFileRouter>();
+export interface UploadedFile {
+  key: string;
+  name: string;
+  size: number;
+  type: string;
+  url: string;
+}
 
-export interface UploadedFile<T = unknown> extends ClientUploadedFileData<T> {}
-
-interface UseUploadFileProps
-  extends Pick<
-    UploadFilesOptions<OurFileRouter['editorUploader']>,
-    'headers' | 'onUploadBegin' | 'onUploadProgress' | 'skipPolling'
-  > {
-  defaultUploadedFiles?: UploadedFile[];
+interface UseUploadFileProps {
+  onUploadBegin?: (fileName: string) => void;
+  onUploadProgress?: (progress: number) => void;
   onUploadComplete?: (file: UploadedFile) => void;
   onUploadError?: (error: unknown) => void;
 }
 
+/**
+ * Upload files to the runtime's /upload endpoint
+ * Files are stored in the workbook's public/ directory
+ */
 export function useUploadFile({
+  onUploadBegin,
+  onUploadProgress,
   onUploadComplete,
   onUploadError,
-  ...props
 }: UseUploadFileProps = {}) {
   const [uploadedFile, setUploadedFile] = React.useState<UploadedFile>();
   const [uploadingFile, setUploadingFile] = React.useState<File>();
   const [progress, setProgress] = React.useState<number>(0);
   const [isUploading, setIsUploading] = React.useState(false);
 
-  async function uploadThing(file: File) {
+  async function uploadFile(file: File): Promise<UploadedFile | undefined> {
     setIsUploading(true);
     setUploadingFile(file);
+    setProgress(0);
+
+    onUploadBegin?.(file.name);
 
     try {
-      const res = await uploadFiles('editorUploader', {
-        ...props,
-        files: [file],
-        onUploadProgress: ({ progress }) => {
-          setProgress(Math.min(progress, 100));
-        },
+      const formData = new FormData();
+      formData.append('file', file);
+
+      // Use XMLHttpRequest for progress tracking
+      const result = await new Promise<UploadedFile>((resolve, reject) => {
+        const xhr = new XMLHttpRequest();
+
+        xhr.upload.addEventListener('progress', (event) => {
+          if (event.lengthComputable) {
+            const percentComplete = Math.round((event.loaded / event.total) * 100);
+            setProgress(percentComplete);
+            onUploadProgress?.(percentComplete);
+          }
+        });
+
+        xhr.addEventListener('load', () => {
+          if (xhr.status >= 200 && xhr.status < 300) {
+            try {
+              const response = JSON.parse(xhr.responseText);
+              const uploaded: UploadedFile = {
+                key: response.url,
+                name: response.name,
+                size: response.size,
+                type: response.type,
+                url: response.url,
+              };
+              resolve(uploaded);
+            } catch {
+              reject(new Error('Invalid response from server'));
+            }
+          } else {
+            try {
+              const error = JSON.parse(xhr.responseText);
+              reject(new Error(error.error || 'Upload failed'));
+            } catch {
+              reject(new Error(`Upload failed with status ${xhr.status}`));
+            }
+          }
+        });
+
+        xhr.addEventListener('error', () => {
+          reject(new Error('Network error during upload'));
+        });
+
+        xhr.addEventListener('abort', () => {
+          reject(new Error('Upload aborted'));
+        });
+
+        // Post to runtime's upload endpoint
+        xhr.open('POST', '/upload');
+        xhr.send(formData);
       });
 
-      setUploadedFile(res[0]);
+      setUploadedFile(result);
+      onUploadComplete?.(result);
 
-      onUploadComplete?.(res[0]);
-
-      return uploadedFile;
+      return result;
     } catch (error) {
       const errorMessage = getErrorMessage(error);
-
-      const message =
-        errorMessage.length > 0
-          ? errorMessage
-          : 'Something went wrong, please try again later.';
-
-      toast.error(message);
-
+      toast.error(errorMessage);
       onUploadError?.(error);
-
-      // Mock upload for unauthenticated users
-      // toast.info('User not logged in. Mocking upload process.');
-      const mockUploadedFile = {
-        key: 'mock-key-0',
-        appUrl: `https://mock-app-url.com/${file.name}`,
-        name: file.name,
-        size: file.size,
-        type: file.type,
-        url: URL.createObjectURL(file),
-      } as UploadedFile;
-
-      // Simulate upload progress
-      let progress = 0;
-
-      const simulateProgress = async () => {
-        while (progress < 100) {
-          await new Promise((resolve) => setTimeout(resolve, 50));
-          progress += 2;
-          setProgress(Math.min(progress, 100));
-        }
-      };
-
-      await simulateProgress();
-
-      setUploadedFile(mockUploadedFile);
-
-      return mockUploadedFile;
+      return undefined;
     } finally {
       setProgress(0);
       setIsUploading(false);
@@ -101,7 +113,7 @@ export function useUploadFile({
     isUploading,
     progress,
     uploadedFile,
-    uploadFile: uploadThing,
+    uploadFile,
     uploadingFile,
   };
 }
@@ -111,21 +123,16 @@ export function getErrorMessage(err: unknown) {
 
   if (err instanceof z.ZodError) {
     const errors = err.issues.map((issue) => issue.message);
-
     return errors.join('\n');
   }
   if (err instanceof Error) {
     return err.message;
   }
-  // else if (isRedirectError(err)) {
-  //   throw err;
-  // }
 
   return unknownError;
 }
 
 export function showErrorToast(err: unknown) {
   const errorMessage = getErrorMessage(err);
-
   return toast.error(errorMessage);
 }

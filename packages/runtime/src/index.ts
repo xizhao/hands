@@ -590,6 +590,106 @@ function createApp(config: RuntimeConfig) {
   });
 
   // ============================================
+  // Media Upload (images/videos/audio to public/)
+  // ============================================
+  app.post("/upload", async (c) => {
+    try {
+      const formData = await c.req.formData();
+      const file = formData.get("file") as File | null;
+
+      if (!file) {
+        return c.json({ error: "No file provided" }, 400);
+      }
+
+      // Only allow media files
+      const allowedTypes = ["image/", "video/", "audio/"];
+      const isMedia = allowedTypes.some((type) => file.type.startsWith(type));
+      if (!isMedia) {
+        return c.json({ error: "Only image, video, and audio files are allowed" }, 400);
+      }
+
+      // Create public directory if it doesn't exist
+      const publicDir = join(config.workbookDir, "public");
+      if (!existsSync(publicDir)) {
+        const { mkdirSync } = await import("node:fs");
+        mkdirSync(publicDir, { recursive: true });
+      }
+
+      // Generate unique filename to avoid collisions
+      const ext = file.name.split(".").pop() || "";
+      const timestamp = Date.now();
+      const randomId = Math.random().toString(36).substring(2, 8);
+      const safeOriginalName = file.name
+        .replace(/\.[^/.]+$/, "") // remove extension
+        .replace(/[^a-zA-Z0-9-_]/g, "-") // sanitize
+        .substring(0, 50); // limit length
+      const filename = `${safeOriginalName}-${timestamp}-${randomId}.${ext}`;
+
+      // Write file
+      const filePath = join(publicDir, filename);
+      const buffer = await file.arrayBuffer();
+      const { writeFileSync } = await import("node:fs");
+      writeFileSync(filePath, Buffer.from(buffer));
+
+      console.log(`[runtime] Uploaded media: ${filename} (${file.type}, ${file.size} bytes)`);
+
+      // Return URL relative to public/
+      return c.json({
+        url: `/public/${filename}`,
+        name: file.name,
+        size: file.size,
+        type: file.type,
+      });
+    } catch (err) {
+      console.error("[runtime] Upload failed:", err);
+      return c.json({ error: "Upload failed" }, 500);
+    }
+  });
+
+  // Serve public/ directory for uploaded media
+  app.get("/public/*", async (c) => {
+    const filePath = c.req.path.replace("/public/", "");
+    const fullPath = join(config.workbookDir, "public", filePath);
+
+    if (!existsSync(fullPath)) {
+      return c.json({ error: "File not found" }, 404);
+    }
+
+    try {
+      const { readFileSync } = await import("node:fs");
+      const content = readFileSync(fullPath);
+
+      // Determine content type
+      const ext = filePath.split(".").pop()?.toLowerCase() || "";
+      const mimeTypes: Record<string, string> = {
+        jpg: "image/jpeg",
+        jpeg: "image/jpeg",
+        png: "image/png",
+        gif: "image/gif",
+        webp: "image/webp",
+        svg: "image/svg+xml",
+        mp4: "video/mp4",
+        webm: "video/webm",
+        mov: "video/quicktime",
+        mp3: "audio/mpeg",
+        wav: "audio/wav",
+        ogg: "audio/ogg",
+      };
+      const contentType = mimeTypes[ext] || "application/octet-stream";
+
+      return new Response(content, {
+        headers: {
+          "Content-Type": contentType,
+          "Cache-Control": "public, max-age=31536000",
+        },
+      });
+    } catch (err) {
+      console.error("[runtime] Failed to serve file:", err);
+      return c.json({ error: "Failed to serve file" }, 500);
+    }
+  });
+
+  // ============================================
   // Source Management Routes
   // ============================================
   registerSourceRoutes(app, {

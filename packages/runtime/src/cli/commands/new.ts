@@ -1,15 +1,14 @@
 /**
  * hands new <name> - Create a new workbook
  *
- * Uses the shared initWorkbook() from @hands/runtime/config to create
- * the standard workbook structure. This ensures CLI and desktop app
- * create identical workbooks.
+ * Uses the shared initWorkbook() from config to create
+ * the standard workbook structure.
  */
 
 import { existsSync } from "node:fs";
 import { mkdir } from "node:fs/promises";
 import { join } from "node:path";
-import { initWorkbook, slugify } from "@hands/runtime/config";
+import { initWorkbook, slugify } from "../../config/index.js";
 
 interface NewOptions {
   template?: string;

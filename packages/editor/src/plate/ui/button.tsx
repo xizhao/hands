@@ -56,7 +56,7 @@ export const buttonVariants = cva(
         blockActionSecondary:
           'rounded-sm bg-primary/6 [&_svg]:text-muted-foreground',
         brand:
-          'bg-brand font-medium text-white hover:bg-brand/80 active:bg-brand-active',
+          'bg-brand font-medium text-white hover:bg-brand-80 active:bg-brand-active',
         default:
           'bg-primary font-medium text-primary-foreground hover:bg-primary/90 [&_svg]:text-primary-foreground',
         destructive:

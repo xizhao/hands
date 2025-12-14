@@ -1,35 +1,29 @@
 /**
  * MDX Serializer
  *
- * Converts Plate editor value back to MDX source.
+ * Uses Plate's MarkdownPlugin for proper markdown serialization,
+ * with custom handling for frontmatter and RSC blocks.
  */
 
-import type { TElement, Value } from "platejs";
+import { MarkdownPlugin } from "@platejs/markdown";
+import type { PlateEditor, Value } from "platejs/react";
 import { serializeFrontmatter } from "./frontmatter";
-import type {
-  CodeBlockElement,
-  MdxFrontmatter,
-  PlateToMdxOptions,
-  RscBlockElement,
-} from "./types";
-import { isCodeBlockElement, isRscBlockElement } from "./types";
+import type { MdxFrontmatter, RscBlockElement } from "./types";
 
 // ============================================================================
 // Main Serializer
 // ============================================================================
 
 /**
- * Serialize Plate value to MDX source
+ * Serialize Plate value to MDX source using Plate's MarkdownPlugin
  *
- * @param value - Plate editor value
+ * @param editor - Plate editor instance (must have MarkdownPlugin installed)
  * @param frontmatter - Frontmatter metadata
- * @param options - Serialization options
  * @returns MDX source string
  */
-export function serializeMdx(
-  value: Value,
+export function serializeMdxWithEditor(
+  editor: PlateEditor,
   frontmatter: MdxFrontmatter = {},
-  options: PlateToMdxOptions = {},
 ): string {
   const lines: string[] = [];
 
@@ -40,18 +34,40 @@ export function serializeMdx(
     lines.push(""); // Blank line after frontmatter
   }
 
-  // Serialize content
-  for (let i = 0; i < value.length; i++) {
-    const element = value[i];
-    const serialized = serializeElement(element, options);
+  // Use Plate's MarkdownPlugin serializer
+  const api = editor.getApi(MarkdownPlugin);
+  const markdown = api.markdown.serialize();
 
-    if (serialized !== null) {
-      // Add blank lines before this element
-      const blankLinesBefore = getBlankLinesBefore(element, value[i - 1], i === 0);
-      for (let j = 0; j < blankLinesBefore; j++) {
-        lines.push("");
-      }
+  lines.push(markdown.trim());
 
+  return lines.join("\n") + "\n";
+}
+
+/**
+ * Legacy serializer - kept for compatibility but prefer serializeMdxWithEditor
+ * @deprecated Use serializeMdxWithEditor instead
+ */
+export function serializeMdx(
+  value: Value,
+  frontmatter: MdxFrontmatter = {},
+): string {
+  // This is a fallback that doesn't use MarkdownPlugin
+  // It won't support all markdown features
+  console.warn("[mdx-serializer] Using legacy serializer - consider using serializeMdxWithEditor");
+
+  const lines: string[] = [];
+
+  // Serialize frontmatter
+  const frontmatterStr = serializeFrontmatter(frontmatter);
+  if (frontmatterStr) {
+    lines.push(frontmatterStr.trim());
+    lines.push(""); // Blank line after frontmatter
+  }
+
+  // Simple fallback serialization
+  for (const element of value) {
+    const serialized = serializeElementFallback(element);
+    if (serialized) {
       lines.push(serialized);
     }
   }
@@ -59,89 +75,44 @@ export function serializeMdx(
   return lines.join("\n").trim() + "\n";
 }
 
-/**
- * Get number of blank lines to add before an element.
- * Uses stored metadata if available, otherwise falls back to heuristics.
- */
-function getBlankLinesBefore(
-  element: TElement,
-  prevElement: TElement | undefined,
-  isFirst: boolean,
-): number {
-  // Check for stored blank lines metadata
-  const stored = (element as any)._blankLinesBefore;
-  if (typeof stored === "number") {
-    return stored;
-  }
-
-  // Fall back to heuristics for new content
-  if (isFirst) return 0;
-  if (!prevElement) return 0;
-
-  return shouldAddBlankLineHeuristic(prevElement, element) ? 1 : 0;
-}
-
 // ============================================================================
-// Element Serialization
+// Fallback Element Serialization (for legacy use)
 // ============================================================================
 
-function serializeElement(element: TElement, options: PlateToMdxOptions): string | null {
+function serializeElementFallback(element: any): string | null {
   const type = element.type as string;
 
   switch (type) {
-    // Headings
     case "h1":
       return `# ${getTextContent(element.children)}`;
     case "h2":
       return `## ${getTextContent(element.children)}`;
     case "h3":
       return `### ${getTextContent(element.children)}`;
-    case "h4":
-      return `#### ${getTextContent(element.children)}`;
-    case "h5":
-      return `##### ${getTextContent(element.children)}`;
-    case "h6":
-      return `###### ${getTextContent(element.children)}`;
-
-    // Paragraph
     case "p":
       return getTextContent(element.children);
-
-    // Blockquote
     case "blockquote":
       return `> ${getTextContent(element.children)}`;
-
-    // Horizontal rule
     case "hr":
       return "---";
-
-    // Code block
-    case "code-block":
-      return serializeCodeBlock(element as CodeBlockElement);
-
-    // RSC Block
     case "rsc-block":
       return serializeRscBlock(element as RscBlockElement);
-
-    // Generic JSX element (custom component)
+    case "img":
+      return `![${element.alt || ""}](${element.url || ""})`;
     default:
-      return serializeJsxElement(element, options);
+      // For unknown types, try to get text content
+      if (element.children) {
+        return getTextContent(element.children);
+      }
+      return null;
   }
 }
 
-function serializeCodeBlock(element: CodeBlockElement): string {
-  const lang = element.language || "";
-  const code = element.code || "";
-  return `\`\`\`${lang}\n${code}\n\`\`\``;
-}
-
 function serializeRscBlock(element: RscBlockElement): string {
-  // Use the stored raw source if available, otherwise reconstruct
   if (element.source) {
     return element.source;
   }
 
-  // Reconstruct from props
   const props = Object.entries(element.blockProps || {})
     .map(([key, value]) => formatProp(key, value))
     .filter(Boolean)
@@ -151,56 +122,18 @@ function serializeRscBlock(element: RscBlockElement): string {
   return `<Block src="${element.blockId}"${propsStr} />`;
 }
 
-function serializeJsxElement(element: TElement, options: PlateToMdxOptions): string {
-  const tagName = element.type as string;
-
-  // Skip standard Plate node types that aren't JSX
-  if (["p", "h1", "h2", "h3", "h4", "h5", "h6", "blockquote", "hr", "code-block", "rsc-block"].includes(tagName)) {
-    return "";
-  }
-
-  // Extract props (exclude internal Plate fields)
-  const internalFields = new Set(["type", "id", "children", "isVoid"]);
-  const props = Object.entries(element)
-    .filter(([key]) => !internalFields.has(key))
-    .map(([key, value]) => formatProp(key, value))
-    .filter(Boolean)
-    .join(" ");
-
-  const propsStr = props ? ` ${props}` : "";
-  const children = element.children;
-
-  // Check if void/self-closing
-  const hasContent =
-    children &&
-    children.length > 0 &&
-    !(children.length === 1 && "text" in children[0] && children[0].text === "");
-
-  if (!hasContent) {
-    return `<${tagName}${propsStr} />`;
-  }
-
-  // Serialize children
-  const childrenStr = serializeChildren(children, options);
-  return `<${tagName}${propsStr}>${childrenStr}</${tagName}>`;
-}
-
-// ============================================================================
-// Children Serialization
-// ============================================================================
-
-function serializeChildren(
-  children: Array<{ text: string } | TElement>,
-  options: PlateToMdxOptions,
-): string {
+function getTextContent(children: any[]): string {
+  if (!children) return "";
   return children
     .map((child) => {
-      if ("text" in child && typeof (child as any).text === "string") {
-        return serializeTextNode(child as { text: string; bold?: boolean; italic?: boolean; code?: boolean; url?: string });
+      if (typeof child.text === "string") {
+        return serializeTextNode(child);
       }
-      return serializeElement(child as TElement, options);
+      if (child.children) {
+        return getTextContent(child.children);
+      }
+      return "";
     })
-    .filter((s) => s !== null)
     .join("");
 }
 
@@ -209,87 +142,25 @@ function serializeTextNode(node: {
   bold?: boolean;
   italic?: boolean;
   code?: boolean;
-  url?: string;
+  underline?: boolean;
+  strikethrough?: boolean;
 }): string {
   let text = node.text;
-
   if (!text) return "";
 
-  // Apply marks
-  if (node.code) {
-    text = `\`${text}\``;
-  }
-  if (node.bold) {
-    text = `**${text}**`;
-  }
-  if (node.italic) {
-    text = `*${text}*`;
-  }
-  if (node.url) {
-    text = `[${text}](${node.url})`;
-  }
+  if (node.code) text = `\`${text}\``;
+  if (node.bold) text = `**${text}**`;
+  if (node.italic) text = `*${text}*`;
+  if (node.strikethrough) text = `~~${text}~~`;
 
   return text;
-}
-
-// ============================================================================
-// Helpers
-// ============================================================================
-
-function getTextContent(children: Array<{ text: string } | TElement>): string {
-  return children
-    .map((child) => {
-      if ("text" in child && typeof (child as any).text === "string") {
-        return serializeTextNode(child as { text: string; bold?: boolean; italic?: boolean; code?: boolean; url?: string });
-      }
-      // Nested element - recursively get text
-      if ("children" in child) {
-        return getTextContent((child as TElement).children as Array<{ text: string } | TElement>);
-      }
-      return "";
-    })
-    .join("");
 }
 
 function formatProp(key: string, value: unknown): string {
   if (value === undefined || value === null) return "";
   if (value === true) return key;
   if (value === false) return "";
-
-  if (typeof value === "string") {
-    // Escape quotes in string values
-    const escaped = value.replace(/"/g, '\\"');
-    return `${key}="${escaped}"`;
-  }
-
-  if (typeof value === "number") {
-    return `${key}={${value}}`;
-  }
-
-  // Complex values as JSX expressions
+  if (typeof value === "string") return `${key}="${value.replace(/"/g, '\\"')}"`;
+  if (typeof value === "number") return `${key}={${value}}`;
   return `${key}={${JSON.stringify(value)}}`;
-}
-
-/**
- * Heuristic for determining if a blank line should be added between elements.
- * Used as fallback when no stored whitespace metadata is available (e.g., new content).
- */
-function shouldAddBlankLineHeuristic(current: TElement, next: TElement): boolean {
-  // Always add blank line after headings
-  const headings = ["h1", "h2", "h3", "h4", "h5", "h6"];
-  if (headings.includes(current.type as string)) return true;
-
-  // Add blank line after code blocks
-  if (current.type === "code-block") return true;
-
-  // Add blank line after RSC blocks
-  if (current.type === "rsc-block") return true;
-
-  // Add blank line before headings
-  if (headings.includes(next.type as string)) return true;
-
-  // Add blank line after blockquotes
-  if (current.type === "blockquote") return true;
-
-  return false;
 }

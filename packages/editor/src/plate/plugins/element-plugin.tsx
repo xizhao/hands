@@ -321,7 +321,7 @@ function ComponentBlockSelection() {
     <div
       className={cn(
         "pointer-events-none absolute inset-0 z-[1] rounded-[4px]",
-        "bg-brand/15",
+        "bg-brand-15",
         "transition-opacity duration-200",
         isDragging && "opacity-0",
       )}

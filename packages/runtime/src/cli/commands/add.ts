@@ -6,8 +6,9 @@
 
 import { existsSync } from "node:fs";
 import { copyFile, mkdir } from "node:fs/promises";
-import { dirname, join, resolve } from "node:path";
-import { loadHandsJson, saveHandsJson } from "./utils.js";
+import { dirname, join } from "node:path";
+import { getStdlibSourcePath, loadConfig, saveConfig } from "../../config/index.js";
+import { loadRegistry } from "./sources.js";
 
 interface AddOptions {
   schedule?: string;
@@ -41,7 +42,7 @@ export async function addCommand(name: string, options: AddOptions) {
   console.log(`Adding source: ${registryItem.title}`);
 
   // Get the stdlib path (where source files live)
-  const stdlibPath = getStdlibPath();
+  const stdlibPath = getStdlibSourcePath();
   const filesCreated: string[] = [];
   const errors: string[] = [];
 
@@ -77,7 +78,7 @@ export async function addCommand(name: string, options: AddOptions) {
 
   // Update hands.json
   try {
-    const config = await loadHandsJson(workbookDir);
+    const config = await loadConfig(workbookDir);
 
     // Add source if not already present
     if (!config.sources[name]) {
@@ -99,7 +100,7 @@ export async function addCommand(name: string, options: AddOptions) {
         }
       }
 
-      await saveHandsJson(workbookDir, config);
+      await saveConfig(workbookDir, config);
       console.log("  Updated: hands.json");
     }
   } catch (error) {
@@ -167,61 +168,4 @@ export async function addCommand(name: string, options: AddOptions) {
 
   console.log("  Start the runtime to sync data:");
   console.log("    hands dev");
-}
-
-interface RegistryItem {
-  name: string;
-  type: "source";
-  title: string;
-  description: string;
-  files: Array<{ path: string; target: string }>;
-  dependencies: string[];
-  secrets: string[];
-  streams: string[];
-  tables?: string[];
-  schedule?: string;
-  icon?: string;
-}
-
-interface Registry {
-  $schema?: string;
-  name: string;
-  version: string;
-  items: RegistryItem[];
-}
-
-/**
- * Load the source registry from @hands/stdlib
- */
-async function loadRegistry(): Promise<Registry> {
-  const stdlibPath = getStdlibPath();
-  const registryPath = join(stdlibPath, "src/registry/sources/registry.json");
-
-  try {
-    const file = Bun.file(registryPath);
-    return await file.json();
-  } catch (error) {
-    console.error(`Failed to load registry: ${error}`);
-    process.exit(1);
-  }
-}
-
-/**
- * Get the path to the stdlib package
- */
-function getStdlibPath(): string {
-  // Try workspace path (development)
-  const devPath = resolve(import.meta.dir, "../../../stdlib");
-  if (existsSync(join(devPath, "src/registry/sources/registry.json"))) {
-    return devPath;
-  }
-
-  // Try node_modules path
-  const nodeModulesPath = join(process.cwd(), "node_modules/@hands/stdlib");
-  if (existsSync(nodeModulesPath)) {
-    return nodeModulesPath;
-  }
-
-  // Fall back to dev path
-  return devPath;
 }

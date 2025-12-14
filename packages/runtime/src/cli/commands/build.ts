@@ -1,9 +1,6 @@
 /**
  * hands build - Build workbook for deployment
  *
- * Spawns the runtime to perform the actual build.
- * This avoids the CLI needing to resolve workspace dependencies.
- *
  * Options:
  *   --production    Build for production with optimizations and static pre-rendering
  *   --verbose       Show detailed build output
@@ -11,8 +8,8 @@
  */
 
 import { existsSync } from "node:fs";
+import { mkdir, writeFile } from "node:fs/promises";
 import { join, resolve } from "node:path";
-import { spawn } from "bun";
 
 interface BuildOptions {
   check?: boolean;
@@ -56,7 +53,7 @@ export async function buildCommand(options: BuildOptions) {
   if (options.skipPrerender) args.push("--skip-prerender");
 
   // Spawn runtime build
-  const proc = spawn({
+  const proc = Bun.spawn({
     cmd: args.filter(Boolean),
     cwd: workbookDir,
     stdout: "inherit",
@@ -73,10 +70,10 @@ export async function buildCommand(options: BuildOptions) {
  * Find the runtime build script
  */
 function findRuntimeBuildPath(): string | null {
-  // Try workspace path (development)
-  const devPath = resolve(import.meta.dir, "../../../runtime/src/build/cli.ts");
-  if (existsSync(devPath)) {
-    return devPath;
+  // We're in the runtime package, so use relative path
+  const buildPath = resolve(import.meta.dir, "../../build/cli.ts");
+  if (existsSync(buildPath)) {
+    return buildPath;
   }
 
   // Try node_modules path (production)
@@ -93,8 +90,6 @@ function findRuntimeBuildPath(): string | null {
  * This is a minimal fallback that generates the basic structure
  */
 async function inlineBuild(workbookDir: string, _options: BuildOptions) {
-  const { mkdir, writeFile } = await import("node:fs/promises");
-
   // Read hands.json
   const handsJsonPath = join(workbookDir, "hands.json");
   const config = JSON.parse(await Bun.file(handsJsonPath).text());

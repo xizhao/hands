@@ -159,7 +159,7 @@ export function DragSelect({ containerRef, onSelect, disabled }: DragSelectProps
 
   return (
     <div
-      className="absolute pointer-events-none border border-brand bg-brand/10 z-50"
+      className="absolute pointer-events-none border border-brand bg-brand-10 z-50"
       style={{
         left,
         top,

@@ -39,6 +39,12 @@ svg [opacity="0.2"] {
     --brand: 211 77% 51%;
     --brand-foreground: 0 0% 100%;
     --brand-active: 211 77% 41%;
+    --brand-10: 211 77% 51% / 0.10;
+    --brand-15: 211 77% 51% / 0.15;
+    --brand-25: 211 77% 51% / 0.25;
+    --brand-50: 211 77% 51% / 0.50;
+    --brand-80: 211 77% 51% / 0.80;
+    --brand-90: 211 77% 51% / 0.90;
     --highlight: 48 100% 50%;
     --subtle-foreground: 240 5% 34%;
   }
@@ -72,6 +78,12 @@ svg [opacity="0.2"] {
     --brand: 211 77% 51%;
     --brand-foreground: 0 0% 100%;
     --brand-active: 211 77% 41%;
+    --brand-10: 211 77% 51% / 0.10;
+    --brand-15: 211 77% 51% / 0.15;
+    --brand-25: 211 77% 51% / 0.25;
+    --brand-50: 211 77% 51% / 0.50;
+    --brand-80: 211 77% 51% / 0.80;
+    --brand-90: 211 77% 51% / 0.90;
     --highlight: 48 100% 50%;
     --subtle-foreground: 240 5% 34%;
   }

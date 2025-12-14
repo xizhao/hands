@@ -2,8 +2,11 @@
 /**
  * Hands CLI
  *
+ * Unified CLI for Hands workbooks. Consolidates all commands into the runtime package.
+ *
  * Usage:
  *   hands dev                   Start the development server
+ *   hands check                 Run preflight checks
  *   hands build                 Build for production
  *   hands new <name>            Create a new workbook
  *   hands add source <name>     Add a source from the registry
@@ -13,6 +16,7 @@
 import { Command } from "commander";
 import { addCommand } from "./commands/add.js";
 import { buildCommand } from "./commands/build.js";
+import { checkCommand } from "./commands/check.js";
 import { devCommand } from "./commands/dev.js";
 import { newCommand } from "./commands/new.js";
 import { sourcesCommand } from "./commands/sources.js";
@@ -26,7 +30,15 @@ program
   .description("Start the development server")
   .option("-p, --port <port>", "Runtime port", parseInt)
   .option("--no-hmr", "Disable hot module replacement")
+  .option("--no-editor", "Disable editor dev server")
   .action(devCommand);
+
+program
+  .command("check")
+  .description("Run preflight checks on the workbook")
+  .option("--fix", "Auto-fix issues where possible")
+  .option("--json", "Output results as JSON")
+  .action(checkCommand);
 
 program
   .command("build")

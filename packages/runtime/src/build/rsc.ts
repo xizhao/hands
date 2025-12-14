@@ -421,6 +421,7 @@ function generateTsConfig(): string {
     "esModuleInterop": true,
     "skipLibCheck": true,
     "jsx": "react-jsx",
+    "jsxImportSource": "react",
     "types": ["@cloudflare/workers-types"]
   },
   "include": ["src/**/*", "../blocks/**/*"],
