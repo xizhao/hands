@@ -15,7 +15,7 @@ interface FileDropOverlayProps {
   disabled?: boolean;
 }
 
-interface TauriDropPayload {
+interface TauriDragPayload {
   paths: string[];
   position: { x: number; y: number };
 }
@@ -27,8 +27,12 @@ export function FileDropOverlay({ onFileDrop, disabled = false }: FileDropOverla
     if (disabled) return;
 
     // Tauri drag events for UI state
-    const unlistenEnter = listen("tauri://drag-enter", () => {
-      setIsDragging(true);
+    // Only show overlay for external file drags (paths array will have entries)
+    const unlistenEnter = listen<TauriDragPayload>("tauri://drag-enter", (event) => {
+      // Only show overlay if dragging actual files from outside the app
+      if (event.payload.paths && event.payload.paths.length > 0) {
+        setIsDragging(true);
+      }
     });
 
     const unlistenLeave = listen("tauri://drag-leave", () => {
@@ -36,7 +40,7 @@ export function FileDropOverlay({ onFileDrop, disabled = false }: FileDropOverla
     });
 
     // Tauri drop event gives us the actual file path
-    const unlistenDrop = listen<TauriDropPayload>("tauri://drag-drop", (event) => {
+    const unlistenDrop = listen<TauriDragPayload>("tauri://drag-drop", (event) => {
       setIsDragging(false);
 
       const paths = event.payload.paths;

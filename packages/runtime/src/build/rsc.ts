@@ -323,10 +323,11 @@ export default defineConfig({
     redwood(),
   ],
   optimizeDeps: {
-    // Disable pre-bundling in dev - avoids "new version of pre-bundle" race conditions
-    // in SSR module runner. Slower cold start but more reliable.
+    // Disable discovery but keep pre-bundling for deps that are explicitly included.
+    // This avoids "new version of pre-bundle" race conditions from mid-session discovery.
+    // React deps are pre-bundled so the vite-proxy can intercept them for cross-origin loading.
     noDiscovery: true,
-    include: [],
+    include: ["react", "react-dom", "react/jsx-runtime", "react/jsx-dev-runtime"],
   },
   build: {
     rollupOptions: {

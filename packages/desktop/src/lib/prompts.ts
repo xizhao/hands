@@ -19,9 +19,16 @@ function template<T extends string>(str: T): PromptTemplate<T> {
 // Standard prompt definitions
 // NOTE: Template curly syntax is intentional - these are string patterns for matching
 export const PROMPTS = {
-  // File import - matches the first line of the import prompt
+  // File import - delegates to @import agent then integrates into UI
   // biome-ignore lint/suspicious/noTemplateCurlyInString: Intentional template pattern
-  IMPORT_FILE: template("Import and integrate this data file: ${filePath}"),
+  IMPORT_FILE: template(`Import and integrate this data file: \${filePath}
+
+Use @import to load the data into the database first. Once the data is in the database, integrate it into the app by either:
+- Creating a new dashboard/block to visualize the data
+- Adding it to an existing relevant block
+- Building an appropriate view based on the data type (charts for time series, tables for records, etc.)
+
+The import is only complete when the data is both in the database AND visible in the UI.`),
 
   // Block error fix - has variable
   // biome-ignore lint/suspicious/noTemplateCurlyInString: Intentional template pattern
@@ -91,7 +98,8 @@ function templateToRegex(template: string): RegExp {
   // Escape the template, then convert ${...} placeholders to capture groups
   const escaped = escapeRegex(template);
   const pattern = escaped.replace(/\\\$\\\{(\w+)\\\}/g, "(.+)");
-  return new RegExp(`^${pattern}$`);
+  // Use 's' flag for dotall mode (. matches newlines) to handle multiline templates
+  return new RegExp(`^${pattern}$`, "s");
 }
 
 // Extract variable names from template
