@@ -42,6 +42,9 @@ function NotebookLayout() {
 
       // Route to the correct page based on route type
       switch (routeType) {
+        case "pages":
+          navigate({ to: "/pages/$pageId", params: { pageId: id } });
+          break;
         case "blocks":
           navigate({ to: "/blocks/$blockId", params: { blockId: id } });
           break;

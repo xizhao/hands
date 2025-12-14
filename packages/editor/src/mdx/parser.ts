@@ -23,6 +23,8 @@ import type {
   RscBlockElement,
   RscBlockInfo,
   CodeBlockElement,
+  PageTitleElement,
+  PageSubtitleElement,
 } from "./types";
 
 // ============================================================================
@@ -110,14 +112,38 @@ export function parseMdx(source: string, options: MdxToPlateOptions = {}): MdxPa
     }
   }
 
-  // Ensure at least one paragraph if empty
+  // Prepend page-title and page-subtitle from frontmatter
+  const frontmatterElements: TElement[] = [];
+
+  // Always add title element (even if empty - provides Notion-like experience)
+  const titleElement: PageTitleElement = {
+    type: "page-title",
+    id: generateId("title"),
+    children: [{ text: frontmatter.title ?? "" }],
+  };
+  frontmatterElements.push(titleElement);
+
+  // Add subtitle if description exists in frontmatter
+  if (frontmatter.description) {
+    const subtitleElement: PageSubtitleElement = {
+      type: "page-subtitle",
+      id: generateId("subtitle"),
+      children: [{ text: frontmatter.description }],
+    };
+    frontmatterElements.push(subtitleElement);
+  }
+
+  // Prepend frontmatter elements to value
+  const finalValue: Value = [...frontmatterElements, ...value];
+
+  // Ensure at least one paragraph after frontmatter elements if content is empty
   if (value.length === 0) {
-    value.push({ type: "p", children: [{ text: "" }] });
+    finalValue.push({ type: "p", children: [{ text: "" }] });
   }
 
   return {
     frontmatter,
-    value,
+    value: finalValue,
     sourceMap: {
       frontmatter: frontmatterLoc ?? undefined,
       contentStart,

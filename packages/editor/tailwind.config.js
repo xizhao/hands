@@ -1,8 +1,10 @@
 /** @type {import('tailwindcss').Config} */
 export default {
   content: [
-    "./demo/**/*.{js,ts,jsx,tsx}",
     "./src/**/*.{js,ts,jsx,tsx}",
+    "./demo/workbook/.hands/src/**/*.{js,ts,jsx,tsx}",
+    "./demo/workbook/blocks/**/*.{js,ts,jsx,tsx}",
+    "./demo/workbook/pages/**/*.{js,ts,jsx,tsx}",
     "../stdlib/src/**/*.{js,ts,jsx,tsx}",
   ],
   theme: {

@@ -21,6 +21,7 @@ import {
   Code,
   Copy,
   Database,
+  FileText,
   Folder,
   FolderOpen,
   Globe,
@@ -60,7 +61,7 @@ import {
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { useRuntimePort, useRuntimeState } from "@/hooks/useRuntimeState";
 import { useSourceManagement } from "@/hooks/useSources";
-import { useCreateBlock } from "@/hooks/useWorkbook";
+import { useCreateBlock, useCreatePage } from "@/hooks/useWorkbook";
 import { cn } from "@/lib/utils";
 
 interface NotebookSidebarProps {
@@ -154,6 +155,20 @@ function ActionIcon({ className, empty }: { className?: string; empty?: boolean 
         "h-4 w-4",
         listItemIconStyles,
         empty ? "opacity-50" : "text-green-500",
+        className,
+      )}
+    />
+  );
+}
+
+function PageIcon({ className, empty }: { className?: string; empty?: boolean }) {
+  return (
+    <FileText
+      weight="duotone"
+      className={cn(
+        "h-4 w-4",
+        listItemIconStyles,
+        empty ? "opacity-50" : "text-orange-400 group-hover:text-orange-300",
         className,
       )}
     />
@@ -350,8 +365,10 @@ export function NotebookSidebar({
   // All data from manifest (filesystem source of truth)
   const blocks = manifest?.blocks ?? [];
   const actions = manifest?.actions ?? [];
+  const pages = manifest?.pages ?? [];
   const blocksLoading = manifestLoading;
 
+  const [pagesExpanded, setPagesExpanded] = useState(true);
   const [blocksExpanded, setBlocksExpanded] = useState(true);
   const [dataExpanded, setDataExpanded] = useState(true);
   const [actionsExpanded, setActionsExpanded] = useState(true);
@@ -440,14 +457,23 @@ export function NotebookSidebar({
   const [addSourceOpen, setAddSourceOpen] = useState(false);
   const [isCreatingNewBlock, setIsCreatingNewBlock] = useState(false);
   const [newBlockName, setNewBlockName] = useState("");
+  const [isCreatingNewPage, setIsCreatingNewPage] = useState(false);
+  const [newPageName, setNewPageName] = useState("");
   const [selectedSource, setSelectedSource] = useState<string | null>(null);
   const isConfirmingRef = useRef(false); // Guard against double submission
+  const isConfirmingPageRef = useRef(false); // Guard against double submission for pages
   const newBlockInputRef = useCallback((node: HTMLInputElement | null) => {
+    if (node) node.focus();
+  }, []);
+  const newPageInputRef = useCallback((node: HTMLInputElement | null) => {
     if (node) node.focus();
   }, []);
 
   // Create block mutation
   const { mutateAsync: createBlock, isPending: isCreatingBlock } = useCreateBlock();
+
+  // Create page mutation
+  const { mutateAsync: createPage, isPending: isCreatingPage } = useCreatePage();
 
   const handleStartNewBlock = () => {
     setIsCreatingNewBlock(true);
@@ -531,6 +557,83 @@ export default function Placeholder() {
     }
   };
 
+  // Page creation handlers
+  const handleStartNewPage = () => {
+    setIsCreatingNewPage(true);
+    setNewPageName("");
+  };
+
+  const handleCancelNewPage = () => {
+    setIsCreatingNewPage(false);
+    setNewPageName("");
+  };
+
+  const handleConfirmNewPage = async () => {
+    // Guard against double submission
+    if (isConfirmingPageRef.current) return;
+
+    if (!newPageName.trim()) {
+      handleCancelNewPage();
+      return;
+    }
+
+    // Sanitize the name to create a valid page ID
+    const pageId = newPageName
+      .trim()
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/^-|-$/g, "");
+
+    if (!pageId) {
+      handleCancelNewPage();
+      return;
+    }
+
+    // Set guard before async work
+    isConfirmingPageRef.current = true;
+
+    // Check if page already exists
+    const existingPage = pages.find((p) => p.id === pageId);
+    if (existingPage) {
+      // Just navigate to existing page
+      setIsCreatingNewPage(false);
+      setNewPageName("");
+      isConfirmingPageRef.current = false;
+      navigate({ to: "/pages/$pageId", params: { pageId } });
+      return;
+    }
+
+    try {
+      await createPage({ pageId });
+      setIsCreatingNewPage(false);
+      setNewPageName("");
+      // Navigate to the newly created page
+      navigate({ to: "/pages/$pageId", params: { pageId } });
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : "Failed to create page";
+      // If page already exists, just navigate to it
+      if (message.includes("already exists")) {
+        setIsCreatingNewPage(false);
+        setNewPageName("");
+        navigate({ to: "/pages/$pageId", params: { pageId } });
+      } else {
+        console.error("[sidebar] failed to create page:", err);
+      }
+    } finally {
+      isConfirmingPageRef.current = false;
+    }
+  };
+
+  const handleNewPageKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === "Enter") {
+      e.preventDefault();
+      handleConfirmNewPage();
+    } else if (e.key === "Escape") {
+      e.preventDefault();
+      handleCancelNewPage();
+    }
+  };
+
   // Get installed source names for filtering
   const installedSourceNames = sources.map((s) => s.name);
   const availableToAdd = availableSources.filter((s) => !installedSourceNames.includes(s.name));
@@ -554,6 +657,15 @@ export default function Placeholder() {
     const query = searchQuery.toLowerCase();
     return blocks.filter((block) => block.title.toLowerCase().includes(query));
   }, [blocks, searchQuery]);
+
+  // Handle page click - navigate to page editor
+  const handlePageClick = useCallback(
+    (pageId: string) => {
+      console.log("[sidebar] navigating to page:", pageId);
+      navigate({ to: "/pages/$pageId", params: { pageId } });
+    },
+    [navigate],
+  );
 
   // Handle block click - navigate to block editor
   const handleBlockClick = useCallback(
@@ -704,8 +816,36 @@ export default function Placeholder() {
     return (
       <TooltipProvider delayDuration={0}>
         <div className="space-y-3 px-1">
+          {/* Pages section - collapsed: show all as compact icons */}
+          {pages.length > 0 ? (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <div className="flex flex-wrap gap-0.5 justify-center pt-2 border-t border-border/50 cursor-default">
+                  {pages.map((page) => (
+                    <FileText
+                      key={page.id}
+                      weight="duotone"
+                      className="h-2.5 w-2.5 text-orange-400/70"
+                    />
+                  ))}
+                </div>
+              </TooltipTrigger>
+              <TooltipContent side="right">
+                <p>
+                  {pages.length} page{pages.length !== 1 ? "s" : ""}
+                </p>
+              </TooltipContent>
+            </Tooltip>
+          ) : (
+            <div className="pt-2 border-t border-border/50">
+              <div className="flex justify-center">
+                <FileText weight="duotone" className="h-2.5 w-2.5 text-muted-foreground/30" />
+              </div>
+            </div>
+          )}
+
           {/* Blocks section - collapsed: show all as compact squares */}
-          {blocks.length > 0 && (
+          {blocks.length > 0 ? (
             <Tooltip>
               <TooltipTrigger asChild>
                 <div className="flex flex-wrap gap-0.5 justify-center pt-2 border-t border-border/50 cursor-default">
@@ -728,10 +868,16 @@ export default function Placeholder() {
                 </p>
               </TooltipContent>
             </Tooltip>
+          ) : (
+            <div className="pt-2 border-t border-border/50">
+              <div className="flex justify-center">
+                <span className="text-[8px] leading-none text-muted-foreground/30">{"\u25A1"}</span>
+              </div>
+            </div>
           )}
 
           {/* Data section - collapsed: show all tables as compact icons */}
-          {schema && schema.length > 0 && (
+          {schema && schema.length > 0 ? (
             <Tooltip>
               <TooltipTrigger asChild>
                 <div className="flex flex-wrap gap-0.5 justify-center pt-2 border-t border-border/50 cursor-default">
@@ -751,6 +897,12 @@ export default function Placeholder() {
                 </p>
               </TooltipContent>
             </Tooltip>
+          ) : (
+            <div className="pt-2 border-t border-border/50">
+              <div className="flex justify-center">
+                <Table weight="duotone" className="h-2.5 w-2.5 text-muted-foreground/30" />
+              </div>
+            </div>
           )}
 
           {/* Actions section - collapsed: show all as compact icons */}
@@ -759,7 +911,7 @@ export default function Placeholder() {
               <TooltipTrigger asChild>
                 <div className="flex flex-wrap gap-0.5 justify-center pt-2 border-t border-border/50 cursor-default">
                   {actions.map((action) => (
-                    <span key={action.id} className="text-[8px] leading-none text-orange-400/70">
+                    <span key={action.id} className="text-[8px] leading-none text-green-500/70">
                       &#x25B6;
                     </span>
                   ))}
@@ -774,7 +926,7 @@ export default function Placeholder() {
           ) : (
             <div className="pt-2 border-t border-border/50">
               <div className="flex justify-center">
-                <span className="text-[8px] leading-none text-muted-foreground/30">&#x25B6;</span>
+                <Play weight="fill" className="h-2.5 w-2.5 text-muted-foreground/30" />
               </div>
             </div>
           )}
@@ -859,6 +1011,88 @@ export default function Placeholder() {
 
         {/* Main content grid - 1 column narrow, 2 columns fullWidth */}
         <div className={cn(fullWidth ? "grid grid-cols-1 md:grid-cols-2 gap-6" : "space-y-3")}>
+          {/* Pages Section - first in sidebar */}
+          <div className="space-y-1">
+            <div className="flex items-center justify-between">
+              <button
+                onClick={() => setPagesExpanded(!pagesExpanded)}
+                className="flex items-center gap-1 text-[10px] font-medium text-muted-foreground/80 uppercase tracking-wider hover:text-muted-foreground transition-colors"
+              >
+                {pagesExpanded ? (
+                  <ChevronDown className="h-3 w-3" />
+                ) : (
+                  <ChevronRight className="h-3 w-3" />
+                )}
+                Pages
+              </button>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <button
+                    onClick={handleStartNewPage}
+                    className="p-0.5 text-muted-foreground/60 hover:text-muted-foreground transition-colors"
+                    title="New page"
+                  >
+                    <Plus className="h-3 w-3" />
+                  </button>
+                </TooltipTrigger>
+                <TooltipContent side="right">New page</TooltipContent>
+              </Tooltip>
+            </div>
+
+            {pagesExpanded && (
+              <div className="space-y-0">
+                {/* Inline new page input */}
+                {isCreatingNewPage && (
+                  <div className={cn(listItemStyles, "pr-1")}>
+                    <PageIcon />
+                    <input
+                      ref={newPageInputRef}
+                      type="text"
+                      value={newPageName}
+                      onChange={(e) => setNewPageName(e.target.value)}
+                      onKeyDown={handleNewPageKeyDown}
+                      onBlur={handleConfirmNewPage}
+                      placeholder="page-name"
+                      disabled={isCreatingPage}
+                      className="flex-1 bg-transparent border-none outline-none text-sm placeholder:text-muted-foreground/50"
+                    />
+                    {isCreatingPage && (
+                      <CircleNotch
+                        weight="bold"
+                        className="h-3 w-3 animate-spin text-muted-foreground"
+                      />
+                    )}
+                  </div>
+                )}
+                {manifestLoading ? (
+                  <div className={emptyStateStyles}>Loading...</div>
+                ) : pages.length > 0 || isCreatingNewPage ? (
+                  (searchQuery
+                    ? pages.filter((p) =>
+                        p.id.toLowerCase().includes(searchQuery.toLowerCase()),
+                      )
+                    : pages
+                  ).map((page) => (
+                    <div key={page.id} className={listItemStyles}>
+                      <PageIcon />
+                      <button
+                        onClick={() => handlePageClick(page.id)}
+                        className="flex-1 truncate text-left hover:underline"
+                      >
+                        {page.id}
+                      </button>
+                    </div>
+                  ))
+                ) : (
+                  <div className={emptyStateStyles}>
+                    <PageIcon empty />
+                    <span>No pages</span>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+
           {/* Blocks Section */}
           <div className="space-y-1">
             <div className="flex items-center justify-between">

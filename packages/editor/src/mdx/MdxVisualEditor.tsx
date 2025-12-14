@@ -8,7 +8,8 @@
  * - MDX source is the single source of truth
  * - Source changes → Plate value is recomputed
  * - Plate changes → MDX is serialized back
- * - Frontmatter is managed separately from content
+ * - Title/description from frontmatter are rendered as page-title/page-subtitle
+ *   Plate elements (like Notion's non-deletable title)
  */
 
 import type { Value } from "platejs";
@@ -19,7 +20,7 @@ import {
   PlateContent,
   usePlateEditor,
 } from "platejs/react";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef } from "react";
 import type { Operation } from "slate";
 import { cn } from "../lib/utils";
 import { elementFallbackRenderer } from "../plate/plugins/element-plugin";
@@ -45,6 +46,8 @@ export interface MdxVisualEditorProps {
   workerPort?: number;
   /** CSS class name */
   className?: string;
+  /** Whether content is being refreshed (shows at reduced opacity) */
+  isRefreshing?: boolean;
 }
 
 // ============================================================================
@@ -70,10 +73,8 @@ export function MdxVisualEditor({
   runtimePort = 55000,
   workerPort = 55200,
   className,
+  isRefreshing = false,
 }: MdxVisualEditorProps) {
-  // Frontmatter state (managed separately from Plate)
-  const [frontmatter, setFrontmatter] = useState<MdxFrontmatter>({});
-
   // Refs for operation tracking
   const stateRef = useRef<MdxSyncState>({
     source,
@@ -92,7 +93,6 @@ export function MdxVisualEditor({
     const parseResult = parseMdx(source);
     stateRef.current.parseResult = parseResult;
     stateRef.current.source = source;
-    setFrontmatter(parseResult.frontmatter);
     return parseResult.value;
   }, []); // Only on mount
 
@@ -167,9 +167,8 @@ export function MdxVisualEditor({
     try {
       const parseResult = parseMdx(source);
 
-      // Update frontmatter if changed
-      if (JSON.stringify(parseResult.frontmatter) !== JSON.stringify(frontmatter)) {
-        setFrontmatter(parseResult.frontmatter);
+      // Notify frontmatter change if callback provided
+      if (JSON.stringify(parseResult.frontmatter) !== JSON.stringify(state.parseResult.frontmatter)) {
         state.onFrontmatterChange?.(parseResult.frontmatter);
       }
 
@@ -196,28 +195,7 @@ export function MdxVisualEditor({
         state.isSyncing = false;
       }, 0);
     }
-  }, [source, editor, frontmatter]);
-
-  // Handle frontmatter updates
-  const handleFrontmatterUpdate = useCallback(
-    (key: string, value: unknown) => {
-      const state = stateRef.current;
-      const newFrontmatter = { ...state.parseResult.frontmatter, [key]: value };
-
-      // Update local state
-      setFrontmatter(newFrontmatter);
-      state.parseResult = { ...state.parseResult, frontmatter: newFrontmatter };
-
-      // Reserialize MDX
-      const value_ = editor.children as Value;
-      const newSource = serializeMdx(value_, newFrontmatter);
-
-      state.source = newSource;
-      state.onSourceChange(newSource);
-      state.onFrontmatterChange?.(newFrontmatter);
-    },
-    [editor],
-  );
+  }, [source, editor]);
 
   // Handle Plate value changes
   const handleChange = useCallback(({ value }: { value: Value }) => {
@@ -226,22 +204,14 @@ export function MdxVisualEditor({
   }, []);
 
   return (
-    <div className={cn("mdx-visual-editor h-full flex flex-col", className)}>
-      {/* Frontmatter editor (optional) */}
-      {Object.keys(frontmatter).length > 0 && (
-        <div className="frontmatter-bar px-6 py-2 border-b border-border/50 bg-muted/20">
-          <div className="flex items-center gap-4 text-sm text-muted-foreground">
-            {frontmatter.title && (
-              <span className="font-medium text-foreground">{frontmatter.title}</span>
-            )}
-            {frontmatter.description && (
-              <span className="text-xs truncate max-w-[300px]">{frontmatter.description}</span>
-            )}
-          </div>
-        </div>
+    <div
+      className={cn(
+        "mdx-visual-editor h-full flex flex-col transition-opacity duration-150",
+        isRefreshing && "opacity-60 pointer-events-none",
+        className,
       )}
-
-      {/* Plate editor */}
+    >
+      {/* Plate editor - title and description are now inline Plate elements */}
       <div className="flex-1 min-h-0">
         <Plate editor={editor} onChange={handleChange}>
           <PlateContainer

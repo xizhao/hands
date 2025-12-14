@@ -74,10 +74,7 @@ export function RscBlockElementComponent({
   // Enter editing mode
   const enterEditMode = useCallback(() => {
     setIsEditing(true);
-    // Focus the container after a tick so keyboard events work
-    requestAnimationFrame(() => {
-      containerRef.current?.focus();
-    });
+    // Don't auto-focus - let user click inside to focus OverlayEditor naturally
   }, []);
 
   // Exit editing mode
@@ -106,21 +103,12 @@ export function RscBlockElementComponent({
     };
   }, [isEditing, exitEditMode]);
 
-  // Handle keyboard events - prevent Plate from processing them
+  // Handle Escape to exit editing mode - let OverlayEditor handle everything else
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent) => {
-      // Stop propagation to prevent Plate from handling
-      e.stopPropagation();
-
-      // Prevent default for destructive keys so Plate doesn't delete the block
-      if (e.key === "Delete" || e.key === "Backspace") {
-        e.preventDefault();
-        // Let the OverlayEditor handle these if it has selection
-        return;
-      }
-
-      // Escape exits editing mode (OverlayEditor will call onExit when no selection)
+      // Only handle Escape at this level - let OverlayEditor handle Delete/Backspace/etc
       if (e.key === "Escape" && isEditing) {
+        e.stopPropagation();
         exitEditMode();
       }
     },
@@ -211,12 +199,11 @@ export function RscBlockElementComponent({
           "ring-2 ring-blue-500/40",
           "outline-none overflow-visible",
         )}
-        contentEditable={false}
-        tabIndex={0}
+        tabIndex={-1}
         onKeyDown={handleKeyDown}
       >
         {/* Full interactive content */}
-        <div className="cursor-crosshair overflow-visible">
+        <div className="overflow-visible">
           {renderContent(true)}
         </div>
       </div>

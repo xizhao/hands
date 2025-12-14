@@ -155,7 +155,7 @@ function Draggable(props: PlateElementProps) {
               )}
             >
               <Button
-                className="absolute right-0 h-6 w-6 p-0"
+                className="absolute left-0 h-6 w-6 p-0"
                 data-plate-prevent-deselect
                 ref={handleRef}
                 style={{ top: `${dragButtonTop + 3}px` }}
@@ -171,7 +171,7 @@ function Draggable(props: PlateElementProps) {
 
               {!isInColumn && !isInTable && (
                 <div
-                  className="absolute left-0 h-6"
+                  className="absolute right-0 h-6"
                   style={{ top: `${dragButtonTop + 3}px` }}
                 >
                   <DraggableInsertHandle />

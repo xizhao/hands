@@ -984,6 +984,7 @@ import React from "react";
 export function OverlayEditor(props: OverlayEditorProps) {
   const containerRef = useRef<HTMLDivElement>(null);
 
+  // Note: DndProvider is provided at sandbox root level, shared by all editors
   return (
     <EditorProvider>
       <OverlayEditorInner {...props} containerRef={containerRef} />

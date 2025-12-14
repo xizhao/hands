@@ -107,6 +107,34 @@ export function isCodeBlockElement(element: TElement): element is CodeBlockEleme
 }
 
 // ============================================================================
+// Page Title & Subtitle (from frontmatter)
+// ============================================================================
+
+/** Page title element - rendered as H1, cannot be deleted */
+export interface PageTitleElement extends TElement {
+  type: "page-title";
+  id: string;
+  children: Array<{ text: string }>;
+}
+
+/** Page subtitle element - rendered below title, cannot be deleted */
+export interface PageSubtitleElement extends TElement {
+  type: "page-subtitle";
+  id: string;
+  children: Array<{ text: string }>;
+}
+
+/** Type guard for page title elements */
+export function isPageTitleElement(element: TElement): element is PageTitleElement {
+  return element.type === "page-title";
+}
+
+/** Type guard for page subtitle elements */
+export function isPageSubtitleElement(element: TElement): element is PageSubtitleElement {
+  return element.type === "page-subtitle";
+}
+
+// ============================================================================
 // Conversion Options
 // ============================================================================
 

@@ -486,6 +486,32 @@ function startFileWatcher(config: RuntimeConfig) {
       console.warn("[runtime] Could not watch blocks/:", err);
     }
   }
+
+  // Watch pages directory
+  const pagesDir = join(workbookDir, "pages");
+  if (existsSync(pagesDir)) {
+    try {
+      const pagesWatcher = watch(pagesDir, { recursive: true }, async (_event, filename) => {
+        if (filename && (filename.endsWith(".md") || filename.endsWith(".mdx") || filename.endsWith(".plate.json"))) {
+          console.log(`[runtime] Page file event: ${filename}`);
+
+          // Reload page registry to pick up changes
+          if (state.pageRegistry) {
+            try {
+              await state.pageRegistry.load();
+              console.log("[runtime] Page registry reloaded");
+            } catch (err) {
+              console.warn("[runtime] Failed to reload page registry:", err);
+            }
+          }
+        }
+      });
+      state.fileWatchers.push(pagesWatcher);
+      console.log("[runtime] Watching pages/ for changes");
+    } catch (err) {
+      console.warn("[runtime] Could not watch pages/:", err);
+    }
+  }
 }
 
 /**
@@ -567,7 +593,20 @@ function createApp(config: RuntimeConfig) {
   // Clients poll this endpoint (every 1s) instead of using SSE
   app.get("/workbook/manifest", async (c) => {
     const manifest = await getManifest(config.workbookDir, config.workbookId);
-    return c.json(manifest);
+
+    // Include pages from pageRegistry if available
+    const pages = state.pageRegistry?.list().map((p) => ({
+      id: p.path.replace(/\.(mdx?|plate\.json)$/, ""),
+      route: p.route,
+      path: p.path,
+      title: p.route === "/" ? "Home" : p.route.slice(1), // Use route as title for now
+    })) ?? [];
+
+    return c.json({
+      ...manifest,
+      pages,
+      isEmpty: manifest.isEmpty && pages.length === 0,
+    });
   });
 
   // ============================================
@@ -1006,6 +1045,85 @@ function createApp(config: RuntimeConfig) {
     } catch (err) {
       return c.json(
         { error: `Failed to reload: ${err instanceof Error ? err.message : String(err)}` },
+        500,
+      );
+    }
+  });
+
+  // Create new page
+  app.post("/workbook/pages", async (c) => {
+    const { pageId, source } = await c.req.json<{ pageId: string; source?: string }>();
+
+    if (!pageId || typeof pageId !== "string") {
+      return c.json({ error: "Missing pageId" }, 400);
+    }
+
+    // Validate page ID - must start with letter, contain only alphanumeric, dashes, underscores
+    if (!/^[a-zA-Z][a-zA-Z0-9_-]*$/.test(pageId)) {
+      return c.json(
+        {
+          error:
+            "Invalid pageId - must start with letter, contain only alphanumeric, dashes, underscores",
+        },
+        400,
+      );
+    }
+
+    const pagesDir = join(config.workbookDir, "pages");
+
+    // Create pages directory if it doesn't exist
+    if (!existsSync(pagesDir)) {
+      const { mkdirSync } = await import("node:fs");
+      mkdirSync(pagesDir, { recursive: true });
+    }
+
+    // Check if page already exists
+    const filePath = join(pagesDir, `${pageId}.mdx`);
+    if (existsSync(filePath)) {
+      return c.json({ error: `Page already exists: ${pageId}` }, 409);
+    }
+
+    // Default MDX content for new page
+    const defaultSource =
+      source ||
+      `---
+title: ${pageId}
+---
+
+# ${pageId}
+
+Start writing your page content here.
+`;
+
+    try {
+      const { openSync, writeSync, fsyncSync, closeSync } = await import("node:fs");
+      const fd = openSync(filePath, "w");
+      writeSync(fd, defaultSource, 0, "utf-8");
+      fsyncSync(fd);
+      closeSync(fd);
+
+      // Reload page registry to pick up the new page
+      if (state.pageRegistry) {
+        await state.pageRegistry.load();
+      } else {
+        // Initialize page registry if it doesn't exist
+        state.pageRegistry = createPageRegistry({
+          pagesDir,
+          precompile: false,
+        });
+        await state.pageRegistry.load();
+      }
+
+      return c.json({
+        success: true,
+        pageId,
+        filePath,
+      });
+    } catch (err) {
+      return c.json(
+        {
+          error: `Failed to create page: ${err instanceof Error ? err.message : String(err)}`,
+        },
         500,
       );
     }

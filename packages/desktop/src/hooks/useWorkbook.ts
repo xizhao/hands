@@ -53,6 +53,20 @@ export interface WorkbookManifest {
   workbookDir: string;
   blocks: WorkbookBlock[];
   sources?: WorkbookSource[];
+  actions?: Array<{
+    id: string;
+    name: string;
+    description?: string;
+    schedule?: string;
+    triggers: string[];
+    path: string;
+  }>;
+  pages?: Array<{
+    id: string;
+    route: string;
+    path: string;
+    title: string;
+  }>;
   tables?: string[];
   isEmpty: boolean;
 }
@@ -459,6 +473,42 @@ export function useCreateBlock() {
       }
 
       return response.json() as Promise<CreateBlockResult>;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["workbook-manifest"] });
+      queryClient.invalidateQueries({ queryKey: ["manifest"] });
+    },
+  });
+}
+
+// Create a new page
+export interface CreatePageResult {
+  success: boolean;
+  pageId: string;
+  filePath: string;
+}
+
+export function useCreatePage() {
+  const port = useRuntimePort();
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationKey: ["page", "create"],
+    mutationFn: async ({ pageId, source }: { pageId: string; source?: string }) => {
+      if (!port) throw new Error("Runtime not connected");
+
+      const response = await fetch(`http://localhost:${port}/workbook/pages`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ pageId, source }),
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || "Failed to create page");
+      }
+
+      return response.json() as Promise<CreatePageResult>;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["workbook-manifest"] });

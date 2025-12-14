@@ -10,7 +10,10 @@
 import "../rsc/shared-react";
 
 import { StrictMode, useCallback, useEffect, useState } from "react";
+import { DndProvider } from "react-dnd";
+import { HTML5Backend } from "react-dnd-html5-backend";
 import { createRoot } from "react-dom/client";
+import { getCachedPageSource, setCachedPageSource } from "../mdx/cache";
 import { MdxVisualEditor } from "../mdx/MdxVisualEditor";
 import { OverlayEditor } from "../overlay";
 import { installGlobalErrorHandler } from "../overlay/errors";
@@ -63,9 +66,13 @@ if (runtimePortNum) {
 installGlobalErrorHandler(blockId ?? pageId ?? undefined);
 
 function SandboxApp() {
-  const [source, setSource] = useState<string | null>(null);
+  // For pages, initialize with cached source for instant display
+  const cachedSource = editorMode === "page" && pageId ? getCachedPageSource(pageId) : null;
+  const [source, setSource] = useState<string | null>(cachedSource);
   const [error, setError] = useState<string | null>(null);
   const [rscReady, setRscReady] = useState(false);
+  // Track if we're refreshing (have cached content, fetching fresh)
+  const [isRefreshing, setIsRefreshing] = useState(cachedSource !== null);
 
   // Initialize RSC Flight client
   useEffect(() => {
@@ -90,7 +97,13 @@ function SandboxApp() {
     } else if (editorMode === "page" && pageId) {
       fetch(`http://localhost:${runtimePortNum}/workbook/pages/${pageId}/source`)
         .then((res) => (res.ok ? res.json() : Promise.reject("Failed to load page")))
-        .then((data) => setSource(data.source))
+        .then((data) => {
+          setSource(data.source);
+          // Update cache with fresh source
+          setCachedPageSource(pageId, data.source);
+          // Done refreshing
+          setIsRefreshing(false);
+        })
         .catch((err) => setError(String(err)));
     } else {
       setError("Missing blockId or pageId");
@@ -112,6 +125,9 @@ function SandboxApp() {
   const handlePageSave = useCallback((newSource: string) => {
     if (readOnly || !pageId || !runtimePortNum) return;
 
+    // Update cache immediately on save
+    setCachedPageSource(pageId, newSource);
+
     fetch(`http://localhost:${runtimePortNum}/workbook/pages/${pageId}/source`, {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
@@ -123,7 +139,26 @@ function SandboxApp() {
     return <div className="flex items-center justify-center h-screen text-red-500">{error}</div>;
   }
 
-  if (!rscReady || source === null) {
+  // Page mode: Show cached content immediately with refresh indicator
+  // Only block on rscReady, not on source (we may have cached source)
+  if (editorMode === "page") {
+    // If we have cached source, show it immediately (even if RSC not ready yet)
+    // Once RSC is ready, the editor will work fully
+    if (source !== null) {
+      return (
+        <RscProvider port={workerPortNum!} enabled>
+          <MdxVisualEditor
+            source={source}
+            onSourceChange={handlePageSave}
+            runtimePort={runtimePortNum!}
+            workerPort={workerPortNum!}
+            className="h-screen"
+            isRefreshing={isRefreshing || !rscReady}
+          />
+        </RscProvider>
+      );
+    }
+    // No cached source, show loading
     return (
       <div className="flex items-center justify-center h-screen text-muted-foreground">
         <div className="flex items-center gap-2">
@@ -134,18 +169,15 @@ function SandboxApp() {
     );
   }
 
-  // Page mode: Use MDX Visual Editor
-  if (editorMode === "page") {
+  // Block mode: Wait for both RSC and source (blocks have their own caching)
+  if (!rscReady || source === null) {
     return (
-      <RscProvider port={workerPortNum!} enabled>
-        <MdxVisualEditor
-          source={source}
-          onSourceChange={handlePageSave}
-          runtimePort={runtimePortNum!}
-          workerPort={workerPortNum!}
-          className="h-screen"
-        />
-      </RscProvider>
+      <div className="flex items-center justify-center h-screen text-muted-foreground">
+        <div className="flex items-center gap-2">
+          <div className="w-4 h-4 border-2 border-muted-foreground/30 border-t-muted-foreground rounded-full animate-spin" />
+          <span className="text-sm">Loading...</span>
+        </div>
+      </div>
     );
   }
 
@@ -165,6 +197,8 @@ function SandboxApp() {
 
 createRoot(document.getElementById("root")!).render(
   <StrictMode>
-    <SandboxApp />
+    <DndProvider backend={HTML5Backend}>
+      <SandboxApp />
+    </DndProvider>
   </StrictMode>,
 );

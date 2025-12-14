@@ -60,6 +60,12 @@ export interface WorkbookManifest {
     triggers: Array<"manual" | "webhook" | "schedule" | "pg_notify">;
     path: string;
   }>;
+  pages?: Array<{
+    id: string;
+    route: string;
+    path: string;
+    title: string;
+  }>;
   tables?: string[];
   isEmpty: boolean;
 }

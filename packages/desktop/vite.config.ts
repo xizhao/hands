@@ -57,8 +57,6 @@ export default defineConfig({
     __webpack_require__: "globalThis.__webpack_require__",
   },
   optimizeDeps: {
-    // Prevent mid-session re-bundling that causes 504 "Outdated Optimize Dep" errors
-    noDiscovery: true,
     include: ["react-server-dom-webpack/client"],
   },
   clearScreen: false,

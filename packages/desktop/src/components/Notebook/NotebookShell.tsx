@@ -76,8 +76,16 @@ export function NotebookShell({ children }: NotebookShellProps) {
   const tableMatch = currentPath.match(/^\/tables\/(.+)$/);
   const tableId = tableMatch?.[1];
   const isOnTable = !!tableId;
-  // Check if we're on any content route (block, source, or table) that needs the editor layout
-  const isOnContentRoute = isOnBlock || isOnSource || isOnTable;
+  // Check if we're on a page route and extract pageId
+  const pageMatch = currentPath.match(/^\/pages\/(.+)$/);
+  const pageId = pageMatch?.[1];
+  const isOnPage = !!pageId;
+  // Check if we're on an action route and extract actionId
+  const actionMatch = currentPath.match(/^\/actions\/(.+)$/);
+  const actionId = actionMatch?.[1];
+  const isOnAction = !!actionId;
+  // Check if we're on any content route that needs the editor layout with sidebar
+  const isOnContentRoute = isOnBlock || isOnSource || isOnTable || isOnPage || isOnAction;
 
   // Consolidated runtime state - single source of truth
   const {
@@ -136,6 +144,12 @@ export function NotebookShell({ children }: NotebookShellProps) {
 
   // Current table (for breadcrumb) - from schema
   const currentTable = dbSchema?.find((t) => t.table_name === tableId);
+
+  // Current page (for breadcrumb) - from manifest
+  const currentPage = manifest?.pages?.find((p) => p.id === pageId || p.route === `/${pageId}`);
+
+  // Current action (for breadcrumb) - from manifest
+  const currentAction = manifest?.actions?.find((a) => a.id === actionId);
 
   // Sidebar hover state (invisible until hover on left edge) - only used when on a page
   const [sidebarVisible, setSidebarVisible] = useState(false);
@@ -511,6 +525,52 @@ export function NotebookShell({ children }: NotebookShellProps) {
                 </Tooltip>
               </>
             )}
+            {isOnPage && (
+              <>
+                <span
+                  className={cn(
+                    "px-1 py-0.5 text-sm text-muted-foreground bg-transparent rounded-sm",
+                    "hover:bg-accent/50 hover:text-foreground",
+                  )}
+                >
+                  {currentPage?.title || pageId}
+                </span>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <button
+                      onClick={handleClosePage}
+                      className="ml-1 p-0.5 rounded-sm text-muted-foreground/70 hover:text-muted-foreground hover:bg-accent/50 transition-colors opacity-0 group-hover/titlebar:opacity-100"
+                    >
+                      <X weight="bold" className="h-3 w-3" />
+                    </button>
+                  </TooltipTrigger>
+                  <TooltipContent side="bottom">Close page</TooltipContent>
+                </Tooltip>
+              </>
+            )}
+            {isOnAction && (
+              <>
+                <span
+                  className={cn(
+                    "px-1 py-0.5 text-sm text-muted-foreground bg-transparent rounded-sm",
+                    "hover:bg-accent/50 hover:text-foreground",
+                  )}
+                >
+                  {currentAction?.name || actionId}
+                </span>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <button
+                      onClick={handleClosePage}
+                      className="ml-1 p-0.5 rounded-sm text-muted-foreground/70 hover:text-muted-foreground hover:bg-accent/50 transition-colors opacity-0 group-hover/titlebar:opacity-100"
+                    >
+                      <X weight="bold" className="h-3 w-3" />
+                    </button>
+                  </TooltipTrigger>
+                  <TooltipContent side="bottom">Close action</TooltipContent>
+                </Tooltip>
+              </>
+            )}
           </div>
 
           {/* Right: Panel toggles + Share */}
@@ -775,6 +835,36 @@ export function NotebookShell({ children }: NotebookShellProps) {
                           className={cn(
                             "w-1.5 h-1.5 rounded-full transition-colors",
                             table.table_name === tableId ? "bg-foreground/60" : "bg-foreground/15",
+                          )}
+                        />
+                      ))}
+                    </div>
+                  )}
+                  {/* Pages - horizontal lines */}
+                  {manifest?.pages && manifest.pages.length > 0 && (
+                    <div className="flex flex-col items-center gap-1 mt-2">
+                      {manifest.pages.slice(0, 3).map((page) => (
+                        <div
+                          key={`page-${page.id}`}
+                          className={cn(
+                            "w-2 h-0.5 transition-colors",
+                            page.id === pageId || page.route === `/${pageId}`
+                              ? "bg-foreground/60"
+                              : "bg-foreground/15",
+                          )}
+                        />
+                      ))}
+                    </div>
+                  )}
+                  {/* Actions - diamonds (rotated squares) */}
+                  {manifest?.actions && manifest.actions.length > 0 && (
+                    <div className="flex flex-col items-center gap-1 mt-2">
+                      {manifest.actions.slice(0, 3).map((action) => (
+                        <div
+                          key={`action-${action.id}`}
+                          className={cn(
+                            "w-1.5 h-1.5 rotate-45 transition-colors",
+                            action.id === actionId ? "bg-foreground/60" : "bg-foreground/15",
                           )}
                         />
                       ))}
