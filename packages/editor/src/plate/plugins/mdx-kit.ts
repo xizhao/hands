@@ -37,14 +37,10 @@ import { BlockSelectionKit } from "./block-selection-kit";
 import { DndKitWithoutProvider } from "./dnd-kit";
 import { ElementPlugin } from "./element-plugin";
 import { FloatingToolbarKit } from "./floating-toolbar-kit";
-import { PageFrontmatterPlugins } from "./page-frontmatter-plugin";
 import { RscBlockPlugin } from "./rsc-block-plugin";
 import { SlashKit } from "./slash-kit";
 
 export const MdxEditorKit = [
-  // Page Frontmatter Plugins - title and subtitle from frontmatter
-  ...PageFrontmatterPlugins,
-
   // RSC Block Plugin - Must be before ElementPlugin to take precedence
   RscBlockPlugin,
 

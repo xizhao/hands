@@ -12,6 +12,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { useRuntimeState } from "@/hooks/useRuntimeState";
+import { useThumbnail } from "@/hooks/useThumbnails";
 import { cn } from "@/lib/utils";
 
 // Editor error event types (must match packages/editor/src/overlay/errors.ts)
@@ -49,6 +50,56 @@ function isEditorErrorEvent(msg: unknown): msg is EditorErrorEvent {
 interface NavigateTableEvent {
   type: "navigate-table";
   tableId: string;
+}
+
+// Thumbnail captured event from iframe
+interface ThumbnailCapturedEvent {
+  type: "thumbnail-captured";
+  thumbnail: string; // base64 PNG
+  theme: "light" | "dark";
+  contentId: string;
+  contentType: "page" | "block";
+}
+
+function isThumbnailCapturedEvent(msg: unknown): msg is ThumbnailCapturedEvent {
+  return (
+    typeof msg === "object" &&
+    msg !== null &&
+    (msg as ThumbnailCapturedEvent).type === "thumbnail-captured" &&
+    typeof (msg as ThumbnailCapturedEvent).thumbnail === "string"
+  );
+}
+
+/**
+ * Generate LQIP (Low Quality Image Placeholder) from a full-size image
+ * Creates a tiny 20x15 blurred version for instant loading placeholders
+ */
+async function generateLQIP(base64Image: string): Promise<string> {
+  return new Promise((resolve) => {
+    const img = new Image();
+    img.onload = () => {
+      // Create tiny canvas (20x15)
+      const canvas = document.createElement("canvas");
+      canvas.width = 20;
+      canvas.height = 15;
+      const ctx = canvas.getContext("2d");
+      if (!ctx) {
+        resolve(base64Image); // Fallback to original
+        return;
+      }
+
+      // Draw scaled down
+      ctx.drawImage(img, 0, 0, 20, 15);
+
+      // Apply blur by re-drawing with imageSmoothingQuality
+      ctx.imageSmoothingEnabled = true;
+      ctx.imageSmoothingQuality = "low";
+
+      resolve(canvas.toDataURL("image/png"));
+    };
+    img.onerror = () => resolve(base64Image);
+    img.src = base64Image;
+  });
 }
 
 function isNavigateTableEvent(msg: unknown): msg is NavigateTableEvent {
@@ -140,6 +191,9 @@ export function SandboxFrame({
 
   // Runtime port for the editor to connect to
   const { port: runtimePort } = useRuntimeState();
+
+  // Fetch LQIP for loading placeholder
+  const { data: thumbnail } = useThumbnail(mode, contentId);
 
   // Actual ports from runtime status (populated by polling)
   const [editorPort, setEditorPort] = useState<number | null>(null);
@@ -283,10 +337,43 @@ export function SandboxFrame({
           });
         }
       }
+
+      // Handle thumbnail captured from iframe
+      if (isThumbnailCapturedEvent(e.data)) {
+        const { thumbnail, theme, contentId, contentType } = e.data;
+        console.log(`[SandboxFrame:${mode}] Thumbnail captured for ${contentType}:${contentId} (${theme})`);
+
+        // Generate LQIP and save to runtime
+        generateLQIP(thumbnail).then((lqip) => {
+          if (!runtimePort) return;
+
+          fetch(`http://localhost:${runtimePort}/workbook/thumbnails`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              type: contentType,
+              contentId,
+              theme,
+              thumbnail,
+              lqip,
+            }),
+          })
+            .then((res) => {
+              if (res.ok) {
+                console.log(`[SandboxFrame:${mode}] Thumbnail saved`);
+              } else {
+                console.error(`[SandboxFrame:${mode}] Failed to save thumbnail:`, res.status);
+              }
+            })
+            .catch((err) => {
+              console.error(`[SandboxFrame:${mode}] Error saving thumbnail:`, err);
+            });
+        });
+      }
     };
     window.addEventListener("message", handleMessage);
     return () => window.removeEventListener("message", handleMessage);
-  }, [sendStyles, navigate, mode]);
+  }, [sendStyles, navigate, mode, runtimePort]);
 
   // Handle iframe load - also try sending styles (fallback)
   const handleIframeLoad = useCallback(() => {
@@ -351,28 +438,67 @@ export function SandboxFrame({
     setCrashCount((c) => c + 1);
   }, [crashCount]);
 
+  // Page skeleton - mimics the MDX editor layout
+  const PageSkeleton = () => (
+    <div className={cn("h-full bg-background", className)}>
+      <div className="pl-16 pr-6 pt-6">
+        {/* Title skeleton */}
+        <div className="h-10 w-64 bg-muted/50 rounded animate-pulse" />
+        {/* Subtitle skeleton */}
+        <div className="h-5 w-96 bg-muted/30 rounded animate-pulse mt-2" />
+      </div>
+      {/* Content skeleton */}
+      <div className="pl-16 pr-6 pt-6 space-y-3">
+        <div className="h-4 w-full max-w-2xl bg-muted/20 rounded animate-pulse" />
+        <div className="h-4 w-full max-w-xl bg-muted/20 rounded animate-pulse" />
+        <div className="h-4 w-full max-w-lg bg-muted/20 rounded animate-pulse" />
+        <div className="h-32 w-full max-w-2xl bg-muted/15 rounded animate-pulse mt-4" />
+        <div className="h-4 w-full max-w-md bg-muted/20 rounded animate-pulse mt-4" />
+        <div className="h-4 w-full max-w-lg bg-muted/20 rounded animate-pulse" />
+      </div>
+    </div>
+  );
+
+  // Block skeleton - simpler centered layout
+  const BlockSkeleton = () => (
+    <div className={cn("h-full bg-background flex items-center justify-center", className)}>
+      <div className="w-4 h-4 border-2 border-muted-foreground/30 border-t-muted-foreground rounded-full animate-spin" />
+    </div>
+  );
+
+  // LQIP loading state - less blur, top-left anchored at real size
+  const LqipLoadingState = () => {
+    if (thumbnail?.thumbnail) {
+      // Use full thumbnail (not LQIP) with subtle blur, anchored top-left
+      return (
+        <div className={cn("relative h-full overflow-hidden bg-background", className)}>
+          {/* Thumbnail at real size, anchored top-left, subtle blur */}
+          <img
+            src={thumbnail.thumbnail}
+            alt=""
+            // 800x600 captured, show at natural size from top-left
+            className="absolute top-0 left-0 w-[800px] h-[600px] object-cover object-top-left blur-[2px] opacity-90"
+          />
+          {/* Subtle loading indicator in corner */}
+          <div className="absolute top-4 right-4">
+            <div className="w-3 h-3 border-2 border-muted-foreground/30 border-t-muted-foreground rounded-full animate-spin" />
+          </div>
+        </div>
+      );
+    }
+
+    // Fallback: show appropriate skeleton based on mode
+    return mode === "page" ? <PageSkeleton /> : <BlockSkeleton />;
+  };
+
   // Waiting for runtime port
   if (!runtimePort) {
-    return (
-      <div className={cn("flex items-center justify-center h-full bg-background", className)}>
-        <div className="flex items-center gap-2 text-muted-foreground">
-          <div className="w-4 h-4 border-2 border-muted-foreground/30 border-t-muted-foreground rounded-full animate-spin" />
-          <span className="text-sm font-medium">Connecting to runtime...</span>
-        </div>
-      </div>
-    );
+    return <LqipLoadingState />;
   }
 
   // Waiting for editor server to be ready
   if (state === "waiting") {
-    return (
-      <div className={cn("flex items-center justify-center h-full bg-background", className)}>
-        <div className="flex items-center gap-2 text-muted-foreground">
-          <div className="w-4 h-4 border-2 border-muted-foreground/30 border-t-muted-foreground rounded-full animate-spin" />
-          <span className="text-sm font-medium">Waiting for editor server...</span>
-        </div>
-      </div>
-    );
+    return <LqipLoadingState />;
   }
 
   // Error state
@@ -404,17 +530,53 @@ export function SandboxFrame({
     );
   }
 
+  // Loading overlay component (used when iframe is loading)
+  const LoadingOverlay = () => {
+    if (thumbnail?.thumbnail) {
+      // Use full thumbnail with subtle blur, anchored top-left
+      return (
+        <div className="absolute inset-0 z-10 overflow-hidden bg-background">
+          <img
+            src={thumbnail.thumbnail}
+            alt=""
+            className="absolute top-0 left-0 w-[800px] h-[600px] object-cover object-top-left blur-[2px] opacity-90"
+          />
+          <div className="absolute top-4 right-4">
+            <div className="w-3 h-3 border-2 border-muted-foreground/30 border-t-muted-foreground rounded-full animate-spin" />
+          </div>
+        </div>
+      );
+    }
+
+    // No thumbnail - show skeleton
+    if (mode === "page") {
+      return (
+        <div className="absolute inset-0 z-10 bg-background">
+          <div className="pl-16 pr-6 pt-6">
+            <div className="h-10 w-64 bg-muted/50 rounded animate-pulse" />
+            <div className="h-5 w-96 bg-muted/30 rounded animate-pulse mt-2" />
+          </div>
+          <div className="pl-16 pr-6 pt-6 space-y-3">
+            <div className="h-4 w-full max-w-2xl bg-muted/20 rounded animate-pulse" />
+            <div className="h-4 w-full max-w-xl bg-muted/20 rounded animate-pulse" />
+            <div className="h-4 w-full max-w-lg bg-muted/20 rounded animate-pulse" />
+          </div>
+        </div>
+      );
+    }
+
+    // Block mode fallback
+    return (
+      <div className="absolute inset-0 z-10 flex items-center justify-center bg-background/80">
+        <div className="w-4 h-4 border-2 border-muted-foreground/30 border-t-muted-foreground rounded-full animate-spin" />
+      </div>
+    );
+  };
+
   return (
     <div className={cn("relative flex flex-col h-full", className)}>
       {/* Loading overlay */}
-      {state === "loading" && (
-        <div className="absolute inset-0 z-10 flex items-center justify-center bg-background/80">
-          <div className="flex items-center gap-2 text-muted-foreground">
-            <div className="w-4 h-4 border-2 border-muted-foreground/30 border-t-muted-foreground rounded-full animate-spin" />
-            <span className="text-sm font-medium">Starting editor...</span>
-          </div>
-        </div>
-      )}
+      {state === "loading" && <LoadingOverlay />}
 
       {/* Editor iframe - opacity 0 until ready to prevent white flash */}
       <iframe

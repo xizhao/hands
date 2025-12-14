@@ -9,7 +9,8 @@
 // MUST BE FIRST: Initialize shared React for RSC client components
 import "../rsc/shared-react";
 
-import { StrictMode, useCallback, useEffect, useState } from "react";
+import html2canvas from "html2canvas";
+import { StrictMode, useCallback, useEffect, useRef, useState } from "react";
 import { DndProvider } from "react-dnd";
 import { HTML5Backend } from "react-dnd-html5-backend";
 import { createRoot } from "react-dom/client";
@@ -65,6 +66,45 @@ if (runtimePortNum) {
 // Install global error handler to stream runtime errors to parent
 installGlobalErrorHandler(blockId ?? pageId ?? undefined);
 
+// Capture thumbnail and send to parent
+async function captureThumbnail() {
+  const root = document.getElementById("root");
+  if (!root) return;
+
+  try {
+    const canvas = await html2canvas(root, {
+      width: 800,
+      height: 600,
+      windowWidth: 800,
+      windowHeight: 600,
+      scale: 1,
+      useCORS: true,
+      backgroundColor: null,
+      logging: false,
+    });
+
+    const thumbnail = canvas.toDataURL("image/png");
+    const theme = document.documentElement.classList.contains("dark") ? "dark" : "light";
+    const contentId = pageId || blockId;
+    const contentType = pageId ? "page" : "block";
+
+    window.parent.postMessage(
+      {
+        type: "thumbnail-captured",
+        thumbnail,
+        theme,
+        contentId,
+        contentType,
+      },
+      "*",
+    );
+
+    console.log(`[Sandbox] Thumbnail captured for ${contentType}:${contentId} (${theme})`);
+  } catch (err) {
+    console.error("[Sandbox] Failed to capture thumbnail:", err);
+  }
+}
+
 function SandboxApp() {
   // For pages, initialize with cached source for instant display
   const cachedSource = editorMode === "page" && pageId ? getCachedPageSource(pageId) : null;
@@ -73,6 +113,8 @@ function SandboxApp() {
   const [rscReady, setRscReady] = useState(false);
   // Track if we're refreshing (have cached content, fetching fresh)
   const [isRefreshing, setIsRefreshing] = useState(cachedSource !== null);
+  // Track if thumbnail has been captured for this session
+  const thumbnailCapturedRef = useRef(false);
 
   // Initialize RSC Flight client
   useEffect(() => {
@@ -81,6 +123,23 @@ function SandboxApp() {
       setRscReady(success);
     });
   }, []);
+
+  // Capture thumbnail after content settles (3 seconds after RSC ready + source loaded)
+  useEffect(() => {
+    // Don't capture if not ready, no source, or already captured
+    if (!rscReady || source === null || thumbnailCapturedRef.current) return;
+    // Don't capture while still refreshing
+    if (isRefreshing) return;
+
+    const timer = setTimeout(() => {
+      if (!thumbnailCapturedRef.current) {
+        thumbnailCapturedRef.current = true;
+        captureThumbnail();
+      }
+    }, 3000);
+
+    return () => clearTimeout(timer);
+  }, [rscReady, source, isRefreshing]);
 
   // Fetch source (block or page)
   useEffect(() => {
@@ -121,19 +180,60 @@ function SandboxApp() {
     }).catch(console.error);
   }, []);
 
+  // Track current page ID (may change after rename)
+  const [currentPageId, setCurrentPageId] = useState(pageId);
+
   // Save source changes (for pages)
   const handlePageSave = useCallback((newSource: string) => {
-    if (readOnly || !pageId || !runtimePortNum) return;
+    if (readOnly || !currentPageId || !runtimePortNum) return;
 
     // Update cache immediately on save
-    setCachedPageSource(pageId, newSource);
+    setCachedPageSource(currentPageId, newSource);
 
-    fetch(`http://localhost:${runtimePortNum}/workbook/pages/${pageId}/source`, {
+    fetch(`http://localhost:${runtimePortNum}/workbook/pages/${currentPageId}/source`, {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ source: newSource }),
     }).catch(console.error);
-  }, []);
+  }, [currentPageId]);
+
+  // Handle page rename (title → slug sync)
+  const handlePageRename = useCallback(async (newSlug: string): Promise<boolean> => {
+    if (readOnly || !currentPageId || !runtimePortNum) return false;
+
+    try {
+      const res = await fetch(`http://localhost:${runtimePortNum}/workbook/pages/${currentPageId}/rename`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ newSlug }),
+      });
+
+      if (!res.ok) {
+        const error = await res.json();
+        console.error("[Sandbox] Rename failed:", error);
+        return false;
+      }
+
+      const result = await res.json();
+      console.log("[Sandbox] Page renamed:", result);
+
+      // Update local state
+      setCurrentPageId(newSlug);
+
+      // Update URL to new page ID without reloading
+      const newParams = new URLSearchParams(window.location.search);
+      newParams.set("pageId", newSlug);
+      window.history.replaceState({}, "", `?${newParams.toString()}`);
+
+      // Notify parent that page was renamed
+      window.parent.postMessage({ type: "page-renamed", oldId: currentPageId, newId: newSlug }, "*");
+
+      return true;
+    } catch (err) {
+      console.error("[Sandbox] Rename error:", err);
+      return false;
+    }
+  }, [currentPageId]);
 
   if (error) {
     return <div className="flex items-center justify-center h-screen text-red-500">{error}</div>;
@@ -150,6 +250,8 @@ function SandboxApp() {
           <MdxVisualEditor
             source={source}
             onSourceChange={handlePageSave}
+            pageId={currentPageId ?? undefined}
+            onRename={handlePageRename}
             runtimePort={runtimePortNum!}
             workerPort={workerPortNum!}
             className="h-screen"

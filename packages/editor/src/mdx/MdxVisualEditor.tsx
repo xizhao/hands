@@ -8,8 +8,8 @@
  * - MDX source is the single source of truth
  * - Source changes → Plate value is recomputed
  * - Plate changes → MDX is serialized back
- * - Title/description from frontmatter are rendered as page-title/page-subtitle
- *   Plate elements (like Notion's non-deletable title)
+ * - Title/description from frontmatter are simple contentEditable fields
+ *   above the Plate editor (single-line, unstyled)
  */
 
 import type { Value } from "platejs";
@@ -20,7 +20,7 @@ import {
   PlateContent,
   usePlateEditor,
 } from "platejs/react";
-import { useCallback, useEffect, useMemo, useRef } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { Operation } from "slate";
 import { cn } from "../lib/utils";
 import { elementFallbackRenderer } from "../plate/plugins/element-plugin";
@@ -40,6 +40,10 @@ export interface MdxVisualEditorProps {
   onSourceChange: (source: string) => void;
   /** Callback when frontmatter changes */
   onFrontmatterChange?: (frontmatter: MdxFrontmatter) => void;
+  /** Current page ID (slug) for rename functionality */
+  pageId?: string;
+  /** Callback when page should be renamed (title → slug sync) */
+  onRename?: (newSlug: string) => Promise<boolean>;
   /** Runtime port for RSC rendering */
   runtimePort?: number;
   /** Worker port for RSC rendering */
@@ -70,11 +74,18 @@ export function MdxVisualEditor({
   source,
   onSourceChange,
   onFrontmatterChange,
+  pageId,
+  onRename,
   runtimePort = 55000,
   workerPort = 55200,
   className,
   isRefreshing = false,
 }: MdxVisualEditorProps) {
+  // Refs for contentEditable elements
+  const titleRef = useRef<HTMLDivElement>(null);
+  const subtitleRef = useRef<HTMLDivElement>(null);
+  const editorRef = useRef<any>(null);
+
   // Refs for operation tracking
   const stateRef = useRef<MdxSyncState>({
     source,
@@ -95,6 +106,124 @@ export function MdxVisualEditor({
     stateRef.current.source = source;
     return parseResult.value;
   }, []); // Only on mount
+
+  // Sync title/subtitle from source to contentEditable elements
+  useEffect(() => {
+    const { frontmatter } = stateRef.current.parseResult;
+    if (titleRef.current && titleRef.current.textContent !== (frontmatter.title ?? "")) {
+      titleRef.current.textContent = frontmatter.title ?? "";
+    }
+    if (subtitleRef.current && subtitleRef.current.textContent !== (frontmatter.description ?? "")) {
+      subtitleRef.current.textContent = frontmatter.description ?? "";
+    }
+  }, [source]);
+
+  // Handle frontmatter field changes
+  const handleFrontmatterChange = useCallback((field: "title" | "description", value: string) => {
+    const state = stateRef.current;
+    const newFrontmatter = { ...state.parseResult.frontmatter };
+
+    if (value) {
+      newFrontmatter[field] = value;
+    } else {
+      delete newFrontmatter[field];
+    }
+
+    // Update parse result
+    state.parseResult = { ...state.parseResult, frontmatter: newFrontmatter };
+
+    // Reserialize with new frontmatter
+    const newSource = serializeMdx(state.parseResult.value, newFrontmatter);
+    state.source = newSource;
+    state.onSourceChange(newSource);
+    state.onFrontmatterChange?.(newFrontmatter);
+  }, []);
+
+  // Handle title blur - update frontmatter and trigger rename if needed
+  const handleTitleBlur = useCallback((e: React.FocusEvent<HTMLDivElement>) => {
+    const newTitle = e.currentTarget.textContent ?? "";
+    handleFrontmatterChange("title", newTitle);
+
+    // Sync title to slug if rename callback provided
+    if (onRename && pageId) {
+      const newSlug = slugify(newTitle);
+      // Only rename if slug changed and is valid
+      if (newSlug && newSlug !== pageId && /^[a-z0-9][a-z0-9-]*$/.test(newSlug)) {
+        onRename(newSlug).catch((err) => {
+          console.error("[MdxEditor] Failed to rename page:", err);
+        });
+      }
+    }
+  }, [handleFrontmatterChange, onRename, pageId]);
+
+  // Handle keyboard navigation between title, subtitle, and Plate
+  const handleTitleKeyDown = useCallback((e: React.KeyboardEvent) => {
+    if (e.key === "Enter" || e.key === "ArrowDown") {
+      e.preventDefault();
+      subtitleRef.current?.focus();
+      // Move cursor to start
+      if (subtitleRef.current) {
+        const range = document.createRange();
+        const sel = window.getSelection();
+        range.selectNodeContents(subtitleRef.current);
+        range.collapse(true);
+        sel?.removeAllRanges();
+        sel?.addRange(range);
+      }
+    }
+  }, []);
+
+  const handleSubtitleKeyDown = useCallback((e: React.KeyboardEvent) => {
+    if (e.key === "Enter" || e.key === "ArrowDown") {
+      e.preventDefault();
+      // Focus Plate editor
+      const ed = editorRef.current;
+      if (ed) {
+        ed.tf.focus();
+        // Move to start of first block
+        ed.tf.select({ path: [0, 0], offset: 0 });
+      }
+    } else if (e.key === "ArrowUp") {
+      e.preventDefault();
+      titleRef.current?.focus();
+      // Move cursor to end
+      if (titleRef.current) {
+        const range = document.createRange();
+        const sel = window.getSelection();
+        range.selectNodeContents(titleRef.current);
+        range.collapse(false);
+        sel?.removeAllRanges();
+        sel?.addRange(range);
+      }
+    }
+  }, []);
+
+  // Handle Up arrow from Plate to move to subtitle
+  const handlePlateKeyDown = useCallback((e: React.KeyboardEvent) => {
+    if (e.key === "ArrowUp") {
+      // Check if cursor is at start of first block
+      const ed = editorRef.current;
+      if (!ed) return;
+      const { selection } = ed;
+      if (selection) {
+        const [start] = ed.api.edges(selection);
+        // Check if at path [0, 0] offset 0
+        if (start.path[0] === 0 && start.offset === 0) {
+          e.preventDefault();
+          subtitleRef.current?.focus();
+          // Move cursor to end
+          if (subtitleRef.current) {
+            const range = document.createRange();
+            const sel = window.getSelection();
+            range.selectNodeContents(subtitleRef.current);
+            range.collapse(false);
+            sel?.removeAllRanges();
+            sel?.addRange(range);
+          }
+        }
+      }
+    }
+  }, []);
 
   // Create the MDX sync plugin that handles Plate → MDX serialization
   const MdxSyncPlugin = useMemo(
@@ -151,6 +280,9 @@ export function MdxVisualEditor({
     plugins: [...MdxEditorKit, MdxSyncPlugin],
     value: initialValue,
   });
+
+  // Store editor ref for keyboard handlers
+  editorRef.current = editor;
 
   // SOURCE IS TRUTH: When source changes externally, overwrite Plate
   useEffect(() => {
@@ -211,22 +343,58 @@ export function MdxVisualEditor({
         className,
       )}
     >
-      {/* Plate editor - title and description are now inline Plate elements */}
+      {/* Plate editor with frontmatter fields */}
       <div className="flex-1 min-h-0">
         <Plate editor={editor} onChange={handleChange}>
           <PlateContainer
             id="mdx-editor-container"
             className="relative h-full cursor-text overflow-y-auto overflow-x-visible"
           >
+            {/* Frontmatter fields - simple contentEditable, single line */}
+            <div className="pl-16 pr-6 pt-8">
+              {/* Title - H1 style */}
+              <div
+                ref={titleRef}
+                contentEditable
+                suppressContentEditableWarning
+                className="text-4xl font-bold outline-none empty:before:content-[attr(data-placeholder)] empty:before:text-muted-foreground/40"
+                data-placeholder="Untitled"
+                onKeyDown={handleTitleKeyDown}
+                onBlur={handleTitleBlur}
+                onPaste={(e) => {
+                  // Paste as plain text only
+                  e.preventDefault();
+                  const text = e.clipboardData.getData("text/plain").replace(/\n/g, " ");
+                  document.execCommand("insertText", false, text);
+                }}
+              />
+              {/* Subtitle - smaller, muted */}
+              <div
+                ref={subtitleRef}
+                contentEditable
+                suppressContentEditableWarning
+                className="text-lg text-muted-foreground/70 outline-none empty:before:content-[attr(data-placeholder)] empty:before:text-muted-foreground/30 mt-1"
+                data-placeholder="Add a description..."
+                onKeyDown={handleSubtitleKeyDown}
+                onBlur={(e) => handleFrontmatterChange("description", e.currentTarget.textContent ?? "")}
+                onPaste={(e) => {
+                  // Paste as plain text only
+                  e.preventDefault();
+                  const text = e.clipboardData.getData("text/plain").replace(/\n/g, " ");
+                  document.execCommand("insertText", false, text);
+                }}
+              />
+            </div>
             <PlateContent
               className={cn(
                 // Add extra left padding for drag handles
-                "py-6 pl-16 pr-6 min-h-full outline-none",
+                "py-4 pl-16 pr-6 min-h-full outline-none",
                 // Add selectable class to blocks
                 "[&_.slate-selectable]:relative",
               )}
               placeholder="Type / to add blocks..."
               renderElement={elementFallbackRenderer}
+              onKeyDown={handlePlateKeyDown}
             />
           </PlateContainer>
         </Plate>
@@ -238,6 +406,19 @@ export function MdxVisualEditor({
 // ============================================================================
 // Helpers
 // ============================================================================
+
+/**
+ * Convert a title to a URL-safe slug
+ */
+function slugify(text: string): string {
+  return text
+    .toLowerCase()
+    .trim()
+    .replace(/[^\w\s-]/g, "") // Remove non-word chars except spaces and hyphens
+    .replace(/\s+/g, "-") // Replace spaces with hyphens
+    .replace(/-+/g, "-") // Collapse multiple hyphens
+    .replace(/^-+|-+$/g, ""); // Trim hyphens from start/end
+}
 
 /**
  * Determine if an operation should trigger MDX serialization

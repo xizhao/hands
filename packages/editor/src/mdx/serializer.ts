@@ -12,12 +12,7 @@ import type {
   PlateToMdxOptions,
   RscBlockElement,
 } from "./types";
-import {
-  isCodeBlockElement,
-  isRscBlockElement,
-  isPageTitleElement,
-  isPageSubtitleElement,
-} from "./types";
+import { isCodeBlockElement, isRscBlockElement } from "./types";
 
 // ============================================================================
 // Main Serializer
@@ -38,43 +33,15 @@ export function serializeMdx(
 ): string {
   const lines: string[] = [];
 
-  // Extract title and subtitle from value (first elements)
-  const updatedFrontmatter = { ...frontmatter };
-  let contentStartIndex = 0;
-
-  // Check for page-title element
-  if (value.length > 0 && isPageTitleElement(value[0])) {
-    const titleText = getTextContent(value[0].children as Array<{ text: string } | TElement>);
-    if (titleText) {
-      updatedFrontmatter.title = titleText;
-    } else {
-      // Remove title from frontmatter if empty
-      delete updatedFrontmatter.title;
-    }
-    contentStartIndex = 1;
-
-    // Check for page-subtitle element (must come after title)
-    if (value.length > 1 && isPageSubtitleElement(value[1])) {
-      const subtitleText = getTextContent(value[1].children as Array<{ text: string } | TElement>);
-      if (subtitleText) {
-        updatedFrontmatter.description = subtitleText;
-      } else {
-        // Remove description from frontmatter if empty
-        delete updatedFrontmatter.description;
-      }
-      contentStartIndex = 2;
-    }
-  }
-
   // Serialize frontmatter
-  const frontmatterStr = serializeFrontmatter(updatedFrontmatter);
+  const frontmatterStr = serializeFrontmatter(frontmatter);
   if (frontmatterStr) {
     lines.push(frontmatterStr.trim());
     lines.push(""); // Blank line after frontmatter
   }
 
-  // Serialize content (skip title/subtitle elements)
-  for (let i = contentStartIndex; i < value.length; i++) {
+  // Serialize content
+  for (let i = 0; i < value.length; i++) {
     const element = value[i];
     const serialized = serializeElement(element, options);
 

@@ -58,11 +58,42 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { HoverCard, HoverCardContent, HoverCardTrigger } from "@/components/ui/hover-card";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { useRuntimePort, useRuntimeState } from "@/hooks/useRuntimeState";
 import { useSourceManagement } from "@/hooks/useSources";
+import { usePrefetchThumbnail, useThumbnail } from "@/hooks/useThumbnails";
 import { useCreateBlock, useCreatePage } from "@/hooks/useWorkbook";
 import { cn } from "@/lib/utils";
+import { ThumbnailPreview } from "./ThumbnailPreview";
+
+// HoverCard wrapper with conditional delay based on thumbnail availability
+function ThumbnailHoverCard({
+  type,
+  contentId,
+  children,
+  onMouseEnter,
+}: {
+  type: "page" | "block";
+  contentId: string;
+  children: React.ReactNode;
+  onMouseEnter?: () => void;
+}) {
+  const { data: thumbnail } = useThumbnail(type, contentId);
+  // Show faster (150ms) if we have a thumbnail, slower (400ms) if not
+  const delay = thumbnail?.thumbnail ? 150 : 400;
+
+  return (
+    <HoverCard openDelay={delay} closeDelay={100}>
+      <HoverCardTrigger asChild>
+        <div onMouseEnter={onMouseEnter}>{children}</div>
+      </HoverCardTrigger>
+      <HoverCardContent side="right" sideOffset={8} className="w-auto p-1">
+        <ThumbnailPreview type={type} contentId={contentId} />
+      </HoverCardContent>
+    </HoverCard>
+  );
+}
 
 interface NotebookSidebarProps {
   collapsed?: boolean;
@@ -163,15 +194,15 @@ function ActionIcon({ className, empty }: { className?: string; empty?: boolean 
 
 function PageIcon({ className, empty }: { className?: string; empty?: boolean }) {
   return (
-    <FileText
-      weight="duotone"
+    <span
       className={cn(
-        "h-4 w-4",
         listItemIconStyles,
-        empty ? "opacity-50" : "text-orange-400 group-hover:text-orange-300",
+        empty ? "opacity-50" : "group-hover:text-orange-400",
         className,
       )}
-    />
+    >
+      &#x25AC;
+    </span>
   );
 }
 
@@ -697,6 +728,9 @@ export default function Placeholder() {
   // Runtime port for API calls
   const runtimePort = useRuntimePort();
 
+  // Prefetch thumbnails on hover for faster previews
+  const prefetchThumbnail = usePrefetchThumbnail();
+
   // CRUD action handlers
   const handleCopyBlock = useCallback(
     async (blockId: string) => {
@@ -730,6 +764,44 @@ export default function Placeholder() {
         navigate({ to: "/" });
       } catch (err) {
         console.error("[sidebar] failed to delete block:", err);
+      }
+    },
+    [runtimePort, navigate],
+  );
+
+  const handleDuplicatePage = useCallback(
+    async (pageId: string) => {
+      if (!runtimePort) return;
+      try {
+        const res = await fetch(
+          `http://localhost:${runtimePort}/workbook/pages/${pageId}/duplicate`,
+          {
+            method: "POST",
+          },
+        );
+        if (!res.ok) throw new Error("Failed to duplicate page");
+        const data = await res.json();
+        console.log("[sidebar] duplicated page:", pageId, "->", data.newRoute);
+      } catch (err) {
+        console.error("[sidebar] failed to duplicate page:", err);
+      }
+    },
+    [runtimePort],
+  );
+
+  const handleDeletePage = useCallback(
+    async (pageId: string) => {
+      if (!runtimePort) return;
+      try {
+        const res = await fetch(`http://localhost:${runtimePort}/workbook/pages/${pageId}`, {
+          method: "DELETE",
+        });
+        if (!res.ok) throw new Error("Failed to delete page");
+        console.log("[sidebar] deleted page:", pageId);
+        // Navigate away if we deleted the current page
+        navigate({ to: "/" });
+      } catch (err) {
+        console.error("[sidebar] failed to delete page:", err);
       }
     },
     [runtimePort, navigate],
@@ -822,11 +894,9 @@ export default function Placeholder() {
               <TooltipTrigger asChild>
                 <div className="flex flex-wrap gap-0.5 justify-center pt-2 border-t border-border/50 cursor-default">
                   {pages.map((page) => (
-                    <FileText
-                      key={page.id}
-                      weight="duotone"
-                      className="h-2.5 w-2.5 text-orange-400/70"
-                    />
+                    <span key={page.id} className="text-[8px] leading-none text-muted-foreground/70">
+                      &#x25AC;
+                    </span>
                   ))}
                 </div>
               </TooltipTrigger>
@@ -839,7 +909,7 @@ export default function Placeholder() {
           ) : (
             <div className="pt-2 border-t border-border/50">
               <div className="flex justify-center">
-                <FileText weight="duotone" className="h-2.5 w-2.5 text-muted-foreground/30" />
+                <span className="text-[8px] leading-none text-muted-foreground/30">&#x25AC;</span>
               </div>
             </div>
           )}
@@ -900,7 +970,7 @@ export default function Placeholder() {
           ) : (
             <div className="pt-2 border-t border-border/50">
               <div className="flex justify-center">
-                <Table weight="duotone" className="h-2.5 w-2.5 text-muted-foreground/30" />
+                <span className="text-[8px] leading-none text-muted-foreground/30">&#x25A0;</span>
               </div>
             </div>
           )}
@@ -926,7 +996,7 @@ export default function Placeholder() {
           ) : (
             <div className="pt-2 border-t border-border/50">
               <div className="flex justify-center">
-                <Play weight="fill" className="h-2.5 w-2.5 text-muted-foreground/30" />
+                <span className="text-[8px] leading-none text-muted-foreground/30">&#x25B6;</span>
               </div>
             </div>
           )}
@@ -1069,19 +1139,32 @@ export default function Placeholder() {
                 ) : pages.length > 0 || isCreatingNewPage ? (
                   (searchQuery
                     ? pages.filter((p) =>
+                        p.title?.toLowerCase().includes(searchQuery.toLowerCase()) ||
                         p.id.toLowerCase().includes(searchQuery.toLowerCase()),
                       )
                     : pages
                   ).map((page) => (
-                    <div key={page.id} className={listItemStyles}>
-                      <PageIcon />
-                      <button
-                        onClick={() => handlePageClick(page.id)}
-                        className="flex-1 truncate text-left hover:underline"
-                      >
-                        {page.id}
-                      </button>
-                    </div>
+                    <ThumbnailHoverCard
+                      key={page.id}
+                      type="page"
+                      contentId={page.id}
+                      onMouseEnter={() => prefetchThumbnail("page", page.id)}
+                    >
+                      <div className={cn(listItemStyles, "group")}>
+                        <PageIcon />
+                        <button
+                          onClick={() => handlePageClick(page.id)}
+                          className="flex-1 truncate text-left hover:underline"
+                        >
+                          {page.title}
+                        </button>
+                        <ItemActions
+                          onCopy={() => handleDuplicatePage(page.id)}
+                          onDelete={() => handleDeletePage(page.id)}
+                          onOpenChange={onMenuOpenChange}
+                        />
+                      </div>
+                    </ThumbnailHoverCard>
                   ))
                 ) : (
                   <div className={emptyStateStyles}>
@@ -1189,20 +1272,27 @@ export default function Placeholder() {
                             {(isExpanded || searchQuery) && (
                               <div className="ml-4 border-l border-border/50 pl-2">
                                 {filteredDirBlocks.map((block) => (
-                                  <div key={block.id} className={listItemStyles}>
-                                    <BlockIcon empty={block.uninitialized} />
-                                    <button
-                                      onClick={() => handleBlockClick(block.id)}
-                                      className="flex-1 truncate text-left hover:underline"
-                                    >
-                                      {block.title || block.id}
-                                    </button>
-                                    <ItemActions
-                                      onCopy={() => handleCopyBlock(block.id)}
-                                      onDelete={() => handleDeleteBlock(block.id)}
-                                      onOpenChange={onMenuOpenChange}
-                                    />
-                                  </div>
+                                  <ThumbnailHoverCard
+                                    key={block.id}
+                                    type="block"
+                                    contentId={block.id}
+                                    onMouseEnter={() => prefetchThumbnail("block", block.id)}
+                                  >
+                                    <div className={listItemStyles}>
+                                      <BlockIcon empty={block.uninitialized} />
+                                      <button
+                                        onClick={() => handleBlockClick(block.id)}
+                                        className="flex-1 truncate text-left hover:underline"
+                                      >
+                                        {block.title || block.id}
+                                      </button>
+                                      <ItemActions
+                                        onCopy={() => handleCopyBlock(block.id)}
+                                        onDelete={() => handleDeleteBlock(block.id)}
+                                        onOpenChange={onMenuOpenChange}
+                                      />
+                                    </div>
+                                  </ThumbnailHoverCard>
                                 ))}
                               </div>
                             )}
@@ -1216,20 +1306,27 @@ export default function Placeholder() {
                         )
                       : blockTree.rootBlocks
                     ).map((block) => (
-                      <div key={block.id} className={listItemStyles}>
-                        <BlockIcon empty={block.uninitialized} />
-                        <button
-                          onClick={() => handleBlockClick(block.id)}
-                          className="flex-1 truncate text-left hover:underline"
-                        >
-                          {block.title || block.id}
-                        </button>
-                        <ItemActions
-                          onCopy={() => handleCopyBlock(block.id)}
-                          onDelete={() => handleDeleteBlock(block.id)}
-                          onOpenChange={onMenuOpenChange}
-                        />
-                      </div>
+                      <ThumbnailHoverCard
+                        key={block.id}
+                        type="block"
+                        contentId={block.id}
+                        onMouseEnter={() => prefetchThumbnail("block", block.id)}
+                      >
+                        <div className={listItemStyles}>
+                          <BlockIcon empty={block.uninitialized} />
+                          <button
+                            onClick={() => handleBlockClick(block.id)}
+                            className="flex-1 truncate text-left hover:underline"
+                          >
+                            {block.title || block.id}
+                          </button>
+                          <ItemActions
+                            onCopy={() => handleCopyBlock(block.id)}
+                            onDelete={() => handleDeleteBlock(block.id)}
+                            onOpenChange={onMenuOpenChange}
+                          />
+                        </div>
+                      </ThumbnailHoverCard>
                     ))}
                   </>
                 ) : (

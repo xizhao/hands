@@ -38,6 +38,14 @@ import { discoverSources } from "./sources/discovery.js";
 import { registerSourceRoutes } from "./sources/index.js";
 import { registerTRPCRoutes } from "./trpc/index.js";
 import { PageRegistry, createPageRegistry, renderPage, type PageRenderContext } from "./pages/index.js";
+import {
+  initThumbnailsTable,
+  getThumbnail,
+  getThumbnails,
+  saveThumbnail,
+  deleteThumbnails,
+  type ThumbnailInput,
+} from "./thumbnails/index.js";
 
 interface RuntimeConfig {
   workbookId: string;
@@ -594,13 +602,22 @@ function createApp(config: RuntimeConfig) {
   app.get("/workbook/manifest", async (c) => {
     const manifest = await getManifest(config.workbookDir, config.workbookId);
 
-    // Include pages from pageRegistry if available
-    const pages = state.pageRegistry?.list().map((p) => ({
-      id: p.path.replace(/\.(mdx?|plate\.json)$/, ""),
-      route: p.route,
-      path: p.path,
-      title: p.route === "/" ? "Home" : p.route.slice(1), // Use route as title for now
-    })) ?? [];
+    // Include pages from pageRegistry with frontmatter titles
+    const pages: Array<{ id: string; route: string; path: string; title: string }> = [];
+    if (state.pageRegistry) {
+      for (const p of state.pageRegistry.list()) {
+        const compiled = await state.pageRegistry.getCompiled(p.route);
+        const frontmatterTitle = compiled?.meta?.title;
+        const id = p.path.replace(/\.(mdx?|plate\.json)$/, "");
+        pages.push({
+          id,
+          route: p.route,
+          path: p.path,
+          // Use frontmatter title, fallback to "Untitled" for empty, or route-based name
+          title: frontmatterTitle || (id.startsWith("untitled") ? "Untitled" : (p.route === "/" ? "Home" : p.route.slice(1))),
+        });
+      }
+    }
 
     return c.json({
       ...manifest,
@@ -1050,25 +1067,8 @@ function createApp(config: RuntimeConfig) {
     }
   });
 
-  // Create new page
+  // Create new page - instant creation with auto-incrementing "untitled" name
   app.post("/workbook/pages", async (c) => {
-    const { pageId, source } = await c.req.json<{ pageId: string; source?: string }>();
-
-    if (!pageId || typeof pageId !== "string") {
-      return c.json({ error: "Missing pageId" }, 400);
-    }
-
-    // Validate page ID - must start with letter, contain only alphanumeric, dashes, underscores
-    if (!/^[a-zA-Z][a-zA-Z0-9_-]*$/.test(pageId)) {
-      return c.json(
-        {
-          error:
-            "Invalid pageId - must start with letter, contain only alphanumeric, dashes, underscores",
-        },
-        400,
-      );
-    }
-
     const pagesDir = join(config.workbookDir, "pages");
 
     // Create pages directory if it doesn't exist
@@ -1077,22 +1077,21 @@ function createApp(config: RuntimeConfig) {
       mkdirSync(pagesDir, { recursive: true });
     }
 
-    // Check if page already exists
-    const filePath = join(pagesDir, `${pageId}.mdx`);
-    if (existsSync(filePath)) {
-      return c.json({ error: `Page already exists: ${pageId}` }, 409);
+    // Find next available "untitled" name
+    let pageId = "untitled";
+    let counter = 0;
+    while (existsSync(join(pagesDir, `${pageId}.mdx`))) {
+      counter++;
+      pageId = `untitled-${counter}`;
     }
 
-    // Default MDX content for new page
-    const defaultSource =
-      source ||
-      `---
-title: ${pageId}
+    const filePath = join(pagesDir, `${pageId}.mdx`);
+
+    // Default MDX content - empty title so user focuses on it
+    const defaultSource = `---
+title: ""
 ---
 
-# ${pageId}
-
-Start writing your page content here.
 `;
 
     try {
@@ -1126,6 +1125,241 @@ Start writing your page content here.
         },
         500,
       );
+    }
+  });
+
+  // Rename page (triggered when title changes)
+  app.post("/workbook/pages/:path{.+}/rename", async (c) => {
+    if (!state.pageRegistry) {
+      return c.json({ error: "Page registry not initialized" }, 503);
+    }
+
+    const pagePath = c.req.param("path");
+    const route = pagePath.startsWith("/") ? pagePath : `/${pagePath}`;
+    const { newSlug } = await c.req.json<{ newSlug: string }>();
+
+    if (!newSlug || typeof newSlug !== "string") {
+      return c.json({ error: "Missing newSlug" }, 400);
+    }
+
+    // Validate slug
+    if (!/^[a-z0-9][a-z0-9-]*$/.test(newSlug)) {
+      return c.json({ error: "Invalid slug - use lowercase, numbers, hyphens only" }, 400);
+    }
+
+    const page = state.pageRegistry.match(route);
+    if (!page) {
+      return c.json({ error: `Page not found: ${route}` }, 404);
+    }
+
+    const pagesDir = state.pageRegistry.getPagesDir();
+    const oldFilePath = join(pagesDir, page.path);
+    const newFileName = `${newSlug}${page.ext}`;
+    const newFilePath = join(pagesDir, newFileName);
+
+    // Check if target already exists (and isn't the same file)
+    if (oldFilePath !== newFilePath && existsSync(newFilePath)) {
+      return c.json({ error: `Page already exists: ${newSlug}` }, 409);
+    }
+
+    // Skip if same file
+    if (oldFilePath === newFilePath) {
+      return c.json({ success: true, newRoute: route, noChange: true });
+    }
+
+    try {
+      const { renameSync } = await import("node:fs");
+      renameSync(oldFilePath, newFilePath);
+
+      // Reload page registry
+      await state.pageRegistry.load();
+
+      // Calculate new route
+      const newRoute = newSlug === "index" ? "/" : `/${newSlug}`;
+
+      return c.json({
+        success: true,
+        oldRoute: route,
+        newRoute,
+        newPath: newFileName,
+      });
+    } catch (err) {
+      return c.json(
+        { error: `Failed to rename: ${err instanceof Error ? err.message : String(err)}` },
+        500,
+      );
+    }
+  });
+
+  // Delete a page
+  app.delete("/workbook/pages/:path{.+}", async (c) => {
+    if (!state.pageRegistry) {
+      return c.json({ error: "Page registry not initialized" }, 503);
+    }
+
+    const pagePath = c.req.param("path");
+    const route = pagePath.startsWith("/") ? pagePath : `/${pagePath}`;
+
+    const page = state.pageRegistry.match(route);
+    if (!page) {
+      return c.json({ error: `Page not found: ${route}` }, 404);
+    }
+
+    const pagesDir = state.pageRegistry.getPagesDir();
+    const filePath = join(pagesDir, page.path);
+
+    try {
+      const { unlinkSync } = await import("node:fs");
+      unlinkSync(filePath);
+
+      // Reload page registry
+      await state.pageRegistry.load();
+
+      return c.json({
+        success: true,
+        deletedRoute: route,
+        deletedPath: page.path,
+      });
+    } catch (err) {
+      return c.json(
+        { error: `Failed to delete: ${err instanceof Error ? err.message : String(err)}` },
+        500,
+      );
+    }
+  });
+
+  // Duplicate a page
+  app.post("/workbook/pages/:path{.+}/duplicate", async (c) => {
+    if (!state.pageRegistry) {
+      return c.json({ error: "Page registry not initialized" }, 503);
+    }
+
+    const pagePath = c.req.param("path");
+    const route = pagePath.startsWith("/") ? pagePath : `/${pagePath}`;
+
+    const page = state.pageRegistry.match(route);
+    if (!page) {
+      return c.json({ error: `Page not found: ${route}` }, 404);
+    }
+
+    const pagesDir = state.pageRegistry.getPagesDir();
+    const sourcePath = join(pagesDir, page.path);
+
+    // Read original source
+    const source = await state.pageRegistry.getSource(page.route);
+    if (!source) {
+      return c.json({ error: "Failed to read page source" }, 500);
+    }
+
+    // Generate unique name: original-copy, original-copy-1, etc.
+    const baseName = page.path.replace(page.ext, "");
+    let newName = `${baseName}-copy`;
+    let counter = 0;
+    while (existsSync(join(pagesDir, `${newName}${page.ext}`))) {
+      counter++;
+      newName = `${baseName}-copy-${counter}`;
+    }
+
+    const newPath = `${newName}${page.ext}`;
+    const newFilePath = join(pagesDir, newPath);
+
+    try {
+      const { writeFileSync } = await import("node:fs");
+      writeFileSync(newFilePath, source, "utf-8");
+
+      // Reload page registry
+      await state.pageRegistry.load();
+
+      const newRoute = newName === "index" ? "/" : `/${newName}`;
+
+      return c.json({
+        success: true,
+        originalRoute: route,
+        newRoute,
+        newPath,
+      });
+    } catch (err) {
+      return c.json(
+        { error: `Failed to duplicate: ${err instanceof Error ? err.message : String(err)}` },
+        500,
+      );
+    }
+  });
+
+  // =========================================================================
+  // Thumbnail routes - preview images for pages/blocks
+  // =========================================================================
+
+  // GET /workbook/thumbnails/:type/:id - Get thumbnails for a page/block (both themes)
+  app.get("/workbook/thumbnails/:type/:id{.+}", async (c) => {
+    if (!state.dbReady || !state.workbookDb) {
+      return c.json({ error: "Database not ready" }, 503);
+    }
+
+    const type = c.req.param("type") as "page" | "block";
+    const contentId = c.req.param("id");
+
+    if (type !== "page" && type !== "block") {
+      return c.json({ error: "Invalid type, must be 'page' or 'block'" }, 400);
+    }
+
+    try {
+      const thumbnails = await getThumbnails(state.workbookDb.db, type, contentId);
+      return c.json(thumbnails);
+    } catch (err) {
+      console.error("[thumbnails] Error fetching:", err);
+      return c.json({ error: String(err) }, 500);
+    }
+  });
+
+  // POST /workbook/thumbnails - Save a thumbnail
+  app.post("/workbook/thumbnails", async (c) => {
+    if (!state.dbReady || !state.workbookDb) {
+      return c.json({ error: "Database not ready" }, 503);
+    }
+
+    try {
+      const body = await c.req.json<ThumbnailInput>();
+
+      if (!body.type || !body.contentId || !body.theme || !body.thumbnail || !body.lqip) {
+        return c.json({ error: "Missing required fields" }, 400);
+      }
+
+      if (body.type !== "page" && body.type !== "block") {
+        return c.json({ error: "Invalid type" }, 400);
+      }
+
+      if (body.theme !== "light" && body.theme !== "dark") {
+        return c.json({ error: "Invalid theme" }, 400);
+      }
+
+      await saveThumbnail(state.workbookDb.db, body);
+      return c.json({ success: true });
+    } catch (err) {
+      console.error("[thumbnails] Error saving:", err);
+      return c.json({ error: String(err) }, 500);
+    }
+  });
+
+  // DELETE /workbook/thumbnails/:type/:id - Delete thumbnails for a page/block
+  app.delete("/workbook/thumbnails/:type/:id{.+}", async (c) => {
+    if (!state.dbReady || !state.workbookDb) {
+      return c.json({ error: "Database not ready" }, 503);
+    }
+
+    const type = c.req.param("type") as "page" | "block";
+    const contentId = c.req.param("id");
+
+    if (type !== "page" && type !== "block") {
+      return c.json({ error: "Invalid type" }, 400);
+    }
+
+    try {
+      await deleteThumbnails(state.workbookDb.db, type, contentId);
+      return c.json({ success: true });
+    } catch (err) {
+      console.error("[thumbnails] Error deleting:", err);
+      return c.json({ error: String(err) }, 500);
     }
   });
 
@@ -1814,6 +2048,10 @@ async function bootPGlite(workbookDir: string) {
     // Initialize action runs table
     await initActionRunsTable(state.workbookDb.db);
     console.log("[runtime] Action runs table initialized");
+
+    // Initialize thumbnails table
+    await initThumbnailsTable(state.workbookDb.db);
+    console.log("[runtime] Thumbnails table initialized");
 
     // Initialize pgtyped runner for type-safe SQL queries
     state.pgTypedRunner = createPgTypedRunner(workbookDir, state.workbookDb.db);
