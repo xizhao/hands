@@ -297,7 +297,7 @@ const DropLine = React.memo(function DropLine({
       className={cn(
         "slate-dropLine",
         "absolute inset-x-0 h-0.5 opacity-100 transition-opacity",
-        "bg-blue-500",
+        "bg-brand",
         dropLine === "top" && "-top-px",
         dropLine === "bottom" && "-bottom-px",
         className,
@@ -321,7 +321,7 @@ function ComponentBlockSelection() {
     <div
       className={cn(
         "pointer-events-none absolute inset-0 z-[1] rounded-[4px]",
-        "bg-blue-500/15",
+        "bg-brand/15",
         "transition-opacity duration-200",
         isDragging && "opacity-0",
       )}

@@ -1,85 +1,65 @@
+"use client";
+
 /**
- * Plate Editor Kit for the demo
+ * Plate Editor Kit
  *
- * Real Plate plugins with actual element components.
- * Includes DnD, Block Selection, and Slash Menu.
- *
- * Key design: Every JSX element is a Plate block, editable with its original tag name.
+ * Full-featured editor based on Potion template with custom ElementPlugin for MDX rendering.
+ * Note: AI, Comment, and Suggestion features are disabled - they require additional setup.
  */
 
-import {
-  BlockquotePlugin,
-  BoldPlugin,
-  CodePlugin,
-  H1Plugin,
-  H2Plugin,
-  H3Plugin,
-  HorizontalRulePlugin,
-  ItalicPlugin,
-  StrikethroughPlugin,
-  UnderlinePlugin,
-} from "@platejs/basic-nodes/react";
-import { TrailingBlockPlugin } from "platejs";
-import { ParagraphPlugin } from "platejs/react";
+import { TrailingBlockPlugin, type Value } from "platejs";
+import { type TPlateEditor, useEditorRef } from "platejs/react";
 
-import {
-  BlockquoteElement,
-  H1Element,
-  H2Element,
-  H3Element,
-  HrElement,
-  ParagraphElement,
-} from "./plate-elements";
+// Import plugins directly from plate/plugins (our directory)
+import { AutoformatKit } from "./plugins/autoformat-kit";
+import { BasicBlocksKit } from "./plugins/basic-blocks-kit";
+import { BasicMarksKit } from "./plugins/basic-marks-kit";
 import { BlockSelectionKit } from "./plugins/block-selection-kit";
-// Plugin kits
+import { CalloutKit } from "./plugins/callout-kit";
+import { CodeBlockKit } from "./plugins/code-block-kit";
 import { DndKit } from "./plugins/dnd-kit";
-import { ElementPlugin } from "./plugins/element-plugin";
+import { ExitBreakKit } from "./plugins/exit-break-kit";
 import { FloatingToolbarKit } from "./plugins/floating-toolbar-kit";
+import { FontKit } from "./plugins/font-kit";
+import { ListKit } from "./plugins/list-kit";
 import { SlashKit } from "./plugins/slash-kit";
+import { TableKit } from "./plugins/table-kit";
+import { ToggleKit } from "./plugins/toggle-kit";
+
+// Our custom MDX element plugin
+import { ElementPlugin } from "./plugins/element-plugin";
 
 export const EditorKit = [
-  // Unified Element Plugin - Renders ALL elements (HTML + custom components)
-  // Single source of truth for isVoid logic
+  // Custom MDX Element Plugin - Renders ALL elements (HTML + custom components)
+  // Must come first as single source of truth for isVoid logic
   ElementPlugin,
 
-  // Block Elements with real components
-  ParagraphPlugin.withComponent(ParagraphElement),
-  H1Plugin.configure({
-    node: { component: H1Element },
-    rules: { break: { empty: "reset" } },
-  }),
-  H2Plugin.configure({
-    node: { component: H2Element },
-    rules: { break: { empty: "reset" } },
-  }),
-  H3Plugin.configure({
-    node: { component: H3Element },
-    rules: { break: { empty: "reset" } },
-  }),
-  BlockquotePlugin.configure({
-    node: { component: BlockquoteElement },
-  }),
-  HorizontalRulePlugin.withComponent(HrElement),
+  // Elements
+  ...BasicBlocksKit,
+  ...CodeBlockKit,
+  ...TableKit,
+  ...ToggleKit,
+  ...CalloutKit,
 
   // Marks
-  BoldPlugin,
-  ItalicPlugin,
-  UnderlinePlugin,
-  StrikethroughPlugin,
-  CodePlugin,
+  ...BasicMarksKit,
+  ...FontKit,
 
-  // DnD - Drag and Drop
-  ...DndKit,
+  // Block Style
+  ...ListKit,
 
-  // Block Selection - Multi-block select
-  ...BlockSelectionKit,
-
-  // Slash Menu - Command palette
+  // Editing
   ...SlashKit,
-
-  // Floating Toolbar - Selection formatting
-  ...FloatingToolbarKit,
-
-  // Utilities
+  ...AutoformatKit,
+  ...DndKit,
+  ...ExitBreakKit,
   TrailingBlockPlugin,
+
+  // UI
+  ...BlockSelectionKit,
+  ...FloatingToolbarKit,
 ];
+
+export type MyEditor = TPlateEditor<Value, (typeof EditorKit)[number]>;
+
+export const useEditor = () => useEditorRef<MyEditor>();

@@ -134,7 +134,7 @@ function DataDepChip({ nodeId, containerRef, tables }: DataDepChipProps) {
       <button
         type="button"
         onClick={handleClick}
-        className="flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-blue-500/90 text-white text-[10px] font-medium shadow-sm backdrop-blur-sm hover:bg-blue-600 transition-colors cursor-pointer"
+        className="flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-brand/90 text-white text-[10px] font-medium shadow-sm backdrop-blur-sm hover:bg-brand/80 transition-colors cursor-pointer"
       >
         <Database size={10} weight="bold" />
         <span>{tables.join(", ")}</span>

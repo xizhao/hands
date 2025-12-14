@@ -9,6 +9,7 @@
  */
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { getTRPCClient } from "../trpc";
 import { createHttpError, createMutationError, sendErrorToParent } from "./errors";
 import { applyOperation, applyOperations, type EditOperation } from "./operations";
 
@@ -83,6 +84,7 @@ export function useEditorSource({
   useEffect(() => {
     let active = true;
 
+    const trpc = getTRPCClient(runtimePort);
     const poll = async () => {
       // Skip polling if we have a pending save
       if (!active || pendingSource.current !== null) {
@@ -90,11 +92,8 @@ export function useEditorSource({
       }
 
       try {
-        const res = await fetch(
-          `http://localhost:${runtimePort}/workbook/blocks/${blockId}/source`,
-        );
-        if (res.ok && active && pendingSource.current === null) {
-          const data = await res.json();
+        const data = await trpc.workbook.blocks.getSource.query({ blockId });
+        if (active && pendingSource.current === null) {
           // Only update if source changed externally (different from last confirmed server source)
           if (data.source !== confirmedServerSource.current) {
             console.log("[useEditorSource] Source changed externally, updating");
@@ -141,38 +140,19 @@ export function useEditorSource({
       // Otherwise RSC refetch reads old file before PUT completes
 
       try {
-        const res = await fetch(
-          `http://localhost:${runtimePort}/workbook/blocks/${blockId}/source`,
-          {
-            method: "PUT",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ source: newSource }),
-          },
-        );
+        const trpc = getTRPCClient(runtimePort);
+        await trpc.workbook.blocks.saveSource.mutate({ blockId, source: newSource });
 
-        if (res.ok) {
-          // Only update confirmed source AFTER server confirms
-          confirmedServerSource.current = newSource;
-          // NOW trigger RSC re-render - file is written
-          setVersion((v) => v + 1);
-          console.log("[useEditorSource] Saved successfully");
-          return true;
-        }
-
-        // HTTP error - stream to parent
-        const errorText = await res.text().catch(() => "Unknown error");
-        const error = createHttpError(`Failed to save block: ${res.status} ${res.statusText}`, {
-          status: res.status,
-          details: errorText,
-          blockId,
-        });
-        sendErrorToParent(error);
-        console.error("[useEditorSource] Save returned non-ok status:", res.status);
-        return false;
+        // Only update confirmed source AFTER server confirms
+        confirmedServerSource.current = newSource;
+        // NOW trigger RSC re-render - file is written
+        setVersion((v) => v + 1);
+        console.log("[useEditorSource] Saved successfully");
+        return true;
       } catch (e) {
-        // Network error - stream to parent
+        // tRPC error - stream to parent
         const error = createHttpError(
-          `Network error saving block: ${e instanceof Error ? e.message : "Unknown error"}`,
+          `Failed to save block: ${e instanceof Error ? e.message : "Unknown error"}`,
           { blockId },
         );
         sendErrorToParent(error);

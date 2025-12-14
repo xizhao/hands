@@ -13,6 +13,7 @@
 
 import { spawn } from "node:child_process";
 import { resolve } from "node:path";
+import { getTRPCClient } from "../src/trpc";
 
 const RUNTIME_PORT = 55100;
 const SANDBOX_PORT = 5167;
@@ -55,21 +56,20 @@ const sandbox = spawn(
 
 // Wait for both servers to be ready
 console.log("[dev] Waiting for servers to be ready...");
+const trpc = getTRPCClient(RUNTIME_PORT);
+
 const waitForServers = async () => {
   let runtimeReady = false;
   let sandboxReady = false;
 
   for (let i = 0; i < 120; i++) {
     try {
-      // Check runtime health endpoint
+      // Check runtime health via tRPC
       if (!runtimeReady) {
-        const healthRes = await fetch(`http://localhost:${RUNTIME_PORT}/health`);
-        if (healthRes.ok) {
-          const health = await healthRes.json();
-          if (health.ready) {
-            runtimeReady = true;
-            console.log("[dev] Runtime ready (db + blocks vite)");
-          }
+        const health = await trpc.status.health.query();
+        if (health.ready) {
+          runtimeReady = true;
+          console.log("[dev] Runtime ready (db + blocks vite)");
         }
       }
 
@@ -113,14 +113,13 @@ if (!(await waitForServers())) {
 // Sandbox runs on its own port, runtime provides API + blocks vite
 let openUrl: string;
 try {
-  const res = await fetch(`http://localhost:${RUNTIME_PORT}/workbook/manifest`);
-  const manifest = await res.json();
+  const manifest = await trpc.workbook.manifest.query();
 
   if (manifest.pages?.length > 0) {
-    // Open first page in MDX editor
-    const pageId = manifest.pages[0].id;
-    openUrl = `http://localhost:${SANDBOX_PORT}/sandbox.html?pageId=${pageId}&runtimePort=${RUNTIME_PORT}`;
-    console.log(`\n[dev] Opening page: ${pageId}`);
+    // Open first page in MDX editor - use route not id
+    const page = manifest.pages[0];
+    openUrl = `http://localhost:${SANDBOX_PORT}/sandbox.html?pageId=${page.route}&runtimePort=${RUNTIME_PORT}`;
+    console.log(`\n[dev] Opening page: ${page.route}`);
   } else if (manifest.blocks?.length > 0) {
     // Fallback to first block
     const blockId = manifest.blocks[0].id;
@@ -130,9 +129,10 @@ try {
     console.log("\n[dev] No pages or blocks found in workbook");
     openUrl = `http://localhost:${SANDBOX_PORT}/sandbox.html?runtimePort=${RUNTIME_PORT}`;
   }
-} catch {
+} catch (err) {
+  console.error("[dev] Failed to get manifest:", err);
   // Fallback
-  openUrl = `http://localhost:${SANDBOX_PORT}/sandbox.html?pageId=homepage&runtimePort=${RUNTIME_PORT}`;
+  openUrl = `http://localhost:${SANDBOX_PORT}/sandbox.html?runtimePort=${RUNTIME_PORT}`;
 }
 
 console.log(`[dev] URL: ${openUrl}\n`);

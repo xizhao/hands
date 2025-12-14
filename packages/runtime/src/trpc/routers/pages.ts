@@ -169,9 +169,14 @@ export const pagesRouter = t.router({
 
     const filePath = join(pagesDir, `${pageId}.mdx`);
 
-    // Default MDX content - empty title so user focuses on it
+    // Convert slug to title case (e.g., "my-page" -> "My Page")
+    const title = pageId
+      .split("-")
+      .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+      .join(" ");
+
     const defaultSource = `---
-title: ""
+title: "${title}"
 ---
 
 `;

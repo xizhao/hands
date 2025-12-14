@@ -17,6 +17,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { cn } from "../../lib/utils";
 import { OverlayEditor } from "../../overlay";
 import { BlockSkeleton } from "../../rsc";
+import { getTRPCClient } from "../../trpc";
 import type { RscBlockElement } from "./rsc-block-plugin";
 
 // ============================================================================
@@ -50,18 +51,16 @@ export function RscBlockElementComponent({
   const runtimePort = (editor as any).runtimePort || 55000;
   const workerPort = (editor as any).workerPort || 55200;
 
-  // Fetch initial source from runtime
+  // Fetch initial source from runtime via tRPC
   useEffect(() => {
     if (!rscElement.blockId || !runtimePort) {
       setError("Missing blockId or runtimePort");
       return;
     }
 
-    fetch(`http://localhost:${runtimePort}/workbook/blocks/${rscElement.blockId}/source`)
-      .then((res) => {
-        if (!res.ok) throw new Error(`Failed to load block: ${res.statusText}`);
-        return res.json();
-      })
+    const trpc = getTRPCClient(runtimePort);
+    trpc.workbook.blocks.getSource
+      .query({ blockId: rscElement.blockId })
       .then((data) => {
         setInitialSource(data.source);
         setError(null);
@@ -103,12 +102,12 @@ export function RscBlockElementComponent({
     };
   }, [isEditing, exitEditMode]);
 
-  // Handle Escape to exit editing mode - let OverlayEditor handle everything else
+  // Handle Escape to exit editing mode
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent) => {
-      // Only handle Escape at this level - let OverlayEditor handle Delete/Backspace/etc
       if (e.key === "Escape" && isEditing) {
         e.stopPropagation();
+        e.preventDefault();
         exitEditMode();
       }
     },
@@ -142,49 +141,7 @@ export function RscBlockElementComponent({
   };
 
   // ============================================================================
-  // Document Mode - Inline preview, click to edit
-  // ============================================================================
-
-  if (!isEditing) {
-    return (
-      <PlateElement
-        className={cn("rsc-block-element group/rsc-block relative my-2", className)}
-        {...props}
-      >
-        <div
-          onMouseEnter={() => setIsHovered(true)}
-          onMouseLeave={() => setIsHovered(false)}
-        >
-          {/* Drag handles provided by BlockDraggable wrapper */}
-
-          {/* Inline content - click to edit */}
-          <div
-            className={cn(
-              "rsc-block-preview rounded transition-all duration-150",
-              isHovered && "bg-muted/30 ring-1 ring-border/50",
-              "cursor-pointer",
-            )}
-            onClick={(e) => {
-              e.preventDefault();
-              e.stopPropagation();
-              enterEditMode();
-            }}
-          >
-            {/* Non-interactive preview */}
-            <div className="pointer-events-none">
-              {renderContent(false)}
-            </div>
-          </div>
-        </div>
-
-        {/* Hidden Slate children */}
-        <span className="sr-only">{children}</span>
-      </PlateElement>
-    );
-  }
-
-  // ============================================================================
-  // Editing Mode - Full interactive editor
+  // Render
   // ============================================================================
 
   return (
@@ -192,24 +149,43 @@ export function RscBlockElementComponent({
       className={cn("rsc-block-element group/rsc-block relative my-2", className)}
       {...props}
     >
+      {/*
+        contentEditable={false} is the Plate/Slate idiom for void elements.
+        This tells the browser and Slate that this content is not editable,
+        preventing cursor placement, selection, and keyboard handling.
+      */}
       <div
         ref={containerRef}
+        contentEditable={false}
         className={cn(
-          "rsc-block-editing rounded",
-          "ring-2 ring-blue-500/40",
-          "outline-none overflow-visible",
+          "rsc-block-content rounded transition-all duration-150",
+          !isEditing && isHovered && "bg-muted/30 ring-1 ring-border/50",
+          !isEditing && "cursor-pointer",
+          isEditing && "ring-2 ring-brand/40",
         )}
-        tabIndex={-1}
+        onMouseEnter={() => !isEditing && setIsHovered(true)}
+        onMouseLeave={() => !isEditing && setIsHovered(false)}
+        onClick={(e) => {
+          if (!isEditing) {
+            e.preventDefault();
+            e.stopPropagation();
+            enterEditMode();
+          }
+        }}
         onKeyDown={handleKeyDown}
+        tabIndex={isEditing ? 0 : undefined}
       >
-        {/* Full interactive content */}
-        <div className="overflow-visible">
-          {renderContent(true)}
+        {/*
+          When not editing: pointer-events-none makes content non-interactive
+          When editing: full interactivity for OverlayEditor
+        */}
+        <div className={cn(!isEditing && "pointer-events-none")}>
+          {renderContent(isEditing)}
         </div>
       </div>
 
-      {/* Hidden Slate children */}
-      <span className="sr-only">{children}</span>
+      {/* Slate requires children for void elements */}
+      {children}
     </PlateElement>
   );
 }

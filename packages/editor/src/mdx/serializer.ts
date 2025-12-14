@@ -46,17 +46,39 @@ export function serializeMdx(
     const serialized = serializeElement(element, options);
 
     if (serialized !== null) {
-      lines.push(serialized);
-
-      // Add blank line between block elements (except for consecutive paragraphs)
-      const nextElement = value[i + 1];
-      if (nextElement && shouldAddBlankLine(element, nextElement)) {
+      // Add blank lines before this element
+      const blankLinesBefore = getBlankLinesBefore(element, value[i - 1], i === 0);
+      for (let j = 0; j < blankLinesBefore; j++) {
         lines.push("");
       }
+
+      lines.push(serialized);
     }
   }
 
   return lines.join("\n").trim() + "\n";
+}
+
+/**
+ * Get number of blank lines to add before an element.
+ * Uses stored metadata if available, otherwise falls back to heuristics.
+ */
+function getBlankLinesBefore(
+  element: TElement,
+  prevElement: TElement | undefined,
+  isFirst: boolean,
+): number {
+  // Check for stored blank lines metadata
+  const stored = (element as any)._blankLinesBefore;
+  if (typeof stored === "number") {
+    return stored;
+  }
+
+  // Fall back to heuristics for new content
+  if (isFirst) return 0;
+  if (!prevElement) return 0;
+
+  return shouldAddBlankLineHeuristic(prevElement, element) ? 1 : 0;
 }
 
 // ============================================================================
@@ -248,7 +270,11 @@ function formatProp(key: string, value: unknown): string {
   return `${key}={${JSON.stringify(value)}}`;
 }
 
-function shouldAddBlankLine(current: TElement, next: TElement): boolean {
+/**
+ * Heuristic for determining if a blank line should be added between elements.
+ * Used as fallback when no stored whitespace metadata is available (e.g., new content).
+ */
+function shouldAddBlankLineHeuristic(current: TElement, next: TElement): boolean {
   // Always add blank line after headings
   const headings = ["h1", "h2", "h3", "h4", "h5", "h6"];
   if (headings.includes(current.type as string)) return true;

@@ -2,7 +2,7 @@
 
 import { cva, type VariantProps } from 'class-variance-authority';
 import { ChevronDownIcon } from 'lucide-react';
-import * as ToolbarPrimitive from '@radix-ui/react-toolbar';
+import { Toolbar as ToolbarPrimitive } from 'radix-ui';
 import * as React from 'react';
 
 import { cn } from '../../lib/utils';

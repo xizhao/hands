@@ -16,7 +16,6 @@
 
 import { type ChildProcess, spawn } from "node:child_process";
 import { existsSync, type FSWatcher, readdirSync, readFileSync, watch } from "node:fs";
-import { createServer } from "node:http";
 import { join } from "node:path";
 import type { SourceDefinitionV2 } from "@hands/stdlib/sources";
 import { Hono } from "hono";
@@ -1679,91 +1678,49 @@ async function main() {
     console.log(`[runtime] Auto-fixed ${fixedChecks.length} issue(s)`);
   }
 
-  // 1. Start HTTP server using Node's http module with Hono
+  // 1. Start HTTP server using Bun's native server with Hono
   const app = createApp(config);
-  const server = createServer(async (req, res) => {
+
+  let server: ReturnType<typeof Bun.serve>;
+
+  const startServer = async (retried = false) => {
     try {
-      // Convert Node request to fetch Request
-      const url = `http://localhost:${port}${req.url}`;
-      const headers = new Headers();
-      for (const [key, value] of Object.entries(req.headers)) {
-        if (value) headers.set(key, Array.isArray(value) ? value.join(", ") : value);
+      server = Bun.serve({
+        port,
+        fetch: app.fetch,
+        error(error) {
+          console.error("[runtime] Request error:", error);
+          return new Response("Internal Server Error", { status: 500 });
+        },
+      });
+
+      console.log(`[runtime] Server ready on http://localhost:${port}${retried ? " (after retry)" : ""}`);
+      console.log(`[runtime] Manifest available at http://localhost:${port}/workbook/manifest`);
+
+      // Output ready JSON for Tauri - format must match lib.rs expectations
+      console.log(
+        JSON.stringify({
+          type: "ready",
+          runtimePort: port,
+          postgresPort: port, // PGlite is in-process, use same port
+          workerPort: PORTS.WORKER,
+        }),
+      );
+    } catch (err: any) {
+      if (err?.code === "EADDRINUSE" && !retried) {
+        console.error(`[runtime] Port ${port} in use, attempting to free it...`);
+        const { killProcessOnPort } = await import("./ports.js");
+        await killProcessOnPort(port);
+        await new Promise((resolve) => setTimeout(resolve, 1000));
+        await startServer(true);
+      } else {
+        console.error(`[runtime] Server error:`, err);
+        process.exit(1);
       }
-
-      const body =
-        req.method !== "GET" && req.method !== "HEAD"
-          ? await new Promise<Buffer>((resolve) => {
-              const chunks: Buffer[] = [];
-              req.on("data", (chunk) => chunks.push(chunk));
-              req.on("end", () => resolve(Buffer.concat(chunks)));
-            })
-          : undefined;
-
-      const request = new Request(url, {
-        method: req.method,
-        headers,
-        body,
-      });
-
-      // Get response from Hono
-      const response = await app.fetch(request);
-
-      // Send response
-      res.statusCode = response.status;
-      response.headers.forEach((value, key) => {
-        res.setHeader(key, value);
-      });
-
-      const responseBody = await response.arrayBuffer();
-      res.end(Buffer.from(responseBody));
-    } catch (err) {
-      console.error("Request error:", err);
-      res.statusCode = 500;
-      res.end("Internal Server Error");
     }
-  });
+  };
 
-  // Handle port binding errors with retry
-  server.on("error", async (err: NodeJS.ErrnoException) => {
-    if (err.code === "EADDRINUSE") {
-      console.error(`[runtime] Port ${port} in use, attempting to free it...`);
-      const { killProcessOnPort } = await import("./ports.js");
-      await killProcessOnPort(port);
-      await new Promise((resolve) => setTimeout(resolve, 1000));
-
-      // Retry once
-      server.listen(port, () => {
-        console.log(`[runtime] Server ready on http://localhost:${port} (after retry)`);
-        console.log(`[runtime] Manifest available at http://localhost:${port}/workbook/manifest`);
-        console.log(
-          JSON.stringify({
-            type: "ready",
-            runtimePort: port,
-            postgresPort: port,
-            workerPort: PORTS.WORKER,
-          }),
-        );
-      });
-    } else {
-      console.error(`[runtime] Server error:`, err);
-      process.exit(1);
-    }
-  });
-
-  server.listen(port, () => {
-    console.log(`[runtime] Server ready on http://localhost:${port}`);
-    console.log(`[runtime] Manifest available at http://localhost:${port}/workbook/manifest`);
-
-    // Output ready JSON for Tauri - format must match lib.rs expectations
-    console.log(
-      JSON.stringify({
-        type: "ready",
-        runtimePort: port,
-        postgresPort: port, // PGlite is in-process, use same port
-        workerPort: PORTS.WORKER,
-      }),
-    );
-  });
+  await startServer();
 
   // 3. Boot critical services in parallel (non-blocking)
   // All are independent and can start simultaneously
@@ -1794,7 +1751,7 @@ async function main() {
       await state.workbookDb.save();
       await state.workbookDb.close();
     }
-    server.close();
+    server.stop();
     process.exit(0);
   };
 

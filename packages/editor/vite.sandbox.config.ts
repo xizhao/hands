@@ -9,13 +9,14 @@
  */
 
 import { resolve } from "node:path";
+import tailwindcss from "@tailwindcss/vite";
 import react from "@vitejs/plugin-react";
 import { defineConfig } from "vite";
 
 const isDev = process.env.NODE_ENV !== "production";
 
 export default defineConfig({
-  plugins: [react()],
+  plugins: [react(), tailwindcss()],
   // In dev: no base (runtime proxies /sandbox/* -> /)
   // In prod: /editor/ for Tauri asset serving
   base: isDev ? "/" : "/editor/",

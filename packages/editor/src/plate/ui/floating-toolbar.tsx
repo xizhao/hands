@@ -1,5 +1,6 @@
 'use client';
 
+import { AIChatPlugin } from '@platejs/ai/react';
 import {
   type FloatingToolbarState,
   flip,
@@ -18,6 +19,7 @@ import {
 import * as React from 'react';
 
 import { cn } from '../../lib/utils';
+import { linkPlugin } from '../plugins/link-kit';
 
 import { Toolbar } from './toolbar';
 
@@ -31,6 +33,8 @@ export function FloatingToolbar({
 }) {
   const editor = useEditorRef();
   const focusedEditorId = useEventEditorValue('focus');
+  const isFloatingLinkOpen = !!usePluginOption(linkPlugin, 'mode');
+  const aiOpen = usePluginOption(AIChatPlugin, 'open');
   const isSelectingSomeBlocks = usePluginOption(
     BlockSelectionPlugin,
     'isSelectingSome'
@@ -39,7 +43,7 @@ export function FloatingToolbar({
   const floatingToolbarState = useFloatingToolbarState({
     editorId: editor.id,
     focusedEditorId,
-    hideToolbar: isSelectingSomeBlocks,
+    hideToolbar: aiOpen || isFloatingLinkOpen || isSelectingSomeBlocks,
     ...state,
     floatingOptions: {
       middleware: [

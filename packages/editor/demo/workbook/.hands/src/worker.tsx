@@ -391,19 +391,6 @@ app.get("/workbook/pages/:pageId", async (c) => {
   }
 });
 
-// Get page source (matches main runtime API)
-app.get("/workbook/pages/:pageId/source", async (c) => {
-  const workbookDir = c.get("workbookDir");
-  const pageId = c.req.param("pageId");
-
-  try {
-    const source = await getPageContent(workbookDir, pageId);
-    return c.json({ success: true, pageId, source });
-  } catch (err) {
-    return c.json({ error: String(err) }, 404);
-  }
-});
-
 app.put("/workbook/pages/:pageId", async (c) => {
   const workbookDir = c.get("workbookDir");
   const pageId = c.req.param("pageId");
@@ -411,20 +398,6 @@ app.put("/workbook/pages/:pageId", async (c) => {
 
   try {
     await savePageContent(workbookDir, pageId, content);
-    return c.json({ success: true, pageId });
-  } catch (err) {
-    return c.json({ error: String(err) }, 500);
-  }
-});
-
-// Save page source (matches main runtime API)
-app.put("/workbook/pages/:pageId/source", async (c) => {
-  const workbookDir = c.get("workbookDir");
-  const pageId = c.req.param("pageId");
-  const { source } = await c.req.json<{ source: string }>();
-
-  try {
-    await savePageContent(workbookDir, pageId, source);
     return c.json({ success: true, pageId });
   } catch (err) {
     return c.json({ error: String(err) }, 500);

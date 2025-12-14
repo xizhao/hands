@@ -14,8 +14,8 @@ import { StrictMode, useCallback, useEffect, useRef, useState } from "react";
 import { DndProvider } from "react-dnd";
 import { HTML5Backend } from "react-dnd-html5-backend";
 import { createRoot } from "react-dom/client";
-import { getCachedPageSource, setCachedPageSource } from "../mdx/cache";
 import { MdxVisualEditor } from "../mdx/MdxVisualEditor";
+import { usePageSource } from "../mdx/usePageSource";
 import { OverlayEditor } from "../overlay";
 import { installGlobalErrorHandler } from "../overlay/errors";
 import { initFlightClient, RscProvider, setRuntimePort } from "../rsc";
@@ -106,30 +106,40 @@ async function captureThumbnail() {
   }
 }
 
-function SandboxApp() {
-  // For pages, initialize with cached source for instant display
-  const cachedSource = editorMode === "page" && pageId ? getCachedPageSource(pageId) : null;
-  const [source, setSource] = useState<string | null>(cachedSource);
-  const [error, setError] = useState<string | null>(null);
-  const [rscReady, setRscReady] = useState(false);
-  // Track if we're refreshing (have cached content, fetching fresh)
-  const [isRefreshing, setIsRefreshing] = useState(cachedSource !== null);
-  // Track if thumbnail has been captured for this session
+/**
+ * Page Editor Component - Uses usePageSource for polling/saving
+ */
+function PageEditor({
+  pageId,
+  runtimePort,
+  workerPort,
+  readOnly,
+  rscReady,
+}: {
+  pageId: string;
+  runtimePort: number;
+  workerPort: number;
+  readOnly: boolean;
+  rscReady: boolean;
+}) {
   const thumbnailCapturedRef = useRef(false);
 
-  // Initialize RSC Flight client
-  useEffect(() => {
-    initFlightClient().then((success) => {
-      console.log("[Sandbox] RSC initialized:", success);
-      setRscReady(success);
-    });
-  }, []);
+  const {
+    source,
+    isRefreshing,
+    currentPageId,
+    saveSource,
+    renamePage,
+  } = usePageSource({
+    pageId,
+    runtimePort,
+    readOnly,
+    pollInterval: 1000,
+  });
 
-  // Capture thumbnail after content settles (3 seconds after RSC ready + source loaded)
+  // Capture thumbnail after content settles
   useEffect(() => {
-    // Don't capture if not ready, no source, or already captured
     if (!rscReady || source === null || thumbnailCapturedRef.current) return;
-    // Don't capture while still refreshing
     if (isRefreshing) return;
 
     const timer = setTimeout(() => {
@@ -142,123 +152,95 @@ function SandboxApp() {
     return () => clearTimeout(timer);
   }, [rscReady, source, isRefreshing]);
 
-  // Fetch source (block or page) via tRPC
+  if (source !== null) {
+    return (
+      <RscProvider port={workerPort} enabled>
+        <MdxVisualEditor
+          source={source}
+          onSourceChange={saveSource}
+          pageId={currentPageId}
+          onRename={renamePage}
+          runtimePort={runtimePort}
+          workerPort={workerPort}
+          className="h-screen"
+          isRefreshing={isRefreshing || !rscReady}
+        />
+      </RscProvider>
+    );
+  }
+
+  return (
+    <div className="flex items-center justify-center h-screen text-muted-foreground">
+      <div className="flex items-center gap-2">
+        <div className="w-4 h-4 border-2 border-muted-foreground/30 border-t-muted-foreground rounded-full animate-spin" />
+        <span className="text-sm">Loading...</span>
+      </div>
+    </div>
+  );
+}
+
+function SandboxApp() {
+  const [source, setSource] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [rscReady, setRscReady] = useState(false);
+  const thumbnailCapturedRef = useRef(false);
+
+  // Initialize RSC Flight client
   useEffect(() => {
-    if (!runtimePortNum) {
-      setError("Missing runtimePort");
+    initFlightClient().then((success) => {
+      console.log("[Sandbox] RSC initialized:", success);
+      setRscReady(success);
+    });
+  }, []);
+
+  // Fetch source for blocks only (pages use usePageSource)
+  useEffect(() => {
+    if (editorMode !== "block" || !blockId || !runtimePortNum) {
+      if (editorMode === "block" && !blockId) {
+        setError("Missing blockId");
+      }
       return;
     }
 
     const trpc = getTRPCClient(runtimePortNum);
-
-    if (editorMode === "block" && blockId) {
-      trpc.workbook.blocks.getSource.query({ blockId })
-        .then((data) => setSource(data.source))
-        .catch((err) => setError(String(err)));
-    } else if (editorMode === "page" && pageId) {
-      trpc.pages.getSource.query({ route: pageId })
-        .then((data) => {
-          setSource(data.source);
-          // Update cache with fresh source
-          setCachedPageSource(pageId, data.source);
-          // Done refreshing
-          setIsRefreshing(false);
-        })
-        .catch((err) => setError(String(err)));
-    } else {
-      setError("Missing blockId or pageId");
-    }
+    trpc.workbook.blocks.getSource.query({ blockId })
+      .then((data) => setSource(data.source))
+      .catch((err) => setError(String(err)));
   }, []);
 
-  // Save source changes (for blocks) via tRPC
-  const handleBlockSave = useCallback((newSource: string) => {
-    if (readOnly || !blockId || !runtimePortNum) return;
+  // Capture thumbnail for blocks
+  useEffect(() => {
+    if (editorMode !== "block") return;
+    if (!rscReady || source === null || thumbnailCapturedRef.current) return;
 
-    const trpc = getTRPCClient(runtimePortNum);
-    trpc.workbook.blocks.saveSource.mutate({ blockId, source: newSource })
-      .catch(console.error);
-  }, []);
+    const timer = setTimeout(() => {
+      if (!thumbnailCapturedRef.current) {
+        thumbnailCapturedRef.current = true;
+        captureThumbnail();
+      }
+    }, 3000);
 
-  // Track current page ID (may change after rename)
-  const [currentPageId, setCurrentPageId] = useState(pageId);
-
-  // Save source changes (for pages) via tRPC
-  const handlePageSave = useCallback((newSource: string) => {
-    if (readOnly || !currentPageId || !runtimePortNum) return;
-
-    // Update cache immediately on save
-    setCachedPageSource(currentPageId, newSource);
-
-    const trpc = getTRPCClient(runtimePortNum);
-    trpc.pages.saveSource.mutate({ route: currentPageId, source: newSource })
-      .catch(console.error);
-  }, [currentPageId]);
-
-  // Handle page rename (title → slug sync) via tRPC
-  const handlePageRename = useCallback(async (newSlug: string): Promise<boolean> => {
-    if (readOnly || !currentPageId || !runtimePortNum) return false;
-
-    try {
-      const trpc = getTRPCClient(runtimePortNum);
-      const result = await trpc.pages.rename.mutate({ route: currentPageId, newSlug });
-
-      console.log("[Sandbox] Page renamed:", result);
-
-      // Update local state
-      setCurrentPageId(newSlug);
-
-      // Update URL to new page ID without reloading
-      const newParams = new URLSearchParams(window.location.search);
-      newParams.set("pageId", newSlug);
-      window.history.replaceState({}, "", `?${newParams.toString()}`);
-
-      // Notify parent that page was renamed
-      window.parent.postMessage({ type: "page-renamed", oldId: currentPageId, newId: newSlug }, "*");
-
-      return true;
-    } catch (err) {
-      console.error("[Sandbox] Rename error:", err);
-      return false;
-    }
-  }, [currentPageId]);
+    return () => clearTimeout(timer);
+  }, [rscReady, source]);
 
   if (error) {
     return <div className="flex items-center justify-center h-screen text-red-500">{error}</div>;
   }
 
-  // Page mode: Show cached content immediately with refresh indicator
-  // Only block on rscReady, not on source (we may have cached source)
-  if (editorMode === "page") {
-    // If we have cached source, show it immediately (even if RSC not ready yet)
-    // Once RSC is ready, the editor will work fully
-    if (source !== null) {
-      return (
-        <RscProvider port={workerPortNum!} enabled>
-          <MdxVisualEditor
-            source={source}
-            onSourceChange={handlePageSave}
-            pageId={currentPageId ?? undefined}
-            onRename={handlePageRename}
-            runtimePort={runtimePortNum!}
-            workerPort={workerPortNum!}
-            className="h-screen"
-            isRefreshing={isRefreshing || !rscReady}
-          />
-        </RscProvider>
-      );
-    }
-    // No cached source, show loading
+  // Page mode: Use dedicated component with usePageSource hook
+  if (editorMode === "page" && pageId && runtimePortNum) {
     return (
-      <div className="flex items-center justify-center h-screen text-muted-foreground">
-        <div className="flex items-center gap-2">
-          <div className="w-4 h-4 border-2 border-muted-foreground/30 border-t-muted-foreground rounded-full animate-spin" />
-          <span className="text-sm">Loading...</span>
-        </div>
-      </div>
+      <PageEditor
+        pageId={pageId}
+        runtimePort={runtimePortNum}
+        workerPort={workerPortNum!}
+        readOnly={readOnly}
+        rscReady={rscReady}
+      />
     );
   }
 
-  // Block mode: Wait for both RSC and source (blocks have their own caching)
+  // Block mode: Wait for both RSC and source
   if (!rscReady || source === null) {
     return (
       <div className="flex items-center justify-center h-screen text-muted-foreground">

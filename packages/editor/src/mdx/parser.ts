@@ -88,18 +88,35 @@ export function parseMdx(source: string, options: MdxToPlateOptions = {}): MdxPa
 
   const value: Value = [];
 
+  // Calculate starting line (after frontmatter)
+  let prevEndLine = 0;
+  if (frontmatterLoc) {
+    // Find the line number after frontmatter ends
+    const frontmatterText = source.slice(0, frontmatterLoc.end);
+    prevEndLine = frontmatterText.split("\n").length;
+  }
+
+  const ctx: ConversionContext = {
+    generateId,
+    nodeLocations,
+    rscBlocks,
+    options,
+    source,
+    errors,
+    prevEndLine,
+  };
+
   for (const node of mdast.children) {
     // Skip frontmatter node (already parsed separately)
-    if (node.type === "yaml") continue;
+    if (node.type === "yaml") {
+      // Update prevEndLine to after frontmatter
+      if (node.position) {
+        ctx.prevEndLine = node.position.end.line;
+      }
+      continue;
+    }
 
-    const plateNode = mdastNodeToPlate(node, {
-      generateId,
-      nodeLocations,
-      rscBlocks,
-      options,
-      source,
-      errors,
-    });
+    const plateNode = mdastNodeToPlate(node, ctx);
 
     if (plateNode) {
       if (Array.isArray(plateNode)) {
@@ -107,6 +124,11 @@ export function parseMdx(source: string, options: MdxToPlateOptions = {}): MdxPa
       } else {
         value.push(plateNode);
       }
+    }
+
+    // Update prevEndLine for next iteration
+    if (node.position) {
+      ctx.prevEndLine = node.position.end.line;
     }
   }
 
@@ -139,6 +161,19 @@ interface ConversionContext {
   options: MdxToPlateOptions;
   source: string;
   errors: string[];
+  /** End line of previous node, for calculating blank lines */
+  prevEndLine: number;
+}
+
+/**
+ * Calculate number of blank lines before a node
+ * (gap between previous end line and this start line, minus 1 for the node itself)
+ */
+function calcBlankLinesBefore(node: MdastNode, ctx: ConversionContext): number {
+  if (!node.position) return 0;
+  const startLine = node.position.start.line;
+  const gap = startLine - ctx.prevEndLine - 1;
+  return Math.max(0, gap);
 }
 
 function mdastNodeToPlate(
@@ -186,6 +221,7 @@ function mdastNodeToPlate(
 function headingToPlate(node: Heading, ctx: ConversionContext): TElement {
   const id = ctx.generateId("h");
   const type = `h${node.depth}` as "h1" | "h2" | "h3" | "h4" | "h5" | "h6";
+  const blankLinesBefore = calcBlankLinesBefore(node, ctx);
 
   if (node.position) {
     ctx.nodeLocations.set(id, {
@@ -197,12 +233,14 @@ function headingToPlate(node: Heading, ctx: ConversionContext): TElement {
   return {
     type,
     id,
+    _blankLinesBefore: blankLinesBefore,
     children: inlineNodesToPlate(node.children, ctx),
   };
 }
 
 function paragraphToPlate(node: Paragraph, ctx: ConversionContext): TElement | TElement[] {
   const id = ctx.generateId("p");
+  const blankLinesBefore = calcBlankLinesBefore(node, ctx);
 
   if (node.position) {
     ctx.nodeLocations.set(id, {
@@ -214,19 +252,21 @@ function paragraphToPlate(node: Paragraph, ctx: ConversionContext): TElement | T
   // Check if paragraph contains only a JSX element
   const firstChild = node.children[0] as { type: string };
   if (node.children.length === 1 && (firstChild.type === "mdxJsxTextElement" || firstChild.type === "mdxJsxFlowElement")) {
-    const jsxElement = jsxElementToPlate(node.children[0] as MdxJsxElement, ctx);
+    const jsxElement = jsxElementToPlate(node.children[0] as MdxJsxElement, ctx, blankLinesBefore);
     if (jsxElement) return jsxElement;
   }
 
   return {
     type: "p",
     id,
+    _blankLinesBefore: blankLinesBefore,
     children: inlineNodesToPlate(node.children, ctx),
   };
 }
 
 function blockquoteToPlate(node: Blockquote, ctx: ConversionContext): TElement {
   const id = ctx.generateId("bq");
+  const blankLinesBefore = calcBlankLinesBefore(node, ctx);
 
   if (node.position) {
     ctx.nodeLocations.set(id, {
@@ -244,12 +284,14 @@ function blockquoteToPlate(node: Blockquote, ctx: ConversionContext): TElement {
   return {
     type: "blockquote",
     id,
+    _blankLinesBefore: blankLinesBefore,
     children,
   };
 }
 
 function codeBlockToPlate(node: Code, ctx: ConversionContext): TElement {
   const id = ctx.generateId("code");
+  const blankLinesBefore = calcBlankLinesBefore(node, ctx);
 
   if (node.position) {
     ctx.nodeLocations.set(id, {
@@ -258,9 +300,10 @@ function codeBlockToPlate(node: Code, ctx: ConversionContext): TElement {
     });
   }
 
-  const codeBlock: CodeBlockElement = {
+  const codeBlock: CodeBlockElement & { _blankLinesBefore: number } = {
     type: "code-block",
     id,
+    _blankLinesBefore: blankLinesBefore,
     language: node.lang ?? undefined,
     code: node.value,
     children: [{ text: "" }],
@@ -271,18 +314,21 @@ function codeBlockToPlate(node: Code, ctx: ConversionContext): TElement {
 
 function listToPlate(node: List, ctx: ConversionContext): TElement[] {
   const elements: TElement[] = [];
+  const blankLinesBefore = calcBlankLinesBefore(node, ctx);
 
+  let isFirst = true;
   for (const item of node.children) {
     if (item.type === "listItem") {
-      const listItemElements = listItemToPlate(item as ListItem, node.ordered ?? false, ctx);
+      const listItemElements = listItemToPlate(item as ListItem, node.ordered ?? false, ctx, isFirst ? blankLinesBefore : 0);
       elements.push(...listItemElements);
+      isFirst = false;
     }
   }
 
   return elements;
 }
 
-function listItemToPlate(node: ListItem, ordered: boolean, ctx: ConversionContext): TElement[] {
+function listItemToPlate(node: ListItem, ordered: boolean, ctx: ConversionContext, blankLinesBefore: number = 0): TElement[] {
   const elements: TElement[] = [];
   const id = ctx.generateId("li");
 
@@ -294,6 +340,7 @@ function listItemToPlate(node: ListItem, ordered: boolean, ctx: ConversionContex
   }
 
   // Extract content from list item children
+  let isFirst = true;
   for (const child of node.children) {
     if (child.type === "paragraph") {
       const para = child as Paragraph;
@@ -301,11 +348,13 @@ function listItemToPlate(node: ListItem, ordered: boolean, ctx: ConversionContex
       elements.push({
         type: "p",
         id,
+        _blankLinesBefore: isFirst ? blankLinesBefore : 0,
         children: [
           { text: ordered ? "• " : "• " }, // TODO: proper list support
           ...inlineNodesToPlate(para.children, ctx),
         ],
       });
+      isFirst = false;
     }
   }
 
@@ -314,6 +363,7 @@ function listItemToPlate(node: ListItem, ordered: boolean, ctx: ConversionContex
 
 function thematicBreakToPlate(node: ThematicBreak, ctx: ConversionContext): TElement {
   const id = ctx.generateId("hr");
+  const blankLinesBefore = calcBlankLinesBefore(node, ctx);
 
   if (node.position) {
     ctx.nodeLocations.set(id, {
@@ -325,13 +375,16 @@ function thematicBreakToPlate(node: ThematicBreak, ctx: ConversionContext): TEle
   return {
     type: "hr",
     id,
+    _blankLinesBefore: blankLinesBefore,
     children: [{ text: "" }],
   };
 }
 
-function jsxElementToPlate(node: MdxJsxElement, ctx: ConversionContext): TElement | null {
+function jsxElementToPlate(node: MdxJsxElement, ctx: ConversionContext, parentBlankLines?: number): TElement | null {
   const id = ctx.generateId("jsx");
   const tagName = node.name ?? "Fragment";
+  // Use parent's blank lines if provided, otherwise calculate
+  const blankLinesBefore = parentBlankLines ?? calcBlankLinesBefore(node, ctx);
 
   if (node.position) {
     ctx.nodeLocations.set(id, {
@@ -386,9 +439,10 @@ function jsxElementToPlate(node: MdxJsxElement, ctx: ConversionContext): TElemen
     });
 
     // Create RSC block element
-    const rscBlock: RscBlockElement = {
+    const rscBlock: RscBlockElement & { _blankLinesBefore: number } = {
       type: "rsc-block",
       id,
+      _blankLinesBefore: blankLinesBefore,
       blockId,
       source: rawSource,
       blockProps: Object.fromEntries(
@@ -405,6 +459,7 @@ function jsxElementToPlate(node: MdxJsxElement, ctx: ConversionContext): TElemen
   return {
     type: tagName,
     id,
+    _blankLinesBefore: blankLinesBefore,
     ...props,
     children: node.children && node.children.length > 0
       ? convertJsxChildren(node.children, ctx)

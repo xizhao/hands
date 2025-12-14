@@ -292,13 +292,12 @@ export function DropZone({ containerRef, onDrop }: DropZoneProps) {
 
   return (
     <div
-      className="absolute pointer-events-none bg-blue-500 z-50 rounded-full"
+      className="absolute pointer-events-none bg-brand z-50 rounded-full"
       style={{
         left: dropInfo.rect.x,
         top: dropInfo.rect.y - 1,
         width: dropInfo.rect.width,
         height: 3,
-        boxShadow: "0 0 4px rgba(59, 130, 246, 0.5)",
       }}
     />
   );
