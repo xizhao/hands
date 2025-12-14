@@ -8,8 +8,10 @@ import { PlateElement, type PlateElementProps } from "platejs/react";
 import { cn } from "../lib/utils";
 
 export function ParagraphElement({ className, children, ...props }: PlateElementProps) {
+  // Use div instead of p to avoid hydration errors with Plate's Draggable wrapper
+  // which adds div elements around content (div cannot be a descendant of p)
   return (
-    <PlateElement as="p" className={cn("m-0 py-1 text-base leading-7", className)} {...props}>
+    <PlateElement className={cn("m-0 py-1 text-base leading-7", className)} {...props}>
       {children}
     </PlateElement>
   );

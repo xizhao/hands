@@ -37,7 +37,10 @@ svg [opacity="0.2"] {
     --chart-4: 43 74% 66%;
     --chart-5: 27 87% 67%;
     --brand: 211 77% 51%;
+    --brand-foreground: 0 0% 100%;
+    --brand-active: 211 77% 41%;
     --highlight: 48 100% 50%;
+    --subtle-foreground: 240 5% 34%;
   }
 
   .dark {
@@ -67,7 +70,10 @@ svg [opacity="0.2"] {
     --chart-4: 280 65% 60%;
     --chart-5: 340 75% 55%;
     --brand: 211 77% 51%;
+    --brand-foreground: 0 0% 100%;
+    --brand-active: 211 77% 41%;
     --highlight: 48 100% 50%;
+    --subtle-foreground: 240 5% 34%;
   }
 }
 

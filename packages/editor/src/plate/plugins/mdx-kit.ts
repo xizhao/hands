@@ -33,10 +33,12 @@ import {
   HrElement,
   ParagraphElement,
 } from "../plate-elements";
+import { AutoformatKit } from "./autoformat-kit";
 import { BlockSelectionKit } from "./block-selection-kit";
 import { DndKitWithoutProvider } from "./dnd-kit";
 import { ElementPlugin } from "./element-plugin";
 import { FloatingToolbarKit } from "./floating-toolbar-kit";
+import { ListKit } from "./list-kit";
 import { RscBlockPlugin } from "./rsc-block-plugin";
 import { SlashKit } from "./slash-kit";
 
@@ -81,6 +83,12 @@ export const MdxEditorKit = [
 
   // Slash Menu - Command palette
   ...SlashKit,
+
+  // Autoformat - Markdown shortcuts (- for list, # for heading, etc.)
+  ...AutoformatKit,
+
+  // Lists - Bullet, numbered, todo lists
+  ...ListKit,
 
   // Floating Toolbar - Selection formatting
   ...FloatingToolbarKit,

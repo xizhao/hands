@@ -48,7 +48,8 @@ window.addEventListener("message", (e) => {
     }
     style.textContent = e.data.css;
 
-    if (e.data.css.includes("color-scheme:dark")) {
+    // Toggle dark class based on parent's theme
+    if (e.data.isDark) {
       document.documentElement.classList.add("dark");
     } else {
       document.documentElement.classList.remove("dark");

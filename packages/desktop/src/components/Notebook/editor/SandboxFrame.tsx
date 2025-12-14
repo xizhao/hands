@@ -143,7 +143,10 @@ const CSS_VARS = [
   "chart-4",
   "chart-5",
   "brand",
+  "brand-foreground",
+  "brand-active",
   "highlight",
+  "subtle-foreground",
   // Sidebar vars if they exist
   "sidebar-background",
   "sidebar-foreground",
@@ -224,6 +227,10 @@ export function SandboxFrame({
     return `http://localhost:${editorPort}/sandbox.html?${params}`;
   })();
 
+  // CSS variables that are raw HSL values (need hsl() wrapper for sandbox)
+  // These don't include radius, which is a length value
+  const HSL_VARS = new Set(CSS_VARS.filter((v) => v !== "radius"));
+
   // Generate CSS to inject into iframe
   const generateStyles = useCallback(() => {
     const root = document.documentElement;
@@ -233,16 +240,23 @@ export function SandboxFrame({
     const computedStyle = getComputedStyle(root);
     const cssVars = CSS_VARS.map((v) => {
       const value = computedStyle.getPropertyValue(`--${v}`).trim();
-      return value ? `--${v}:${value}` : null;
+      if (!value) return null;
+
+      // Wrap HSL values in hsl() for sandbox (Tailwind v4 expects hsl() wrapper)
+      // Check if it's a raw HSL value (e.g., "211 77% 51%") vs already wrapped
+      if (HSL_VARS.has(v) && !value.startsWith("hsl") && !value.startsWith("rgb")) {
+        return `--${v}:hsl(${value})`;
+      }
+      return `--${v}:${value}`;
     })
       .filter(Boolean)
       .join(";");
 
-    // Build complete CSS
+    // Build complete CSS - variables only, sandbox handles base styles
+    // Note: We don't set color-scheme here as it affects the browser's canvas color.
+    // The .dark class is toggled via the message handler in sandbox/index.tsx
     return (
       `:root{${cssVars}}` +
-      (isDark ? "html{color-scheme:dark}" : "html{color-scheme:light}") +
-      "html,body{background:transparent}" +
       "#root{padding-bottom:80px}" // Room for floating chatbar overlay
     );
   }, []);
@@ -251,7 +265,8 @@ export function SandboxFrame({
   const sendStyles = useCallback(() => {
     if (!iframeRef.current?.contentWindow) return;
     const css = generateStyles();
-    iframeRef.current.contentWindow.postMessage({ type: "styles", css }, "*");
+    const isDark = document.documentElement.classList.contains("dark");
+    iframeRef.current.contentWindow.postMessage({ type: "styles", css, isDark }, "*");
   }, [generateStyles]);
 
   // Listen for sandbox ready signal, editor errors, and navigation events
@@ -538,9 +553,10 @@ export function SandboxFrame({
         ref={iframeRef}
         src={iframeSrc!}
         className={cn(
-          "w-full h-full border-0 transition-opacity duration-75",
+          "w-full h-full border-0 bg-transparent transition-opacity duration-75",
           state === "ready" ? "opacity-100" : "opacity-0",
         )}
+        style={{ background: "transparent" }}
         sandbox="allow-scripts allow-same-origin"
         onLoad={handleIframeLoad}
         onError={handleIframeError}
