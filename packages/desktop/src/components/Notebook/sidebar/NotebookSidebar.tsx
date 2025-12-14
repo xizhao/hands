@@ -67,7 +67,7 @@ import { useCreateBlock, useCreatePage } from "@/hooks/useWorkbook";
 import { cn } from "@/lib/utils";
 import { ThumbnailPreview } from "./ThumbnailPreview";
 
-// HoverCard wrapper with conditional delay based on thumbnail availability
+// HoverCard wrapper - only shows if thumbnail exists
 function ThumbnailHoverCard({
   type,
   contentId,
@@ -80,11 +80,14 @@ function ThumbnailHoverCard({
   onMouseEnter?: () => void;
 }) {
   const { data: thumbnail } = useThumbnail(type, contentId);
-  // Show faster (150ms) if we have a thumbnail, slower (400ms) if not
-  const delay = thumbnail?.thumbnail ? 150 : 400;
+
+  // No thumbnail - just render children without HoverCard
+  if (!thumbnail?.thumbnail) {
+    return <div onMouseEnter={onMouseEnter}>{children}</div>;
+  }
 
   return (
-    <HoverCard openDelay={delay} closeDelay={100}>
+    <HoverCard openDelay={150} closeDelay={100}>
       <HoverCardTrigger asChild>
         <div onMouseEnter={onMouseEnter}>{children}</div>
       </HoverCardTrigger>
