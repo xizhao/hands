@@ -6,16 +6,16 @@ import { CaretDown, CaretRight, CircleNotch, Table } from "@phosphor-icons/react
 import { useState } from "react";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { useRuntimeState } from "@/hooks/useRuntimeState";
-import { useRuntimeQuery } from "@/hooks/useWorkbook";
+import { trpc } from "@/lib/trpc";
 import { cn } from "@/lib/utils";
 
 export function DatabasePanel() {
-  const { workbookId: activeWorkbookId, schema, isDbBooting, isStarting } = useRuntimeState();
+  const { schema, isDbBooting, isStarting } = useRuntimeState();
   const isLoading = isStarting || isDbBooting;
   const [expandedTable, setExpandedTable] = useState<string | null>(null);
   const [tableData, setTableData] = useState<Record<string, unknown[] | null>>({});
   const [loadingTable, setLoadingTable] = useState<string | null>(null);
-  const runtimeQuery = useRuntimeQuery();
+  const dbQuery = trpc.db.query.useMutation();
 
   const handleExpandTable = async (tableName: string) => {
     if (expandedTable === tableName) {
@@ -26,11 +26,10 @@ export function DatabasePanel() {
     setExpandedTable(tableName);
 
     // Load table data if not already loaded
-    if (!tableData[tableName] && activeWorkbookId) {
+    if (!tableData[tableName]) {
       setLoadingTable(tableName);
       try {
-        const result = await runtimeQuery.mutateAsync({
-          workbookId: activeWorkbookId,
+        const result = await dbQuery.mutateAsync({
           query: `SELECT * FROM "${tableName}" LIMIT 100`,
         });
         setTableData((prev) => ({ ...prev, [tableName]: result.rows }));

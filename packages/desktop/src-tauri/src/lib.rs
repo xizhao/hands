@@ -869,7 +869,7 @@ async fn get_runtime_status(
     })
 }
 
-/// Execute SQL query through runtime
+/// Execute SQL query through runtime (via tRPC)
 #[tauri::command]
 async fn runtime_query(
     state: tauri::State<'_, Arc<Mutex<AppState>>>,
@@ -881,7 +881,8 @@ async fn runtime_query(
     let runtime = state_guard.runtimes.get(&workbook_id)
         .ok_or("Runtime not running for this workbook")?;
 
-    let url = format!("http://localhost:{}/postgres/query", runtime.runtime_port);
+    // Use tRPC endpoint (db.query is a mutation)
+    let url = format!("http://localhost:{}/trpc/db.query", runtime.runtime_port);
 
     let resp = reqwest::Client::new()
         .post(&url)
@@ -895,7 +896,23 @@ async fn runtime_query(
         return Err(format!("Query failed: {}", error));
     }
 
-    resp.json().await.map_err(|e| format!("Failed to parse response: {}", e))
+    // tRPC wraps response in { "result": { "data": ... } }
+    let trpc_response: serde_json::Value = resp.json().await
+        .map_err(|e| format!("Failed to parse response: {}", e))?;
+
+    // Extract the data from tRPC response wrapper
+    trpc_response
+        .get("result")
+        .and_then(|r| r.get("data"))
+        .cloned()
+        .ok_or_else(|| {
+            // Check for tRPC error format
+            if let Some(error) = trpc_response.get("error") {
+                format!("Query failed: {}", error)
+            } else {
+                "Invalid tRPC response format".to_string()
+            }
+        })
 }
 
 /// Trigger eval on runtime

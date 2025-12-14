@@ -298,18 +298,6 @@ export function useStopRuntime() {
   });
 }
 
-// Execute SQL query through runtime
-export function useRuntimeQuery() {
-  return useMutation({
-    mutationKey: ["runtime", "query"],
-    mutationFn: ({ workbookId, query }: { workbookId: string; query: string }) =>
-      invoke<{ rows: unknown[]; rowCount: number; command: string }>("runtime_query", {
-        workbookId,
-        query,
-      }),
-  });
-}
-
 // Trigger eval on runtime
 export function useRuntimeEval() {
   const queryClient = useQueryClient();
