@@ -1439,7 +1439,7 @@ async function bootVite(config: RuntimeConfig) {
       },
     );
 
-    // Forward Vite output but ignore EPIPE errors on shutdown
+    // Forward Vite output with [worker] prefix for visibility
     // Capture both stdout and stderr for error reporting
     // Vite module errors often go to stdout, not stderr
     let outputBuffer = "";
@@ -1451,34 +1451,53 @@ async function bootVite(config: RuntimeConfig) {
         outputBuffer = outputBuffer.slice(-4000);
       }
     };
+    const prefixLines = (data: Buffer, prefix: string) => {
+      const str = data.toString();
+      // Add prefix to each line for visibility in logs
+      return str.split('\n').map(line => line ? `${prefix} ${line}` : '').join('\n');
+    };
     state.viteProc.stdout?.on("data", (data) => {
       captureOutput(data);
-      process.stdout.write(data, () => {});
+      const prefixed = prefixLines(data, "[worker]");
+      if (prefixed.trim()) {
+        console.log(prefixed);
+      }
     });
     state.viteProc.stderr?.on("data", (data) => {
       captureOutput(data);
-      process.stderr.write(data, () => {});
+      const prefixed = prefixLines(data, "[worker]");
+      if (prefixed.trim()) {
+        console.error(prefixed);
+      }
     });
 
-    // Monitor for crashes - reset viteReady if process exits
+    // Monitor for crashes - reset viteReady and auto-restart
     state.viteProc.on("exit", (code, signal) => {
-      if (state.viteReady) {
-        console.error(`[runtime] Vite crashed (code=${code}, signal=${signal})`);
-        state.viteReady = false;
-        state.viteError = extractViteError(outputBuffer) || `Vite exited with code ${code}`;
-        state.viteProc = null;
+      const wasReady = state.viteReady;
+      console.error(`[runtime] Vite exited (code=${code}, signal=${signal}, wasReady=${wasReady})`);
+      state.viteReady = false;
+      state.viteError = extractViteError(outputBuffer) || `Vite exited with code ${code}`;
+      state.viteProc = null;
 
-        // Clear Vite cache on crash - often fixes pre-bundle errors
-        const viteCacheDir = join(handsDir, "node_modules", ".vite");
-        if (existsSync(viteCacheDir)) {
-          console.log("[runtime] Clearing Vite cache after crash...");
-          try {
-            const { rmSync } = require("node:fs");
-            rmSync(viteCacheDir, { recursive: true, force: true });
-          } catch (err) {
-            console.warn("[runtime] Failed to clear Vite cache:", err);
-          }
+      // Clear Vite cache on crash - often fixes pre-bundle errors
+      const viteCacheDir = join(handsDir, ".vite");
+      if (existsSync(viteCacheDir)) {
+        console.log("[runtime] Clearing Vite cache after crash...");
+        try {
+          rmSync(viteCacheDir, { recursive: true, force: true });
+        } catch (err) {
+          console.warn("[runtime] Failed to clear Vite cache:", err);
         }
+      }
+
+      // Auto-restart after a delay (unless this was a clean shutdown)
+      if (code !== 0 && code !== null) {
+        console.log("[runtime] Auto-restarting Vite in 2s...");
+        setTimeout(() => {
+          bootVite(config).catch((err) => {
+            console.error("[runtime] Failed to restart Vite:", err);
+          });
+        }, 2000);
       }
     });
 
@@ -1775,7 +1794,10 @@ async function main() {
   // Log any auto-fixed issues
   const fixedChecks = preflightResult.checks.filter((c) => c.fixed);
   if (fixedChecks.length > 0) {
-    console.log(`[runtime] Auto-fixed ${fixedChecks.length} issue(s)`);
+    console.log(`[runtime] Auto-fixed ${fixedChecks.length} issue(s):`);
+    for (const check of fixedChecks) {
+      console.log(`[runtime]   - ${check.name}: ${check.message}`);
+    }
   }
 
   // 1. Start HTTP server using Bun's native server with Hono
@@ -1796,16 +1818,6 @@ async function main() {
 
       console.log(`[runtime] Server ready on http://localhost:${port}${retried ? " (after retry)" : ""}`);
       console.log(`[runtime] Manifest available at http://localhost:${port}/workbook/manifest`);
-
-      // Output ready JSON for Tauri - format must match lib.rs expectations
-      console.log(
-        JSON.stringify({
-          type: "ready",
-          runtimePort: port,
-          postgresPort: port, // PGlite is in-process, use same port
-          workerPort: PORTS.WORKER,
-        }),
-      );
     } catch (err: any) {
       if (err?.code === "EADDRINUSE" && !retried) {
         console.error(`[runtime] Port ${port} in use, attempting to free it...`);
@@ -1822,16 +1834,31 @@ async function main() {
 
   await startServer();
 
-  // 3. Boot critical services in parallel (non-blocking)
-  // All are independent and can start simultaneously
+  // 3. Boot critical services
+  // PGlite and Pages can run in parallel (non-blocking)
   bootPGlite(workbookDir);
+  bootPages(workbookDir);
+
+  // Output ready JSON for Tauri - format must match lib.rs expectations
+  console.log(
+    JSON.stringify({
+      type: "ready",
+      runtimePort: port,
+      postgresPort: port, // PGlite is in-process, use same port
+      workerPort: PORTS.WORKER,
+    }),
+  );
+
+  // Boot Vite (block server) - can take a few seconds
+  // Editor/sandbox will show loading state until worker is ready
   bootVite(config);
+
+  // Editor can start in parallel with Vite
   if (!config.noEditor) {
     bootEditor(config);
   } else {
     console.log("[runtime] Editor disabled (--no-editor)");
   }
-  bootPages(workbookDir);
 
   // 4. Start file watcher for real-time manifest updates
   startFileWatcher(config);

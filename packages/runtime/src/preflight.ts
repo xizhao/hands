@@ -112,7 +112,13 @@ export async function runPreflight(options: PreflightOptions): Promise<Preflight
   // 7. Ensure .hands/tsconfig.json is correct (auto-fix always)
   checks.push(await checkHandsTsConfig(workbookDir, autoFix));
 
-  // 8. Ensure workbook has required dependencies in package.json
+  // 8. Clear Vite cache to prevent stale dependency issues
+  checks.push(await clearViteCache(workbookDir));
+
+  // 9. Ensure .hands/vite.config.ts has correct optimizeDeps settings
+  checks.push(await checkViteConfig(workbookDir, autoFix));
+
+  // 10. Ensure workbook has required dependencies in package.json
   checks.push(await checkWorkbookDependencies(workbookDir, autoFix));
 
   const ok = checks.filter((c) => c.required).every((c) => c.ok);
@@ -825,6 +831,116 @@ async function checkWorkbookDependencies(workbookDir: string, autoFix: boolean):
       ok: false,
       message: `Error reading package.json: ${err instanceof Error ? err.message : String(err)}`,
       required: true,
+    };
+  }
+}
+
+/**
+ * Clear Vite's dependency optimization cache on startup.
+ * This prevents "new version of pre-bundle" race condition errors
+ * that occur when Vite discovers new dependencies mid-session.
+ */
+async function clearViteCache(workbookDir: string): Promise<PreflightCheck> {
+  const handsDir = join(workbookDir, ".hands");
+  const viteCacheDir = join(handsDir, ".vite");
+
+  // If cache doesn't exist, nothing to do
+  if (!existsSync(viteCacheDir)) {
+    return {
+      name: "Vite cache",
+      ok: true,
+      message: "No cache to clear",
+      required: false,
+    };
+  }
+
+  try {
+    rmSync(viteCacheDir, { recursive: true, force: true });
+    return {
+      name: "Vite cache",
+      ok: true,
+      message: "Cleared",
+      required: false,
+      fixed: true,
+    };
+  } catch (err) {
+    // Non-fatal - Vite will work, just might have stale cache
+    return {
+      name: "Vite cache",
+      ok: true,
+      message: `Could not clear: ${err instanceof Error ? err.message : String(err)}`,
+      required: false,
+    };
+  }
+}
+
+/**
+ * Check that vite.config.ts has correct optimizeDeps settings to prevent
+ * "new version of pre-bundle" race condition errors during development.
+ *
+ * Required settings:
+ * - optimizeDeps.noDiscovery: true (client-side)
+ * - ssr.optimizeDeps.noDiscovery: true (SSR-side)
+ */
+async function checkViteConfig(workbookDir: string, autoFix: boolean): Promise<PreflightCheck> {
+  const handsDir = join(workbookDir, ".hands");
+  const viteConfigPath = join(handsDir, "vite.config.ts");
+
+  // If .hands doesn't exist yet, skip - it will be created on first build
+  if (!existsSync(handsDir) || !existsSync(viteConfigPath)) {
+    return {
+      name: "Vite optimizeDeps config",
+      ok: true,
+      message: "Will be created on first build",
+      required: false,
+    };
+  }
+
+  try {
+    const content = readFileSync(viteConfigPath, "utf-8");
+
+    // Check for required patterns
+    const hasClientNoDiscovery = /optimizeDeps:\s*\{[^}]*noDiscovery:\s*true/.test(content);
+    const hasSsrNoDiscovery = /ssr:\s*\{[^}]*optimizeDeps:\s*\{[^}]*noDiscovery:\s*true/.test(content);
+
+    if (hasClientNoDiscovery && hasSsrNoDiscovery) {
+      return {
+        name: "Vite optimizeDeps config",
+        ok: true,
+        message: "noDiscovery enabled for client and SSR",
+        required: false,
+      };
+    }
+
+    // Config is outdated - needs regeneration
+    if (autoFix) {
+      // Remove the vite.config.ts so it gets regenerated on next build
+      rmSync(viteConfigPath);
+      return {
+        name: "Vite optimizeDeps config",
+        ok: true,
+        message: "Removed outdated config - will regenerate on next build",
+        required: false,
+        fixed: true,
+      };
+    }
+
+    const missing: string[] = [];
+    if (!hasClientNoDiscovery) missing.push("optimizeDeps.noDiscovery");
+    if (!hasSsrNoDiscovery) missing.push("ssr.optimizeDeps.noDiscovery");
+
+    return {
+      name: "Vite optimizeDeps config",
+      ok: false,
+      message: `Missing: ${missing.join(", ")} - delete .hands/vite.config.ts to regenerate`,
+      required: false,
+    };
+  } catch (err) {
+    return {
+      name: "Vite optimizeDeps config",
+      ok: false,
+      message: `Error reading vite.config.ts: ${err instanceof Error ? err.message : String(err)}`,
+      required: false,
     };
   }
 }

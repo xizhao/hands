@@ -339,6 +339,11 @@ export default defineConfig({
   ssr: {
     external: ["bun"],
     noExternal: ["hono", "@hands/stdlib"],
+    optimizeDeps: {
+      // Disable SSR dep optimization to avoid "new version of pre-bundle" race conditions
+      noDiscovery: true,
+      include: [],
+    },
   },
   server: {
     fs: {
