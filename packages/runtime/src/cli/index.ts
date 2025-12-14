@@ -35,8 +35,10 @@ program
 
 program
   .command("check")
-  .description("Run preflight checks on the workbook")
-  .option("--fix", "Auto-fix issues where possible")
+  .description("Run code quality checks (TypeScript, Biome, preflight)")
+  .option("--fix", "Auto-fix formatting issues (default: true)")
+  .option("--no-fix", "Don't auto-fix formatting issues")
+  .option("--strict", "Treat lint warnings as errors")
   .option("--json", "Output results as JSON")
   .action(checkCommand);
 
