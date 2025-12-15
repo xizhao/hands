@@ -9,8 +9,26 @@
   "main": "src/worker.tsx",
 
   // Compatibility settings
-  "compatibility_date": "2025-08-21",
-  "compatibility_flags": ["nodejs_compat"],
+  "compatibility_date": "2024-09-23",
+  "compatibility_flags": ["nodejs_compat", "nodejs_als"],
+
+  // Durable Objects for SQLite database
+  "durable_objects": {
+    "bindings": [
+      {
+        "name": "DATABASE",
+        "class_name": "Database"
+      }
+    ]
+  },
+
+  // DO migrations - declares SQLite-backed classes
+  "migrations": [
+    {
+      "tag": "v1",
+      "new_sqlite_classes": ["Database"]
+    }
+  ],
 
   // Assets configuration
   "assets": {

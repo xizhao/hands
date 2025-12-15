@@ -1,22 +1,6 @@
 import React from "react";
 import { renderToReadableStream } from "react-server-dom-webpack/server";
 
-interface DbContext {
-  sql<T>(strings: TemplateStringsArray, ...values: unknown[]): Promise<T[]>;
-  query<TParams, TResult>(
-    preparedQuery: {
-      run(params: TParams, client: unknown): Promise<TResult[]>;
-    },
-    params: TParams
-  ): Promise<TResult[]>;
-}
-
-interface RequestContext {
-  db: DbContext;
-  params: Record<string, unknown>;
-  env: Record<string, unknown>;
-}
-
 // Preload all blocks using import.meta.glob
 // Vite will handle "use client" transforms and create a registry
 // Using alias from vite.config.mts
@@ -44,18 +28,41 @@ for (const [path, loader] of Object.entries(blockModules)) {
   }
 }
 
+const MAX_RETRIES = 10;
+const RETRY_DELAY_MS = 100;
+
+/**
+ * Check if error is a Vite pre-bundle invalidation (retryable)
+ */
+function isPreBundleError(err: unknown): boolean {
+  if (err instanceof Error) {
+    return err.message.includes("new version of the pre-bundle");
+  }
+  return false;
+}
+
+/**
+ * Sleep for given ms
+ */
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
 /**
  * Load a block by ID using import.meta.glob registry
  * Uses Vite's module resolution which handles "use client" transforms
- * Throws on error so callers can return proper error responses
+ * Retries on Vite pre-bundle invalidation errors
  */
-async function loadBlock(blockId: string): Promise<React.FC<any>> {
-  try {
-    const loader = blockRegistry.get(blockId);
-    if (!loader) {
-      throw new Error(`Block "${blockId}" not found in registry`);
-    }
+async function loadBlock(
+  blockId: string,
+  retries = MAX_RETRIES
+): Promise<React.FC<any>> {
+  const loader = blockRegistry.get(blockId);
+  if (!loader) {
+    throw new Error(`Block "${blockId}" not found in registry`);
+  }
 
+  try {
     // Load the module - Vite resolves this and applies RSC transforms
     const mod = await loader();
     const Block = mod.default;
@@ -64,6 +71,14 @@ async function loadBlock(blockId: string): Promise<React.FC<any>> {
     }
     return Block;
   } catch (err) {
+    // Retry on Vite pre-bundle invalidation
+    if (isPreBundleError(err) && retries > 0) {
+      console.log(
+        `[worker] Pre-bundle invalidated, retrying... (${retries} left)`
+      );
+      await sleep(RETRY_DELAY_MS);
+      return loadBlock(blockId, retries - 1);
+    }
     const error = err instanceof Error ? err : new Error(String(err));
     console.error(`[worker] Failed to load block "${blockId}":`, error);
     throw error;

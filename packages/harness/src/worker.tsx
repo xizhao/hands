@@ -1,6 +1,10 @@
 import { route, RouteMiddleware } from "rwsdk/router";
 import { defineApp } from "rwsdk/worker";
 import { handleBlockGet } from "./blocks/render";
+import { runWithDbMode, Database } from "./db/dev";
+
+// Export Durable Object for wrangler
+export { Database };
 
 export const setCommonHeaders =
   (): RouteMiddleware =>
@@ -34,11 +38,14 @@ export const setCommonHeaders =
 
 export default defineApp([
   setCommonHeaders(),
-  ({ ctx }) => {
-    // setup ctx here
-    ctx;
-  },
   route("/blocks/*", {
-    get: handleBlockGet,
+    get: (args) => {
+      // Blocks are read-only - wrap in block mode context
+      return runWithDbMode("block", () => handleBlockGet(args));
+    },
   }),
+  // TODO: Add action routes with runWithDbMode("action", ...)
+  // route("/actions/*", {
+  //   post: (args) => runWithDbMode("action", () => handleAction(args)),
+  // }),
 ]);

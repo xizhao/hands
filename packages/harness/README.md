@@ -17,7 +17,8 @@ We should try to keep workbooks clean and use the same harness, but per workbook
 
 Todo:
 
-- [ ] Wire up RSC partials and prove that works
+- [ ] Wire up FE RSC partials and prove that works
+- [ ] Wire up backend rsc partials w db
 - [ ] Wire up pages routing and MDX transform -> pages
 
 big todo: I'm going to have to figure out how to port my pgtyped and pglite setup into cloudflare durable objects and the whole rwsdk setup -- liekly pglite -> sqlite bridge for deploy for now...
