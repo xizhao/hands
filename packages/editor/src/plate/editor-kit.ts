@@ -29,6 +29,7 @@ import { ListKit } from "./plugins/list-kit";
 import { SlashKit } from "./plugins/slash-kit";
 import { TableKit } from "./plugins/table-kit";
 import { ToggleKit } from "./plugins/toggle-kit";
+import { EmojiKit } from "./plugins/emoji-kit";
 
 // Our custom MDX element plugin
 import { ElementPlugin } from "./plugins/element-plugin";
@@ -54,6 +55,7 @@ export const EditorKit = [
 
   // Editing
   ...SlashKit,
+  ...EmojiKit,
   ...AutoformatKit,
   ...DndKitWithoutProvider,
   ...ExitBreakKit,

@@ -11,22 +11,28 @@
  * Auto-fixes issues where possible (install deps, create dirs, fix symlinks).
  */
 
-import { existsSync, mkdirSync, readFileSync, rmSync, statSync, symlinkSync, writeFileSync } from "node:fs";
+import {
+  existsSync,
+  lstatSync,
+  mkdirSync,
+  readFileSync,
+  readlinkSync,
+  rmSync,
+  statSync,
+  symlinkSync,
+  unlinkSync,
+  writeFileSync,
+} from "node:fs";
 import { join } from "node:path";
 import { $ } from "bun";
 import {
   generateClientEntry,
-  generatePackageJson,
   generateTsConfig,
   generateViteConfig,
   generateWranglerConfig,
   type HandsConfig,
 } from "./build/index.js";
-import {
-  ensureStdlibSymlink,
-  ensureWorkbookStdlibSymlink,
-  getStdlibSourcePath,
-} from "./config/index.js";
+import { ensureStdlibSymlink, getStdlibSourcePath } from "./config/index.js";
 import { killProcessOnPort, PORTS, waitForPortFree } from "./ports.js";
 
 // ============================================================================
@@ -102,28 +108,27 @@ export async function runPreflight(options: PreflightOptions): Promise<Preflight
   checks.push(await checkBlocksDir(workbookDir, autoFix));
   checks.push(await checkSourcesDir(workbookDir, autoFix));
 
-  // 3. Symlinks and stdlib
+  // 3. Global stdlib symlink (for development)
   checks.push(await checkStdlibSymlink(autoFix));
-  checks.push(await checkWorkbookStdlib(workbookDir, autoFix));
 
   // 4. Port availability (clean up stale processes)
   checks.push(await checkPortAvailable(port, autoFix));
   // Also check Vite/worker port - critical for RSC to work
   checks.push(await checkPortAvailable(PORTS.WORKER, autoFix));
 
-  // 5. Scaffold .hands directory with all config files
-  // This creates package.json, vite.config.mts, wrangler.jsonc, tsconfig.json, client.tsx
-  // Files are only written if changed to avoid triggering Vite re-optimization
+  // 5. Scaffold .hands directory with config files (vite.config.mts, wrangler.jsonc, etc.)
+  // .hands/ is a build directory - no package.json or node_modules needed
+  // Dependencies are resolved from the workbook root's node_modules
   checks.push(await scaffoldHandsDir(workbookDir, autoFix));
 
-  // 6. Dependencies in .hands directory (must come after scaffold creates package.json)
-  checks.push(await checkHandsDependencies(workbookDir, autoFix));
-
-  // 7. Clear Vite cache to prevent stale dependency issues
+  // 6. Clear Vite cache to prevent stale dependency issues
   checks.push(await clearViteCache(workbookDir));
 
-  // 8. Ensure workbook has required dependencies in package.json
+  // 7. Ensure workbook has required dependencies in package.json
   checks.push(await checkWorkbookDependencies(workbookDir, autoFix));
+
+  // 8. Apply rwsdk patch (fixes deadlock in directiveModulesDevPlugin)
+  checks.push(await patchRwsdk(workbookDir));
 
   const ok = checks.filter((c) => c.required).every((c) => c.ok);
   const duration = Date.now() - startTime;
@@ -427,46 +432,6 @@ async function checkStdlibSymlink(autoFix: boolean): Promise<PreflightCheck> {
   };
 }
 
-async function checkWorkbookStdlib(workbookDir: string, autoFix: boolean): Promise<PreflightCheck> {
-  const nodeModulesPath = join(workbookDir, "node_modules", "@hands", "stdlib");
-
-  if (autoFix) {
-    try {
-      ensureWorkbookStdlibSymlink(workbookDir);
-      return {
-        name: "Workbook @hands/stdlib",
-        ok: true,
-        message: "Symlink verified",
-        required: true,
-        fixed: !existsSync(nodeModulesPath),
-      };
-    } catch (err) {
-      return {
-        name: "Workbook @hands/stdlib",
-        ok: false,
-        message: `Symlink failed: ${err instanceof Error ? err.message : String(err)}`,
-        required: true,
-      };
-    }
-  }
-
-  if (!existsSync(nodeModulesPath)) {
-    return {
-      name: "Workbook @hands/stdlib",
-      ok: false,
-      message: "Symlink missing in workbook node_modules",
-      required: true,
-    };
-  }
-
-  return {
-    name: "Workbook @hands/stdlib",
-    ok: true,
-    message: "Present",
-    required: true,
-  };
-}
-
 async function checkPortAvailable(port: number, autoFix: boolean): Promise<PreflightCheck> {
   const portFree = await waitForPortFree(port, autoFix ? 3000 : 100, autoFix);
 
@@ -538,117 +503,6 @@ async function checkHandsOutputDir(workbookDir: string, autoFix: boolean): Promi
     ok: true,
     message: "Present",
     required: false,
-  };
-}
-
-async function checkHandsDependencies(
-  workbookDir: string,
-  autoFix: boolean,
-): Promise<PreflightCheck> {
-  const handsDir = join(workbookDir, ".hands");
-  const packageJson = join(handsDir, "package.json");
-  const nodeModules = join(handsDir, "node_modules");
-
-  // If .hands doesn't exist yet, skip this check
-  if (!existsSync(handsDir) || !existsSync(packageJson)) {
-    return {
-      name: ".hands/ dependencies",
-      ok: true,
-      message: "Will be installed on first build",
-      required: false,
-    };
-  }
-
-  // Check if node_modules exists
-  if (!existsSync(nodeModules)) {
-    if (autoFix) {
-      try {
-        console.log("[preflight] Installing .hands dependencies...");
-        const result = await $`cd ${handsDir} && bun install`.quiet();
-        if (result.exitCode === 0) {
-          return {
-            name: ".hands/ dependencies",
-            ok: true,
-            message: "Installed",
-            required: true,
-            fixed: true,
-          };
-        }
-        return {
-          name: ".hands/ dependencies",
-          ok: false,
-          message: `npm install failed: ${result.stderr.toString()}`,
-          required: true,
-        };
-      } catch (err: any) {
-        // Bun shell errors have stderr on the error object
-        const stderr = err?.stderr?.toString?.()?.trim();
-        const errMsg = stderr || (err instanceof Error ? err.message : String(err));
-        return {
-          name: ".hands/ dependencies",
-          ok: false,
-          message: `Install failed: ${errMsg}`,
-          required: true,
-        };
-      }
-    }
-    return {
-      name: ".hands/ dependencies",
-      ok: false,
-      message: "node_modules missing - run bun install in .hands/",
-      required: true,
-    };
-  }
-
-  // Check for critical dependencies
-  const criticalDeps = ["vite", "rwsdk", "react"];
-  const missingDeps: string[] = [];
-
-  for (const dep of criticalDeps) {
-    if (!existsSync(join(nodeModules, dep))) {
-      missingDeps.push(dep);
-    }
-  }
-
-  // Also verify critical subpath exports are present (rwsdk/vite is required for Vite to start)
-  const criticalSubpaths = [{ pkg: "rwsdk", subpath: "dist/vite", display: "rwsdk/vite" }];
-
-  for (const { pkg, subpath, display } of criticalSubpaths) {
-    const subpathDir = join(nodeModules, pkg, subpath);
-    if (existsSync(join(nodeModules, pkg)) && !existsSync(subpathDir)) {
-      missingDeps.push(`${display} (incomplete install)`);
-    }
-  }
-
-  if (missingDeps.length > 0) {
-    if (autoFix) {
-      try {
-        console.log("[preflight] Reinstalling .hands dependencies...");
-        const result = await $`cd ${handsDir} && bun install`.quiet();
-        if (result.exitCode === 0) {
-          return {
-            name: ".hands/ dependencies",
-            ok: true,
-            message: "Reinstalled",
-            required: true,
-            fixed: true,
-          };
-        }
-      } catch {}
-    }
-    return {
-      name: ".hands/ dependencies",
-      ok: false,
-      message: `Missing: ${missingDeps.join(", ")}`,
-      required: true,
-    };
-  }
-
-  return {
-    name: ".hands/ dependencies",
-    ok: true,
-    message: "All present",
-    required: true,
   };
 }
 
@@ -741,16 +595,45 @@ async function checkHandsTsConfig(workbookDir: string, autoFix: boolean): Promis
 /**
  * Required dependencies for workbook package.json
  */
-const REQUIRED_WORKBOOK_DEPS = {
+// Base deps - @hands/stdlib is added dynamically with file: path
+const REQUIRED_WORKBOOK_DEPS_BASE = {
   dependencies: {
+    // React (required for RSC)
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
+    "react-server-dom-webpack": "^19.0.0",
+    // Runtime deps for Vite worker
+    "rwsdk": "1.0.0-beta.39",
+    "hono": "^4.7.0",
+    "@electric-sql/pglite": "^0.2.17",
+    "@trpc/client": "^11.0.0",
   },
   devDependencies: {
     "@types/react": "^19.0.0",
     "@types/react-dom": "^19.0.0",
+    "@cloudflare/vite-plugin": "^1.16.1",
+    "@cloudflare/workers-types": "^4.20251202.0",
+    "typescript": "^5.8.0",
+    "vite": "^7.2.0",
   },
 };
+
+/**
+ * Get required deps including stdlib with file: path
+ * bun install with file: copies the package (not symlink)
+ */
+function getRequiredWorkbookDeps() {
+  const stdlibPath = getStdlibSourcePath();
+  return {
+    dependencies: {
+      ...REQUIRED_WORKBOOK_DEPS_BASE.dependencies,
+      // file: protocol causes bun to copy the package, not symlink
+      // This is required because rwsdk's "use client" scan doesn't follow symlinks
+      "@hands/stdlib": `file:${stdlibPath}`,
+    },
+    devDependencies: REQUIRED_WORKBOOK_DEPS_BASE.devDependencies,
+  };
+}
 
 async function checkWorkbookDependencies(workbookDir: string, autoFix: boolean): Promise<PreflightCheck> {
   const packageJsonPath = join(workbookDir, "package.json");
@@ -767,19 +650,20 @@ async function checkWorkbookDependencies(workbookDir: string, autoFix: boolean):
   try {
     const content = readFileSync(packageJsonPath, "utf-8");
     const pkg = JSON.parse(content);
+    const requiredDeps = getRequiredWorkbookDeps();
 
     const missingDeps: string[] = [];
     const missingDevDeps: string[] = [];
 
     // Check dependencies
-    for (const [name, version] of Object.entries(REQUIRED_WORKBOOK_DEPS.dependencies)) {
+    for (const [name, version] of Object.entries(requiredDeps.dependencies)) {
       if (!pkg.dependencies?.[name]) {
         missingDeps.push(`${name}@${version}`);
       }
     }
 
     // Check devDependencies
-    for (const [name, version] of Object.entries(REQUIRED_WORKBOOK_DEPS.devDependencies)) {
+    for (const [name, version] of Object.entries(requiredDeps.devDependencies)) {
       if (!pkg.devDependencies?.[name]) {
         missingDevDeps.push(`${name}@${version}`);
       }
@@ -799,26 +683,54 @@ async function checkWorkbookDependencies(workbookDir: string, autoFix: boolean):
       pkg.dependencies = pkg.dependencies || {};
       pkg.devDependencies = pkg.devDependencies || {};
 
-      for (const [name, version] of Object.entries(REQUIRED_WORKBOOK_DEPS.dependencies)) {
+      let added = false;
+      for (const [name, version] of Object.entries(requiredDeps.dependencies)) {
         if (!pkg.dependencies[name]) {
           pkg.dependencies[name] = version;
+          added = true;
         }
       }
 
-      for (const [name, version] of Object.entries(REQUIRED_WORKBOOK_DEPS.devDependencies)) {
+      for (const [name, version] of Object.entries(requiredDeps.devDependencies)) {
         if (!pkg.devDependencies[name]) {
           pkg.devDependencies[name] = version;
+          added = true;
         }
       }
 
-      writeFileSync(packageJsonPath, `${JSON.stringify(pkg, null, 2)}\n`);
+      if (added) {
+        writeFileSync(packageJsonPath, `${JSON.stringify(pkg, null, 2)}\n`);
+      }
+
+      // Run bun install to ensure node_modules is up to date
+      try {
+        console.log("[preflight] Installing workbook dependencies...");
+        const result = await $`cd ${workbookDir} && bun install`.quiet();
+        if (result.exitCode !== 0) {
+          return {
+            name: "Workbook dependencies",
+            ok: false,
+            message: `bun install failed: ${result.stderr.toString()}`,
+            required: true,
+          };
+        }
+      } catch (err: any) {
+        const stderr = err?.stderr?.toString?.()?.trim();
+        const errMsg = stderr || (err instanceof Error ? err.message : String(err));
+        return {
+          name: "Workbook dependencies",
+          ok: false,
+          message: `Install failed: ${errMsg}`,
+          required: true,
+        };
+      }
 
       return {
         name: "Workbook dependencies",
         ok: true,
-        message: "Added missing dependencies (run bun install)",
+        message: added ? "Added deps and installed" : "Installed",
         required: true,
-        fixed: true,
+        fixed: added,
       };
     }
 
@@ -834,6 +746,75 @@ async function checkWorkbookDependencies(workbookDir: string, autoFix: boolean):
       name: "Workbook dependencies",
       ok: false,
       message: `Error reading package.json: ${err instanceof Error ? err.message : String(err)}`,
+      required: true,
+    };
+  }
+}
+
+/**
+ * Patch rwsdk to fix deadlock in directiveModulesDevPlugin.
+ *
+ * The bug: esbuild plugin awaits scanPromise in onResolve, but scanPromise
+ * only resolves in configureServer. Vite runs dep optimization BEFORE
+ * configureServer, causing a deadlock.
+ *
+ * The fix: Use separate optimizePromise that resolves at end of configResolved.
+ *
+ * TODO: Remove this patch when rwsdk merges the fix upstream.
+ * Tracking: https://github.com/xizhao/sdk (forked with fix)
+ */
+async function patchRwsdk(workbookDir: string): Promise<PreflightCheck> {
+  const targetPath = join(workbookDir, "node_modules/rwsdk/dist/vite/directiveModulesDevPlugin.mjs");
+
+  // Check if rwsdk is installed
+  if (!existsSync(targetPath)) {
+    return {
+      name: "rwsdk patch",
+      ok: true,
+      message: "rwsdk not installed, skipping patch",
+      required: false,
+    };
+  }
+
+  try {
+    const currentContent = readFileSync(targetPath, "utf-8");
+
+    // Check if already patched (look for optimizePromise)
+    if (currentContent.includes("optimizePromise")) {
+      return {
+        name: "rwsdk patch",
+        ok: true,
+        message: "Already patched",
+        required: false,
+      };
+    }
+
+    // Read the patched version from our patches directory
+    const patchPath = join(import.meta.dirname, "patches/rwsdk-directiveModulesDevPlugin.mjs");
+    if (!existsSync(patchPath)) {
+      return {
+        name: "rwsdk patch",
+        ok: false,
+        message: "Patch file not found",
+        required: true,
+      };
+    }
+
+    const patchedContent = readFileSync(patchPath, "utf-8");
+    writeFileSync(targetPath, patchedContent);
+
+    return {
+      name: "rwsdk patch",
+      ok: true,
+      message: "Applied deadlock fix",
+      required: false,
+      fixed: true,
+    };
+  } catch (err) {
+    return {
+      name: "rwsdk patch",
+      ok: false,
+      message: `Failed to patch: ${err instanceof Error ? err.message : String(err)}`,
       required: true,
     };
   }
@@ -990,8 +971,8 @@ export async function scaffoldHandsDir(workbookDir: string, autoFix: boolean): P
 
   if (!autoFix) {
     // Check if scaffold is needed
+    // .hands/ is a build directory - no package.json needed
     const requiredFiles = [
-      join(handsDir, "package.json"),
       join(handsDir, "vite.config.mts"),
       join(handsDir, "wrangler.jsonc"),
       join(handsDir, "tsconfig.json"),
@@ -1016,7 +997,6 @@ export async function scaffoldHandsDir(workbookDir: string, autoFix: boolean): P
 
   try {
     const config: HandsConfig = JSON.parse(readFileSync(handsJsonPath, "utf-8"));
-    const stdlibPath = getStdlibSourcePath();
     const filesWritten: string[] = [];
 
     // Ensure directories exist
@@ -1027,10 +1007,56 @@ export async function scaffoldHandsDir(workbookDir: string, autoFix: boolean): P
       mkdirSync(srcDir, { recursive: true });
     }
 
-    // Generate and write config files (only if changed)
-    if (writeFileIfChanged(join(handsDir, "package.json"), generatePackageJson(config, stdlibPath))) {
-      filesWritten.push("package.json");
+    // Symlink .hands/node_modules -> ../node_modules
+    // This allows vite.config.mts to import from workbook's deps
+    const handsNodeModules = join(handsDir, "node_modules");
+    try {
+      const stat = lstatSync(handsNodeModules);
+      if (stat.isSymbolicLink()) {
+        const target = readlinkSync(handsNodeModules);
+        if (target !== "../node_modules") {
+          unlinkSync(handsNodeModules);
+          symlinkSync("../node_modules", handsNodeModules);
+          filesWritten.push("node_modules symlink");
+        }
+      } else {
+        // It's a real directory, remove it and symlink
+        rmSync(handsNodeModules, { recursive: true, force: true });
+        symlinkSync("../node_modules", handsNodeModules);
+        filesWritten.push("node_modules symlink");
+      }
+    } catch (e) {
+      if ((e as NodeJS.ErrnoException).code === "ENOENT") {
+        symlinkSync("../node_modules", handsNodeModules);
+        filesWritten.push("node_modules symlink");
+      }
     }
+
+    // Symlink workbook/src -> .hands/src
+    // rwsdk scans root/src for "use client"/"use server" directives
+    // This makes our worker.tsx visible to the scan
+    const workbookSrc = join(workbookDir, "src");
+    try {
+      const stat = lstatSync(workbookSrc);
+      if (stat.isSymbolicLink()) {
+        const target = readlinkSync(workbookSrc);
+        if (target !== ".hands/src") {
+          unlinkSync(workbookSrc);
+          symlinkSync(".hands/src", workbookSrc);
+          filesWritten.push("src symlink");
+        }
+      } else {
+        // It's a real directory - don't touch it, user might have their own src/
+      }
+    } catch (e) {
+      if ((e as NodeJS.ErrnoException).code === "ENOENT") {
+        symlinkSync(".hands/src", workbookSrc);
+        filesWritten.push("src symlink");
+      }
+    }
+
+    // Generate and write config files (only if changed)
+    // No package.json - .hands/ is a build dir, deps come from workbook root
     if (writeFileIfChanged(join(handsDir, "vite.config.mts"), generateViteConfig())) {
       filesWritten.push("vite.config.mts");
     }

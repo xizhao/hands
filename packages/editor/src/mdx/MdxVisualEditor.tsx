@@ -64,6 +64,13 @@ interface MdxSyncState {
 }
 
 // ============================================================================
+// Constants
+// ============================================================================
+
+/** Debounce delay for text operations (ms) */
+const SERIALIZE_DEBOUNCE_MS = 250;
+
+// ============================================================================
 // Component
 // ============================================================================
 
@@ -81,6 +88,9 @@ export function MdxVisualEditor({
   const titleRef = useRef<HTMLDivElement>(null);
   const subtitleRef = useRef<HTMLDivElement>(null);
   const editorRef = useRef<any>(null);
+
+  // Debounce timer for text serialization
+  const serializeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Refs for operation tracking
   const stateRef = useRef<MdxSyncState>({
@@ -208,6 +218,20 @@ export function MdxVisualEditor({
     }
   }, []);
 
+  // Perform serialization and notify parent
+  const doSerialize = useCallback((editor: any, opType: string) => {
+    const state = stateRef.current;
+    const newSource = serializeMdxWithEditor(editor, state.parseResult.frontmatter);
+
+    if (newSource !== state.source) {
+      state.source = newSource;
+      state.parseResult = parseMdx(newSource);
+      state.onSourceChange(newSource);
+
+      console.debug("[mdx-sync] Serialized MDX after operation:", opType);
+    }
+  }, []);
+
   // Create the MDX sync plugin that handles Plate → MDX serialization
   const MdxSyncPlugin = useMemo(
     () =>
@@ -237,15 +261,24 @@ export function MdxVisualEditor({
 
             // For significant changes, serialize back to MDX
             if (shouldSerialize(op)) {
-              // Serialize current Plate value to MDX using MarkdownPlugin
-              const newSource = serializeMdxWithEditor(editor, state.parseResult.frontmatter);
-
-              if (newSource !== state.source) {
-                state.source = newSource;
-                state.parseResult = parseMdx(newSource);
-                state.onSourceChange(newSource);
-
-                console.debug("[mdx-sync] Serialized MDX after operation:", op.type);
+              // Text operations are debounced; structural changes serialize immediately
+              if (op.type === "insert_text" || op.type === "remove_text") {
+                // Clear existing timer
+                if (serializeTimerRef.current) {
+                  clearTimeout(serializeTimerRef.current);
+                }
+                // Schedule debounced serialization
+                serializeTimerRef.current = setTimeout(() => {
+                  serializeTimerRef.current = null;
+                  doSerialize(editor, op.type);
+                }, SERIALIZE_DEBOUNCE_MS);
+              } else {
+                // Structural changes: flush any pending debounce and serialize immediately
+                if (serializeTimerRef.current) {
+                  clearTimeout(serializeTimerRef.current);
+                  serializeTimerRef.current = null;
+                }
+                doSerialize(editor, op.type);
               }
             }
           };
@@ -253,7 +286,7 @@ export function MdxVisualEditor({
           return editor;
         },
       }),
-    [runtimePort],
+    [runtimePort, doSerialize],
   );
 
   // Create editor with all plugins
@@ -264,6 +297,17 @@ export function MdxVisualEditor({
 
   // Store editor ref for keyboard handlers
   editorRef.current = editor;
+
+  // Cleanup: flush pending serialization on unmount
+  useEffect(() => {
+    return () => {
+      if (serializeTimerRef.current) {
+        clearTimeout(serializeTimerRef.current);
+        // Flush the pending serialization before unmount
+        doSerialize(editor, "unmount-flush");
+      }
+    };
+  }, [editor, doSerialize]);
 
   // Update handleFrontmatterChange to use editor
   handleFrontmatterChangeRef.current = (field: "title" | "description", value: string) => {

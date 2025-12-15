@@ -1515,21 +1515,8 @@ async function bootVite(config: RuntimeConfig) {
     state.viteHandsDir = handsDir;
     console.log(`[runtime] Built to ${handsDir}`);
 
-    // Install deps if needed
-    const nodeModules = join(handsDir, "node_modules");
-    if (!existsSync(nodeModules)) {
-      console.log("[runtime] Installing dependencies...");
-      await new Promise<void>((resolve, reject) => {
-        const proc = spawn("bun", ["install"], {
-          cwd: handsDir,
-          stdio: "inherit",
-        });
-        proc.on("close", (code) => {
-          if (code === 0) resolve();
-          else reject(new Error(`bun install failed with code ${code}`));
-        });
-      });
-    }
+    // Note: Dependencies come from workbook root via symlink (.hands/node_modules -> ../node_modules)
+    // Preflight's scaffoldHandsDir() creates the symlink, checkWorkbookDependencies() installs deps
 
     // Ensure Vite port is free before starting
     const portFree = await waitForPortFree(vitePort, 3000, true);
@@ -1678,10 +1665,13 @@ async function bootVite(config: RuntimeConfig) {
     // Subprocess mode - used as fallback or when programmatic mode is disabled
     if (!state.viteServer && !state.viteReady) {
       // Fallback: subprocess mode (original approach)
+      // Run from .hands/ directory to prevent Vite from serving blocks/ as static files
+      // The worker handles /blocks/* routes for RSC rendering
       console.log(`[runtime] Starting Vite (subprocess) on port ${vitePort}...`);
+      const handsDir = join(workbookDir, ".hands");
       state.viteProc = spawn(
         "npx",
-        ["vite", "dev", "--port", String(vitePort), "--host", "127.0.0.1"],
+        ["vite", "dev", "--config", "vite.config.mts", "--port", String(vitePort), "--host", "127.0.0.1"],
         {
           cwd: handsDir,
           stdio: ["ignore", "pipe", "pipe"],

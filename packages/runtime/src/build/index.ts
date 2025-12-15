@@ -9,7 +9,6 @@ export { buildProduction } from "./production.js";
 export { buildRSC, buildRSC as build } from "./rsc.js";
 // Re-export config generators for preflight scaffolding
 export {
-  generatePackageJson,
   generateViteConfig,
   generateWranglerConfig,
   generateClientEntry,

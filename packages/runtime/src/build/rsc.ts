@@ -100,43 +100,6 @@ export async function buildRSC(
 }
 
 /**
- * Generate package.json for the RSC workbook
- */
-export function generatePackageJson(config: HandsConfig, stdlibPath: string): string {
-  const pkg = {
-    name: `@hands/${config.name || "workbook"}`,
-    version: "1.0.0",
-    type: "module",
-    private: true,
-    scripts: {
-      dev: "vite dev",
-      build: "vite build",
-      preview: "vite preview",
-    },
-    dependencies: {
-      react: "19.2.1",
-      "react-dom": "19.2.1",
-      "react-server-dom-webpack": "19.2.1",
-      rwsdk: "1.0.0-beta.39",
-      hono: "^4.7.0",
-      "@electric-sql/pglite": "0.2.17",
-      "@trpc/client": "^11.0.0",
-      "@hands/stdlib": `file:${stdlibPath}`,
-    },
-    devDependencies: {
-      "@cloudflare/vite-plugin": "1.16.1",
-      "@cloudflare/workers-types": "4.20251202.0",
-      "@types/react": "19.1.2",
-      "@types/react-dom": "19.1.2",
-      typescript: "5.8.3",
-      vite: "7.2.6",
-    },
-  };
-
-  return `${JSON.stringify(pkg, null, 2)}\n`;
-}
-
-/**
  * Generate vite.config.mts
  *
  * For cross-origin RSC: Client components are loaded by the editor from a different origin.
@@ -280,17 +243,40 @@ export const Fragment = JSX.Fragment;
 }
 
 export default defineConfig({
+  // Vite runs from .hands/ directory to prevent serving blocks/ as static files
+  // All paths are relative to .hands/
   plugins: [
     reactGlobalPlugin(),
     cloudflare({
       viteEnvironment: { name: "worker" },
+      // wrangler.jsonc is in .hands/ (same directory as vite.config.mts)
+      configPath: "wrangler.jsonc",
     }),
-    redwood(),
+    redwood({
+      // wrangler.jsonc is in .hands/ (same directory as vite.config.mts)
+      configPath: "wrangler.jsonc",
+      // Force stdlib components with "use client" to be treated as client modules
+      // These components live in node_modules but contain client directives
+      // Path is relative to .hands/, so ../node_modules/
+      forceClientPaths: [
+        "../node_modules/@hands/stdlib/src/registry/components/**/*.tsx",
+      ],
+    }),
   ],
+  resolve: {
+    // @hands/stdlib needs special handling for subpath exports
+    // The package uses "exports" in package.json which maps to src/registry/components/
+    // Note: Must use absolute paths for worker environment (Miniflare) compatibility
+    // process.cwd() is .hands/, so we go up one level to workbook root
+    alias: [
+      // @hands/stdlib subpath exports: charts/*, ui/*, maps/*, etc.
+      { find: /^@hands\\/stdlib\\/(.*)$/, replacement: process.cwd() + "/../node_modules/@hands/stdlib/src/registry/components/$1.tsx" },
+      { find: "@hands/stdlib", replacement: process.cwd() + "/../node_modules/@hands/stdlib/src/index.ts" },
+    ],
+  },
   optimizeDeps: {
     // Disable discovery but keep pre-bundling for deps that are explicitly included.
     // This avoids "new version of pre-bundle" race conditions from mid-session discovery.
-    // React deps are pre-bundled so the vite-proxy can intercept them for cross-origin loading.
     noDiscovery: true,
     include: ["react", "react-dom", "react/jsx-runtime", "react/jsx-dev-runtime"],
   },
@@ -323,8 +309,9 @@ export default defineConfig({
  * Generate wrangler.jsonc
  */
 export function generateWranglerConfig(config: HandsConfig): string {
+  // wrangler.jsonc lives in .hands/, so paths are relative to .hands/
   return `{
-  "$schema": "node_modules/wrangler/config-schema.json",
+  "$schema": "../node_modules/wrangler/config-schema.json",
   "name": "${config.name || "workbook"}",
   "main": "src/worker.tsx",
   "compatibility_date": "2025-08-21",
@@ -365,7 +352,7 @@ export async function createBlockFromStream(blockId: string, props: Record<strin
     searchParams.set(key, String(value));
   }
 
-  const response = await fetch(\`/blocks/\${blockId}/rsc?\${searchParams}\`);
+  const response = await fetch(\`/blocks/\${blockId}?\${searchParams}\`);
 
   if (!response.ok) {
     throw new Error(\`Failed to fetch block: \${response.statusText}\`);

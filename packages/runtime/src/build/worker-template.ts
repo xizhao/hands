@@ -45,6 +45,43 @@ import { join } from "node:path";
 import { createTRPCClient, httpBatchLink } from "@trpc/client";
 
 // ============================================================================
+// STDLIB CLIENT COMPONENTS: Pre-register for rwsdk "use client" scanning
+// ============================================================================
+// These imports ensure stdlib client components are included in rwsdk's
+// initial directive scan. Without this, dynamically imported blocks that use
+// stdlib components will fail with "No module found in module lookup" errors.
+//
+// Import paths use @hands/stdlib/charts/*, @hands/stdlib/ui/*, etc.
+// (see stdlib's package.json exports)
+// ============================================================================
+import "@hands/stdlib/charts/bar-chart";
+import "@hands/stdlib/charts/line-chart";
+import "@hands/stdlib/maps/scatterplot-map";
+import "@hands/stdlib/maps/hexagon-map";
+import "@hands/stdlib/maps/heatmap-map";
+import "@hands/stdlib/maps/geojson-map";
+import "@hands/stdlib/ui/chart";
+import "@hands/stdlib/ui/form";
+import "@hands/stdlib/ui/calendar";
+import "@hands/stdlib/ui/dialog";
+import "@hands/stdlib/ui/dropdown-menu";
+import "@hands/stdlib/ui/tooltip";
+import "@hands/stdlib/ui/select";
+import "@hands/stdlib/ui/sheet";
+import "@hands/stdlib/ui/sidebar";
+import "@hands/stdlib/ui/carousel";
+import "@hands/stdlib/ui/collapsible";
+import "@hands/stdlib/ui/command";
+import "@hands/stdlib/ui/resizable";
+import "@hands/stdlib/ui/progress";
+import "@hands/stdlib/ui/input-otp";
+import "@hands/stdlib/ui/label";
+import "@hands/stdlib/ui/toggle-group";
+import "@hands/stdlib/ui/avatar";
+import "@hands/stdlib/ui/field";
+import "@hands/stdlib/ui/sonner";
+
+// ============================================================================
 // ARCHITECTURE: Dynamic Block Imports
 // ============================================================================
 //
