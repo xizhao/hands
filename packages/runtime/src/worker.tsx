@@ -45,6 +45,10 @@ export const setCommonHeaders =
 
 export default defineApp([
   setCommonHeaders(),
+  // Root route for health check / readiness detection
+  route("/", () => new Response(JSON.stringify({ status: "ok" }), {
+    headers: { "Content-Type": "application/json" }
+  })),
   route("/blocks/*", {
     get: (args) => {
       // Blocks are read-only - wrap in block mode context

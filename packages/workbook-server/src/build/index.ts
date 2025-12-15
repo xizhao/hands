@@ -8,15 +8,15 @@ export { buildProduction } from "./production.js";
 // Re-export the build functions
 export { buildRSC, buildRSC as build } from "./rsc.js";
 // Re-export config generators for preflight scaffolding
+// Note: generateViteConfig is not exported - it lives in @hands/runtime package
 export {
-  generateViteConfig,
   generateWranglerConfig,
   generateClientEntry,
   generateTsConfig,
 } from "./rsc.js";
 
 /**
- * Hands workbook configuration (hands.json)
+ * Hands workbook configuration (stored in package.json under "hands" field)
  */
 export interface HandsConfig {
   name?: string;

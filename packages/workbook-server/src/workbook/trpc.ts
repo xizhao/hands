@@ -1,56 +1,37 @@
 /**
- * tRPC Router for Workbook Operations
+ * Workbook tRPC Router
  *
  * Type-safe API for workbook manifest and block CRUD operations.
- * Uses the unified workbook discovery module.
+ * Uses the unified discovery module.
  */
 
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { initTRPC, TRPCError } from "@trpc/server";
 import { z } from "zod";
-import { discoverWorkbook } from "../../workbook/discovery.js";
+import { discoverWorkbook } from "./discovery.js";
+import type { WorkbookManifest } from "./types.js";
 
 // ============================================================================
 // Context
 // ============================================================================
 
-export interface WorkbookContext {
+export interface WorkbookTRPCContext {
   workbookId: string;
   workbookDir: string;
-  /** Optional: external manifest provider (for sources, actions, config) */
-  getExternalManifest?: () => Promise<{
-    sources?: Array<{
-      id: string;
-      name: string;
-      title: string;
-      description: string;
-      schedule?: string;
-      secrets: string[];
-      missingSecrets: string[];
-      path: string;
-      spec?: string;
-    }>;
-    actions?: Array<{
-      id: string;
-      name: string;
-      description?: string;
-      schedule?: string;
-      triggers: string[];
-      path: string;
-    }>;
-    config?: Record<string, unknown>;
-  }>;
-  formatBlockSource: (filePath: string) => Promise<boolean>;
-  generateDefaultBlockSource: (blockName: string) => string;
+  /** Optional cached manifest (for performance) */
+  cachedManifest?: WorkbookManifest;
+  /** Format source code (prettier/biome) */
+  formatSource?: (filePath: string) => Promise<boolean>;
+  /** Generate default block source */
+  generateBlockSource?: (blockName: string) => string;
 }
 
 // ============================================================================
 // tRPC Setup
 // ============================================================================
 
-const t = initTRPC.context<WorkbookContext>().create();
-
+const t = initTRPC.context<WorkbookTRPCContext>().create();
 const publicProcedure = t.procedure;
 
 // ============================================================================
@@ -108,54 +89,73 @@ function findBlockFile(blocksDir: string, blockId: string): string | null {
   return null;
 }
 
+function generateDefaultBlockSource(blockName: string): string {
+  const componentName = blockName
+    .split("-")
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join("");
+
+  return `export default function ${componentName}() {
+  return (
+    <div className="p-4">
+      <h1 className="text-lg font-semibold">${componentName}</h1>
+      <p className="text-muted-foreground">Edit this block to get started.</p>
+    </div>
+  );
+}
+`;
+}
+
 // ============================================================================
 // Router
 // ============================================================================
 
-export const workbookRouter = t.router({
-  /** Get workbook manifest (blocks, pages, components, sources, actions, config) */
+export const workbookTRPCRouter = t.router({
+  /** Get workbook manifest (blocks, pages, components) */
   manifest: publicProcedure.query(async ({ ctx }) => {
-    // Use new unified discovery for blocks, pages, components
-    const discovery = await discoverWorkbook({ rootPath: ctx.workbookDir });
-
-    // Get external manifest data (sources, actions, config) if available
-    const external = ctx.getExternalManifest ? await ctx.getExternalManifest() : {};
-
-    const blocks = discovery.blocks.map((b) => ({
-      id: b.id,
-      title: b.meta.title || b.id,
-      path: b.path,
-      parentDir: b.parentDir,
-      uninitialized: b.uninitialized,
-    }));
-
-    const pages = discovery.pages.map((p) => ({
-      id: p.route.replace(/^\//, "") || "index",
-      route: p.route,
-      path: p.path,
-      title: p.route === "/" ? "Home" : p.route.split("/").pop() || p.route,
-    }));
-
+    const manifest = await discoverWorkbook({ rootPath: ctx.workbookDir });
     return {
       workbookId: ctx.workbookId,
       workbookDir: ctx.workbookDir,
-      blocks,
-      pages,
-      components: discovery.components.map((c) => ({
+      blocks: manifest.blocks.map((b) => ({
+        id: b.id,
+        title: b.meta.title || b.id,
+        description: b.meta.description,
+        path: b.path,
+        parentDir: b.parentDir,
+        uninitialized: b.uninitialized,
+        refreshable: b.meta.refreshable,
+      })),
+      pages: manifest.pages.map((p) => ({
+        id: p.route.replace(/^\//, "") || "index",
+        route: p.route,
+        path: p.path,
+        title: p.route === "/" ? "Home" : p.route.split("/").pop() || p.route,
+      })),
+      components: manifest.components.map((c) => ({
         name: c.name,
         path: c.path,
         isClient: c.isClientComponent,
       })),
-      sources: external.sources ?? [],
-      actions: external.actions ?? [],
-      config: external.config ?? {},
-      isEmpty: blocks.length === 0 && pages.length === 0,
-      errors: discovery.errors,
+      errors: manifest.errors,
+      timestamp: manifest.timestamp,
     };
   }),
 
   /** Block operations */
   blocks: t.router({
+    /** List all blocks */
+    list: publicProcedure.query(async ({ ctx }) => {
+      const manifest = await discoverWorkbook({ rootPath: ctx.workbookDir });
+      return manifest.blocks.map((b) => ({
+        id: b.id,
+        title: b.meta.title || b.id,
+        path: b.path,
+        parentDir: b.parentDir,
+        uninitialized: b.uninitialized,
+      }));
+    }),
+
     /** Get block source code */
     getSource: publicProcedure.input(blockIdInput).query(async ({ ctx, input }) => {
       const blocksDir = join(ctx.workbookDir, "blocks");
@@ -177,7 +177,6 @@ export const workbookRouter = t.router({
     saveSource: publicProcedure.input(saveBlockSourceInput).mutation(async ({ ctx, input }) => {
       const blocksDir = join(ctx.workbookDir, "blocks");
 
-      // Find existing file or use .tsx for new files
       let filePath = findBlockFile(blocksDir, input.blockId);
       if (!filePath) {
         filePath = join(blocksDir, `${input.blockId}.tsx`);
@@ -186,7 +185,7 @@ export const workbookRouter = t.router({
       try {
         const { mkdirSync, openSync, writeSync, fsyncSync, closeSync } = await import("node:fs");
 
-        // Ensure parent directories exist (for nested blocks)
+        // Ensure parent directories exist
         const parentDir = filePath.substring(0, filePath.lastIndexOf("/"));
         if (!existsSync(parentDir)) {
           mkdirSync(parentDir, { recursive: true });
@@ -198,10 +197,12 @@ export const workbookRouter = t.router({
         fsyncSync(fd);
         closeSync(fd);
 
-        // Auto-format after save
-        await ctx.formatBlockSource(filePath);
+        // Auto-format if available
+        if (ctx.formatSource) {
+          await ctx.formatSource(filePath);
+        }
 
-        // Read back formatted source
+        // Read back (possibly formatted) source
         const formattedSource = readFileSync(filePath, "utf-8");
 
         return {
@@ -230,7 +231,8 @@ export const workbookRouter = t.router({
 
       const segments = input.blockId.split("/");
       const blockName = segments[segments.length - 1];
-      const source = input.source ?? ctx.generateDefaultBlockSource(blockName);
+      const source =
+        input.source ?? ctx.generateBlockSource?.(blockName) ?? generateDefaultBlockSource(blockName);
 
       try {
         const { writeFileSync, mkdirSync } = await import("node:fs");
@@ -242,10 +244,7 @@ export const workbookRouter = t.router({
 
         writeFileSync(filePath, source, "utf-8");
 
-        return {
-          blockId: input.blockId,
-          filePath,
-        };
+        return { blockId: input.blockId, filePath };
       } catch (err) {
         throw new TRPCError({
           code: "INTERNAL_SERVER_ERROR",
@@ -278,7 +277,6 @@ export const workbookRouter = t.router({
         throw new TRPCError({ code: "NOT_FOUND", message: "Block not found" });
       }
 
-      // Generate new ID
       const newBlockId = input.newBlockId ?? `${input.blockId}-copy`;
       validateBlockId(newBlockId);
 
@@ -342,7 +340,10 @@ export const workbookRouter = t.router({
 
         const sourceFile = project.getSourceFile(sourcePath);
         if (!sourceFile) {
-          throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Could not parse source file" });
+          throw new TRPCError({
+            code: "INTERNAL_SERVER_ERROR",
+            message: "Could not parse source file",
+          });
         }
 
         const { mkdirSync } = await import("node:fs");
@@ -377,10 +378,40 @@ export const workbookRouter = t.router({
         throw new TRPCError({ code: "NOT_FOUND", message: "Block not found" });
       }
 
-      const success = await ctx.formatBlockSource(filePath);
+      if (!ctx.formatSource) {
+        return { success: false, message: "Formatter not configured" };
+      }
+
+      const success = await ctx.formatSource(filePath);
       return { success };
+    }),
+  }),
+
+  /** Page operations */
+  pages: t.router({
+    /** List all pages */
+    list: publicProcedure.query(async ({ ctx }) => {
+      const manifest = await discoverWorkbook({ rootPath: ctx.workbookDir });
+      return manifest.pages.map((p) => ({
+        route: p.route,
+        path: p.path,
+        ext: p.ext,
+      }));
+    }),
+  }),
+
+  /** UI component operations */
+  components: t.router({
+    /** List all UI components */
+    list: publicProcedure.query(async ({ ctx }) => {
+      const manifest = await discoverWorkbook({ rootPath: ctx.workbookDir });
+      return manifest.components.map((c) => ({
+        name: c.name,
+        path: c.path,
+        isClient: c.isClientComponent,
+      }));
     }),
   }),
 });
 
-export type WorkbookRouter = typeof workbookRouter;
+export type WorkbookTRPCRouter = typeof workbookTRPCRouter;

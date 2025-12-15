@@ -7,7 +7,7 @@
  * Includes retry logic for resilience against runtime restarts.
  */
 
-import type { AppRouter } from "@hands/runtime/trpc";
+import type { AppRouter } from "@hands/workbook-server/trpc";
 import { createTRPCClient, httpBatchLink, retryLink } from "@trpc/client";
 
 let client: ReturnType<typeof createTRPCClient<AppRouter>> | null = null;

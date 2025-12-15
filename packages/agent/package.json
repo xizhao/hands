@@ -13,7 +13,7 @@
     "build": "bun build src/index.ts --outdir dist --target node"
   },
   "dependencies": {
-    "@hands/runtime": "workspace:*",
+    "@hands/workbook-server": "workspace:*",
     "@hands/stdlib": "workspace:*",
     "@opencode-ai/sdk": "^1.0.152",
     "@opencode-ai/plugin": "^1.0.152",

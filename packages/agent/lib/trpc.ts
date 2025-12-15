@@ -1,10 +1,10 @@
 /**
  * Shared tRPC client for agent tools
  */
-import type { AppRouter } from "@hands/runtime/trpc";
+import type { AppRouter } from "@hands/workbook-server/trpc";
 import { createTRPCClient, httpBatchLink } from "@trpc/client";
 
-// Default runtime port (matches packages/runtime/src/ports.ts)
+// Default runtime port (matches packages/workbook-server/src/ports.ts)
 const DEFAULT_RUNTIME_PORT = 55000;
 
 export function getRuntimePort(): number {

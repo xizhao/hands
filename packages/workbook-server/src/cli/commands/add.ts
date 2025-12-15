@@ -1,7 +1,7 @@
 /**
  * hands add source <name> - Add a source from the registry
  *
- * Copies source files from the registry and updates hands.json.
+ * Copies source files from the registry and updates package.json hands config.
  */
 
 import { existsSync } from "node:fs";
@@ -18,9 +18,9 @@ export async function addCommand(name: string, options: AddOptions) {
   const workbookDir = process.cwd();
 
   // Verify this is a workbook directory
-  const handsJsonPath = join(workbookDir, "hands.json");
-  if (!existsSync(handsJsonPath)) {
-    console.error("Error: hands.json not found");
+  const pkgJsonPath = join(workbookDir, "package.json");
+  if (!existsSync(pkgJsonPath)) {
+    console.error("Error: package.json not found");
     console.error("Run this command from a workbook directory");
     process.exit(1);
   }
@@ -76,7 +76,7 @@ export async function addCommand(name: string, options: AddOptions) {
     }
   }
 
-  // Update hands.json
+  // Update package.json hands config
   try {
     const config = await loadConfig(workbookDir);
 
@@ -101,10 +101,10 @@ export async function addCommand(name: string, options: AddOptions) {
       }
 
       await saveConfig(workbookDir, config);
-      console.log("  Updated: hands.json");
+      console.log("  Updated: package.json (hands config)");
     }
   } catch (error) {
-    errors.push(`Failed to update hands.json: ${error}`);
+    errors.push(`Failed to update package.json: ${error}`);
   }
 
   // Add dependencies to package.json

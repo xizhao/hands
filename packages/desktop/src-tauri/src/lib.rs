@@ -12,7 +12,7 @@ use tokio::io::{AsyncBufReadExt, BufReader};
 use tokio::process::{Child, Command};
 use tokio::sync::Mutex;
 
-// Port configuration - matches packages/runtime/src/ports.ts
+// Port configuration - matches packages/workbook-server/src/ports.ts
 // All ports use 5-digit scheme with configurable prefix (default 55xxx)
 const PORT_PREFIX: u16 = 55;
 // const PORT_RUNTIME: u16 = PORT_PREFIX * 1000;        // 55000
@@ -139,7 +139,7 @@ fn read_workbook_config(workbook_dir: &PathBuf) -> Option<Workbook> {
 /// This ensures CLI and desktop app create identical workbook structures.
 fn init_workbook(workbook_dir: &PathBuf, name: &str, _description: Option<&str>) -> Result<(), String> {
     // Get the config CLI script path (relative to CARGO_MANIFEST_DIR which is src-tauri)
-    let config_script = format!("{}/../../runtime/src/config/cli.ts", env!("CARGO_MANIFEST_DIR"));
+    let config_script = format!("{}/../../workbook-server/src/config/cli.ts", env!("CARGO_MANIFEST_DIR"));
 
     let output = std::process::Command::new("bun")
         .args([
@@ -493,8 +493,8 @@ async fn spawn_runtime(
     // Force cleanup any stale processes before starting
     force_cleanup_runtime().await;
 
-    // Get the runtime script path (relative to CARGO_MANIFEST_DIR which is src-tauri)
-    let runtime_script = format!("{}/../../runtime/src/index.ts", env!("CARGO_MANIFEST_DIR"));
+    // Get the workbook-server script path (relative to CARGO_MANIFEST_DIR which is src-tauri)
+    let runtime_script = format!("{}/../../workbook-server/src/index.ts", env!("CARGO_MANIFEST_DIR"));
 
     // Start hands-runtime process - run from the workbook directory
     let mut child = Command::new("bun")

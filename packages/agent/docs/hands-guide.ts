@@ -15,7 +15,7 @@ workbook/
 ├── pages/        # MDX documents (what users see)
 ├── blocks/       # TSX components (query + view)
 ├── sources/      # Table definitions + sync logic
-└── hands.json    # Config
+└── package.json  # Config (hands field)
 \`\`\`
 
 ### Pages (MDX)

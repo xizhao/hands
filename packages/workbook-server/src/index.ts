@@ -17,7 +17,6 @@
 import { type ChildProcess, spawn } from "node:child_process";
 import { existsSync, type FSWatcher, readdirSync, readFileSync, rmSync, watch, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import type { ViteDevServer } from "vite";
 import type { SourceDefinitionV2 } from "@hands/stdlib/sources";
 import { Hono } from "hono";
 import { cors } from "hono/cors";
@@ -28,8 +27,7 @@ import {
   startScheduler,
   stopScheduler,
 } from "./actions/index.js";
-import { buildRSC } from "./build/rsc.js";
-import { getEditorSourcePath } from "./config/index.js";
+import { getEditorSourcePath, getRuntimeSourcePath } from "./config/index.js";
 import type { BlockContext } from "./ctx.js";
 import { initWorkbookDb, type WorkbookDb } from "./db/index.js";
 import { createPgTypedRunner, type PgTypedRunner } from "./db/pgtyped/index.js";
@@ -49,8 +47,10 @@ interface RuntimeConfig {
 
 interface RuntimeState {
   dbReady: boolean;
-  viteReady: boolean;
-  vitePort: number | null;
+  rscReady: boolean;
+  rscPort: number | null;
+  rscProc: ChildProcess | null;
+  rscError: string | null;
   editorReady: boolean;
   editorPort: number | null;
   editorProc: ChildProcess | null;
@@ -59,12 +59,8 @@ interface RuntimeState {
   editorReadyResolve: (() => void) | null;
   editorConfig: RuntimeConfig | null;
   workbookDb: WorkbookDb | null;
-  viteProc: ChildProcess | null;
-  viteServer: ViteDevServer | null; // Programmatic Vite server for HMR access
-  viteHandsDir: string | null; // Path to .hands directory where Vite runs
   fileWatchers: FSWatcher[];
   buildErrors: string[];
-  viteError: string | null;
   pgTypedRunner: PgTypedRunner | null;
   pageRegistry: PageRegistry | null;
 }
@@ -72,8 +68,10 @@ interface RuntimeState {
 // Global state for progressive readiness
 const state: RuntimeState = {
   dbReady: false,
-  viteReady: false,
-  vitePort: null,
+  rscReady: false,
+  rscPort: null,
+  rscProc: null,
+  rscError: null,
   editorReady: false,
   editorPort: null,
   editorProc: null,
@@ -82,11 +80,7 @@ const state: RuntimeState = {
   editorReadyResolve: null,
   editorConfig: null,
   workbookDb: null,
-  viteProc: null,
-  viteServer: null,
-  viteHandsDir: null,
   buildErrors: [],
-  viteError: null,
   fileWatchers: [],
   pgTypedRunner: null,
   pageRegistry: null,
@@ -275,12 +269,13 @@ async function getManifest(workbookDir: string, workbookId: string) {
     }
   }
 
-  // Read config
+  // Read config from package.json
   let config: Record<string, any> = {};
-  const handsJsonPath = join(workbookDir, "hands.json");
-  if (existsSync(handsJsonPath)) {
+  const pkgJsonPath = join(workbookDir, "package.json");
+  if (existsSync(pkgJsonPath)) {
     try {
-      config = JSON.parse(readFileSync(handsJsonPath, "utf-8"));
+      const pkg = JSON.parse(readFileSync(pkgJsonPath, "utf-8"));
+      config = pkg.hands || {};
     } catch {}
   }
 
@@ -417,16 +412,12 @@ let blockReloadPending = false;
 let blockReloadTimer: ReturnType<typeof setTimeout> | null = null;
 
 /**
- * Hot-reload blocks via HMR instead of full Vite restart.
+ * Handle block file changes.
  *
- * This works by:
- * 1. Regenerating worker.tsx with updated static imports
- * 2. Invalidating the worker module in Vite's module graph
- * 3. Letting Vite re-process the file (which picks up new "use client" components)
- *
- * This is much faster than a full restart (~100ms vs ~2-3s).
+ * The runtime package uses import.meta.glob for dynamic block discovery,
+ * so Vite handles HMR automatically. We just log the event.
  */
-async function hotReloadBlocks(config: RuntimeConfig) {
+async function hotReloadBlocks(_config: RuntimeConfig) {
   // Debounce rapid reload requests (fs.watch can fire multiple times)
   if (blockReloadTimer) {
     clearTimeout(blockReloadTimer);
@@ -435,105 +426,20 @@ async function hotReloadBlocks(config: RuntimeConfig) {
   blockReloadTimer = setTimeout(async () => {
     // Guard against concurrent reloads
     if (blockReloadPending) {
-      console.log("[runtime] Block reload already in progress, skipping...");
       return;
     }
 
     blockReloadPending = true;
-    const startTime = Date.now();
 
     try {
-      // Check if we have a programmatic Vite server with HMR access
-      if (state.viteServer && state.viteHandsDir) {
-        console.log("[runtime] Hot-reloading blocks via HMR...");
-
-        // 1. Rebuild worker.tsx with new static imports
-        const { buildRSC: rebuildRSC } = await import("./build/rsc.js");
-        const buildResult = await rebuildRSC(config.workbookDir, { verbose: false });
-
-        if (!buildResult.success) {
-          console.warn("[runtime] Block rebuild has errors:", buildResult.errors);
-          state.buildErrors = buildResult.errors;
-        }
-
-        // 2. Invalidate worker.tsx in the module graph
-        const workerPath = join(state.viteHandsDir, "src", "worker.tsx");
-
-        // Get the module from the worker environment's module graph
-        const workerEnv = state.viteServer.environments?.worker;
-        if (workerEnv?.moduleGraph) {
-          const mod = workerEnv.moduleGraph.getModulesByFile(workerPath);
-          if (mod && mod.size > 0) {
-            for (const m of mod) {
-              console.log(`[runtime] Invalidating module: ${m.id}`);
-              workerEnv.moduleGraph.invalidateModule(m);
-            }
-          }
-
-          // Also invalidate in SSR environment for RSC
-          const ssrEnv = state.viteServer.environments?.ssr;
-          if (ssrEnv?.moduleGraph) {
-            const ssrMod = ssrEnv.moduleGraph.getModulesByFile(workerPath);
-            if (ssrMod && ssrMod.size > 0) {
-              for (const m of ssrMod) {
-                ssrEnv.moduleGraph.invalidateModule(m);
-              }
-            }
-          }
-        }
-
-        // 3. Trigger HMR update
-        state.viteServer.hot?.send({ type: "full-reload" });
-
-        const elapsed = Date.now() - startTime;
-        console.log(`[runtime] Blocks hot-reloaded in ${elapsed}ms`);
-      } else if (state.viteProc && state.vitePort) {
-        // Subprocess mode with dynamic imports: Just rebuild worker.tsx and invalidate cache
-        // No restart needed - Vite handles HMR for the dynamic imports
-        console.log("[runtime] Block list changed, rebuilding worker.tsx...");
-
-        // 1. Rebuild worker.tsx with updated KNOWN_BLOCK_IDS
-        const { buildRSC: rebuildRSC } = await import("./build/rsc.js");
-        const buildResult = await rebuildRSC(config.workbookDir, { verbose: false });
-
-        if (!buildResult.success) {
-          console.warn("[runtime] Block rebuild has errors:", buildResult.errors);
-          state.buildErrors = buildResult.errors;
-        }
-
-        // 2. Invalidate the block cache in the worker via HTTP
-        try {
-          await fetch(`http://127.0.0.1:${state.vitePort}/blocks/invalidate`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({}), // Clear all
-            signal: AbortSignal.timeout(5000),
-          });
-        } catch (err) {
-          console.warn("[runtime] Failed to invalidate block cache:", err);
-        }
-
-        const elapsed = Date.now() - startTime;
-        console.log(`[runtime] Blocks reloaded in ${elapsed}ms (no restart needed)`);
-      } else {
-        console.warn("[runtime] No Vite server available for block reload");
-      }
-    } catch (err) {
-      console.error("[runtime] Block hot-reload failed:", err);
-      // Fallback to full restart on error
-      if (state.viteProc) {
-        console.log("[runtime] Falling back to full restart...");
-        state.viteProc.kill();
-        state.viteProc = null;
-        state.viteReady = false;
-        state.vitePort = null;
-        await bootVite(config);
-      }
+      // Runtime package uses import.meta.glob for dynamic discovery
+      // Vite's file watcher handles HMR automatically
+      console.log("[runtime] Block files changed - Vite will handle HMR");
     } finally {
       blockReloadPending = false;
       blockReloadTimer = null;
     }
-  }, 200); // 200ms debounce (faster than before since HMR is quick)
+  }, 200);
 }
 
 /**
@@ -654,8 +560,8 @@ function createApp(config: RuntimeConfig) {
     // Create render context
     const renderContext: PageRenderContext = {
       pagesDir: state.pageRegistry.getPagesDir(),
-      blockServerPort: state.vitePort ?? undefined,
-      useRsc: state.viteReady,
+      blockServerPort: state.rscPort ?? undefined,
+      useRsc: state.rscReady,
     };
 
     try {
@@ -837,35 +743,21 @@ function createApp(config: RuntimeConfig) {
     },
     getState: () => ({
       dbReady: state.dbReady,
-      viteReady: state.viteReady,
-      vitePort: state.vitePort,
-      viteError: state.viteError,
+      rscReady: state.rscReady,
+      rscPort: state.rscPort,
+      rscError: state.rscError,
       editorReady: state.editorReady,
       editorPort: state.editorPort,
       editorRestartCount: state.editorRestartCount,
       buildErrors: state.buildErrors,
     }),
-    getManifest: async () => {
+    // External manifest provides sources, actions, config (blocks/pages now come from discovery)
+    getExternalManifest: async () => {
       const manifest = await getManifest(config.workbookDir, config.workbookId);
-      // Include pages from pageRegistry with frontmatter titles
-      const pages: Array<{ id: string; route: string; path: string; title: string }> = [];
-      if (state.pageRegistry) {
-        for (const p of state.pageRegistry.list()) {
-          const compiled = await state.pageRegistry.getCompiled(p.route);
-          const frontmatterTitle = compiled?.meta?.title;
-          const id = p.path.replace(/\.(mdx?|plate\.json)$/, "");
-          pages.push({
-            id,
-            route: p.route,
-            path: p.path,
-            title: frontmatterTitle || (id.startsWith("untitled") ? "Untitled" : (p.route === "/" ? "Home" : p.route.slice(1))),
-          });
-        }
-      }
       return {
-        ...manifest,
-        pages,
-        isEmpty: manifest.isEmpty && pages.length === 0,
+        sources: manifest.sources,
+        actions: manifest.actions,
+        config: manifest.config,
       };
     },
     formatBlockSource: (filePath: string) => formatBlockSource(filePath, config.workbookDir),
@@ -890,10 +782,10 @@ function createApp(config: RuntimeConfig) {
   // These are "use client" components that need to be loaded client-side
   // Path format: /client-modules/ui/counter-button.tsx -> blocks/ui/counter-button.tsx
   app.get("/client-modules/*", async (c) => {
-    if (!state.viteReady || !state.vitePort) {
-      const error = state.viteError || "Block server not ready";
-      const booting = !state.viteError;
-      return c.json({ error, booting, blockServerError: state.viteError }, 503);
+    if (!state.rscReady || !state.rscPort) {
+      const error = state.rscError || "Block server not ready";
+      const booting = !state.rscError;
+      return c.json({ error, booting, blockServerError: state.rscError }, 503);
     }
 
     // Extract the module path from the request
@@ -903,7 +795,7 @@ function createApp(config: RuntimeConfig) {
     // Vite's dev server can serve files outside the root using /@fs/ prefix
     const blocksDir = join(config.workbookDir, "blocks");
     const absolutePath = join(blocksDir, modulePath);
-    const viteUrl = `http://localhost:${state.vitePort}/@fs${absolutePath}`;
+    const viteUrl = `http://localhost:${state.rscPort}/@fs${absolutePath}`;
 
     try {
       const response = await fetch(viteUrl, {
@@ -959,10 +851,10 @@ function createApp(config: RuntimeConfig) {
   // Proxy Vite internal routes for client module dependencies
   // Handles: /@vite/client, /@react-refresh, /node_modules/.vite/deps/*, /@fs/*
   app.get("/vite-proxy/*", async (c) => {
-    if (!state.viteReady || !state.vitePort) {
-      const error = state.viteError || "Block server not ready";
-      const booting = !state.viteError;
-      return c.json({ error, booting, blockServerError: state.viteError }, 503);
+    if (!state.rscReady || !state.rscPort) {
+      const error = state.rscError || "Block server not ready";
+      const booting = !state.rscError;
+      return c.json({ error, booting, blockServerError: state.rscError }, 503);
     }
 
     // Extract the path after /vite-proxy
@@ -1059,7 +951,7 @@ export const Fragment = JSX.Fragment;
       }
     }
 
-    const viteUrl = `http://localhost:${state.vitePort}${vitePath}`;
+    const viteUrl = `http://localhost:${state.rscPort}${vitePath}`;
 
     try {
       const response = await fetch(viteUrl, {
@@ -1198,17 +1090,34 @@ export const __SECRET_INTERNALS_DO_NOT_USE_OR_YOU_WILL_BE_FIRED = RD.__SECRET_IN
     }
   });
 
+  // Proxy tunnel metadata from RSC runtime
+  app.get("/__hands__", async (c) => {
+    if (!state.rscReady || !state.rscPort) {
+      return c.json({ publicUrl: null, localUrl: "", status: "connecting" });
+    }
+
+    try {
+      const response = await fetch(`http://localhost:${state.rscPort}/__hands__`, {
+        signal: AbortSignal.timeout(2000),
+      });
+      const data = await response.json();
+      return c.json(data);
+    } catch {
+      return c.json({ publicUrl: null, localUrl: "", status: "error", error: "Failed to fetch tunnel status" });
+    }
+  });
+
   // Proxy to block server for RSC routes
   app.all("/blocks/*", async (c) => {
-    if (!state.viteReady || !state.vitePort) {
+    if (!state.rscReady || !state.rscPort) {
       // Include actual error message if block server crashed (e.g., compilation errors)
-      const error = state.viteError || "Block server not ready";
-      const booting = !state.viteError; // Only "booting" if there's no error
-      return c.json({ error, booting, blockServerError: state.viteError }, 503);
+      const error = state.rscError || "Block server not ready";
+      const booting = !state.rscError; // Only "booting" if there's no error
+      return c.json({ error, booting, blockServerError: state.rscError }, 503);
     }
 
     const url = new URL(c.req.url);
-    url.host = `localhost:${state.vitePort}`;
+    url.host = `localhost:${state.rscPort}`;
 
     try {
       const response = await fetch(url.toString(), {
@@ -1234,14 +1143,14 @@ export const __SECRET_INTERNALS_DO_NOT_USE_OR_YOU_WILL_BE_FIRED = RD.__SECRET_IN
   // Proxy RSC component routes to block server
   // This allows the editor to render arbitrary components via Flight
   app.all("/rsc/*", async (c) => {
-    if (!state.viteReady || !state.vitePort) {
-      const error = state.viteError || "Block server not ready";
-      const booting = !state.viteError;
-      return c.json({ error, booting, blockServerError: state.viteError }, 503);
+    if (!state.rscReady || !state.rscPort) {
+      const error = state.rscError || "Block server not ready";
+      const booting = !state.rscError;
+      return c.json({ error, booting, blockServerError: state.rscError }, 503);
     }
 
     const url = new URL(c.req.url);
-    url.host = `localhost:${state.vitePort}`;
+    url.host = `localhost:${state.rscPort}`;
 
     try {
       const response = await fetch(url.toString(), {
@@ -1486,308 +1395,151 @@ function extractViteError(output: string): string | null {
 }
 
 /**
- * Build and start Vite in background
+ * Boot the RSC runtime in background
  *
- * Uses Vite's programmatic createServer API to enable HMR-based block reloading.
- * When blocks are added/removed, we can regenerate worker.tsx and invalidate
- * the module graph instead of doing a full restart.
+ * Uses the @hands/runtime package which has a static vite.config.mts.
+ * The runtime uses HANDS_WORKBOOK_PATH env var to locate the workbook.
  */
-async function bootVite(config: RuntimeConfig) {
-  const { workbookDir, workbookId } = config;
-  const vitePort = PORTS.WORKER; // Use worker port for Vite (55200)
+async function bootRuntime(config: RuntimeConfig) {
+  const { workbookDir } = config;
+  const rscPort = PORTS.WORKER; // RSC runtime port (55200)
 
-  console.log("[runtime] Building RSC project...");
+  // Get the runtime package path (contains vite.config.mts)
+  const runtimePath = getRuntimeSourcePath();
+  console.log(`[runtime] Using runtime at: ${runtimePath}`);
+
+  if (!existsSync(join(runtimePath, "vite.config.mts"))) {
+    console.error(`[runtime] vite.config.mts not found in runtime package at ${runtimePath}`);
+    state.rscError = "Runtime package vite.config.mts not found";
+    return;
+  }
 
   try {
-    const buildResult = await buildRSC(workbookDir, { verbose: true });
-
-    // Log errors but continue - fail open in dev mode
-    if (!buildResult.success) {
-      console.warn("[runtime] Build has errors (will start Vite anyway):");
-      for (const err of buildResult.errors) {
-        console.warn(`  - ${err}`);
-      }
-      // Store errors for status endpoint
-      state.buildErrors = buildResult.errors;
-    }
-
-    const handsDir = buildResult.outputDir;
-    state.viteHandsDir = handsDir;
-    console.log(`[runtime] Built to ${handsDir}`);
-
-    // Note: Dependencies come from workbook root via symlink (.hands/node_modules -> ../node_modules)
-    // Preflight's scaffoldHandsDir() creates the symlink, checkWorkbookDependencies() installs deps
-
-    // Ensure Vite port is free before starting
-    const portFree = await waitForPortFree(vitePort, 3000, true);
+    // Ensure port is free before starting
+    const portFree = await waitForPortFree(rscPort, 3000, true);
     if (!portFree) {
-      throw new Error(`Port ${vitePort} is still in use after cleanup attempt`);
+      throw new Error(`Port ${rscPort} is still in use after cleanup attempt`);
     }
 
-    // Use programmatic Vite API for HMR access
-    // This enables hot-reloading blocks without full restarts
-    // NOTE: Disabled - createServer() hangs with cloudflare/miniflare plugins
-    // Instead, we use subprocess mode and send HMR commands via WebSocket
-    const useProgrammaticVite = false;
-
-    if (useProgrammaticVite) {
-      console.log(`[runtime] Starting Vite (programmatic) on port ${vitePort}...`);
-
-      // Set env vars that vite.config.mts expects
-      process.env.WORKBOOK_ID = workbookId;
-      process.env.WORKBOOK_DIR = workbookDir;
-      process.env.RUNTIME_PORT = String(config.port);
-
-      // Save original cwd and change to .hands directory
-      // rwsdk's findWranglerConfig searches from process.cwd()
-      const originalCwd = process.cwd();
-      process.chdir(handsDir);
-
-      try {
-        // Import Vite and load config from .hands directory
-        const { createServer, loadConfigFromFile } = await import("vite");
-
-        // Load the vite.config.mts from .hands directory
-        const configPath = join(handsDir, "vite.config.mts");
-        console.log(`[runtime] Loading Vite config from ${configPath}...`);
-
-        const loadedConfig = await loadConfigFromFile(
-          { command: "serve", mode: "development" },
-          configPath,
-          handsDir
-        );
-
-        if (!loadedConfig) {
-          throw new Error("Failed to load vite.config.mts");
-        }
-
-        console.log(`[runtime] Loaded Vite config, creating server...`);
-
-        // Create Vite dev server with loaded config
-        const serverConfig = {
-          ...loadedConfig.config,
-          root: handsDir,
-          server: {
-            ...loadedConfig.config.server,
-            port: vitePort,
-            host: "127.0.0.1",
-            strictPort: true,
-          },
-          customLogger: {
-            // Forward Vite logs with [worker] prefix
-            info: (msg: string) => console.log(`[worker] ${msg}`),
-            warn: (msg: string) => console.warn(`[worker] ${msg}`),
-            warnOnce: (msg: string) => console.warn(`[worker] ${msg}`),
-            error: (msg: string) => console.error(`[worker] ${msg}`),
-            clearScreen: () => {},
-            hasErrorLogged: () => false,
-            hasWarned: false,
-          },
-        };
-
-        console.log(`[runtime] Creating Vite server with config...`);
-
-        // Wrap createServer with a timeout - it can hang with cloudflare/miniflare plugins
-        const createServerTimeout = 60000;
-        const createServerPromise = createServer(serverConfig);
-        const timeoutPromise = new Promise<never>((_, reject) => {
-          setTimeout(() => reject(new Error(`createServer() timed out after ${createServerTimeout}ms`)), createServerTimeout);
-        });
-
-        state.viteServer = await Promise.race([createServerPromise, timeoutPromise]);
-        console.log(`[runtime] Vite server instance created`);
-        console.log(`[runtime] Vite environments:`, Object.keys(state.viteServer.environments || {}));
-        console.log(`[runtime] Starting to listen on port ${vitePort}...`);
-
-        // Don't await listen() - it may hang with cloudflare/miniflare plugins
-        // Instead, start listening and poll for readiness like subprocess mode
-        state.viteServer.listen().then(() => {
-          console.log(`[runtime] Vite listen() promise resolved`);
-        }).catch((err) => {
-          console.error(`[runtime] Vite listen() error:`, err);
-        });
-
-        // Poll for Vite readiness via /health endpoint
-        const timeout = 60000;
-        const startTime = Date.now();
-        let ready = false;
-
-        while (Date.now() - startTime < timeout && !ready) {
-          try {
-            const response = await fetch(`http://127.0.0.1:${vitePort}/health`, {
-              signal: AbortSignal.timeout(1000),
-            });
-            if (response.ok) {
-              ready = true;
-              break;
-            }
-          } catch {
-            // Not ready yet
-          }
-          await new Promise((resolve) => setTimeout(resolve, 300));
-        }
-
-        if (!ready) {
-          throw new Error(`Vite failed to become ready within ${timeout}ms`);
-        }
-
-        console.log(`[runtime] Vite (programmatic) ready on port ${vitePort}`);
-
-        state.vitePort = vitePort;
-        state.viteReady = true;
-        state.viteError = null;
-        state.viteHandsDir = handsDir;
-        console.log(`[runtime] HMR-based block hot-reload enabled`);
-      } catch (viteErr) {
-        console.error(`[runtime] Vite programmatic boot failed:`, viteErr);
-        state.viteError = viteErr instanceof Error ? viteErr.message : String(viteErr);
-
-        // Close the server if it was created
-        if (state.viteServer) {
-          try {
-            await state.viteServer.close();
-          } catch {
-            // Ignore close errors
-          }
-          state.viteServer = null;
-        }
-
-        // Fall back to subprocess mode
-        console.log(`[runtime] Falling back to subprocess mode...`);
-        process.chdir(originalCwd); // Restore cwd before spawning subprocess
-        // Continue to the else branch below
-      } finally {
-        // Restore original cwd
-        process.chdir(originalCwd);
-      }
-    }
-
-    // Subprocess mode - used as fallback or when programmatic mode is disabled
-    if (!state.viteServer && !state.viteReady) {
-      // Fallback: subprocess mode (original approach)
-      // Run from .hands/ directory to prevent Vite from serving blocks/ as static files
-      // The worker handles /blocks/* routes for RSC rendering
-      console.log(`[runtime] Starting Vite (subprocess) on port ${vitePort}...`);
-      const handsDir = join(workbookDir, ".hands");
-      state.viteProc = spawn(
-        "npx",
-        ["vite", "dev", "--config", "vite.config.mts", "--port", String(vitePort), "--host", "127.0.0.1"],
-        {
-          cwd: handsDir,
-          stdio: ["ignore", "pipe", "pipe"],
-          env: {
-            ...process.env,
-            WORKBOOK_ID: workbookId,
-            WORKBOOK_DIR: workbookDir,
-            RUNTIME_PORT: String(config.port),
-          },
+    // Spawn RSC runtime from the runtime package directory
+    // The runtime's vite.config.mts uses HANDS_WORKBOOK_PATH to locate the workbook
+    console.log(`[runtime] Starting RSC runtime on port ${rscPort}...`);
+    state.rscProc = spawn(
+      "npx",
+      ["vite", "dev", "--port", String(rscPort), "--host", "127.0.0.1"],
+      {
+        cwd: runtimePath,
+        stdio: ["ignore", "pipe", "pipe"],
+        env: {
+          ...process.env,
+          HANDS_WORKBOOK_PATH: workbookDir,
         },
-      );
+      },
+    );
 
-      // Forward Vite output with [worker] prefix for visibility
-      let outputBuffer = "";
-      const captureOutput = (data: Buffer) => {
-        const str = data.toString();
-        outputBuffer += str;
-        if (outputBuffer.length > 4000) {
-          outputBuffer = outputBuffer.slice(-4000);
-        }
-      };
-      const prefixLines = (data: Buffer, prefix: string) => {
-        const str = data.toString();
-        return str.split('\n').map(line => line ? `${prefix} ${line}` : '').join('\n');
-      };
-      state.viteProc.stdout?.on("data", (data) => {
-        captureOutput(data);
-        const prefixed = prefixLines(data, "[worker]");
-        if (prefixed.trim()) {
-          console.log(prefixed);
-        }
-      });
-      state.viteProc.stderr?.on("data", (data) => {
-        captureOutput(data);
-        const prefixed = prefixLines(data, "[worker]");
-        if (prefixed.trim()) {
-          console.error(prefixed);
-        }
-      });
+    // Forward runtime output with [worker] prefix for visibility
+    let outputBuffer = "";
+    const captureOutput = (data: Buffer) => {
+      const str = data.toString();
+      outputBuffer += str;
+      if (outputBuffer.length > 4000) {
+        outputBuffer = outputBuffer.slice(-4000);
+      }
+    };
+    const prefixLines = (data: Buffer, prefix: string) => {
+      const str = data.toString();
+      return str.split('\n').map(line => line ? `${prefix} ${line}` : '').join('\n');
+    };
+    state.rscProc.stdout?.on("data", (data) => {
+      captureOutput(data);
+      const prefixed = prefixLines(data, "[worker]");
+      if (prefixed.trim()) {
+        console.log(prefixed);
+      }
+    });
+    state.rscProc.stderr?.on("data", (data) => {
+      captureOutput(data);
+      const prefixed = prefixLines(data, "[worker]");
+      if (prefixed.trim()) {
+        console.error(prefixed);
+      }
+    });
 
-      // Monitor for crashes - reset viteReady and auto-restart
-      state.viteProc.on("exit", (code, signal) => {
-        const wasReady = state.viteReady;
-        console.error(`[runtime] Vite exited (code=${code}, signal=${signal}, wasReady=${wasReady})`);
-        state.viteReady = false;
-        state.viteError = extractViteError(outputBuffer) || `Vite exited with code ${code}`;
-        state.viteProc = null;
+    // Monitor for crashes and auto-restart
+    state.rscProc.on("exit", (code, signal) => {
+      const wasReady = state.rscReady;
+      console.error(`[runtime] RSC runtime exited (code=${code}, signal=${signal}, wasReady=${wasReady})`);
+      state.rscReady = false;
+      state.rscError = extractViteError(outputBuffer) || `RSC runtime exited with code ${code}`;
+      state.rscProc = null;
 
-        // Clear Vite cache on crash
-        const viteCacheDir = join(handsDir, ".vite");
-        if (existsSync(viteCacheDir)) {
-          console.log("[runtime] Clearing Vite cache after crash...");
-          try {
-            rmSync(viteCacheDir, { recursive: true, force: true });
-          } catch (err) {
-            console.warn("[runtime] Failed to clear Vite cache:", err);
-          }
-        }
-
-        // Auto-restart after a delay (unless this was a clean shutdown)
-        if (code !== 0 && code !== null) {
-          console.log("[runtime] Auto-restarting Vite in 2s...");
-          setTimeout(() => {
-            bootVite(config).catch((err) => {
-              console.error("[runtime] Failed to restart Vite:", err);
-            });
-          }, 2000);
-        }
-      });
-
-      // Wait for Vite to be ready
-      const timeout = 30000;
-      const startTime = Date.now();
-
-      while (Date.now() - startTime < timeout) {
+      // Clear cache on crash
+      const cacheDir = join(runtimePath, "node_modules", ".vite");
+      if (existsSync(cacheDir)) {
+        console.log("[runtime] Clearing cache after crash...");
         try {
-          const response = await fetch(`http://localhost:${vitePort}/health`, {
-            signal: AbortSignal.timeout(1000),
-          });
-          if (response.ok) {
-            state.vitePort = vitePort;
-            state.viteReady = true;
-            state.viteError = null;
-            console.log(`[runtime] Vite (subprocess) ready on port ${vitePort}`);
-            return;
-          }
-          if (response.status >= 400) {
-            try {
-              const text = await response.text();
-              const moduleMatch = text.match(/Cannot find module ['"]([^'"]+)['"]/);
-              if (moduleMatch) {
-                state.viteError = `Cannot find module '${moduleMatch[1]}'`;
-              }
-            } catch {
-              // Ignore response parsing errors
-            }
-          }
-        } catch {
-          // Not ready yet
+          rmSync(cacheDir, { recursive: true, force: true });
+        } catch (err) {
+          console.warn("[runtime] Failed to clear cache:", err);
         }
-        await new Promise((resolve) => setTimeout(resolve, 500));
       }
 
-      // Timeout
-      if (!state.viteError) {
-        const extractedError = extractViteError(outputBuffer);
-        state.viteError = extractedError || "Vite failed to start within timeout";
+      // Auto-restart after a delay (unless this was a clean shutdown)
+      if (code !== 0 && code !== null) {
+        console.log("[runtime] Auto-restarting RSC runtime in 2s...");
+        setTimeout(() => {
+          bootRuntime(config).catch((err) => {
+            console.error("[runtime] Failed to restart RSC runtime:", err);
+          });
+        }, 2000);
       }
-      console.error("[runtime] Vite failed to start within timeout");
-      if (outputBuffer) {
-        console.error("[runtime] Captured output:\n", outputBuffer);
+    });
+
+    // Wait for runtime to be ready
+    const timeout = 30000;
+    const startTime = Date.now();
+
+    while (Date.now() - startTime < timeout) {
+      try {
+        const response = await fetch(`http://localhost:${rscPort}/`, {
+          signal: AbortSignal.timeout(1000),
+        });
+        if (response.ok) {
+          state.rscPort = rscPort;
+          state.rscReady = true;
+          state.rscError = null;
+          console.log(`[runtime] RSC runtime ready on port ${rscPort}`);
+          return;
+        }
+        if (response.status >= 400) {
+          try {
+            const text = await response.text();
+            const moduleMatch = text.match(/Cannot find module ['"]([^'"]+)['"]/);
+            if (moduleMatch) {
+              state.rscError = `Cannot find module '${moduleMatch[1]}'`;
+            }
+          } catch {
+            // Ignore response parsing errors
+          }
+        }
+      } catch {
+        // Not ready yet
       }
+      await new Promise((resolve) => setTimeout(resolve, 500));
+    }
+
+    // Timeout
+    if (!state.rscError) {
+      const extractedError = extractViteError(outputBuffer);
+      state.rscError = extractedError || "RSC runtime failed to start within timeout";
+    }
+    console.error("[runtime] RSC runtime failed to start within timeout");
+    if (outputBuffer) {
+      console.error("[runtime] Captured output:\n", outputBuffer);
     }
   } catch (err) {
-    console.error("[runtime] Vite boot failed:", err);
-    state.viteError = err instanceof Error ? err.message : String(err);
+    console.error("[runtime] RSC runtime boot failed:", err);
+    state.rscError = err instanceof Error ? err.message : String(err);
   }
 }
 
@@ -2017,29 +1769,6 @@ async function main() {
 
   console.log(`[runtime] Starting workbook: ${workbookId}`);
 
-  // Run comprehensive preflight checks (validates environment, fixes issues)
-  const { runPreflight, printPreflightResults } = await import("./preflight.js");
-  const preflightResult = await runPreflight({
-    workbookDir,
-    port,
-    autoFix: true,
-    verbose: true,
-  });
-
-  if (!preflightResult.ok) {
-    printPreflightResults(preflightResult);
-    process.exit(1);
-  }
-
-  // Log any auto-fixed issues
-  const fixedChecks = preflightResult.checks.filter((c) => c.fixed);
-  if (fixedChecks.length > 0) {
-    console.log(`[runtime] Auto-fixed ${fixedChecks.length} issue(s):`);
-    for (const check of fixedChecks) {
-      console.log(`[runtime]   - ${check.name}: ${check.message}`);
-    }
-  }
-
   // 1. Start HTTP server using Bun's native server with Hono
   const app = createApp(config);
 
@@ -2091,9 +1820,9 @@ async function main() {
 
   // Boot Vite (block server) - can take a few seconds
   // Editor/sandbox will show loading state until worker is ready
-  bootVite(config).catch((err) => {
+  bootRuntime(config).catch((err) => {
     console.error("[runtime] Vite boot failed:", err);
-    state.viteError = err instanceof Error ? err.message : String(err);
+    state.rscError = err instanceof Error ? err.message : String(err);
   });
 
   // Editor can start in parallel with Vite
@@ -2115,12 +1844,8 @@ async function main() {
     for (const watcher of state.fileWatchers) {
       watcher.close();
     }
-    // Close Vite (programmatic or subprocess)
-    if (state.viteServer) {
-      await state.viteServer.close();
-      state.viteServer = null;
-    }
-    if (state.viteProc) state.viteProc.kill();
+    // Close runtime process
+    if (state.rscProc) state.rscProc.kill();
     if (state.editorProc) state.editorProc.kill();
     if (state.workbookDb) {
       await state.workbookDb.save();

@@ -77,7 +77,7 @@ export interface TableSchema {
 }
 
 // Note: Runtime status and manifest types are now provided by tRPC
-// via @hands/runtime/trpc (AppRouter)
+// via @hands/workbook-server/trpc (AppRouter)
 
 /**
  * Runtime lifecycle phases - explicit discriminated union

@@ -1,6 +1,7 @@
 /**
- * Configuration types and validation for hands.json
+ * Configuration types and validation for workbook config
  *
+ * Config is stored in package.json under the "hands" field.
  * This is the single source of truth for workbook configuration.
  * CLI and other packages should import from here.
  */
@@ -84,9 +85,9 @@ export function getEditorSourcePath(): string {
       return devPath;
     }
   }
-  // Fallback: check relative to runtime package root
-  const runtimeRoot = resolve(import.meta.dir, "../..");
-  const altDevPath = resolve(runtimeRoot, "../editor");
+  // Fallback: check relative to workbook-server package root
+  const workbookServerRoot = resolve(import.meta.dir, "../..");
+  const altDevPath = resolve(workbookServerRoot, "../editor");
   if (existsSync(join(altDevPath, "package.json"))) {
     try {
       return realpathSync(altDevPath);
@@ -96,6 +97,40 @@ export function getEditorSourcePath(): string {
   }
   // Last resort: node_modules
   const nodeModulesPath = resolve(import.meta.dir, "../../node_modules/@hands/editor");
+  try {
+    return realpathSync(nodeModulesPath);
+  } catch {
+    return nodeModulesPath;
+  }
+}
+
+/**
+ * Get the actual path to @hands/runtime source
+ * This is the Vite runtime package with vite.config.mts
+ * Works in both development (monorepo) and production
+ */
+export function getRuntimeSourcePath(): string {
+  // In development, runtime is a sibling package in packages/runtime
+  const devPath = resolve(import.meta.dir, "../../../runtime");
+  if (existsSync(join(devPath, "vite.config.mts"))) {
+    try {
+      return realpathSync(devPath);
+    } catch {
+      return devPath;
+    }
+  }
+  // Fallback: check relative to workbook-server package root
+  const workbookServerRoot = resolve(import.meta.dir, "../..");
+  const altDevPath = resolve(workbookServerRoot, "../runtime");
+  if (existsSync(join(altDevPath, "vite.config.mts"))) {
+    try {
+      return realpathSync(altDevPath);
+    } catch {
+      return altDevPath;
+    }
+  }
+  // Last resort: node_modules
+  const nodeModulesPath = resolve(import.meta.dir, "../../node_modules/@hands/runtime");
   try {
     return realpathSync(nodeModulesPath);
   } catch {
@@ -214,10 +249,9 @@ export const DevConfigSchema = z.object({
   hmr: z.boolean().default(true),
 });
 
-// Full hands.json schema
-export const HandsJsonSchema = z.object({
-  $schema: z.string().optional(),
-  name: z.string(),
+// Hands config schema (stored in package.json under "hands" field)
+export const HandsConfigSchema = z.object({
+  name: z.string().optional(), // Falls back to package.json name
   version: z.string().default("0.1.0"),
   pages: PagesConfigSchema.default({}),
   blocks: BlocksConfigSchema.default({}),
@@ -229,7 +263,7 @@ export const HandsJsonSchema = z.object({
 });
 
 // Export types
-export type HandsJson = z.infer<typeof HandsJsonSchema>;
+export type HandsConfig = z.infer<typeof HandsConfigSchema>;
 export type SourceConfig = z.infer<typeof SourceConfigSchema>;
 export type SecretConfig = z.infer<typeof SecretSchema>;
 export type PagesConfig = z.infer<typeof PagesConfigSchema>;
@@ -239,42 +273,52 @@ export type BuildConfig = z.infer<typeof BuildConfigSchema>;
 export type DevConfig = z.infer<typeof DevConfigSchema>;
 
 /**
- * Load and validate hands.json from a workbook directory
+ * Load and validate config from package.json "hands" field
  */
-export function loadConfig(workbookDir: string): HandsJson {
-  const path = join(workbookDir, "hands.json");
+export function loadConfig(workbookDir: string): HandsConfig & { name: string } {
+  const pkgPath = join(workbookDir, "package.json");
 
-  if (!existsSync(path)) {
-    throw new Error(`hands.json not found at ${path}`);
+  if (!existsSync(pkgPath)) {
+    throw new Error(`package.json not found at ${pkgPath}`);
   }
 
   try {
-    const content = JSON.parse(readFileSync(path, "utf-8"));
-    return HandsJsonSchema.parse(content);
+    const pkg = JSON.parse(readFileSync(pkgPath, "utf-8"));
+    const handsConfig = pkg.hands || {};
+    const parsed = HandsConfigSchema.parse(handsConfig);
+
+    // Use hands.name or fall back to package name
+    const name = parsed.name || pkg.name?.replace(/^@hands\//, "") || "workbook";
+
+    return { ...parsed, name };
   } catch (error) {
     if (error instanceof z.ZodError) {
       const issues = error.issues.map((i) => `  - ${i.path.join(".")}: ${i.message}`).join("\n");
-      throw new Error(`Invalid hands.json:\n${issues}`);
+      throw new Error(`Invalid hands config in package.json:\n${issues}`);
     }
     throw error;
   }
 }
 
 /**
- * Save hands.json to a workbook directory
+ * Save config to package.json "hands" field
  */
-export function saveConfig(workbookDir: string, config: HandsJson): void {
-  const path = join(workbookDir, "hands.json");
-  const content = JSON.stringify(config, null, 2);
-  writeFileSync(path, `${content}\n`);
+export function saveConfig(workbookDir: string, config: Partial<HandsConfig>): void {
+  const pkgPath = join(workbookDir, "package.json");
+
+  const pkg = existsSync(pkgPath)
+    ? JSON.parse(readFileSync(pkgPath, "utf-8"))
+    : {};
+
+  pkg.hands = { ...pkg.hands, ...config };
+  writeFileSync(pkgPath, `${JSON.stringify(pkg, null, 2)}\n`);
 }
 
 /**
- * Create a default hands.json for a new workbook
+ * Create default hands config for a new workbook
  */
-export function createDefaultConfig(name: string): HandsJson {
+export function createDefaultConfig(name: string): HandsConfig {
   return {
-    $schema: "https://hands.dev/schema/hands.json",
     name,
     version: "0.1.0",
     pages: { dir: "./pages" },
@@ -326,22 +370,7 @@ export async function initWorkbook(options: InitWorkbookOptions): Promise<void> 
   mkdirSync(join(directory, "lib"), { recursive: true });
   mkdirSync(join(directory, "sources"), { recursive: true });
 
-  // Create hands.json
-  const handsJson: HandsJson = {
-    $schema: "https://hands.dev/schema/hands.json",
-    name: slug,
-    version: "0.1.0",
-    pages: { dir: "./pages" },
-    blocks: { dir: "./blocks" },
-    sources: {},
-    secrets: {},
-    database: { migrations: "./migrations" },
-    build: { outDir: ".hands" },
-    dev: { hmr: true },
-  };
-  writeFileSync(join(directory, "hands.json"), `${JSON.stringify(handsJson, null, 2)}\n`);
-
-  // Create package.json (using file: path for @hands/stdlib)
+  // Create package.json with hands config embedded
   const stdlibPath = getStdlibPath();
   const packageJson = {
     name: `@hands/${slug}`,
@@ -352,22 +381,30 @@ export async function initWorkbook(options: InitWorkbookOptions): Promise<void> 
       dev: "hands dev",
       build: "hands build",
     },
+    hands: {
+      version: "0.1.0",
+      pages: { dir: "./pages" },
+      blocks: { dir: "./blocks" },
+      sources: {},
+      secrets: {},
+      database: { migrations: "./migrations" },
+      build: { outDir: ".hands" },
+      dev: { hmr: true },
+    },
     dependencies: {
       "@hands/stdlib": `file:${stdlibPath}`,
-      "react": "^19.0.0",
+      react: "^19.0.0",
       "react-dom": "^19.0.0",
     },
     devDependencies: {
       "@types/react": "^19.0.0",
       "@types/react-dom": "^19.0.0",
-      "typescript": "^5",
+      typescript: "^5",
     },
   };
   writeFileSync(join(directory, "package.json"), `${JSON.stringify(packageJson, null, 2)}\n`);
 
   // Create tsconfig.json
-  // Note: paths are resolved at runtime by Vite aliases, but we need them
-  // here for TypeScript checking in the editor
   const tsconfig = {
     compilerOptions: {
       target: "ESNext",
@@ -395,8 +432,6 @@ db/
 *.log
 `;
   writeFileSync(join(directory, ".gitignore"), gitignore);
-
-  // Note: No starter blocks or pages - user creates them on demand via the UI
 
   // Create lib/db.ts helper
   const dbHelper = `// Database helper - re-exported from context for convenience

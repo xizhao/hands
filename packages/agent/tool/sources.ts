@@ -105,7 +105,7 @@ Available sources:
 - github - GitHub data (requires GITHUB_TOKEN)`;
         }
 
-        if (errorMsg.includes("hands.json")) {
+        if (errorMsg.includes("package.json")) {
           return `No workbook found in current directory. Make sure you're in a workbook folder.`;
         }
 

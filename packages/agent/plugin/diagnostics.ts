@@ -4,7 +4,7 @@
  * Provides diagnostic tools for the AI agent to inspect the runtime and workbook state.
  * Uses tRPC client to communicate with the runtime.
  *
- * NOTE: tRPC is lazy-loaded inside execute() to avoid loading @hands/runtime
+ * NOTE: tRPC is lazy-loaded inside execute() to avoid loading @hands/workbook-server
  * at plugin discovery time, which can slow down tool loading.
  */
 import type { Plugin } from "@opencode-ai/plugin";

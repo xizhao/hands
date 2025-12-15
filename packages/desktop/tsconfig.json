@@ -19,7 +19,11 @@
     "noFallthroughCasesInSwitch": true,
     "baseUrl": ".",
     "paths": {
-      "@/*": ["./src/*"]
+      "@/*": ["./src/*"],
+      "@hands/workbook-server": ["../workbook-server/src/index.ts"],
+      "@hands/workbook-server/*": ["../workbook-server/src/*"],
+      "@hands/stdlib": ["../stdlib/src/index.ts"],
+      "@hands/stdlib/*": ["../stdlib/src/*"]
     }
   },
   "include": ["src", "vite.config.ts"]

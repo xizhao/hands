@@ -549,11 +549,12 @@ async function buildManifest(workbookDir: string, workbookId: string, db: any) {
     // DB not available yet (still booting)
   }
 
-  // Read sources from hands.json
+  // Read sources from package.json hands config
   const sources: any[] = [];
   try {
-    const handsJson = await readFile(join(workbookDir, "hands.json"), "utf-8");
-    const config = JSON.parse(handsJson);
+    const pkgJson = await readFile(join(workbookDir, "package.json"), "utf-8");
+    const pkg = JSON.parse(pkgJson);
+    const config = pkg.hands || {};
     if (config.sources) {
       for (const [name, sc] of Object.entries(config.sources)) {
         sources.push({
@@ -564,7 +565,7 @@ async function buildManifest(workbookDir: string, workbookId: string, db: any) {
       }
     }
   } catch {
-    // No hands.json
+    // No package.json or no hands config
   }
 
   const isEmpty =

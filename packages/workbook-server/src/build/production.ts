@@ -12,8 +12,7 @@ import { existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSy
 import { dirname, join } from "node:path";
 import { build as esbuild, type Plugin } from "esbuild";
 import { nodeless } from "unenv";
-import { discoverBlocks } from "../blocks/discovery.js";
-import { discoverPages } from "../pages/discovery.js";
+import { discoverBlocks, discoverPages } from "../workbook/discovery.js";
 import type { BuildResult, HandsConfig } from "./index.js";
 import {
   type PageDocument,
@@ -78,18 +77,19 @@ export async function buildProduction(
   const files: string[] = [];
   const staticPages: Array<{ route: string; file: string }> = [];
 
-  // Read hands.json
-  const handsJsonPath = join(workbookDir, "hands.json");
-  if (!existsSync(handsJsonPath)) {
+  // Read config from package.json
+  const pkgJsonPath = join(workbookDir, "package.json");
+  if (!existsSync(pkgJsonPath)) {
     return {
       success: false,
       outputDir: "",
       files: [],
-      errors: [`No hands.json found in ${workbookDir}`],
+      errors: [`No package.json found in ${workbookDir}`],
     };
   }
 
-  const config: HandsConfig = JSON.parse(readFileSync(handsJsonPath, "utf-8"));
+  const pkg = JSON.parse(readFileSync(pkgJsonPath, "utf-8"));
+  const config: HandsConfig = { name: pkg.name?.replace(/^@hands\//, "") || "workbook", ...pkg.hands };
   const outputDir = join(workbookDir, options.outDir || config.build?.outDir || "dist");
 
   try {
@@ -111,7 +111,6 @@ export async function buildProduction(
 
     const pagesResult = await discoverPages(pagesDir);
     const blocksResult = await discoverBlocks(blocksDir, {
-      include: config.blocks?.include,
       exclude: config.blocks?.exclude,
     });
 
@@ -128,14 +127,14 @@ export async function buildProduction(
     }
 
     if (options.verbose) {
-      console.log(`Found ${pagesResult.pages.length} pages, ${blocksResult.blocks.length} blocks`);
+      console.log(`Found ${pagesResult.items.length} pages, ${blocksResult.items.length} blocks`);
     }
 
     // Analyze pages to determine which can be pre-rendered
     const staticPageRoutes: string[] = [];
     const dynamicPageRoutes: string[] = [];
 
-    for (const page of pagesResult.pages) {
+    for (const page of pagesResult.items) {
       const pagePath = join(workbookDir, config.pages?.dir || "./pages", page.path);
       const content = readFileSync(pagePath, "utf-8");
 
@@ -164,7 +163,7 @@ export async function buildProduction(
       }
 
       for (const route of staticPageRoutes) {
-        const page = pagesResult.pages.find((p) => p.route === route);
+        const page = pagesResult.items.find((p) => p.route === route);
         if (!page) continue;
 
         const pagePath = join(workbookDir, config.pages?.dir || "./pages", page.path);
@@ -196,8 +195,8 @@ export async function buildProduction(
     const workerTs = generateProductionWorker(
       workbookDir,
       config,
-      pagesResult.pages,
-      blocksResult.blocks,
+      pagesResult.items,
+      blocksResult.items,
       staticPageRoutes,
     );
     const workerSrcPath = join(outputDir, "worker.src.ts");
@@ -318,8 +317,8 @@ export async function buildProduction(
       outputDir,
       files,
       errors,
-      pages: pagesResult.pages.map((p) => ({ route: p.route, path: p.path })),
-      blocks: blocksResult.blocks.map((b) => ({ id: b.id, path: b.path, parentDir: b.parentDir })),
+      pages: pagesResult.items.map((p) => ({ route: p.route, path: p.path })),
+      blocks: blocksResult.items.map((b) => ({ id: b.id, path: b.path, parentDir: b.parentDir })),
       staticPages,
       stats: {
         workerSize,

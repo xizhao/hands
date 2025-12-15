@@ -137,7 +137,7 @@ Sources are code-based data connectors that sync external data into the workbook
 **Adding a source:**
 Use sources tool: \`sources action='add' name='stripe'\`
 
-This copies the source code to \`sources/stripe/\` and configures it in hands.json.
+This copies the source code to \`sources/stripe/\` and configures it in package.json.
 
 **After adding a source:**
 1. User sets required secrets (e.g., API keys) via the secrets prompt

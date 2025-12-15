@@ -36,7 +36,6 @@ export async function initCommand(name?: string) {
       tsx: true,
       tailwind: {
         config: "",
-        css: "ui/styles.css",
         baseColor: "neutral",
         cssVariables: true,
       },
@@ -56,7 +55,6 @@ export async function initCommand(name?: string) {
   // Create directories
   const dirs = [
     "ui",           // shadcn components
-    "ui/lib",       // utils
     "ui/hooks",     // custom hooks
     "blocks",       // data blocks
     "pages",        // markdown pages
@@ -68,34 +66,6 @@ export async function initCommand(name?: string) {
       fs.mkdirSync(dirPath, { recursive: true });
       console.log(pc.dim(`  Created ${dir}/`));
     }
-  }
-
-  // Create utils.ts
-  const utilsPath = path.join(workbookPath, "ui/lib/utils.ts");
-  if (!fs.existsSync(utilsPath)) {
-    const utils = `import { clsx, type ClassValue } from "clsx";
-import { twMerge } from "tailwind-merge";
-
-export function cn(...inputs: ClassValue[]) {
-  return twMerge(clsx(inputs));
-}
-`;
-    fs.writeFileSync(utilsPath, utils);
-    console.log(pc.dim("  Created ui/lib/utils.ts"));
-  }
-
-  // Create styles.css
-  const stylesPath = path.join(workbookPath, "ui/styles.css");
-  if (!fs.existsSync(stylesPath)) {
-    const styles = `@import "tailwindcss";
-
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-}
-`;
-    fs.writeFileSync(stylesPath, styles);
-    console.log(pc.dim("  Created ui/styles.css"));
   }
 
   // Create .gitignore

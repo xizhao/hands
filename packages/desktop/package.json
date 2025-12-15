@@ -25,7 +25,7 @@
     "@craftjs/utils": "^0.2.5",
     "@emoji-mart/data": "^1.2.1",
     "@glideapps/glide-data-grid": "^6.0.3",
-    "@hands/runtime": "workspace:*",
+    "@hands/workbook-server": "workspace:*",
     "@hands/stdlib": "workspace:*",
     "@opencode-ai/sdk": "^1.0.152",
     "@phosphor-icons/react": "^2.1.10",

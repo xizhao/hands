@@ -5,7 +5,7 @@
  * The worker sets up the context before rendering, and blocks import db directly.
  *
  * Usage in blocks:
- *   import { db } from '@hands/runtime/context'
+ *   import { db } from '@hands/db'
  *   const users = await db.sql<User>`SELECT * FROM users`
  *
  * The db interface is the same in dev (PGlite) and prod (serverless pg).
@@ -63,7 +63,7 @@ export function runWithContext<T>(ctx: RequestContext, fn: () => T): T {
  * All queries automatically run with hands_reader role for security.
  *
  * @example
- * import { db } from '@hands/runtime/context'
+ * import { db } from '@hands/db'
  *
  * export default async function MyBlock() {
  *   const users = await db.sql<User>\`SELECT * FROM users WHERE active = \${true}\`
@@ -100,7 +100,7 @@ export const db: DbContext = {
  * Get URL/form params from request context
  *
  * @example
- * import { params } from '@hands/runtime/context'
+ * import { params } from '@hands/db'
  *
  * export default async function MyBlock() {
  *   const { limit = 10 } = params<{ limit?: number }>()

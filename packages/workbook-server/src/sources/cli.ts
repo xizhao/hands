@@ -80,9 +80,9 @@ async function main() {
   const workbookDir = resolve(parsed.workbookDir);
 
   // Check workbook exists
-  const handsJsonPath = join(workbookDir, "hands.json");
-  if (!existsSync(handsJsonPath) && command !== "help") {
-    output({ success: false, error: `No hands.json found in ${workbookDir}` }, json ?? false);
+  const pkgJsonPath = join(workbookDir, "package.json");
+  if (!existsSync(pkgJsonPath) && command !== "help") {
+    output({ success: false, error: `No package.json found in ${workbookDir}` }, json ?? false);
     process.exit(1);
   }
 

@@ -69,7 +69,7 @@ workbook/blocks/
 ```tsx
 // workbook/blocks/sales-chart.tsx
 import type { BlockFn } from "@hands/stdlib";
-import { db } from "@hands/runtime/context";
+import { db } from "@hands/db";
 
 const SalesChart: BlockFn<{ limit?: number }> = async ({ limit = 100 }) => {
   // Use db.sql tagged template for type-safe queries
@@ -91,10 +91,10 @@ export default SalesChart;
 ```
 
 **Database Access**:
-- `import { db } from "@hands/runtime/context"` - Import the database context
+- `import { db } from "@hands/db"` - Import the database context
 - `db.sql` - Tagged template literal for parameterized SQL queries
 - `db.query` - Execute PgTyped prepared queries with type-safe params
-- `params()` - Get URL/form parameters (also from `@hands/runtime/context`)
+- `params()` - Get URL/form parameters (also from `@hands/db`)
 - Blocks use read-only database access (`hands_reader` role)
 
 **How it works**:
@@ -103,7 +103,7 @@ export default SalesChart;
 3. Vite builds the RSC bundle
 4. Requests to `/sandbox/*` are proxied to Vite dev server
 5. Runtime sets up request context via AsyncLocalStorage before rendering
-6. Blocks import `db` from `@hands/runtime/context` which reads from the request context
+6. Blocks import `db` from `@hands/db` which reads from the request context
 
 ### 2. Sources (Data Containers)
 

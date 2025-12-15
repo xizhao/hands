@@ -32,8 +32,7 @@ export async function newCommand(name: string, _options: NewOptions) {
   // Use shared initialization function
   await initWorkbook({ name, directory: targetDir });
 
-  console.log("  Created: hands.json");
-  console.log("  Created: package.json");
+  console.log("  Created: package.json (with hands config)");
   console.log("  Created: tsconfig.json");
   console.log("  Created: .gitignore");
   console.log("  Created: pages/index.md");

@@ -14,8 +14,8 @@ import { killProcessOnPort } from "./ports.js";
 export interface RuntimeLock {
   pid: number;
   runtimePort: number;
-  vitePort: number;
-  vitePid?: number;
+  rscPort: number;
+  rscPid?: number;
   workbookId: string;
   workbookDir: string;
   startedAt: number;
@@ -147,15 +147,15 @@ export async function cleanupOrphanedProcesses(): Promise<{
   console.log(`Found orphaned runtime lock from PID ${lock.pid}`);
   const killedPids: number[] = [];
 
-  // Kill Vite if still running
-  if (lock.vitePid && isProcessRunning(lock.vitePid)) {
-    console.log(`Killing orphaned Vite (PID ${lock.vitePid})`);
-    killProcess(lock.vitePid, "SIGTERM");
-    killedPids.push(lock.vitePid);
+  // Kill RSC runtime if still running
+  if (lock.rscPid && isProcessRunning(lock.rscPid)) {
+    console.log(`Killing orphaned RSC runtime (PID ${lock.rscPid})`);
+    killProcess(lock.rscPid, "SIGTERM");
+    killedPids.push(lock.rscPid);
   }
 
   // Also try to kill processes on the port
-  await killProcessOnPort(lock.vitePort);
+  await killProcessOnPort(lock.rscPort);
 
   if (killedPids.length > 0) {
     await Bun.sleep(1000);
@@ -182,7 +182,7 @@ export async function cleanupOrphanedProcesses(): Promise<{
  */
 export async function acquireLock(config: {
   runtimePort: number;
-  vitePort: number;
+  rscPort: number;
   workbookId: string;
   workbookDir: string;
 }): Promise<RuntimeLock> {
@@ -201,7 +201,7 @@ export async function acquireLock(config: {
   const lock: RuntimeLock = {
     pid: process.pid,
     runtimePort: config.runtimePort,
-    vitePort: config.vitePort,
+    rscPort: config.rscPort,
     workbookId: config.workbookId,
     workbookDir: config.workbookDir,
     startedAt: Date.now(),

@@ -30,7 +30,7 @@
     "@codemirror/theme-one-dark": "^6.1.0",
     "@emoji-mart/data": "1.2.1",
     "@faker-js/faker": "^10.1.0",
-    "@hands/runtime": "workspace:*",
+    "@hands/workbook-server": "workspace:*",
     "@hands/stdlib": "workspace:*",
     "@phosphor-icons/react": "^2.1.10",
     "@platejs/ai": "^52.0.11",

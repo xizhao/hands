@@ -28,25 +28,17 @@ export interface TRPCConfig {
   saveDb: () => Promise<void>;
   getState: () => {
     dbReady: boolean;
-    viteReady: boolean;
-    vitePort: number | null;
-    viteError: string | null;
+    rscReady: boolean;
+    rscPort: number | null;
+    rscError: string | null;
     editorReady: boolean;
     editorPort: number | null;
     editorRestartCount: number;
     buildErrors: string[];
   };
-  getManifest: () => Promise<{
-    workbookId: string;
-    workbookDir: string;
-    blocks: Array<{
-      id: string;
-      title: string;
-      path: string;
-      parentDir: string;
-      uninitialized?: boolean;
-    }>;
-    sources: Array<{
+  /** Optional: provides sources, actions, config (blocks/pages now come from discovery) */
+  getExternalManifest?: () => Promise<{
+    sources?: Array<{
       id: string;
       name: string;
       title: string;
@@ -57,7 +49,7 @@ export interface TRPCConfig {
       path: string;
       spec?: string;
     }>;
-    actions: Array<{
+    actions?: Array<{
       id: string;
       name: string;
       description?: string;
@@ -65,14 +57,7 @@ export interface TRPCConfig {
       triggers: string[];
       path: string;
     }>;
-    pages: Array<{
-      id: string;
-      route: string;
-      path: string;
-      title: string;
-    }>;
-    config: Record<string, unknown>;
-    isEmpty: boolean;
+    config?: Record<string, unknown>;
   }>;
   formatBlockSource: (filePath: string) => Promise<boolean>;
   generateDefaultBlockSource: (blockName: string) => string;
@@ -131,7 +116,7 @@ export function registerTRPCRoutes(app: Hono, config: TRPCConfig) {
     isDbReady,
     saveDb,
     getState,
-    getManifest,
+    getExternalManifest,
     formatBlockSource,
     generateDefaultBlockSource,
     onDdlQuery,
@@ -153,8 +138,8 @@ export function registerTRPCRoutes(app: Hono, config: TRPCConfig) {
       saveDb,
       // Status context
       getState,
-      // Workbook context
-      getManifest,
+      // Workbook context (now uses discovery module internally)
+      getExternalManifest,
       formatBlockSource,
       generateDefaultBlockSource,
       // DB context

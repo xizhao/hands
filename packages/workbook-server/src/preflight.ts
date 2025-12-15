@@ -3,7 +3,7 @@
  *
  * Performs comprehensive validation:
  * - System dependencies (bun, node)
- * - Workbook structure (hands.json, directories)
+ * - Workbook structure (package.json with hands config, directories)
  * - Port availability
  * - Dependencies installation
  * - Symlinks and file layout
@@ -28,7 +28,6 @@ import { $ } from "bun";
 import {
   generateClientEntry,
   generateTsConfig,
-  generateViteConfig,
   generateWranglerConfig,
   type HandsConfig,
 } from "./build/index.js";
@@ -104,7 +103,7 @@ export async function runPreflight(options: PreflightOptions): Promise<Preflight
 
   // 2. Workbook structure
   checks.push(await checkWorkbookDir(workbookDir));
-  checks.push(await checkHandsJson(workbookDir));
+  checks.push(await checkWorkbookConfig(workbookDir));
   checks.push(await checkBlocksDir(workbookDir, autoFix));
   checks.push(await checkSourcesDir(workbookDir, autoFix));
 
@@ -273,40 +272,34 @@ async function checkWorkbookDir(workbookDir: string): Promise<PreflightCheck> {
   };
 }
 
-async function checkHandsJson(workbookDir: string): Promise<PreflightCheck> {
-  const handsJsonPath = join(workbookDir, "hands.json");
+async function checkWorkbookConfig(workbookDir: string): Promise<PreflightCheck> {
+  const pkgJsonPath = join(workbookDir, "package.json");
 
-  if (!existsSync(handsJsonPath)) {
+  if (!existsSync(pkgJsonPath)) {
     return {
-      name: "hands.json",
+      name: "package.json",
       ok: false,
-      message: `Not found. Create ${handsJsonPath} with workbook config.`,
+      message: `Not found at ${pkgJsonPath}`,
       required: true,
     };
   }
 
   try {
-    const content = readFileSync(handsJsonPath, "utf-8");
-    const config = JSON.parse(content);
+    const content = readFileSync(pkgJsonPath, "utf-8");
+    const pkg = JSON.parse(content);
 
-    if (!config.name) {
-      return {
-        name: "hands.json",
-        ok: false,
-        message: 'Missing required "name" field',
-        required: true,
-      };
-    }
+    // Get name from package.json name field
+    const name = pkg.name?.replace(/^@hands\//, "") || "workbook";
 
     return {
-      name: "hands.json",
+      name: "package.json",
       ok: true,
-      message: `name: "${config.name}"`,
+      message: `name: "${name}"`,
       required: true,
     };
   } catch (err) {
     return {
-      name: "hands.json",
+      name: "package.json",
       ok: false,
       message: `Invalid JSON: ${err instanceof Error ? err.message : String(err)}`,
       required: true,
@@ -860,77 +853,6 @@ async function clearViteCache(workbookDir: string): Promise<PreflightCheck> {
 }
 
 /**
- * Check that vite.config.ts has correct optimizeDeps settings to prevent
- * "new version of pre-bundle" race condition errors during development.
- *
- * Required settings:
- * - optimizeDeps.noDiscovery: true (client-side)
- * - ssr.optimizeDeps.noDiscovery: true (SSR-side)
- */
-async function checkViteConfig(workbookDir: string, autoFix: boolean): Promise<PreflightCheck> {
-  const handsDir = join(workbookDir, ".hands");
-  const viteConfigPath = join(handsDir, "vite.config.ts");
-
-  // If .hands doesn't exist yet, skip - it will be created on first build
-  if (!existsSync(handsDir) || !existsSync(viteConfigPath)) {
-    return {
-      name: "Vite optimizeDeps config",
-      ok: true,
-      message: "Will be created on first build",
-      required: false,
-    };
-  }
-
-  try {
-    const content = readFileSync(viteConfigPath, "utf-8");
-
-    // Check for required patterns
-    const hasClientNoDiscovery = /optimizeDeps:\s*\{[^}]*noDiscovery:\s*true/.test(content);
-    const hasSsrNoDiscovery = /ssr:\s*\{[^}]*optimizeDeps:\s*\{[^}]*noDiscovery:\s*true/.test(content);
-
-    if (hasClientNoDiscovery && hasSsrNoDiscovery) {
-      return {
-        name: "Vite optimizeDeps config",
-        ok: true,
-        message: "noDiscovery enabled for client and SSR",
-        required: false,
-      };
-    }
-
-    // Config is outdated - needs regeneration
-    if (autoFix) {
-      // Remove the vite.config.ts so it gets regenerated on next build
-      rmSync(viteConfigPath);
-      return {
-        name: "Vite optimizeDeps config",
-        ok: true,
-        message: "Removed outdated config - will regenerate on next build",
-        required: false,
-        fixed: true,
-      };
-    }
-
-    const missing: string[] = [];
-    if (!hasClientNoDiscovery) missing.push("optimizeDeps.noDiscovery");
-    if (!hasSsrNoDiscovery) missing.push("ssr.optimizeDeps.noDiscovery");
-
-    return {
-      name: "Vite optimizeDeps config",
-      ok: false,
-      message: `Missing: ${missing.join(", ")} - delete .hands/vite.config.ts to regenerate`,
-      required: false,
-    };
-  } catch (err) {
-    return {
-      name: "Vite optimizeDeps config",
-      ok: false,
-      message: `Error reading vite.config.ts: ${err instanceof Error ? err.message : String(err)}`,
-      required: false,
-    };
-  }
-}
-
-/**
  * Write a file only if its content has changed.
  * This prevents unnecessary mtime updates that would trigger Vite re-optimization.
  */
@@ -946,34 +868,31 @@ function writeFileIfChanged(filePath: string, content: string): boolean {
 }
 
 /**
- * Scaffold all .hands config files (vite.config.mts, package.json, wrangler.jsonc, etc.)
+ * Scaffold .hands directory with required config files.
  *
- * This creates the initial .hands directory structure with all static config files.
- * Only worker.tsx (which contains block imports) is generated by buildRSC.
+ * Note: vite.config.mts is NOT scaffolded here - it lives in @hands/runtime.
+ * The runtime package has its own vite.config.mts and uses HANDS_WORKBOOK_PATH env var.
  *
- * Files are only written if their content has changed, to avoid triggering
- * Vite's dependency re-optimization.
+ * Files are only written if their content has changed.
  */
 export async function scaffoldHandsDir(workbookDir: string, autoFix: boolean): Promise<PreflightCheck> {
   const handsDir = join(workbookDir, ".hands");
   const srcDir = join(handsDir, "src");
-  const handsJsonPath = join(workbookDir, "hands.json");
+  const pkgJsonPath = join(workbookDir, "package.json");
 
-  // Must have hands.json to scaffold
-  if (!existsSync(handsJsonPath)) {
+  // Must have package.json to scaffold
+  if (!existsSync(pkgJsonPath)) {
     return {
       name: ".hands scaffold",
       ok: false,
-      message: "No hands.json found",
+      message: "No package.json found",
       required: true,
     };
   }
 
   if (!autoFix) {
     // Check if scaffold is needed
-    // .hands/ is a build directory - no package.json needed
     const requiredFiles = [
-      join(handsDir, "vite.config.mts"),
       join(handsDir, "wrangler.jsonc"),
       join(handsDir, "tsconfig.json"),
       join(srcDir, "client.tsx"),
@@ -996,7 +915,8 @@ export async function scaffoldHandsDir(workbookDir: string, autoFix: boolean): P
   }
 
   try {
-    const config: HandsConfig = JSON.parse(readFileSync(handsJsonPath, "utf-8"));
+    const pkg = JSON.parse(readFileSync(pkgJsonPath, "utf-8"));
+    const config: HandsConfig = pkg.hands || {};
     const filesWritten: string[] = [];
 
     // Ensure directories exist
@@ -1056,7 +976,7 @@ export async function scaffoldHandsDir(workbookDir: string, autoFix: boolean): P
     }
 
     // Generate and write config files (only if changed)
-    // package.json is needed for rwsdk to read (it checks for various scripts)
+    // Note: vite.config.mts is NOT generated here - it lives in @hands/runtime
     const handsPackageJson = JSON.stringify({
       name: `${config.name}-hands`,
       private: true,
@@ -1064,9 +984,6 @@ export async function scaffoldHandsDir(workbookDir: string, autoFix: boolean): P
     }, null, 2);
     if (writeFileIfChanged(join(handsDir, "package.json"), handsPackageJson)) {
       filesWritten.push("package.json");
-    }
-    if (writeFileIfChanged(join(handsDir, "vite.config.mts"), generateViteConfig())) {
-      filesWritten.push("vite.config.mts");
     }
     if (writeFileIfChanged(join(handsDir, "wrangler.jsonc"), generateWranglerConfig(config))) {
       filesWritten.push("wrangler.jsonc");

@@ -25,9 +25,9 @@ export async function buildCommand(options: BuildOptions) {
   const workbookDir = process.cwd();
 
   // Verify this is a workbook directory
-  const handsJsonPath = join(workbookDir, "hands.json");
-  if (!existsSync(handsJsonPath)) {
-    console.error("Error: hands.json not found");
+  const pkgJsonPath = join(workbookDir, "package.json");
+  if (!existsSync(pkgJsonPath)) {
+    console.error("Error: package.json not found");
     console.error("Run this command from a workbook directory");
     process.exit(1);
   }
@@ -77,7 +77,7 @@ function findRuntimeBuildPath(): string | null {
   }
 
   // Try node_modules path (production)
-  const nodeModulesPath = join(process.cwd(), "node_modules/@hands/runtime/src/build/cli.ts");
+  const nodeModulesPath = join(process.cwd(), "node_modules/@hands/workbook-server/src/build/cli.ts");
   if (existsSync(nodeModulesPath)) {
     return nodeModulesPath;
   }
@@ -90,9 +90,10 @@ function findRuntimeBuildPath(): string | null {
  * This is a minimal fallback that generates the basic structure
  */
 async function inlineBuild(workbookDir: string, _options: BuildOptions) {
-  // Read hands.json
-  const handsJsonPath = join(workbookDir, "hands.json");
-  const config = JSON.parse(await Bun.file(handsJsonPath).text());
+  // Read config from package.json
+  const pkgJsonPath = join(workbookDir, "package.json");
+  const pkg = JSON.parse(await Bun.file(pkgJsonPath).text());
+  const config = { name: pkg.name?.replace(/^@hands\//, "") || "workbook", ...pkg.hands };
 
   const outputDir = join(workbookDir, config.build?.outDir || ".hands");
 

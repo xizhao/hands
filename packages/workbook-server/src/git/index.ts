@@ -182,7 +182,7 @@ function generateCommitMessage(status: {
   const hasBlockChanges = uniqueFiles.some((f) => f.startsWith("blocks/"));
   const hasSourceChanges = uniqueFiles.some((f) => f.startsWith("sources/"));
   const hasActionChanges = uniqueFiles.some((f) => f.startsWith("actions/"));
-  const hasConfigChanges = uniqueFiles.some((f) => f === "package.json" || f === "hands.json");
+  const hasConfigChanges = uniqueFiles.some((f) => f === "package.json");
 
   // Build message parts
   const parts: string[] = [];

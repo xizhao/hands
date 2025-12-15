@@ -1,12 +1,13 @@
 /**
  * hands dev - Start the development server
  *
- * Runs the runtime directly (no subprocess needed since we're in the runtime package).
+ * Runs preflight checks, then starts the runtime.
  */
 
 import { existsSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { loadConfig } from "../../config/index.js";
+import { printPreflightResults, runPreflight } from "../../preflight.js";
 
 interface DevOptions {
   port?: number;
@@ -18,9 +19,9 @@ export async function devCommand(options: DevOptions) {
   const workbookDir = process.cwd();
 
   // Verify this is a workbook directory
-  const handsJsonPath = join(workbookDir, "hands.json");
-  if (!existsSync(handsJsonPath)) {
-    console.error("Error: hands.json not found");
+  const pkgJsonPath = join(workbookDir, "package.json");
+  if (!existsSync(pkgJsonPath)) {
+    console.error("Error: package.json not found");
     console.error("Run this command from a workbook directory");
     process.exit(1);
   }
@@ -29,7 +30,27 @@ export async function devCommand(options: DevOptions) {
   const config = await loadConfig(workbookDir);
   const workbookId = config.name;
 
-  console.log(`Starting Hands dev server for: ${workbookId}`);
+  // Run preflight checks before starting runtime
+  console.log(`[hands] Running preflight checks...`);
+  const preflightResult = await runPreflight({
+    workbookDir,
+    port: options.port,
+    autoFix: true,
+    verbose: true,
+  });
+
+  if (!preflightResult.ok) {
+    printPreflightResults(preflightResult);
+    process.exit(1);
+  }
+
+  // Log any auto-fixed issues
+  const fixedChecks = preflightResult.checks.filter((c) => c.fixed);
+  if (fixedChecks.length > 0) {
+    console.log(`[hands] Auto-fixed ${fixedChecks.length} issue(s)`);
+  }
+
+  console.log(`[hands] Starting dev server for: ${workbookId}`);
 
   // Set environment variables
   process.env.HANDS_HMR = options.hmr !== false ? "1" : "0";

@@ -4,7 +4,7 @@
  * Blocks are server-rendered React components that can query the database.
  *
  * Server components access the database via import:
- *   import { db } from '@hands/runtime/context'
+ *   import { db } from '@hands/db'
  *   const users = await db.sql<User>`SELECT * FROM users`
  *
  * Client components ("use client") cannot access the database directly.
@@ -30,7 +30,7 @@ export interface DbContext {
   /**
    * Tagged template literal for type-safe SQL queries
    * @example
-   * import { db } from '@hands/runtime/context'
+   * import { db } from '@hands/db'
    * const users = await db.sql<User>`SELECT * FROM users WHERE active = ${true}`
    */
   sql<T = Record<string, unknown>>(
@@ -41,7 +41,7 @@ export interface DbContext {
   /**
    * Execute a pgtyped prepared query with type-safe params and results
    * @example
-   * import { db } from '@hands/runtime/context'
+   * import { db } from '@hands/db'
    * import { getActiveUsers } from './my-block.types'
    * const users = await db.query(getActiveUsers, { active: true })
    */
@@ -59,7 +59,7 @@ export interface DbContext {
  * Server components can query the database via import:
  * @example
  * ```tsx
- * import { db } from '@hands/runtime/context'
+ * import { db } from '@hands/db'
  *
  * export default async function MyBlock({ limit = 10 }) {
  *   const items = await db.sql<Item>\`SELECT * FROM items LIMIT \${limit}\`
@@ -83,11 +83,11 @@ export type BlockFn<TProps = Record<string, unknown>> = (
 ) => ReactElement | Promise<ReactElement>;
 
 // =============================================================================
-// Legacy types (deprecated - use import { db } from '@hands/runtime/context')
+// Legacy types (deprecated - use import { db } from '@hands/db')
 // =============================================================================
 
 /**
- * @deprecated Use `import { db } from '@hands/runtime/context'` instead of ctx prop
+ * @deprecated Use `import { db } from '@hands/db'` instead of ctx prop
  */
 export interface BlockContext<TParams = Record<string, unknown>> {
   db: DbContext;
@@ -97,7 +97,7 @@ export interface BlockContext<TParams = Record<string, unknown>> {
 }
 
 /**
- * @deprecated Use `import { db } from '@hands/runtime/context'` instead of ctx prop
+ * @deprecated Use `import { db } from '@hands/db'` instead of ctx prop
  */
 export type BlockProps<TProps = unknown, TParams = Record<string, unknown>> = TProps & {
   ctx: BlockContext<TParams>;

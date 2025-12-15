@@ -5,7 +5,7 @@
  * Provides end-to-end type safety from database to UI.
  */
 
-import type { AppRouter } from "@hands/runtime/trpc";
+import type { AppRouter } from "@hands/workbook-server/trpc";
 import { createTRPCReact, httpBatchLink } from "@trpc/react-query";
 
 // Create the tRPC React hooks

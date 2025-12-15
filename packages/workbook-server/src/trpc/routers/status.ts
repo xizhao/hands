@@ -15,9 +15,9 @@ export interface StatusContext {
   workbookDir: string;
   getState: () => {
     dbReady: boolean;
-    viteReady: boolean;
-    vitePort: number | null;
-    viteError: string | null;
+    rscReady: boolean;
+    rscPort: number | null;
+    rscError: string | null;
     editorReady: boolean;
     editorPort: number | null;
     editorRestartCount: number;
@@ -41,7 +41,7 @@ export const statusRouter = t.router({
   /** Basic health check */
   health: publicProcedure.query(({ ctx }) => {
     const state = ctx.getState();
-    const ready = state.dbReady && state.viteReady;
+    const ready = state.dbReady && state.rscReady;
     return {
       ready,
       status: ready ? ("ready" as const) : ("booting" as const),
@@ -57,9 +57,9 @@ export const statusRouter = t.router({
       services: {
         db: { ready: state.dbReady },
         blockServer: {
-          ready: state.viteReady,
-          port: state.vitePort,
-          error: state.viteError,
+          ready: state.rscReady,
+          port: state.rscPort,
+          error: state.rscError,
         },
         editor: {
           ready: state.editorReady,
@@ -88,9 +88,9 @@ export const statusRouter = t.router({
           error: state.dbReady ? undefined : "Database is booting",
         },
         blockServer: {
-          up: state.viteReady,
-          port: state.vitePort ?? 0,
-          error: state.viteReady ? undefined : state.viteError || "Block server is starting",
+          up: state.rscReady,
+          port: state.rscPort ?? 0,
+          error: state.rscReady ? undefined : state.rscError || "Block server is starting",
         },
       },
     };
