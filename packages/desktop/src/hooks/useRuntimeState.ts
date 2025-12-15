@@ -26,7 +26,6 @@ interface TauriRuntimeStatus {
   directory: string;
   runtime_port: number;
   postgres_port: number;
-  worker_port: number;
   message: string;
 }
 

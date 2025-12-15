@@ -43,10 +43,8 @@ export interface MdxVisualEditorProps {
   pageId?: string;
   /** Callback when page should be renamed (title → slug sync) */
   onRename?: (newSlug: string) => Promise<boolean>;
-  /** Runtime port for RSC rendering */
+  /** Runtime port for RSC rendering (blocks go through runtime proxy) */
   runtimePort?: number;
-  /** Worker port for RSC rendering */
-  workerPort?: number;
   /** CSS class name */
   className?: string;
   /** Whether content is being refreshed (shows at reduced opacity) */
@@ -76,7 +74,6 @@ export function MdxVisualEditor({
   pageId,
   onRename,
   runtimePort = 55000,
-  workerPort = 55200,
   className,
   isRefreshing = false,
 }: MdxVisualEditorProps) {
@@ -219,9 +216,8 @@ export function MdxVisualEditor({
         extendEditor: ({ editor }) => {
           const origApply = editor.apply as (op: Operation) => void;
 
-          // Store runtime ports on editor for RSC blocks
+          // Store runtime port on editor for RSC blocks (blocks go through runtime proxy)
           (editor as any).runtimePort = runtimePort;
-          (editor as any).workerPort = workerPort;
 
           editor.apply = (op: Operation) => {
             const state = stateRef.current;
@@ -257,7 +253,7 @@ export function MdxVisualEditor({
           return editor;
         },
       }),
-    [runtimePort, workerPort],
+    [runtimePort],
   );
 
   // Create editor with all plugins

@@ -13,9 +13,8 @@ export interface RscRenderResult {
 /** RSC context configuration */
 export interface RscConfig {
   /**
-   * Port of the server to connect to.
-   * - 55000: Runtime API (recommended, proxies /rsc/* to Vite worker)
-   * - 55200: Vite worker directly (for debugging)
+   * Port of the runtime server to connect to.
+   * All block/RSC requests go through the runtime (55000) which proxies to Vite internally.
    */
   port: number;
   /** Whether RSC is enabled */

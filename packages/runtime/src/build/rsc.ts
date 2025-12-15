@@ -5,10 +5,9 @@
  * Uses Vite + @cloudflare/vite-plugin for building and dev server.
  */
 
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { discoverBlocks } from "../blocks/discovery.js";
-import { getStdlibSourcePath } from "../config/index.js";
 import type { BuildOptions, BuildResult, HandsConfig } from "./index.js";
 import { generateWorkerTemplate } from "./worker-template.js";
 
@@ -20,7 +19,14 @@ export interface RSCBuildResult extends BuildResult {
 }
 
 /**
- * Build a workbook with RSC support using RedwoodSDK/Vite
+ * Build worker.tsx for a workbook.
+ *
+ * This ONLY generates worker.tsx with block imports. All other config files
+ * (vite.config.mts, package.json, etc.) are created by preflight's scaffoldHandsDir().
+ *
+ * Called:
+ * - At runtime startup (after preflight)
+ * - On block file changes (hot reload)
  */
 export async function buildRSC(
   workbookDir: string,
@@ -29,6 +35,7 @@ export async function buildRSC(
   const errors: string[] = [];
   const files: string[] = [];
   const outputDir = join(workbookDir, ".hands");
+  const srcDir = join(outputDir, "src");
 
   try {
     // Read hands.json
@@ -43,17 +50,6 @@ export async function buildRSC(
     }
 
     const config: HandsConfig = JSON.parse(readFileSync(handsJsonPath, "utf-8"));
-
-    // Ensure output directory exists
-    if (!existsSync(outputDir)) {
-      mkdirSync(outputDir, { recursive: true });
-    }
-
-    // Create src directory
-    const srcDir = join(outputDir, "src");
-    if (!existsSync(srcDir)) {
-      mkdirSync(srcDir, { recursive: true });
-    }
 
     // Discover blocks
     const blocksDir = join(workbookDir, config.blocks?.dir || "./blocks");
@@ -75,24 +71,6 @@ export async function buildRSC(
       }
     }
 
-    // Get stdlib path first (used by both package.json and vite.config)
-    const stdlibPath = getStdlibSourcePath();
-
-    // Generate package.json
-    const packageJson = generatePackageJson(config, stdlibPath);
-    writeFileSync(join(outputDir, "package.json"), packageJson);
-    files.push("package.json");
-
-    // Generate vite.config.mts
-    const viteConfig = generateViteConfig();
-    writeFileSync(join(outputDir, "vite.config.mts"), viteConfig);
-    files.push("vite.config.mts");
-
-    // Generate wrangler.jsonc
-    const wranglerConfig = generateWranglerConfig(config);
-    writeFileSync(join(outputDir, "wrangler.jsonc"), wranglerConfig);
-    files.push("wrangler.jsonc");
-
     // Generate worker.tsx with RSC block rendering + API routes
     const workerTsx = generateWorkerTemplate({
       config,
@@ -101,20 +79,6 @@ export async function buildRSC(
     });
     writeFileSync(join(srcDir, "worker.tsx"), workerTsx);
     files.push("src/worker.tsx");
-
-    // Generate client.tsx for hydration
-    const clientTsx = generateClientEntry();
-    writeFileSync(join(srcDir, "client.tsx"), clientTsx);
-    files.push("src/client.tsx");
-
-    // Generate tsconfig.json
-    const tsconfig = generateTsConfig();
-    writeFileSync(join(outputDir, "tsconfig.json"), tsconfig);
-    files.push("tsconfig.json");
-
-    // Generate .gitignore
-    writeFileSync(join(outputDir, ".gitignore"), "node_modules/\ndist/\n.wrangler/\n");
-    files.push(".gitignore");
 
     return {
       success: errors.length === 0,
@@ -138,7 +102,7 @@ export async function buildRSC(
 /**
  * Generate package.json for the RSC workbook
  */
-function generatePackageJson(config: HandsConfig, stdlibPath: string): string {
+export function generatePackageJson(config: HandsConfig, stdlibPath: string): string {
   const pkg = {
     name: `@hands/${config.name || "workbook"}`,
     version: "1.0.0",
@@ -183,7 +147,7 @@ function generatePackageJson(config: HandsConfig, stdlibPath: string): string {
  *
  * server.fs.allow: ["/"] enables /@fs/ access to any file (for loading stdlib "use client" components)
  */
-function generateViteConfig(): string {
+export function generateViteConfig(): string {
   return `import { defineConfig, Plugin } from "vite";
 import { redwood } from "rwsdk/vite";
 import { cloudflare } from "@cloudflare/vite-plugin";
@@ -358,7 +322,7 @@ export default defineConfig({
 /**
  * Generate wrangler.jsonc
  */
-function generateWranglerConfig(config: HandsConfig): string {
+export function generateWranglerConfig(config: HandsConfig): string {
   return `{
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "${config.name || "workbook"}",
@@ -383,7 +347,7 @@ function generateWranglerConfig(config: HandsConfig): string {
 /**
  * Generate client.tsx for RSC hydration
  */
-function generateClientEntry(): string {
+export function generateClientEntry(): string {
   return `// Client entry for RSC hydration
 // This handles consuming Flight streams and hydrating client components
 
@@ -416,7 +380,7 @@ export async function createBlockFromStream(blockId: string, props: Record<strin
  * Note: We intentionally do NOT define @/* path alias to avoid confusion.
  * Blocks should import from @hands/stdlib or use relative imports.
  */
-function generateTsConfig(): string {
+export function generateTsConfig(): string {
   return `{
   "compilerOptions": {
     "target": "ES2022",

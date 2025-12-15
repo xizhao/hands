@@ -33,7 +33,7 @@ export async function initFlightClient(): Promise<boolean> {
 /**
  * Render a component via RSC
  *
- * @param port - Runtime worker port (e.g., 55200)
+ * @param port - Runtime port (e.g., 55000) - RSC requests go through runtime proxy
  * @param request - Component render request
  * @returns Rendered React element or error
  */

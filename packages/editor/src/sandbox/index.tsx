@@ -26,12 +26,9 @@ import "./styles.css";
 const params = new URLSearchParams(window.location.search);
 const blockId = params.get("blockId");
 const pageId = params.get("pageId");
-// runtimePort is the main API port (55100) for /workbook/* endpoints
+// runtimePort is the main API port - all requests (tRPC, blocks, RSC) go through runtime
 const runtimePort = params.get("runtimePort");
 const runtimePortNum = runtimePort ? parseInt(runtimePort, 10) : null;
-// workerPort is the Vite worker port (55200+) for RSC /blocks/* endpoints
-const workerPort = params.get("workerPort");
-const workerPortNum = workerPort ? parseInt(workerPort, 10) : runtimePortNum;
 const readOnly = params.get("readOnly") === "true";
 
 // Determine editor mode
@@ -108,13 +105,11 @@ async function captureThumbnail() {
 function PageEditor({
   pageId,
   runtimePort,
-  workerPort,
   readOnly,
   rscReady,
 }: {
   pageId: string;
   runtimePort: number;
-  workerPort: number;
   readOnly: boolean;
   rscReady: boolean;
 }) {
@@ -157,14 +152,13 @@ function PageEditor({
 
   if (source !== null) {
     return (
-      <RscProvider port={workerPort} enabled>
+      <RscProvider port={runtimePort} enabled>
         <MdxVisualEditor
           source={source}
           onSourceChange={saveSource}
           pageId={currentPageId}
           onRename={renamePage}
           runtimePort={runtimePort}
-          workerPort={workerPort}
           className="h-screen"
           isRefreshing={isRefreshing || !rscReady}
         />
@@ -237,7 +231,6 @@ function SandboxApp() {
       <PageEditor
         pageId={pageId}
         runtimePort={runtimePortNum}
-        workerPort={workerPortNum!}
         readOnly={readOnly}
         rscReady={rscReady}
       />
@@ -252,7 +245,7 @@ function SandboxApp() {
   // Block mode: Use Overlay Editor in canvas view
   // Slightly dimmed background, block container is centered and sized to content
   return (
-    <RscProvider port={workerPortNum!} enabled>
+    <RscProvider port={runtimePortNum!} enabled>
       <div className="relative min-h-screen w-full bg-background flex items-center justify-center p-8 overflow-auto">
         <div className="absolute inset-0 bg-black/[0.03] dark:bg-black/[0.15] pointer-events-none" />
         <div className="relative bg-background rounded-xl shadow-md">
@@ -260,7 +253,6 @@ function SandboxApp() {
             blockId={blockId!}
             initialSource={source}
             runtimePort={runtimePortNum!}
-            workerPort={workerPortNum!}
             readOnly={readOnly}
           />
         </div>

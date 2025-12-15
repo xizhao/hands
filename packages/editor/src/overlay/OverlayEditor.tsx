@@ -149,8 +149,8 @@ function DataDepChip({ nodeId, containerRef, tables }: DataDepChipProps) {
 
 interface OverlayEditorProps {
   blockId: string;
+  /** Runtime port - all block/RSC requests go through runtime proxy */
   runtimePort: number;
-  workerPort: number;
   initialSource: string;
   readOnly?: boolean;
   /** Called when user presses Escape with no selection (to exit editing mode) */
@@ -168,7 +168,6 @@ interface OverlayEditorInnerProps extends OverlayEditorProps {
 function OverlayEditorInner({
   blockId,
   runtimePort,
-  workerPort,
   initialSource,
   readOnly = false,
   onExit,
@@ -270,7 +269,7 @@ function OverlayEditorInner({
         if (version > 0) {
           props._ts = Date.now().toString();
         }
-        const result = await renderBlockViaRsc(workerPort, blockId, props);
+        const result = await renderBlockViaRsc(runtimePort, blockId, props);
 
         if (!mounted) return;
 
@@ -295,7 +294,7 @@ function OverlayEditorInner({
     return () => {
       mounted = false;
     };
-  }, [blockId, workerPort, version]);
+  }, [blockId, runtimePort, version]);
 
   // Cache rendered HTML after RSC settles
   useEffect(() => {

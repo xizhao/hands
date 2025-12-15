@@ -201,9 +201,9 @@ export function SandboxFrame({
   // Fetch LQIP for loading placeholder
   const { data: thumbnail } = useThumbnail(mode, contentId);
 
-  // Derive ports from runtime port (they're deterministic: editor = runtime + 400, worker = runtime + 200)
+  // Derive editor port from runtime port (editor = runtime + 400)
+  // Worker/block requests go through runtime proxy, not directly to Vite
   const editorPort = runtimePort ? runtimePort + 400 : null;
-  const workerPort = runtimePort ? runtimePort + 200 : null;
 
   // Mark ready when we have ports - iframe will handle its own loading/retry
   useEffect(() => {
@@ -213,10 +213,9 @@ export function SandboxFrame({
   }, [editorReady, editorPort]);
 
   // Build iframe URL - load directly from editor Vite for proper module resolution
+  // All block/RSC requests go through runtimePort (which proxies to Vite internally)
   const iframeSrc = (() => {
     if (!editorPort || !editorReady || !runtimePort) return null;
-    // Block mode requires worker port
-    if (requireBlockServer && !workerPort) return null;
 
     const params = new URLSearchParams({
       runtimePort: String(runtimePort),
@@ -224,7 +223,7 @@ export function SandboxFrame({
 
     if (blockId) params.set("blockId", blockId);
     if (pageId) params.set("pageId", pageId);
-    if (workerPort) params.set("workerPort", String(workerPort));
+    // Note: workerPort is intentionally not passed - editor uses runtimePort for blocks
     if (readOnly) params.set("readOnly", "true");
 
     return `http://localhost:${editorPort}/sandbox.html?${params}`;

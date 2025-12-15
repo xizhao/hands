@@ -10,7 +10,6 @@ interface TauriRuntimeStatus {
   directory: string;
   runtime_port: number;
   postgres_port: number;
-  worker_port: number;
   message: string;
 }
 
@@ -214,7 +213,6 @@ export function useOpenWorkbook() {
         directory: workbook.directory,
         runtime_port: 0,
         postgres_port: 0,
-        worker_port: 0,
         message: "Starting...",
       });
 

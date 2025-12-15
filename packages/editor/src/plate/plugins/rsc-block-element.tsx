@@ -47,9 +47,8 @@ export function RscBlockElementComponent({
   // Access element from props
   const rscElement = props.element as RscBlockElement;
 
-  // Get runtime port from editor or default
+  // Get runtime port from editor or default (blocks go through runtime proxy)
   const runtimePort = (editor as any).runtimePort || 55000;
-  const workerPort = (editor as any).workerPort || 55200;
 
   // Fetch initial source from runtime via tRPC
   useEffect(() => {
@@ -133,7 +132,6 @@ export function RscBlockElementComponent({
         blockId={rscElement.blockId}
         initialSource={initialSource}
         runtimePort={runtimePort}
-        workerPort={workerPort}
         readOnly={!interactive}
         onExit={exitEditMode}
       />

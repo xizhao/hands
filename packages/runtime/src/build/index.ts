@@ -7,6 +7,14 @@
 export { buildProduction } from "./production.js";
 // Re-export the build functions
 export { buildRSC, buildRSC as build } from "./rsc.js";
+// Re-export config generators for preflight scaffolding
+export {
+  generatePackageJson,
+  generateViteConfig,
+  generateWranglerConfig,
+  generateClientEntry,
+  generateTsConfig,
+} from "./rsc.js";
 
 /**
  * Hands workbook configuration (hands.json)

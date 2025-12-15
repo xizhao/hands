@@ -26,7 +26,6 @@ pub struct RuntimeProcess {
     pub child: Child,
     pub runtime_port: u16,
     pub postgres_port: u16,
-    pub worker_port: u16,
     pub directory: String,
     pub restart_count: u32,
 }
@@ -383,8 +382,6 @@ struct RuntimeReady {
     runtime_port: u16,
     #[serde(rename = "postgresPort")]
     postgres_port: u16,
-    #[serde(rename = "workerPort")]
-    worker_port: u16,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -394,7 +391,6 @@ pub struct DevServerStatus {
     pub directory: String,
     pub runtime_port: u16,
     pub postgres_port: u16,
-    pub worker_port: u16,
     pub message: String,
 }
 
@@ -493,7 +489,7 @@ async fn force_cleanup_runtime() {
 async fn spawn_runtime(
     workbook_id: &str,
     directory: &str,
-) -> Result<(Child, u16, u16, u16), String> {
+) -> Result<(Child, u16, u16), String> {
     // Force cleanup any stale processes before starting
     force_cleanup_runtime().await;
 
@@ -528,7 +524,7 @@ async fn spawn_runtime(
             if line.starts_with('{') {
                 if let Ok(ready) = serde_json::from_str::<RuntimeReady>(&line) {
                     if ready.msg_type == "ready" {
-                        return Ok((ready.runtime_port, ready.postgres_port, ready.worker_port));
+                        return Ok((ready.runtime_port, ready.postgres_port, reader));
                     }
                 }
             }
@@ -537,8 +533,14 @@ async fn spawn_runtime(
     }).await;
 
     match timeout_result {
-        Ok(Ok((runtime_port, postgres_port, worker_port))) => {
-            Ok((child, runtime_port, postgres_port, worker_port))
+        Ok(Ok((runtime_port, postgres_port, mut reader))) => {
+            // Continue reading stdout in background to show Vite logs
+            tokio::spawn(async move {
+                while let Ok(Some(line)) = reader.next_line().await {
+                    println!("[runtime] {}", line);
+                }
+            });
+            Ok((child, runtime_port, postgres_port))
         }
         Ok(Err(e)) => {
             let _ = child.kill().await;
@@ -611,13 +613,12 @@ fn start_runtime_monitor(state: Arc<Mutex<AppState>>) {
                 println!("[monitor] Restarting runtime for {}...", workbook_id);
 
                 match spawn_runtime(&workbook_id, &directory).await {
-                    Ok((child, runtime_port, postgres_port, worker_port)) => {
+                    Ok((child, runtime_port, postgres_port)) => {
                         let mut state_guard = state.lock().await;
                         state_guard.runtimes.insert(workbook_id.clone(), RuntimeProcess {
                             child,
                             runtime_port,
                             postgres_port,
-                            worker_port,
                             directory,
                             restart_count,
                         });
@@ -673,7 +674,7 @@ async fn start_runtime(
     kill_processes_on_port(runtime_port_default);
     tokio::time::sleep(Duration::from_millis(300)).await;
 
-    let (child, runtime_port, postgres_port, worker_port) =
+    let (child, runtime_port, postgres_port) =
         spawn_runtime(&workbook_id, &directory).await?;
 
     // Re-acquire lock and store
@@ -682,14 +683,13 @@ async fn start_runtime(
         child,
         runtime_port,
         postgres_port,
-        worker_port,
         directory: directory.clone(),
         restart_count: 0,
     });
 
     println!(
-        "Runtime started for workbook {} - runtime:{}, postgres:{}, worker:{}",
-        workbook_id, runtime_port, postgres_port, worker_port
+        "Runtime started for workbook {} - runtime:{}, postgres:{}",
+        workbook_id, runtime_port, postgres_port
     );
 
     Ok(DevServerStatus {
@@ -698,7 +698,6 @@ async fn start_runtime(
         directory,
         runtime_port,
         postgres_port,
-        worker_port,
         message: format!("Runtime started on port {}", runtime_port),
     })
 }
@@ -758,7 +757,6 @@ async fn stop_runtime(
             directory: String::new(),
             runtime_port: 0,
             postgres_port: 0,
-            worker_port: 0,
             message: "Runtime stopped".to_string(),
         });
     }
@@ -769,7 +767,6 @@ async fn stop_runtime(
         directory: String::new(),
         runtime_port: 0,
         postgres_port: 0,
-        worker_port: 0,
         message: "Runtime was not running".to_string(),
     })
 }
@@ -793,7 +790,6 @@ async fn get_active_runtime(
             directory: runtime.directory.clone(),
             runtime_port: runtime.runtime_port,
             postgres_port: runtime.postgres_port,
-            worker_port: runtime.worker_port,
             message: "Runtime is running".to_string(),
         }));
     }
@@ -824,7 +820,6 @@ async fn get_runtime_status(
             directory: String::new(),
             runtime_port: runtime.runtime_port,
             postgres_port: runtime.postgres_port,
-            worker_port: runtime.worker_port,
             message: if is_running {
                 "Runtime is running".to_string()
             } else {
@@ -837,10 +832,9 @@ async fn get_runtime_status(
     drop(state_guard);
 
     // Fallback: Check if runtime is running on default port (started externally)
-    // Default ports: runtime=55000, postgres=55100, worker=55200
+    // Default ports: runtime=55000, postgres=55100
     let default_runtime_port: u16 = PORT_PREFIX as u16 * 1000;
     let default_postgres_port: u16 = default_runtime_port + 100;
-    let default_worker_port: u16 = default_runtime_port + 200;
 
     let status_url = format!("http://localhost:{}/status", default_runtime_port);
     if let Ok(resp) = reqwest::get(&status_url).await {
@@ -852,7 +846,6 @@ async fn get_runtime_status(
                 directory: String::new(),
                 runtime_port: default_runtime_port,
                 postgres_port: default_postgres_port,
-                worker_port: default_worker_port,
                 message: "Runtime detected on default port".to_string(),
             });
         }
@@ -864,7 +857,6 @@ async fn get_runtime_status(
         directory: String::new(),
         runtime_port: 0,
         postgres_port: 0,
-        worker_port: 0,
         message: "Runtime is not running".to_string(),
     })
 }
