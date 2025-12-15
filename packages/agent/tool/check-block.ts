@@ -2,10 +2,10 @@
  * Check Block tool - verify a block executes successfully at runtime
  *
  * Hits the block's endpoint to verify it renders without errors.
- * This catches runtime errors that TypeScript checking misses:
+ * Uses React's Flight stream parser to catch all errors including:
  * - Database query failures
  * - Missing/invalid props
- * - React rendering errors
+ * - React rendering errors (including serialization errors)
  * - Runtime exceptions
  */
 
@@ -19,7 +19,7 @@ const checkBlock = tool({
 
 Unlike the 'check' tool (TypeScript validation), this actually runs the block to catch:
 - Database query errors (missing tables, bad SQL)
-- React rendering errors
+- React rendering errors (including serialization errors)
 - Missing imports or runtime exceptions
 - Invalid props or context issues
 
@@ -46,14 +46,9 @@ Use this after creating or modifying a block to verify it works end-to-end.`,
         },
       });
 
-      if (response.ok) {
-        // Block rendered successfully
-        return `✓ Block "${blockId}" executes successfully (HTTP ${response.status})`;
-      }
-
-      // Handle error response
       const contentType = response.headers.get("content-type") || "";
 
+      // Handle JSON error response (load errors, etc.)
       if (contentType.includes("application/json")) {
         try {
           const errorData = await response.json();
@@ -64,7 +59,6 @@ Use this after creating or modifying a block to verify it works end-to-end.`,
           result += `Error: ${errorMessage}`;
 
           if (stack) {
-            // Extract the most relevant part of the stack trace
             const stackLines = stack.split("\n").slice(0, 5).join("\n");
             result += `\n\nStack trace:\n${stackLines}`;
           }
@@ -75,7 +69,35 @@ Use this after creating or modifying a block to verify it works end-to-end.`,
         }
       }
 
-      // Non-JSON error response
+      // For RSC streams, use React's Flight parser to properly detect errors
+      if (contentType.includes("text/x-component") && response.body) {
+        try {
+          // Dynamic import to avoid slowing tool load
+          const { createFromReadableStream } = await import(
+            "react-server-dom-webpack/client.node"
+          );
+
+          // Parse the Flight stream - this will throw on errors
+          const result = await createFromReadableStream(response.body, {
+            // No-op module loading since we just want to validate, not render
+            moduleLoading: null,
+            moduleMap: null,
+          });
+
+          // If we got here, stream parsed successfully
+          return `✓ Block "${blockId}" renders successfully`;
+        } catch (err) {
+          const message = err instanceof Error ? err.message : String(err);
+          return `✗ Block "${blockId}" failed during render\n\nError: ${message}`;
+        }
+      }
+
+      // Non-RSC success response
+      if (response.ok) {
+        return `✓ Block "${blockId}" executes successfully (HTTP ${response.status})`;
+      }
+
+      // Other error response
       const text = await response.text();
       return `✗ Block "${blockId}" failed (HTTP ${response.status}): ${text.slice(0, 500)}`;
     } catch (err) {

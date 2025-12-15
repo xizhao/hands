@@ -17,7 +17,8 @@
     "@hands/stdlib": "workspace:*",
     "@opencode-ai/sdk": "^1.0.152",
     "@opencode-ai/plugin": "^1.0.152",
-    "@trpc/client": "^11.8.0"
+    "@trpc/client": "^11.8.0",
+    "react-server-dom-webpack": "19.1.0"
   },
   "devDependencies": {
     "@oxc-parser/binding-wasm32-wasi": "0.102.0",

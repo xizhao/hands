@@ -102,12 +102,21 @@ const KNOWN_BLOCK_IDS: string[] = [${blockIds}];
 // Module cache for loaded blocks
 const blockCache = new Map<string, React.FC<any>>();
 
+// Error cache for blocks that failed to load (cleared on HMR)
+const blockErrorCache = new Map<string, Error>();
+
 /**
  * Dynamically load a block by ID
  * Uses Vite's module resolution which handles "use client" transforms
+ * Throws on error so callers can return proper error responses
  */
-async function loadBlock(blockId: string): Promise<React.FC<any> | null> {
-  // Check cache first
+async function loadBlock(blockId: string): Promise<React.FC<any>> {
+  // Check error cache first (avoid repeated failed imports)
+  if (blockErrorCache.has(blockId)) {
+    throw blockErrorCache.get(blockId)!;
+  }
+
+  // Check success cache
   if (blockCache.has(blockId)) {
     return blockCache.get(blockId)!;
   }
@@ -116,11 +125,16 @@ async function loadBlock(blockId: string): Promise<React.FC<any> | null> {
     // Dynamic import - Vite resolves this and applies RSC transforms
     const mod = await import(\`../../${blocksDir}/\${blockId}.tsx\`);
     const Block = mod.default;
+    if (!Block) {
+      throw new Error(\`Block "\${blockId}" has no default export\`);
+    }
     blockCache.set(blockId, Block);
     return Block;
   } catch (err) {
-    console.error(\`[worker] Failed to load block "\${blockId}":\`, err);
-    return null;
+    const error = err instanceof Error ? err : new Error(String(err));
+    console.error(\`[worker] Failed to load block "\${blockId}":\`, error);
+    blockErrorCache.set(blockId, error);
+    throw error;
   }
 }
 
@@ -130,8 +144,10 @@ async function loadBlock(blockId: string): Promise<React.FC<any> | null> {
 function clearBlockCache(blockId?: string) {
   if (blockId) {
     blockCache.delete(blockId);
+    blockErrorCache.delete(blockId);
   } else {
     blockCache.clear();
+    blockErrorCache.clear();
   }
 }
 
@@ -348,10 +364,15 @@ app.get("/blocks/:blockId{.+}", async (c) => {
   const blockId = c.req.param("blockId");
 
   // Dynamically load the block - Vite handles "use client" transforms
-  const Block = await loadBlock(blockId);
-
-  if (!Block) {
-    return c.json({ error: \`Block not found: \${blockId}\` }, 404);
+  let Block: React.FC<any>;
+  try {
+    Block = await loadBlock(blockId);
+  } catch (err) {
+    // Import/load error - return the actual error, not "not found"
+    const error = err instanceof Error ? err.message : String(err);
+    const stack = err instanceof Error ? err.stack : undefined;
+    console.error(\`[worker] Block "\${blockId}" load error:\`, err);
+    return c.json({ error, stack }, 500);
   }
 
   const url = new URL(c.req.url);
@@ -386,7 +407,7 @@ app.get("/blocks/:blockId{.+}", async (c) => {
       },
     });
   } catch (err) {
-    // Error boundary - don't crash the server
+    // Render error - don't crash the server
     const error = err instanceof Error ? err.message : String(err);
     const stack = err instanceof Error ? err.stack : undefined;
     console.error(\`[worker] Block "\${blockId}" render error:\`, err);
@@ -398,10 +419,15 @@ app.post("/blocks/:blockId{.+}/rsc", async (c) => {
   const blockId = c.req.param("blockId");
 
   // Dynamically load the block
-  const Block = await loadBlock(blockId);
-
-  if (!Block) {
-    return c.json({ error: \`Block not found: \${blockId}\` }, 404);
+  let Block: React.FC<any>;
+  try {
+    Block = await loadBlock(blockId);
+  } catch (err) {
+    // Import/load error - return the actual error
+    const error = err instanceof Error ? err.message : String(err);
+    const stack = err instanceof Error ? err.stack : undefined;
+    console.error(\`[worker] Block "\${blockId}" load error:\`, err);
+    return c.json({ error, stack }, 500);
   }
 
   const props = await c.req.json();
@@ -430,7 +456,7 @@ app.post("/blocks/:blockId{.+}/rsc", async (c) => {
       },
     });
   } catch (err) {
-    // Error boundary - don't crash the server
+    // Render error - don't crash the server
     const error = err instanceof Error ? err.message : String(err);
     const stack = err instanceof Error ? err.stack : undefined;
     console.error(\`[worker] Block "\${blockId}" RSC render error:\`, err);
