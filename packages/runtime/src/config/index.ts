@@ -366,6 +366,8 @@ export async function initWorkbook(options: InitWorkbookOptions): Promise<void> 
   writeFileSync(join(directory, "package.json"), `${JSON.stringify(packageJson, null, 2)}\n`);
 
   // Create tsconfig.json
+  // Note: paths are resolved at runtime by Vite aliases, but we need them
+  // here for TypeScript checking in the editor
   const tsconfig = {
     compilerOptions: {
       target: "ESNext",
@@ -376,8 +378,13 @@ export async function initWorkbook(options: InitWorkbookOptions): Promise<void> 
       skipLibCheck: true,
       jsx: "react-jsx",
       jsxImportSource: "react",
+      baseUrl: ".",
+      paths: {
+        "@hands/db": [".hands/src/worker.tsx"],
+        "@hands/db/types": [".hands/types.ts"],
+      },
     },
-    include: ["blocks/**/*", "pages/**/*", "lib/**/*"],
+    include: ["blocks/**/*", "pages/**/*", "lib/**/*", ".hands/src/**/*", ".hands/types.ts"],
   };
   writeFileSync(join(directory, "tsconfig.json"), `${JSON.stringify(tsconfig, null, 2)}\n`);
 

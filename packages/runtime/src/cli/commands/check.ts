@@ -5,10 +5,11 @@
  * - Preflight/environment validation
  * - TypeScript type checking
  * - Biome linting and formatting
+ * - Architecture linting (blocks read-only, correct imports)
  */
 
-import { existsSync } from "node:fs";
-import { join } from "node:path";
+import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
+import { join, relative } from "node:path";
 import { spawnSync } from "node:child_process";
 import { printPreflightResults, runPreflight } from "../../preflight.js";
 
@@ -24,6 +25,71 @@ interface CheckResult {
   message: string;
   output?: string;
   fixed?: boolean;
+}
+
+// Architecture lint rules (warnings only)
+const ARCH_RULES = [
+  {
+    id: "block-writes-data",
+    pattern: /\b(INSERT\s+INTO|UPDATE\s+\w+\s+SET|DELETE\s+FROM)\b/gi,
+    message: "Blocks should be read-only. Use Actions for writes.",
+  },
+  {
+    id: "deprecated-import",
+    pattern: /from\s+["']@hands\/runtime\/context["']/,
+    message: "Use `import { sql } from '@hands/db'` instead.",
+  },
+  {
+    id: "deprecated-ctx-sql",
+    pattern: /\bctx\.sql\b/,
+    message: "ctx.sql is deprecated. Import sql from @hands/db.",
+  },
+];
+
+interface ArchWarning {
+  file: string;
+  line: number;
+  rule: string;
+  message: string;
+}
+
+function lintBlocks(blocksDir: string): ArchWarning[] {
+  const warnings: ArchWarning[] = [];
+
+  if (!existsSync(blocksDir)) return warnings;
+
+  function scanDir(dir: string) {
+    for (const entry of readdirSync(dir)) {
+      const fullPath = join(dir, entry);
+      const stat = statSync(fullPath);
+
+      if (stat.isDirectory()) {
+        scanDir(fullPath);
+      } else if (entry.endsWith(".tsx") || entry.endsWith(".ts")) {
+        const content = readFileSync(fullPath, "utf-8");
+        const lines = content.split("\n");
+        const relPath = relative(blocksDir, fullPath);
+
+        for (const rule of ARCH_RULES) {
+          for (let i = 0; i < lines.length; i++) {
+            if (rule.pattern.test(lines[i])) {
+              warnings.push({
+                file: relPath,
+                line: i + 1,
+                rule: rule.id,
+                message: rule.message,
+              });
+            }
+            // Reset regex lastIndex for global patterns
+            rule.pattern.lastIndex = 0;
+          }
+        }
+      }
+    }
+  }
+
+  scanDir(blocksDir);
+  return warnings;
 }
 
 export async function checkCommand(options: CheckOptions) {
@@ -120,6 +186,37 @@ export async function checkCommand(options: CheckOptions) {
 
   if (!biomeOk && strict) {
     hasErrors = true;
+  }
+
+  // 4. Architecture linting (blocks read-only, correct imports)
+  if (!jsonOutput) {
+    console.log("Running architecture checks...");
+  }
+
+  const blocksDir = join(workbookDir, "blocks");
+  const archWarnings = lintBlocks(blocksDir);
+
+  if (archWarnings.length > 0) {
+    const archOutput = archWarnings
+      .map((w) => `  ${w.file}:${w.line} - ${w.message} (${w.rule})`)
+      .join("\n");
+
+    results.push({
+      name: "Architecture",
+      ok: !strict, // Warnings don't fail unless strict mode
+      message: `${archWarnings.length} warning${archWarnings.length === 1 ? "" : "s"}`,
+      output: archOutput,
+    });
+
+    if (strict) {
+      hasErrors = true;
+    }
+  } else {
+    results.push({
+      name: "Architecture",
+      ok: true,
+      message: "No issues",
+    });
   }
 
   // Output results

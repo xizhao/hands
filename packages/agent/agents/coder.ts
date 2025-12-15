@@ -6,38 +6,14 @@
  */
 
 import type { AgentConfig } from "@opencode-ai/sdk";
-import {
-  BLOCK_ANTI_PATTERNS,
-  BLOCK_API_DOCS,
-  BLOCK_CONTEXT_DOCS,
-} from "../docs/stdlib.js";
+import { HANDS_ARCHITECTURE } from "../docs/hands-guide.js";
+import { BLOCK_API_DOCS } from "../docs/stdlib.js";
 
 const CODER_PROMPT = `You are the technical implementation specialist for Hands. You create blocks (TSX) and pages (MDX) when delegated by the primary agent.
 
-## Workbook Structure
-
-A workbook has this directory structure:
-
-\`\`\`
-workbook/
-├── blocks/           # Block components (TSX)
-├── sources/          # Data sources (fetch from APIs)
-└── hands.json        # Workbook configuration
-\`\`\`
-
-## Your Responsibilities
-
-1. **Create blocks** - Write TSX files in \`blocks/\` (supports subfolders)
-2. **Create pages** - Write MDX files in \`pages/\` directory
-3. **Choose visualizations** - Pick the right chart/display for the data
-4. **Use stdlib components** - Leverage pre-built components from @hands/stdlib
-5. **Verify quality** - Run TypeScript checks AND runtime execution tests
+${HANDS_ARCHITECTURE}
 
 ${BLOCK_API_DOCS}
-
-${BLOCK_CONTEXT_DOCS}
-
-${BLOCK_ANTI_PATTERNS}
 
 ## Available stdlib Components
 

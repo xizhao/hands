@@ -242,10 +242,84 @@ export const Fragment = JSX.Fragment;
   };
 }
 
+/**
+ * Pre-include all stdlib dependencies to avoid mid-session discovery.
+ *
+ * rwsdk uses Vite's dep optimizer for RSC transforms via esbuild plugins.
+ * When deps are discovered mid-request, it causes "new version of pre-bundle" race conditions.
+ * By pre-including all known deps, we avoid discovery while keeping rwsdk's transforms working.
+ */
+function preIncludeStdlibDeps(): Plugin {
+  // All dependencies from @hands/stdlib that might be imported
+  const stdlibDeps = [
+    // Radix UI (used by shadcn components)
+    "@radix-ui/react-accordion",
+    "@radix-ui/react-alert-dialog",
+    "@radix-ui/react-aspect-ratio",
+    "@radix-ui/react-avatar",
+    "@radix-ui/react-checkbox",
+    "@radix-ui/react-collapsible",
+    "@radix-ui/react-context-menu",
+    "@radix-ui/react-dialog",
+    "@radix-ui/react-dropdown-menu",
+    "@radix-ui/react-hover-card",
+    "@radix-ui/react-label",
+    "@radix-ui/react-menubar",
+    "@radix-ui/react-navigation-menu",
+    "@radix-ui/react-popover",
+    "@radix-ui/react-progress",
+    "@radix-ui/react-radio-group",
+    "@radix-ui/react-scroll-area",
+    "@radix-ui/react-select",
+    "@radix-ui/react-separator",
+    "@radix-ui/react-slider",
+    "@radix-ui/react-slot",
+    "@radix-ui/react-switch",
+    "@radix-ui/react-tabs",
+    "@radix-ui/react-toggle",
+    "@radix-ui/react-toggle-group",
+    "@radix-ui/react-tooltip",
+    // Charts
+    "recharts",
+    // Utils
+    "lucide-react",
+    "clsx",
+    "tailwind-merge",
+    "class-variance-authority",
+    "date-fns",
+    // UI components
+    "cmdk",
+    "vaul",
+    "sonner",
+    "input-otp",
+    "embla-carousel-react",
+    "react-resizable-panels",
+    "react-day-picker",
+  ];
+
+  return {
+    name: "hands-pre-include-deps",
+    enforce: "pre",
+    config() {
+      return {
+        optimizeDeps: {
+          include: stdlibDeps,
+        },
+        ssr: {
+          optimizeDeps: {
+            include: stdlibDeps,
+          },
+        },
+      };
+    },
+  };
+}
+
 export default defineConfig({
   // Vite runs from .hands/ directory to prevent serving blocks/ as static files
   // All paths are relative to .hands/
   plugins: [
+    preIncludeStdlibDeps(),
     reactGlobalPlugin(),
     cloudflare({
       viteEnvironment: { name: "worker" },
@@ -350,11 +424,7 @@ export function generateWranglerConfig(config: HandsConfig): string {
  */
 export function generateClientEntry(): string {
   return `// Client entry for RSC hydration
-// This handles consuming Flight streams and hydrating client components
-
-import { initClient } from "rwsdk/client";
-
-initClient();
+// Minimal client entry - rwsdk handles client component hydration automatically
 
 // Export utility for consuming Flight streams from blocks
 export async function createBlockFromStream(blockId: string, props: Record<string, unknown> = {}) {
