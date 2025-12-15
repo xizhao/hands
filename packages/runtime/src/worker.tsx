@@ -1,9 +1,10 @@
 import { route, render, RouteMiddleware } from "rwsdk/router";
 import { defineApp } from "rwsdk/worker";
-import { handleBlockGet } from "./blocks/render";
+import { handleBlockGet, loadBlock } from "./blocks/render";
 import { Page } from "./pages/Page";
+import { BlockPreview } from "./blocks/BlockPreview";
 import { pageRoutes } from "@hands/pages";
-import { runWithDbMode, Database } from "./db/dev";
+import { runWithDbMode, Database, sql } from "./db/dev";
 
 // Export Durable Object for wrangler
 export { Database };
@@ -56,4 +57,13 @@ export default defineApp([
   // route("/actions/*", {
   //   post: (args) => runWithDbMode("action", () => handleAction(args)),
   // }),
+
+  // Block preview with full HTML/SSR (for browser viewing)
+  ...render(BlockPreview, [
+    route("/preview/*", async ({ params }) => {
+      const blockId = params.$0;
+      const Block = await loadBlock(blockId);
+      return runWithDbMode("block", () => <Block />);
+    }),
+  ]),
 ]);

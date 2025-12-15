@@ -22,7 +22,7 @@ const blockRegistry = createRegistry(blockModules, /\/([^/]+)\.tsx$/);
 /**
  * Load a block by ID
  */
-async function loadBlock(blockId: string): Promise<React.FC<any>> {
+export async function loadBlock(blockId: string): Promise<React.FC<any>> {
   const loader = blockRegistry.get(blockId);
   if (!loader) {
     throw new Error(`Block "${blockId}" not found in registry`);

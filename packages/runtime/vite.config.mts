@@ -38,18 +38,23 @@ export default defineConfig({
       viteEnvironment: { name: "worker" },
     }),
     redwood({
-      forceClientPaths: [path.resolve(workbookPath, "blocks/**/*.tsx")],
+      // Blocks are server components by default
+      // ui/ components with "use client" need to be registered for client bundling
+      forceClientPaths: [path.resolve(workbookPath, "ui/**/*.tsx")],
     }),
     tailwindcss(),
   ],
   resolve: {
     alias: {
+      // Workbook paths
+      "@ui": path.resolve(workbookPath, "ui"),
       "@/blocks": path.resolve(workbookPath, "blocks"),
-      "@hands/db": path.resolve(__dirname, "src/db/dev.ts"), // Kysely + DO SQLite
-      "@hands/db/types": path.join(workbookPath, ".hands/db.d.ts"), // Generated types
-      "@hands/pages": path.join(workbookPath, ".hands/pages/index.tsx"), // Generated page manifest
+      // Hands runtime
+      "@hands/db": path.resolve(__dirname, "src/db/dev.ts"),
+      "@hands/db/types": path.join(workbookPath, ".hands/db.d.ts"),
+      "@hands/pages": path.join(workbookPath, ".hands/pages/index.tsx"),
     },
-    // Resolve deps from workbook first, then harness
+    // Resolve deps from workbook first, then runtime
     modules: [
       path.join(workbookPath, "node_modules"),
       "node_modules",
