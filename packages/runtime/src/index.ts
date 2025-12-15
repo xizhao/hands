@@ -487,17 +487,34 @@ async function hotReloadBlocks(config: RuntimeConfig) {
 
         const elapsed = Date.now() - startTime;
         console.log(`[runtime] Blocks hot-reloaded in ${elapsed}ms`);
-      } else if (state.viteProc) {
-        // Fallback: Full restart if using subprocess mode
-        console.log("[runtime] Block list changed, restarting Vite worker (no HMR available)...");
+      } else if (state.viteProc && state.vitePort) {
+        // Subprocess mode with dynamic imports: Just rebuild worker.tsx and invalidate cache
+        // No restart needed - Vite handles HMR for the dynamic imports
+        console.log("[runtime] Block list changed, rebuilding worker.tsx...");
 
-        state.viteProc.kill();
-        state.viteProc = null;
-        state.viteReady = false;
-        state.vitePort = null;
+        // 1. Rebuild worker.tsx with updated KNOWN_BLOCK_IDS
+        const { buildRSC: rebuildRSC } = await import("./build/rsc.js");
+        const buildResult = await rebuildRSC(config.workbookDir, { verbose: false });
 
-        // Rebuild and restart Vite
-        await bootVite(config);
+        if (!buildResult.success) {
+          console.warn("[runtime] Block rebuild has errors:", buildResult.errors);
+          state.buildErrors = buildResult.errors;
+        }
+
+        // 2. Invalidate the block cache in the worker via HTTP
+        try {
+          await fetch(`http://127.0.0.1:${state.vitePort}/blocks/invalidate`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({}), // Clear all
+            signal: AbortSignal.timeout(5000),
+          });
+        } catch (err) {
+          console.warn("[runtime] Failed to invalidate block cache:", err);
+        }
+
+        const elapsed = Date.now() - startTime;
+        console.log(`[runtime] Blocks reloaded in ${elapsed}ms (no restart needed)`);
       } else {
         console.warn("[runtime] No Vite server available for block reload");
       }
@@ -1522,8 +1539,9 @@ async function bootVite(config: RuntimeConfig) {
 
     // Use programmatic Vite API for HMR access
     // This enables hot-reloading blocks without full restarts
-    // TODO: Debug why programmatic mode hangs on listen() - falling back to subprocess for now
-    const useProgrammaticVite = false; // Feature flag
+    // NOTE: Disabled - createServer() hangs with cloudflare/miniflare plugins
+    // Instead, we use subprocess mode and send HMR commands via WebSocket
+    const useProgrammaticVite = false;
 
     if (useProgrammaticVite) {
       console.log(`[runtime] Starting Vite (programmatic) on port ${vitePort}...`);
@@ -1544,6 +1562,8 @@ async function bootVite(config: RuntimeConfig) {
 
         // Load the vite.config.mts from .hands directory
         const configPath = join(handsDir, "vite.config.mts");
+        console.log(`[runtime] Loading Vite config from ${configPath}...`);
+
         const loadedConfig = await loadConfigFromFile(
           { command: "serve", mode: "development" },
           configPath,
@@ -1557,7 +1577,7 @@ async function bootVite(config: RuntimeConfig) {
         console.log(`[runtime] Loaded Vite config, creating server...`);
 
         // Create Vite dev server with loaded config
-        state.viteServer = await createServer({
+        const serverConfig = {
           ...loadedConfig.config,
           root: handsDir,
           server: {
@@ -1568,36 +1588,95 @@ async function bootVite(config: RuntimeConfig) {
           },
           customLogger: {
             // Forward Vite logs with [worker] prefix
-            info: (msg) => console.log(`[worker] ${msg}`),
-            warn: (msg) => console.warn(`[worker] ${msg}`),
-            warnOnce: (msg) => console.warn(`[worker] ${msg}`),
-            error: (msg) => console.error(`[worker] ${msg}`),
+            info: (msg: string) => console.log(`[worker] ${msg}`),
+            warn: (msg: string) => console.warn(`[worker] ${msg}`),
+            warnOnce: (msg: string) => console.warn(`[worker] ${msg}`),
+            error: (msg: string) => console.error(`[worker] ${msg}`),
             clearScreen: () => {},
             hasErrorLogged: () => false,
             hasWarned: false,
           },
+        };
+
+        console.log(`[runtime] Creating Vite server with config...`);
+
+        // Wrap createServer with a timeout - it can hang with cloudflare/miniflare plugins
+        const createServerTimeout = 60000;
+        const createServerPromise = createServer(serverConfig);
+        const timeoutPromise = new Promise<never>((_, reject) => {
+          setTimeout(() => reject(new Error(`createServer() timed out after ${createServerTimeout}ms`)), createServerTimeout);
         });
 
-        console.log(`[runtime] Vite server created, starting to listen...`);
+        state.viteServer = await Promise.race([createServerPromise, timeoutPromise]);
+        console.log(`[runtime] Vite server instance created`);
+        console.log(`[runtime] Vite environments:`, Object.keys(state.viteServer.environments || {}));
+        console.log(`[runtime] Starting to listen on port ${vitePort}...`);
 
-        // Start listening
-        await state.viteServer.listen();
-        console.log(`[runtime] Vite listen() completed`);
+        // Don't await listen() - it may hang with cloudflare/miniflare plugins
+        // Instead, start listening and poll for readiness like subprocess mode
+        state.viteServer.listen().then(() => {
+          console.log(`[runtime] Vite listen() promise resolved`);
+        }).catch((err) => {
+          console.error(`[runtime] Vite listen() error:`, err);
+        });
+
+        // Poll for Vite readiness via /health endpoint
+        const timeout = 60000;
+        const startTime = Date.now();
+        let ready = false;
+
+        while (Date.now() - startTime < timeout && !ready) {
+          try {
+            const response = await fetch(`http://127.0.0.1:${vitePort}/health`, {
+              signal: AbortSignal.timeout(1000),
+            });
+            if (response.ok) {
+              ready = true;
+              break;
+            }
+          } catch {
+            // Not ready yet
+          }
+          await new Promise((resolve) => setTimeout(resolve, 300));
+        }
+
+        if (!ready) {
+          throw new Error(`Vite failed to become ready within ${timeout}ms`);
+        }
+
+        console.log(`[runtime] Vite (programmatic) ready on port ${vitePort}`);
 
         state.vitePort = vitePort;
         state.viteReady = true;
         state.viteError = null;
-        console.log(`[runtime] Vite (programmatic) ready on port ${vitePort}`);
+        state.viteHandsDir = handsDir;
         console.log(`[runtime] HMR-based block hot-reload enabled`);
       } catch (viteErr) {
         console.error(`[runtime] Vite programmatic boot failed:`, viteErr);
         state.viteError = viteErr instanceof Error ? viteErr.message : String(viteErr);
-        // Don't re-throw - let the finally block run to restore cwd
+
+        // Close the server if it was created
+        if (state.viteServer) {
+          try {
+            await state.viteServer.close();
+          } catch {
+            // Ignore close errors
+          }
+          state.viteServer = null;
+        }
+
+        // Fall back to subprocess mode
+        console.log(`[runtime] Falling back to subprocess mode...`);
+        process.chdir(originalCwd); // Restore cwd before spawning subprocess
+        // Continue to the else branch below
       } finally {
         // Restore original cwd
         process.chdir(originalCwd);
       }
-    } else {
+    }
+
+    // Subprocess mode - used as fallback or when programmatic mode is disabled
+    if (!state.viteServer && !state.viteReady) {
       // Fallback: subprocess mode (original approach)
       console.log(`[runtime] Starting Vite (subprocess) on port ${vitePort}...`);
       state.viteProc = spawn(

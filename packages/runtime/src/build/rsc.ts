@@ -328,7 +328,10 @@ export function generateWranglerConfig(config: HandsConfig): string {
   "name": "${config.name || "workbook"}",
   "main": "src/worker.tsx",
   "compatibility_date": "2025-08-21",
-  "compatibility_flags": ["nodejs_compat"],
+  "compatibility_flags": [
+    "nodejs_compat",
+    "no_handle_cross_request_promise_resolution"
+  ],
   "assets": {
     "binding": "ASSETS"
   },

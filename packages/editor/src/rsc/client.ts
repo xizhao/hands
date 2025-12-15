@@ -237,12 +237,15 @@ export async function renderBlockViaRsc(
     } catch (err) {
       lastError = err instanceof Error ? err : new Error(String(err));
 
-      // Connection refused = worker not ready yet, retry
+      // Connection errors that are worth retrying
       const isConnectionError =
         lastError.message.includes("Load failed") ||
         lastError.message.includes("fetch failed") ||
         lastError.message.includes("ECONNREFUSED") ||
-        lastError.message.includes("NetworkError");
+        lastError.message.includes("NetworkError") ||
+        lastError.message.includes("connection closed") ||
+        lastError.message.includes("Connection closed") ||
+        lastError.message.includes("aborted");
 
       if (isConnectionError && attempt < retries) {
         console.log(`[rsc] Connection failed, retry ${attempt + 1}/${retries}...`);
