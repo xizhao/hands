@@ -1,6 +1,8 @@
-import { route, RouteMiddleware } from "rwsdk/router";
+import { route, render, RouteMiddleware } from "rwsdk/router";
 import { defineApp } from "rwsdk/worker";
 import { handleBlockGet } from "./blocks/render";
+import { Page } from "./pages/Page";
+import { pageRoutes } from "@hands/pages";
 import { runWithDbMode, Database } from "./db/dev";
 
 // Export Durable Object for wrangler
@@ -44,6 +46,8 @@ export default defineApp([
       return runWithDbMode("block", () => handleBlockGet(args));
     },
   }),
+  // Pages use rwsdk's render() for proper RSC/SSR handling
+  ...render(Page, pageRoutes),
   // TODO: Add action routes with runWithDbMode("action", ...)
   // route("/actions/*", {
   //   post: (args) => runWithDbMode("action", () => handleAction(args)),

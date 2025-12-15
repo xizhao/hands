@@ -6,6 +6,9 @@
 
 export { plateValueToSource, sourceToPlateValue } from "./converters";
 
+// Static components for SSR/RSC rendering
+export * from "./ui/static-components";
+
 // Editor kit (plugins configuration)
 export { EditorKit } from "./editor-kit";
 // Main editor component

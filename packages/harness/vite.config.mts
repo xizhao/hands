@@ -4,6 +4,7 @@ import path from "path";
 import { redwood } from "rwsdk/vite";
 import { defineConfig } from "vite";
 import { dbTypesPlugin } from "./src/vite-plugin-db-types";
+import { mdxPlugin } from "./src/vite-plugin-mdx";
 
 const isDev = process.env.NODE_ENV !== "production";
 const workbookPath = process.env.HANDS_WORKBOOK_PATH ?? "";
@@ -27,6 +28,10 @@ export default defineConfig({
   },
   plugins: [
     dbTypesPlugin({ workbookPath }),
+    mdxPlugin({
+      workbookPath,
+      componentsPath: path.resolve(__dirname, "src/pages/components/index.tsx"),
+    }),
     cloudflare({
       viteEnvironment: { name: "worker" },
     }),
@@ -41,6 +46,7 @@ export default defineConfig({
       "@/hands/stdlib": path.resolve(__dirname, "../stdlib"),
       "@hands/db": path.resolve(__dirname, "src/db/dev.ts"), // Kysely + DO SQLite
       "@hands/db/types": path.join(workbookPath, ".hands/db.d.ts"), // Generated types
+      "@hands/pages": path.join(workbookPath, ".hands/pages/index.tsx"), // Generated page manifest
     },
   },
 });
