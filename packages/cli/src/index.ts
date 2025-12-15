@@ -1,10 +1,10 @@
 import { program } from "commander";
-import pc from "picocolors";
 import { devCommand } from "./commands/dev.js";
-import { addCommand } from "./commands/add.js";
 import { initCommand } from "./commands/init.js";
 import { checkCommand } from "./commands/check.js";
-import { libupdateCommand } from "./commands/libupdate.js";
+import { uiCommand } from "./commands/ui.js";
+import { sourceCommand } from "./commands/source.js";
+import { blockCommand } from "./commands/block.js";
 
 program
   .name("hands")
@@ -23,21 +23,56 @@ program
   .action(initCommand);
 
 program
-  .command("add")
-  .description("Add components from registry")
-  .argument("<components...>", "Components to add")
-  .option("-r, --registry <url>", "Registry URL")
-  .action(addCommand);
-
-program
-  .command("libupdate")
-  .description("Update installed components")
-  .argument("[components...]", "Components to update (all if empty)")
-  .action(libupdateCommand);
-
-program
   .command("check")
   .description("Validate workbook configuration")
   .action(checkCommand);
+
+// UI components - proxy to shadcn
+program
+  .command("ui")
+  .description("UI components (proxies to shadcn)")
+  .argument("<command>", "shadcn command: add, diff, etc.")
+  .argument("[args...]", "Command arguments")
+  .allowUnknownOption()
+  .action(uiCommand);
+
+// Data sources
+const source = program
+  .command("source")
+  .description("Manage data sources");
+
+source
+  .command("add")
+  .description("Add a data source")
+  .argument("<type>", "Source type: csv, json, api, etc.")
+  .argument("[path]", "Path or URL")
+  .action(sourceCommand.add);
+
+source
+  .command("list")
+  .description("List configured sources")
+  .action(sourceCommand.list);
+
+source
+  .command("sync")
+  .description("Sync data from sources")
+  .argument("[name]", "Source name (all if empty)")
+  .action(sourceCommand.sync);
+
+// Block templates
+const block = program
+  .command("block")
+  .description("Manage blocks");
+
+block
+  .command("add")
+  .description("Add a block from template")
+  .argument("<name>", "Block template name")
+  .action(blockCommand.add);
+
+block
+  .command("list")
+  .description("List available block templates")
+  .action(blockCommand.list);
 
 program.parse();
