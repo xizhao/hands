@@ -382,20 +382,14 @@ app.get("/blocks/:blockId{.+}", async (c) => {
   delete props.edit;
   delete props._ts;
 
-  const db = c.get("db");
-  const ctx = {
-    db,
-    sql: db.sql,
-    params: props,
-    env: c.env,
-  };
-
   try {
     // Wrap rendering with rwsdk request context for "use client" support
+    // Note: We don't pass ctx to blocks - server components should use async data fetching,
+    // and client components can't receive functions anyway
     const rscContext = createRscRequestContext(c.req.raw);
     const stream = runWithRequestInfo(rscContext, () =>
       renderToReadableStream(
-        React.createElement(Block, { ...props, ctx }),
+        React.createElement(Block, props),
         createClientManifest()
       )
     );
@@ -431,20 +425,13 @@ app.post("/blocks/:blockId{.+}/rsc", async (c) => {
   }
 
   const props = await c.req.json();
-  const db = c.get("db");
-  const ctx = {
-    db,
-    sql: db.sql,
-    params: props,
-    env: c.env,
-  };
 
   try {
     // Wrap rendering with rwsdk request context for "use client" support
     const rscContext = createRscRequestContext(c.req.raw);
     const stream = runWithRequestInfo(rscContext, () =>
       renderToReadableStream(
-        React.createElement(Block, { ...props, ctx }),
+        React.createElement(Block, props),
         createClientManifest()
       )
     );
