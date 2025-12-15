@@ -4,7 +4,7 @@ import path from "path";
 import { redwood } from "rwsdk/vite";
 import { defineConfig } from "vite";
 import { dbTypesPlugin } from "./src/vite-plugin-db-types";
-import { mdxPlugin } from "./src/vite-plugin-mdx";
+import { pagesPlugin } from "./src/vite-plugin-pages";
 
 const isDev = process.env.NODE_ENV !== "production";
 const workbookPath = process.env.HANDS_WORKBOOK_PATH ?? "";
@@ -28,10 +28,7 @@ export default defineConfig({
   },
   plugins: [
     dbTypesPlugin({ workbookPath }),
-    mdxPlugin({
-      workbookPath,
-      componentsPath: path.resolve(__dirname, "src/pages/components/index.tsx"),
-    }),
+    pagesPlugin({ workbookPath }),
     cloudflare({
       viteEnvironment: { name: "worker" },
     }),
