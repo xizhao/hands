@@ -43,6 +43,91 @@ import { existsSync } from "node:fs";
 import { readFile, writeFile, readdir, mkdir } from "node:fs/promises";
 import { join } from "node:path";
 import { createTRPCClient, httpBatchLink } from "@trpc/client";
+import { AsyncLocalStorage } from "node:async_hooks";
+
+// ============================================================================
+// @hands/db - Database access for server components
+// ============================================================================
+// Blocks import { sql } from '@hands/db' to query the database.
+// The worker sets up request context before rendering via AsyncLocalStorage.
+// ============================================================================
+
+interface DbContext {
+  sql<T>(strings: TemplateStringsArray, ...values: unknown[]): Promise<T[]>;
+  query<TParams, TResult>(
+    preparedQuery: { run(params: TParams, client: unknown): Promise<TResult[]> },
+    params: TParams
+  ): Promise<TResult[]>;
+}
+
+interface RequestContext {
+  db: DbContext;
+  params: Record<string, unknown>;
+  env: Record<string, unknown>;
+}
+
+const requestContext = new AsyncLocalStorage<RequestContext>();
+
+function runWithContext<T>(ctx: RequestContext, fn: () => T): T {
+  return requestContext.run(ctx, fn);
+}
+
+function getContext(): RequestContext {
+  const ctx = requestContext.getStore();
+  if (!ctx) {
+    throw new Error(
+      "[hands] Database can only be accessed during request handling, not at module load time."
+    );
+  }
+  return ctx;
+}
+
+/**
+ * Tagged template for SQL queries
+ * @example
+ * import { sql } from '@hands/db'
+ * const users = await sql<User>\`SELECT * FROM users WHERE active = \${true}\`
+ */
+export function sql<T = Record<string, unknown>>(
+  strings: TemplateStringsArray,
+  ...values: unknown[]
+): Promise<T[]> {
+  return getContext().db.sql<T>(strings, ...values);
+}
+
+/**
+ * Execute a pgtyped prepared query
+ * @example
+ * import { query } from '@hands/db'
+ * import { getUsers } from './queries.types'
+ * const users = await query(getUsers, { active: true })
+ */
+export function query<TParams, TResult>(
+  preparedQuery: { run(params: TParams, client: unknown): Promise<TResult[]> },
+  params: TParams
+): Promise<TResult[]> {
+  return getContext().db.query(preparedQuery, params);
+}
+
+/**
+ * Get URL/form params from the current request
+ * @example
+ * import { params } from '@hands/db'
+ * const { limit = 10 } = params<{ limit?: number }>()
+ */
+export function params<T = Record<string, unknown>>(): T {
+  return getContext().params as T;
+}
+
+/**
+ * Get environment bindings
+ * @example
+ * import { env } from '@hands/db'
+ * const { API_KEY } = env<{ API_KEY: string }>()
+ */
+export function env<T = Record<string, unknown>>(): T {
+  return getContext().env as T;
+}
 
 // ============================================================================
 // STDLIB CLIENT COMPONENTS: Pre-register for rwsdk "use client" scanning
@@ -382,15 +467,25 @@ app.get("/blocks/:blockId{.+}", async (c) => {
   delete props.edit;
   delete props._ts;
 
+  // Set up request context for db access via AsyncLocalStorage
+  // Server components import { sql } from '@hands/db'
+  const requestCtx = {
+    db: c.get("db"),  // Uses reader role for blocks
+    params: props,
+    env: c.env,
+  };
+
   try {
-    // Wrap rendering with rwsdk request context for "use client" support
-    // Note: We don't pass ctx to blocks - server components should use async data fetching,
-    // and client components can't receive functions anyway
+    // Wrap rendering with both:
+    // 1. runWithContext - our AsyncLocalStorage for db access
+    // 2. runWithRequestInfo - rwsdk's context for "use client" support
     const rscContext = createRscRequestContext(c.req.raw);
-    const stream = runWithRequestInfo(rscContext, () =>
-      renderToReadableStream(
-        React.createElement(Block, props),
-        createClientManifest()
+    const stream = runWithContext(requestCtx, () =>
+      runWithRequestInfo(rscContext, () =>
+        renderToReadableStream(
+          React.createElement(Block, props),
+          createClientManifest()
+        )
       )
     );
 
@@ -426,13 +521,22 @@ app.post("/blocks/:blockId{.+}/rsc", async (c) => {
 
   const props = await c.req.json();
 
+  // Set up request context for db access via AsyncLocalStorage
+  const requestCtx = {
+    db: c.get("db"),
+    params: props,
+    env: c.env,
+  };
+
   try {
-    // Wrap rendering with rwsdk request context for "use client" support
+    // Wrap rendering with both contexts
     const rscContext = createRscRequestContext(c.req.raw);
-    const stream = runWithRequestInfo(rscContext, () =>
-      renderToReadableStream(
-        React.createElement(Block, props),
-        createClientManifest()
+    const stream = runWithContext(requestCtx, () =>
+      runWithRequestInfo(rscContext, () =>
+        renderToReadableStream(
+          React.createElement(Block, props),
+          createClientManifest()
+        )
       )
     );
 
@@ -551,9 +655,21 @@ function createDbProxy(runtimePort: number) {
 
   return {
     sql,
-    query: async (queryText: string, params?: unknown[]) => {
-      const result = await trpc.db.query.mutate({ query: queryText, params });
-      return result.rows;
+    // pgtyped PreparedQuery support
+    // PreparedQuery objects have a run(params, client) method that returns Promise<TResult[]>
+    // We pass a fake client that routes queries through our tRPC proxy
+    query: async <TParams, TResult>(
+      preparedQuery: { run(params: TParams, client: unknown): Promise<TResult[]> },
+      params: TParams
+    ): Promise<TResult[]> => {
+      // Create a fake pg client that routes queries through tRPC
+      const fakeClient = {
+        query: async (queryText: string, values?: unknown[]) => {
+          const result = await trpc.db.query.mutate({ query: queryText, params: values });
+          return { rows: result.rows };
+        },
+      };
+      return preparedQuery.run(params, fakeClient);
     },
     tables: async () => {
       return await trpc.db.tables.query();

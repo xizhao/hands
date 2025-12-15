@@ -69,10 +69,11 @@ workbook/blocks/
 ```tsx
 // workbook/blocks/sales-chart.tsx
 import type { BlockFn } from "@hands/stdlib";
+import { db } from "@hands/runtime/context";
 
-const SalesChart: BlockFn<{ limit?: number }> = async ({ ctx, limit = 100 }) => {
-  // Use ctx.sql tagged template for type-safe queries
-  const sales = await ctx.sql`SELECT * FROM sales ORDER BY date DESC LIMIT ${limit}`;
+const SalesChart: BlockFn<{ limit?: number }> = async ({ limit = 100 }) => {
+  // Use db.sql tagged template for type-safe queries
+  const sales = await db.sql`SELECT * FROM sales ORDER BY date DESC LIMIT ${limit}`;
 
   return (
     <div>
@@ -89,18 +90,20 @@ const SalesChart: BlockFn<{ limit?: number }> = async ({ ctx, limit = 100 }) => 
 export default SalesChart;
 ```
 
-**Block Context (`ctx`)**:
-- `ctx.sql` - Tagged template literal for parameterized SQL queries
-- `ctx.query` - Execute PgTyped prepared queries with type-safe params
-- `ctx.params` - URL/form parameters passed to the block
+**Database Access**:
+- `import { db } from "@hands/runtime/context"` - Import the database context
+- `db.sql` - Tagged template literal for parameterized SQL queries
+- `db.query` - Execute PgTyped prepared queries with type-safe params
+- `params()` - Get URL/form parameters (also from `@hands/runtime/context`)
 - Blocks use read-only database access (`hands_reader` role)
 
 **How it works**:
 1. Runtime discovers blocks via `blocks/discovery.ts`
-2. Generates `worker.tsx` with static imports for all blocks
+2. Generates `worker.tsx` with block imports
 3. Vite builds the RSC bundle
 4. Requests to `/sandbox/*` are proxied to Vite dev server
-5. Runtime injects `ctx` with database access when rendering blocks
+5. Runtime sets up request context via AsyncLocalStorage before rendering
+6. Blocks import `db` from `@hands/runtime/context` which reads from the request context
 
 ### 2. Sources (Data Containers)
 

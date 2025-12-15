@@ -25,6 +25,7 @@ Every block follows this exact pattern:
 \`\`\`typescript
 import type { BlockFn, BlockMeta } from "@hands/stdlib";
 import { LineChart } from "@hands/stdlib";
+import { sql } from "@hands/db";
 
 export const meta: BlockMeta = {
   title: "My Block",
@@ -32,10 +33,10 @@ export const meta: BlockMeta = {
   refreshable: true,
 };
 
-// BlockFn receives a SINGLE props object containing ctx
-const MyBlock: BlockFn<{ limit?: number }> = async ({ ctx, limit = 10 }) => {
-  // Use ctx.sql tagged template for queries (shorthand for ctx.db.sql)
-  const data = await ctx.sql<{ name: string; value: number }>\`
+// BlockFn receives props - db access is via import, not props
+const MyBlock: BlockFn<{ limit?: number }> = async ({ limit = 10 }) => {
+  // Use sql tagged template for queries
+  const data = await sql<{ name: string; value: number }>\`
     SELECT name, value FROM my_table
     LIMIT \${limit}
   \`;
@@ -55,24 +56,25 @@ export default MyBlock;
 - \`meta: BlockMeta\` - Title, description, refreshable flag
 - \`default\` - The BlockFn component
 
-**IMPORTANT**: BlockFn receives ONE argument (props object with \`ctx\` inside), NOT two arguments.
+**IMPORTANT**: Database access is via \`import { sql } from '@hands/db'\`, not via props.
 
 ## Type-Safe Queries with pgtyped
 
 For type-safe queries with auto-generated TypeScript types, use pgtyped:
 
 \`\`\`typescript
-import { sql } from "@pgtyped/runtime";
+import { sql as sqlType } from "@pgtyped/runtime";
+import { query } from "@hands/db";
 import type { IGetUsersQuery } from "./my-block.types";
 
 // Define prepared query - types auto-generated from SQL
-const getUsers = sql<IGetUsersQuery>\`
+const getUsers = sqlType<IGetUsersQuery>\`
   SELECT id, name, email FROM users WHERE active = $active
 \`;
 
-const MyBlock: BlockFn = async ({ ctx }) => {
-  // Execute with ctx.query() - result is fully typed
-  const users = await ctx.query(getUsers, { active: true });
+const MyBlock: BlockFn = async () => {
+  // Execute with query() - result is fully typed
+  const users = await query(getUsers, { active: true });
   // users is { id: number; name: string; email: string }[]
 
   return <ul>{users.map(u => <li key={u.id}>{u.name}</li>)}</ul>;
@@ -83,23 +85,35 @@ Types in \`.types.ts\` files are auto-generated when you save the block.
 `;
 
 /**
- * BlockContext API documentation
+ * Database context API documentation
  */
 export const BLOCK_CONTEXT_DOCS = `
-## BlockContext API
+## Database API
 
-The \`ctx\` is destructured from props:
+Import from @hands/db directly in your block:
 
 \`\`\`typescript
-const MyBlock: BlockFn = async ({ ctx }) => {
-  // ctx.sql is the tagged template for safe SQL queries (shorthand for ctx.db.sql)
-  const users = await ctx.sql<User[]>\`SELECT * FROM users WHERE active = \${true}\`;
+import { sql } from "@hands/db";
 
-  // ctx.query executes pgtyped prepared queries with full type safety
-  const typedUsers = await ctx.query(getActiveUsers, { active: true });
+const MyBlock: BlockFn = async () => {
+  // sql is the tagged template for safe SQL queries
+  const users = await sql<User>\`SELECT * FROM users WHERE active = \${true}\`;
 
-  // ctx.params contains URL/form parameters
-  const limit = ctx.params.limit || 10;
+  return <UserList users={users} />;
+};
+\`\`\`
+
+### URL Parameters
+
+Access URL/form parameters via the params helper:
+
+\`\`\`typescript
+import { sql, params } from "@hands/db";
+
+const MyBlock: BlockFn = async () => {
+  const { limit = 10 } = params<{ limit?: number }>();
+  const items = await sql\`SELECT * FROM items LIMIT \${limit}\`;
+  return <ItemList items={items} />;
 };
 \`\`\`
 
@@ -116,31 +130,45 @@ ${blockTypesRaw}
 export const BLOCK_ANTI_PATTERNS = `
 ## Common Mistakes
 
-### WRONG: Two-argument signature
+### WRONG: Using ctx prop (deprecated)
 \`\`\`typescript
-// DON'T DO THIS - ctx will be undefined
-const MyBlock: BlockFn = async (props, ctx) => {
-  const data = await ctx.db.sql\`...\`; // ERROR: ctx is undefined
-};
-\`\`\`
-
-### CORRECT: Destructure from props
-\`\`\`typescript
-// DO THIS - ctx is part of props
+// DON'T DO THIS - ctx prop is deprecated
 const MyBlock: BlockFn = async ({ ctx }) => {
-  const data = await ctx.db.sql\`...\`;
+  const data = await ctx.sql\`...\`;
 };
 \`\`\`
 
-### WRONG: Using db directly as template
+### CORRECT: Import sql from @hands/db
 \`\`\`typescript
-// DON'T DO THIS
-const data = await ctx.db\`SELECT ...\`;
+// DO THIS - import sql directly
+import { sql } from "@hands/db";
+
+const MyBlock: BlockFn = async () => {
+  const data = await sql\`SELECT ...\`;
+};
 \`\`\`
 
-### CORRECT: Use db.sql
+### WRONG: Using sql at module load time
 \`\`\`typescript
-// DO THIS
-const data = await ctx.db.sql\`SELECT ...\`;
+// DON'T DO THIS - sql only works during request handling
+import { sql } from "@hands/db";
+
+// ERROR: Called at module load, not during request
+const allUsers = await sql\`SELECT * FROM users\`;
+
+const MyBlock: BlockFn = async () => {
+  return <UserList users={allUsers} />;
+};
+\`\`\`
+
+### CORRECT: Query inside the component function
+\`\`\`typescript
+import { sql } from "@hands/db";
+
+const MyBlock: BlockFn = async () => {
+  // Queries must be inside the component function
+  const users = await sql\`SELECT * FROM users\`;
+  return <UserList users={users} />;
+};
 \`\`\`
 `;

@@ -8,6 +8,7 @@
     ".": "./src/index.ts",
     "./build": "./src/build/index.ts",
     "./config": "./src/config/index.ts",
+    "./context": "./src/db/request-context.ts",
     "./ctx": "./src/ctx.ts",
     "./db": "./src/db/index.ts",
     "./types": "./src/types.ts",

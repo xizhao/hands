@@ -264,11 +264,14 @@ export default defineConfig({
     }),
   ],
   resolve: {
-    // @hands/stdlib needs special handling for subpath exports
-    // The package uses "exports" in package.json which maps to src/registry/components/
+    // @hands/stdlib and @hands/runtime need special handling for subpath exports
+    // These packages use "exports" in package.json
     // Note: Must use absolute paths for worker environment (Miniflare) compatibility
     // process.cwd() is .hands/, so we go up one level to workbook root
     alias: [
+      // @hands/db - database access for server components
+      // Points to worker.tsx which exports sql, query, params, env
+      { find: "@hands/db", replacement: process.cwd() + "/src/worker.tsx" },
       // @hands/stdlib subpath exports: charts/*, ui/*, maps/*, etc.
       { find: /^@hands\\/stdlib\\/(.*)$/, replacement: process.cwd() + "/../node_modules/@hands/stdlib/src/registry/components/$1.tsx" },
       { find: "@hands/stdlib", replacement: process.cwd() + "/../node_modules/@hands/stdlib/src/index.ts" },
@@ -300,6 +303,11 @@ export default defineConfig({
       // Allow serving files from anywhere (for /@fs/ access to stdlib components)
       allow: ["/"],
     },
+  },
+  define: {
+    // Pass runtime port to the worker at build time
+    // This is read from process.env.RUNTIME_PORT which is set by the runtime
+    "process.env.RUNTIME_PORT": JSON.stringify(process.env.RUNTIME_PORT || "55000"),
   },
 });
 `;

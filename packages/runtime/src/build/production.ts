@@ -245,6 +245,18 @@ export async function buildProduction(
       },
     };
 
+    // esbuild plugin to resolve @hands/db to worker.src.ts
+    // The worker exports sql, query, params, env which blocks import
+    const handsDbPlugin: Plugin = {
+      name: "hands-db-resolver",
+      setup(build) {
+        build.onResolve({ filter: /^@hands\/db$/ }, () => {
+          // Resolve to the worker source file which exports sql, query, params, env
+          return { path: workerSrcPath };
+        });
+      },
+    };
+
     const result = await esbuild({
       entryPoints: [workerSrcPath],
       outfile: join(outputDir, "worker.js"),
@@ -254,7 +266,7 @@ export async function buildProduction(
       minify: true, // Production: minify
       sourcemap: true, // External sourcemap for debugging
       external: ["cloudflare:*"],
-      plugins: [unenvPlugin, ...(stdlibPath ? [stdlibPlugin] : [])],
+      plugins: [unenvPlugin, handsDbPlugin, ...(stdlibPath ? [stdlibPlugin] : [])],
       logLevel: "warning",
     });
 
@@ -439,6 +451,69 @@ import { cors } from "hono/cors";
 import * as React from "react";
 import { renderToString } from "react-dom/server.edge";
 import postgres from "postgres";
+import { AsyncLocalStorage } from "node:async_hooks";
+
+// ============================================================================
+// @hands/db - Database access for server components
+// ============================================================================
+// Blocks import { sql } from '@hands/db' to query the database.
+// ============================================================================
+
+interface DbContext {
+  sql<T>(strings: TemplateStringsArray, ...values: unknown[]): Promise<T[]>;
+  query<TParams, TResult>(
+    preparedQuery: { run(params: TParams, client: unknown): Promise<TResult[]> },
+    params: TParams
+  ): Promise<TResult[]>;
+}
+
+interface RequestContext {
+  db: DbContext;
+  params: Record<string, unknown>;
+  env: Record<string, unknown>;
+}
+
+const requestContext = new AsyncLocalStorage<RequestContext>();
+
+function runWithContext<T>(ctx: RequestContext, fn: () => T): T {
+  return requestContext.run(ctx, fn);
+}
+
+function getContext(): RequestContext {
+  const ctx = requestContext.getStore();
+  if (!ctx) {
+    throw new Error(
+      "[hands] Database can only be accessed during request handling, not at module load time."
+    );
+  }
+  return ctx;
+}
+
+/** Tagged template for SQL queries */
+export function sql<T = Record<string, unknown>>(
+  strings: TemplateStringsArray,
+  ...values: unknown[]
+): Promise<T[]> {
+  return getContext().db.sql<T>(strings, ...values);
+}
+
+/** Execute a pgtyped prepared query */
+export function query<TParams, TResult>(
+  preparedQuery: { run(params: TParams, client: unknown): Promise<TResult[]> },
+  params: TParams
+): Promise<TResult[]> {
+  return getContext().db.query(preparedQuery, params);
+}
+
+/** Get URL/form params from the current request */
+export function params<T = Record<string, unknown>>(): T {
+  return getContext().params as T;
+}
+
+/** Get environment bindings */
+export function env<T = Record<string, unknown>>(): T {
+  return getContext().env as T;
+}
 
 ${blockImports}
 
@@ -493,15 +568,22 @@ app.get("/blocks/*", async (c) => {
   const Block = BLOCKS[blockId];
 
   if (!Block) {
-    return c.json({ error: \\\`Block not found: \\\${blockId}\\\` }, 404);
+    return c.json({ error: "Block not found: " + blockId }, 404);
   }
 
   const props = Object.fromEntries(new URL(c.req.url).searchParams);
-  const ctx = createBlockContext(c.env.DATABASE_URL, c.env, {});
+  const requestCtx = {
+    db: createDbContext(c.env.DATABASE_URL),
+    params: props,
+    env: c.env as Record<string, unknown>,
+  };
 
   try {
-    const element = React.createElement(Block, { ...props, ctx });
-    return c.html(renderToString(element));
+    const html = await runWithContext(requestCtx, async () => {
+      const element = React.createElement(Block, props);
+      return renderToString(element);
+    });
+    return c.html(html);
   } catch (err) {
     const error = err instanceof Error ? err.message : String(err);
     return c.json({ error }, 500);
@@ -513,15 +595,22 @@ app.post("/blocks/*", async (c) => {
   const Block = BLOCKS[blockId];
 
   if (!Block) {
-    return c.json({ error: \\\`Block not found: \\\${blockId}\\\` }, 404);
+    return c.json({ error: "Block not found: " + blockId }, 404);
   }
 
   const props = await c.req.json();
-  const ctx = createBlockContext(c.env.DATABASE_URL, c.env, {});
+  const requestCtx = {
+    db: createDbContext(c.env.DATABASE_URL),
+    params: props,
+    env: c.env as Record<string, unknown>,
+  };
 
   try {
-    const element = React.createElement(Block, { ...props, ctx });
-    return c.html(renderToString(element));
+    const html = await runWithContext(requestCtx, async () => {
+      const element = React.createElement(Block, props);
+      return renderToString(element);
+    });
+    return c.html(html);
   } catch (err) {
     const error = err instanceof Error ? err.message : String(err);
     return c.json({ error }, 500);
@@ -555,29 +644,36 @@ export default app;
 
 // === Helpers ===
 
-function createDb(connectionString: string) {
+function createDbContext(connectionString: string) {
   const sql = postgres(connectionString, {
     max: 5,
     idle_timeout: 20,
     connect_timeout: 10,
   });
 
-  const client = async function(strings: TemplateStringsArray, ...values: unknown[]) {
-    return await sql(strings, ...values);
-  } as any;
-
-  client.unsafe = async (query: string, params?: unknown[]) => {
-    return await sql.unsafe(query, params);
-  };
-
-  return client;
-}
-
-function createBlockContext(databaseUrl: string, env: Record<string, string>, params: Record<string, string>) {
   return {
-    db: createDb(databaseUrl),
-    env,
-    params,
+    // Tagged template for SQL queries
+    sql: async <T = Record<string, unknown>>(
+      strings: TemplateStringsArray,
+      ...values: unknown[]
+    ): Promise<T[]> => {
+      const result = await sql(strings, ...values);
+      return result as T[];
+    },
+    // pgtyped PreparedQuery support
+    query: async <TParams, TResult>(
+      preparedQuery: { run(params: TParams, client: unknown): Promise<TResult[]> },
+      params: TParams
+    ): Promise<TResult[]> => {
+      // Create a pg-compatible client for pgtyped
+      const pgClient = {
+        query: async (queryText: string, values?: unknown[]) => {
+          const result = await sql.unsafe(queryText, values);
+          return { rows: result };
+        },
+      };
+      return preparedQuery.run(params, pgClient);
+    },
   };
 }
 

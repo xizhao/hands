@@ -117,8 +117,8 @@ export async function runPreflight(options: PreflightOptions): Promise<Preflight
   checks.push(await checkPortAvailable(PORTS.WORKER, autoFix));
 
   // 5. Scaffold .hands directory with config files (vite.config.mts, wrangler.jsonc, etc.)
-  // .hands/ is a build directory - no package.json or node_modules needed
-  // Dependencies are resolved from the workbook root's node_modules
+  // .hands/ is a build directory - node_modules is symlinked to ../node_modules
+  // A minimal package.json is created for rwsdk compatibility
   checks.push(await scaffoldHandsDir(workbookDir, autoFix));
 
   // 6. Clear Vite cache to prevent stale dependency issues
@@ -1056,7 +1056,15 @@ export async function scaffoldHandsDir(workbookDir: string, autoFix: boolean): P
     }
 
     // Generate and write config files (only if changed)
-    // No package.json - .hands/ is a build dir, deps come from workbook root
+    // package.json is needed for rwsdk to read (it checks for various scripts)
+    const handsPackageJson = JSON.stringify({
+      name: `${config.name}-hands`,
+      private: true,
+      type: "module",
+    }, null, 2);
+    if (writeFileIfChanged(join(handsDir, "package.json"), handsPackageJson)) {
+      filesWritten.push("package.json");
+    }
     if (writeFileIfChanged(join(handsDir, "vite.config.mts"), generateViteConfig())) {
       filesWritten.push("vite.config.mts");
     }
