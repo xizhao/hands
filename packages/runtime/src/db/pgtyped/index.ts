@@ -3,7 +3,7 @@
  *
  * Provides type-safe SQL queries by:
  * 1. Parsing sql`` tagged templates from TypeScript files
- * 2. Generating .types.ts files with TypeScript interfaces
+ * 2. Generating a single .hands/types.ts file with all TypeScript interfaces
  * 3. Running on file changes during dev mode
  */
 
@@ -16,7 +16,7 @@ import { buildSchemaMap, generateTypesForFiles, type SchemaMap } from "./type-ge
 export interface PgTypedRunner {
   /** Run type generation for all block files */
   runAll: () => Promise<void>;
-  /** Run type generation for a specific file */
+  /** Run type generation for a specific file (regenerates all types) */
   runFile: (filePath: string) => Promise<void>;
   /** Refresh schema cache (call after DDL changes) */
   refreshSchema: () => Promise<void>;
@@ -24,9 +24,11 @@ export interface PgTypedRunner {
 
 /**
  * Create a pgtyped runner for a workbook
+ * Outputs all types to a single file: .hands/types.ts
  */
 export function createPgTypedRunner(workbookDir: string, db: PGlite): PgTypedRunner {
   const blocksDir = join(workbookDir, "blocks");
+  const outputPath = join(workbookDir, ".hands", "types.ts");
   let schemaCache: SchemaMap | null = null;
 
   async function getSchema(): Promise<SchemaMap> {
@@ -36,36 +38,10 @@ export function createPgTypedRunner(workbookDir: string, db: PGlite): PgTypedRun
     return schemaCache;
   }
 
-  async function runFile(filePath: string): Promise<void> {
-    if (!existsSync(filePath)) {
-      console.log(`[pgtyped] File not found: ${filePath}`);
-      return;
-    }
-
-    const content = readFileSync(filePath, "utf-8");
-    const parsed = extractQueriesFromSource(content, filePath);
-
-    if (parsed.errors.length > 0) {
-      for (const err of parsed.errors) {
-        console.warn(`[pgtyped] ${err}`);
-      }
-    }
-
-    if (parsed.queries.length === 0) {
-      console.log(`[pgtyped] No SQL queries found in ${relative(workbookDir, filePath)}`);
-      return;
-    }
-
-    // Ensure schema cache is loaded (used by generateTypesForFiles internally)
-    await getSchema();
-    const typesMap = await generateTypesForFiles([parsed], db);
-
-    for (const [typesPath, content] of typesMap) {
-      writeFileSync(typesPath, content);
-      console.log(
-        `[pgtyped] Generated ${relative(workbookDir, typesPath)} (${parsed.queries.length} queries)`,
-      );
-    }
+  async function runFile(_filePath: string): Promise<void> {
+    // When a single file changes, regenerate all types
+    // This keeps the single types.ts file up to date
+    await runAll();
   }
 
   async function runAll(): Promise<void> {
@@ -94,19 +70,12 @@ export function createPgTypedRunner(workbookDir: string, db: PGlite): PgTypedRun
       }
     }
 
-    if (parsedFiles.length === 0) {
-      console.log("[pgtyped] No SQL queries found in any block files");
-      return;
-    }
+    // Generate consolidated types file
+    const typesContent = await generateTypesForFiles(parsedFiles, db, outputPath);
+    writeFileSync(outputPath, typesContent);
 
-    const typesMap = await generateTypesForFiles(parsedFiles, db);
-
-    for (const [typesPath, content] of typesMap) {
-      writeFileSync(typesPath, content);
-      console.log(`[pgtyped] Generated ${relative(workbookDir, typesPath)}`);
-    }
-
-    console.log(`[pgtyped] Generated types for ${parsedFiles.length} files`);
+    const totalQueries = parsedFiles.reduce((sum, f) => sum + f.queries.length, 0);
+    console.log(`[pgtyped] Generated .hands/types.ts (${totalQueries} queries from ${parsedFiles.length} files)`);
   }
 
   async function refreshSchema(): Promise<void> {

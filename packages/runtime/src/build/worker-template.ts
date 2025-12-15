@@ -393,12 +393,13 @@ app.use("/*", async (c, next) => {
 });
 
 // Initialize context
-// Runtime port defaults to 55000 (PORTS.RUNTIME) for local dev
-// In production, this would come from wrangler bindings
+// Runtime port is injected at build time via vite define config
+// process.env.RUNTIME_PORT is replaced at compile time with the actual value
 const DEFAULT_RUNTIME_PORT = 55000;
 
 app.use("/*", async (c, next) => {
-  const runtimePort = parseInt(c.env.RUNTIME_PORT, 10) || DEFAULT_RUNTIME_PORT;
+  // process.env.RUNTIME_PORT is replaced at build time by vite's define config
+  const runtimePort = parseInt(process.env.RUNTIME_PORT || "", 10) || DEFAULT_RUNTIME_PORT;
   const db = createDbProxy(runtimePort);
   c.set("db", db);
   c.set("runtimePort", runtimePort);

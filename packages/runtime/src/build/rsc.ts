@@ -269,6 +269,9 @@ export default defineConfig({
     // Note: Must use absolute paths for worker environment (Miniflare) compatibility
     // process.cwd() is .hands/, so we go up one level to workbook root
     alias: [
+      // @hands/db/types - auto-generated pgtyped types for SQL queries
+      // Points to .hands/types.ts which contains all query result types
+      { find: "@hands/db/types", replacement: process.cwd() + "/types.ts" },
       // @hands/db - database access for server components
       // Points to worker.tsx which exports sql, query, params, env
       { find: "@hands/db", replacement: process.cwd() + "/src/worker.tsx" },

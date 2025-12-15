@@ -135,8 +135,9 @@ async function findBlockFiles(
       continue;
     }
 
-    // Only process .tsx files
+    // Only process .tsx files (but not .types.tsx which are pgtyped generated)
     if (!entry.name.endsWith(".tsx")) continue;
+    if (entry.name.endsWith(".types.tsx") || entry.name.endsWith(".types.ts")) continue;
 
     // Check exclude patterns
     if (options.exclude?.some((pattern) => matchPattern(relativePath, pattern))) {

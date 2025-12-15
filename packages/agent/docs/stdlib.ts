@@ -58,30 +58,26 @@ export default MyBlock;
 
 **IMPORTANT**: Database access is via \`import { sql } from '@hands/db'\`, not via props.
 
-## Type-Safe Queries with pgtyped
+## Auto-Generated Types with pgtyped
 
-For type-safe queries with auto-generated TypeScript types, use pgtyped:
+Types are auto-generated from your SQL queries and available via \`@hands/db/types\`:
 
 \`\`\`typescript
-import { sql as sqlType } from "@pgtyped/runtime";
-import { query } from "@hands/db";
-import type { IGetUsersQuery } from "./my-block.types";
-
-// Define prepared query - types auto-generated from SQL
-const getUsers = sqlType<IGetUsersQuery>\`
-  SELECT id, name, email FROM users WHERE active = $active
-\`;
+import { sql } from "@hands/db";
+import type { IGetMoviesResult } from "@hands/db/types";
 
 const MyBlock: BlockFn = async () => {
-  // Execute with query() - result is fully typed
-  const users = await query(getUsers, { active: true });
-  // users is { id: number; name: string; email: string }[]
+  // Result type is auto-generated from the SQL query
+  const movies = await sql<IGetMoviesResult>\`
+    SELECT id, title, rating FROM movies WHERE active = true
+  \`;
+  // movies is { id: number; title: string; rating: number }[]
 
-  return <ul>{users.map(u => <li key={u.id}>{u.name}</li>)}</ul>;
+  return <ul>{movies.map(m => <li key={m.id}>{m.title}</li>)}</ul>;
 };
 \`\`\`
 
-Types in \`.types.ts\` files are auto-generated when you save the block.
+Types are generated to \`.hands/types.ts\` when you save blocks containing SQL queries.
 `;
 
 /**

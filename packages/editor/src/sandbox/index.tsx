@@ -10,7 +10,7 @@
 import "../rsc/shared-react";
 
 import { domToPng } from "modern-screenshot";
-import { StrictMode, useCallback, useEffect, useRef, useState } from "react";
+import { StrictMode, useEffect, useRef, useState } from "react";
 import { DndProvider } from "react-dnd";
 import { HTML5Backend } from "react-dnd-html5-backend";
 import { createRoot } from "react-dom/client";
@@ -78,7 +78,9 @@ async function captureThumbnail() {
       backgroundColor: null,
     });
 
-    const theme = document.documentElement.classList.contains("dark") ? "dark" : "light";
+    const theme = document.documentElement.classList.contains("dark")
+      ? "dark"
+      : "light";
     const contentId = pageId || blockId;
     const contentType = pageId ? "page" : "block";
 
@@ -90,10 +92,12 @@ async function captureThumbnail() {
         contentId,
         contentType,
       },
-      "*",
+      "*"
     );
 
-    console.log(`[Sandbox] Thumbnail captured for ${contentType}:${contentId} (${theme})`);
+    console.log(
+      `[Sandbox] Thumbnail captured for ${contentType}:${contentId} (${theme})`
+    );
   } catch (err) {
     console.error("[Sandbox] Failed to capture thumbnail:", err);
   }
@@ -115,18 +119,13 @@ function PageEditor({
 }) {
   const thumbnailCapturedRef = useRef(false);
 
-  const {
-    source,
-    isRefreshing,
-    currentPageId,
-    saveSource,
-    renamePage,
-  } = usePageSource({
-    pageId,
-    runtimePort,
-    readOnly,
-    pollInterval: 1000,
-  });
+  const { source, isRefreshing, currentPageId, saveSource, renamePage } =
+    usePageSource({
+      pageId,
+      runtimePort,
+      readOnly,
+      pollInterval: 1000,
+    });
 
   // Capture thumbnail after content settles
   useEffect(() => {
@@ -194,7 +193,8 @@ function SandboxApp() {
     }
 
     const trpc = getTRPCClient(runtimePortNum);
-    trpc.workbook.blocks.getSource.query({ blockId })
+    trpc.workbook.blocks.getSource
+      .query({ blockId })
       .then((data) => setSource(data.source))
       .catch((err) => setError(String(err)));
   }, []);
@@ -222,7 +222,11 @@ function SandboxApp() {
   }, [rscReady, source]);
 
   if (error) {
-    return <div className="flex items-center justify-center h-screen text-red-500">{error}</div>;
+    return (
+      <div className="flex items-center justify-center h-screen text-red-500">
+        {error}
+      </div>
+    );
   }
 
   // Page mode: Use dedicated component with usePageSource hook
@@ -248,7 +252,7 @@ function SandboxApp() {
     <RscProvider port={runtimePortNum!} enabled>
       <div className="relative min-h-screen w-full bg-background flex items-center justify-center p-8 overflow-auto">
         <div className="absolute inset-0 bg-black/[0.03] dark:bg-black/[0.15] pointer-events-none" />
-        <div className="relative bg-background rounded-xl shadow-md">
+        <div className="relative bg-background rounded-xl shadow-md mb-20">
           <OverlayEditor
             blockId={blockId!}
             initialSource={source}
@@ -266,5 +270,5 @@ createRoot(document.getElementById("root")!).render(
     <DndProvider backend={HTML5Backend}>
       <SandboxApp />
     </DndProvider>
-  </StrictMode>,
+  </StrictMode>
 );
