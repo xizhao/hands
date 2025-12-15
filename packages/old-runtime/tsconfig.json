@@ -1,0 +1,22 @@
+{
+  "compilerOptions": {
+    "target": "ESNext",
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "strict": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "noEmit": true,
+    "resolveJsonModule": true,
+    "isolatedModules": true,
+    "jsx": "react-jsx",
+    "types": ["bun", "@types/react", "@types/react-dom"],
+    "baseUrl": ".",
+    "paths": {
+      "@hands/stdlib": ["../stdlib/src"],
+      "@hands/stdlib/*": ["../stdlib/src/*"]
+    }
+  },
+  "include": ["src/**/*.ts", "src/**/*.tsx"],
+  "exclude": ["node_modules", "src/build/worker.template.tsx"]
+}

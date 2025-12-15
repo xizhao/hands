@@ -1,0 +1,25 @@
+{
+  "name": "@hands/cli",
+  "version": "1.0.0",
+  "description": "Hands CLI - workbook development tool",
+  "type": "module",
+  "bin": {
+    "hands": "./bin/hands.js"
+  },
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch",
+    "check": "tsc --noEmit"
+  },
+  "dependencies": {
+    "commander": "^13.0.0",
+    "picocolors": "^1.1.1"
+  },
+  "devDependencies": {
+    "@types/node": "^24.5.2",
+    "typescript": "^5.8.3"
+  }
+}
