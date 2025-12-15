@@ -10,6 +10,7 @@
   },
   "scripts": {
     "dev": "bun run scripts/dev-with-runtime.ts",
+    "dev:standalone": "bun run scripts/dev-standalone.ts",
     "dev:editor-only": "vite",
     "dev:sandbox": "vite --config vite.sandbox.config.ts",
     "start": "vite",

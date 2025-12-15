@@ -4,19 +4,39 @@
  * Build: vite build --config vite.sandbox.config.ts
  * Dev:   vite --config vite.sandbox.config.ts
  *
- * In dev mode: Runtime proxies /sandbox/* to this server
- * In prod mode: Outputs to ../desktop/dist/editor/ for Tauri to serve
+ * Standalone dev mode:
+ *   WORKBOOK_PATH=/path/to/workbook vite --config vite.sandbox.config.ts
+ *   Provides /api/source/* endpoints for file I/O
+ *
+ * With runtime:
+ *   Runtime proxies /sandbox/* to this server
+ *
+ * Prod mode:
+ *   Outputs to ../desktop/dist/editor/ for Tauri to serve
  */
 
 import { resolve } from "node:path";
 import tailwindcss from "@tailwindcss/vite";
 import react from "@vitejs/plugin-react";
 import { defineConfig } from "vite";
+import { devApiPlugin } from "./src/vite-plugin-dev-api";
 
 const isDev = process.env.NODE_ENV !== "production";
+const workbookPath = process.env.WORKBOOK_PATH;
+const harnessUrl = process.env.HARNESS_URL || "http://localhost:5173";
 
 export default defineConfig({
-  plugins: [react(), tailwindcss()],
+  define: {
+    // Make harness URL available to client code
+    "import.meta.env.HARNESS_URL": JSON.stringify(harnessUrl),
+    "import.meta.env.STANDALONE_MODE": JSON.stringify(isDev && !!workbookPath),
+  },
+  plugins: [
+    react(),
+    tailwindcss(),
+    // Only enable dev API when workbook path is set (standalone mode)
+    ...(isDev && workbookPath ? [devApiPlugin({ workbookPath })] : []),
+  ],
   // In dev: no base (runtime proxies /sandbox/* -> /)
   // In prod: /editor/ for Tauri asset serving
   base: isDev ? "/" : "/editor/",

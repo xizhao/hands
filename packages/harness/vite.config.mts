@@ -24,7 +24,12 @@ export default defineConfig({
     "process.env.HANDS_WORKBOOK_PATH": JSON.stringify(workbookPath),
   },
   environments: {
-    ssr: {},
+    ssr: {
+      optimizeDeps: {
+        // Disable SSR dep optimization to avoid prebundle race conditions
+        noDiscovery: true,
+      },
+    },
   },
   plugins: [
     dbTypesPlugin({ workbookPath }),
@@ -40,10 +45,14 @@ export default defineConfig({
   resolve: {
     alias: {
       "@/blocks": path.resolve(workbookPath, "blocks"),
-      "@/hands/stdlib": path.resolve(__dirname, "../stdlib"),
       "@hands/db": path.resolve(__dirname, "src/db/dev.ts"), // Kysely + DO SQLite
       "@hands/db/types": path.join(workbookPath, ".hands/db.d.ts"), // Generated types
       "@hands/pages": path.join(workbookPath, ".hands/pages/index.tsx"), // Generated page manifest
     },
+    // Resolve deps from workbook first, then harness
+    modules: [
+      path.join(workbookPath, "node_modules"),
+      "node_modules",
+    ],
   },
 });

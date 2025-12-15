@@ -1,16 +1,17 @@
 /**
  * Sandbox Entry Point - Block & Page Editor
  *
- * Supports two modes:
+ * Supports multiple modes:
  * 1. Block mode (blockId param): RSC-first editor for TSX blocks
  * 2. Page mode (pageId param): MDX visual editor for pages
+ * 3. Standalone mode (STANDALONE_MODE env): Uses local file API, no runtime
  */
 
 // MUST BE FIRST: Initialize shared React for RSC client components
 import "../rsc/shared-react";
 
 import { domToPng } from "modern-screenshot";
-import { StrictMode, useEffect, useRef, useState } from "react";
+import { StrictMode, useCallback, useEffect, useRef, useState } from "react";
 import { DndProvider } from "react-dnd";
 import { HTML5Backend } from "react-dnd-html5-backend";
 import { createRoot } from "react-dom/client";
@@ -20,8 +21,13 @@ import { OverlayEditor } from "../overlay";
 import { installGlobalErrorHandler } from "../overlay/errors";
 import { initFlightClient, RscProvider, setRuntimePort } from "../rsc";
 import { getTRPCClient } from "../trpc";
+import { getSource, saveSource as saveSourceApi } from "./standalone-api";
 
 import "./styles.css";
+
+// Standalone mode detection (set by vite config when WORKBOOK_PATH is present)
+const isStandalone = import.meta.env.STANDALONE_MODE === true;
+const harnessUrl = (import.meta.env.HARNESS_URL as string) || "http://localhost:5173";
 
 const params = new URLSearchParams(window.location.search);
 const blockId = params.get("blockId");
@@ -104,6 +110,45 @@ async function captureThumbnail() {
 }
 
 /**
+ * Minimal Edit/Preview Toggle - top right corner
+ */
+function ModeToggle({
+  mode,
+  onToggle,
+}: {
+  mode: "edit" | "preview";
+  onToggle: () => void;
+}) {
+  return (
+    <button
+      onClick={onToggle}
+      className="fixed top-3 right-3 z-50 px-3 py-1.5 text-xs font-medium rounded-md bg-black/5 hover:bg-black/10 dark:bg-white/10 dark:hover:bg-white/15 transition-colors"
+      title={mode === "edit" ? "Switch to Preview" : "Switch to Edit"}
+    >
+      {mode === "edit" ? "Preview" : "Edit"}
+    </button>
+  );
+}
+
+/**
+ * Preview iframe - shows harness-rendered content
+ */
+function PreviewPane({ type, id }: { type: "block" | "page"; id: string }) {
+  const previewUrl =
+    type === "page"
+      ? `${harnessUrl}/pages/${id}`
+      : `${harnessUrl}/blocks/${id}`;
+
+  return (
+    <iframe
+      src={previewUrl}
+      className="w-full h-full border-0"
+      title="Preview"
+    />
+  );
+}
+
+/**
  * Page Editor Component - Uses usePageSource for polling/saving
  */
 function PageEditor({
@@ -169,13 +214,116 @@ function PageEditor({
   return null;
 }
 
+/**
+ * Standalone Page Editor - Uses local file API instead of tRPC
+ */
+function StandalonePageEditor({ pageId }: { pageId: string }) {
+  const [source, setSource] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [mode, setMode] = useState<"edit" | "preview">("edit");
+  const saveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Load initial source
+  useEffect(() => {
+    getSource("page", pageId)
+      .then((result) => setSource(result.source))
+      .catch((err) => setError(String(err)));
+  }, [pageId]);
+
+  // Debounced save
+  const handleSourceChange = useCallback(
+    (newSource: string) => {
+      setSource(newSource);
+      if (saveTimeoutRef.current) {
+        clearTimeout(saveTimeoutRef.current);
+      }
+      saveTimeoutRef.current = setTimeout(() => {
+        saveSourceApi("page", pageId, newSource).catch(console.error);
+      }, 500);
+    },
+    [pageId]
+  );
+
+  if (error) {
+    return (
+      <div className="flex items-center justify-center h-screen text-red-500">
+        {error}
+      </div>
+    );
+  }
+
+  if (source === null) {
+    return null;
+  }
+
+  return (
+    <div className="h-screen w-full">
+      <ModeToggle mode={mode} onToggle={() => setMode(mode === "edit" ? "preview" : "edit")} />
+      {mode === "edit" ? (
+        <MdxVisualEditor
+          source={source}
+          onSourceChange={handleSourceChange}
+          pageId={pageId}
+          className="h-screen"
+        />
+      ) : (
+        <PreviewPane type="page" id={pageId} />
+      )}
+    </div>
+  );
+}
+
+/**
+ * Standalone Block Editor - Preview only for now
+ * (Full block editing requires RSC runtime)
+ */
+function StandaloneBlockEditor({ blockId }: { blockId: string }) {
+  const [mode, setMode] = useState<"edit" | "preview">("preview");
+
+  return (
+    <div className="h-screen w-full">
+      <ModeToggle mode={mode} onToggle={() => setMode(mode === "edit" ? "preview" : "edit")} />
+      {mode === "edit" ? (
+        <div className="flex items-center justify-center h-screen text-muted-foreground">
+          <div className="text-center">
+            <p className="mb-2">Block editing requires RSC runtime</p>
+            <p className="text-sm">Use preview mode or run with full runtime</p>
+          </div>
+        </div>
+      ) : (
+        <PreviewPane type="block" id={blockId} />
+      )}
+    </div>
+  );
+}
+
 function SandboxApp() {
   const [source, setSource] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [rscReady, setRscReady] = useState(false);
   const thumbnailCapturedRef = useRef(false);
 
-  // Initialize RSC Flight client
+  // Standalone mode: Use local file API, no RSC/runtime
+  if (isStandalone) {
+    if (editorMode === "page" && pageId) {
+      return <StandalonePageEditor pageId={pageId} />;
+    }
+    if (editorMode === "block" && blockId) {
+      return <StandaloneBlockEditor blockId={blockId} />;
+    }
+    return (
+      <div className="flex items-center justify-center h-screen text-muted-foreground">
+        <div className="text-center">
+          <p className="mb-2">Standalone mode</p>
+          <p className="text-sm">
+            Add <code>?pageId=name</code> or <code>?blockId=name</code> to URL
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  // Runtime mode: Initialize RSC Flight client
   useEffect(() => {
     initFlightClient().then((success) => {
       console.log("[Sandbox] RSC initialized:", success);

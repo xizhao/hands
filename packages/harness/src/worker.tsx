@@ -32,9 +32,13 @@ export const setCommonHeaders =
     );
 
     // Defines trusted sources for content loading and script execution:
+    // In dev mode, allow framing from editor sandbox (localhost:5167)
+    const frameAncestors = import.meta.env.VITE_IS_DEV_SERVER
+      ? "frame-ancestors 'self' http://localhost:5167 http://localhost:*"
+      : "frame-ancestors 'self'";
     response.headers.set(
       "Content-Security-Policy",
-      `default-src 'self'; script-src 'self' 'unsafe-eval' 'nonce-${nonce}' https://challenges.cloudflare.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; frame-ancestors 'self'; frame-src 'self' https://challenges.cloudflare.com; object-src 'none';`
+      `default-src 'self'; script-src 'self' 'unsafe-eval' 'nonce-${nonce}' https://challenges.cloudflare.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; ${frameAncestors}; frame-src 'self' https://challenges.cloudflare.com; object-src 'none';`
     );
   };
 
