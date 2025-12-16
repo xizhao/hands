@@ -15,9 +15,9 @@
  *   Outputs to ../desktop/dist/editor/ for Tauri to serve
  */
 
-import { resolve } from "node:path";
 import tailwindcss from "@tailwindcss/vite";
 import react from "@vitejs/plugin-react";
+import { resolve } from "node:path";
 import { defineConfig } from "vite";
 import { devApiPlugin } from "./src/vite-plugin-dev-api";
 
@@ -62,10 +62,12 @@ export default defineConfig({
     // Port is set via CLI when started by runtime (--port 55400)
     // Default to 5167 for standalone dev
     port: 5167,
+    hmr: false, // Disable HMR - blocks are rendered via RSC from runtime
     cors: true,
     headers: {
       "Access-Control-Allow-Origin": "*",
     },
+    hmr: false,
   },
   optimizeDeps: {
     include: ["@codemirror/lang-javascript", "@uiw/react-codemirror"],
