@@ -2,6 +2,7 @@ import { MarkdownPlugin, remarkMdx, remarkMention } from '@platejs/markdown';
 import { KEYS } from 'platejs';
 import remarkGfm from 'remark-gfm';
 import remarkMath from 'remark-math';
+import type { MdxJsxFlowElement, MdxJsxAttribute } from 'mdast-util-mdx-jsx';
 
 /**
  * Serialize rsc-block element to MDX <Block src="..." /> syntax
@@ -12,27 +13,38 @@ import remarkMath from 'remark-math';
  *   - editor/plate/plugins/markdown-kit.tsx (serialize rsc-block → <Block>) ← YOU ARE HERE
  *   - runtime/components/PageStatic.tsx (render rsc-block in PlateStatic)
  */
-function serializeRscBlock(element: any): string {
-  // If we have the original source, use it (preserves formatting)
-  if (element.source) {
-    return element.source;
+function serializeRscBlockToMdast(element: any): MdxJsxFlowElement {
+  // Build JSX attributes array
+  const attributes: MdxJsxAttribute[] = [
+    { type: 'mdxJsxAttribute', name: 'src', value: element.blockId },
+  ];
+
+  // Add additional props
+  for (const [key, value] of Object.entries(element.blockProps || {})) {
+    if (value === undefined || value === null) continue;
+    if (value === true) {
+      attributes.push({ type: 'mdxJsxAttribute', name: key, value: null });
+    } else if (typeof value === 'string') {
+      attributes.push({ type: 'mdxJsxAttribute', name: key, value });
+    } else {
+      // For numbers, objects, arrays - use expression syntax
+      attributes.push({
+        type: 'mdxJsxAttribute',
+        name: key,
+        value: {
+          type: 'mdxJsxAttributeValueExpression',
+          value: JSON.stringify(value),
+        },
+      });
+    }
   }
 
-  // Otherwise reconstruct from blockId and props
-  const props = Object.entries(element.blockProps || {})
-    .map(([key, value]) => {
-      if (value === undefined || value === null) return '';
-      if (value === true) return key;
-      if (value === false) return '';
-      if (typeof value === 'string') return `${key}="${value.replace(/"/g, '\\"')}"`;
-      if (typeof value === 'number') return `${key}={${value}}`;
-      return `${key}={${JSON.stringify(value)}}`;
-    })
-    .filter(Boolean)
-    .join(' ');
-
-  const propsStr = props ? ` ${props}` : '';
-  return `<Block src="${element.blockId}"${propsStr} />`;
+  return {
+    type: 'mdxJsxFlowElement',
+    name: 'Block',
+    attributes,
+    children: [],
+  };
 }
 
 export const MarkdownKit = [
@@ -40,9 +52,9 @@ export const MarkdownKit = [
     options: {
       disallowedNodes: [KEYS.suggestion],
       remarkPlugins: [remarkMath, remarkGfm, remarkMdx, remarkMention],
-      elementRules: {
+      rules: {
         'rsc-block': {
-          serialize: (element) => serializeRscBlock(element),
+          serialize: (element) => serializeRscBlockToMdast(element),
         },
       },
     },
