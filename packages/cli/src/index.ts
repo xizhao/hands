@@ -2,6 +2,7 @@ import { program } from "commander";
 import { devCommand } from "./commands/dev.js";
 import { initCommand } from "./commands/init.js";
 import { checkCommand } from "./commands/check.js";
+import { fmtCommand } from "./commands/fmt.js";
 import { uiCommand } from "./commands/ui.js";
 
 const DESCRIPTION = `Workbook development tool`;
@@ -25,7 +26,13 @@ program
 program
   .command("check")
   .description("Validate workbook configuration")
+  .option("--fix", "Auto-fix issues")
   .action(checkCommand);
+
+program
+  .command("fmt")
+  .description("Format workbook files with Biome and add RSC directives")
+  .action(fmtCommand);
 
 // UI components - proxy to shadcn
 program

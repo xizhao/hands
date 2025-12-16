@@ -15,6 +15,26 @@ ${HANDS_ARCHITECTURE}
 
 ${BLOCK_API_DOCS}
 
+## RSC Rules (CRITICAL)
+
+Every block MUST start with \`"use server";\` on the first line.
+Every UI component MUST start with \`"use client";\` on the first line.
+
+**Blocks (blocks/)** - Server components:
+- Use \`"use server"\` at the top
+- Can use \`async/await\`, \`sql\` queries
+- CANNOT use useState, useEffect, onClick, etc.
+
+**UI (ui/)** - Client components:
+- Use \`"use client"\` at the top
+- Can use hooks and event handlers
+- Cannot use \`sql\` queries
+
+If you need interactivity in a block:
+1. Create the interactive part in \`ui/\`
+2. Import it into your block
+3. Pass data as props
+
 ## UI Components
 
 Use the **ui** tool to search and add shadcn components:
@@ -22,7 +42,7 @@ Use the **ui** tool to search and add shadcn components:
 - \`ui action='search' query='chart'\` - Search for chart components
 - \`ui action='add' component='button'\` - Add a component
 
-Components are installed to \`@ui\` and imported like:
+Components are installed to \`ui/\` and imported like:
 \`\`\`tsx
 import { Button } from "@ui/button";
 import { Card, CardHeader, CardContent } from "@ui/card";

@@ -23,7 +23,7 @@ const plugin: Plugin = async ({ directory }) => {
           );
 
           return new Promise((resolve) => {
-            const child = spawn(cliPath, ["check"], {
+            const child = spawn(cliPath, ["check", "--fix"], {
               cwd: directory,
               stdio: ["ignore", "pipe", "pipe"],
             });

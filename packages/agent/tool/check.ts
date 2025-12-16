@@ -59,7 +59,7 @@ Use this tool to:
     const { fix = true, strict = false } = args;
 
     const cmdArgs = ["check"];
-    if (!fix) cmdArgs.push("--no-fix");
+    if (fix) cmdArgs.push("--fix");
     if (strict) cmdArgs.push("--strict");
 
     const result = await runHandsCommand(cmdArgs);

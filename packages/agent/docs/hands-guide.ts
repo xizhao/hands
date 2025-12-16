@@ -35,10 +35,11 @@ Top customers:
 <Block src="top-customers" limit={10} />
 \`\`\`
 
-### Blocks (TSX) - READ ONLY
+### Blocks (TSX) - Server Components
 Single-file components: query + view together. One concept = one file.
 
 \`\`\`tsx
+"use server";
 
 import { sql } from "@hands/db";
 
@@ -64,10 +65,48 @@ export default async function RevenueChart({ period = "30d" }) {
 \`\`\`
 
 **Block rules:**
+- MUST have \`"use server"\` directive at the top
 - Read-only (no INSERT/UPDATE/DELETE - use Actions for writes)
 - One file per concept
-- Use the ui tool to install interactive components to @ui, and its search feature "hands ui search @shadcn -q ..." to search for components
+- CANNOT use useState, useEffect, onClick, etc. (client patterns)
+- Use the ui tool to install interactive components to @ui
 - Style with Tailwind CSS
+
+### UI Components (Client)
+Interactive components live in \`ui/\` with \`"use client"\` directive.
+
+\`\`\`tsx
+"use client";
+
+import { useState } from "react";
+
+export function Counter({ initial = 0 }) {
+  const [count, setCount] = useState(initial);
+  return <button onClick={() => setCount(c => c + 1)}>{count}</button>;
+}
+\`\`\`
+
+**UI rules:**
+- MUST have \`"use client"\` directive at the top
+- CAN use hooks (useState, useEffect, etc.) and event handlers
+- CANNOT use \`sql\` or async data fetching
+- Receive data as props from server blocks
+
+### Server + Client Pattern
+When blocks need interactivity, import client components from \`@ui\`:
+
+\`\`\`tsx
+// blocks/users.tsx
+"use server";
+
+import { sql } from "@hands/db";
+import { UserTable } from "@ui/user-table";
+
+export default async function Users() {
+  const users = await sql\`SELECT * FROM users\`;
+  return <UserTable users={users} />;  // Pass data to client component
+}
+\`\`\`
 
 ### Tables (SQLite)
 Data lives in SQLite. Query with \`sql\` tagged template:
@@ -91,9 +130,9 @@ workbook/actions/
                    write              read-only
 \`\`\`
 
-### UI Components
+### shadcn Components
 
-Use the \`ui\` tool to install shadcn components to \`@ui\`:
+Use the \`ui\` tool to install shadcn components to \`ui/\`:
 - Search: \`ui search "chart"\` to find components
 - Install: \`ui add button card\` to install
 - Import: \`import { Button } from "@ui/button"\`
@@ -103,7 +142,7 @@ Use the \`ui\` tool to install shadcn components to \`@ui\`:
 | Want to... | Use |
 |------------|-----|
 | Show data to users | Page with Blocks |
-| Query + visualize | Block with sql |
+| Query + visualize | Block with \`"use server"\` + sql |
 | Write/sync data | Action |
-| Interactive UI | @ui components |
+| Interactive UI | \`ui/\` components with \`"use client"\` |
 `;

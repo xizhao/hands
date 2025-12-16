@@ -1,14 +1,38 @@
 import { spawn } from "child_process";
-import { existsSync, mkdirSync, writeFileSync } from "fs";
+import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from "fs";
 import path from "path";
 import pc from "picocolors";
 import { findWorkbookRoot } from "../utils.js";
+import { hasUseServerDirective, hasUseClientDirective, validateBlock, validateUIComponent } from "../rsc-validate.js";
+
+interface CheckOptions {
+  fix?: boolean;
+}
+
+// Architecture lint rules
+const ARCH_RULES = [
+  {
+    id: "block-writes-data",
+    pattern: /\b(INSERT\s+INTO|UPDATE\s+\w+\s+SET|DELETE\s+FROM)\b/gi,
+    message: "Blocks should be read-only. Use Actions for writes.",
+  },
+  {
+    id: "deprecated-import",
+    pattern: /from\s+["']@hands\/runtime\/context["']/,
+    message: "Use `import { sql } from '@hands/db'` instead.",
+  },
+  {
+    id: "deprecated-ctx-sql",
+    pattern: /\bctx\.sql\b/,
+    message: "ctx.sql is deprecated. Import sql from @hands/db.",
+  },
+];
 
 /**
- * Run diagnostics on workbook: TypeScript type checking and Biome linting.
- * Runs from the runtime directory using the same type environment as Vite.
+ * Run diagnostics on workbook: type checking and linting.
+ * Runs types and lints in parallel for speed.
  */
-export async function checkCommand() {
+export async function checkCommand(options: CheckOptions = {}) {
   const workbookPath = await findWorkbookRoot();
 
   if (!workbookPath) {
@@ -17,24 +41,24 @@ export async function checkCommand() {
   }
 
   const runtimeDir = path.resolve(import.meta.dirname, "../../../runtime");
+  const fix = options.fix ?? false;
 
-  console.log(pc.blue(`Checking ${pc.bold(path.basename(workbookPath))}...\n`));
+  console.log(pc.blue(`${fix ? "Fixing" : "Checking"} ${pc.bold(path.basename(workbookPath))}...\n`));
 
-  let hasErrors = false;
+  // Fix RSC directives first if --fix (so linters see correct code)
+  if (fix) {
+    fixRSCDirectives(workbookPath);
+  }
 
-  // 1. TypeScript type checking
-  console.log(pc.cyan("▶ Running TypeScript..."));
-  const tscOk = await runTypeCheck(workbookPath, runtimeDir);
-  if (!tscOk) hasErrors = true;
-
-  // 2. Biome linting (excludes .hands)
-  console.log(pc.cyan("\n▶ Running Biome..."));
-  const biomeOk = await runBiome(workbookPath);
-  if (!biomeOk) hasErrors = true;
+  // Run types and lints in parallel
+  const [typesOk, lintsOk] = await Promise.all([
+    runTypes(workbookPath, runtimeDir),
+    runLints(workbookPath, runtimeDir, fix),
+  ]);
 
   // Summary
   console.log("");
-  if (hasErrors) {
+  if (!typesOk || !lintsOk) {
     console.log(pc.red("✗ Check failed"));
     process.exit(1);
   } else {
@@ -44,23 +68,42 @@ export async function checkCommand() {
 }
 
 /**
+ * Fix RSC directives before running checks.
+ * Adds "use server" to blocks and "use client" to UI components.
+ */
+function fixRSCDirectives(workbookPath: string): void {
+  const blocksDir = path.join(workbookPath, "blocks");
+  const uiDir = path.join(workbookPath, "ui");
+
+  // Fix blocks
+  for (const file of findTsxFiles(blocksDir)) {
+    const content = readFileSync(file, "utf-8");
+    if (!hasUseServerDirective(content)) {
+      writeFileSync(file, `"use server";\n\n${content}`);
+    }
+  }
+
+  // Fix UI
+  for (const file of findTsxFiles(uiDir)) {
+    const content = readFileSync(file, "utf-8");
+    if (!hasUseClientDirective(content)) {
+      writeFileSync(file, `"use client";\n\n${content}`);
+    }
+  }
+}
+
+/**
  * Generate a tsconfig that extends runtime's tsconfig and checks workbook files.
- * Uses the same path aliases as Vite's resolve.alias.
  */
 function generateCheckTsConfig(workbookPath: string, runtimeDir: string): string {
   return JSON.stringify(
     {
       extends: path.join(runtimeDir, "tsconfig.json"),
       compilerOptions: {
-        // Use runtime's baseUrl for module resolution
         baseUrl: runtimeDir,
-        // Use simpler module resolution (bundler mode is too strict about exports)
         moduleResolution: "node",
-        // Limit type lookups to runtime's node_modules only
         typeRoots: [path.join(runtimeDir, "node_modules/@types")],
-        // Override types with absolute paths (extends inherits relative paths that break)
         types: ["node", "react", "react-dom"],
-        // Use declaration files for @hands/* to avoid checking runtime source
         paths: {
           "@/*": [path.join(runtimeDir, "src/*")],
           "@hands/db": [path.join(runtimeDir, "types/hands-db.d.ts")],
@@ -69,14 +112,12 @@ function generateCheckTsConfig(workbookPath: string, runtimeDir: string): string
           "@hands/pages": [path.join(runtimeDir, "types/pages-placeholder.d.ts")],
           "@ui/*": [path.join(workbookPath, "ui/*")],
           "@/blocks/*": [path.join(workbookPath, "blocks/*")],
-          // Force react resolution to runtime's node_modules
-          "react": [path.join(runtimeDir, "node_modules/react")],
+          react: [path.join(runtimeDir, "node_modules/react")],
           "react/*": [path.join(runtimeDir, "node_modules/react/*")],
           "react-dom": [path.join(runtimeDir, "node_modules/react-dom")],
           "react-dom/*": [path.join(runtimeDir, "node_modules/react-dom/*")],
         },
       },
-      // Only check user's workbook files (relative to workbook root, not .hands/)
       include: [
         path.join(workbookPath, "blocks/**/*.ts"),
         path.join(workbookPath, "blocks/**/*.tsx"),
@@ -87,25 +128,24 @@ function generateCheckTsConfig(workbookPath: string, runtimeDir: string): string
         path.join(workbookPath, "lib/**/*.ts"),
         path.join(workbookPath, "lib/**/*.tsx"),
       ],
-      // Exclude generated files and node_modules
-      exclude: [
-        path.join(workbookPath, "node_modules"),
-        path.join(workbookPath, ".hands"),
-      ],
+      exclude: [path.join(workbookPath, "node_modules"), path.join(workbookPath, ".hands")],
     },
     null,
     2
   );
 }
 
-async function runTypeCheck(workbookPath: string, runtimeDir: string): Promise<boolean> {
-  // Ensure .hands directory exists
+/**
+ * Run TypeScript type checking.
+ */
+async function runTypes(workbookPath: string, runtimeDir: string): Promise<boolean> {
+  console.log(pc.cyan("▶ Types"));
+
   const handsDir = path.join(workbookPath, ".hands");
   if (!existsSync(handsDir)) {
     mkdirSync(handsDir, { recursive: true });
   }
 
-  // Generate tsconfig in workbook/.hands (so paths are relative to workbook)
   const tsconfigPath = path.join(handsDir, "tsconfig.check.json");
   writeFileSync(tsconfigPath, generateCheckTsConfig(workbookPath, runtimeDir));
 
@@ -131,45 +171,153 @@ async function runTypeCheck(workbookPath: string, runtimeDir: string): Promise<b
   });
 }
 
-async function runBiome(workbookPath: string): Promise<boolean> {
-  // Check if biome is available in the monorepo root
-  const monorepoRoot = path.resolve(import.meta.dirname, "../../../../..");
-  const biomePath = path.join(monorepoRoot, "node_modules/.bin/biome");
+/**
+ * Run all linting: Biome + RSC directives + architecture rules.
+ */
+async function runLints(workbookPath: string, runtimeDir: string, fix: boolean): Promise<boolean> {
+  console.log(pc.cyan("▶ Lints"));
+
+  // Run all lint checks
+  const [biomeOk, rscOk, archOk] = await Promise.all([
+    runBiome(workbookPath, runtimeDir, fix),
+    runRSCLints(workbookPath),
+    runArchLints(workbookPath),
+  ]);
+
+  return biomeOk && rscOk && archOk;
+}
+
+/**
+ * Run Biome linting and formatting.
+ */
+async function runBiome(workbookPath: string, runtimeDir: string, fix: boolean): Promise<boolean> {
+  const biomePath = path.join(runtimeDir, "node_modules/.bin/biome");
 
   if (!existsSync(biomePath)) {
-    console.log(pc.yellow("  ⊘ Biome not installed, skipping"));
+    console.log(pc.yellow("  ⊘ Biome not found in runtime, run bun install"));
     return true;
   }
 
-  // Get directories that exist
-  const dirs = ["blocks", "pages", "lib", "ui"].filter((d) =>
-    existsSync(path.join(workbookPath, d))
-  );
+  const dirs = ["blocks", "pages", "lib", "ui"].filter((d) => existsSync(path.join(workbookPath, d)));
 
   if (dirs.length === 0) {
-    console.log(pc.yellow("  ⊘ No source directories found, skipping"));
     return true;
   }
 
+  const configPath = path.join(runtimeDir, "biome.json");
+  const args = fix
+    ? ["check", "--write", "--config-path", configPath, "--colors=force", ...dirs]
+    : ["check", "--config-path", configPath, "--colors=force", ...dirs];
+
   return new Promise((resolve) => {
-    // Use biome from monorepo, check workbook dirs, ignore .hands
-    const child = spawn(biomePath, ["check", "--colors=force", ...dirs], {
+    const child = spawn(biomePath, args, {
       cwd: workbookPath,
       stdio: "inherit",
     });
 
-    child.on("exit", (code) => {
-      if (code === 0) {
-        console.log(pc.green("  ✓ No lint errors"));
-        resolve(true);
-      } else {
-        resolve(false);
-      }
-    });
-
+    child.on("exit", (code) => resolve(code === 0));
     child.on("error", (err) => {
       console.error(pc.red(`  Failed to run biome: ${err.message}`));
       resolve(false);
     });
   });
+}
+
+/**
+ * Check RSC directives: "use server" in blocks, "use client" in UI.
+ */
+async function runRSCLints(workbookPath: string): Promise<boolean> {
+  const blocksDir = path.join(workbookPath, "blocks");
+  const uiDir = path.join(workbookPath, "ui");
+  let hasErrors = false;
+
+  // Check blocks have "use server"
+  for (const file of findTsxFiles(blocksDir)) {
+    const content = readFileSync(file, "utf-8");
+    const relativePath = path.relative(workbookPath, file);
+    const result = validateBlock(file, content);
+
+    for (const error of result.errors) {
+      console.log(pc.red(`  ${relativePath}: ${error.message}`));
+      hasErrors = true;
+    }
+    for (const warning of result.warnings) {
+      console.log(pc.yellow(`  ${relativePath}:${warning.line}: ${warning.message}`));
+    }
+  }
+
+  // Check UI has "use client"
+  for (const file of findTsxFiles(uiDir)) {
+    const content = readFileSync(file, "utf-8");
+    const relativePath = path.relative(workbookPath, file);
+    const result = validateUIComponent(file, content);
+
+    for (const error of result.errors) {
+      console.log(pc.red(`  ${relativePath}: ${error.message}`));
+      hasErrors = true;
+    }
+  }
+
+  return !hasErrors;
+}
+
+/**
+ * Check architecture rules: read-only blocks, deprecated imports.
+ */
+async function runArchLints(workbookPath: string): Promise<boolean> {
+  const blocksDir = path.join(workbookPath, "blocks");
+  if (!existsSync(blocksDir)) return true;
+
+  const warnings: string[] = [];
+
+  function scanDir(dir: string) {
+    for (const entry of readdirSync(dir, { withFileTypes: true })) {
+      const fullPath = path.join(dir, entry.name);
+
+      if (entry.isDirectory()) {
+        scanDir(fullPath);
+      } else if (entry.name.endsWith(".tsx") || entry.name.endsWith(".ts")) {
+        const content = readFileSync(fullPath, "utf-8");
+        const lines = content.split("\n");
+        const relPath = path.relative(workbookPath, fullPath);
+
+        for (const rule of ARCH_RULES) {
+          for (let i = 0; i < lines.length; i++) {
+            if (rule.pattern.test(lines[i])) {
+              warnings.push(`  ${relPath}:${i + 1}: ${rule.message}`);
+            }
+            rule.pattern.lastIndex = 0;
+          }
+        }
+      }
+    }
+  }
+
+  scanDir(blocksDir);
+
+  for (const warning of warnings) {
+    console.log(pc.yellow(warning));
+  }
+
+  // Architecture warnings don't fail the check (advisory only)
+  return true;
+}
+
+/**
+ * Find all .tsx files recursively in a directory.
+ */
+function findTsxFiles(dir: string): string[] {
+  const files: string[] = [];
+  if (!existsSync(dir)) return files;
+
+  const entries = readdirSync(dir, { withFileTypes: true });
+  for (const entry of entries) {
+    const fullPath = path.join(dir, entry.name);
+    if (entry.isDirectory()) {
+      files.push(...findTsxFiles(fullPath));
+    } else if (entry.name.endsWith(".tsx") && !entry.name.endsWith(".test.tsx")) {
+      files.push(fullPath);
+    }
+  }
+  return files;
 }

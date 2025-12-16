@@ -41,11 +41,11 @@ export async function initCommand(name?: string) {
       },
       iconLibrary: "lucide",
       aliases: {
-        components: "@ui",
-        ui: "@ui",
-        utils: "@ui/lib/utils",
-        lib: "@ui/lib",
-        hooks: "@ui/hooks",
+        components: "ui",
+        ui: "ui",
+        utils: "ui/lib/utils",
+        lib: "ui/lib",
+        hooks: "ui/hooks",
       },
     };
     fs.writeFileSync(componentsPath, JSON.stringify(components, null, 2));
