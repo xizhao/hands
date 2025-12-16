@@ -11,17 +11,27 @@ import { tunnelPlugin } from "./src/vite-plugin-tunnel";
 const isDev = process.env.NODE_ENV !== "production";
 const workbookPath = process.env.HANDS_WORKBOOK_PATH ?? "";
 
-if (!isDev) {
-  throw new Error(
-    "Production builds not yet supported. TODO: implement @hands/db with Durable Objects."
-  );
-}
-
 if (!workbookPath) {
   throw new Error("HANDS_WORKBOOK_PATH environment variable is required");
 }
 
+// Build output directory - defaults to .hands/dist in workbook
+const outDir = process.env.HANDS_BUILD_OUTPUT ?? path.join(workbookPath, ".hands/dist");
+
 export default defineConfig({
+  // Build output configuration
+  build: {
+    outDir,
+    emptyOutDir: true,
+    // Ensure dependencies are resolved from monorepo root
+    commonjsOptions: {
+      include: [/node_modules/],
+    },
+    rollupOptions: {
+      // Don't treat these as external - they need to be bundled
+      external: ["cloudflare:workers"],
+    },
+  },
   server: {
     host: true, // Expose to LAN
     allowedHosts: [".trycloudflare.com"], // Allow tunnel requests
@@ -97,15 +107,25 @@ export default defineConfig({
       persistState: { path: path.join(workbookPath, ".hands/db") },
     }),
     redwood({
-      // Components with "use client" need to be registered for client bundling
+      // UI components are client-side (interactive)
+      // Blocks are always server components (use server) - they can access @hands/db
       forceClientPaths: [
         path.resolve(workbookPath, "ui/**/*.tsx"),
-        path.resolve(workbookPath, "blocks/**/*.tsx"),
       ],
     }),
     tailwindcss(),
   ],
   resolve: {
+    // Ensure consistent resolution for slate and related packages
+    dedupe: [
+      "is-hotkey",
+      "slate",
+      "slate-dom",
+      "slate-react",
+      "slate-hyperscript",
+      "react",
+      "react-dom",
+    ],
     alias: {
       // Workbook paths
       "@ui": path.resolve(workbookPath, "ui"),

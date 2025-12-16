@@ -128,6 +128,11 @@ export function usePageSource({
   // Track pending source during save (to prevent poll overwrites)
   const pendingSource = useRef<string | null>(null);
 
+  // Grace period after save - ignore poll changes for a short time
+  // This prevents the poll from overwriting content we just saved
+  const lastSaveTime = useRef<number>(0);
+  const SAVE_GRACE_PERIOD_MS = 2000; // Ignore poll changes for 2s after save
+
   // Get tRPC client
   const trpcRef = useRef(getTRPCClient(runtimePort));
 
@@ -175,6 +180,16 @@ export function usePageSource({
         if (active && pendingSource.current === null) {
           // Only update if source changed externally
           if (data.source !== confirmedServerSource.current) {
+            // Check if we're in the grace period after a save
+            // This prevents poll from overwriting content we just saved
+            // (serialization may not be perfectly round-trip consistent)
+            const timeSinceSave = Date.now() - lastSaveTime.current;
+            if (timeSinceSave < SAVE_GRACE_PERIOD_MS) {
+              console.log("[usePageSource] Ignoring poll change during grace period");
+              confirmedServerSource.current = data.source;
+              return;
+            }
+
             // Check if we have unsaved local edits
             if (localEditVersion.current > savedVersion.current) {
               // Conflict: external change while user has unsaved edits
@@ -184,7 +199,12 @@ export function usePageSource({
               confirmedServerSource.current = data.source;
             } else {
               // No local edits - safe to apply external change
-              console.log("[usePageSource] Source changed externally, updating");
+              console.warn("[usePageSource] TRIGGERING UPDATE - source changed externally", {
+                serverLength: data.source.length,
+                confirmedLength: confirmedServerSource.current?.length,
+                localVersion: localEditVersion.current,
+                savedVersion: savedVersion.current,
+              });
               setSourceState(data.source);
               setCachedPageSource(currentPageId, data.source);
               confirmedServerSource.current = data.source;
@@ -236,6 +256,7 @@ export function usePageSource({
         // Update confirmed source after server confirms
         confirmedServerSource.current = newSource;
         savedVersion.current = editVersion;
+        lastSaveTime.current = Date.now(); // Start grace period
         console.log("[usePageSource] Saved successfully (version", editVersion, ")");
 
         // Check if more edits came in during the save

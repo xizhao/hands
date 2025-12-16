@@ -29,6 +29,7 @@
     "@tailwindcss/vite": "^4.1.18",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
+    "is-hotkey": "^0.2.0",
     "kysely": "0.28.8",
     "kysely-d1": "^0.4.0",
     "lucide-react": "^0.561.0",
@@ -38,6 +39,10 @@
     "react-server-dom-webpack": "19.2.3",
     "remark-gfm": "^4.0.1",
     "rwsdk": "1.0.0-beta.41",
+    "slate": "^0.120.0",
+    "slate-dom": "^0.119.0",
+    "slate-hyperscript": "^0.100.0",
+    "slate-react": "^0.120.0",
     "tailwind-merge": "^3.4.0",
     "tailwindcss": "^4.1.18"
   },

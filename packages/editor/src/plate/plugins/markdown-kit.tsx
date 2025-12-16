@@ -13,8 +13,14 @@ import type { MdxJsxFlowElement, MdxJsxAttribute } from 'mdast-util-mdx-jsx';
  *   - editor/plate/plugins/markdown-kit.tsx (serialize rsc-block → <Block>) ← YOU ARE HERE
  *   - runtime/components/PageStatic.tsx (render rsc-block in PlateStatic)
  */
-function serializeRscBlockToMdast(element: any): MdxJsxFlowElement {
-  // Build JSX attributes array
+function serializeRscBlockToMdast(element: any): MdxJsxFlowElement | { type: 'html'; value: string } {
+  // If we have the original source, use it to preserve formatting
+  // This ensures round-trip consistency (parse → serialize produces identical output)
+  if (element.source) {
+    return { type: 'html', value: element.source };
+  }
+
+  // Otherwise reconstruct from blockId and props
   const attributes: MdxJsxAttribute[] = [
     { type: 'mdxJsxAttribute', name: 'src', value: element.blockId },
   ];

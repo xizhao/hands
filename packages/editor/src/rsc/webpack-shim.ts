@@ -58,7 +58,9 @@ function toViteUrl(file: string): string {
 /**
  * Load a module from the runtime dev server via Vite
  */
-async function loadModuleFromRuntime(file: string): Promise<Record<string, unknown>> {
+async function loadModuleFromRuntime(
+  file: string
+): Promise<Record<string, unknown>> {
   if (!currentRuntimePort) {
     throw new Error("[rsc-shim] Runtime port not configured");
   }
@@ -105,7 +107,14 @@ const webpackRequire = ((id: string) => {
   // Parse the module ID: format is "file#exportName"
   const [file, exportName] = id.split("#");
 
-  console.debug("[rsc-shim] Requested module:", id, "-> file:", file, "export:", exportName);
+  console.debug(
+    "[rsc-shim] Requested module:",
+    id,
+    "-> file:",
+    file,
+    "export:",
+    exportName
+  );
 
   // Load the module and return a lazy component wrapper
   const promisedModule = loadModule(file);
@@ -121,7 +130,8 @@ const webpackRequire = ((id: string) => {
   // Wrap in a component that renders the lazy component
   const Wrapped = (props: Record<string, unknown>) =>
     React.createElement(Lazy, props as React.Attributes);
-  (Wrapped as unknown as { displayName: string }).displayName = `RSCClientComponent(${id})`;
+  (Wrapped as unknown as { displayName: string }).displayName =
+    `RSCClientComponent(${id})`;
 
   // Return the module-like object that React expects
   return { [id]: Wrapped };
@@ -131,7 +141,11 @@ const webpackRequire = ((id: string) => {
 // Add required webpack runtime properties
 webpackRequire.u = (chunkId: string) => `${chunkId}.js`;
 webpackRequire.p = "/";
-webpackRequire.O = (result: unknown, _chunkIds?: unknown, fn?: () => unknown) => {
+webpackRequire.O = (
+  result: unknown,
+  _chunkIds?: unknown,
+  fn?: () => unknown
+) => {
   if (fn) return fn();
   return result;
 };
@@ -141,7 +155,9 @@ webpackRequire.scriptsToBeLoaded = [];
 webpackRequire.scripts = {};
 
 // Chunk loading (returns resolved promise since we don't load chunks dynamically)
-(globalThis as unknown as Record<string, unknown>).__webpack_chunk_load__ = (chunkId: string) => {
+(globalThis as unknown as Record<string, unknown>).__webpack_chunk_load__ = (
+  chunkId: string
+) => {
   console.debug("[rsc-shim] Chunk load:", chunkId);
   return Promise.resolve();
 };
@@ -149,7 +165,8 @@ webpackRequire.scripts = {};
 // Set on globalThis
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 (globalThis as any).__webpack_require__ = webpackRequire;
-(globalThis as unknown as Record<string, unknown>).__webpack_module_cache__ = moduleCache;
+(globalThis as unknown as Record<string, unknown>).__webpack_module_cache__ =
+  moduleCache;
 
 /**
  * Clear the module cache (useful for HMR)

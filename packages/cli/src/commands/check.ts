@@ -10,6 +10,7 @@ interface CheckOptions {
 }
 
 // Architecture lint rules
+
 const ARCH_RULES = [
   {
     id: "block-writes-data",
@@ -29,8 +30,8 @@ const ARCH_RULES = [
 ];
 
 /**
- * Run diagnostics on workbook: type checking and linting.
- * Runs types and lints in parallel for speed.
+ * Run code quality checks: types and lints.
+ * Runs in parallel for speed.
  */
 export async function checkCommand(options: CheckOptions = {}) {
   const workbookPath = await findWorkbookRoot();
@@ -45,7 +46,7 @@ export async function checkCommand(options: CheckOptions = {}) {
 
   console.log(pc.blue(`${fix ? "Fixing" : "Checking"} ${pc.bold(path.basename(workbookPath))}...\n`));
 
-  // Fix RSC directives first if --fix (so linters see correct code)
+  // Fix RSC directives before linting (so linters see correct code)
   if (fix) {
     fixRSCDirectives(workbookPath);
   }

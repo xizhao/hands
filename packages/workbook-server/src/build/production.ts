@@ -256,6 +256,10 @@ export async function buildProduction(
       },
     };
 
+    // Find workbook-server's node_modules for dependency resolution
+    const workbookServerRoot = dirname(dirname(dirname(import.meta.dir)));
+    const workbookServerNodeModules = join(workbookServerRoot, "node_modules");
+
     const result = await esbuild({
       entryPoints: [workerSrcPath],
       outfile: join(outputDir, "worker.js"),
@@ -266,6 +270,7 @@ export async function buildProduction(
       sourcemap: true, // External sourcemap for debugging
       external: ["cloudflare:*"],
       plugins: [unenvPlugin, handsDbPlugin, ...(stdlibPath ? [stdlibPlugin] : [])],
+      nodePaths: [workbookServerNodeModules], // Resolve deps from workbook-server
       logLevel: "warning",
     });
 
