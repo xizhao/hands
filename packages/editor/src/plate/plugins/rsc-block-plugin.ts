@@ -26,6 +26,8 @@ export interface RscBlockElement extends TElement {
   id: string;
   /** Whether this block is being created/edited (shows shimmer placeholder) */
   editing?: boolean;
+  /** User prompt for AI to build this block (only set when editing) */
+  prompt?: string;
   /** Plate requires children, even for void elements */
   children: [{ text: "" }];
 }

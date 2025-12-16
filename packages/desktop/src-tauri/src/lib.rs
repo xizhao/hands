@@ -1453,8 +1453,9 @@ pub fn run() {
                 .build()?;
 
             // File submenu
+            // Note: We intentionally omit .close_window() here because Cmd+W is handled
+            // by the frontend hotkey system to navigate up instead of closing the window
             let file_submenu = SubmenuBuilder::new(app_handle, "File")
-                .close_window()
                 .build()?;
 
             // Edit submenu
@@ -1476,8 +1477,6 @@ pub fn run() {
             // Window submenu
             let window_submenu = SubmenuBuilder::new(app_handle, "Window")
                 .minimize()
-                .separator()
-                .close_window()
                 .build()?;
 
             let menu = MenuBuilder::new(app_handle)

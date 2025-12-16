@@ -121,6 +121,11 @@ function serializeRscBlock(element: RscBlockElement): string {
     attrs.push(`src="${element.blockId}"`);
   }
 
+  // Add prompt if present (for editing blocks)
+  if (element.prompt) {
+    attrs.push(`prompt="${element.prompt.replace(/"/g, '\\"')}"`);
+  }
+
   // Add editing attribute if true
   if (element.editing) {
     attrs.push("editing");

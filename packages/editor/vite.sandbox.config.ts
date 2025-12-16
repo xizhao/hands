@@ -67,7 +67,6 @@ export default defineConfig({
     headers: {
       "Access-Control-Allow-Origin": "*",
     },
-    hmr: false,
   },
   optimizeDeps: {
     include: ["@codemirror/lang-javascript", "@uiw/react-codemirror"],

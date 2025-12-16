@@ -2,6 +2,7 @@ import { createRootRoute, Outlet } from "@tanstack/react-router";
 import { listen } from "@tauri-apps/api/event";
 import { useEffect, useState } from "react";
 import { SettingsModal } from "@/components/SettingsModal";
+import { useAppHotkeys, useHotkeys } from "@/hooks/useHotkeys";
 import { initTheme } from "@/lib/theme";
 
 export const Route = createRootRoute({
@@ -10,6 +11,9 @@ export const Route = createRootRoute({
 
 function RootComponent() {
   const [settingsOpen, setSettingsOpen] = useState(false);
+
+  // Global hotkeys (Cmd+W to close page, etc.)
+  useAppHotkeys();
 
   // Initialize theme on mount
   useEffect(() => {
@@ -35,17 +39,18 @@ function RootComponent() {
     };
   }, []);
 
-  // Cmd+, to open settings (fallback for keyboard shortcut)
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.metaKey && e.key === ",") {
-        e.preventDefault();
+  // Cmd+, to open settings (using hotkey system)
+  useHotkeys([
+    {
+      key: ",",
+      meta: true,
+      handler: () => {
         setSettingsOpen(true);
-      }
-    };
-    window.addEventListener("keydown", handleKeyDown);
-    return () => window.removeEventListener("keydown", handleKeyDown);
-  }, []);
+        return true;
+      },
+      description: "Open settings",
+    },
+  ]);
 
   return (
     <>

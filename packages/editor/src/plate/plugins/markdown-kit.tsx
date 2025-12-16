@@ -30,6 +30,11 @@ function serializeRscBlockToMdast(element: any): MdxJsxFlowElement | { type: 'ht
     attributes.push({ type: 'mdxJsxAttribute', name: 'src', value: element.blockId });
   }
 
+  // Add prompt if present (for editing blocks)
+  if (element.prompt) {
+    attributes.push({ type: 'mdxJsxAttribute', name: 'prompt', value: element.prompt });
+  }
+
   // Add editing attribute if true (boolean attribute with null value)
   if (element.editing) {
     attributes.push({ type: 'mdxJsxAttribute', name: 'editing', value: null });

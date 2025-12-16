@@ -12,7 +12,9 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { useRuntimeState } from "@/hooks/useRuntimeState";
+import { useCreateSession, useSendMessage } from "@/hooks/useSession";
 import { useThumbnail } from "@/hooks/useThumbnails";
+import { trpc } from "@/lib/trpc";
 import { cn } from "@/lib/utils";
 
 // Editor error event types (must match packages/editor/src/overlay/errors.ts)
@@ -50,6 +52,14 @@ function isEditorErrorEvent(msg: unknown): msg is EditorErrorEvent {
 interface NavigateTableEvent {
   type: "navigate-table";
   tableId: string;
+}
+
+// Block create event from editor (e.g., "Make with Hands" in slash menu)
+interface BlockCreateEvent {
+  type: "block-create";
+  prompt: string;
+  blockElementId: string;
+  pageId: string;
 }
 
 // Thumbnail captured event from iframe
@@ -108,6 +118,17 @@ function isNavigateTableEvent(msg: unknown): msg is NavigateTableEvent {
     msg !== null &&
     (msg as NavigateTableEvent).type === "navigate-table" &&
     typeof (msg as NavigateTableEvent).tableId === "string"
+  );
+}
+
+function isBlockCreateEvent(msg: unknown): msg is BlockCreateEvent {
+  return (
+    typeof msg === "object" &&
+    msg !== null &&
+    (msg as BlockCreateEvent).type === "block-create" &&
+    typeof (msg as BlockCreateEvent).prompt === "string" &&
+    typeof (msg as BlockCreateEvent).blockElementId === "string" &&
+    typeof (msg as BlockCreateEvent).pageId === "string"
   );
 }
 
@@ -197,6 +218,10 @@ export function SandboxFrame({
 
   // Runtime port for the editor to connect to
   const { port: runtimePort } = useRuntimeState();
+
+  // Session hooks for AI block creation
+  const createSession = useCreateSession();
+  const sendMessage = useSendMessage();
 
   // Fetch LQIP for loading placeholder
   const { data: thumbnail } = useThumbnail(mode, contentId);
@@ -314,37 +339,73 @@ export function SandboxFrame({
         const { thumbnail, theme, contentId, contentType } = e.data;
         console.log(`[SandboxFrame:${mode}] Thumbnail captured for ${contentType}:${contentId} (${theme})`);
 
-        // Generate LQIP and save to runtime
-        generateLQIP(thumbnail).then((lqip) => {
-          if (!runtimePort) return;
-
-          fetch(`http://localhost:${runtimePort}/workbook/thumbnails`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
+        // Generate LQIP and save via tRPC
+        generateLQIP(thumbnail).then(async (lqip) => {
+          try {
+            await trpc.thumbnails.save.mutate({
               type: contentType,
               contentId,
               theme,
               thumbnail,
               lqip,
-            }),
-          })
-            .then((res) => {
-              if (res.ok) {
-                console.log(`[SandboxFrame:${mode}] Thumbnail saved`);
-              } else {
-                console.error(`[SandboxFrame:${mode}] Failed to save thumbnail:`, res.status);
-              }
-            })
-            .catch((err) => {
-              console.error(`[SandboxFrame:${mode}] Error saving thumbnail:`, err);
             });
+            console.log(`[SandboxFrame:${mode}] Thumbnail saved`);
+          } catch (err) {
+            console.error(`[SandboxFrame:${mode}] Error saving thumbnail:`, err);
+          }
         });
+      }
+
+      // Handle block creation from editor (e.g., "Make with Hands" in slash menu)
+      if (isBlockCreateEvent(e.data)) {
+        const { prompt, blockElementId, pageId: targetPageId } = e.data;
+        console.log(`[SandboxFrame:${mode}] Block create requested:`, { prompt, blockElementId, targetPageId });
+
+        // Craft the prompt for the AI to create the block and update the page
+        const aiPrompt = `Create a new React block component for the page "${targetPageId}".
+
+The user wants: "${prompt}"
+
+Instructions:
+1. Create a new block in the blocks/ folder with a descriptive name based on the user's request
+2. The block should fulfill the user's request
+3. After creating the block, update the page "${targetPageId}" to replace the placeholder \`<Block prompt="${prompt}" editing />\` with \`<Block src="your-new-block-id" />\`
+4. Make sure the block renders correctly
+
+The placeholder block has element ID: ${blockElementId}`;
+
+        // Create a new session for the block creation (idiomatic React Query pattern)
+        createSession.mutate(
+          { title: `Creating: ${prompt.slice(0, 30)}...` },
+          {
+            onSuccess: (session) => {
+              console.log(`[SandboxFrame:${mode}] Created session for block:`, session.id);
+
+              // Send the prompt to the AI
+              sendMessage.mutate({
+                sessionId: session.id,
+                content: aiPrompt,
+                agent: "hands",
+              });
+
+              // Show toast to let user know creation started
+              toast.info("Creating block with Hands...", {
+                description: prompt.slice(0, 50) + (prompt.length > 50 ? "..." : ""),
+              });
+            },
+            onError: (err) => {
+              console.error(`[SandboxFrame:${mode}] Error creating session:`, err);
+              toast.error("Failed to start block creation", {
+                description: String(err),
+              });
+            },
+          },
+        );
       }
     };
     window.addEventListener("message", handleMessage);
     return () => window.removeEventListener("message", handleMessage);
-  }, [sendStyles, navigate, mode, runtimePort]);
+  }, [sendStyles, navigate, mode, runtimePort, createSession, sendMessage]);
 
   // Handle iframe load - also try sending styles (fallback)
   const handleIframeLoad = useCallback(() => {

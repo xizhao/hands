@@ -39,14 +39,14 @@ function HandsLogo({ className }: { className?: string }) {
 type SlashMenuItem = {
   icon: React.ReactNode;
   value: string;
-  onSelect: (editor: PlateEditor) => void;
+  onSelect: (editor: PlateEditor, searchValue: string) => void;
   description?: string;
   keywords?: string[];
   label?: string;
   alwaysShow?: boolean; // Always show regardless of filter
 };
 
-function insertBlock(editor: PlateEditor, blockId: string, editing = false) {
+function insertBlock(editor: PlateEditor, blockId: string, options: { editing?: boolean; prompt?: string } = {}) {
   // Insert an RSC block element that renders via <Block src="blockId" />
   const node: TElement = {
     type: "rsc-block",
@@ -54,10 +54,19 @@ function insertBlock(editor: PlateEditor, blockId: string, editing = false) {
     source: "", // Source is fetched from runtime by blockId
     blockProps: {},
     id: crypto.randomUUID(),
-    editing,
+    editing: options.editing,
+    prompt: options.prompt,
     children: [{ text: "" }],
   };
   editor.tf.insertNodes(node);
+
+  // Trigger onBlockCreate callback if editing (new block being created)
+  if (options.editing && options.prompt) {
+    const onBlockCreate = (editor as any).onBlockCreate as ((prompt: string, blockElementId: string) => void) | undefined;
+    if (onBlockCreate) {
+      onBlockCreate(options.prompt, node.id as string);
+    }
+  }
 }
 
 interface BlockWithThumbnail {
@@ -223,14 +232,14 @@ function SlashMenuSection({
           alwaysShow={alwaysShow}
           keywords={keywords}
           label={label}
-          onClick={() => onSelect(editor)}
+          onClick={() => onSelect(editor, searchValue || "")}
           value={value}
         >
           <SlashMenuItemContent
             icon={icon}
             label={label}
             value={value}
-            description={description}
+            description={alwaysShow && searchValue?.trim() ? `"${searchValue.trim()}"` : description}
             variant={alwaysShow ? "action" : "default"}
           />
         </InlineComboboxItem>
@@ -276,7 +285,7 @@ function MyBlocksSection({
         label: block.title,
         value: `block:${block.id}`,
         keywords: [block.id, block.title],
-        onSelect: (ed: PlateEditor) => insertBlock(ed, block.id),
+        onSelect: (ed: PlateEditor, _searchValue: string) => insertBlock(ed, block.id),
         hasThumbnail: !!block.thumbnail,
       })),
     [blocks],
@@ -327,6 +336,8 @@ function MyBlocksSection({
  * Make with Hands - standalone item when no blocks exist
  */
 function MakeWithHandsItem({ editor }: { editor: PlateEditor }) {
+  const searchValue = useInlineComboboxSearchValue();
+
   return (
     <InlineComboboxGroup>
       <InlineComboboxItem
@@ -334,8 +345,9 @@ function MakeWithHandsItem({ editor }: { editor: PlateEditor }) {
         keywords={["ai", "generate", "create", "make", "hands", "build", "new"]}
         label="Make with Hands"
         onClick={() => {
-          // Insert a new block in editing mode
-          insertBlock(editor, "", true);
+          // Insert a new block in editing mode with the search text as prompt
+          const prompt = searchValue?.trim() || "Create a new block";
+          insertBlock(editor, "", { editing: true, prompt });
         }}
         value="hands:make"
       >
@@ -343,7 +355,7 @@ function MakeWithHandsItem({ editor }: { editor: PlateEditor }) {
           icon={<HandsLogo className="size-4" />}
           label="Make with Hands"
           value="hands:make"
-          description="Create a new block with AI"
+          description={searchValue?.trim() ? `"${searchValue.trim()}"` : "Create a new block with AI"}
           variant="action"
         />
       </InlineComboboxItem>
@@ -371,9 +383,11 @@ export function SlashInputElement(props: PlateElementProps) {
         value: "hands:make",
         keywords: ["ai", "generate", "create", "make", "hands", "build", "new"],
         alwaysShow: true,
-        onSelect: (ed) => {
-          // Insert a new block in editing mode
-          insertBlock(ed, "", true);
+        description: "Create a new block with AI",
+        onSelect: (ed, searchValue) => {
+          // Insert a new block in editing mode with the search text as prompt
+          const prompt = searchValue?.trim() || "Create a new block";
+          insertBlock(ed, "", { editing: true, prompt });
         },
       },
     ],

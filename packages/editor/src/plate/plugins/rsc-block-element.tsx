@@ -24,7 +24,7 @@ import type { RscBlockElement } from "./rsc-block-plugin";
 // Editing Placeholder (shimmer effect for new blocks)
 // ============================================================================
 
-function EditingPlaceholder() {
+function EditingPlaceholder({ prompt }: { prompt?: string }) {
   return (
     <div className="relative flex items-center gap-3 overflow-hidden rounded-lg border border-primary/20 bg-gradient-to-r from-primary/5 via-primary/10 to-primary/5 px-4 py-3">
       {/* Dramatic shimmer sweep */}
@@ -32,13 +32,19 @@ function EditingPlaceholder() {
 
       {/* Hands logo with glow */}
       <div className="relative flex size-8 shrink-0 items-center justify-center rounded-md bg-primary/10">
-        <svg className="size-5 text-primary" viewBox="0 0 32 32" fill="currentColor">
+        <svg
+          className="size-5 text-primary"
+          viewBox="0 0 32 32"
+          fill="currentColor"
+        >
           <path d="M8 12h4v8H8zM14 10h4v10h-4zM20 14h4v6h-4z" />
         </svg>
       </div>
 
       {/* Text */}
-      <span className="text-sm font-medium text-primary/80">Creating with Hands...</span>
+      <span className="text-sm font-medium text-primary/80">
+        Creating {prompt ? `"${prompt}"` : ""} with Hands...
+      </span>
     </div>
   );
 }
@@ -47,12 +53,22 @@ function EditingPlaceholder() {
 // Error Placeholder (for blocks that failed to load)
 // ============================================================================
 
-function ErrorPlaceholder({ error, onFix }: { error: string; onFix?: () => void }) {
+function ErrorPlaceholder({
+  error,
+  onFix,
+}: {
+  error: string;
+  onFix?: () => void;
+}) {
   return (
     <div className="relative flex items-center gap-3 overflow-hidden rounded-lg border border-red-500/30 bg-gradient-to-r from-red-500/5 via-red-500/10 to-red-500/5 px-4 py-3">
       {/* Hands logo in red */}
       <div className="relative flex size-8 shrink-0 items-center justify-center rounded-md bg-red-500/10">
-        <svg className="size-5 text-red-500" viewBox="0 0 32 32" fill="currentColor">
+        <svg
+          className="size-5 text-red-500"
+          viewBox="0 0 32 32"
+          fill="currentColor"
+        >
           <path d="M8 12h4v8H8zM14 10h4v10h-4zM20 14h4v6h-4z" />
         </svg>
       </div>
@@ -147,7 +163,10 @@ export function RscBlockElementComponent({
     if (!isEditing) return;
 
     const handleClickOutside = (e: MouseEvent) => {
-      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
+      if (
+        containerRef.current &&
+        !containerRef.current.contains(e.target as Node)
+      ) {
         exitEditMode();
       }
     };
@@ -172,14 +191,14 @@ export function RscBlockElementComponent({
         exitEditMode();
       }
     },
-    [isEditing, exitEditMode],
+    [isEditing, exitEditMode]
   );
 
   // Render content based on state
   const renderContent = (interactive: boolean) => {
     // New block being created - show shimmer placeholder
     if (rscElement.editing) {
-      return <EditingPlaceholder />;
+      return <EditingPlaceholder prompt={rscElement.prompt} />;
     }
 
     if (error) {
@@ -188,7 +207,10 @@ export function RscBlockElementComponent({
           error={error}
           onFix={() => {
             // TODO: Trigger AI fix flow
-            console.log("[RscBlock] Fix with Hands clicked for block:", rscElement.blockId);
+            console.log(
+              "[RscBlock] Fix with Hands clicked for block:",
+              rscElement.blockId
+            );
           }}
         />
       );
@@ -215,7 +237,10 @@ export function RscBlockElementComponent({
 
   return (
     <PlateElement
-      className={cn("rsc-block-element group/rsc-block relative my-2", className)}
+      className={cn(
+        "rsc-block-element group/rsc-block relative my-2",
+        className
+      )}
       {...props}
     >
       {/*
@@ -230,7 +255,7 @@ export function RscBlockElementComponent({
           "rsc-block-content rounded transition-all duration-150",
           !isEditing && isHovered && "bg-muted/30 ring-1 ring-border/50",
           !isEditing && "cursor-pointer",
-          isEditing && "ring-2 ring-brand/40",
+          isEditing && "ring-2 ring-brand/40"
         )}
         onMouseEnter={() => !isEditing && setIsHovered(true)}
         onMouseLeave={() => !isEditing && setIsHovered(false)}

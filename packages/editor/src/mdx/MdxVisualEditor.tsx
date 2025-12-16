@@ -45,6 +45,8 @@ export interface MdxVisualEditorProps {
   onRename?: (newSlug: string) => Promise<boolean>;
   /** Runtime port for RSC rendering (blocks go through runtime proxy) */
   runtimePort?: number;
+  /** Callback when a new block is being created via "Make with Hands" */
+  onBlockCreate?: (prompt: string, blockElementId: string) => void;
   /** CSS class name */
   className?: string;
   /** Whether content is being refreshed (shows at reduced opacity) */
@@ -81,6 +83,7 @@ export function MdxVisualEditor({
   pageId,
   onRename,
   runtimePort = 55000,
+  onBlockCreate,
   className,
   isRefreshing = false,
 }: MdxVisualEditorProps) {
@@ -246,6 +249,8 @@ export function MdxVisualEditor({
 
           // Store runtime port on editor for RSC blocks (blocks go through runtime proxy)
           (editor as any).runtimePort = runtimePort;
+          // Store onBlockCreate callback for slash menu to trigger AI flow
+          (editor as any).onBlockCreate = onBlockCreate;
 
           editor.apply = (op: Operation) => {
             const state = stateRef.current;
@@ -290,7 +295,7 @@ export function MdxVisualEditor({
           return editor;
         },
       }),
-    [runtimePort, doSerialize],
+    [runtimePort, onBlockCreate, doSerialize],
   );
 
   // Create editor with all plugins

@@ -457,6 +457,7 @@ function jsxElementToPlate(node: MdxJsxElement, ctx: ConversionContext, parentBl
   if (tagName === "Block" && ("src" in props || "editing" in props)) {
     const blockId = "src" in props ? String(props.src) : "";
     const editing = props.editing === true;
+    const prompt = "prompt" in props ? String(props.prompt) : undefined;
     const rawSource = ctx.source.slice(
       node.position?.start.offset ?? 0,
       node.position?.end.offset ?? 0,
@@ -467,7 +468,7 @@ function jsxElementToPlate(node: MdxJsxElement, ctx: ConversionContext, parentBl
       id,
       src: blockId,
       props: Object.fromEntries(
-        Object.entries(props).filter(([k]) => k !== "src" && k !== "editing"),
+        Object.entries(props).filter(([k]) => k !== "src" && k !== "editing" && k !== "prompt"),
       ),
       loc: {
         start: node.position?.start.offset ?? 0,
@@ -484,9 +485,10 @@ function jsxElementToPlate(node: MdxJsxElement, ctx: ConversionContext, parentBl
       blockId,
       source: editing ? "" : rawSource, // Don't preserve source for editing blocks
       blockProps: Object.fromEntries(
-        Object.entries(props).filter(([k]) => k !== "src" && k !== "editing"),
+        Object.entries(props).filter(([k]) => k !== "src" && k !== "editing" && k !== "prompt"),
       ),
       editing: editing || undefined,
+      prompt,
       children: [{ text: "" }],
     };
 

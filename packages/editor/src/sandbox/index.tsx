@@ -172,6 +172,18 @@ function PageEditor({
       pollInterval: 1000,
     });
 
+  // Handle block creation via "Make with Hands"
+  const handleBlockCreate = useCallback((prompt: string, blockElementId: string) => {
+    console.log("[PageEditor] Block create requested:", { prompt, blockElementId, pageId: currentPageId });
+    // Send message to parent to trigger AI flow
+    window.parent.postMessage({
+      type: "block-create",
+      prompt,
+      blockElementId,
+      pageId: currentPageId,
+    }, "*");
+  }, [currentPageId]);
+
   // Capture thumbnail after content settles
   useEffect(() => {
     if (!rscReady || source === null || thumbnailCapturedRef.current) return;
@@ -203,6 +215,7 @@ function PageEditor({
           pageId={currentPageId}
           onRename={renamePage}
           runtimePort={runtimePort}
+          onBlockCreate={handleBlockCreate}
           className="h-screen"
           isRefreshing={isRefreshing || !rscReady}
         />
