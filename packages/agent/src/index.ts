@@ -73,6 +73,8 @@ function setupPluginsSymlink(workingDir: string) {
 // Build config
 const config: Config = {
   model: MODEL,
+  // Disable OpenCode's built-in LSP file diagnostics - we use hands check instead
+  lsp: false,
   // Plugins are auto-discovered from .opencode/plugin/ directory
   agent: {
     // Disable general and build, keep plan/explore

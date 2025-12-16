@@ -108,6 +108,63 @@ const checks: PreflightCheck[] = [
     },
   },
   {
+    name: "ui directory exists",
+    autoFix: true,
+    check: async (workbookPath) => {
+      const atUiDir = path.join(workbookPath, "@ui");
+      const uiDir = path.join(workbookPath, "ui");
+
+      // Fix @ui -> ui (shadcn doesn't understand path aliases)
+      if (fs.existsSync(atUiDir)) {
+        if (fs.existsSync(uiDir)) {
+          return "Both @ui/ and ui/ folders exist - merge manually";
+        }
+        fs.renameSync(atUiDir, uiDir);
+        console.log(pc.dim("  Renamed @ui/ → ui/"));
+      }
+
+      // Create ui/ if missing
+      if (!fs.existsSync(uiDir)) {
+        fs.mkdirSync(uiDir, { recursive: true });
+        console.log(pc.dim("  Created ui/ directory"));
+      }
+      return true;
+    },
+  },
+  {
+    name: "shadcn config valid",
+    autoFix: true,
+    check: async (workbookPath) => {
+      const componentsPath = path.join(workbookPath, "components.json");
+      if (!fs.existsSync(componentsPath)) {
+        return true; // No config is fine, shadcn will prompt
+      }
+
+      try {
+        const content = fs.readFileSync(componentsPath, "utf-8");
+        const config = JSON.parse(content);
+
+        if (config.aliases) {
+          let fixed = false;
+          for (const [key, value] of Object.entries(config.aliases)) {
+            if (typeof value === "string" && value.startsWith("@ui")) {
+              config.aliases[key] = value.replace(/^@ui/, "ui");
+              fixed = true;
+            }
+          }
+
+          if (fixed) {
+            fs.writeFileSync(componentsPath, JSON.stringify(config, null, 2) + "\n");
+            console.log(pc.dim("  Fixed components.json aliases (@ui → ui)"));
+          }
+        }
+        return true;
+      } catch {
+        return "components.json is not valid JSON";
+      }
+    },
+  },
+  {
     name: ".hands directory exists",
     autoFix: true,
     check: async (workbookPath) => {

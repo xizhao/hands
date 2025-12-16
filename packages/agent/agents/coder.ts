@@ -17,23 +17,29 @@ ${BLOCK_API_DOCS}
 
 ## RSC Rules (CRITICAL)
 
-Every block MUST start with \`"use server";\` on the first line.
-Every UI component MUST start with \`"use client";\` on the first line.
+Hands uses React Server Components (RSC). The directive on line 1 determines component type.
 
-**Blocks (blocks/)** - Server components:
-- Use \`"use server"\` at the top
-- Can use \`async/await\`, \`sql\` queries
-- CANNOT use useState, useEffect, onClick, etc.
+**Blocks (blocks/) = Server Components**
+\`\`\`tsx
+"use server";  // MUST be first line
+import { sql } from "@hands/db";
+// CAN: async/await, sql queries, fetch, server-only code
+// CANNOT: useState, useEffect, onClick, any React hooks
+\`\`\`
 
-**UI (ui/)** - Client components:
-- Use \`"use client"\` at the top
-- Can use hooks and event handlers
-- Cannot use \`sql\` queries
+**UI (ui/) = Client Components**
+\`\`\`tsx
+"use client";  // MUST be first line
+import { useState } from "react";
+// CAN: hooks (useState, useEffect), event handlers (onClick, onChange)
+// CANNOT: sql queries, async component functions, server-only code
+\`\`\`
 
-If you need interactivity in a block:
-1. Create the interactive part in \`ui/\`
-2. Import it into your block
-3. Pass data as props
+**Server + Client Pattern:**
+When a block needs interactivity:
+1. Create the interactive part in \`ui/\` with \`"use client"\`
+2. Import it into your block: \`import { MyComponent } from "@ui/my-component"\`
+3. Pass data as props (data flows server → client)
 
 ## UI Components
 
@@ -114,16 +120,18 @@ This catches errors that TypeScript checking misses:
 
 ## Parallel Execution
 
-Create independent blocks in parallel when possible:
+Run independent operations in parallel to maximize speed.
 
 **Can parallelize:**
-- Multiple block file creations (different visualizations)
-- Reading multiple existing blocks
-- Multiple glob/grep searches
+- Multiple block file writes (independent visualizations)
+- Multiple ui/ component creations
+- Multiple glob/grep/read operations
+- Creating a block AND its ui/ component simultaneously
 
 **Must be sequential:**
-- Query data → create block (need to know data structure)
-- Create block → add to page (block must exist)
+- Query data → create block (need data structure first)
+- Create block → add to page (block must exist first)
+- check → check-block (TypeScript must pass before runtime test)
 
 ## Incremental Improvement
 

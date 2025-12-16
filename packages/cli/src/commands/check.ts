@@ -2,8 +2,13 @@ import { spawn } from "child_process";
 import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from "fs";
 import path from "path";
 import pc from "picocolors";
+import {
+  hasUseClientDirective,
+  hasUseServerDirective,
+  validateBlock,
+  validateUIComponent,
+} from "../rsc-validate.js";
 import { findWorkbookRoot } from "../utils.js";
-import { hasUseServerDirective, hasUseClientDirective, validateBlock, validateUIComponent } from "../rsc-validate.js";
 
 interface CheckOptions {
   fix?: boolean;
@@ -30,6 +35,67 @@ const ARCH_RULES = [
 ];
 
 /**
+ * Fix shadcn config issues (@ui folder and aliases).
+ * Returns true if any fixes were applied.
+ */
+function fixShadcnConfig(workbookPath: string, fix: boolean): boolean {
+  let hasIssues = false;
+
+  // Check for @ui folder
+  const atUiPath = path.join(workbookPath, "@ui");
+  const uiPath = path.join(workbookPath, "ui");
+
+  if (existsSync(atUiPath)) {
+    if (fix) {
+      if (existsSync(uiPath)) {
+        console.log(pc.red("  ✗ Both @ui/ and ui/ folders exist - merge manually"));
+        return false;
+      }
+      const { renameSync } = require("fs");
+      renameSync(atUiPath, uiPath);
+      console.log(pc.green("  ✓ Fixed: Renamed @ui/ → ui/"));
+    } else {
+      console.log(pc.red("  ✗ Found @ui/ folder (should be ui/)"));
+      hasIssues = true;
+    }
+  }
+
+  // Check components.json aliases
+  const componentsPath = path.join(workbookPath, "components.json");
+  if (existsSync(componentsPath)) {
+    try {
+      const content = readFileSync(componentsPath, "utf-8");
+      const config = JSON.parse(content);
+
+      if (config.aliases) {
+        const badAliases = Object.entries(config.aliases).filter(
+          ([, value]) => typeof value === "string" && (value as string).startsWith("@ui"),
+        );
+
+        if (badAliases.length > 0) {
+          if (fix) {
+            for (const [key, value] of Object.entries(config.aliases)) {
+              if (typeof value === "string" && value.startsWith("@ui")) {
+                config.aliases[key] = value.replace(/^@ui/, "ui");
+              }
+            }
+            writeFileSync(componentsPath, JSON.stringify(config, null, 2) + "\n");
+            console.log(pc.green("  ✓ Fixed: Updated components.json aliases (@ui → ui)"));
+          } else {
+            console.log(pc.red("  ✗ components.json has @ui aliases (should be ui)"));
+            hasIssues = true;
+          }
+        }
+      }
+    } catch {
+      // Ignore parse errors
+    }
+  }
+
+  return !hasIssues;
+}
+
+/**
  * Run code quality checks: types and lints.
  * Runs in parallel for speed.
  */
@@ -44,7 +110,16 @@ export async function checkCommand(options: CheckOptions = {}) {
   const runtimeDir = path.resolve(import.meta.dirname, "../../../runtime");
   const fix = options.fix ?? false;
 
-  console.log(pc.blue(`${fix ? "Fixing" : "Checking"} ${pc.bold(path.basename(workbookPath))}...\n`));
+  console.log(
+    pc.blue(`${fix ? "Fixing" : "Checking"} ${pc.bold(path.basename(workbookPath))}...\n`),
+  );
+
+  // Check/fix shadcn config
+  console.log(pc.cyan("▶ Config"));
+  const configOk = fixShadcnConfig(workbookPath, fix);
+  if (configOk) {
+    console.log(pc.green("  ✓ shadcn config OK"));
+  }
 
   // Fix RSC directives before linting (so linters see correct code)
   if (fix) {
@@ -59,7 +134,7 @@ export async function checkCommand(options: CheckOptions = {}) {
 
   // Summary
   console.log("");
-  if (!typesOk || !lintsOk) {
+  if (!typesOk || !lintsOk || !configOk) {
     console.log(pc.red("✗ Check failed"));
     process.exit(1);
   } else {
@@ -132,7 +207,7 @@ function generateCheckTsConfig(workbookPath: string, runtimeDir: string): string
       exclude: [path.join(workbookPath, "node_modules"), path.join(workbookPath, ".hands")],
     },
     null,
-    2
+    2,
   );
 }
 
@@ -199,7 +274,9 @@ async function runBiome(workbookPath: string, runtimeDir: string, fix: boolean):
     return true;
   }
 
-  const dirs = ["blocks", "pages", "lib", "ui"].filter((d) => existsSync(path.join(workbookPath, d)));
+  const dirs = ["blocks", "pages", "lib", "ui"].filter((d) =>
+    existsSync(path.join(workbookPath, d)),
+  );
 
   if (dirs.length === 0) {
     return true;
