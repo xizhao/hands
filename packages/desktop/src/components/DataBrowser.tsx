@@ -93,6 +93,8 @@ export function DataBrowser({ source, table, className, editable = false }: Data
   const [containerSize, setContainerSize] = useState<{ width: number; height: number } | null>(
     null,
   );
+  // Track if we're ready to render (after one frame to ensure DPR is applied)
+  const [isCanvasReady, setIsCanvasReady] = useState(false);
   const [pendingChanges, setPendingChanges] = useState<Map<string, Record<string, unknown>>>(
     new Map(),
   );
@@ -140,6 +142,18 @@ export function DataBrowser({ source, table, className, editable = false }: Data
     observer.observe(container);
     return () => observer.disconnect();
   }, []);
+
+  // Wait one frame after container measurement to ensure canvas DPR is correct
+  // Re-run when isCanvasReady becomes false (e.g., table change)
+  useEffect(() => {
+    if (!containerSize || isCanvasReady) {
+      return;
+    }
+    const frame = requestAnimationFrame(() => {
+      setIsCanvasReady(true);
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [containerSize, isCanvasReady]);
 
   // Watch for theme changes (class changes on documentElement)
   useEffect(() => {
@@ -191,6 +205,7 @@ export function DataBrowser({ source, table, className, editable = false }: Data
     setColumnOrder(null); // Reset column order to default
     setMenuColumnIndex(null);
     setMenuPosition(null);
+    setIsCanvasReady(false); // Force re-measure for new table
   }, [source, table]);
 
   // Apply column order (for reordering) and build ordered columns list
@@ -676,8 +691,8 @@ export function DataBrowser({ source, table, className, editable = false }: Data
               </button>
             )}
           </div>
-        ) : !containerSize ? (
-          // Wait for container to be measured before rendering grid (prevents blurry first render)
+        ) : !containerSize || !isCanvasReady ? (
+          // Wait for container measurement + one frame for DPR (prevents blurry first render)
           <div className="flex items-center justify-center h-full">
             <CircleNotch weight="bold" className="h-6 w-6 animate-spin text-muted-foreground/50" />
           </div>
