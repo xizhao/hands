@@ -49,6 +49,8 @@ export default defineConfig({
     },
   },
   ssr: {
+    // Cloudflare-specific imports must be external (only available in worker runtime)
+    external: ["cloudflare:workers"],
     // Force bundling of CJS packages that use `exports` (not compatible with ESM worker)
     noExternal: [
       "is-hotkey",
@@ -70,9 +72,11 @@ export default defineConfig({
       persistState: { path: path.join(workbookPath, ".hands/db") },
     }),
     redwood({
-      // Blocks are server components by default
-      // ui/ components with "use client" need to be registered for client bundling
-      forceClientPaths: [path.resolve(workbookPath, "ui/**/*.tsx")],
+      // Components with "use client" need to be registered for client bundling
+      forceClientPaths: [
+        path.resolve(workbookPath, "ui/**/*.tsx"),
+        path.resolve(workbookPath, "blocks/**/*.tsx"),
+      ],
     }),
     tailwindcss(),
   ],

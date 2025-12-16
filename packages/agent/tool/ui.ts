@@ -4,6 +4,10 @@
 
 import { tool } from "@opencode-ai/plugin";
 import { execSync } from "node:child_process";
+import path from "node:path";
+
+// Path to the hands CLI
+const handsCliPath = path.resolve(import.meta.dirname, "../../cli/bin/hands.js");
 
 const ui = tool({
   description: `Search and add UI components from shadcn and other registries.
@@ -42,7 +46,7 @@ Examples:
     try {
       if (action === "search") {
         const searchQuery = query ?? "";
-        const cmd = `hands ui search ${registry} -q "${searchQuery}"`;
+        const cmd = `"${handsCliPath}" ui search ${registry} -q "${searchQuery}"`;
         const result = execSync(cmd, { encoding: "utf-8", timeout: 30000 });
 
         // Parse JSON output
@@ -75,7 +79,7 @@ Examples:
 
         // Run from workbook directory where components.json lives
         const workbookDir = process.cwd();
-        const cmd = `hands ui add ${component}`;
+        const cmd = `"${handsCliPath}" ui add ${component}`;
         const result = execSync(cmd, {
           encoding: "utf-8",
           timeout: 60000,

@@ -36,17 +36,49 @@ export function pagesPlugin(options: PagesPluginOptions): Plugin {
     },
 
     configureServer(server) {
-      // Watch for page file changes
-      server.watcher.add(path.join(pagesDir, "**/*.mdx"));
-      server.watcher.add(path.join(pagesDir, "**/*.md"));
+      // Watch the pages directory for changes
+      // Note: watcher.add takes paths, not globs - we filter by extension in the handler
+      console.log(`[pages] Watching directory: ${pagesDir}`);
+      server.watcher.add(pagesDir);
+
+      const reprocessAndReload = async (changedPath: string, action: string) => {
+        console.log(`[pages] ${action} ${path.basename(changedPath)}...`);
+        await processAllPages(pagesDir, outputDir);
+
+        // Invalidate the generated manifest module to trigger HMR
+        const manifestPath = path.join(outputDir, "index.tsx");
+        console.log(`[pages] Looking for module: ${manifestPath}`);
+
+        const mod = server.moduleGraph.getModuleById(manifestPath);
+        console.log(`[pages] Module found: ${!!mod}`);
+
+        if (mod) {
+          server.moduleGraph.invalidateModule(mod);
+          console.log(`[pages] Invalidated module`);
+        }
+
+        // Also try by URL
+        const mods = server.moduleGraph.getModulesByFile(manifestPath);
+        console.log(`[pages] Modules by file: ${mods?.size || 0}`);
+        if (mods) {
+          for (const m of mods) {
+            server.moduleGraph.invalidateModule(m);
+            console.log(`[pages] Invalidated module by file: ${m.url}`);
+          }
+        }
+
+        // Send full reload since pages affect routing
+        console.log(`[pages] Sending full-reload`);
+        server.ws.send({ type: "full-reload" });
+      };
 
       server.watcher.on("change", async (changedPath) => {
+        console.log(`[pages] Watcher change event: ${changedPath}`);
         if (
           (changedPath.endsWith(".mdx") || changedPath.endsWith(".md")) &&
           changedPath.startsWith(pagesDir)
         ) {
-          console.log(`[pages] Reprocessing ${path.basename(changedPath)}...`);
-          await processAllPages(pagesDir, outputDir);
+          await reprocessAndReload(changedPath, "Reprocessing");
         }
       });
 
@@ -55,8 +87,7 @@ export function pagesPlugin(options: PagesPluginOptions): Plugin {
           (addedPath.endsWith(".mdx") || addedPath.endsWith(".md")) &&
           addedPath.startsWith(pagesDir)
         ) {
-          console.log(`[pages] Processing new file ${path.basename(addedPath)}...`);
-          await processAllPages(pagesDir, outputDir);
+          await reprocessAndReload(addedPath, "Processing new file");
         }
       });
 
@@ -65,8 +96,7 @@ export function pagesPlugin(options: PagesPluginOptions): Plugin {
           (removedPath.endsWith(".mdx") || removedPath.endsWith(".md")) &&
           removedPath.startsWith(pagesDir)
         ) {
-          console.log(`[pages] Removed ${path.basename(removedPath)}`);
-          await processAllPages(pagesDir, outputDir);
+          await reprocessAndReload(removedPath, "Removed");
         }
       });
     },

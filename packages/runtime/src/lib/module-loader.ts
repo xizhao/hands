@@ -4,7 +4,7 @@
  */
 
 const MAX_RETRIES = 10;
-const RETRY_DELAY_MS = 100;
+const RETRY_DELAY_MS = 500;
 
 /**
  * Check if error is a Vite pre-bundle invalidation (retryable)

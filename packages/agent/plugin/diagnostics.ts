@@ -1,64 +1,58 @@
 /**
  * Diagnostics Plugin for Hands
  *
- * Provides diagnostic tools for the AI agent to inspect the runtime and workbook state.
- * Uses tRPC client to communicate with the runtime.
- *
- * NOTE: tRPC is lazy-loaded inside execute() to avoid loading @hands/workbook-server
- * at plugin discovery time, which can slow down tool loading.
+ * Runs `hands check` in the workbook to type-check and lint code.
  */
 import type { Plugin } from "@opencode-ai/plugin";
 import { tool } from "@opencode-ai/plugin";
+import { spawn } from "child_process";
+import path from "path";
 
 const plugin: Plugin = async ({ directory }) => {
   return {
     tool: {
       hands_diagnostics: tool({
         description:
-          "Get diagnostics information about the Hands runtime and workbook. " +
-          "Returns system status including database connection, worker state, and available sources.",
+          "Run diagnostics on the Hands workbook. " +
+          "Runs TypeScript type checking and Biome linting on workbook files.",
         args: {},
         async execute() {
-          // Lazy load tRPC to avoid slowing down plugin discovery
-          const { getRuntimePort, getTRPCClient } = await import("../lib/trpc.js");
+          const cliPath = path.resolve(
+            import.meta.dirname,
+            "../../cli/bin/hands.js"
+          );
 
-          const results: Record<string, unknown> = {};
+          return new Promise((resolve) => {
+            const child = spawn(cliPath, ["check"], {
+              cwd: directory,
+              stdio: ["ignore", "pipe", "pipe"],
+            });
 
-          try {
-            // System info
-            results.system = {
-              workingDirectory: directory,
-              platform: process.platform,
-              nodeVersion: process.version,
-              uptime: process.uptime(),
-              runtimePort: getRuntimePort(),
-            };
+            let stdout = "";
+            let stderr = "";
 
-            // Get runtime status via tRPC
-            try {
-              const trpc = getTRPCClient();
-              const status = await trpc.status.get.query();
+            child.stdout?.on("data", (data) => {
+              stdout += data.toString();
+            });
 
-              results.database = status.services?.db || { ready: false };
-              results.blockServer = status.services?.blockServer || { ready: false };
+            child.stderr?.on("data", (data) => {
+              stderr += data.toString();
+            });
 
-              // Get manifest for sources info
-              try {
-                const manifest = await trpc.workbook.manifest.query();
-                results.sources = manifest.sources || [];
-                results.blocks = manifest.blocks?.length || 0;
-                results.pages = manifest.pages?.length || 0;
-              } catch {
-                results.sources = [];
-              }
-            } catch (err) {
-              results.runtimeError = `Could not connect to Hands runtime on port ${getRuntimePort()}: ${err}`;
-            }
-          } catch (err) {
-            results.error = String(err);
-          }
+            child.on("exit", (code) => {
+              const output = stdout + stderr;
+              // Strip ANSI codes for cleaner output
+              const cleaned = output.replace(
+                /\x1b\[[0-9;]*[a-zA-Z]/g,
+                ""
+              );
+              resolve(cleaned || (code === 0 ? "All checks passed" : "Check failed"));
+            });
 
-          return JSON.stringify(results, null, 2);
+            child.on("error", (err) => {
+              resolve(`Failed to run diagnostics: ${err.message}`);
+            });
+          });
         },
       }),
     },
