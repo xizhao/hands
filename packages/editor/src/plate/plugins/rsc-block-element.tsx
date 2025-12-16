@@ -21,6 +21,63 @@ import { getTRPCClient } from "../../trpc";
 import type { RscBlockElement } from "./rsc-block-plugin";
 
 // ============================================================================
+// Editing Placeholder (shimmer effect for new blocks)
+// ============================================================================
+
+function EditingPlaceholder() {
+  return (
+    <div className="relative flex items-center gap-3 overflow-hidden rounded-lg border border-primary/20 bg-gradient-to-r from-primary/5 via-primary/10 to-primary/5 px-4 py-3">
+      {/* Dramatic shimmer sweep */}
+      <div className="absolute inset-0 animate-shimmer-fast bg-gradient-to-r from-transparent via-primary/30 to-transparent" />
+
+      {/* Hands logo with glow */}
+      <div className="relative flex size-8 shrink-0 items-center justify-center rounded-md bg-primary/10">
+        <svg className="size-5 text-primary" viewBox="0 0 32 32" fill="currentColor">
+          <path d="M8 12h4v8H8zM14 10h4v10h-4zM20 14h4v6h-4z" />
+        </svg>
+      </div>
+
+      {/* Text */}
+      <span className="text-sm font-medium text-primary/80">Creating with Hands...</span>
+    </div>
+  );
+}
+
+// ============================================================================
+// Error Placeholder (for blocks that failed to load)
+// ============================================================================
+
+function ErrorPlaceholder({ error, onFix }: { error: string; onFix?: () => void }) {
+  return (
+    <div className="relative flex items-center gap-3 overflow-hidden rounded-lg border border-red-500/30 bg-gradient-to-r from-red-500/5 via-red-500/10 to-red-500/5 px-4 py-3">
+      {/* Hands logo in red */}
+      <div className="relative flex size-8 shrink-0 items-center justify-center rounded-md bg-red-500/10">
+        <svg className="size-5 text-red-500" viewBox="0 0 32 32" fill="currentColor">
+          <path d="M8 12h4v8H8zM14 10h4v10h-4zM20 14h4v6h-4z" />
+        </svg>
+      </div>
+
+      {/* Error message */}
+      <span className="flex-1 truncate text-sm text-red-400">{error}</span>
+
+      {/* Fix button */}
+      {onFix && (
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation();
+            onFix();
+          }}
+          className="shrink-0 rounded-md bg-red-500/10 px-3 py-1.5 text-sm font-medium text-red-400 transition-colors hover:bg-red-500/20 hover:text-red-300"
+        >
+          Fix with Hands
+        </button>
+      )}
+    </div>
+  );
+}
+
+// ============================================================================
 // Props
 // ============================================================================
 
@@ -50,8 +107,13 @@ export function RscBlockElementComponent({
   // Get runtime port from editor or default (blocks go through runtime proxy)
   const runtimePort = (editor as any).runtimePort || 55000;
 
-  // Fetch initial source from runtime via tRPC
+  // Fetch initial source from runtime via tRPC (skip if editing new block)
   useEffect(() => {
+    // Skip fetching if this is a new block being created
+    if (rscElement.editing) {
+      return;
+    }
+
     if (!rscElement.blockId || !runtimePort) {
       setError("Missing blockId or runtimePort");
       return;
@@ -67,7 +129,7 @@ export function RscBlockElementComponent({
       .catch((err) => {
         setError(err instanceof Error ? err.message : String(err));
       });
-  }, [rscElement.blockId, runtimePort]);
+  }, [rscElement.blockId, rscElement.editing, runtimePort]);
 
   // Enter editing mode
   const enterEditMode = useCallback(() => {
@@ -115,11 +177,20 @@ export function RscBlockElementComponent({
 
   // Render content based on state
   const renderContent = (interactive: boolean) => {
+    // New block being created - show shimmer placeholder
+    if (rscElement.editing) {
+      return <EditingPlaceholder />;
+    }
+
     if (error) {
       return (
-        <div className="p-4 text-sm text-red-400 bg-red-500/10 rounded">
-          <strong>Error:</strong> {error}
-        </div>
+        <ErrorPlaceholder
+          error={error}
+          onFix={() => {
+            // TODO: Trigger AI fix flow
+            console.log("[RscBlock] Fix with Hands clicked for block:", rscElement.blockId);
+          }}
+        />
       );
     }
 

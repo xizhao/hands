@@ -160,6 +160,7 @@
   --animate-popover: popover 100ms ease-in;
   --animate-pulse: pulse var(--duration) ease-out infinite;
   --animate-shimmer: shimmer 1s linear infinite;
+  --animate-shimmer-fast: shimmer-fast 1.5s ease-in-out infinite;
   --animate-zoom: zoom 100ms ease-in;
 
   @keyframes ai-bounce {
@@ -199,6 +200,20 @@
     }
     100% {
       transform: translateX(150%);
+    }
+  }
+
+  @keyframes shimmer-fast {
+    0% {
+      transform: translateX(-100%);
+      opacity: 0;
+    }
+    50% {
+      opacity: 1;
+    }
+    100% {
+      transform: translateX(100%);
+      opacity: 0;
     }
   }
 

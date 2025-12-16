@@ -32,6 +32,32 @@ import type {
 type MdastNode = Content | Root;
 type MdxJsxElement = MdxJsxFlowElement | MdxJsxTextElement;
 
+/**
+ * Convert CSS string to React style object
+ * e.g. "color: rgb(122, 68, 178); font-size: 14px" → { color: "rgb(122, 68, 178)", fontSize: "14px" }
+ */
+function parseCssToStyleObject(cssString: string): Record<string, string> {
+  const style: Record<string, string> = {};
+  // Split by semicolon, handling values that may contain semicolons (rare but possible)
+  const declarations = cssString.split(";").filter(s => s.trim());
+
+  for (const declaration of declarations) {
+    const colonIndex = declaration.indexOf(":");
+    if (colonIndex === -1) continue;
+
+    const property = declaration.slice(0, colonIndex).trim();
+    const value = declaration.slice(colonIndex + 1).trim();
+
+    if (!property || !value) continue;
+
+    // Convert kebab-case to camelCase (e.g. "font-size" → "fontSize")
+    const camelProperty = property.replace(/-([a-z])/g, (_, c) => c.toUpperCase());
+    style[camelProperty] = value;
+  }
+
+  return style;
+}
+
 // ============================================================================
 // Parser Setup
 // ============================================================================
@@ -404,7 +430,12 @@ function jsxElementToPlate(node: MdxJsxElement, ctx: ConversionContext, parentBl
       if (value === null || value === undefined) {
         props[name] = true; // Boolean attribute
       } else if (typeof value === "string") {
-        props[name] = value;
+        // Convert CSS style string to React style object
+        if (name === "style") {
+          props[name] = parseCssToStyleObject(value);
+        } else {
+          props[name] = value;
+        }
       } else if (value.type === "mdxJsxAttributeValueExpression") {
         // Expression value like prop={expression}
         props[name] = value.value;
@@ -416,14 +447,16 @@ function jsxElementToPlate(node: MdxJsxElement, ctx: ConversionContext, parentBl
     }
   }
 
-  // Check if this is an RSC Block (special <Block src="..."> syntax)
+  // Check if this is an RSC Block (special <Block> syntax)
+  // Can be <Block src="..."> for existing blocks or <Block editing /> for new blocks
   // TODO: Consolidate rsc-block handling into @hands/core/blocks package
   // Currently scattered across:
   //   - editor/mdx/parser.ts (parse <Block> → rsc-block) ← YOU ARE HERE
   //   - editor/plate/plugins/markdown-kit.tsx (serialize rsc-block → <Block>)
   //   - runtime/components/PageStatic.tsx (render rsc-block in PlateStatic)
-  if (tagName === "Block" && "src" in props) {
-    const blockId = String(props.src);
+  if (tagName === "Block" && ("src" in props || "editing" in props)) {
+    const blockId = "src" in props ? String(props.src) : "";
+    const editing = props.editing === true;
     const rawSource = ctx.source.slice(
       node.position?.start.offset ?? 0,
       node.position?.end.offset ?? 0,
@@ -434,7 +467,7 @@ function jsxElementToPlate(node: MdxJsxElement, ctx: ConversionContext, parentBl
       id,
       src: blockId,
       props: Object.fromEntries(
-        Object.entries(props).filter(([k]) => k !== "src"),
+        Object.entries(props).filter(([k]) => k !== "src" && k !== "editing"),
       ),
       loc: {
         start: node.position?.start.offset ?? 0,
@@ -449,10 +482,11 @@ function jsxElementToPlate(node: MdxJsxElement, ctx: ConversionContext, parentBl
       id,
       _blankLinesBefore: blankLinesBefore,
       blockId,
-      source: rawSource,
+      source: editing ? "" : rawSource, // Don't preserve source for editing blocks
       blockProps: Object.fromEntries(
-        Object.entries(props).filter(([k]) => k !== "src"),
+        Object.entries(props).filter(([k]) => k !== "src" && k !== "editing"),
       ),
+      editing: editing || undefined,
       children: [{ text: "" }],
     };
 
@@ -574,6 +608,35 @@ function inlineNodeToPlate(
       // Handle inline JSX or unknown nodes
       if ((node as any).type === "mdxJsxTextElement") {
         const jsxNode = node as MdxJsxTextElement;
+
+        // Check for <span style="color:..."> and convert to fontColor mark
+        if (jsxNode.name === "span") {
+          const styleAttr = jsxNode.attributes.find(
+            (a): a is MdxJsxAttribute => a.type === "mdxJsxAttribute" && a.name === "style"
+          );
+          if (styleAttr && typeof styleAttr.value === "string") {
+            const styleObj = parseCssToStyleObject(styleAttr.value);
+            const newMarks = { ...marks };
+
+            // Convert CSS color to Plate fontColor mark
+            if (styleObj.color) {
+              (newMarks as any).fontColor = styleObj.color;
+            }
+            // Convert CSS background-color to Plate fontBackgroundColor mark
+            if (styleObj.backgroundColor) {
+              (newMarks as any).fontBackgroundColor = styleObj.backgroundColor;
+            }
+
+            if (jsxNode.children && jsxNode.children.length > 0) {
+              const jsxResult: Array<Record<string, unknown>> = [];
+              for (const child of jsxNode.children) {
+                jsxResult.push(...inlineNodeToPlate(child as InlineNode, ctx, newMarks));
+              }
+              return jsxResult as any;
+            }
+          }
+        }
+
         if (jsxNode.children && jsxNode.children.length > 0) {
           const jsxResult: Array<{ text: string; bold?: boolean; italic?: boolean; code?: boolean }> = [];
           for (const child of jsxNode.children) {

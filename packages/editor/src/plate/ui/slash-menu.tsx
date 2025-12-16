@@ -46,7 +46,7 @@ type SlashMenuItem = {
   alwaysShow?: boolean; // Always show regardless of filter
 };
 
-function insertBlock(editor: PlateEditor, blockId: string) {
+function insertBlock(editor: PlateEditor, blockId: string, editing = false) {
   // Insert an RSC block element that renders via <Block src="blockId" />
   const node: TElement = {
     type: "rsc-block",
@@ -54,6 +54,7 @@ function insertBlock(editor: PlateEditor, blockId: string) {
     source: "", // Source is fetched from runtime by blockId
     blockProps: {},
     id: crypto.randomUUID(),
+    editing,
     children: [{ text: "" }],
   };
   editor.tf.insertNodes(node);
@@ -219,12 +220,11 @@ function SlashMenuSection({
       {visibleItems.map(({ description, icon, keywords, label, value, onSelect, alwaysShow }) => (
         <InlineComboboxItem
           key={value}
+          alwaysShow={alwaysShow}
           keywords={keywords}
           label={label}
           onClick={() => onSelect(editor)}
           value={value}
-          // Always show items bypass filter
-          {...(alwaysShow ? { "data-always-show": "true" } : {})}
         >
           <SlashMenuItemContent
             icon={icon}
@@ -323,6 +323,34 @@ function MyBlocksSection({
   );
 }
 
+/**
+ * Make with Hands - standalone item when no blocks exist
+ */
+function MakeWithHandsItem({ editor }: { editor: PlateEditor }) {
+  return (
+    <InlineComboboxGroup>
+      <InlineComboboxItem
+        alwaysShow
+        keywords={["ai", "generate", "create", "make", "hands", "build", "new"]}
+        label="Make with Hands"
+        onClick={() => {
+          // Insert a new block in editing mode
+          insertBlock(editor, "", true);
+        }}
+        value="hands:make"
+      >
+        <SlashMenuItemContent
+          icon={<HandsLogo className="size-4" />}
+          label="Make with Hands"
+          value="hands:make"
+          description="Create a new block with AI"
+          variant="action"
+        />
+      </InlineComboboxItem>
+    </InlineComboboxGroup>
+  );
+}
+
 export function SlashInputElement(props: PlateElementProps) {
   const { children, editor, element } = props;
 
@@ -332,7 +360,9 @@ export function SlashInputElement(props: PlateElementProps) {
   // Fetch workbook blocks
   const workbookBlocks = useWorkbookBlocks(runtimePort);
 
-  // Actions - always visible
+  const hasBlocks = workbookBlocks.length > 0;
+
+  // Actions - only show as section when blocks exist
   const actions: SlashMenuItem[] = useMemo(
     () => [
       {
@@ -341,9 +371,9 @@ export function SlashInputElement(props: PlateElementProps) {
         value: "hands:make",
         keywords: ["ai", "generate", "create", "make", "hands", "build", "new"],
         alwaysShow: true,
-        onSelect: (_editor) => {
-          // TODO: Trigger AI generation flow
-          console.log("[SlashMenu] Make with Hands selected");
+        onSelect: (ed) => {
+          // Insert a new block in editing mode
+          insertBlock(ed, "", true);
         },
       },
     ],
@@ -356,11 +386,17 @@ export function SlashInputElement(props: PlateElementProps) {
         <InlineComboboxInput />
 
         <InlineComboboxContent variant="slash">
-          {/* Actions - always first */}
-          <SlashMenuSection title="Actions" items={actions} editor={editor} />
-
-          {/* My Blocks - from workbook */}
-          <MyBlocksSection blocks={workbookBlocks} editor={editor} />
+          {hasBlocks ? (
+            <>
+              {/* Actions section when blocks exist */}
+              <SlashMenuSection title="Actions" items={actions} editor={editor} />
+              {/* My Blocks - from workbook */}
+              <MyBlocksSection blocks={workbookBlocks} editor={editor} />
+            </>
+          ) : (
+            /* Just "Make with Hands" when no blocks */
+            <MakeWithHandsItem editor={editor} />
+          )}
         </InlineComboboxContent>
       </InlineCombobox>
 

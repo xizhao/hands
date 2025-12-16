@@ -274,6 +274,7 @@ function InlineComboboxContent({
 }
 
 function InlineComboboxItem({
+  alwaysShow,
   className,
   focusEditor = true,
   group,
@@ -282,6 +283,7 @@ function InlineComboboxItem({
   onClick,
   ...props
 }: {
+  alwaysShow?: boolean;
   focusEditor?: boolean;
   group?: string;
   keywords?: string[];
@@ -298,8 +300,10 @@ function InlineComboboxItem({
 
   const visible = React.useMemo(
     () =>
-      !filter || filter({ group, keywords, label, value }, search as string),
-    [filter, group, keywords, value, label, search]
+      alwaysShow ||
+      !filter ||
+      filter({ group, keywords, label, value }, search as string),
+    [alwaysShow, filter, group, keywords, value, label, search]
   );
 
   if (!visible) return null;

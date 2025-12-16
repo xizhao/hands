@@ -68,7 +68,7 @@ export interface RscBlockInfo {
 /** RSC Block element in the Plate tree */
 export interface RscBlockElement extends TElement {
   type: "rsc-block";
-  /** Block source identifier (from src prop) */
+  /** Block source identifier (from src prop) - empty string for new blocks */
   blockId: string;
   /** TSX source code for the block content */
   source: string;
@@ -76,6 +76,8 @@ export interface RscBlockElement extends TElement {
   blockProps: Record<string, unknown>;
   /** Stable ID for surgical mutations */
   id: string;
+  /** Whether this block is being created/edited (shows shimmer placeholder) */
+  editing?: boolean;
   /** Plate requires children, even for void elements */
   children: [{ text: "" }];
 }

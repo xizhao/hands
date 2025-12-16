@@ -223,12 +223,16 @@ export function MdxVisualEditor({
     const state = stateRef.current;
     const newSource = serializeMdxWithEditor(editor, state.parseResult.frontmatter);
 
+    console.debug("[mdx-sync] Serialized output:", newSource.slice(0, 500));
+
     if (newSource !== state.source) {
       state.source = newSource;
       state.parseResult = parseMdx(newSource);
       state.onSourceChange(newSource);
 
-      console.debug("[mdx-sync] Serialized MDX after operation:", opType);
+      console.debug("[mdx-sync] Serialized MDX after operation:", opType, "- calling onSourceChange");
+    } else {
+      console.debug("[mdx-sync] No change detected, skipping save");
     }
   }, []);
 

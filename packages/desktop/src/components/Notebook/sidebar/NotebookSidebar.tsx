@@ -66,6 +66,8 @@ import { usePrefetchThumbnail, useThumbnail } from "@/hooks/useThumbnails";
 import { useCreateBlock, useCreatePage } from "@/hooks/useWorkbook";
 import { cn } from "@/lib/utils";
 import { ThumbnailPreview } from "./ThumbnailPreview";
+import { TablePreview } from "./TablePreview";
+import { useTablePreview } from "@/hooks/useTablePreview";
 
 // HoverCard wrapper - shows thumbnail preview on hover
 function ThumbnailHoverCard({
@@ -93,6 +95,31 @@ function ThumbnailHoverCard({
       </HoverCardTrigger>
       <HoverCardContent side="right" sideOffset={8} className="w-auto p-1">
         <ThumbnailPreview type={type} contentId={contentId} />
+      </HoverCardContent>
+    </HoverCard>
+  );
+}
+
+// HoverCard wrapper - shows table schema preview on hover
+function TablePreviewHoverCard({
+  tableName,
+  children,
+}: {
+  tableName: string;
+  children: React.ReactNode;
+}) {
+  const { data: preview } = useTablePreview(tableName);
+
+  // No preview data - just render children without HoverCard
+  if (!preview || preview.columns.length === 0) {
+    return <>{children}</>;
+  }
+
+  return (
+    <HoverCard openDelay={200} closeDelay={100}>
+      <HoverCardTrigger asChild>{children}</HoverCardTrigger>
+      <HoverCardContent side="right" sideOffset={8} className="w-auto p-2">
+        <TablePreview tableName={tableName} />
       </HoverCardContent>
     </HoverCard>
   );
@@ -1532,20 +1559,22 @@ export default function Placeholder() {
                                 filteredSourceTables.length > 0 && (
                                   <div className="ml-6 border-l border-border/50 pl-2">
                                     {filteredSourceTables.map((tableName) => (
-                                      <div key={tableName} className={listItemStyles}>
-                                        <DataIcon />
-                                        <button
-                                          onClick={() => handleTableClick(tableName)}
-                                          className="flex-1 truncate text-left hover:underline"
-                                        >
-                                          {tableName}
-                                        </button>
-                                        <ItemActions
-                                          onDelete={() => handleDeleteTable(tableName)}
-                                          deleteLabel="Drop table"
-                                          onOpenChange={onMenuOpenChange}
-                                        />
-                                      </div>
+                                      <TablePreviewHoverCard key={tableName} tableName={tableName}>
+                                        <div className={listItemStyles}>
+                                          <DataIcon />
+                                          <button
+                                            onClick={() => handleTableClick(tableName)}
+                                            className="flex-1 truncate text-left hover:underline"
+                                          >
+                                            {tableName}
+                                          </button>
+                                          <ItemActions
+                                            onDelete={() => handleDeleteTable(tableName)}
+                                            deleteLabel="Drop table"
+                                            onOpenChange={onMenuOpenChange}
+                                          />
+                                        </div>
+                                      </TablePreviewHoverCard>
                                     ))}
                                   </div>
                                 )}
@@ -1561,21 +1590,23 @@ export default function Placeholder() {
                         )
                       : unassociatedTables
                     ).map((tableName) => (
-                      <div key={tableName} className={listItemStyles}>
-                        <DataIcon colored={false} />
-                        <button
-                          onClick={() => handleTableClick(tableName)}
-                          className="flex-1 truncate text-left hover:underline"
-                        >
-                          {tableName}
-                        </button>
-                        <ItemActions
-                          onConvertToSource={() => handleConvertToSource(tableName)}
-                          onDelete={() => handleDeleteTable(tableName)}
-                          deleteLabel="Drop table"
-                          onOpenChange={onMenuOpenChange}
-                        />
-                      </div>
+                      <TablePreviewHoverCard key={tableName} tableName={tableName}>
+                        <div className={listItemStyles}>
+                          <DataIcon colored={false} />
+                          <button
+                            onClick={() => handleTableClick(tableName)}
+                            className="flex-1 truncate text-left hover:underline"
+                          >
+                            {tableName}
+                          </button>
+                          <ItemActions
+                            onConvertToSource={() => handleConvertToSource(tableName)}
+                            onDelete={() => handleDeleteTable(tableName)}
+                            deleteLabel="Drop table"
+                            onOpenChange={onMenuOpenChange}
+                          />
+                        </div>
+                      </TablePreviewHoverCard>
                     ))}
 
                     {/* Empty state */}

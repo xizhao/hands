@@ -109,17 +109,31 @@ function serializeElementFallback(element: any): string | null {
 }
 
 function serializeRscBlock(element: RscBlockElement): string {
-  if (element.source) {
+  // Don't use preserved source if editing (need to serialize the editing attribute)
+  if (element.source && !element.editing) {
     return element.source;
   }
 
-  const props = Object.entries(element.blockProps || {})
-    .map(([key, value]) => formatProp(key, value))
-    .filter(Boolean)
-    .join(" ");
+  const attrs: string[] = [];
 
-  const propsStr = props ? ` ${props}` : "";
-  return `<Block src="${element.blockId}"${propsStr} />`;
+  // Add src if we have a blockId
+  if (element.blockId) {
+    attrs.push(`src="${element.blockId}"`);
+  }
+
+  // Add editing attribute if true
+  if (element.editing) {
+    attrs.push("editing");
+  }
+
+  // Add additional props
+  for (const [key, value] of Object.entries(element.blockProps || {})) {
+    const formatted = formatProp(key, value);
+    if (formatted) attrs.push(formatted);
+  }
+
+  const attrsStr = attrs.length > 0 ? ` ${attrs.join(" ")}` : "";
+  return `<Block${attrsStr} />`;
 }
 
 function getTextContent(children: any[]): string {
