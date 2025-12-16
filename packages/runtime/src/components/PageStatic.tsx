@@ -1,0 +1,53 @@
+import { Suspense } from "react";
+import { createSlateEditor, createSlatePlugin } from "platejs";
+import { PlateStatic } from "platejs/static";
+import type { TElement } from "platejs";
+
+interface PageStaticProps {
+  value: any[];
+  /** Block components keyed by ID */
+  blocks: Record<string, React.FC<any>>;
+}
+
+/**
+ * Server-side page renderer using PlateStatic
+ *
+ * Renders Plate value with support for rsc-block elements.
+ * Blocks are rendered directly as RSC - rwsdk handles streaming + HMR.
+ */
+export function PageStatic({ value, blocks }: PageStaticProps) {
+  const RscBlockPlugin = createSlatePlugin({
+    key: "rsc-block",
+    node: {
+      type: "rsc-block",
+      isVoid: true,
+      isElement: true,
+      component: ({ element }: { element: any }) => {
+        const BlockComponent = blocks[element.blockId];
+        if (!BlockComponent) {
+          return <div className="text-red-500">Block not found: {element.blockId}</div>;
+        }
+        return (
+          <Suspense fallback={<div className="animate-pulse bg-muted h-32 rounded-lg" />}>
+            <BlockComponent {...(element.blockProps || {})} />
+          </Suspense>
+        );
+      },
+    },
+    extendEditor: ({ editor }) => {
+      const origIsVoid = editor.isVoid as (element: TElement) => boolean;
+      editor.isVoid = (element: TElement) => {
+        if (element.type === "rsc-block") return true;
+        return origIsVoid(element);
+      };
+      return editor;
+    },
+  });
+
+  const editor = createSlateEditor({
+    value,
+    plugins: [RscBlockPlugin],
+  });
+
+  return <PlateStatic editor={editor} />;
+}

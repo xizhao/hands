@@ -102,6 +102,17 @@ export function blocksPlugin(options: BlocksPluginOptions): Plugin {
         await invalidateBlockRegistry();
       });
 
+      // Handle file changes - force full reload for blocks
+      // This handles sync→async transitions which break HMR
+      server.watcher.on("change", async (changedPath) => {
+        if (!isBlockFile(changedPath, blocksDir)) return;
+
+        const relativePath = path.relative(blocksDir, changedPath);
+        console.log(`[blocks] Block changed: ${relativePath}, triggering full reload`);
+        await invalidateBlockRegistry();
+        server.ws.send({ type: "full-reload" });
+      });
+
       console.log(`[blocks] Watching for changes, tracking ${knownBlocks.size} blocks`);
     },
   };

@@ -44,7 +44,19 @@ export default defineConfig({
           "slate",
           "slate-dom",
           "slate-react",
+          "slate-hyperscript",
+          "platejs",
+          "platejs/static",
         ],
+        esbuildOptions: {
+          // Worker uses "neutral" platform which ignores "main" by default
+          mainFields: ["module", "main"],
+        },
+      },
+      resolve: {
+        // Ensure consistent resolution in worker
+        mainFields: ["module", "main", "browser"],
+        dedupe: ["is-hotkey", "slate", "slate-dom", "slate-react"],
       },
     },
   },
@@ -57,9 +69,22 @@ export default defineConfig({
       "slate",
       "slate-dom",
       "slate-react",
+      "slate-hyperscript",
       /^@platejs\//,
       "platejs",
+      /^platejs\//,
     ],
+    optimizeDeps: {
+      include: [
+        "is-hotkey",
+        "slate",
+        "slate-dom",
+        "slate-react",
+      ],
+      esbuildOptions: {
+        mainFields: ["module", "main"],
+      },
+    },
   },
   plugins: [
     tunnelPlugin({ enabled: isDev }),
@@ -90,6 +115,7 @@ export default defineConfig({
       // Hands runtime
       "@hands/db": path.resolve(__dirname, "src/db/dev.ts"),
       "@hands/db/types": path.join(workbookPath, ".hands/db.d.ts"),
+      "@hands/runtime/components/PageStatic": path.resolve(__dirname, "src/components/PageStatic.tsx"),
       "@hands/runtime": path.resolve(__dirname, "src/types/index.ts"),
       "@hands/pages": path.join(workbookPath, ".hands/pages/index.tsx"),
       // Shared deps from runtime (workbook imports these but doesn't install them)

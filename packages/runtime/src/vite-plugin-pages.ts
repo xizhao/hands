@@ -1,9 +1,9 @@
 /**
  * Vite plugin for pages
  *
- * Processes markdown/MDX files:
- * 1. Parse frontmatter for title/description
- * 2. Deserialize markdown → Plate JSON
+ * Processes MDX files:
+ * 1. Parse MDX with frontmatter and Block components
+ * 2. Convert to Plate JSON (rsc-block elements for Block components)
  * 3. Generate page components using PlateStatic
  * 4. Generate route manifest
  */
@@ -11,6 +11,7 @@
 import fs from "fs";
 import path from "path";
 import type { Plugin } from "vite";
+import type { Value } from "platejs";
 
 interface PagesPluginOptions {
   workbookPath: string;
@@ -19,7 +20,8 @@ interface PagesPluginOptions {
 interface PageMeta {
   id: string;
   frontmatter: Record<string, unknown>;
-  markdown: string;
+  content: string;
+  value: Value;
 }
 
 export function pagesPlugin(options: PagesPluginOptions): Plugin {
@@ -122,6 +124,9 @@ async function processAllPages(
 
   console.log(`[pages] Processing ${pageFiles.length} page files...`);
 
+  // Dynamically import the parser using relative path (workspace deps don't resolve at vite config time)
+  const { parseMdx } = await import("../../editor/src/mdx/parser");
+
   const pages: PageMeta[] = [];
 
   for (const file of pageFiles) {
@@ -130,171 +135,112 @@ async function processAllPages(
     const ext = path.extname(file);
     const id = path.basename(file, ext);
 
-    const { frontmatter, markdown } = parseFrontmatter(content);
+    try {
+      const result = parseMdx(content);
 
-    pages.push({
-      id,
-      frontmatter,
-      markdown,
-    });
+      if (result.errors.length > 0) {
+        console.warn(`[pages] Warnings for ${file}:`, result.errors);
+      }
+
+      pages.push({
+        id,
+        frontmatter: result.frontmatter,
+        content,
+        value: result.value,
+      });
+    } catch (err) {
+      console.error(`[pages] Failed to parse ${file}:`, err);
+      // Create a fallback page with error message
+      pages.push({
+        id,
+        frontmatter: { title: id },
+        content,
+        value: [{ type: "p", children: [{ text: `Error parsing page: ${err}` }] }],
+      });
+    }
   }
 
   await generateManifest(pages, outputDir);
   console.log(`[pages] Done. Generated manifest with ${pages.length} pages`);
 }
 
-function parseFrontmatter(content: string): {
-  frontmatter: Record<string, unknown>;
-  markdown: string;
-} {
-  const frontmatter: Record<string, unknown> = {};
-  let markdown = content;
-
-  if (content.startsWith("---")) {
-    const endIndex = content.indexOf("---", 3);
-    if (endIndex !== -1) {
-      const frontmatterStr = content.slice(3, endIndex).trim();
-      markdown = content.slice(endIndex + 3).trim();
-
-      // Parse YAML-like frontmatter
-      for (const line of frontmatterStr.split("\n")) {
-        const colonIndex = line.indexOf(":");
-        if (colonIndex === -1) continue;
-
-        const key = line.slice(0, colonIndex).trim();
-        let value: unknown = line.slice(colonIndex + 1).trim();
-
-        // Remove quotes
-        if (typeof value === "string") {
-          if (
-            (value.startsWith('"') && value.endsWith('"')) ||
-            (value.startsWith("'") && value.endsWith("'"))
-          ) {
-            value = value.slice(1, -1);
-          }
-          // Try to parse as number or boolean
-          if (value === "true") value = true;
-          else if (value === "false") value = false;
-          else if (!isNaN(Number(value)) && value !== "") value = Number(value);
-        }
-
-        frontmatter[key] = value;
-      }
-    }
-  }
-
-  return { frontmatter, markdown };
-}
-
 async function generateManifest(
   pages: PageMeta[],
   outputDir: string
 ): Promise<void> {
-  // Convert markdown to Plate JSON at build time
-  const pagesWithValue = await Promise.all(
-    pages.map(async (p) => {
-      const value = await markdownToPlateValue(p.markdown);
-      return { ...p, value };
-    })
-  );
+  // Collect all unique block IDs across all pages
+  const allBlockIds = new Set<string>();
+  for (const page of pages) {
+    extractBlockIds(page.value, allBlockIds);
+  }
 
-  // Generate the manifest that exports page data and routes
+  // Generate block imports
+  const blockImports = Array.from(allBlockIds)
+    .map((id) => `import ${sanitizeId(id)}Block from "@/blocks/${id}";`)
+    .join("\n");
+
+  // Generate block map
+  const blockMap = Array.from(allBlockIds)
+    .map((id) => `  "${id}": ${sanitizeId(id)}Block,`)
+    .join("\n");
+
+  // Generate the manifest - blocks imported statically, rwsdk handles HMR
   const manifest = `// Auto-generated pages manifest - DO NOT EDIT
 import { route } from "rwsdk/router";
-import { PageContent } from "./PageContent";
+import { PageStatic } from "@hands/runtime/components/PageStatic";
+${blockImports}
 
-${pagesWithValue
+const blocks: Record<string, React.FC<any>> = {
+${blockMap}
+};
+
+${pages
   .map(
     (p) => `const ${sanitizeId(p.id)}Frontmatter = ${JSON.stringify(p.frontmatter)};
 const ${sanitizeId(p.id)}Value = ${JSON.stringify(p.value)};`
   )
   .join("\n\n")}
 
-// Page components that render Plate value via PlateStatic
-${pagesWithValue
+// Page components (RSC) that render via PlateStatic (client)
+${pages
   .map(
     (p) => `function ${sanitizeId(p.id)}Page() {
-  return <PageContent value={${sanitizeId(p.id)}Value} frontmatter={${sanitizeId(p.id)}Frontmatter} />;
+  const title = (${sanitizeId(p.id)}Frontmatter.title as string) || "Untitled";
+  return (
+    <article className="prose prose-slate max-w-none">
+      <h1>{title}</h1>
+      <PageStatic value={${sanitizeId(p.id)}Value} blocks={blocks} />
+    </article>
+  );
 }`
   )
   .join("\n\n")}
 
 // Page metadata for lookups
 export const pages = {
-${pagesWithValue.map((p) => `  "${p.id}": { frontmatter: ${sanitizeId(p.id)}Frontmatter },`).join("\n")}
+${pages.map((p) => `  "${p.id}": { frontmatter: ${sanitizeId(p.id)}Frontmatter },`).join("\n")}
 } as const;
 
 export type PageId = keyof typeof pages;
 
 // Routes for rwsdk render()
 export const pageRoutes = [
-${pagesWithValue.map((p) => `  route("/pages/${p.id}", ${sanitizeId(p.id)}Page),`).join("\n")}
+${pages.map((p) => `  route("/pages/${p.id}", ${sanitizeId(p.id)}Page),`).join("\n")}
 ] as const;
 `;
 
   fs.writeFileSync(path.join(outputDir, "index.tsx"), manifest);
-
-  // Generate PageContent component that renders pre-converted Plate value
-  const pageContentComponent = `// Auto-generated - DO NOT EDIT
-import { createSlateEditor } from "platejs";
-import { PlateStatic } from "platejs/static";
-
-interface PageContentProps {
-  value: any[];
-  frontmatter: Record<string, unknown>;
 }
 
-export function PageContent({ value, frontmatter }: PageContentProps) {
-  const title = (frontmatter.title as string) || "Untitled";
-
-  // Create a minimal static editor for rendering
-  const editor = createSlateEditor({
-    value,
-  });
-
-  return (
-    <article className="prose prose-slate max-w-none">
-      <h1>{title}</h1>
-      <PlateStatic editor={editor} />
-    </article>
-  );
-}
-`;
-
-  fs.writeFileSync(path.join(outputDir, "PageContent.tsx"), pageContentComponent);
-}
-
-/**
- * Convert markdown to Plate JSON value at build time
- * Uses the same code path as the editor
- */
-async function markdownToPlateValue(markdown: string): Promise<unknown[]> {
-  const { createSlateEditor } = await import("platejs");
-  const { MarkdownPlugin } = await import("@platejs/markdown");
-  const { BaseBasicMarksPlugin, BaseBasicBlocksPlugin } = await import("@platejs/basic-nodes");
-  const remarkGfm = (await import("remark-gfm")).default;
-
-  try {
-    // Create a minimal headless editor with markdown support
-    const editor = createSlateEditor({
-      plugins: [
-        BaseBasicBlocksPlugin,
-        BaseBasicMarksPlugin,
-        MarkdownPlugin.configure({
-          options: {
-            remarkPlugins: [remarkGfm],
-          },
-        }),
-      ],
-    });
-
-    // Use the same API as the editor
-    const value = editor.api.markdown.deserialize(markdown);
-    return value;
-  } catch (err) {
-    console.error("[pages] Failed to convert markdown:", err);
-    // Return a simple paragraph with the raw text
-    return [{ type: "p", children: [{ text: markdown }] }];
+/** Recursively extract all block IDs from a Plate value */
+function extractBlockIds(nodes: any[], blockIds: Set<string>): void {
+  for (const node of nodes) {
+    if (node.type === "rsc-block" && node.blockId) {
+      blockIds.add(node.blockId);
+    }
+    if (node.children) {
+      extractBlockIds(node.children, blockIds);
+    }
   }
 }
 
