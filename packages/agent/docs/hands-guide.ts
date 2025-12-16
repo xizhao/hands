@@ -64,8 +64,8 @@ export default async function RevenueChart({ period = "30d" }) {
 - One file per concept
 - Use \`@hands/stdlib\` for charts, tables, interactive UI
 
-### Tables (PostgreSQL)
-Data lives in PostgreSQL. Query with \`sql\` tagged template:
+### Tables (SQLite)
+Data lives in SQLite. Query with \`sql\` tagged template:
 \`\`\`tsx
 import { sql } from "@hands/db";
 const users = await sql<User>\`SELECT * FROM users WHERE active = \${true}\`;

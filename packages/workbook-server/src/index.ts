@@ -22,21 +22,14 @@ import { Hono } from "hono";
 import { cors } from "hono/cors";
 import {
   discoverActions,
-  initActionRunsTable,
-  registerWebhookRoutes,
   startScheduler,
   stopScheduler,
 } from "./actions/index.js";
 import { getEditorSourcePath, getRuntimeSourcePath } from "./config/index.js";
-import type { BlockContext } from "./ctx.js";
-import { initWorkbookDb, type WorkbookDb } from "./db/index.js";
-import { createPgTypedRunner, type PgTypedRunner } from "./db/pgtyped/index.js";
 import { PORTS, waitForPortFree } from "./ports.js";
-import { discoverSources } from "./sources/discovery.js";
 import { registerSourceRoutes } from "./sources/index.js";
 import { registerTRPCRoutes } from "./trpc/index.js";
 import { PageRegistry, createPageRegistry, renderPage, type PageRenderContext } from "./pages/index.js";
-import { initThumbnailsTable } from "./thumbnails/index.js";
 
 interface RuntimeConfig {
   workbookId: string;
@@ -46,7 +39,7 @@ interface RuntimeConfig {
 }
 
 interface RuntimeState {
-  dbReady: boolean;
+  /** Runtime ready - includes SQLite database */
   rscReady: boolean;
   rscPort: number | null;
   rscProc: ChildProcess | null;
@@ -58,16 +51,13 @@ interface RuntimeState {
   editorReadyPromise: Promise<void> | null;
   editorReadyResolve: (() => void) | null;
   editorConfig: RuntimeConfig | null;
-  workbookDb: WorkbookDb | null;
   fileWatchers: FSWatcher[];
   buildErrors: string[];
-  pgTypedRunner: PgTypedRunner | null;
   pageRegistry: PageRegistry | null;
 }
 
 // Global state for progressive readiness
 const state: RuntimeState = {
-  dbReady: false,
   rscReady: false,
   rscPort: null,
   rscProc: null,
@@ -79,10 +69,8 @@ const state: RuntimeState = {
   editorReadyPromise: null,
   editorReadyResolve: null,
   editorConfig: null,
-  workbookDb: null,
   buildErrors: [],
   fileWatchers: [],
-  pgTypedRunner: null,
   pageRegistry: null,
 };
 
@@ -482,17 +470,8 @@ function startFileWatcher(config: RuntimeConfig) {
             // Hot-reload blocks via HMR (or fallback to restart)
             await hotReloadBlocks(config);
           } else {
-            // Just a file edit - pgtyped only, Vite handles HMR
-            if (state.pgTypedRunner && state.dbReady) {
-              const filePath = join(blocksDir, filename);
-              if (existsSync(filePath)) {
-                try {
-                  await state.pgTypedRunner.runFile(filePath);
-                } catch (err) {
-                  console.warn(`[runtime] pgtyped failed for ${filename}:`, err);
-                }
-              }
-            }
+            // Just a file edit - Vite handles HMR automatically
+            console.log(`[runtime] Block file edited: ${filename}`);
           }
         }
       });
@@ -590,8 +569,8 @@ function createApp(config: RuntimeConfig) {
 
   // Get block context (for Vite server to use)
   app.get("/ctx", async (c) => {
-    if (!state.dbReady || !state.workbookDb) {
-      return c.json({ error: "Database not ready", booting: true }, 503);
+    if (!state.rscReady) {
+      return c.json({ error: "Runtime not ready", booting: true }, 503);
     }
     // Context is ready - Vite will call this to check
     return c.json({ ready: true });
@@ -710,23 +689,20 @@ function createApp(config: RuntimeConfig) {
   // ============================================
   registerSourceRoutes(app, {
     workbookDir: config.workbookDir,
-    isDbReady: () => state.dbReady,
-    getDb: () => state.workbookDb?.db ?? null,
+    isDbReady: () => state.rscReady,
+    // Note: getDb not provided - sources use SQLite via runtime now
   });
 
   // ============================================
   // Action Webhook Routes
   // ============================================
-  registerWebhookRoutes(app, {
-    workbookDir: config.workbookDir,
-    isDbReady: () => state.dbReady,
-    getDb: () => state.workbookDb?.db ?? null,
-    getSources: () => {
-      // Discover sources synchronously from cache or return empty
-      // The scheduler will have the latest sources
-      return [];
-    },
-  });
+  // Note: Webhooks temporarily disabled - need to update to use SQLite via runtime
+  // registerWebhookRoutes(app, {
+  //   workbookDir: config.workbookDir,
+  //   isDbReady: () => state.rscReady,
+  //   getDb: () => null,
+  //   getSources: () => [],
+  // });
 
   // ============================================
   // tRPC Routes (type-safe API)
@@ -734,15 +710,10 @@ function createApp(config: RuntimeConfig) {
   registerTRPCRoutes(app, {
     workbookId: config.workbookId,
     workbookDir: config.workbookDir,
-    getDb: () => state.workbookDb?.db ?? null,
-    isDbReady: () => state.dbReady,
-    saveDb: async () => {
-      if (state.workbookDb) {
-        await state.workbookDb.save();
-      }
-    },
+    // SQLite database lives in the runtime - provide runtime URL
+    getRuntimeUrl: () => (state.rscReady && state.rscPort ? `http://localhost:${state.rscPort}` : null),
+    isDbReady: () => state.rscReady,
     getState: () => ({
-      dbReady: state.dbReady,
       rscReady: state.rscReady,
       rscPort: state.rscPort,
       rscError: state.rscError,
@@ -762,14 +733,9 @@ function createApp(config: RuntimeConfig) {
     },
     formatBlockSource: (filePath: string) => formatBlockSource(filePath, config.workbookDir),
     generateDefaultBlockSource,
-    onDdlQuery: async () => {
-      if (state.workbookDb) {
-        await state.workbookDb.regenerateSchema();
-      }
-      if (state.pgTypedRunner) {
-        await state.pgTypedRunner.refreshSchema();
-        await state.pgTypedRunner.runAll();
-      }
+    onSchemaChange: async () => {
+      // Schema regeneration is handled by the runtime
+      console.log("[runtime] Schema changed - runtime will handle regeneration");
     },
     getPageRegistry: () => state.pageRegistry,
     createPageRegistry: (pagesDir: string) => {
@@ -1261,50 +1227,6 @@ export const __SECRET_INTERNALS_DO_NOT_USE_OR_YOU_WILL_BE_FIRED = RD.__SECRET_IN
 }
 
 /**
- * Boot PGlite in background
- * Loads from .hands/db.tar.gz if exists, generates schema.ts
- * Also initializes pgtyped runner for type-safe SQL queries
- */
-async function bootPGlite(workbookDir: string) {
-  console.log(`[runtime] Booting database for ${workbookDir}...`);
-
-  try {
-    state.workbookDb = await initWorkbookDb(workbookDir);
-    state.dbReady = true;
-    console.log("[runtime] Database ready");
-
-    // Initialize action runs table
-    await initActionRunsTable(state.workbookDb.db);
-    console.log("[runtime] Action runs table initialized");
-
-    // Initialize thumbnails table
-    await initThumbnailsTable(state.workbookDb.db);
-    console.log("[runtime] Thumbnails table initialized");
-
-    // Initialize pgtyped runner for type-safe SQL queries
-    state.pgTypedRunner = createPgTypedRunner(workbookDir, state.workbookDb.db);
-
-    // Run initial type generation for all block files (non-blocking)
-    state.pgTypedRunner.runAll().catch((err) => {
-      console.warn("[runtime] Initial pgtyped generation failed:", err);
-    });
-
-    // Start the action scheduler for cron-based actions
-    startScheduler({
-      workbookDir,
-      getDb: () => state.workbookDb?.db ?? null,
-      getSources: () => {
-        // Return empty array - actions can discover sources dynamically
-        return [];
-      },
-    });
-    console.log("[runtime] Action scheduler started");
-  } catch (err) {
-    console.error("[runtime] Database failed:", err);
-  }
-}
-
-/**
  * Boot page registry for MDX pages
  * Discovers pages from workbookDir/pages/
  */
@@ -1337,24 +1259,6 @@ async function bootPages(workbookDir: string) {
   } catch (err) {
     console.error("[runtime] Page registry failed:", err);
   }
-}
-
-/**
- * Create block context for execution
- * Uses reader context (hands_reader role) for read-only access
- */
-function _createBlockContext(params: Record<string, any> = {}): BlockContext {
-  if (!state.workbookDb) {
-    throw new Error("Database not ready");
-  }
-  // Use reader context for block rendering (read-only access to public schema)
-  const dbCtx = state.workbookDb.readerCtx;
-  return {
-    db: dbCtx,
-    sql: dbCtx.sql,
-    query: dbCtx.query,
-    params,
-  };
 }
 
 /**
@@ -1501,7 +1405,7 @@ async function bootRuntime(config: RuntimeConfig) {
 
     while (Date.now() - startTime < timeout) {
       try {
-        const response = await fetch(`http://localhost:${rscPort}/`, {
+        const response = await fetch(`http://localhost:${rscPort}/health`, {
           signal: AbortSignal.timeout(1000),
         });
         if (response.ok) {
@@ -1803,18 +1707,15 @@ async function main() {
 
   await startServer();
 
-  // 3. Boot critical services
-  // PGlite and Pages can run in parallel (non-blocking)
-  bootPGlite(workbookDir);
+  // 3. Boot critical services - pages can run in parallel (non-blocking)
   bootPages(workbookDir);
 
   // Output ready JSON for Tauri - format must match lib.rs expectations
-  // Note: workerPort removed - all block/RSC requests go through runtimePort
+  // Note: Database is SQLite in runtime, accessible via runtimePort
   console.log(
     JSON.stringify({
       type: "ready",
       runtimePort: port,
-      postgresPort: port, // PGlite is in-process, use same port
     }),
   );
 
@@ -1844,13 +1745,9 @@ async function main() {
     for (const watcher of state.fileWatchers) {
       watcher.close();
     }
-    // Close runtime process
+    // Close runtime process (SQLite database lives in runtime)
     if (state.rscProc) state.rscProc.kill();
     if (state.editorProc) state.editorProc.kill();
-    if (state.workbookDb) {
-      await state.workbookDb.save();
-      await state.workbookDb.close();
-    }
     server.stop();
     process.exit(0);
   };

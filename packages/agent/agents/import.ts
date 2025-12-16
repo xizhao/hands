@@ -4,7 +4,7 @@
 
 import type { AgentConfig } from "@opencode-ai/sdk";
 
-const IMPORT_PROMPT = `You are a data import specialist. Your ONLY job is to get data INTO the PostgreSQL database. You must be extremely persistent.
+const IMPORT_PROMPT = `You are a data import specialist. Your ONLY job is to get data INTO the SQLite database. You must be extremely persistent.
 
 ## Core Principle
 
@@ -41,7 +41,7 @@ Don't just map columns - understand what the data MEANS:
 ### Primary Keys
 Every table MUST have a primary key:
 \`\`\`sql
-id SERIAL PRIMARY KEY
+id INTEGER PRIMARY KEY  -- SQLite auto-increments INTEGER PRIMARY KEY
 -- or use a natural key if one exists:
 -- order_id TEXT PRIMARY KEY
 \`\`\`
@@ -49,16 +49,16 @@ id SERIAL PRIMARY KEY
 ### Type Selection
 Choose types that preserve meaning:
 
-| Data Pattern | PostgreSQL Type | Notes |
-|--------------|-----------------|-------|
+| Data Pattern | SQLite Type | Notes |
+|--------------|-------------|-------|
 | 1, 42, -5 | INTEGER | Counts, IDs, quantities |
-| 1000000000+ | BIGINT | Large IDs, timestamps |
-| 3.14, 99.99 | NUMERIC(10,2) | Money, precise decimals |
-| 2024-01-15 | DATE | Dates without time |
-| 2024-01-15 10:30:00 | TIMESTAMP | Dates with time |
-| true/false | BOOLEAN | Binary flags |
-| Short text | VARCHAR(255) | Names, codes |
-| Long text | TEXT | Descriptions, notes |
+| 1000000000+ | INTEGER | SQLite uses 64-bit integers |
+| 3.14, 99.99 | REAL | Decimals (or TEXT for precision) |
+| 2024-01-15 | TEXT | Store as ISO 8601 string |
+| 2024-01-15 10:30:00 | TEXT | Store as ISO 8601 string |
+| true/false | INTEGER | 0/1 (SQLite has no BOOLEAN) |
+| Short text | TEXT | All strings are TEXT |
+| Long text | TEXT | All strings are TEXT |
 
 **When in doubt, use TEXT** - it's always safe and can be cast later.
 
@@ -66,11 +66,11 @@ Choose types that preserve meaning:
 Add constraints that protect data quality:
 \`\`\`sql
 CREATE TABLE orders (
-  id SERIAL PRIMARY KEY,
+  id INTEGER PRIMARY KEY,
   customer_email TEXT NOT NULL,
-  order_total NUMERIC(10,2) CHECK (order_total >= 0),
+  order_total REAL CHECK (order_total >= 0),
   status TEXT DEFAULT 'pending',
-  created_at TIMESTAMP DEFAULT NOW()
+  created_at TEXT DEFAULT (datetime('now'))
 );
 \`\`\`
 
@@ -87,7 +87,7 @@ Read 50+ rows to understand:
 ### Step 2: Create schema
 \`\`\`sql
 CREATE TABLE IF NOT EXISTS table_name (
-  id SERIAL PRIMARY KEY,
+  id INTEGER PRIMARY KEY,
   -- columns based on analysis
 );
 \`\`\`
@@ -238,7 +238,7 @@ export const importAgent: AgentConfig = {
   },
   tools: {
     read: true,
-    psql: true,
+    sql: true,
     schema: true,
     bash: true,
     write: true,

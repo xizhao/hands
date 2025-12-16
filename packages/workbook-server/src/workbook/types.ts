@@ -75,6 +75,17 @@ export interface DiscoveredComponent {
 }
 
 // ============================================================================
+// Database Tables
+// ============================================================================
+
+export interface DiscoveredTable {
+  /** Table name */
+  name: string;
+  /** Column names */
+  columns: string[];
+}
+
+// ============================================================================
 // Discovery Results
 // ============================================================================
 
@@ -95,6 +106,8 @@ export interface WorkbookManifest {
   pages: DiscoveredPage[];
   /** Discovered UI components */
   components: DiscoveredComponent[];
+  /** Discovered database tables */
+  tables: DiscoveredTable[];
   /** Discovery errors */
   errors: DiscoveryError[];
   /** Timestamp of discovery */

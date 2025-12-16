@@ -1,6 +1,6 @@
-import { execSync, spawnSync } from "child_process";
-import fs from "fs";
-import path from "path";
+import { execSync, spawnSync } from "node:child_process";
+import fs from "node:fs";
+import path from "node:path";
 import pc from "picocolors";
 
 interface PreflightCheck {
@@ -172,7 +172,7 @@ export async function preflight(workbookPath: string): Promise<boolean> {
  * Check if a port is in use and optionally kill the process
  */
 export async function ensurePortFree(port: number, kill = true): Promise<boolean> {
-  const net = await import("net");
+  const net = await import("node:net");
 
   const isInUse = await new Promise<boolean>((resolve) => {
     const server = net.createServer();

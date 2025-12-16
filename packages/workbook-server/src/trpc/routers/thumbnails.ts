@@ -1,26 +1,21 @@
 /**
  * tRPC Router for Thumbnail Operations
  *
- * Type-safe API for page/block thumbnail CRUD.
+ * Thumbnails are stored as files in {workbookDir}/.hands/thumbnails/
+ * Structure: .hands/thumbnails/{type}/{contentId}/{theme}.png
  */
 
-import type { PGlite } from "@electric-sql/pglite";
+import { existsSync, mkdirSync, readFileSync, unlinkSync, writeFileSync } from "node:fs";
+import { join } from "node:path";
 import { initTRPC, TRPCError } from "@trpc/server";
 import { z } from "zod";
-import {
-  getThumbnails,
-  saveThumbnail,
-  deleteThumbnails,
-  type ThumbnailInput,
-} from "../../thumbnails/index.js";
 
 // ============================================================================
 // Context
 // ============================================================================
 
 export interface ThumbnailsContext {
-  db: PGlite | null;
-  isDbReady: boolean;
+  workbookDir: string;
 }
 
 // ============================================================================
@@ -28,16 +23,6 @@ export interface ThumbnailsContext {
 // ============================================================================
 
 const t = initTRPC.context<ThumbnailsContext>().create();
-
-const dbReadyProcedure = t.procedure.use(async ({ ctx, next }) => {
-  if (!ctx.isDbReady || !ctx.db) {
-    throw new TRPCError({
-      code: "PRECONDITION_FAILED",
-      message: "Database not ready",
-    });
-  }
-  return next({ ctx: { ...ctx, db: ctx.db } });
-});
 
 // ============================================================================
 // Input Schemas
@@ -66,62 +51,98 @@ const deleteThumbnailInput = z.object({
 });
 
 // ============================================================================
+// Helpers
+// ============================================================================
+
+function getThumbnailDir(workbookDir: string, type: string, contentId: string): string {
+  return join(workbookDir, ".hands", "thumbnails", type, contentId);
+}
+
+function getThumbnailPath(workbookDir: string, type: string, contentId: string, theme: string): string {
+  return join(getThumbnailDir(workbookDir, type, contentId), `${theme}.json`);
+}
+
+interface StoredThumbnail {
+  type: "page" | "block";
+  contentId: string;
+  theme: "light" | "dark";
+  thumbnail: string;
+  lqip: string;
+  contentHash?: string;
+  createdAt: string;
+}
+
+function readThumbnail(workbookDir: string, type: string, contentId: string, theme: string): StoredThumbnail | undefined {
+  const path = getThumbnailPath(workbookDir, type, contentId, theme);
+  if (!existsSync(path)) return undefined;
+
+  try {
+    const content = readFileSync(path, "utf-8");
+    return JSON.parse(content) as StoredThumbnail;
+  } catch {
+    return undefined;
+  }
+}
+
+// ============================================================================
 // Router
 // ============================================================================
 
 export const thumbnailsRouter = t.router({
   /** Get thumbnails for a page/block (both themes) */
-  get: dbReadyProcedure
+  get: t.procedure
     .input(getThumbnailInput)
-    .query(async ({ ctx, input }) => {
-      try {
-        const thumbnails = await getThumbnails(ctx.db, input.type, input.contentId);
-        return thumbnails;
-      } catch (err) {
-        throw new TRPCError({
-          code: "INTERNAL_SERVER_ERROR",
-          message: `Failed to fetch thumbnails: ${err instanceof Error ? err.message : String(err)}`,
-        });
-      }
+    .query(({ ctx, input }): { light?: StoredThumbnail; dark?: StoredThumbnail } => {
+      const light = readThumbnail(ctx.workbookDir, input.type, input.contentId, "light");
+      const dark = readThumbnail(ctx.workbookDir, input.type, input.contentId, "dark");
+      return { light, dark };
     }),
 
   /** Save a thumbnail */
-  save: dbReadyProcedure
+  save: t.procedure
     .input(saveThumbnailInput)
-    .mutation(async ({ ctx, input }) => {
-      try {
-        const thumbnailInput: ThumbnailInput = {
-          type: input.type,
-          contentId: input.contentId,
-          theme: input.theme,
-          thumbnail: input.thumbnail,
-          lqip: input.lqip,
-          contentHash: input.contentHash,
-        };
+    .mutation(({ ctx, input }) => {
+      const dir = getThumbnailDir(ctx.workbookDir, input.type, input.contentId);
+      const path = getThumbnailPath(ctx.workbookDir, input.type, input.contentId, input.theme);
 
-        await saveThumbnail(ctx.db, thumbnailInput);
-        return { success: true };
-      } catch (err) {
-        throw new TRPCError({
-          code: "INTERNAL_SERVER_ERROR",
-          message: `Failed to save thumbnail: ${err instanceof Error ? err.message : String(err)}`,
-        });
+      // Ensure directory exists
+      if (!existsSync(dir)) {
+        mkdirSync(dir, { recursive: true });
       }
+
+      const data: StoredThumbnail = {
+        type: input.type,
+        contentId: input.contentId,
+        theme: input.theme,
+        thumbnail: input.thumbnail,
+        lqip: input.lqip,
+        contentHash: input.contentHash,
+        createdAt: new Date().toISOString(),
+      };
+
+      writeFileSync(path, JSON.stringify(data));
+      return { success: true };
     }),
 
   /** Delete thumbnails for a page/block (all themes) */
-  delete: dbReadyProcedure
+  delete: t.procedure
     .input(deleteThumbnailInput)
-    .mutation(async ({ ctx, input }) => {
-      try {
-        await deleteThumbnails(ctx.db, input.type, input.contentId);
-        return { success: true };
-      } catch (err) {
-        throw new TRPCError({
-          code: "INTERNAL_SERVER_ERROR",
-          message: `Failed to delete thumbnails: ${err instanceof Error ? err.message : String(err)}`,
-        });
+    .mutation(({ ctx, input }) => {
+      const dir = getThumbnailDir(ctx.workbookDir, input.type, input.contentId);
+
+      // Delete both theme files if they exist
+      for (const theme of ["light", "dark"]) {
+        const path = join(dir, `${theme}.json`);
+        if (existsSync(path)) {
+          try {
+            unlinkSync(path);
+          } catch {
+            // Ignore errors
+          }
+        }
       }
+
+      return { success: true };
     }),
 });
 

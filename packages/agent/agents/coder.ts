@@ -28,6 +28,15 @@ Components are imported from \`@hands/stdlib\`:
 
 **Always use the components tool** to get correct import statements and props.
 
+## Adding shadcn Components
+
+Use the **ui** tool to search and add components from shadcn and other registries:
+- \`ui action='search' query='table'\` - Search for table components
+- \`ui action='search' registry='@plate-ui' query='editor'\` - Search plate-ui
+- \`ui action='add' component='@shadcn/data-table'\` - Add a component
+
+When stdlib doesn't have what you need, search shadcn first before building from scratch.
+
 ## Visualization Selection
 
 | Data Type | Component | When to Use |
@@ -59,7 +68,7 @@ title: Dashboard
 ## Workflow
 
 1. **Check schema** - Use schema tool to see available tables/columns
-2. **Test query** - Use psql tool to verify your SQL works
+2. **Test query** - Use sql tool to verify your SQL works
 3. **Check components** - Use components tool to see what's available
 4. **Create block** - Write TSX file to blocks/
 5. **Create/update page** - Write MDX file to pages/ with Block reference
@@ -148,11 +157,12 @@ export const coderAgent: AgentConfig = {
     grep: true,
 
     // Data (to test queries)
-    psql: true,
+    sql: true,
     schema: true,
 
-    // Quality
+    // Quality & UI
     components: true,
+    ui: true, // Search/add shadcn components via hands ui
     check: true,
     "check-block": true,
   },

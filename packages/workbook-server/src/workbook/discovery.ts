@@ -1,16 +1,17 @@
 /**
  * Workbook Discovery
  *
- * Unified discovery for blocks, pages, and UI components.
+ * Unified discovery for blocks, pages, UI components, and database tables.
  */
 
-import { existsSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { readdir, readFile } from "node:fs/promises";
 import { basename, dirname, join } from "node:path";
 import type {
   DiscoveredBlock,
   DiscoveredComponent,
   DiscoveredPage,
+  DiscoveredTable,
   DiscoveryError,
   DiscoveryResult,
   ResolvedWorkbookConfig,
@@ -192,6 +193,76 @@ export async function discoverComponents(
 }
 
 // ============================================================================
+// Table Discovery
+// ============================================================================
+
+/**
+ * Parse .hands/db.d.ts to discover tables and columns using ts-morph.
+ * Re-reads the file on every call since it changes frequently.
+ */
+export function discoverTables(rootPath: string): DiscoveryResult<DiscoveredTable> {
+  const items: DiscoveredTable[] = [];
+  const errors: DiscoveryError[] = [];
+
+  const dbTypesPath = join(rootPath, ".hands", "db.d.ts");
+
+  if (!existsSync(dbTypesPath)) {
+    return { items, errors };
+  }
+
+  try {
+    // Use dynamic import to avoid loading ts-morph if not needed
+    const { Project } = require("ts-morph") as typeof import("ts-morph");
+
+    // Create a fresh project each time (file changes frequently)
+    const project = new Project({ useInMemoryFileSystem: true });
+    const content = readFileSync(dbTypesPath, "utf-8");
+    const sourceFile = project.createSourceFile("db.d.ts", content);
+
+    // Find the DB interface
+    const dbInterface = sourceFile.getInterface("DB");
+    if (!dbInterface) {
+      return { items, errors };
+    }
+
+    // Get all table names from DB interface properties
+    for (const prop of dbInterface.getProperties()) {
+      const tableName = prop.getName();
+
+      // Skip internal tables
+      if (tableName.startsWith("__")) continue;
+
+      // Get the type reference (e.g., "FeatureIdeas")
+      const typeNode = prop.getTypeNode();
+      const typeName = typeNode?.getText();
+
+      if (!typeName) {
+        items.push({ name: tableName, columns: [] });
+        continue;
+      }
+
+      // Find the interface for this table type
+      const tableInterface = sourceFile.getInterface(typeName);
+      if (!tableInterface) {
+        items.push({ name: tableName, columns: [] });
+        continue;
+      }
+
+      // Extract column names from the table interface
+      const columns = tableInterface.getProperties().map((p) => p.getName());
+      items.push({ name: tableName, columns });
+    }
+  } catch (err) {
+    errors.push({
+      file: dbTypesPath,
+      error: `Failed to parse db types: ${err instanceof Error ? err.message : String(err)}`,
+    });
+  }
+
+  return { items, errors };
+}
+
+// ============================================================================
 // Full Workbook Discovery
 // ============================================================================
 
@@ -204,11 +275,20 @@ export async function discoverWorkbook(config: WorkbookConfig): Promise<Workbook
     discoverComponents(resolved.uiDir),
   ]);
 
+  // Table discovery is sync (bun:sqlite is sync)
+  const tablesResult = discoverTables(resolved.rootPath);
+
   return {
     blocks: blocksResult.items,
     pages: pagesResult.items,
     components: componentsResult.items,
-    errors: [...blocksResult.errors, ...pagesResult.errors, ...componentsResult.errors],
+    tables: tablesResult.items,
+    errors: [
+      ...blocksResult.errors,
+      ...pagesResult.errors,
+      ...componentsResult.errors,
+      ...tablesResult.errors,
+    ],
     timestamp: Date.now(),
   };
 }

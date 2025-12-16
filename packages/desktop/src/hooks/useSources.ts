@@ -5,7 +5,7 @@
  * Runtime only executes sync - no history/progress tracking here.
  */
 
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import { useCallback, useState } from "react";
 import { toast } from "sonner";
 import { useBackgroundTask } from "@/hooks/useBackgroundTask";
@@ -74,7 +74,7 @@ export function useSources(): Source[] {
  */
 export function useSyncSource() {
   const port = useRuntimePort();
-  const queryClient = useQueryClient();
+  const utils = trpc.useUtils();
 
   return useMutation({
     mutationFn: async (sourceId: string): Promise<SyncResult> => {
@@ -90,9 +90,9 @@ export function useSyncSource() {
       return data as SyncResult;
     },
     onSuccess: () => {
-      // Refresh manifest (includes sources) and db schema
-      queryClient.invalidateQueries({ queryKey: ["manifest"] });
-      queryClient.invalidateQueries({ queryKey: ["db-schema"] });
+      // Refresh manifest (includes sources) and db schema using tRPC utils
+      utils.workbook.manifest.invalidate();
+      utils.db.schema.invalidate();
     },
   });
 }
@@ -123,7 +123,7 @@ export function useAvailableSources() {
  */
 export function useAddSource() {
   const port = useRuntimePort();
-  const queryClient = useQueryClient();
+  const utils = trpc.useUtils();
 
   return useMutation({
     mutationFn: async (sourceName: string): Promise<AddSourceResult> => {
@@ -140,7 +140,7 @@ export function useAddSource() {
     },
     onSuccess: () => {
       // Refresh manifest (includes sources)
-      queryClient.invalidateQueries({ queryKey: ["manifest"] });
+      utils.workbook.manifest.invalidate();
     },
   });
 }
@@ -150,7 +150,7 @@ export function useAddSource() {
  */
 export function useSaveSpec() {
   const port = useRuntimePort();
-  const queryClient = useQueryClient();
+  const utils = trpc.useUtils();
 
   return useMutation({
     mutationFn: async ({
@@ -176,7 +176,7 @@ export function useSaveSpec() {
     },
     onSuccess: () => {
       // Refresh manifest to update spec
-      queryClient.invalidateQueries({ queryKey: ["manifest"] });
+      utils.workbook.manifest.invalidate();
     },
   });
 }
@@ -208,12 +208,12 @@ export function useValidateSource() {
  * Save secrets to .env.local
  */
 export function useSaveSecrets() {
-  const queryClient = useQueryClient();
+  const utils = trpc.useUtils();
 
   return trpc.secrets.save.useMutation({
     onSuccess: () => {
       // Refresh manifest to update missingSecrets
-      queryClient.invalidateQueries({ queryKey: ["manifest"] });
+      utils.workbook.manifest.invalidate();
     },
   });
 }
@@ -223,7 +223,7 @@ export function useSaveSecrets() {
  */
 export function useStreamingSync() {
   const port = useRuntimePort();
-  const queryClient = useQueryClient();
+  const utils = trpc.useUtils();
   const [logs, setLogs] = useState<LogEntry[]>([]);
   const [isRunning, setIsRunning] = useState(false);
   const [result, setResult] = useState<SyncResult | null>(null);
@@ -272,14 +272,14 @@ export function useStreamingSync() {
           };
         });
 
-        // Refresh data
-        queryClient.invalidateQueries({ queryKey: ["manifest"] });
-        queryClient.invalidateQueries({ queryKey: ["db-schema"] });
+        // Refresh data using tRPC utils
+        utils.workbook.manifest.invalidate();
+        utils.db.schema.invalidate();
       } finally {
         setIsRunning(false);
       }
     },
-    [port, queryClient],
+    [port, utils],
   );
 
   const reset = useCallback(() => {

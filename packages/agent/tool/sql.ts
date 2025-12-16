@@ -2,9 +2,9 @@ import { tool } from "@opencode-ai/plugin";
 import { getRuntimePort, getTRPCClient } from "../lib/trpc";
 
 // Execute query via tRPC
-async function executeQuery(sql: string): Promise<{ rows: unknown[]; rowCount: number }> {
+async function executeQuery(sql: string): Promise<{ rows: unknown[]; rowCount: number; changes?: number }> {
   const trpc = getTRPCClient();
-  return trpc.db.query.mutate({ query: sql });
+  return trpc.db.query.mutate({ sql });
 }
 
 function formatTable(rows: Record<string, unknown>[]): string {
@@ -38,8 +38,8 @@ function formatCsv(rows: Record<string, unknown>[]): string {
   return [headerRow, ...dataRows].join("\n");
 }
 
-const psql = tool({
-  description: `Execute SQL queries against the workbook's embedded Postgres database.
+const sql = tool({
+  description: `Execute SQL queries against the workbook's embedded SQLite database.
 
 Use this tool to:
 - Query data for analysis (SELECT)
@@ -49,10 +49,12 @@ Use this tool to:
 
 TIP: Use the SchemaRead tool first to see available tables and columns.
 
-IMPORTANT RULES:
-- Always use the default 'public' schema - do NOT create custom schemas
-- Use simple CREATE TABLE tablename (...) - no schema prefix needed
-- NEVER run CREATE SCHEMA - you don't have permission and don't need it`,
+SQLite-specific notes:
+- Uses SQLite syntax (not PostgreSQL)
+- No schemas - tables are in the main database
+- Use INTEGER PRIMARY KEY for auto-increment
+- BOOLEAN stored as 0/1
+- Use datetime('now') for current timestamp`,
 
   args: {
     query: tool.schema.string().describe("SQL query to execute"),
@@ -88,6 +90,9 @@ This would modify/delete data. To proceed, run again with confirm_destructive: t
 
       // For non-SELECT queries
       if (!Array.isArray(result.rows) || result.rows.length === 0) {
+        if (result.changes !== undefined && result.changes > 0) {
+          return `Query executed successfully. Rows affected: ${result.changes}`;
+        }
         if (result.rowCount !== undefined && result.rowCount > 0) {
           return `Query executed successfully. Rows affected: ${result.rowCount}`;
         }
@@ -131,4 +136,4 @@ Try again in a few seconds.`;
   },
 });
 
-export default psql;
+export default sql;

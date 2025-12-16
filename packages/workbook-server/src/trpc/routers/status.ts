@@ -14,7 +14,6 @@ export interface StatusContext {
   workbookId: string;
   workbookDir: string;
   getState: () => {
-    dbReady: boolean;
     rscReady: boolean;
     rscPort: number | null;
     rscError: string | null;
@@ -41,10 +40,9 @@ export const statusRouter = t.router({
   /** Basic health check */
   health: publicProcedure.query(({ ctx }) => {
     const state = ctx.getState();
-    const ready = state.dbReady && state.rscReady;
     return {
-      ready,
-      status: ready ? ("ready" as const) : ("booting" as const),
+      ready: state.rscReady,
+      status: state.rscReady ? ("ready" as const) : ("booting" as const),
     };
   }),
 
@@ -55,8 +53,7 @@ export const statusRouter = t.router({
       workbookId: ctx.workbookId,
       workbookDir: ctx.workbookDir,
       services: {
-        db: { ready: state.dbReady },
-        blockServer: {
+        runtime: {
           ready: state.rscReady,
           port: state.rscPort,
           error: state.rscError,
@@ -82,15 +79,10 @@ export const statusRouter = t.router({
       format: { fixed: [] as string[], errors: [] as string[] },
       unused: { exports: [] as string[], files: [] as string[] },
       services: {
-        postgres: {
-          up: state.dbReady,
-          port: 0, // PGlite is in-process, no TCP port
-          error: state.dbReady ? undefined : "Database is booting",
-        },
-        blockServer: {
+        runtime: {
           up: state.rscReady,
           port: state.rscPort ?? 0,
-          error: state.rscReady ? undefined : state.rscError || "Block server is starting",
+          error: state.rscReady ? undefined : state.rscError || "Runtime is starting",
         },
       },
     };

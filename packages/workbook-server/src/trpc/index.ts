@@ -5,7 +5,6 @@
  * Provides type-safe API for desktop client.
  */
 
-import type { PGlite } from "@electric-sql/pglite";
 import { initTRPC } from "@trpc/server";
 import { fetchRequestHandler } from "@trpc/server/adapters/fetch";
 import type { Hono } from "hono";
@@ -13,7 +12,7 @@ import { actionsRouter } from "../actions/trpc.js";
 import { gitRouter } from "../git/trpc.js";
 import type { PageRegistry } from "../pages/index.js";
 import { sourcesRouter, type TRPCContext } from "../sources/trpc.js";
-import { dbRouter, type DbContext } from "./routers/db.js";
+import { sqliteTRPCRouter, type SQLiteTRPCContext } from "../sqlite/trpc.js";
 import { pagesRouter, type PagesContext } from "./routers/pages.js";
 import { secretsRouter, type SecretsContext } from "./routers/secrets.js";
 import { statusRouter, type StatusContext } from "./routers/status.js";
@@ -23,11 +22,11 @@ import { workbookRouter, type WorkbookContext } from "./routers/workbook.js";
 export interface TRPCConfig {
   workbookId: string;
   workbookDir: string;
-  getDb: () => PGlite | null;
+  /** Runtime URL for SQLite database access (e.g., http://localhost:55200) */
+  getRuntimeUrl: () => string | null;
+  /** Whether the runtime/database is ready */
   isDbReady: () => boolean;
-  saveDb: () => Promise<void>;
   getState: () => {
-    dbReady: boolean;
     rscReady: boolean;
     rscPort: number | null;
     rscError: string | null;
@@ -61,7 +60,8 @@ export interface TRPCConfig {
   }>;
   formatBlockSource: (filePath: string) => Promise<boolean>;
   generateDefaultBlockSource: (blockName: string) => string;
-  onDdlQuery?: () => Promise<void>;
+  /** Called when schema changes (DDL executed) */
+  onSchemaChange?: () => Promise<void>;
   // Page registry
   getPageRegistry: () => PageRegistry | null;
   createPageRegistry: (pagesDir: string) => PageRegistry;
@@ -71,13 +71,11 @@ export interface TRPCConfig {
 interface CombinedContext
   extends TRPCContext,
     StatusContext,
-    DbContext,
+    SQLiteTRPCContext,
     SecretsContext,
     WorkbookContext,
     PagesContext,
-    ThumbnailsContext {
-  saveDb: () => Promise<void>;
-}
+    ThumbnailsContext {}
 
 // Create a merged router that includes all routes
 const t = initTRPC.context<CombinedContext>().create();
@@ -85,8 +83,8 @@ const t = initTRPC.context<CombinedContext>().create();
 const appRouter = t.router({
   // Status & health routes
   status: statusRouter,
-  // Database routes
-  db: dbRouter,
+  // Database routes (SQLite via runtime)
+  db: sqliteTRPCRouter,
   // Secrets management
   secrets: secretsRouter,
   // Workbook manifest & blocks
@@ -112,14 +110,13 @@ export function registerTRPCRoutes(app: Hono, config: TRPCConfig) {
   const {
     workbookId,
     workbookDir,
-    getDb,
+    getRuntimeUrl,
     isDbReady,
-    saveDb,
     getState,
     getExternalManifest,
     formatBlockSource,
     generateDefaultBlockSource,
-    onDdlQuery,
+    onSchemaChange,
     getPageRegistry,
     createPageRegistry,
   } = config;
@@ -128,22 +125,24 @@ export function registerTRPCRoutes(app: Hono, config: TRPCConfig) {
   app.all("/trpc/*", async (c) => {
     const _path = c.req.path.replace("/trpc", "");
 
+    // Get runtime URL for SQLite access
+    const runtimeUrl = getRuntimeUrl();
+
     // Create combined context for this request
     const ctx: CombinedContext = {
       // Base context
       workbookId,
       workbookDir,
-      db: getDb(),
       isDbReady: isDbReady(),
-      saveDb,
+      // SQLite context - runtime URL for database access
+      runtimeUrl: runtimeUrl ?? "http://localhost:55200",
+      onSchemaChange,
       // Status context
       getState,
       // Workbook context (now uses discovery module internally)
       getExternalManifest,
       formatBlockSource,
       generateDefaultBlockSource,
-      // DB context
-      onDdlQuery,
       // Pages context
       getPageRegistry,
       createPageRegistry,
@@ -165,7 +164,7 @@ export type { ActionsRouter } from "../actions/trpc.js";
 export type { GitRouter } from "../git/trpc.js";
 // Re-export router types for client usage
 export type { SourcesRouter } from "../sources/trpc.js";
-export type { DbRouter } from "./routers/db.js";
+export type { SQLiteTRPCRouter as DbRouter } from "../sqlite/trpc.js";
 export type { PagesRouter } from "./routers/pages.js";
 export type { SecretsRouter } from "./routers/secrets.js";
 export type { StatusRouter } from "./routers/status.js";

@@ -178,7 +178,7 @@ function generateCommitMessage(status: {
   const uniqueFiles = [...new Set(allFiles)];
 
   // Check for specific file patterns
-  const hasDbChanges = uniqueFiles.some((f) => f.endsWith("db.tar.gz"));
+  const hasDbChanges = uniqueFiles.some((f) => f.endsWith("db.sqlite"));
   const hasBlockChanges = uniqueFiles.some((f) => f.startsWith("blocks/"));
   const hasSourceChanges = uniqueFiles.some((f) => f.startsWith("sources/"));
   const hasActionChanges = uniqueFiles.some((f) => f.startsWith("actions/"));
@@ -399,7 +399,7 @@ export async function revertToCommit(
   await git.checkout([targetHash, "--", "."]);
 
   // Restore the database from the reverted state
-  // The db.tar.gz from the target commit is now in the working directory
+  // The db.sqlite from the target commit is now in the working directory
 
   // Stage and commit the revert
   await git.add(".");
@@ -420,7 +420,7 @@ export async function revertToCommit(
 
 /**
  * Save workbook state and commit
- * This is the main "save" action - saves db.tar.gz then commits all changes
+ * This is the main "save" action - saves db.sqlite then commits all changes
  */
 export async function saveAndCommit(
   workbookDir: string,
@@ -450,7 +450,7 @@ export async function saveAndCommit(
 }
 
 /**
- * Get diff statistics for uncommitted changes (excluding db.tar.gz for line stats)
+ * Get diff statistics for uncommitted changes (excluding db.sqlite for line stats)
  */
 export async function getDiffStats(workbookDir: string): Promise<GitDiffStats> {
   const repo = await isGitRepo(workbookDir);
@@ -483,10 +483,10 @@ export async function getDiffStats(workbookDir: string): Promise<GitDiffStats> {
   // Get all changed files
   const allFiles = [...status.staged, ...status.modified, ...status.not_added];
   const uniqueFiles = [...new Set(allFiles)];
-  const hasDbChange = uniqueFiles.some((f) => f.endsWith("db.tar.gz"));
+  const hasDbChange = uniqueFiles.some((f) => f.endsWith("db.sqlite"));
 
-  // Get current db.tar.gz size
-  const dbPath = join(workbookDir, "db.tar.gz");
+  // Get current db.sqlite size
+  const dbPath = join(workbookDir, "db.sqlite");
   let dbSizeCurrent: number | null = null;
   if (existsSync(dbPath)) {
     try {
@@ -496,10 +496,10 @@ export async function getDiffStats(workbookDir: string): Promise<GitDiffStats> {
     }
   }
 
-  // Get db.tar.gz size from last commit
+  // Get db.sqlite size from last commit
   let dbSizeLastCommit: number | null = null;
   try {
-    const result = await git.raw(["ls-tree", "-l", "HEAD", "db.tar.gz"]);
+    const result = await git.raw(["ls-tree", "-l", "HEAD", "db.sqlite"]);
     if (result.trim()) {
       // Format: mode type hash size filename
       const parts = result.trim().split(/\s+/);
@@ -508,17 +508,17 @@ export async function getDiffStats(workbookDir: string): Promise<GitDiffStats> {
       }
     }
   } catch {
-    // No previous commit or db.tar.gz not in last commit
+    // No previous commit or db.sqlite not in last commit
   }
 
-  // Get diff stats excluding db.tar.gz (binary file would skew stats)
+  // Get diff stats excluding db.sqlite (binary file would skew stats)
   let insertions = 0;
   let deletions = 0;
-  const filesChanged = uniqueFiles.filter((f) => !f.endsWith("db.tar.gz")).length;
+  const filesChanged = uniqueFiles.filter((f) => !f.endsWith("db.sqlite")).length;
 
   try {
-    // Get numstat for tracked files (excluding db.tar.gz)
-    const diffResult = await git.diff(["--numstat", "--", ".", ":(exclude)db.tar.gz"]);
+    // Get numstat for tracked files (excluding db.sqlite)
+    const diffResult = await git.diff(["--numstat", "--", ".", ":(exclude)db.sqlite"]);
     if (diffResult.trim()) {
       const lines = diffResult.trim().split("\n");
       for (const line of lines) {

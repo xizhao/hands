@@ -139,25 +139,10 @@ function DatabaseButton({
         </button>
       </HoverCardTrigger>
       <HoverCardContent side="bottom" align="center" className="w-auto p-1">
-        <button
-          onClick={(e) => {
-            e.stopPropagation();
-            database.save?.();
-          }}
-          disabled={!database.save || database.isSaving}
-          className={cn(
-            "flex items-center gap-1.5 px-2 py-1 rounded text-xs transition-colors",
-            "hover:bg-accent text-muted-foreground hover:text-foreground",
-            "disabled:opacity-50 disabled:cursor-not-allowed"
-          )}
-        >
-          {database.isSaving ? (
-            <CircleNotch weight="bold" className="h-3 w-3 animate-spin" />
-          ) : (
-            <FloppyDisk weight="duotone" className="h-3 w-3" />
-          )}
-          <span>{database.isSaving ? "Saving..." : "Save"}</span>
-        </button>
+        <div className="flex items-center gap-1.5 px-2 py-1 text-xs text-muted-foreground">
+          <Database weight="duotone" className="h-3 w-3" />
+          <span>{tableCount} table{tableCount !== 1 ? "s" : ""}</span>
+        </div>
       </HoverCardContent>
     </HoverCard>
   );

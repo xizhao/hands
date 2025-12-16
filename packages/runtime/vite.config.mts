@@ -42,6 +42,8 @@ export default defineConfig({
     pagesPlugin({ workbookPath }),
     cloudflare({
       viteEnvironment: { name: "worker" },
+      // Persist Durable Object SQLite to .hands/db in workbook
+      persistState: { path: path.join(workbookPath, ".hands/db") },
     }),
     redwood({
       // Blocks are server components by default
@@ -67,10 +69,5 @@ export default defineConfig({
       "platejs/react": path.resolve(__dirname, "node_modules/platejs/dist/react/index.js"),
       "platejs": path.resolve(__dirname, "node_modules/platejs/dist/index.js"),
     },
-    // Resolve deps from workbook first, then runtime
-    modules: [
-      path.join(workbookPath, "node_modules"),
-      "node_modules",
-    ],
   },
 });

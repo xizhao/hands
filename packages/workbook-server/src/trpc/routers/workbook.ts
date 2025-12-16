@@ -148,6 +148,7 @@ export const workbookRouter = t.router({
       })),
       sources: external.sources ?? [],
       actions: external.actions ?? [],
+      tables: discovery.tables,
       config: external.config ?? {},
       isEmpty: blocks.length === 0 && pages.length === 0,
       errors: discovery.errors,

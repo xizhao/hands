@@ -383,10 +383,12 @@ export function NotebookSidebar({
   const {
     workbookId: activeWorkbookId,
     manifest,
-    schema,
     isStarting,
     isDbBooting,
   } = useRuntimeState();
+
+  // Tables from manifest (discovered from db.sqlite)
+  const tables = manifest?.tables ?? [];
 
   // Derived loading states
   const manifestLoading = !manifest && !!activeWorkbookId;
@@ -460,10 +462,10 @@ export function NotebookSidebar({
     const tableMap = new Map<string, string[]>(); // sourceId -> table names
     const unassociated: string[] = [];
 
-    if (!schema) return { sourceTableMap: tableMap, unassociatedTables: unassociated };
+    if (tables.length === 0) return { sourceTableMap: tableMap, unassociatedTables: unassociated };
 
-    for (const table of schema) {
-      const tableName = table.table_name;
+    for (const table of tables) {
+      const tableName = table.name;
       // Check if table is prefixed with any source name (e.g., "hackernews_stories" belongs to "hackernews" source)
       let matched = false;
       for (const source of sources) {
@@ -486,7 +488,7 @@ export function NotebookSidebar({
     }
 
     return { sourceTableMap: tableMap, unassociatedTables: unassociated };
-  }, [schema, sources]);
+  }, [tables, sources]);
   const [searchQuery, setSearchQuery] = useState("");
   const [addSourceOpen, setAddSourceOpen] = useState(false);
   const [isCreatingNewBlock, setIsCreatingNewBlock] = useState(false);
@@ -679,12 +681,12 @@ export default function Placeholder() {
     setAddSourceOpen(false);
   };
 
-  // Filter sources and blocks based on search query
-  const _filteredSources = useMemo(() => {
-    if (!searchQuery.trim() || !schema) return schema;
+  // Filter tables based on search query
+  const _filteredTables = useMemo(() => {
+    if (!searchQuery.trim() || tables.length === 0) return tables;
     const query = searchQuery.toLowerCase();
-    return schema.filter((table) => table.table_name.toLowerCase().includes(query));
-  }, [schema, searchQuery]);
+    return tables.filter((table) => table.name.toLowerCase().includes(query));
+  }, [tables, searchQuery]);
 
   const _filteredBlocks = useMemo(() => {
     if (!searchQuery.trim()) return blocks;
@@ -950,13 +952,13 @@ export default function Placeholder() {
           )}
 
           {/* Data section - collapsed: show all tables as compact icons */}
-          {schema && schema.length > 0 ? (
+          {tables.length > 0 ? (
             <Tooltip>
               <TooltipTrigger asChild>
                 <div className="flex flex-wrap gap-0.5 justify-center pt-2 border-t border-border/50 cursor-default">
-                  {schema.map((table) => (
+                  {tables.map((table) => (
                     <span
-                      key={table.table_name}
+                      key={table.name}
                       className="text-[8px] leading-none text-emerald-400/70"
                     >
                       &#x25A0;
@@ -966,7 +968,7 @@ export default function Placeholder() {
               </TooltipTrigger>
               <TooltipContent side="right">
                 <p>
-                  {schema.length} table{schema.length !== 1 ? "s" : ""}
+                  {tables.length} table{tables.length !== 1 ? "s" : ""}
                 </p>
               </TooltipContent>
             </Tooltip>

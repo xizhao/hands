@@ -3,8 +3,9 @@ import { defineApp } from "rwsdk/worker";
 import { handleBlockGet, loadBlock } from "./blocks/render";
 import { Page } from "./pages/Page";
 import { BlockPreview } from "./blocks/BlockPreview";
-import { pageRoutes } from "@hands/pages";
-import { runWithDbMode, Database, sql } from "./db/dev";
+import { pages, pageRoutes } from "@hands/pages";
+import { runWithDbMode, Database } from "./db/dev";
+import { dbRoutes } from "./db/routes";
 
 // Export Durable Object for wrangler
 export { Database };
@@ -43,12 +44,32 @@ export const setCommonHeaders =
     );
   };
 
+// Get the first page ID for root redirect
+const firstPageId = Object.keys(pages)[0];
+
 export default defineApp([
   setCommonHeaders(),
-  // Root route for health check / readiness detection
-  route("/", () => new Response(JSON.stringify({ status: "ok" }), {
-    headers: { "Content-Type": "application/json" }
-  })),
+  // Health check endpoint for workbook-server polling
+  route("/health", () =>
+    new Response(JSON.stringify({ status: "ok" }), {
+      headers: { "Content-Type": "application/json" },
+    })
+  ),
+  // Database routes (dev only - for AI agent access)
+  ...(import.meta.env.VITE_IS_DEV_SERVER ? dbRoutes : []),
+  // Root route - redirect to first page or return health check if no pages
+  route("/", () => {
+    if (firstPageId) {
+      return new Response(null, {
+        status: 302,
+        headers: { Location: `/pages/${firstPageId}` },
+      });
+    }
+    // Fallback for empty workbooks
+    return new Response(JSON.stringify({ status: "ok", pages: 0 }), {
+      headers: { "Content-Type": "application/json" },
+    });
+  }),
   route("/blocks/*", {
     get: (args) => {
       // Blocks are read-only - wrap in block mode context

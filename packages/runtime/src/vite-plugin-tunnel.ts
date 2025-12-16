@@ -1,4 +1,4 @@
-import { spawn, type ChildProcess } from "child_process";
+import { type ChildProcess, spawn } from "node:child_process";
 import type { Plugin, ViteDevServer } from "vite";
 
 interface TunnelPluginOptions {
@@ -16,7 +16,7 @@ export function tunnelPlugin(options: TunnelPluginOptions = {}): Plugin {
   const { enabled = true } = options;
 
   let tunnelProcess: ChildProcess | null = null;
-  let metadata: RuntimeMetadata = {
+  const metadata: RuntimeMetadata = {
     publicUrl: null,
     localUrl: "",
     status: "connecting",
@@ -42,7 +42,7 @@ export function tunnelPlugin(options: TunnelPluginOptions = {}): Plugin {
       // Start tunnel when server is listening
       server.httpServer?.once("listening", () => {
         const address = server.httpServer?.address();
-        const port = typeof address === "object" ? address?.port : 5173;
+        const port = typeof address === "object" ? (address?.port ?? 5173) : 5173;
         metadata.localUrl = `http://localhost:${port}`;
 
         startTunnel(port);

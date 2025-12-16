@@ -20,12 +20,11 @@ const PORT_PREFIX: u16 = 55;
 // const PORT_WORKER: u16 = PORT_PREFIX * 1000 + 200;   // 55200
 const PORT_OPENCODE: u16 = PORT_PREFIX * 1000 + 300;    // 55300
 
-// Runtime process info for a workbook
+// Workbook server process info
 #[derive(Debug)]
-pub struct RuntimeProcess {
+pub struct WorkbookServerProcess {
     pub child: Child,
     pub runtime_port: u16,
-    pub postgres_port: u16,
     pub directory: String,
     pub restart_count: u32,
 }
@@ -33,7 +32,7 @@ pub struct RuntimeProcess {
 // App state - now just tracks runtime processes and opencode server
 pub struct AppState {
     pub server: Option<Child>,
-    pub runtimes: HashMap<String, RuntimeProcess>, // workbook_id -> runtime process
+    pub workbook_servers: HashMap<String, WorkbookServerProcess>, // workbook_id -> server process
     pub active_workbook_id: Option<String>,        // currently active workbook
 }
 
@@ -323,7 +322,7 @@ async fn delete_workbook(
     // Stop runtime if running
     {
         let mut state = state.lock().await;
-        if let Some(mut runtime) = state.runtimes.remove(&id) {
+        if let Some(mut runtime) = state.workbook_servers.remove(&id) {
             // Call /stop endpoint first for graceful shutdown
             let stop_url = format!("http://localhost:{}/stop", runtime.runtime_port);
             let _ = reqwest::Client::new()
@@ -373,15 +372,13 @@ pub struct ServiceStatus {
     pub error: Option<String>,
 }
 
-// Runtime ready message from stdout
+// Workbook server ready message from stdout
 #[derive(Debug, Clone, Deserialize)]
-struct RuntimeReady {
+struct WorkbookServerReady {
     #[serde(rename = "type")]
     msg_type: String,
     #[serde(rename = "runtimePort")]
     runtime_port: u16,
-    #[serde(rename = "postgresPort")]
-    postgres_port: u16,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -390,7 +387,6 @@ pub struct DevServerStatus {
     pub workbook_id: String,
     pub directory: String,
     pub runtime_port: u16,
-    pub postgres_port: u16,
     pub message: String,
 }
 
@@ -415,7 +411,7 @@ fn kill_processes_on_port(port: u16) {
 }
 
 /// Force cleanup any stale runtime lockfile and processes
-async fn force_cleanup_runtime() {
+async fn force_cleanup_workbook_server() {
     // Get lockfile path (macOS: ~/Library/Application Support/Hands/runtime.lock)
     let lock_path = std::env::var("HOME").ok().map(|h| {
         PathBuf::from(h).join("Library/Application Support/Hands/runtime.lock")
@@ -486,12 +482,12 @@ async fn force_cleanup_runtime() {
 }
 
 /// Internal helper to spawn and wait for runtime ready
-async fn spawn_runtime(
+async fn spawn_workbook_server(
     workbook_id: &str,
     directory: &str,
-) -> Result<(Child, u16, u16), String> {
+) -> Result<(Child, u16), String> {
     // Force cleanup any stale processes before starting
-    force_cleanup_runtime().await;
+    force_cleanup_workbook_server().await;
 
     // Get the workbook-server script path (relative to CARGO_MANIFEST_DIR which is src-tauri)
     let runtime_script = format!("{}/../../workbook-server/src/index.ts", env!("CARGO_MANIFEST_DIR"));
@@ -522,9 +518,9 @@ async fn spawn_runtime(
 
             // Try to parse as ready message
             if line.starts_with('{') {
-                if let Ok(ready) = serde_json::from_str::<RuntimeReady>(&line) {
+                if let Ok(ready) = serde_json::from_str::<WorkbookServerReady>(&line) {
                     if ready.msg_type == "ready" {
-                        return Ok((ready.runtime_port, ready.postgres_port, reader));
+                        return Ok((ready.runtime_port, reader));
                     }
                 }
             }
@@ -533,14 +529,14 @@ async fn spawn_runtime(
     }).await;
 
     match timeout_result {
-        Ok(Ok((runtime_port, postgres_port, mut reader))) => {
+        Ok(Ok((runtime_port, mut reader))) => {
             // Continue reading stdout in background to show Vite logs
             tokio::spawn(async move {
                 while let Ok(Some(line)) = reader.next_line().await {
                     println!("[runtime] {}", line);
                 }
             });
-            Ok((child, runtime_port, postgres_port))
+            Ok((child, runtime_port))
         }
         Ok(Err(e)) => {
             let _ = child.kill().await;
@@ -554,7 +550,7 @@ async fn spawn_runtime(
 }
 
 /// Start runtime monitoring task that auto-restarts crashed runtimes
-fn start_runtime_monitor(state: Arc<Mutex<AppState>>) {
+fn start_workbook_server_monitor(state: Arc<Mutex<AppState>>) {
     const MAX_RESTARTS: u32 = 5;
     const RESTART_DELAY_MS: u64 = 2000;
 
@@ -567,7 +563,7 @@ fn start_runtime_monitor(state: Arc<Mutex<AppState>>) {
             // Collect workbooks that need restart
             let mut to_restart: Vec<(String, String, u32)> = Vec::new();
 
-            for (workbook_id, runtime) in state_guard.runtimes.iter_mut() {
+            for (workbook_id, runtime) in state_guard.workbook_servers.iter_mut() {
                 // Check if process has exited
                 match runtime.child.try_wait() {
                     Ok(Some(status)) => {
@@ -600,7 +596,7 @@ fn start_runtime_monitor(state: Arc<Mutex<AppState>>) {
 
             // Remove dead runtimes before restarting
             for (workbook_id, _, _) in &to_restart {
-                state_guard.runtimes.remove(workbook_id);
+                state_guard.workbook_servers.remove(workbook_id);
             }
 
             // Drop lock before spawning new processes
@@ -612,13 +608,12 @@ fn start_runtime_monitor(state: Arc<Mutex<AppState>>) {
 
                 println!("[monitor] Restarting runtime for {}...", workbook_id);
 
-                match spawn_runtime(&workbook_id, &directory).await {
-                    Ok((child, runtime_port, postgres_port)) => {
+                match spawn_workbook_server(&workbook_id, &directory).await {
+                    Ok((child, runtime_port)) => {
                         let mut state_guard = state.lock().await;
-                        state_guard.runtimes.insert(workbook_id.clone(), RuntimeProcess {
+                        state_guard.workbook_servers.insert(workbook_id.clone(), WorkbookServerProcess {
                             child,
                             runtime_port,
-                            postgres_port,
                             directory,
                             restart_count,
                         });
@@ -638,20 +633,20 @@ fn start_runtime_monitor(state: Arc<Mutex<AppState>>) {
 
 /// Start the hands-runtime for a workbook
 #[tauri::command]
-async fn start_runtime(
+async fn start_workbook_server(
     state: tauri::State<'_, Arc<Mutex<AppState>>>,
     workbook_id: String,
     directory: String,
 ) -> Result<DevServerStatus, String> {
-    println!("[tauri] start_runtime: {} at {}", workbook_id, directory);
+    println!("[tauri] start_workbook_server: {} at {}", workbook_id, directory);
 
     // Stop ALL existing runtimes first (they share port 55000)
     {
         let mut state_guard = state.lock().await;
-        let existing_ids: Vec<String> = state_guard.runtimes.keys().cloned().collect();
+        let existing_ids: Vec<String> = state_guard.workbook_servers.keys().cloned().collect();
 
         for existing_id in existing_ids {
-            if let Some(mut runtime) = state_guard.runtimes.remove(&existing_id) {
+            if let Some(mut runtime) = state_guard.workbook_servers.remove(&existing_id) {
                 println!("[tauri] Stopping existing runtime: {}", existing_id);
                 // Try graceful shutdown
                 let stop_url = format!("http://localhost:{}/stop", runtime.runtime_port);
@@ -674,22 +669,21 @@ async fn start_runtime(
     kill_processes_on_port(runtime_port_default);
     tokio::time::sleep(Duration::from_millis(300)).await;
 
-    let (child, runtime_port, postgres_port) =
-        spawn_runtime(&workbook_id, &directory).await?;
+    let (child, runtime_port) =
+        spawn_workbook_server(&workbook_id, &directory).await?;
 
     // Re-acquire lock and store
     let mut state_guard = state.lock().await;
-    state_guard.runtimes.insert(workbook_id.clone(), RuntimeProcess {
+    state_guard.workbook_servers.insert(workbook_id.clone(), WorkbookServerProcess {
         child,
         runtime_port,
-        postgres_port,
         directory: directory.clone(),
         restart_count: 0,
     });
 
     println!(
-        "Runtime started for workbook {} - runtime:{}, postgres:{}",
-        workbook_id, runtime_port, postgres_port
+        "Workbook server started for {} on port {}",
+        workbook_id, runtime_port
     );
 
     Ok(DevServerStatus {
@@ -697,8 +691,7 @@ async fn start_runtime(
         workbook_id,
         directory,
         runtime_port,
-        postgres_port,
-        message: format!("Runtime started on port {}", runtime_port),
+        message: format!("Workbook server started on port {}", runtime_port),
     })
 }
 
@@ -737,7 +730,7 @@ async fn stop_runtime(
 ) -> Result<DevServerStatus, String> {
     let mut state_guard = state.lock().await;
 
-    if let Some(mut runtime) = state_guard.runtimes.remove(&workbook_id) {
+    if let Some(mut runtime) = state_guard.workbook_servers.remove(&workbook_id) {
         // Try graceful shutdown via /stop endpoint
         let stop_url = format!("http://localhost:{}/stop", runtime.runtime_port);
         let _ = reqwest::Client::new()
@@ -756,7 +749,6 @@ async fn stop_runtime(
             workbook_id,
             directory: String::new(),
             runtime_port: 0,
-            postgres_port: 0,
             message: "Runtime stopped".to_string(),
         });
     }
@@ -766,7 +758,6 @@ async fn stop_runtime(
         workbook_id,
         directory: String::new(),
         runtime_port: 0,
-        postgres_port: 0,
         message: "Runtime was not running".to_string(),
     })
 }
@@ -783,13 +774,12 @@ async fn get_active_runtime(
         None => return Ok(None),
     };
 
-    if let Some(runtime) = state_guard.runtimes.get(&workbook_id) {
+    if let Some(runtime) = state_guard.workbook_servers.get(&workbook_id) {
         return Ok(Some(DevServerStatus {
             running: true,
             workbook_id,
             directory: runtime.directory.clone(),
             runtime_port: runtime.runtime_port,
-            postgres_port: runtime.postgres_port,
             message: "Runtime is running".to_string(),
         }));
     }
@@ -805,7 +795,7 @@ async fn get_runtime_status(
 ) -> Result<DevServerStatus, String> {
     let state_guard = state.lock().await;
 
-    if let Some(runtime) = state_guard.runtimes.get(&workbook_id) {
+    if let Some(runtime) = state_guard.workbook_servers.get(&workbook_id) {
         // Ping the runtime to verify it's still alive
         let status_url = format!("http://localhost:{}/status", runtime.runtime_port);
         let is_running = match reqwest::get(&status_url).await {
@@ -819,7 +809,6 @@ async fn get_runtime_status(
             workbook_id,
             directory: String::new(),
             runtime_port: runtime.runtime_port,
-            postgres_port: runtime.postgres_port,
             message: if is_running {
                 "Runtime is running".to_string()
             } else {
@@ -832,9 +821,7 @@ async fn get_runtime_status(
     drop(state_guard);
 
     // Fallback: Check if runtime is running on default port (started externally)
-    // Default ports: runtime=55000, postgres=55100
     let default_runtime_port: u16 = PORT_PREFIX as u16 * 1000;
-    let default_postgres_port: u16 = default_runtime_port + 100;
 
     let status_url = format!("http://localhost:{}/status", default_runtime_port);
     if let Ok(resp) = reqwest::get(&status_url).await {
@@ -845,7 +832,6 @@ async fn get_runtime_status(
                 workbook_id,
                 directory: String::new(),
                 runtime_port: default_runtime_port,
-                postgres_port: default_postgres_port,
                 message: "Runtime detected on default port".to_string(),
             });
         }
@@ -856,7 +842,6 @@ async fn get_runtime_status(
         workbook_id,
         directory: String::new(),
         runtime_port: 0,
-        postgres_port: 0,
         message: "Runtime is not running".to_string(),
     })
 }
@@ -870,7 +855,7 @@ async fn runtime_query(
 ) -> Result<serde_json::Value, String> {
     let state_guard = state.lock().await;
 
-    let runtime = state_guard.runtimes.get(&workbook_id)
+    let runtime = state_guard.workbook_servers.get(&workbook_id)
         .ok_or("Runtime not running for this workbook")?;
 
     // Use tRPC endpoint (db.query is a mutation)
@@ -915,7 +900,7 @@ async fn runtime_eval(
 ) -> Result<serde_json::Value, String> {
     let state_guard = state.lock().await;
 
-    let runtime = state_guard.runtimes.get(&workbook_id)
+    let runtime = state_guard.workbook_servers.get(&workbook_id)
         .ok_or("Runtime not running for this workbook")?;
 
     let url = format!("http://localhost:{}/eval", runtime.runtime_port);
@@ -1112,14 +1097,10 @@ async fn restart_server_with_dir(
     let model = get_model_from_store(&app);
 
     // Add database URL if runtime is available (optional - AI works without DB)
-    if let Some(runtime) = state_guard.runtimes.get(&workbook_id) {
-        let db_name = format!("hands_{}", workbook_id.replace('-', "_"));
-        let db_url = format!(
-            "postgres://hands:hands@localhost:{}/{}",
-            runtime.postgres_port, db_name
-        );
-        env_vars.insert("HANDS_DATABASE_URL".to_string(), db_url.clone());
-        println!("Setting HANDS_DATABASE_URL for workbook {}: {}", workbook_id, db_url);
+    // Set runtime port for agent tools to access SQLite via tRPC
+    if let Some(runtime) = state_guard.workbook_servers.get(&workbook_id) {
+        env_vars.insert("HANDS_RUNTIME_PORT".to_string(), runtime.runtime_port.to_string());
+        println!("Setting HANDS_RUNTIME_PORT for workbook {}: {}", workbook_id, runtime.runtime_port);
     }
 
     println!("Restarting OpenCode server with working directory: {}", workbook_dir);
@@ -1157,7 +1138,7 @@ async fn restart_server(
     // Get active workbook info
     let (workbook_id, workbook_dir) = if let Some(ref id) = state_guard.active_workbook_id {
         // Try to get directory from runtime first, fall back to computing it
-        let dir = if let Some(runtime) = state_guard.runtimes.get(id) {
+        let dir = if let Some(runtime) = state_guard.workbook_servers.get(id) {
             runtime.directory.clone()
         } else {
             get_workbook_dir(id)?.to_string_lossy().to_string()
@@ -1423,7 +1404,7 @@ pub fn run() {
             get_workbook,
             update_workbook,
             delete_workbook,
-            start_runtime,
+            start_workbook_server,
             stop_runtime,
             get_runtime_status,
             get_active_runtime,
@@ -1439,13 +1420,13 @@ pub fn run() {
         .setup(|app| {
             let state = Arc::new(Mutex::new(AppState {
                 server: None,
-                runtimes: HashMap::new(),
+                workbook_servers: HashMap::new(),
                 active_workbook_id: None,
             }));
             app.manage(state.clone());
 
             // Start runtime monitor for auto-restart
-            start_runtime_monitor(state.clone());
+            start_workbook_server_monitor(state.clone());
 
             // Build the application menu
             let app_handle = app.handle();
@@ -1576,7 +1557,7 @@ pub fn run() {
 
                     // Force cleanup runtime lockfile and kill any orphaned processes
                     tauri::async_runtime::block_on(async {
-                        force_cleanup_runtime().await;
+                        force_cleanup_workbook_server().await;
                     });
 
                     // Kill OpenCode server port

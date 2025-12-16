@@ -3,14 +3,14 @@
  *
  * Type-safe API for source management and table CRUD.
  * Used by desktop app for end-to-end type safety.
+ *
+ * NOTE: Database operations are being migrated from PGlite to SQLite (via runtime).
+ * Some procedures are temporarily disabled during this transition.
  */
 
-import type { PGlite } from "@electric-sql/pglite";
 import { initTRPC, TRPCError } from "@trpc/server";
 import { z } from "zod";
-import { getSyncManager } from "../sync/manager.js";
-import { createSource, introspectRemotePostgres, listRemoteTables } from "./create.js";
-import { discoverSources, introspectTables } from "./discovery.js";
+import { introspectRemotePostgres, listRemoteTables } from "./create.js";
 
 // ============================================================================
 // Context
@@ -18,8 +18,9 @@ import { discoverSources, introspectTables } from "./discovery.js";
 
 export interface TRPCContext {
   workbookDir: string;
-  db: PGlite | null;
   isDbReady: boolean;
+  /** Runtime URL for db access */
+  runtimeUrl: string;
 }
 
 // ============================================================================
@@ -30,21 +31,61 @@ const t = initTRPC.context<TRPCContext>().create();
 
 const publicProcedure = t.procedure;
 
-// Middleware to ensure DB is ready
+// Middleware to ensure DB is ready (via runtime SQLite)
 const dbProcedure = publicProcedure.use(async ({ ctx, next }) => {
-  if (!ctx.isDbReady || !ctx.db) {
+  if (!ctx.isDbReady) {
     throw new TRPCError({
       code: "PRECONDITION_FAILED",
       message: "Database not ready",
     });
   }
-  return next({
-    ctx: {
-      ...ctx,
-      db: ctx.db,
-    },
-  });
+  return next({ ctx });
 });
+
+// ============================================================================
+// Runtime DB Helpers
+// ============================================================================
+
+interface RuntimeSchema {
+  tables: Array<{
+    name: string;
+    columns: Array<{
+      name: string;
+      type: string;
+      nullable: boolean;
+      isPrimary: boolean;
+    }>;
+  }>;
+}
+
+async function fetchSchema(runtimeUrl: string): Promise<RuntimeSchema> {
+  const response = await fetch(`${runtimeUrl}/db/schema`);
+  if (!response.ok) {
+    throw new TRPCError({
+      code: "INTERNAL_SERVER_ERROR",
+      message: `Failed to get schema: ${await response.text()}`,
+    });
+  }
+  return response.json();
+}
+
+async function executeQuery(
+  runtimeUrl: string,
+  sql: string,
+): Promise<{ rows: unknown[]; changes?: number }> {
+  const response = await fetch(`${runtimeUrl}/db/query`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ sql }),
+  });
+  if (!response.ok) {
+    throw new TRPCError({
+      code: "INTERNAL_SERVER_ERROR",
+      message: `Query failed: ${await response.text()}`,
+    });
+  }
+  return response.json();
+}
 
 // ============================================================================
 // Input Schemas
@@ -103,36 +144,33 @@ export const sourcesRouter = t.router({
   // ==================
 
   sources: t.router({
-    /** List all discovered sources */
-    list: dbProcedure.query(async ({ ctx }) => {
-      const sources = await discoverSources(ctx.workbookDir, ctx.db);
-      return sources.map((s) => ({
-        id: s.id,
-        path: s.path,
-        tables: s.tables.length,
-      }));
+    /** List all discovered sources - NOTE: Migrating to SQLite */
+    list: dbProcedure.query(async (): Promise<{ id: string; path: string; tables: number }[]> => {
+      throw new TRPCError({
+        code: "NOT_IMPLEMENTED",
+        message: "Sources discovery migrating to SQLite",
+      });
     }),
 
-    /** Get a specific source */
-    get: dbProcedure.input(z.object({ source: z.string() })).query(async ({ ctx, input }) => {
-      const sources = await discoverSources(ctx.workbookDir, ctx.db);
-      const source = sources.find((s) => s.id === input.source);
-      if (!source) {
-        throw new TRPCError({ code: "NOT_FOUND", message: "Source not found" });
-      }
-      return source;
+    /** Get a specific source - NOTE: Migrating to SQLite */
+    get: dbProcedure.input(z.object({ source: z.string() })).query(async (): Promise<{
+      id: string;
+      path: string;
+      tables: { name: string }[];
+      definition: Record<string, unknown>;
+    }> => {
+      throw new TRPCError({
+        code: "NOT_IMPLEMENTED",
+        message: "Sources discovery migrating to SQLite",
+      });
     }),
 
-    /** Create a new source */
-    create: dbProcedure.input(createSourceInput).mutation(async ({ ctx, input }) => {
-      const result = await createSource(ctx.workbookDir, ctx.db, input);
-      if (!result.success) {
-        throw new TRPCError({
-          code: "BAD_REQUEST",
-          message: result.error ?? "Failed to create source",
-        });
-      }
-      return result;
+    /** Create a new source - NOTE: Migrating to SQLite */
+    create: dbProcedure.input(createSourceInput).mutation(async (): Promise<{ success: boolean; error?: string; sourcePath?: string }> => {
+      throw new TRPCError({
+        code: "NOT_IMPLEMENTED",
+        message: "Source creation migrating to SQLite",
+      });
     }),
 
     /** List tables in remote Postgres (for source creation UI) */
@@ -173,179 +211,100 @@ export const sourcesRouter = t.router({
   }),
 
   // ==================
-  // Table CRUD
+  // Table CRUD (proxies to runtime /db/* endpoints)
   // ==================
 
   tables: t.router({
-    /** List all tables in the database */
+    /** List all tables */
     listAll: dbProcedure.query(async ({ ctx }) => {
-      const tables = await introspectTables(ctx.db);
-      return tables.map((t) => ({
+      const schema = await fetchSchema(ctx.runtimeUrl);
+      return schema.tables.map((t) => ({
         name: t.name,
-        columnCount: t.schema.columns.length,
-        primaryKey: t.schema.primaryKey,
+        columnCount: t.columns.length,
+        primaryKey: t.columns.filter((c) => c.isPrimary).map((c) => c.name),
       }));
     }),
 
     /** Get table schema */
     schema: dbProcedure.input(z.object({ table: z.string() })).query(async ({ ctx, input }) => {
-      const tables = await introspectTables(ctx.db);
-      const table = tables.find((t) => t.name === input.table);
+      const schema = await fetchSchema(ctx.runtimeUrl);
+      const table = schema.tables.find((t) => t.name === input.table);
       if (!table) {
-        throw new TRPCError({ code: "NOT_FOUND", message: "Table not found" });
+        throw new TRPCError({ code: "NOT_FOUND", message: `Table ${input.table} not found` });
       }
-      return table.schema;
+      return {
+        columns: table.columns.map((c) => ({
+          name: c.name,
+          type: c.type,
+          nullable: c.nullable,
+          isPrimaryKey: c.isPrimary,
+        })),
+        primaryKey: table.columns.filter((c) => c.isPrimary).map((c) => c.name),
+      };
     }),
 
-    /** List rows from a table with pagination */
+    /** List rows */
     list: dbProcedure.input(listTablesInput).query(async ({ ctx, input }) => {
       const { table, limit, offset, sort, select } = input;
+      const cols = select?.length ? select.map((c) => `"${c}"`).join(", ") : "*";
+      let sql = `SELECT ${cols} FROM "${table}"`;
+      if (sort) sql += ` ORDER BY "${sort}"`;
+      sql += ` LIMIT ${limit} OFFSET ${offset}`;
 
-      // Validate table exists
-      const tables = await introspectTables(ctx.db);
-      if (!tables.find((t) => t.name === table)) {
-        throw new TRPCError({ code: "NOT_FOUND", message: "Table not found" });
-      }
-
-      // Build SELECT clause
-      const selectClause = select?.length ? select.join(", ") : "*";
-
-      // Build ORDER BY clause
-      let orderClause = "";
-      if (sort) {
-        const [column, direction] = sort.split(":");
-        const dir = direction?.toLowerCase() === "desc" ? "DESC" : "ASC";
-        orderClause = `ORDER BY ${column} ${dir}`;
-      }
-
-      // Execute query
-      const query = `SELECT ${selectClause} FROM ${table} ${orderClause} LIMIT ${limit} OFFSET ${offset}`;
-      const result = await ctx.db.query(query);
-
-      // Get total count
-      const countResult = await ctx.db.query<{ count: string }>(
-        `SELECT COUNT(*) as count FROM ${table}`,
-      );
-      const total = parseInt(countResult.rows[0]?.count ?? "0", 10);
+      const result = await executeQuery(ctx.runtimeUrl, sql);
+      const countResult = await executeQuery(ctx.runtimeUrl, `SELECT COUNT(*) as count FROM "${table}"`);
+      const total = (countResult.rows[0] as { count: number })?.count ?? 0;
 
       return {
-        rows: result.rows,
+        rows: result.rows as Record<string, unknown>[],
         total,
         limit,
         offset,
       };
     }),
 
-    /** Get a single row by ID */
+    /** Get a single row */
     get: dbProcedure.input(getRowInput).query(async ({ ctx, input }) => {
       const { table, id } = input;
-
-      // Get primary key column
-      const tables = await introspectTables(ctx.db);
-      const tableInfo = tables.find((t) => t.name === table);
-      if (!tableInfo) {
-        throw new TRPCError({ code: "NOT_FOUND", message: "Table not found" });
-      }
-
-      const pkColumn = tableInfo.schema.primaryKey?.[0] ?? "id";
-      const result = await ctx.db.query(`SELECT * FROM ${table} WHERE ${pkColumn} = $1`, [id]);
-
-      if (result.rows.length === 0) {
+      const result = await executeQuery(ctx.runtimeUrl, `SELECT * FROM "${table}" WHERE id = '${id}' LIMIT 1`);
+      if (!result.rows[0]) {
         throw new TRPCError({ code: "NOT_FOUND", message: "Row not found" });
       }
-
-      return result.rows[0];
+      return result.rows[0] as Record<string, unknown>;
     }),
 
     /** Create a new row */
     create: dbProcedure.input(createRowInput).mutation(async ({ ctx, input }) => {
       const { table, data } = input;
-
-      const columns = Object.keys(data);
-      const values = Object.values(data);
-      const placeholders = columns.map((_, i) => `$${i + 1}`);
-
-      const query = `
-          INSERT INTO ${table} (${columns.join(", ")})
-          VALUES (${placeholders.join(", ")})
-          RETURNING *
-        `;
-
-      try {
-        const result = await ctx.db.query(query, values);
-        return result.rows[0];
-      } catch (err) {
-        throw new TRPCError({
-          code: "BAD_REQUEST",
-          message: err instanceof Error ? err.message : "Insert failed",
-        });
-      }
+      const keys = Object.keys(data);
+      const values = Object.values(data).map((v) => (typeof v === "string" ? `'${v}'` : v));
+      const sql = `INSERT INTO "${table}" (${keys.map((k) => `"${k}"`).join(", ")}) VALUES (${values.join(", ")}) RETURNING *`;
+      const result = await executeQuery(ctx.runtimeUrl, sql);
+      return (result.rows[0] ?? {}) as Record<string, unknown>;
     }),
 
     /** Update a row */
     update: dbProcedure.input(updateRowInput).mutation(async ({ ctx, input }) => {
       const { table, id, data } = input;
-
-      // Get primary key column
-      const tables = await introspectTables(ctx.db);
-      const tableInfo = tables.find((t) => t.name === table);
-      if (!tableInfo) {
-        throw new TRPCError({ code: "NOT_FOUND", message: "Table not found" });
-      }
-
-      const pkColumn = tableInfo.schema.primaryKey?.[0] ?? "id";
-
-      const columns = Object.keys(data);
-      const values = Object.values(data);
-      const setClause = columns.map((col, i) => `${col} = $${i + 1}`).join(", ");
-
-      const query = `
-          UPDATE ${table}
-          SET ${setClause}
-          WHERE ${pkColumn} = $${columns.length + 1}
-          RETURNING *
-        `;
-
-      try {
-        const result = await ctx.db.query(query, [...values, id]);
-        if (result.rows.length === 0) {
-          throw new TRPCError({ code: "NOT_FOUND", message: "Row not found" });
-        }
-        return result.rows[0];
-      } catch (err) {
-        if (err instanceof TRPCError) throw err;
-        throw new TRPCError({
-          code: "BAD_REQUEST",
-          message: err instanceof Error ? err.message : "Update failed",
-        });
-      }
+      const sets = Object.entries(data)
+        .map(([k, v]) => `"${k}" = ${typeof v === "string" ? `'${v}'` : v}`)
+        .join(", ");
+      const sql = `UPDATE "${table}" SET ${sets} WHERE id = '${id}' RETURNING *`;
+      const result = await executeQuery(ctx.runtimeUrl, sql);
+      return (result.rows[0] ?? {}) as Record<string, unknown>;
     }),
 
     /** Delete a row */
     delete: dbProcedure.input(deleteRowInput).mutation(async ({ ctx, input }) => {
       const { table, id } = input;
-
-      // Get primary key column
-      const tables = await introspectTables(ctx.db);
-      const tableInfo = tables.find((t) => t.name === table);
-      if (!tableInfo) {
-        throw new TRPCError({ code: "NOT_FOUND", message: "Table not found" });
-      }
-
-      const pkColumn = tableInfo.schema.primaryKey?.[0] ?? "id";
-
-      const result = await ctx.db.query(`DELETE FROM ${table} WHERE ${pkColumn} = $1 RETURNING *`, [
-        id,
-      ]);
-
-      if (result.rows.length === 0) {
-        throw new TRPCError({ code: "NOT_FOUND", message: "Row not found" });
-      }
-
-      return { deleted: true, row: result.rows[0] };
+      const result = await executeQuery(ctx.runtimeUrl, `DELETE FROM "${table}" WHERE id = '${id}' RETURNING *`);
+      return {
+        deleted: result.rows.length > 0,
+        row: (result.rows[0] as Record<string, unknown>) ?? null,
+      };
     }),
 
-    /** Bulk update multiple rows */
+    /** Bulk update */
     bulkUpdate: dbProcedure
       .input(
         z.object({
@@ -360,67 +319,38 @@ export const sourcesRouter = t.router({
       )
       .mutation(async ({ ctx, input }) => {
         const { table, updates } = input;
-
-        // Get primary key column
-        const tables = await introspectTables(ctx.db);
-        const tableInfo = tables.find((t) => t.name === table);
-        if (!tableInfo) {
-          throw new TRPCError({ code: "NOT_FOUND", message: "Table not found" });
+        const rows: Record<string, unknown>[] = [];
+        for (const { id, data } of updates) {
+          const sets = Object.entries(data)
+            .map(([k, v]) => `"${k}" = ${typeof v === "string" ? `'${v}'` : v}`)
+            .join(", ");
+          const sql = `UPDATE "${table}" SET ${sets} WHERE id = '${id}' RETURNING *`;
+          const result = await executeQuery(ctx.runtimeUrl, sql);
+          if (result.rows[0]) rows.push(result.rows[0] as Record<string, unknown>);
         }
-
-        const pkColumn = tableInfo.schema.primaryKey?.[0] ?? "id";
-        const results: unknown[] = [];
-
-        // Execute updates in a transaction-like manner
-        for (const update of updates) {
-          const columns = Object.keys(update.data);
-          const values = Object.values(update.data);
-          const setClause = columns.map((col, i) => `${col} = $${i + 1}`).join(", ");
-
-          const query = `
-            UPDATE ${table}
-            SET ${setClause}
-            WHERE ${pkColumn} = $${columns.length + 1}
-            RETURNING *
-          `;
-
-          const result = await ctx.db.query(query, [...values, update.id]);
-          if (result.rows[0]) {
-            results.push(result.rows[0]);
-          }
-        }
-
-        return { updated: results.length, rows: results };
+        return { updated: rows.length, rows };
       }),
   }),
 
   // ==================
-  // Subscriptions (Electric-SQL)
+  // Subscriptions - Electric-SQL sync is disabled during SQLite migration
   // ==================
 
   subscriptions: t.router({
-    /** Get subscription status for a table */
+    /** Get subscription status - Disabled during migration */
     status: dbProcedure
       .input(z.object({ source: z.string(), table: z.string() }))
-      .query(async ({ ctx, input }) => {
-        try {
-          const syncManager = getSyncManager({
-            db: ctx.db,
-            workbookDir: ctx.workbookDir,
-          });
-          return syncManager.getStatus(input.source, input.table);
-        } catch {
-          return {
-            active: false,
-            shapeId: undefined,
-            lastSyncAt: undefined,
-            rowCount: undefined,
-            error: undefined,
-          };
-        }
+      .query(async () => {
+        return {
+          active: false,
+          shapeId: undefined,
+          lastSyncAt: undefined,
+          rowCount: undefined,
+          error: "Subscriptions disabled during SQLite migration",
+        };
       }),
 
-    /** Start subscription for a table */
+    /** Start subscription - Disabled during migration */
     start: dbProcedure
       .input(
         z.object({
@@ -436,66 +366,28 @@ export const sourcesRouter = t.router({
             .optional(),
         }),
       )
-      .mutation(async ({ ctx, input }) => {
-        const syncManager = getSyncManager({
-          db: ctx.db,
-          workbookDir: ctx.workbookDir,
+      .mutation(async () => {
+        throw new TRPCError({
+          code: "NOT_IMPLEMENTED",
+          message: "Subscriptions disabled during SQLite migration",
         });
-
-        // Get subscription config from source definition if not provided
-        let config = input.config;
-        if (!config) {
-          const sources = await discoverSources(ctx.workbookDir, ctx.db);
-          const source = sources.find((s) => s.id === input.source);
-          const tableDef = source?.definition.tables?.[input.table];
-          if (!tableDef?.subscription) {
-            throw new TRPCError({
-              code: "BAD_REQUEST",
-              message: `No subscription config found for ${input.source}.${input.table}`,
-            });
-          }
-          config = tableDef.subscription;
-        }
-
-        return syncManager.startSubscription(input.source, input.table, config!);
       }),
 
-    /** Stop subscription for a table */
+    /** Stop subscription - Disabled during migration */
     stop: dbProcedure
       .input(z.object({ source: z.string(), table: z.string() }))
-      .mutation(async ({ ctx, input }) => {
-        const syncManager = getSyncManager({
-          db: ctx.db,
-          workbookDir: ctx.workbookDir,
-        });
-        await syncManager.stopSubscription(input.source, input.table);
+      .mutation(async () => {
         return { stopped: true };
       }),
 
-    /** Get all active subscriptions */
-    listActive: dbProcedure.query(async ({ ctx }) => {
-      try {
-        const syncManager = getSyncManager({
-          db: ctx.db,
-          workbookDir: ctx.workbookDir,
-        });
-        return syncManager.getActiveSubscriptions();
-      } catch {
-        return [];
-      }
+    /** Get all active subscriptions - Returns empty during migration */
+    listActive: dbProcedure.query(async () => {
+      return [];
     }),
 
-    /** Get sync statistics */
-    stats: dbProcedure.query(async ({ ctx }) => {
-      try {
-        const syncManager = getSyncManager({
-          db: ctx.db,
-          workbookDir: ctx.workbookDir,
-        });
-        return syncManager.getStats();
-      } catch {
-        return { total: 0, active: 0, errored: 0, inactive: 0 };
-      }
+    /** Get sync statistics - Returns zeros during migration */
+    stats: dbProcedure.query(async () => {
+      return { total: 0, active: 0, errored: 0, inactive: 0 };
     }),
   }),
 });

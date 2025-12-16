@@ -10,12 +10,15 @@
  * so we only regenerate types when DDL changes occur (not on insert/update/delete).
  */
 
-import { execSync } from "child_process";
-import { createHash } from "crypto";
+import { execSync } from "node:child_process";
+import { createHash } from "node:crypto";
+import fs from "node:fs";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 import BetterSqlite3 from "better-sqlite3";
-import fs from "fs";
-import path from "path";
 import type { Plugin } from "vite";
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 interface DbTypesPluginOptions {
   workbookPath: string;
@@ -37,9 +40,22 @@ export function dbTypesPlugin(options: DbTypesPluginOptions): Plugin {
     },
 
     configureServer(server) {
+      // Warm up the Durable Object on server start to initialize the SQLite database
+      server.httpServer?.once("listening", async () => {
+        const address = server.httpServer?.address();
+        const port = typeof address === "object" ? address?.port ?? 5173 : 5173;
+
+        try {
+          // Hit the schema endpoint to trigger DO initialization
+          await fetch(`http://localhost:${port}/db/schema`);
+          // Generate types immediately after warmup
+          await generateDbTypesIfChanged(workbookPath);
+        } catch {
+          // Server might not be fully ready, types will generate on next poll
+        }
+      });
+
       // Poll every 2 seconds for schema changes
-      // This is more efficient than watching file changes since we only
-      // regenerate when the actual schema (DDL) changes, not on every write
       pollInterval = setInterval(async () => {
         await generateDbTypesIfChanged(workbookPath);
       }, 2000);
@@ -76,7 +92,10 @@ function getSchemaHash(sqliteFile: string): string | null {
 }
 
 async function generateDbTypesIfChanged(workbookPath: string): Promise<void> {
-  const doStatePath = path.join(workbookPath, ".wrangler/state/v3/do");
+  // Check .hands/db (current) or legacy .wrangler path
+  const dbPath = path.join(workbookPath, ".hands/db");
+  const legacyPath = path.join(workbookPath, ".wrangler/state/v3/do");
+  const doStatePath = fs.existsSync(dbPath) ? dbPath : legacyPath;
   const outputPath = path.join(workbookPath, ".hands/db.d.ts");
 
   // Find sqlite files in the DO state directory
@@ -112,12 +131,13 @@ export interface DB {}
   lastSchemaHash = currentHash;
 
   try {
-    // Run kysely-codegen
+    // Run kysely-codegen from runtime directory (has better-sqlite3 installed)
+    const runtimeDir = path.resolve(__dirname, "..");
     execSync(
       `npx kysely-codegen --dialect sqlite --url "${sqliteFile}" --out-file "${outputPath}"`,
       {
         stdio: "pipe",
-        cwd: workbookPath,
+        cwd: runtimeDir,
       }
     );
     console.log(`[db-types] Types written to ${outputPath}`);

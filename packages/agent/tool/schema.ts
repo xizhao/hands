@@ -7,9 +7,10 @@ interface TableInfo {
 }
 
 const schema = tool({
-  description: `View the full database schema - all tables with their columns, types, and constraints.
+  description: `View the SQLite database schema - all tables with their columns and types.
 
-Use this tool BEFORE writing SQL queries to understand what data is available.`,
+Use this tool BEFORE writing SQL queries to understand what data is available.
+After viewing the schema, use the sql tool to query the data.`,
 
   args: {},
 
@@ -21,7 +22,7 @@ Use this tool BEFORE writing SQL queries to understand what data is available.`,
       if (rows.length === 0) {
         return `No tables found in the database.
 
-The database is empty. Use the hands_sql tool to create tables, or import data via the Hands app.`;
+The database is empty. Use the sql tool to create tables, or import data via the Hands app.`;
       }
 
       // Group by table - schema returns { table_name, columns: [...] }

@@ -10,7 +10,8 @@ import { trpc } from "@/lib/trpc";
 import { cn } from "@/lib/utils";
 
 export function DatabasePanel() {
-  const { schema, isDbBooting, isStarting } = useRuntimeState();
+  const { manifest, isDbBooting, isStarting } = useRuntimeState();
+  const tables = manifest?.tables ?? [];
   const isLoading = isStarting || isDbBooting;
   const [expandedTable, setExpandedTable] = useState<string | null>(null);
   const [tableData, setTableData] = useState<Record<string, unknown[] | null>>({});
@@ -30,7 +31,7 @@ export function DatabasePanel() {
       setLoadingTable(tableName);
       try {
         const result = await dbQuery.mutateAsync({
-          query: `SELECT * FROM "${tableName}" LIMIT 100`,
+          sql: `SELECT * FROM "${tableName}" LIMIT 100`,
         });
         setTableData((prev) => ({ ...prev, [tableName]: result.rows }));
       } catch (err) {
@@ -46,7 +47,7 @@ export function DatabasePanel() {
     return <div className="p-4 text-sm text-muted-foreground">Loading tables...</div>;
   }
 
-  if (!schema || schema.length === 0) {
+  if (tables.length === 0) {
     return (
       <div className="p-4">
         <div className="flex flex-col items-center justify-center py-8 text-center">
@@ -64,29 +65,29 @@ export function DatabasePanel() {
     <div className="flex flex-col h-full">
       <ScrollArea className="flex-1">
         <div className="p-2 space-y-1">
-          {schema.map((table) => (
-            <div key={table.table_name}>
+          {tables.map((table) => (
+            <div key={table.name}>
               {/* Table header */}
               <button
-                onClick={() => handleExpandTable(table.table_name)}
+                onClick={() => handleExpandTable(table.name)}
                 className={cn(
                   "w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-left",
                   "text-sm hover:bg-accent transition-colors",
-                  expandedTable === table.table_name && "bg-accent",
+                  expandedTable === table.name && "bg-accent",
                 )}
               >
-                {expandedTable === table.table_name ? (
+                {expandedTable === table.name ? (
                   <CaretDown weight="bold" className="h-3 w-3 text-muted-foreground shrink-0" />
                 ) : (
                   <CaretRight weight="bold" className="h-3 w-3 text-muted-foreground shrink-0" />
                 )}
                 <Table weight="duotone" className="h-4 w-4 text-blue-400 shrink-0" />
-                <span className="flex-1 truncate font-medium">{table.table_name}</span>
+                <span className="flex-1 truncate font-medium">{table.name}</span>
                 <span className="text-xs text-muted-foreground">{table.columns.length} cols</span>
               </button>
 
               {/* Expanded table view */}
-              {expandedTable === table.table_name && (
+              {expandedTable === table.name && (
                 <div className="mt-1 ml-5 border-l border-border pl-2">
                   {/* Columns */}
                   <div className="mb-2">
@@ -94,12 +95,8 @@ export function DatabasePanel() {
                       Columns
                     </div>
                     {table.columns.map((col) => (
-                      <div key={col.name} className="flex items-center gap-2 px-2 py-0.5 text-xs">
-                        <span className="text-foreground">{col.name}</span>
-                        <span className="text-muted-foreground/60">{col.type}</span>
-                        {!col.nullable && (
-                          <span className="text-[9px] text-orange-400">NOT NULL</span>
-                        )}
+                      <div key={col} className="flex items-center gap-2 px-2 py-0.5 text-xs">
+                        <span className="text-foreground">{col}</span>
                       </div>
                     ))}
                   </div>
@@ -109,24 +106,24 @@ export function DatabasePanel() {
                     <div className="text-[10px] uppercase text-muted-foreground font-medium px-2 py-1">
                       Data Preview
                     </div>
-                    {loadingTable === table.table_name ? (
+                    {loadingTable === table.name ? (
                       <div className="flex items-center gap-2 px-2 py-2 text-xs text-muted-foreground">
                         <CircleNotch weight="bold" className="h-3 w-3 animate-spin" />
                         Loading...
                       </div>
-                    ) : tableData[table.table_name]?.length === 0 ? (
+                    ) : tableData[table.name]?.length === 0 ? (
                       <div className="px-2 py-2 text-xs text-muted-foreground">No data</div>
-                    ) : tableData[table.table_name] ? (
+                    ) : tableData[table.name] ? (
                       <div className="overflow-x-auto">
                         <table className="w-full text-[11px]">
                           <thead>
                             <tr className="border-b border-border">
                               {table.columns.slice(0, 4).map((col) => (
                                 <th
-                                  key={col.name}
+                                  key={col}
                                   className="px-2 py-1 text-left font-medium text-muted-foreground"
                                 >
-                                  {col.name}
+                                  {col}
                                 </th>
                               ))}
                               {table.columns.length > 4 && (
@@ -137,11 +134,11 @@ export function DatabasePanel() {
                             </tr>
                           </thead>
                           <tbody>
-                            {tableData[table.table_name]?.slice(0, 5).map((row, idx) => (
+                            {tableData[table.name]?.slice(0, 5).map((row, idx) => (
                               <tr key={idx} className="border-b border-border/50">
                                 {table.columns.slice(0, 4).map((col) => (
-                                  <td key={col.name} className="px-2 py-1 truncate max-w-[80px]">
-                                    {String((row as Record<string, unknown>)[col.name] ?? "")}
+                                  <td key={col} className="px-2 py-1 truncate max-w-[80px]">
+                                    {String((row as Record<string, unknown>)[col] ?? "")}
                                   </td>
                                 ))}
                                 {table.columns.length > 4 && (
@@ -151,9 +148,9 @@ export function DatabasePanel() {
                             ))}
                           </tbody>
                         </table>
-                        {(tableData[table.table_name]?.length ?? 0) > 5 && (
+                        {(tableData[table.name]?.length ?? 0) > 5 && (
                           <div className="px-2 py-1 text-[10px] text-muted-foreground">
-                            +{(tableData[table.table_name]?.length ?? 0) - 5} more rows
+                            +{(tableData[table.name]?.length ?? 0) - 5} more rows
                           </div>
                         )}
                       </div>

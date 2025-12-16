@@ -1,16 +1,8 @@
 /**
  * SQLite Module
  *
- * Utilities for SQLite schema introspection and type generation.
+ * TRPC router for SQLite database operations.
  */
-
-export {
-  generateSchema,
-  generateSchemaSQL,
-  generateSchemaTs,
-  introspectSchema,
-  type SQLiteDatabase,
-} from "./schema-gen.js";
 
 export {
   sqliteTRPCRouter,

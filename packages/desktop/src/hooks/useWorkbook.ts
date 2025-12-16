@@ -9,7 +9,6 @@ interface TauriRuntimeStatus {
   workbook_id: string;
   directory: string;
   runtime_port: number;
-  postgres_port: number;
   message: string;
 }
 
@@ -212,7 +211,6 @@ export function useOpenWorkbook() {
         workbook_id: workbook.id,
         directory: workbook.directory,
         runtime_port: 0,
-        postgres_port: 0,
         message: "Starting...",
       });
 
@@ -242,12 +240,12 @@ export function useOpenWorkbook() {
 
       // 5. Start runtime (provides database, blocks, etc.)
       try {
-        console.log("[useOpenWorkbook] Starting runtime for:", workbook.id);
-        const status = await invoke<TauriRuntimeStatus>("start_runtime", {
+        console.log("[useOpenWorkbook] Starting workbook server for:", workbook.id);
+        const status = await invoke<TauriRuntimeStatus>("start_workbook_server", {
           workbookId: workbook.id,
           directory: workbook.directory,
         });
-        console.log("[useOpenWorkbook] Runtime started:", status.runtime_port);
+        console.log("[useOpenWorkbook] Workbook server started:", status.runtime_port);
         queryClient.setQueryData(["active-runtime"], status);
       } catch (err) {
         console.error("[useOpenWorkbook] Failed to start runtime:", err);
@@ -269,14 +267,14 @@ export function useOpenWorkbook() {
 
 // Note: useRuntimeHealth moved to useRuntimeState.ts
 
-// Start runtime
-export function useStartRuntime() {
+// Start workbook server
+export function useStartWorkbookServer() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationKey: ["runtime", "start"],
+    mutationKey: ["workbook-server", "start"],
     mutationFn: ({ workbookId, directory }: { workbookId: string; directory: string }) =>
-      invoke<TauriRuntimeStatus>("start_runtime", { workbookId, directory }),
+      invoke<TauriRuntimeStatus>("start_workbook_server", { workbookId, directory }),
     onSuccess: (status) => {
       queryClient.setQueryData(["runtime-status", status.workbook_id], status);
     },
@@ -357,13 +355,7 @@ export function useWorkbookDatabase(workbookId: string | null) {
 // Note: useDbSchema, useRuntimeStatus, useDbReady, usePrefetchRuntimeData
 // moved to useRuntimeState.ts
 
-/**
- * Save database snapshot (dumps to db.tar.gz)
- * @deprecated Use useDatabase().save instead - it handles DB readiness checks
- */
-export function useSaveDatabase() {
-  return trpc.db.save.useMutation();
-}
+// Note: useSaveDatabase removed - SQLite in runtime handles persistence automatically
 
 // ============================================================================
 // Block Content Hooks

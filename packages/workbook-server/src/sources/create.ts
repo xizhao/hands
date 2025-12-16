@@ -9,7 +9,6 @@
  * 2. Introspect schema for selected tables
  * 3. Create matching tables in local PGlite
  * 4. Generate source.ts with subscription config
- * 5. Regenerate .hands/schema.ts
  */
 
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
