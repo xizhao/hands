@@ -44,7 +44,7 @@ function getOrCreateDb(): Kysely<DB> {
     }
     kyselyInstance = createDb<DB>(databaseBinding, "hands-db");
   }
-  return kyselyInstance;
+  return kyselyInstance!;
 }
 
 /**

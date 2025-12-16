@@ -3,6 +3,7 @@ import tailwindcss from "@tailwindcss/vite";
 import path from "path";
 import { redwood } from "rwsdk/vite";
 import { defineConfig } from "vite";
+import { blocksPlugin } from "./src/vite-plugin-blocks";
 import { dbTypesPlugin } from "./src/vite-plugin-db-types";
 import { pagesPlugin } from "./src/vite-plugin-pages";
 import { tunnelPlugin } from "./src/vite-plugin-tunnel";
@@ -35,9 +36,32 @@ export default defineConfig({
         noDiscovery: true,
       },
     },
+    worker: {
+      optimizeDeps: {
+        // Pre-bundle CJS packages that use `exports` (not compatible with ESM worker)
+        include: [
+          "is-hotkey",
+          "slate",
+          "slate-dom",
+          "slate-react",
+        ],
+      },
+    },
+  },
+  ssr: {
+    // Force bundling of CJS packages that use `exports` (not compatible with ESM worker)
+    noExternal: [
+      "is-hotkey",
+      "slate",
+      "slate-dom",
+      "slate-react",
+      /^@platejs\//,
+      "platejs",
+    ],
   },
   plugins: [
     tunnelPlugin({ enabled: isDev }),
+    blocksPlugin({ workbookPath }),
     dbTypesPlugin({ workbookPath }),
     pagesPlugin({ workbookPath }),
     cloudflare({
@@ -62,8 +86,8 @@ export default defineConfig({
       // Hands runtime
       "@hands/db": path.resolve(__dirname, "src/db/dev.ts"),
       "@hands/db/types": path.join(workbookPath, ".hands/db.d.ts"),
+      "@hands/runtime": path.resolve(__dirname, "src/types/index.ts"),
       "@hands/pages": path.join(workbookPath, ".hands/pages/index.tsx"),
-      "@hands/stdlib": path.resolve(__dirname, "../stdlib/src/index.ts"),
       // Shared deps from runtime (workbook imports these but doesn't install them)
       "platejs/static": path.resolve(__dirname, "node_modules/platejs/dist/static/index.js"),
       "platejs/react": path.resolve(__dirname, "node_modules/platejs/dist/react/index.js"),

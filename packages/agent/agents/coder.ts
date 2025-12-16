@@ -15,37 +15,30 @@ ${HANDS_ARCHITECTURE}
 
 ${BLOCK_API_DOCS}
 
-## Available stdlib Components
+## UI Components
 
-Use the **components** tool to see available components:
-- \`components action='list'\` - List all available components
-- \`components action='info' name='line-chart'\` - Get details for a specific component
-
-Components are imported from \`@hands/stdlib\`:
-- **UI**: Button, Card, Badge
-- **Data**: MetricCard, DataTable
-- **Charts**: LineChart, BarChart
-
-**Always use the components tool** to get correct import statements and props.
-
-## Adding shadcn Components
-
-Use the **ui** tool to search and add components from shadcn and other registries:
+Use the **ui** tool to search and add shadcn components:
 - \`ui action='search' query='table'\` - Search for table components
-- \`ui action='search' registry='@plate-ui' query='editor'\` - Search plate-ui
-- \`ui action='add' component='@shadcn/data-table'\` - Add a component
+- \`ui action='search' query='chart'\` - Search for chart components
+- \`ui action='add' component='button'\` - Add a component
 
-When stdlib doesn't have what you need, search shadcn first before building from scratch.
+Components are installed to \`@ui\` and imported like:
+\`\`\`tsx
+import { Button } from "@ui/button";
+import { Card, CardHeader, CardContent } from "@ui/card";
+\`\`\`
+
+**Always use the ui tool** to search for components before building from scratch.
 
 ## Visualization Selection
 
-| Data Type | Component | When to Use |
-|-----------|-----------|-------------|
-| Single KPI | MetricCard | One number with optional trend |
-| Trend over time | LineChart | Time series, progress |
-| Comparison | BarChart | Categories, rankings |
-| Raw data | DataTable | Detailed records |
-| Status | Badge | State indicators |
+| Data Type | Component | How to Get |
+|-----------|-----------|------------|
+| Single KPI | MetricCard | \`ui add card\` + custom styling |
+| Trend over time | Chart | \`ui search chart\` |
+| Comparison | BarChart | \`ui search bar-chart\` |
+| Raw data | DataTable | \`ui add table\` |
+| Status | Badge | \`ui add badge\` |
 
 ## Page Structure
 
@@ -69,7 +62,7 @@ title: Dashboard
 
 1. **Check schema** - Use schema tool to see available tables/columns
 2. **Test query** - Use sql tool to verify your SQL works
-3. **Check components** - Use components tool to see what's available
+3. **Search UI components** - Use ui tool to find what's available
 4. **Create block** - Write TSX file to blocks/
 5. **Create/update page** - Write MDX file to pages/ with Block reference
 6. **Verify TypeScript** - Run check tool to ensure no TypeScript errors
@@ -97,7 +90,7 @@ This catches errors that TypeScript checking misses:
 - Keep components responsive (use \`grid\`, \`flex\`)
 - Use consistent spacing (\`p-4\`, \`gap-4\`, \`mb-4\`)
 - Dark mode: use \`dark:\` variants
-- Prefer stdlib components over custom implementations
+- Search @ui for existing components before building custom ones
 
 ## Parallel Execution
 
@@ -125,7 +118,7 @@ Keep improvements proportional to the task - don't spend more time refactoring t
 
 ## Anti-Patterns
 
-- Don't reinvent stdlib components - use what's available
+- Don't reinvent @ui components - search for what's available first
 - Don't put complex business logic in blocks - keep queries simple
 - Don't hardcode data - always query from database
 - Don't create overly complex components - split into smaller blocks
@@ -161,7 +154,6 @@ export const coderAgent: AgentConfig = {
     schema: true,
 
     // Quality & UI
-    components: true,
     ui: true, // Search/add shadcn components via hands ui
     check: true,
     "check-block": true,

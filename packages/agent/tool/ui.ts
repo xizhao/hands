@@ -2,8 +2,8 @@
  * UI tool - search and add components via hands ui (shadcn proxy)
  */
 
-import { execSync } from "node:child_process";
 import { tool } from "@opencode-ai/plugin";
+import { execSync } from "node:child_process";
 
 const ui = tool({
   description: `Search and add UI components from shadcn and other registries.
@@ -14,7 +14,6 @@ Actions:
 
 Registries:
 - @shadcn - Official shadcn/ui components
-- @plate-ui - Plate editor components
 - @magicui - Animation components
 
 Examples:
@@ -23,8 +22,14 @@ Examples:
 
   args: {
     action: tool.schema.enum(["search", "add"]).describe("Action to perform"),
-    query: tool.schema.string().optional().describe("Search query for 'search' action"),
-    registry: tool.schema.string().optional().describe("Registry to search (default: @shadcn)"),
+    query: tool.schema
+      .string()
+      .optional()
+      .describe("Search query for 'search' action"),
+    registry: tool.schema
+      .string()
+      .optional()
+      .describe("Registry to search (default: @shadcn)"),
     component: tool.schema
       .string()
       .optional()
@@ -68,10 +73,13 @@ Examples:
           return "Error: component required for 'add' action. Example: component='@shadcn/button'";
         }
 
+        // Run from workbook directory where components.json lives
+        const workbookDir = process.cwd();
         const cmd = `hands ui add ${component}`;
         const result = execSync(cmd, {
           encoding: "utf-8",
           timeout: 60000,
+          cwd: workbookDir,
           stdio: ["pipe", "pipe", "pipe"],
         });
 

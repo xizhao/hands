@@ -11,6 +11,9 @@ import {
 } from "../lib/rsc";
 
 // Preload all blocks using import.meta.glob
+// Note: This is statically transformed by Vite at build time.
+// When blocks are added/removed, the Vite plugin invalidates this module
+// to trigger re-transform with updated glob results.
 const blockModules = import.meta.glob<{ default: React.FC<any> }>(
   "@/blocks/*.tsx",
   { eager: false }

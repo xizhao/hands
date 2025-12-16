@@ -355,6 +355,47 @@ export interface InitWorkbookOptions {
 }
 
 /**
+ * Generate tsconfig.json content with paths to the runtime package.
+ * Uses relative paths from workbook to runtime for portability.
+ */
+export function generateWorkbookTsConfig(workbookDir: string): string {
+  const runtimePath = getRuntimeSourcePath();
+  const { relative } = require("node:path");
+
+  // Compute relative path from workbook to runtime
+  const relativeRuntimePath = relative(workbookDir, runtimePath);
+
+  const tsconfig = {
+    compilerOptions: {
+      target: "ES2022",
+      lib: ["ES2022"],
+      module: "ESNext",
+      moduleResolution: "bundler",
+      strict: true,
+      esModuleInterop: true,
+      skipLibCheck: true,
+      jsx: "react-jsx",
+      jsxImportSource: "react",
+      baseUrl: ".",
+      paths: {
+        // Database access
+        "@hands/db": [`${relativeRuntimePath}/src/db/dev.ts`],
+        "@hands/db/types": [".hands/db.d.ts"],
+        // Runtime types (BlockFn, BlockMeta, etc.)
+        "@hands/runtime": [`${relativeRuntimePath}/src/types/index.ts`],
+        // UI components
+        "@ui/*": ["ui/*"],
+        "@ui/lib/utils": [`${relativeRuntimePath}/src/lib/utils.ts`],
+      },
+    },
+    include: ["blocks/**/*", "pages/**/*", "sources/**/*", "ui/**/*", "lib/**/*"],
+    exclude: ["node_modules", ".hands"],
+  };
+
+  return JSON.stringify(tsconfig, null, 2);
+}
+
+/**
  * Initialize a new workbook with standard structure and starter files.
  * This is the single source of truth for workbook creation - used by CLI and desktop app.
  */
@@ -369,9 +410,9 @@ export async function initWorkbook(options: InitWorkbookOptions): Promise<void> 
   mkdirSync(join(directory, "migrations"), { recursive: true });
   mkdirSync(join(directory, "lib"), { recursive: true });
   mkdirSync(join(directory, "sources"), { recursive: true });
+  mkdirSync(join(directory, "ui"), { recursive: true });
 
   // Create package.json with hands config embedded
-  const stdlibPath = getStdlibPath();
   const packageJson = {
     name: `@hands/${slug}`,
     version: "0.0.1",
@@ -392,7 +433,6 @@ export async function initWorkbook(options: InitWorkbookOptions): Promise<void> 
       dev: { hmr: true },
     },
     dependencies: {
-      "@hands/stdlib": `file:${stdlibPath}`,
       react: "^19.0.0",
       "react-dom": "^19.0.0",
     },
@@ -404,26 +444,8 @@ export async function initWorkbook(options: InitWorkbookOptions): Promise<void> 
   };
   writeFileSync(join(directory, "package.json"), `${JSON.stringify(packageJson, null, 2)}\n`);
 
-  // Create tsconfig.json
-  const tsconfig = {
-    compilerOptions: {
-      target: "ESNext",
-      module: "ESNext",
-      moduleResolution: "bundler",
-      strict: true,
-      esModuleInterop: true,
-      skipLibCheck: true,
-      jsx: "react-jsx",
-      jsxImportSource: "react",
-      baseUrl: ".",
-      paths: {
-        "@hands/db": [".hands/src/worker.tsx"],
-        "@hands/db/types": [".hands/types.ts"],
-      },
-    },
-    include: ["blocks/**/*", "pages/**/*", "lib/**/*", ".hands/src/**/*", ".hands/types.ts"],
-  };
-  writeFileSync(join(directory, "tsconfig.json"), `${JSON.stringify(tsconfig, null, 2)}\n`);
+  // Create tsconfig.json with paths to runtime
+  writeFileSync(join(directory, "tsconfig.json"), `${generateWorkbookTsConfig(directory)}\n`);
 
   // Create .gitignore
   const gitignore = `node_modules/
@@ -432,10 +454,4 @@ db/
 *.log
 `;
   writeFileSync(join(directory, ".gitignore"), gitignore);
-
-  // Create lib/db.ts helper
-  const dbHelper = `// Database helper - re-exported from context for convenience
-export type { BlockContext, DbContext, BlockFn, BlockProps } from "@hands/stdlib"
-`;
-  writeFileSync(join(directory, "lib/db.ts"), dbHelper);
 }

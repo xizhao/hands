@@ -47,11 +47,11 @@ const RULES: Rule[] = [
     message: "ctx.sql is deprecated. Use `import { sql } from '@hands/db'`.",
   },
 
-  // Hints about stdlib (not errors, just suggestions)
+  // Hints about @ui components (not errors, just suggestions)
   {
-    id: "consider-stdlib",
+    id: "consider-ui-components",
     pattern: /import\s+.*from\s+["']\.\/.*\.client["']/,
-    message: "Consider using @hands/stdlib components instead of custom client components.",
+    message: "Consider using @ui components (shadcn) instead of custom client components.",
   },
 ];
 

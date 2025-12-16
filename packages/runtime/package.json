@@ -29,7 +29,7 @@
     "@tailwindcss/vite": "^4.1.18",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
-    "kysely": "^0.28.9",
+    "kysely": "0.28.8",
     "kysely-d1": "^0.4.0",
     "lucide-react": "^0.561.0",
     "platejs": "^52.0.15",

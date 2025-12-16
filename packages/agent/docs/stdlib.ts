@@ -1,16 +1,16 @@
 /**
- * Stdlib documentation for agents
+ * Block documentation for agents
  *
  * Uses Bun's text loader to import raw type definitions,
  * ensuring docs stay in sync with actual types.
  */
 
 // @ts-expect-error - Bun text import
-import blockTypesRaw from "../../stdlib/src/types/block.ts" with { type: "text" };
+import blockTypesRaw from "../../runtime/src/types/block.ts" with { type: "text" };
 
 /**
  * Raw TypeScript source for block types
- * Auto-synced from @hands/stdlib
+ * Auto-synced from @hands/runtime
  */
 export const BLOCK_TYPES_SOURCE: string = blockTypesRaw;
 
@@ -23,8 +23,7 @@ export const BLOCK_API_DOCS = `
 Every block follows this exact pattern:
 
 \`\`\`typescript
-import type { BlockFn, BlockMeta } from "@hands/stdlib";
-import { LineChart } from "@hands/stdlib";
+import type { BlockFn, BlockMeta } from "@hands/runtime";
 import { sql } from "@hands/db";
 
 export const meta: BlockMeta = {
@@ -44,7 +43,11 @@ const MyBlock: BlockFn<{ limit?: number }> = async ({ limit = 10 }) => {
   return (
     <div className="p-4">
       <h2 className="text-lg font-bold mb-4">Title</h2>
-      <LineChart data={data} xKey="name" yKey="value" />
+      <ul>
+        {data.map((row) => (
+          <li key={row.name}>{row.name}: {row.value}</li>
+        ))}
+      </ul>
     </div>
   );
 };
@@ -56,7 +59,10 @@ export default MyBlock;
 - \`meta: BlockMeta\` - Title, description, refreshable flag
 - \`default\` - The BlockFn component
 
-**IMPORTANT**: Database access is via \`import { sql } from '@hands/db'\`, not via props.
+**Imports:**
+- Types from \`@hands/runtime\`: BlockFn, BlockMeta
+- Database from \`@hands/db\`: sql
+- UI components from \`@ui\`: Card, Button, etc. (install with ui tool)
 
 ## Auto-Generated Types with pgtyped
 
@@ -89,6 +95,7 @@ export const BLOCK_CONTEXT_DOCS = `
 Import from @hands/db directly in your block:
 
 \`\`\`typescript
+import type { BlockFn } from "@hands/runtime";
 import { sql } from "@hands/db";
 
 const MyBlock: BlockFn = async () => {
@@ -104,6 +111,7 @@ const MyBlock: BlockFn = async () => {
 Access URL/form parameters via the params helper:
 
 \`\`\`typescript
+import type { BlockFn } from "@hands/runtime";
 import { sql, params } from "@hands/db";
 
 const MyBlock: BlockFn = async () => {
@@ -113,7 +121,7 @@ const MyBlock: BlockFn = async () => {
 };
 \`\`\`
 
-### Type Definitions (from @hands/stdlib)
+### Type Definitions (from @hands/runtime)
 
 \`\`\`typescript
 ${blockTypesRaw}
@@ -137,6 +145,7 @@ const MyBlock: BlockFn = async ({ ctx }) => {
 ### CORRECT: Import sql from @hands/db
 \`\`\`typescript
 // DO THIS - import sql directly
+import type { BlockFn } from "@hands/runtime";
 import { sql } from "@hands/db";
 
 const MyBlock: BlockFn = async () => {
@@ -159,6 +168,7 @@ const MyBlock: BlockFn = async () => {
 
 ### CORRECT: Query inside the component function
 \`\`\`typescript
+import type { BlockFn } from "@hands/runtime";
 import { sql } from "@hands/db";
 
 const MyBlock: BlockFn = async () => {
@@ -167,4 +177,5 @@ const MyBlock: BlockFn = async () => {
   return <UserList users={users} />;
 };
 \`\`\`
+
 `;

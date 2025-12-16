@@ -40,5 +40,10 @@
   ],
   "dependencies": {
     "@napi-rs/wasm-runtime": "^1.1.0"
+  },
+  "overrides": {
+    "kysely": "0.28.8",
+    "@types/react": "19.1.2",
+    "@types/react-dom": "19.1.2"
   }
 }

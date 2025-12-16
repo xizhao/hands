@@ -39,7 +39,7 @@ Top customers:
 Single-file components: query + view together. One concept = one file.
 
 \`\`\`tsx
-import { BarChart } from "@hands/stdlib";
+
 import { sql } from "@hands/db";
 
 export default async function RevenueChart({ period = "30d" }) {
@@ -53,7 +53,11 @@ export default async function RevenueChart({ period = "30d" }) {
   return (
     <div className="p-4">
       <h3 className="font-semibold mb-2">Revenue</h3>
-      <BarChart data={data} xKey="day" yKey="revenue" />
+      <ul>
+        {data.map((row) => (
+          <li key={row.day}>{row.day}: {row.revenue}</li>
+        ))}
+      </ul>
     </div>
   );
 }
@@ -62,7 +66,8 @@ export default async function RevenueChart({ period = "30d" }) {
 **Block rules:**
 - Read-only (no INSERT/UPDATE/DELETE - use Actions for writes)
 - One file per concept
-- Use \`@hands/stdlib\` for charts, tables, interactive UI
+- Use the ui tool to install interactive components to @ui, and its search feature "hands ui search @shadcn -q ..." to search for components
+- Style with Tailwind CSS
 
 ### Tables (SQLite)
 Data lives in SQLite. Query with \`sql\` tagged template:
@@ -86,19 +91,19 @@ workbook/actions/
                    write              read-only
 \`\`\`
 
-### stdlib Components
+### UI Components
 
-Use \`components\` tool to see available:
-- **Charts**: LineChart, BarChart, AreaChart, PieChart
-- **Data**: DataTable, MetricCard
-- **UI**: Card, Badge, Button
+Use the \`ui\` tool to install shadcn components to \`@ui\`:
+- Search: \`ui search "chart"\` to find components
+- Install: \`ui add button card\` to install
+- Import: \`import { Button } from "@ui/button"\`
 
 ### Quick Reference
 
 | Want to... | Use |
 |------------|-----|
 | Show data to users | Page with Blocks |
-| Query + visualize | Block with sql + stdlib |
+| Query + visualize | Block with sql |
 | Write/sync data | Action |
+| Interactive UI | @ui components |
 `;
-

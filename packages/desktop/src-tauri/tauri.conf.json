@@ -45,8 +45,7 @@
     "active": true,
     "targets": "all",
     "resources": {
-      "resources/opencode": "opencode",
-      "../../../docs/dist": "docs"
+      "resources/opencode": "opencode"
     },
     "icon": [
       "icons/32x32.png",
