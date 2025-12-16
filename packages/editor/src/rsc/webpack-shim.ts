@@ -33,30 +33,39 @@ export function getRuntimePort(): number | null {
 }
 
 /**
- * Convert file path to Vite-loadable URL via runtime proxy
- * Absolute paths use /vite-proxy/@fs/, relative paths use /client-modules/
+ * Convert file path to URL via /_client/* endpoint
  *
- * All paths go through the runtime API, which proxies to Vite.
- * This allows the editor to use a single port for everything.
+ * The /_client/* endpoint (handled by runtime's Vite plugin):
+ * - Shims React to use window.__HANDS_REACT__ (editor's React)
+ * - Strips HMR/Fast Refresh code
+ * - Rewrites nested imports to also use /_client/*
  */
 function toViteUrl(file: string): string {
-  // Absolute paths - use runtime's /vite-proxy which forwards to Vite's /@fs/
+  // Absolute paths - use @fs
   if (file.startsWith("/")) {
-    return `/vite-proxy/@fs${file}`;
+    return `/_client/@fs${file}`;
   }
 
-  // Relative paths from blocks/ - use client-modules proxy
+  // Relative paths from blocks/
   if (file.startsWith("blocks/")) {
-    return `/client-modules/${file.replace("blocks/", "")}`;
+    return `/_client/${file}`;
+  }
+
+  // Node modules
+  if (file.startsWith("node_modules/")) {
+    return `/_client/${file}`;
   }
 
   // Fallback
   console.warn("[rsc-shim] Unexpected module path format:", file);
-  return file;
+  return `/_client/${file}`;
 }
 
 /**
  * Load a module from the runtime dev server via Vite
+ *
+ * Uses fetch + blob URL to work around cross-origin import restrictions
+ * (Tauri webview runs on a different origin than localhost)
  */
 async function loadModuleFromRuntime(
   file: string
@@ -69,14 +78,28 @@ async function loadModuleFromRuntime(
   const vitePath = toViteUrl(file);
   const moduleUrl = `http://localhost:${currentRuntimePort}${vitePath}`;
 
-  console.debug("[rsc-shim] Loading module:", file, "->", moduleUrl);
+  console.log("[rsc-shim] Loading module:", file, "->", moduleUrl);
 
   try {
-    // Use dynamic import with @vite-ignore to fetch from the runtime server
-    // eslint-disable-next-line @typescript-eslint/ban-ts-comment
-    // @ts-expect-error - dynamic import from external URL
-    const module = await import(/* @vite-ignore */ moduleUrl);
-    return module;
+    // Fetch module as text to work around cross-origin import restrictions
+    const response = await fetch(moduleUrl);
+    if (!response.ok) {
+      throw new Error(`Failed to fetch module: ${moduleUrl} - ${response.status} ${response.statusText}`);
+    }
+    const code = await response.text();
+
+    // Create blob URL (same-origin) and import from that
+    const blob = new Blob([code], { type: "application/javascript" });
+    const blobUrl = URL.createObjectURL(blob);
+
+    try {
+      // eslint-disable-next-line @typescript-eslint/ban-ts-comment
+      // @ts-expect-error - dynamic import from blob URL
+      const module = await import(/* @vite-ignore */ blobUrl);
+      return module;
+    } finally {
+      URL.revokeObjectURL(blobUrl);
+    }
   } catch (err) {
     console.error("[rsc-shim] Failed to load module:", file, err);
     throw err;

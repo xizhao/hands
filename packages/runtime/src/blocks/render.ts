@@ -22,12 +22,16 @@ const blockModules = import.meta.glob<{ default: React.FC<any> }>(
 // Create registry from glob results
 const blockRegistry = createRegistry(blockModules, /\/([^/]+)\.tsx$/);
 
+// Log registry size on load
+console.log(`[blocks] Registry initialized with ${blockRegistry.size} blocks`);
+
 /**
  * Load a block by ID
  */
 export async function loadBlock(blockId: string): Promise<React.FC<any>> {
   const loader = blockRegistry.get(blockId);
   if (!loader) {
+    console.error(`[blocks] Block "${blockId}" not found. Available: [${[...blockRegistry.keys()].join(", ")}]`);
     throw new Error(`Block "${blockId}" not found in registry`);
   }
 

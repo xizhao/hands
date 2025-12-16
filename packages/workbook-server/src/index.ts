@@ -1106,6 +1106,35 @@ export const __SECRET_INTERNALS_DO_NOT_USE_OR_YOU_WILL_BE_FIRED = RD.__SECRET_IN
     }
   });
 
+  // Proxy /_client/* to Vite for editor client component loading
+  // The editorPlugin in runtime handles React shimming for cross-origin loading
+  app.all("/_client/*", async (c) => {
+    if (!state.rscReady || !state.rscPort) {
+      const error = state.rscError || "Block server not ready";
+      return c.json({ error }, 503);
+    }
+
+    const url = new URL(c.req.url);
+    url.host = `localhost:${state.rscPort}`;
+
+    try {
+      const response = await fetch(url.toString(), {
+        method: c.req.method,
+        headers: c.req.raw.headers,
+      });
+
+      const headers = new Headers(response.headers);
+      headers.delete("transfer-encoding");
+
+      return new Response(response.body, {
+        status: response.status,
+        headers,
+      });
+    } catch (err) {
+      return c.json({ error: `Vite proxy failed: ${String(err)}` }, 502);
+    }
+  });
+
   // Proxy RSC component routes to block server
   // This allows the editor to render arbitrary components via Flight
   app.all("/rsc/*", async (c) => {

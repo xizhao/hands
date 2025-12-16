@@ -1,11 +1,14 @@
 import { cloudflare } from "@cloudflare/vite-plugin";
 import tailwindcss from "@tailwindcss/vite";
+import react from "@vitejs/plugin-react";
 import path from "path";
 import { redwood } from "rwsdk/vite";
 import { defineConfig } from "vite";
 import { blocksPlugin } from "./src/vite-plugin-blocks";
+import { editorPlugin } from "./src/vite-plugin-editor";
 import { dbTypesPlugin } from "./src/vite-plugin-db-types";
 import { pagesPlugin } from "./src/vite-plugin-pages";
+import { staleDepRetryPlugin } from "./src/vite-plugin-stale-dep-retry";
 import { tunnelPlugin } from "./src/vite-plugin-tunnel";
 
 const isDev = process.env.NODE_ENV !== "production";
@@ -57,6 +60,10 @@ export default defineConfig({
           "slate-hyperscript",
           "platejs",
           "platejs/static",
+          // Common workbook deps (avoid mid-request discovery)
+          "tailwind-merge",
+          "clsx",
+          "class-variance-authority",
         ],
         esbuildOptions: {
           // Worker uses "neutral" platform which ignores "main" by default
@@ -97,6 +104,15 @@ export default defineConfig({
     },
   },
   plugins: [
+    // Editor plugin - serves /_client/* and /_rsc/* for editor
+    // Must be first to intercept before rwsdk
+    editorPlugin({ workbookPath }),
+    // Own React plugin - RWSDK will skip its React plugin since we have our own
+    // The editor proxy (/_editor/client/*) strips HMR code for cross-origin loading
+    react({
+      exclude: [/node_modules/],
+    }),
+    // staleDepRetryPlugin(), // TODO: fix - causing Script error
     tunnelPlugin({ enabled: isDev }),
     blocksPlugin({ workbookPath }),
     dbTypesPlugin({ workbookPath }),
