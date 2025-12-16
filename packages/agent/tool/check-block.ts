@@ -57,7 +57,7 @@ Use this after creating or modifying a block to verify it works end-to-end.`,
 
     // Build URL
     const port = process.env.HANDS_RUNTIME_PORT || DEFAULT_RUNTIME_PORT;
-    const url = `http://localhost:${port}/blocks/${blockId}`;
+    const url = `http://localhost:${port}/_editor/blocks/${blockId}`;
 
     try {
       const response = await fetch(url, {

@@ -247,7 +247,7 @@ async function handleBlockInvalidate({ request }: any) {
 }
 
 async function handleBlockGet({ request, ctx, params }: any) {
-  // params.$0 contains the wildcard match for /blocks/*
+  // params.$0 contains the wildcard match for /_editor/blocks/*
   const blockId = params.$0;
 
   // Dynamically load the block - Vite handles "use client" transforms
@@ -298,7 +298,7 @@ async function handleBlockGet({ request, ctx, params }: any) {
 }
 
 async function handleBlockRscPost({ request, ctx, params }: any) {
-  // Extract blockId from path - params.$0 contains everything after /blocks/
+  // Extract blockId from path - params.$0 contains everything after /_editor/blocks/
   const fullPath = params.$0 || "";
   // Remove /rsc suffix to get the blockId
   const blockId = fullPath.replace(/\/rsc$/, "");
@@ -423,9 +423,9 @@ export default defineApp([
   route("/health", handleHealth),
   route("/status", handleStatus),
   route("/blocks", handleBlocksList),
-  route("/blocks/invalidate", { post: handleBlockInvalidate }),
-  // Wildcard routes for blocks - rwsdk uses * for wildcards
-  route("/blocks/*", {
+  route("/_editor/blocks/invalidate", { post: handleBlockInvalidate }),
+  // Wildcard routes for blocks (editor-only) - rwsdk uses * for wildcards
+  route("/_editor/blocks/*", {
     get: handleBlockGet,
     post: handleBlockRscPost,
   }),

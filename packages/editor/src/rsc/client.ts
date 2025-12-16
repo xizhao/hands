@@ -157,7 +157,7 @@ export async function renderBlockViaRsc(
     }
   }
 
-  const url = `http://localhost:${port}/blocks/${blockId}?${searchParams}`;
+  const url = `http://localhost:${port}/_editor/blocks/${blockId}?${searchParams}`;
 
   // Retry loop for connection errors (worker still booting)
   let lastError: Error | null = null;

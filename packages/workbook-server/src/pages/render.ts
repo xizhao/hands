@@ -225,7 +225,7 @@ async function fetchBlockViaRsc(
     }
   }
 
-  const url = `http://localhost:${port}/blocks/${blockId}?${searchParams}`;
+  const url = `http://localhost:${port}/_editor/blocks/${blockId}?${searchParams}`;
 
   try {
     const response = await fetch(url);

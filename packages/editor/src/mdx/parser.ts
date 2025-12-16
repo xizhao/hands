@@ -417,6 +417,11 @@ function jsxElementToPlate(node: MdxJsxElement, ctx: ConversionContext, parentBl
   }
 
   // Check if this is an RSC Block (special <Block src="..."> syntax)
+  // TODO: Consolidate rsc-block handling into @hands/core/blocks package
+  // Currently scattered across:
+  //   - editor/mdx/parser.ts (parse <Block> → rsc-block) ← YOU ARE HERE
+  //   - editor/plate/plugins/markdown-kit.tsx (serialize rsc-block → <Block>)
+  //   - runtime/components/PageStatic.tsx (render rsc-block in PlateStatic)
   if (tagName === "Block" && "src" in props) {
     const blockId = String(props.src);
     const rawSource = ctx.source.slice(

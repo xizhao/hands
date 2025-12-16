@@ -70,9 +70,10 @@ export default defineApp([
       headers: { "Content-Type": "application/json" },
     });
   }),
-  route("/blocks/*", {
+  route("/_editor/blocks/*", {
     get: (args) => {
       // Blocks are read-only - wrap in block mode context
+      // This endpoint returns raw RSC Flight streams for the editor
       return runWithDbMode("block", () => handleBlockGet(args));
     },
   }),

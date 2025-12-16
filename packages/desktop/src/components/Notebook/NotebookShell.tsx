@@ -30,6 +30,7 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   Tooltip,
   TooltipContent,
@@ -56,6 +57,7 @@ import {
 import { cn } from "@/lib/utils";
 import type { Workbook } from "@/lib/workbook";
 import {
+  ArrowSquareOut,
   CaretDown,
   Check,
   CircleNotch,
@@ -876,82 +878,99 @@ export function NotebookShell({ children }: NotebookShellProps) {
                   )}
                 </button>
               </PopoverTrigger>
-              <PopoverContent align="end" className="w-72 p-3">
-                <div className="space-y-3">
-                  <div>
-                    <div className="text-sm font-medium mb-1">
-                      Public link
-                    </div>
-                    <p className="text-xs text-muted-foreground">
-                      {tunnelUrl
-                        ? "Anyone with the link can view this workbook"
-                        : tunnelStatus === "connecting"
-                        ? "Connecting to Cloudflare tunnel..."
-                        : "Tunnel not available"}
-                    </p>
-                  </div>
+              <PopoverContent align="end" className="w-80 p-0">
+                <Tabs defaultValue="preview">
+                  <TabsList className="h-9 px-2 border-b">
+                    <TabsTrigger value="preview" className="text-xs">
+                      Preview
+                    </TabsTrigger>
+                  </TabsList>
+                  <TabsContent value="preview" className="mt-0 p-3">
+                    <div className="space-y-3">
+                      {/* Show preview URL - tunnel if available, otherwise local */}
+                      {runtimePort ? (
+                        <>
+                          <div>
+                            <div className="text-sm font-medium mb-1">
+                              {tunnelUrl ? "Public link" : "Local preview"}
+                            </div>
+                            <p className="text-xs text-muted-foreground">
+                              {tunnelUrl
+                                ? "Anyone with the link can view this workbook"
+                                : "Preview on your local network"}
+                            </p>
+                          </div>
 
-                  {tunnelStatus === "connecting" && !tunnelUrl && (
-                    <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                      <CircleNotch className="h-3.5 w-3.5 animate-spin" />
-                      <span>Starting tunnel...</span>
-                    </div>
-                  )}
+                          {(() => {
+                            const previewUrl = tunnelUrl || `http://localhost:${runtimePort}`;
+                            return (
+                              <div className="flex items-center gap-2">
+                                <div className="flex-1 px-2 py-1.5 text-xs font-mono bg-muted rounded-md truncate">
+                                  {previewUrl.replace(/^https?:\/\//, "")}
+                                </div>
+                                <Tooltip>
+                                  <TooltipTrigger asChild>
+                                    <button
+                                      onClick={() => {
+                                        navigator.clipboard.writeText(previewUrl);
+                                      }}
+                                      className="p-1.5 rounded-md hover:bg-accent transition-colors"
+                                    >
+                                      <Copy
+                                        weight="duotone"
+                                        className="h-3.5 w-3.5 text-muted-foreground"
+                                      />
+                                    </button>
+                                  </TooltipTrigger>
+                                  <TooltipContent>Copy link</TooltipContent>
+                                </Tooltip>
+                                <Tooltip>
+                                  <TooltipTrigger asChild>
+                                    <button
+                                      onClick={() => {
+                                        window.open(previewUrl, "_blank");
+                                      }}
+                                      className="p-1.5 rounded-md hover:bg-accent transition-colors"
+                                    >
+                                      <ArrowSquareOut
+                                        weight="duotone"
+                                        className="h-3.5 w-3.5 text-muted-foreground"
+                                      />
+                                    </button>
+                                  </TooltipTrigger>
+                                  <TooltipContent>Open in browser</TooltipContent>
+                                </Tooltip>
+                              </div>
+                            );
+                          })()}
 
-                  {tunnelError && (
-                    <div className="px-2 py-1.5 text-xs text-amber-600 dark:text-amber-400 bg-amber-500/10 rounded-md">
-                      {tunnelError.includes("ENOENT")
-                        ? "Install cloudflared: brew install cloudflared"
-                        : tunnelError}
+                          {/* Tunnel status indicator */}
+                          {tunnelUrl ? (
+                            <div className="flex items-center gap-1.5 text-xs text-emerald-600 dark:text-emerald-400">
+                              <Globe weight="duotone" className="h-3 w-3" />
+                              <span>Public via Cloudflare Tunnel</span>
+                            </div>
+                          ) : tunnelStatus === "connecting" ? (
+                            <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                              <CircleNotch className="h-3 w-3 animate-spin" />
+                              <span>Connecting tunnel...</span>
+                            </div>
+                          ) : tunnelError ? (
+                            <div className="px-2 py-1.5 text-xs text-amber-600 dark:text-amber-400 bg-amber-500/10 rounded-md">
+                              {tunnelError.includes("ENOENT")
+                                ? "For public sharing: brew install cloudflared"
+                                : tunnelError}
+                            </div>
+                          ) : null}
+                        </>
+                      ) : (
+                        <div className="text-xs text-muted-foreground">
+                          Start the runtime to preview your workbook
+                        </div>
+                      )}
                     </div>
-                  )}
-
-                  {tunnelUrl && (
-                    <div className="flex items-center gap-2">
-                      <div className="flex-1 px-2 py-1.5 text-xs font-mono bg-muted rounded-md truncate">
-                        {tunnelUrl.replace(/^https?:\/\//, "")}
-                      </div>
-                      <Tooltip>
-                        <TooltipTrigger asChild>
-                          <button
-                            onClick={() => {
-                              navigator.clipboard.writeText(tunnelUrl);
-                            }}
-                            className="p-1.5 rounded-md hover:bg-accent transition-colors"
-                          >
-                            <Copy
-                              weight="duotone"
-                              className="h-3.5 w-3.5 text-muted-foreground"
-                            />
-                          </button>
-                        </TooltipTrigger>
-                        <TooltipContent>Copy link</TooltipContent>
-                      </Tooltip>
-                      <Tooltip>
-                        <TooltipTrigger asChild>
-                          <button
-                            onClick={() => {
-                              window.open(tunnelUrl, "_blank");
-                            }}
-                            className="p-1.5 rounded-md hover:bg-accent transition-colors"
-                          >
-                            <Globe
-                              weight="duotone"
-                              className="h-3.5 w-3.5 text-muted-foreground"
-                            />
-                          </button>
-                        </TooltipTrigger>
-                        <TooltipContent>Open in browser</TooltipContent>
-                      </Tooltip>
-                    </div>
-                  )}
-
-                  {tunnelUrl && (
-                    <p className="text-xs text-muted-foreground/70">
-                      Powered by Cloudflare Tunnel. Link is active while the app is running.
-                    </p>
-                  )}
-                </div>
+                  </TabsContent>
+                </Tabs>
               </PopoverContent>
             </Popover>
           </div>

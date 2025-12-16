@@ -177,7 +177,7 @@ describe("RSC Client", () => {
       const { renderBlockViaRsc } = await import("../rsc/client");
       await renderBlockViaRsc(55000, "my-block");
 
-      expect(capturedUrls[0]).toContain("http://localhost:55000/blocks/my-block");
+      expect(capturedUrls[0]).toContain("http://localhost:55000/_editor/blocks/my-block");
     });
 
     test("adds props as query params", async () => {

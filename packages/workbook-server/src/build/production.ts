@@ -561,9 +561,9 @@ app.get("/blocks", (c) => {
   });
 });
 
-// Block wildcard routes (supports nested paths like /blocks/charts/bar-chart)
-app.get("/blocks/*", async (c) => {
-  const blockId = c.req.path.replace("/blocks/", "");
+// Block wildcard routes (editor-only, supports nested paths like /_editor/blocks/charts/bar-chart)
+app.get("/_editor/blocks/*", async (c) => {
+  const blockId = c.req.path.replace("/_editor/blocks/", "");
   const Block = BLOCKS[blockId];
 
   if (!Block) {
@@ -589,8 +589,8 @@ app.get("/blocks/*", async (c) => {
   }
 });
 
-app.post("/blocks/*", async (c) => {
-  const blockId = c.req.path.replace("/blocks/", "");
+app.post("/_editor/blocks/*", async (c) => {
+  const blockId = c.req.path.replace("/_editor/blocks/", "");
   const Block = BLOCKS[blockId];
 
   if (!Block) {

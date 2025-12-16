@@ -12,7 +12,7 @@ export async function createBlockFromStream(blockId: string, props: Record<strin
     searchParams.set(key, String(value));
   }
 
-  const response = await fetch(`/blocks/${blockId}/rsc?${searchParams}`);
+  const response = await fetch(`/_editor/blocks/${blockId}/rsc?${searchParams}`);
 
   if (!response.ok) {
     throw new Error(`Failed to fetch block: ${response.statusText}`);

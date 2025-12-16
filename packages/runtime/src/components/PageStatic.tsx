@@ -14,6 +14,12 @@ interface PageStaticProps {
  *
  * Renders Plate value with support for rsc-block elements.
  * Blocks are rendered directly as RSC - rwsdk handles streaming + HMR.
+ *
+ * TODO: Consolidate rsc-block handling into @hands/core/blocks package
+ * Currently scattered across:
+ *   - editor/mdx/parser.ts (parse <Block> → rsc-block)
+ *   - editor/plate/plugins/markdown-kit.tsx (serialize rsc-block → <Block>)
+ *   - runtime/components/PageStatic.tsx (render rsc-block in PlateStatic) ← YOU ARE HERE
  */
 export function PageStatic({ value, blocks }: PageStaticProps) {
   const RscBlockPlugin = createSlatePlugin({

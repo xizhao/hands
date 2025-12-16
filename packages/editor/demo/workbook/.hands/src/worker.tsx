@@ -238,7 +238,8 @@ app.get("/status", (c) => {
 });
 
 // === Block Routes (RSC) ===
-// Supports nested paths like /blocks/charts/bar-chart
+// Editor-only routes for RSC block rendering
+// Supports nested paths like /_editor/blocks/charts/bar-chart
 
 app.get("/blocks", (c) => {
   return c.json({
@@ -248,7 +249,7 @@ app.get("/blocks", (c) => {
 });
 
 // Use :blockId{.+} for multi-segment path matching (e.g., "charts/bar-chart")
-app.get("/blocks/:blockId{.+}", async (c) => {
+app.get("/_editor/blocks/:blockId{.+}", async (c) => {
   const blockId = c.req.param("blockId");
 
   // ============================================================================
@@ -321,7 +322,7 @@ app.get("/blocks/:blockId{.+}", async (c) => {
   }
 });
 
-app.post("/blocks/:blockId{.+}/rsc", async (c) => {
+app.post("/_editor/blocks/:blockId{.+}/rsc", async (c) => {
   const blockId = c.req.param("blockId");
   const Block = BLOCKS[blockId];
 

@@ -1073,8 +1073,8 @@ export const __SECRET_INTERNALS_DO_NOT_USE_OR_YOU_WILL_BE_FIRED = RD.__SECRET_IN
     }
   });
 
-  // Proxy to block server for RSC routes
-  app.all("/blocks/*", async (c) => {
+  // Proxy to block server for RSC routes (editor-only)
+  app.all("/_editor/blocks/*", async (c) => {
     if (!state.rscReady || !state.rscPort) {
       // Include actual error message if block server crashed (e.g., compilation errors)
       const error = state.rscError || "Block server not ready";

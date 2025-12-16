@@ -137,7 +137,7 @@ function PreviewPane({ type, id }: { type: "block" | "page"; id: string }) {
   const previewUrl =
     type === "page"
       ? `${harnessUrl}/pages/${id}`
-      : `${harnessUrl}/blocks/${id}`;
+      : `${harnessUrl}/preview/${id}`;
 
   return (
     <iframe
