@@ -46,6 +46,7 @@ export interface SandboxErrorInfo {
   column?: number;
   blockId?: string;
   isRenderError?: boolean;
+  isBuildError?: boolean;
 }
 
 // Cache for block states to persist across remounts
@@ -517,6 +518,8 @@ export function SandboxedBlockElement(props: PlateElementProps) {
   const [isGrabActive, setIsGrabActive] = useState(false);
   const [isResizing, setIsResizing] = useState(false);
   const [isFixingWithAI, setIsFixingWithAI] = useState(false);
+  // Track if content has ever loaded successfully (for subtle reload indicator)
+  const [hasLoadedOnce, setHasLoadedOnce] = useState(cached?.state === 'ready');
   const retryTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const iframeReloadRef = useRef<(() => void) | null>(null);
   const persistHeightTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -564,6 +567,7 @@ export function SandboxedBlockElement(props: PlateElementProps) {
     setErrorInfo(null);
     setAutoRetryCount(0); // Reset auto-retry count on success
     setIsAutoRetrying(false);
+    setHasLoadedOnce(true); // Mark that content has loaded at least once
     setIframeHeight(height);
     // Persist initial height if element doesn't have one
     if (typeof element.height !== 'number') {
@@ -614,8 +618,8 @@ export function SandboxedBlockElement(props: PlateElementProps) {
       console.log('[SandboxedBlock] Received detailed error:', errData);
       setErrorInfo(errData);
 
-      // For render errors, don't auto-retry - show error immediately
-      if (errData.isRenderError) {
+      // For render errors and build errors, don't auto-retry - show error immediately
+      if (errData.isRenderError || errData.isBuildError) {
         setError(errData.message);
         setState('error');
         setIsAutoRetrying(false);
@@ -753,6 +757,7 @@ Please fix this error in the block file.`;
         <ErrorPlaceholder
           error={error}
           errorInfo={errorInfo}
+          isBuildError={errorInfo?.isBuildError}
           onRetry={handleRetry}
           onFixWithAI={handleFixWithAI}
           isFixing={isFixingWithAI}
@@ -763,10 +768,20 @@ Please fix this error in the block file.`;
     // Loading or ready - show iframe (with loading overlay when loading)
     return (
       <div className="relative" style={{ minHeight: iframeHeight }}>
-        {/* Loading overlay */}
-        {state === 'loading' && (
+        {/* Initial loading overlay - full placeholder */}
+        {state === 'loading' && !hasLoadedOnce && (
           <div className="absolute inset-0 z-10 bg-background">
             <LoadingPlaceholder retryAttempt={isAutoRetrying ? autoRetryCount : undefined} />
+          </div>
+        )}
+
+        {/* Reload indicator - subtle spinner overlay (when reloading after content was shown) */}
+        {state === 'loading' && hasLoadedOnce && (
+          <div className="absolute right-2 top-2 z-10 flex items-center gap-2 rounded-md bg-background/90 px-2 py-1 shadow-sm border border-border/50">
+            <div className="size-3 animate-spin rounded-full border-2 border-muted-foreground/30 border-t-muted-foreground" />
+            <span className="text-xs text-muted-foreground">
+              {isAutoRetrying ? `Retrying (${autoRetryCount}/${MAX_AUTO_RETRIES})...` : 'Reloading...'}
+            </span>
           </div>
         )}
 

@@ -98,6 +98,10 @@ export default defineConfig({
         "slate",
         "slate-dom",
         "slate-react",
+        // Common workbook deps (avoid mid-request discovery)
+        "tailwind-merge",
+        "clsx",
+        "class-variance-authority",
       ],
       esbuildOptions: {
         mainFields: ["module", "main"],

@@ -8,6 +8,7 @@
  * 4. Generate route manifest
  */
 
+import crypto from "crypto";
 import fs from "fs";
 import path from "path";
 import type { Plugin } from "vite";
@@ -22,6 +23,24 @@ interface PageMeta {
   frontmatter: Record<string, unknown>;
   content: string;
   value: Value;
+}
+
+// Cache of file content hashes to detect actual changes
+const contentHashes = new Map<string, string>();
+
+/**
+ * Normalize content for comparison - ignore whitespace-only changes
+ */
+function normalizeContent(content: string): string {
+  return content
+    .replace(/\r\n/g, "\n")      // Normalize line endings
+    .replace(/[ \t]+$/gm, "")    // Trim trailing whitespace per line
+    .replace(/\n{3,}/g, "\n\n")  // Collapse multiple blank lines
+    .trim();                      // Trim start/end
+}
+
+function hashContent(content: string): string {
+  return crypto.createHash("md5").update(normalizeContent(content)).digest("hex");
 }
 
 export function pagesPlugin(options: PagesPluginOptions): Plugin {
@@ -75,11 +94,27 @@ export function pagesPlugin(options: PagesPluginOptions): Plugin {
       };
 
       server.watcher.on("change", async (changedPath) => {
-        console.log(`[pages] Watcher change event: ${changedPath}`);
         if (
           (changedPath.endsWith(".mdx") || changedPath.endsWith(".md")) &&
           changedPath.startsWith(pagesDir)
         ) {
+          // Check if content actually changed (skip no-op writes)
+          try {
+            const content = fs.readFileSync(changedPath, "utf-8");
+            const hash = hashContent(content);
+            const prevHash = contentHashes.get(changedPath);
+
+            if (prevHash === hash) {
+              // Content unchanged, skip reload
+              return;
+            }
+
+            contentHashes.set(changedPath, hash);
+            console.log(`[pages] Content changed: ${path.basename(changedPath)}`);
+          } catch {
+            // File might be deleted or unreadable, proceed with reload
+          }
+
           await reprocessAndReload(changedPath, "Reprocessing");
         }
       });
@@ -89,6 +124,13 @@ export function pagesPlugin(options: PagesPluginOptions): Plugin {
           (addedPath.endsWith(".mdx") || addedPath.endsWith(".md")) &&
           addedPath.startsWith(pagesDir)
         ) {
+          // Cache hash for new file
+          try {
+            const content = fs.readFileSync(addedPath, "utf-8");
+            contentHashes.set(addedPath, hashContent(content));
+          } catch {
+            // Ignore read errors
+          }
           await reprocessAndReload(addedPath, "Processing new file");
         }
       });
@@ -98,6 +140,8 @@ export function pagesPlugin(options: PagesPluginOptions): Plugin {
           (removedPath.endsWith(".mdx") || removedPath.endsWith(".md")) &&
           removedPath.startsWith(pagesDir)
         ) {
+          // Remove from hash cache
+          contentHashes.delete(removedPath);
           await reprocessAndReload(removedPath, "Removed");
         }
       });
@@ -134,6 +178,9 @@ async function processAllPages(
     const content = fs.readFileSync(filePath, "utf-8");
     const ext = path.extname(file);
     const id = path.basename(file, ext);
+
+    // Cache content hash for change detection
+    contentHashes.set(filePath, hashContent(content));
 
     try {
       const result = parseMdx(content);

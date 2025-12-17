@@ -9,6 +9,50 @@
  */
 
 import { init as initGrab } from "react-grab/core";
+import { initClient } from "rwsdk/client";
+
+initClient({
+  hydrateRootOptions: {
+    onRecoverableError: (
+      error: unknown,
+      errorInfo: { componentStack?: string }
+    ) => {
+      console.warn("[client] Recoverable error:", error);
+      if (error instanceof Error) {
+        window.parent.postMessage(
+          {
+            type: "sandbox-error",
+            error: {
+              message: String(error.message),
+              name: error.name,
+              stack: error.stack,
+            },
+          },
+          "*"
+        );
+      }
+    },
+    onUncaughtError: (
+      error: unknown,
+      errorInfo: { componentStack?: string }
+    ) => {
+      console.error("[client] Uncaught render error:", error);
+      if (error instanceof Error) {
+        window.parent.postMessage(
+          {
+            type: "sandbox-error",
+            error: {
+              message: String(error.message),
+              name: error.name,
+              stack: error.stack,
+            },
+          },
+          "*"
+        );
+      }
+    },
+  },
+});
 
 // Extract block ID from URL path: /preview/:blockId
 const blockId = window.location.pathname.split("/preview/")[1] || "";
@@ -22,27 +66,36 @@ const grabApi = initGrab({
   },
 
   onElementSelect: (element: Element) => {
-    window.parent.postMessage({
-      type: "grab-select",
-      blockId,
-      tagName: element.tagName,
-    }, "*");
+    window.parent.postMessage(
+      {
+        type: "grab-select",
+        blockId,
+        tagName: element.tagName,
+      },
+      "*"
+    );
   },
 
   onCopySuccess: (_elements: Element[], content: string) => {
-    window.parent.postMessage({
-      type: "grab-context",
-      content,
-      blockId,
-    }, "*");
+    window.parent.postMessage(
+      {
+        type: "grab-context",
+        content,
+        blockId,
+      },
+      "*"
+    );
   },
 
   onStateChange: (state: { isActive: boolean }) => {
-    window.parent.postMessage({
-      type: "grab-state",
-      isActive: state.isActive,
-      blockId,
-    }, "*");
+    window.parent.postMessage(
+      {
+        type: "grab-state",
+        isActive: state.isActive,
+        blockId,
+      },
+      "*"
+    );
   },
 });
 
@@ -54,7 +107,9 @@ console.log("[preview-client] react-grab ready, api:", grabApi);
 window.addEventListener("message", (e) => {
   // Theme sync
   if (e.data?.type === "theme") {
-    let style = document.getElementById("theme-vars") as HTMLStyleElement | null;
+    let style = document.getElementById(
+      "theme-vars"
+    ) as HTMLStyleElement | null;
     if (!style) {
       style = document.createElement("style");
       style.id = "theme-vars";
@@ -82,27 +137,54 @@ window.addEventListener("message", (e) => {
 
 // Capture and report errors to parent
 window.onerror = (message, source, lineno, colno, error) => {
-  window.parent.postMessage({
-    type: "sandbox-error",
-    error: {
-      message: String(message),
-      source,
-      lineno,
-      colno,
-      stack: error?.stack,
-    }
-  }, "*");
+  // Determine if this looks like a React render error
+  const isRenderError =
+    error?.stack?.includes("renderWithHooks") ||
+    error?.stack?.includes("mountIndeterminateComponent") ||
+    error?.stack?.includes("beginWork") ||
+    error?.message?.includes("Cannot read properties of") ||
+    error?.message?.includes("is not a function");
+
+  window.parent.postMessage(
+    {
+      type: "sandbox-error",
+      error: {
+        message: String(message),
+        name: error?.name,
+        source:
+          typeof source === "string"
+            ? source.replace(/^.*\/blocks\//, "blocks/")
+            : undefined,
+        line: lineno,
+        column: colno,
+        stack: error?.stack,
+        blockId,
+        isRenderError,
+      },
+    },
+    "*"
+  );
   return false; // Don't suppress the error
 };
 
 window.addEventListener("unhandledrejection", (e) => {
-  window.parent.postMessage({
-    type: "sandbox-error",
-    error: {
-      message: e.reason?.message || String(e.reason),
-      stack: e.reason?.stack,
-    }
-  }, "*");
+  const isRenderError =
+    e.reason?.stack?.includes("renderWithHooks") ||
+    e.reason?.stack?.includes("mountIndeterminateComponent");
+
+  window.parent.postMessage(
+    {
+      type: "sandbox-error",
+      error: {
+        message: e.reason?.message || String(e.reason),
+        name: e.reason?.name,
+        stack: e.reason?.stack,
+        blockId,
+        isRenderError,
+      },
+    },
+    "*"
+  );
 });
 
 // Measure and report content height

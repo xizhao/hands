@@ -247,3 +247,16 @@ export function clearIframeCache() {
   }
   iframeCache.clear();
 }
+
+// Check if an iframe is cached and ready (can be called before mounting)
+export function isIframeCached(src: string): boolean {
+  const cached = iframeCache.get(src);
+  return cached?.ready ?? false;
+}
+
+// Get cached iframe state (height, ready status)
+export function getCachedIframeState(src: string): { ready: boolean; height: number } | null {
+  const cached = iframeCache.get(src);
+  if (!cached) return null;
+  return { ready: cached.ready, height: cached.height };
+}

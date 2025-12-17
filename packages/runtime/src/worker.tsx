@@ -1,8 +1,8 @@
 import { route, render, RouteMiddleware } from "rwsdk/router";
 import { defineApp } from "rwsdk/worker";
-import { handleBlockGet, loadBlock } from "./blocks/render";
+import { handleBlockGet, loadBlock, getBlockBuildError } from "./blocks/render";
 import { Page } from "./pages/Page";
-import { BlockPreview } from "./blocks/BlockPreview";
+import { BlockPreview, BlockErrorPreview } from "./blocks/BlockPreview";
 import { pages, pageRoutes } from "@hands/pages";
 import { runWithDbMode, Database } from "./db/dev";
 import { dbRoutes } from "./db/routes";
@@ -88,8 +88,20 @@ export default defineApp([
   ...render(BlockPreview, [
     route("/preview/*", async ({ params }) => {
       const blockId = params.$0;
-      const Block = await loadBlock(blockId);
-      return runWithDbMode("block", () => <Block />);
+
+      // Check for build error first - show error component instead of crashing
+      const buildError = getBlockBuildError(blockId);
+      if (buildError) {
+        return <BlockErrorPreview error={buildError} blockId={blockId} isBuildError />;
+      }
+
+      try {
+        const Block = await loadBlock(blockId);
+        return runWithDbMode("block", () => <Block />);
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        return <BlockErrorPreview error={message} blockId={blockId} />;
+      }
     }),
   ]),
 ]);
