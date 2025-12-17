@@ -2,47 +2,17 @@
  * PageEditor - Native Plate Editor with Frontmatter
  *
  * Fetches page source via tRPC and renders with Plate.
- * Uses native @platejs imports (no shadcn vendoring).
+ * Uses PageEditorKit for plugins.
  */
 
 import { cn } from "@/lib/utils";
-import { AutoformatPlugin } from "@platejs/autoformat";
-import {
-  BlockquotePlugin,
-  BoldPlugin,
-  CodePlugin,
-  H1Plugin,
-  H2Plugin,
-  H3Plugin,
-  H4Plugin,
-  H5Plugin,
-  H6Plugin,
-  HorizontalRulePlugin,
-  ItalicPlugin,
-  StrikethroughPlugin,
-  UnderlinePlugin,
-} from "@platejs/basic-nodes/react";
-import { FontFamilyPlugin, FontSizePlugin } from "@platejs/basic-styles/react";
-import { CodeBlockPlugin } from "@platejs/code-block/react";
-import { IndentPlugin } from "@platejs/indent/react";
-import { LinkPlugin } from "@platejs/link/react";
-import { indentList, indentTodo } from "@platejs/list";
-import { ListPlugin } from "@platejs/list/react";
-import { MarkdownPlugin, deserializeMd } from "@platejs/markdown";
-import { ImagePlugin } from "@platejs/media/react";
-import { BlockSelectionPlugin } from "@platejs/selection/react";
-import { TrailingBlockPlugin } from "platejs";
-import {
-  ParagraphPlugin,
-  Plate,
-  PlateContent,
-  usePlateEditor,
-} from "platejs/react";
+import { deserializeMd } from "@platejs/markdown";
+import { Plate, PlateContent, usePlateEditor } from "platejs/react";
 import { useCallback, useEffect, useRef } from "react";
-import { type Frontmatter, FrontmatterHeader } from "./Frontmatter";
-import { DndKit } from "./plugins/dnd-kit";
-import { FloatingToolbar } from "./Toolbar";
-import { usePageSource } from "./usePageSource";
+import { EditorKit } from "./editor-kit";
+import { type Frontmatter, FrontmatterHeader } from "./frontmatter";
+import { usePageSource } from "./hooks/usePageSource";
+import { FloatingToolbar } from "./ui/floating-toolbar";
 
 // ============================================================================
 // Types
@@ -56,118 +26,6 @@ export interface PageEditorProps {
   /** Whether the editor is read-only */
   readOnly?: boolean;
 }
-
-// ============================================================================
-// Autoformat Rules (Markdown shortcuts)
-// ============================================================================
-
-const autoformatRules = [
-  // Headings
-  { mode: "block" as const, match: "# ", type: "h1" },
-  { mode: "block" as const, match: "## ", type: "h2" },
-  { mode: "block" as const, match: "### ", type: "h3" },
-  { mode: "block" as const, match: "#### ", type: "h4" },
-  { mode: "block" as const, match: "##### ", type: "h5" },
-  { mode: "block" as const, match: "###### ", type: "h6" },
-  // Blockquote
-  { mode: "block" as const, match: "> ", type: "blockquote" },
-  // Horizontal rule
-  { mode: "block" as const, match: ["---", "—-", "***"], type: "hr" },
-  // Code block
-  { mode: "block" as const, match: "```", type: "code_block" },
-  // Lists - unordered
-  {
-    mode: "block" as const,
-    match: ["- ", "* ", "+ "],
-    format: (editor: Parameters<typeof indentList>[0]) => {
-      indentList(editor, { listStyleType: "disc" });
-    },
-  },
-  // Lists - ordered
-  {
-    mode: "block" as const,
-    match: ["1. ", "1) "],
-    format: (editor: Parameters<typeof indentList>[0]) => {
-      indentList(editor, { listStyleType: "decimal" });
-    },
-  },
-  // Lists - todo/checkbox
-  {
-    mode: "block" as const,
-    match: ["[] ", "[ ] "],
-    format: (editor: Parameters<typeof indentTodo>[0]) => {
-      indentTodo(editor, { listStyleType: "disc" });
-    },
-  },
-  // Marks
-  { mode: "mark" as const, match: "**", type: "bold" },
-  { mode: "mark" as const, match: "__", type: "bold" },
-  { mode: "mark" as const, match: "*", type: "italic" },
-  { mode: "mark" as const, match: "_", type: "italic" },
-  { mode: "mark" as const, match: "~~", type: "strikethrough" },
-  { mode: "mark" as const, match: "`", type: "code" },
-];
-
-// ============================================================================
-// Editor Plugins
-// ============================================================================
-
-const plugins = [
-  // Paragraph (default block)
-  ParagraphPlugin,
-
-  // Headings
-  H1Plugin,
-  H2Plugin,
-  H3Plugin,
-  H4Plugin,
-  H5Plugin,
-  H6Plugin,
-
-  // Block elements
-  BlockquotePlugin,
-  HorizontalRulePlugin,
-  CodeBlockPlugin,
-
-  // Marks (inline formatting)
-  BoldPlugin,
-  ItalicPlugin,
-  UnderlinePlugin,
-  StrikethroughPlugin,
-  CodePlugin,
-
-  // Links
-  LinkPlugin,
-
-  // Lists
-  ListPlugin,
-
-  // Media
-  ImagePlugin,
-
-  // Font styles
-  FontSizePlugin,
-  FontFamilyPlugin,
-
-  // Indentation
-  IndentPlugin,
-
-  // Markdown shortcuts
-  AutoformatPlugin.configure({
-    options: { rules: autoformatRules },
-  }),
-
-  // Markdown serialization
-  MarkdownPlugin,
-
-  // Trailing block (ensures empty paragraph at end)
-  TrailingBlockPlugin,
-
-  // Block selection (required for drag and drop)
-  BlockSelectionPlugin,
-
-  ...DndKit,
-];
 
 // ============================================================================
 // Main Component
@@ -192,7 +50,7 @@ export function PageEditor({
 
   // Create editor
   const editor = usePlateEditor({
-    plugins,
+    plugins: EditorKit,
     // Start with empty - will be populated from content
     value: [{ type: "p", children: [{ text: "" }] }],
   });

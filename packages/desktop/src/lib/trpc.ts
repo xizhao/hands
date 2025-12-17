@@ -26,5 +26,8 @@ export function createTRPCClient(runtimePort: number) {
   });
 }
 
+// Alias for backwards compatibility
+export const getTRPCClient = createTRPCClient;
+
 // Re-export types for convenience
 export type { AppRouter };

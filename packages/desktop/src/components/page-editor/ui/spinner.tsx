@@ -1,0 +1,32 @@
+import { cva, type VariantProps } from 'class-variance-authority';
+import { CircleNotch, type IconProps } from '@phosphor-icons/react';
+import * as React from 'react';
+
+import { cn } from '@/lib/utils';
+
+const spinnerVariants = cva('animate-spin text-muted-foreground', {
+  defaultVariants: {
+    size: 'default',
+  },
+  variants: {
+    size: {
+      default: 'size-4',
+      icon: 'size-10',
+      lg: 'size-6',
+      sm: 'size-2',
+    },
+  },
+});
+
+export function Spinner({
+  className,
+  size,
+  ...props
+}: Partial<IconProps & VariantProps<typeof spinnerVariants>>) {
+  return (
+    <CircleNotch
+      className={cn(spinnerVariants({ size }), className)}
+      {...props}
+    />
+  );
+}
