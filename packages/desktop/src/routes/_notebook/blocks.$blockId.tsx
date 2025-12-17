@@ -1,8 +1,8 @@
+import { EmptyBlockView } from "@/components/workbook/EmptyBlockView";
+import { EditorSandbox } from "@/components/workbook/editor/EditorSandbox";
+import { useBlockContent } from "@/hooks/useWorkbook";
 import { useQueryClient } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
-import { EmptyBlockView } from "@/components/Notebook/EmptyBlockView";
-import { EditorSandbox } from "@/components/Notebook/editor/EditorSandbox";
-import { useBlockContent } from "@/hooks/useWorkbook";
 
 export const Route = createFileRoute("/_notebook/blocks/$blockId")({
   component: BlockView,
@@ -35,7 +35,9 @@ function BlockView() {
     return (
       <div className="h-full flex items-center justify-center bg-background">
         <div className="text-center">
-          <p className="text-sm font-medium text-destructive">Failed to load block</p>
+          <p className="text-sm font-medium text-destructive">
+            Failed to load block
+          </p>
           <p className="text-xs text-muted-foreground mt-1">{error.message}</p>
         </div>
       </div>
@@ -46,7 +48,9 @@ function BlockView() {
   const isUninitialized =
     !source || source.trim() === "" || source.includes("@hands:uninitialized");
   if (isUninitialized) {
-    return <EmptyBlockView blockId={blockId} onInitialized={handleInitialized} />;
+    return (
+      <EmptyBlockView blockId={blockId} onInitialized={handleInitialized} />
+    );
   }
 
   // Non-empty block - sandbox handles canvas styling

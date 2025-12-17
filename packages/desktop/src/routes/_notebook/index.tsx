@@ -1,15 +1,21 @@
-import { createFileRoute } from "@tanstack/react-router";
-import { EmptyWorkbookState } from "@/components/Notebook/EmptyWorkbookState";
-import { NotebookSidebar } from "@/components/Notebook/sidebar/NotebookSidebar";
+import { NotebookSidebar } from "@/components/sidebar/NotebookSidebar";
+import { EmptyWorkbookState } from "@/components/workbook/EmptyWorkbookState";
 import { useChatState } from "@/hooks/useChatState";
 import { useRuntimeState } from "@/hooks/useRuntimeState";
+import { createFileRoute } from "@tanstack/react-router";
 
 export const Route = createFileRoute("/_notebook/")({
   component: IndexPage,
 });
 
 function IndexPage() {
-  const { manifest, schema: dbSchema, isFullyReady, isDbBooting, isStarting } = useRuntimeState();
+  const {
+    manifest,
+    schema: dbSchema,
+    isFullyReady,
+    isDbBooting,
+    isStarting,
+  } = useRuntimeState();
   const chatState = useChatState();
 
   const tableCount = dbSchema?.length ?? 0;
@@ -52,7 +58,10 @@ function IndexPage() {
   if (showGettingStarted) {
     return (
       <div className="flex-1 flex items-start justify-center overflow-y-auto">
-        <EmptyWorkbookState onImportFile={handleImportFile} chatExpanded={chatState.chatExpanded} />
+        <EmptyWorkbookState
+          onImportFile={handleImportFile}
+          chatExpanded={chatState.chatExpanded}
+        />
       </div>
     );
   }

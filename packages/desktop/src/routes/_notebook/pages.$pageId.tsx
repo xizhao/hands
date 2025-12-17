@@ -1,5 +1,5 @@
+import { PageEditorSandbox } from "@/components/workbook/editor/PageEditorSandbox";
 import { createFileRoute } from "@tanstack/react-router";
-import { PageEditorSandbox } from "@/components/Notebook/editor/PageEditorSandbox";
 
 export const Route = createFileRoute("/_notebook/pages/$pageId")({
   component: PageView,

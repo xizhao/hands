@@ -4,8 +4,8 @@
  * Shows the sources sidebar in full-width mode similar to the index page.
  */
 
+import { NotebookSidebar } from "@/components/sidebar/NotebookSidebar";
 import { createFileRoute, useRouter } from "@tanstack/react-router";
-import { NotebookSidebar } from "@/components/Notebook/sidebar/NotebookSidebar";
 
 export const Route = createFileRoute("/_notebook/sources/")({
   component: SourcesIndexPage,

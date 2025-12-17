@@ -11,7 +11,6 @@
 import { ChatBar } from "@/components/ChatBar";
 import { FileDropOverlay } from "@/components/FileDropOverlay";
 import { NewWorkbookModal } from "@/components/NewWorkbookModal";
-import { Thread } from "@/components/Notebook/Thread";
 import { SaveStatusIndicator } from "@/components/SaveStatusIndicator";
 import {
   DropdownMenu,
@@ -37,6 +36,7 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
+import { Thread } from "@/components/workbook/Thread";
 import { ATTACHMENT_TYPE, useChatState } from "@/hooks/useChatState";
 import { useDatabase } from "@/hooks/useDatabase";
 import { useNeedsTrafficLightOffset } from "@/hooks/useFullscreen";
@@ -63,10 +63,8 @@ import {
   CircleNotch,
   Copy,
   Database,
-  FloppyDisk,
   Gear,
   Globe,
-  Link as LinkIcon,
   Plus,
   Warning,
   X,
@@ -79,8 +77,8 @@ import {
   useState,
   type ReactNode,
 } from "react";
+import { NotebookSidebar } from "../sidebar/NotebookSidebar";
 import { RightPanel } from "./panels/RightPanel";
-import { NotebookSidebar } from "./sidebar/NotebookSidebar";
 
 // ============================================================================
 // tRPC-dependent sub-components (only render when runtime connected)
@@ -143,7 +141,9 @@ function DatabaseButton({
       <HoverCardContent side="bottom" align="center" className="w-auto p-1">
         <div className="flex items-center gap-1.5 px-2 py-1 text-xs text-muted-foreground">
           <Database weight="duotone" className="h-3 w-3" />
-          <span>{tableCount} table{tableCount !== 1 ? "s" : ""}</span>
+          <span>
+            {tableCount} table{tableCount !== 1 ? "s" : ""}
+          </span>
         </div>
       </HoverCardContent>
     </HoverCard>
@@ -238,7 +238,9 @@ export function NotebookShell({ children }: NotebookShellProps) {
 
   // Tunnel state - polls /__hands__ for cloudflared tunnel status
   const [tunnelUrl, setTunnelUrl] = useState<string | null>(null);
-  const [tunnelStatus, setTunnelStatus] = useState<"connecting" | "connected" | "error">("connecting");
+  const [tunnelStatus, setTunnelStatus] = useState<
+    "connecting" | "connected" | "error"
+  >("connecting");
   const [tunnelError, setTunnelError] = useState<string | null>(null);
 
   // Poll for tunnel status when runtime is ready
@@ -862,12 +864,14 @@ export function NotebookShell({ children }: NotebookShellProps) {
             {/* Share - text button with popover */}
             <Popover>
               <PopoverTrigger asChild>
-                <button className={cn(
-                  "px-2 py-1 rounded-md text-[12px] font-medium transition-colors",
-                  tunnelUrl
-                    ? "text-emerald-600 dark:text-emerald-400 hover:bg-emerald-500/10"
-                    : "text-muted-foreground hover:text-foreground hover:bg-accent/50"
-                )}>
+                <button
+                  className={cn(
+                    "px-2 py-1 rounded-md text-[12px] font-medium transition-colors",
+                    tunnelUrl
+                      ? "text-emerald-600 dark:text-emerald-400 hover:bg-emerald-500/10"
+                      : "text-muted-foreground hover:text-foreground hover:bg-accent/50"
+                  )}
+                >
                   {tunnelUrl ? (
                     <span className="flex items-center gap-1">
                       <Globe weight="duotone" className="h-3.5 w-3.5" />
@@ -902,7 +906,8 @@ export function NotebookShell({ children }: NotebookShellProps) {
                           </div>
 
                           {(() => {
-                            const previewUrl = tunnelUrl || `http://localhost:${runtimePort}`;
+                            const previewUrl =
+                              tunnelUrl || `http://localhost:${runtimePort}`;
                             return (
                               <div className="flex items-center gap-2">
                                 <div className="flex-1 px-2 py-1.5 text-xs font-mono bg-muted rounded-md truncate">
@@ -912,7 +917,9 @@ export function NotebookShell({ children }: NotebookShellProps) {
                                   <TooltipTrigger asChild>
                                     <button
                                       onClick={() => {
-                                        navigator.clipboard.writeText(previewUrl);
+                                        navigator.clipboard.writeText(
+                                          previewUrl
+                                        );
                                       }}
                                       className="p-1.5 rounded-md hover:bg-accent transition-colors"
                                     >
@@ -938,7 +945,9 @@ export function NotebookShell({ children }: NotebookShellProps) {
                                       />
                                     </button>
                                   </TooltipTrigger>
-                                  <TooltipContent>Open in browser</TooltipContent>
+                                  <TooltipContent>
+                                    Open in browser
+                                  </TooltipContent>
                                 </Tooltip>
                               </div>
                             );

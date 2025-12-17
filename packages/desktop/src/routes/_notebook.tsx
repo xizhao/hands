@@ -1,8 +1,4 @@
-import { CaretDown, Check, Plus } from "@phosphor-icons/react";
-import { createFileRoute, Outlet, useNavigate } from "@tanstack/react-router";
-import { useCallback, useEffect, useRef } from "react";
 import { queryClient } from "@/App";
-import { NotebookShell } from "@/components/Notebook/NotebookShell";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -10,15 +6,23 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { NotebookShell } from "@/components/workbook/NotebookShell";
 import { useNeedsTrafficLightOffset } from "@/hooks/useFullscreen";
 import type { NavSearchParams } from "@/hooks/useNavState";
 import { useActiveSession, useClearNavigation } from "@/hooks/useNavState";
 import { useRuntimeProcess } from "@/hooks/useRuntimeState";
 import { useSessions } from "@/hooks/useSession";
-import { useCreateWorkbook, useOpenWorkbook, useWorkbooks } from "@/hooks/useWorkbook";
+import {
+  useCreateWorkbook,
+  useOpenWorkbook,
+  useWorkbooks,
+} from "@/hooks/useWorkbook";
 import { setNavigateCallback, startSSESync } from "@/lib/sse";
 import { cn } from "@/lib/utils";
 import type { Workbook } from "@/lib/workbook";
+import { CaretDown, Check, Plus } from "@phosphor-icons/react";
+import { createFileRoute, Outlet, useNavigate } from "@tanstack/react-router";
+import { useCallback, useEffect, useRef } from "react";
 
 export const Route = createFileRoute("/_notebook")({
   component: NotebookLayout,
@@ -33,7 +37,8 @@ function NotebookLayout() {
   const navigate = useNavigate();
   // Use minimal Tauri-only hook (works without TRPCProvider)
   const { workbookId, port } = useRuntimeProcess();
-  const { sessionId: activeSessionId, setSession: setActiveSession } = useActiveSession();
+  const { sessionId: activeSessionId, setSession: setActiveSession } =
+    useActiveSession();
 
   // Set up navigate callback for SSE - routes to correct page based on path
   useEffect(() => {
@@ -61,7 +66,12 @@ function NotebookLayout() {
           navigate({ to: "/actions/$actionId", params: { actionId: id } });
           break;
         default:
-          console.warn("[navigate] Unknown route type:", routeType, "from path:", path);
+          console.warn(
+            "[navigate] Unknown route type:",
+            routeType,
+            "from path:",
+            path
+          );
       }
     });
   }, [navigate]);
@@ -124,7 +134,7 @@ function NotebookLayout() {
             initialized.current = true;
             initializingRef.current = false;
           },
-        },
+        }
       );
     }
   }, [workbooks, workbooksLoading, workbookId, createWorkbook, openWorkbook]);
@@ -151,7 +161,7 @@ function NotebookLayout() {
       clearNavigation();
       openWorkbook.mutate(workbook);
     },
-    [clearNavigation, openWorkbook],
+    [clearNavigation, openWorkbook]
   );
 
   // When no port, show minimal shell - just header with workbook switcher
@@ -163,7 +173,7 @@ function NotebookLayout() {
           data-tauri-drag-region
           className={cn(
             "h-11 flex items-center pr-4 border-b border-border/50 bg-background shrink-0",
-            needsTrafficLightOffset ? "pl-[80px]" : "pl-4",
+            needsTrafficLightOffset ? "pl-[80px]" : "pl-4"
           )}
         >
           <div className="flex items-center gap-1.5">
@@ -184,12 +194,19 @@ function NotebookLayout() {
                   >
                     <span className="truncate text-[13px]">{wb.name}</span>
                     {wb.id === workbookId && (
-                      <Check weight="bold" className="h-3.5 w-3.5 text-primary shrink-0" />
+                      <Check
+                        weight="bold"
+                        className="h-3.5 w-3.5 text-primary shrink-0"
+                      />
                     )}
                   </DropdownMenuItem>
                 ))}
                 <DropdownMenuSeparator />
-                <DropdownMenuItem onClick={() => createWorkbook.mutate({ name: "New Notebook" })}>
+                <DropdownMenuItem
+                  onClick={() =>
+                    createWorkbook.mutate({ name: "New Notebook" })
+                  }
+                >
                   <Plus weight="bold" className="h-3.5 w-3.5 mr-2" />
                   <span className="text-[13px]">New Notebook</span>
                 </DropdownMenuItem>

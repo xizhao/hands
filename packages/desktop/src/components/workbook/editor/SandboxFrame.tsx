@@ -223,6 +223,9 @@ export function SandboxFrame({
   const createSession = useCreateSession();
   const sendMessage = useSendMessage();
 
+  // Thumbnail save mutation
+  const saveThumbnail = trpc.thumbnails.save.useMutation();
+
   // Fetch LQIP for loading placeholder
   const { data: thumbnail } = useThumbnail(mode, contentId);
 
@@ -342,7 +345,7 @@ export function SandboxFrame({
         // Generate LQIP and save via tRPC
         generateLQIP(thumbnail).then(async (lqip) => {
           try {
-            await trpc.thumbnails.save.mutate({
+            await saveThumbnail.mutateAsync({
               type: contentType,
               contentId,
               theme,

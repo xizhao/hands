@@ -1,7 +1,7 @@
 import { MutationCache, QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { RouterProvider } from "@tanstack/react-router";
 import { Toaster, toast } from "sonner";
-import { TRPCProvider } from "@/components/TRPCProvider";
+import { TRPCProvider } from "@/TRPCProvider";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { useActiveRuntime } from "@/hooks/useWorkbook";
 import { router } from "@/router";
