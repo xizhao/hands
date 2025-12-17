@@ -1459,13 +1459,10 @@ pub fn run() {
                 .build()?;
 
             // Edit submenu
+            // Note: We don't use native .undo()/.redo()/.cut()/.copy()/.paste() because
+            // they intercept keyboard shortcuts before the webview receives them.
+            // Plate editor handles these operations via web APIs directly.
             let edit_submenu = SubmenuBuilder::new(app_handle, "Edit")
-                .undo()
-                .redo()
-                .separator()
-                .cut()
-                .copy()
-                .paste()
                 .select_all()
                 .build()?;
 
