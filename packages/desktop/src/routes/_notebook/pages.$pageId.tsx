@@ -1,4 +1,4 @@
-import { PageEditorSandbox } from "@/components/workbook/editor/PageEditorSandbox";
+import { PageEditor } from "@/components/page-editor/PageEditor";
 import { createFileRoute } from "@tanstack/react-router";
 
 export const Route = createFileRoute("/_notebook/pages/$pageId")({
@@ -7,5 +7,5 @@ export const Route = createFileRoute("/_notebook/pages/$pageId")({
 
 function PageView() {
   const { pageId } = Route.useParams();
-  return <PageEditorSandbox pageId={pageId} className="h-full" />;
+  return <PageEditor pageId={pageId} className="h-full" />;
 }

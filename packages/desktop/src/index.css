@@ -36,7 +36,7 @@ svg [opacity="0.2"] {
     --chart-3: 197 37% 24%;
     --chart-4: 43 74% 66%;
     --chart-5: 27 87% 67%;
-    --brand: 211 77% 51%;
+    --brand: oklch(0.623 0.214 259.815);
     --brand-foreground: 0 0% 100%;
     --brand-active: 211 77% 41%;
     --brand-10: 211 77% 51% / 0.10;
@@ -45,7 +45,7 @@ svg [opacity="0.2"] {
     --brand-50: 211 77% 51% / 0.50;
     --brand-80: 211 77% 51% / 0.80;
     --brand-90: 211 77% 51% / 0.90;
-    --highlight: 48 100% 50%;
+    --highlight: oklch(0.852 0.199 91.936);
     --subtle-foreground: 240 5% 34%;
   }
 
@@ -75,7 +75,7 @@ svg [opacity="0.2"] {
     --chart-3: 30 80% 55%;
     --chart-4: 280 65% 60%;
     --chart-5: 340 75% 55%;
-    --brand: 211 77% 51%;
+    --brand: oklch(0.707 0.165 254.624);
     --brand-foreground: 0 0% 100%;
     --brand-active: 211 77% 41%;
     --brand-10: 211 77% 51% / 0.10;
@@ -84,7 +84,7 @@ svg [opacity="0.2"] {
     --brand-50: 211 77% 51% / 0.50;
     --brand-80: 211 77% 51% / 0.80;
     --brand-90: 211 77% 51% / 0.90;
-    --highlight: 48 100% 50%;
+    --highlight: oklch(0.852 0.199 91.936);
     --subtle-foreground: 240 5% 34%;
   }
 }

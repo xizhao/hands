@@ -1,0 +1,249 @@
+/**
+ * Frontmatter - Title/Description header for page editor
+ *
+ * Renders editable title and description fields above the Plate editor.
+ * Uses contentEditable for simple single-line editing.
+ *
+ * Keyboard navigation:
+ * - Title: Enter/ArrowDown → focus subtitle
+ * - Subtitle: Enter/ArrowDown → focus editor, ArrowUp → focus title
+ * - Editor: ArrowUp at start → focus subtitle
+ */
+
+import { useCallback, useEffect, useRef } from "react";
+import YAML from "yaml";
+import { cn } from "@/lib/utils";
+
+// ============================================================================
+// Types
+// ============================================================================
+
+export interface Frontmatter {
+  title?: string;
+  description?: string;
+  [key: string]: unknown;
+}
+
+export interface FrontmatterParseResult {
+  frontmatter: Frontmatter;
+  contentStart: number;
+  error?: string;
+}
+
+export interface FrontmatterHeaderProps {
+  /** Current frontmatter values */
+  frontmatter: Frontmatter;
+  /** Callback when frontmatter changes */
+  onFrontmatterChange: (frontmatter: Frontmatter) => void;
+  /** Callback to focus the Plate editor */
+  onFocusEditor: () => void;
+  /** Ref for subtitle element (for keyboard navigation from editor) */
+  subtitleRef?: React.RefObject<HTMLDivElement | null>;
+  /** CSS class name */
+  className?: string;
+}
+
+// ============================================================================
+// Parsing Utilities
+// ============================================================================
+
+const FRONTMATTER_REGEX = /^---\s*\n([\s\S]*?)\n---\s*\n?/;
+
+/**
+ * Parse YAML frontmatter from MDX source
+ */
+export function parseFrontmatter(source: string): FrontmatterParseResult {
+  const match = source.match(FRONTMATTER_REGEX);
+
+  if (!match) {
+    return {
+      frontmatter: {},
+      contentStart: 0,
+    };
+  }
+
+  const yamlContent = match[1];
+  const fullMatch = match[0];
+
+  try {
+    const parsed = YAML.parse(yamlContent);
+    const frontmatter: Frontmatter =
+      typeof parsed === "object" && parsed !== null ? parsed : {};
+
+    return {
+      frontmatter,
+      contentStart: fullMatch.length,
+    };
+  } catch (err) {
+    return {
+      frontmatter: {},
+      contentStart: fullMatch.length,
+      error: err instanceof Error ? err.message : "Failed to parse frontmatter",
+    };
+  }
+}
+
+/**
+ * Serialize frontmatter to YAML string with delimiters
+ */
+export function serializeFrontmatter(frontmatter: Frontmatter): string {
+  const cleaned = Object.fromEntries(
+    Object.entries(frontmatter).filter(([, v]) => v !== undefined),
+  );
+
+  if (Object.keys(cleaned).length === 0) {
+    return "";
+  }
+
+  const yaml = YAML.stringify(cleaned, {
+    indent: 2,
+    lineWidth: 0,
+  }).trim();
+
+  return `---\n${yaml}\n---\n\n`;
+}
+
+/**
+ * Update frontmatter in source string
+ */
+export function updateFrontmatter(source: string, frontmatter: Frontmatter): string {
+  const { contentStart } = parseFrontmatter(source);
+  const content = source.slice(contentStart);
+  return serializeFrontmatter(frontmatter) + content;
+}
+
+/**
+ * Get content without frontmatter
+ */
+export function stripFrontmatter(source: string): string {
+  const { contentStart } = parseFrontmatter(source);
+  return source.slice(contentStart);
+}
+
+// ============================================================================
+// Component
+// ============================================================================
+
+export function FrontmatterHeader({
+  frontmatter,
+  onFrontmatterChange,
+  onFocusEditor,
+  subtitleRef: externalSubtitleRef,
+  className,
+}: FrontmatterHeaderProps) {
+  const titleRef = useRef<HTMLDivElement>(null);
+  const internalSubtitleRef = useRef<HTMLDivElement>(null);
+  const subtitleRef = externalSubtitleRef ?? internalSubtitleRef;
+
+  // Sync frontmatter to contentEditable elements
+  useEffect(() => {
+    if (titleRef.current && titleRef.current.textContent !== (frontmatter.title ?? "")) {
+      titleRef.current.textContent = frontmatter.title ?? "";
+    }
+    if (
+      subtitleRef.current &&
+      subtitleRef.current.textContent !== (frontmatter.description ?? "")
+    ) {
+      subtitleRef.current.textContent = frontmatter.description ?? "";
+    }
+  }, [frontmatter.title, frontmatter.description]);
+
+  // Handle field changes
+  const handleFieldChange = useCallback(
+    (field: "title" | "description", value: string) => {
+      const newFrontmatter = { ...frontmatter };
+      if (value) {
+        newFrontmatter[field] = value;
+      } else {
+        delete newFrontmatter[field];
+      }
+      onFrontmatterChange(newFrontmatter);
+    },
+    [frontmatter, onFrontmatterChange],
+  );
+
+  // Title keyboard handler
+  const handleTitleKeyDown = useCallback(
+    (e: React.KeyboardEvent) => {
+      if (e.key === "Enter" || e.key === "ArrowDown") {
+        e.preventDefault();
+        subtitleRef.current?.focus();
+        // Move cursor to start
+        if (subtitleRef.current) {
+          const range = document.createRange();
+          const sel = window.getSelection();
+          range.selectNodeContents(subtitleRef.current);
+          range.collapse(true);
+          sel?.removeAllRanges();
+          sel?.addRange(range);
+        }
+      }
+    },
+    [],
+  );
+
+  // Subtitle keyboard handler
+  const handleSubtitleKeyDown = useCallback(
+    (e: React.KeyboardEvent) => {
+      if (e.key === "Enter" || e.key === "ArrowDown") {
+        e.preventDefault();
+        onFocusEditor();
+      } else if (e.key === "ArrowUp") {
+        e.preventDefault();
+        titleRef.current?.focus();
+        // Move cursor to end
+        if (titleRef.current) {
+          const range = document.createRange();
+          const sel = window.getSelection();
+          range.selectNodeContents(titleRef.current);
+          range.collapse(false);
+          sel?.removeAllRanges();
+          sel?.addRange(range);
+        }
+      }
+    },
+    [onFocusEditor],
+  );
+
+  // Paste as plain text only
+  const handlePaste = useCallback((e: React.ClipboardEvent) => {
+    e.preventDefault();
+    const text = e.clipboardData.getData("text/plain").replace(/\n/g, " ");
+    document.execCommand("insertText", false, text);
+  }, []);
+
+  return (
+    <div className={cn("pl-16 pr-6 pt-8", className)}>
+      {/* Title */}
+      <div
+        ref={titleRef}
+        contentEditable
+        suppressContentEditableWarning
+        className={cn(
+          "text-4xl font-bold outline-none",
+          "empty:before:content-[attr(data-placeholder)] empty:before:text-muted-foreground/40",
+        )}
+        data-placeholder="Untitled"
+        onKeyDown={handleTitleKeyDown}
+        onBlur={(e) => handleFieldChange("title", e.currentTarget.textContent ?? "")}
+        onPaste={handlePaste}
+      />
+
+      {/* Description */}
+      <div
+        ref={subtitleRef}
+        contentEditable
+        suppressContentEditableWarning
+        className={cn(
+          "text-lg text-muted-foreground/70 outline-none mt-1",
+          "empty:before:content-[attr(data-placeholder)] empty:before:text-muted-foreground/30",
+        )}
+        data-placeholder="Add a description..."
+        onKeyDown={handleSubtitleKeyDown}
+        onBlur={(e) => handleFieldChange("description", e.currentTarget.textContent ?? "")}
+        onPaste={handlePaste}
+      />
+    </div>
+  );
+}
+
