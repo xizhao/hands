@@ -23,7 +23,9 @@ import { ExitBreakKit } from "./plugins/exit-break-kit";
 import { FloatingToolbarKit } from "./plugins/floating-toolbar-kit";
 import { FontKit } from "./plugins/font-kit";
 import { ListKit } from "./plugins/list-kit";
+import { MarkdownKit } from "./plugins/markdown-kit";
 import { SlashKit } from "./plugins/slash-kit";
+import { SandboxedBlockPlugin } from "./SandboxedBlock";
 import { TableKit } from "./plugins/table-kit";
 import { ToggleKit } from "./plugins/toggle-kit";
 
@@ -34,6 +36,7 @@ export const EditorKit = [
   ...TableKit,
   ...ToggleKit,
   ...CalloutKit,
+  SandboxedBlockPlugin,
 
   // Marks
   ...BasicMarksKit,
@@ -53,6 +56,9 @@ export const EditorKit = [
   // UI
   ...BlockSelectionKit,
   ...FloatingToolbarKit,
+
+  // Serialization
+  ...MarkdownKit,
 ];
 
 export type MyEditor = TPlateEditor<Value, (typeof EditorKit)[number]>;

@@ -5,11 +5,11 @@
  */
 
 import { Cube } from "@phosphor-icons/react";
-import type { TElement } from "platejs";
 import type { PlateEditor, PlateElementProps } from "platejs/react";
 import { PlateElement } from "platejs/react";
 import { useMemo } from "react";
 import { useManifest } from "@/hooks/useRuntimeState";
+import { SANDBOXED_BLOCK_KEY, type TSandboxedBlockElement } from "../SandboxedBlock";
 import {
   InlineCombobox,
   InlineComboboxContent,
@@ -19,13 +19,10 @@ import {
   useInlineComboboxSearchValue,
 } from "./inline-combobox";
 
-function insertBlock(editor: PlateEditor, blockId: string) {
-  const node: TElement = {
-    type: "rsc-block",
-    blockId,
-    source: "",
-    blockProps: {},
-    id: crypto.randomUUID(),
+function insertBlock(editor: PlateEditor, blockSrc: string) {
+  const node: TSandboxedBlockElement = {
+    type: SANDBOXED_BLOCK_KEY,
+    src: blockSrc,
     children: [{ text: "" }],
   };
   editor.tf.insertNodes(node);

@@ -50,8 +50,10 @@ export interface UsePageSourceReturn {
   setSource: (newSource: string) => void;
   /** Update frontmatter (updates source) */
   setFrontmatter: (newFrontmatter: Frontmatter) => void;
-  /** Force immediate save */
+  /** Force immediate save of current source */
   saveNow: () => Promise<boolean>;
+  /** Save specific source immediately (bypasses debounce) */
+  saveSourceNow: (newSource: string) => Promise<boolean>;
 }
 
 // ============================================================================
@@ -70,7 +72,11 @@ function debounce<T extends (...args: any[]) => any>(
     if (timeoutId) clearTimeout(timeoutId);
     timeoutId = setTimeout(() => {
       timeoutId = null;
-      fn(...args);
+      // Use lastArgs (most recent) not args (stale closure)
+      if (lastArgs) {
+        fn(...lastArgs);
+        lastArgs = null;
+      }
     }, delay);
   }) as T & { cancel: () => void; flush: () => void };
 
@@ -190,25 +196,22 @@ export function usePageSource({
   // ============================================================================
 
   const performSave = useCallback(
-    async (newSource: string, editVersion: number): Promise<boolean> => {
+    async (newSource: string): Promise<boolean> => {
+      console.log("[usePageSource] performSave called", { readOnly, length: newSource.length });
       if (readOnly) return false;
-
-      // Skip stale saves
-      if (editVersion < localEditVersion.current) {
-        return false;
-      }
 
       pendingSource.current = newSource;
       setIsSaving(true);
 
       try {
+        console.log("[usePageSource] calling saveSourceMutation", { route: pageId, length: newSource.length });
         await saveSourceMutation.mutateAsync({
           route: pageId,
           source: newSource,
         });
+        console.log("[usePageSource] save successful");
 
         confirmedServerSource.current = newSource;
-        savedVersion.current = editVersion;
         lastSaveTime.current = Date.now();
 
         return true;
@@ -216,22 +219,25 @@ export function usePageSource({
         setError(err instanceof Error ? err.message : "Save failed");
         return false;
       } finally {
-        if (savedVersion.current >= localEditVersion.current) {
-          pendingSource.current = null;
-          setIsSaving(false);
-        }
+        pendingSource.current = null;
+        setIsSaving(false);
       }
     },
     [pageId, readOnly, saveSourceMutation]
   );
 
-  // Debounced save
+  // Use ref to always call latest performSave from debounced function
+  const performSaveRef = useRef(performSave);
+  performSaveRef.current = performSave;
+
+  // Debounced save - stable function that uses ref
   const debouncedSave = useMemo(
     () =>
-      debounce((newSource: string, editVersion: number) => {
-        performSave(newSource, editVersion);
+      debounce((newSource: string) => {
+        console.log("[usePageSource] debounce fired, calling performSave");
+        performSaveRef.current(newSource);
       }, debounceMs),
-    [performSave, debounceMs]
+    [debounceMs] // Only recreate if debounceMs changes
   );
 
   // Cleanup on unmount
@@ -247,13 +253,12 @@ export function usePageSource({
 
   const setSource = useCallback(
     (newSource: string) => {
+      console.log("[usePageSource] setSource called", { readOnly, length: newSource.length });
       if (readOnly) return;
 
-      localEditVersion.current++;
-      const editVersion = localEditVersion.current;
-
+      console.log("[usePageSource] queuing debounced save");
       setSourceState(newSource);
-      debouncedSave(newSource, editVersion);
+      debouncedSave(newSource);
     },
     [readOnly, debouncedSave]
   );
@@ -275,9 +280,17 @@ export function usePageSource({
     if (readOnly || !source) return false;
 
     debouncedSave.cancel();
-    localEditVersion.current++;
-    return performSave(source, localEditVersion.current);
+    return performSave(source);
   }, [readOnly, source, debouncedSave, performSave]);
+
+  // Save a specific source immediately (for Cmd+S)
+  const saveSourceNow = useCallback(async (newSource: string): Promise<boolean> => {
+    if (readOnly) return false;
+
+    debouncedSave.cancel();
+    setSourceState(newSource);
+    return performSave(newSource);
+  }, [readOnly, debouncedSave, performSave]);
 
   return {
     source,
@@ -290,5 +303,6 @@ export function usePageSource({
     setSource,
     setFrontmatter,
     saveNow,
+    saveSourceNow,
   };
 }

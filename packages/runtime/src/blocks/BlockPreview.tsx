@@ -6,17 +6,26 @@ interface BlockPreviewProps {
 
 export const BlockPreview: React.FC<BlockPreviewProps> = ({ children }) => {
   return (
-    <html lang="en">
+    <html lang="en" style={{ height: "auto" }}>
       <head>
         <meta charSet="utf-8" />
         <meta name="viewport" content="width=device-width, initial-scale=1" />
-        <title>Block Preview</title>
         <link rel="stylesheet" href={styles} />
         <link rel="modulepreload" href="/src/client.tsx" />
       </head>
-      <body className="bg-gray-50 dark:bg-zinc-950 min-h-screen flex items-center justify-center p-8">
-        <div id="root">{children}</div>
+      <body
+        style={{
+          margin: 0,
+          padding: 0,
+          width: "100%",
+          height: "auto",
+          minHeight: "auto",
+          background: "transparent",
+        }}
+      >
+        <div id="root" style={{ display: "flow-root" }}>{children}</div>
         <script>import("/src/client.tsx")</script>
+        <script>import("/src/preview-client.ts")</script>
       </body>
     </html>
   );

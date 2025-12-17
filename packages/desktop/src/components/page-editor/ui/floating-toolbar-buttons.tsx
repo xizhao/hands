@@ -17,7 +17,6 @@ import { useCallback } from "react";
 import { cn } from "@/lib/utils";
 import { getBlockType, setBlockType } from "../transforms";
 
-import { CommentToolbarButton } from "./comment-toolbar-button";
 import { InlineEquationToolbarButton } from "./equation-toolbar-button";
 import { FontColorToolbarButton } from "./font-color-toolbar-button";
 import { LinkToolbarButton } from "./link-toolbar-button";
@@ -96,13 +95,6 @@ export function FloatingToolbarButtons() {
     >
       {!readOnly && (
         <>
-          {editor.plugins[KEYS.comment] && (
-            <>
-              <CommentToolbarButton />
-              <Separator />
-            </>
-          )}
-
           {/* Header buttons */}
           <HeaderButton level={1} />
           <HeaderButton level={2} />

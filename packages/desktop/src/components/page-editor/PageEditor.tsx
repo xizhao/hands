@@ -2,15 +2,15 @@
  * PageEditor - Native Plate Editor with Frontmatter
  *
  * Fetches page source via tRPC and renders with Plate.
- * Uses PageEditorKit for plugins.
+ * Handles bidirectional sync: markdown <-> Plate value
  */
 
 import { cn } from "@/lib/utils";
-import { deserializeMd } from "@platejs/markdown";
+import { deserializeMd, MarkdownPlugin } from "@platejs/markdown";
 import { Plate, PlateContent, usePlateEditor } from "platejs/react";
 import { useCallback, useEffect, useRef } from "react";
 import { EditorKit } from "./editor-kit";
-import { type Frontmatter, FrontmatterHeader } from "./frontmatter";
+import { type Frontmatter, FrontmatterHeader, serializeFrontmatter, parseFrontmatter as parseFrontmatterFromSource } from "./frontmatter";
 import { usePageSource } from "./hooks/usePageSource";
 import { FloatingToolbar } from "./ui/floating-toolbar";
 
@@ -40,40 +40,102 @@ export function PageEditor({
   const editorRef = useRef<ReturnType<typeof usePlateEditor> | null>(null);
   const subtitleRef = useRef<HTMLDivElement>(null);
 
-  // Track if we've initialized content
-  const initializedRef = useRef(false);
-  const lastContentRef = useRef<string | null>(null);
+  // Track sync state to prevent feedback loops
+  const isExternalUpdateRef = useRef(false);
+  const lastSourceRef = useRef<string | null>(null);
 
-  // Fetch page source
-  const { content, frontmatter, isLoading, isSaving, error, setFrontmatter } =
+  // Fetch page source with debounced saves and polling
+  const { source, frontmatter, isLoading, isSaving, error, setSource, setFrontmatter, saveSourceNow } =
     usePageSource({ pageId, readOnly });
 
   // Create editor
   const editor = usePlateEditor({
     plugins: EditorKit,
-    // Start with empty - will be populated from content
     value: [{ type: "p", children: [{ text: "" }] }],
   });
 
   // Store editor ref for keyboard navigation
   editorRef.current = editor;
 
-  // Sync content to editor when it changes
+  // Serialize editor content to markdown source
+  const serializeEditor = useCallback(() => {
+    try {
+      const api = editor.getApi(MarkdownPlugin);
+      const markdown = api.markdown.serialize();
+      return serializeFrontmatter(frontmatter) + markdown;
+    } catch (err) {
+      console.error("[PageEditor] Failed to serialize:", err);
+      return null;
+    }
+  }, [editor, frontmatter]);
+
+  // Handle editor changes - serialize and save (debounced)
+  const handleChange = useCallback(({ value }: { value: any }) => {
+    console.log("[PageEditor] handleChange called", { readOnly, isExternal: isExternalUpdateRef.current });
+    if (readOnly || isExternalUpdateRef.current) return;
+
+    const newSource = serializeEditor();
+    console.log("[PageEditor] serialized", { hasSource: !!newSource, length: newSource?.length });
+    if (!newSource) return;
+
+    // Only save if actually changed
+    if (newSource !== lastSourceRef.current) {
+      console.log("[PageEditor] source changed, calling setSource");
+      lastSourceRef.current = newSource;
+      setSource(newSource); // usePageSource handles debouncing
+    } else {
+      console.log("[PageEditor] source unchanged, skipping save");
+    }
+  }, [readOnly, serializeEditor, setSource]);
+
+  // Cmd+S to force immediate save
   useEffect(() => {
-    if (!content || content === lastContentRef.current) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key === "s") {
+        e.preventDefault();
+        e.stopPropagation();
+
+        if (readOnly) return;
+
+        // Force serialize and save immediately
+        const newSource = serializeEditor();
+        if (newSource) {
+          lastSourceRef.current = newSource;
+          saveSourceNow(newSource);
+        }
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown, { capture: true });
+    return () => window.removeEventListener("keydown", handleKeyDown, { capture: true });
+  }, [readOnly, serializeEditor, saveSourceNow]);
+
+  // Sync source to editor when it changes externally
+  useEffect(() => {
+    if (!source) return;
+
+    // Skip if this is from our own save
+    if (source === lastSourceRef.current) return;
+
+    // Parse frontmatter to get content
+    const { contentStart } = parseFrontmatterFromSource(source);
+    const content = source.slice(contentStart);
 
     // Deserialize markdown content to Plate value
     try {
+      isExternalUpdateRef.current = true;
       const value = deserializeMd(editor, content);
       if (value && value.length > 0) {
         editor.tf.setValue(value);
-        lastContentRef.current = content;
-        initializedRef.current = true;
+        lastSourceRef.current = source;
       }
     } catch (err) {
-      console.error("[PageEditor] Failed to deserialize content:", err);
+      console.error("[PageEditor] Failed to deserialize:", err);
+    } finally {
+      setTimeout(() => {
+        isExternalUpdateRef.current = false;
+      }, 0);
     }
-  }, [content, editor]);
+  }, [source, editor]);
 
   // Handle frontmatter changes
   const handleFrontmatterChange = useCallback(
@@ -140,7 +202,7 @@ export function PageEditor({
 
   return (
     <div className={cn("h-full flex flex-col", className)}>
-      <Plate editor={editor}>
+      <Plate editor={editor} onChange={handleChange}>
         <div className="relative h-full cursor-text overflow-y-auto">
           {/* Frontmatter header */}
           <FrontmatterHeader

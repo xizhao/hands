@@ -87,6 +87,19 @@ export interface MyMediaEmbedElement
   type: typeof KEYS.mediaEmbed;
 }
 
+export interface MySandboxedBlockElement extends MyBlockElement {
+  children: [EmptyText];
+  type: 'sandboxed_block';
+  /** Block source ID - used to fetch from /preview/{src} */
+  src?: string;
+  /** Whether this block is being created */
+  editing?: boolean;
+  /** User prompt for AI to build this block */
+  prompt?: string;
+  /** Height of the iframe */
+  height?: number;
+}
+
 export interface MyMentionElement extends TMentionElement {
   children: [EmptyText];
   type: typeof KEYS.mention;
@@ -147,6 +160,7 @@ export type MyValue = (
   | MyImageElement
   | MyMediaEmbedElement
   | MyParagraphElement
+  | MySandboxedBlockElement
   | MyTableElement
   | MyToggleElement
 )[];

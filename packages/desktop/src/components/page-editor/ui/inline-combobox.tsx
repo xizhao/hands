@@ -224,7 +224,7 @@ function InlineComboboxInput({
 }
 
 const comboboxVariants = cva(
-  'z-500 mt-1 h-full max-h-[40vh] min-w-[180px] max-w-[calc(100vw-24px)] animate-popover overflow-y-auto rounded-lg bg-popover shadow-floating',
+  'z-500 mt-1 h-full max-h-[40vh] min-w-[180px] max-w-[calc(100vw-24px)] animate-popover overflow-y-auto rounded-lg border border-border bg-popover shadow-floating',
   {
     defaultVariants: {
       variant: 'default',

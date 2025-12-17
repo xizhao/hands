@@ -23,12 +23,9 @@ export { BlockListStatic } from './block-list-static';
 // Inline Elements
 export { LinkElementStatic } from './link-node-static';
 export { MentionElementStatic } from './mention-node-static';
-export { DateElementStatic } from './date-node-static';
 
 // Leaf (text formatting)
 export { CodeLeafStatic } from './code-node-static';
-export { CommentLeafStatic } from './comment-node-static';
-export { SuggestionLeafStatic } from './suggestion-node-static';
 
 // Media
 export { ImageElementStatic } from './media-image-node-static';
