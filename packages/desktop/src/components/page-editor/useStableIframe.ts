@@ -17,7 +17,30 @@ const iframeCache = new Map<string, {
   iframe: HTMLIFrameElement;
   ready: boolean;
   height: number;
+  /** Currently mounted container (null if hidden/unmounted) */
+  activeContainer: HTMLDivElement | null;
 }>();
+
+// Debug helper - call from browser console: window.__debugIframeCache()
+if (typeof window !== 'undefined') {
+  (window as any).__debugIframeCache = () => {
+    console.log('=== Iframe Cache Debug ===');
+    console.log('Cache size:', iframeCache.size);
+    for (const [src, cached] of iframeCache) {
+      console.log(`  ${src}:`, {
+        ready: cached.ready,
+        height: cached.height,
+        hasActiveContainer: !!cached.activeContainer,
+        iframeInDOM: cached.iframe.isConnected,
+        iframeParent: cached.iframe.parentElement?.tagName,
+      });
+    }
+    console.log('All iframes in document:', document.querySelectorAll('iframe').length);
+    document.querySelectorAll('iframe').forEach((iframe, i) => {
+      console.log(`  iframe[${i}]:`, iframe.src, iframe.parentElement?.className);
+    });
+  };
+}
 
 // Callbacks registered for each iframe
 const callbackRegistry = new Map<string, {
@@ -109,26 +132,59 @@ export function useStableIframe({
     };
   }, [src, onReady, onResize, onError]);
 
-  // Mount/unmount iframe
+  // Mount/unmount iframe - use refs to avoid callback instability causing re-runs
+  const onReadyRef = useRef(onReady);
+  const onErrorRef = useRef(onError);
+  useEffect(() => {
+    onReadyRef.current = onReady;
+    onErrorRef.current = onError;
+  }, [onReady, onError]);
+
   useEffect(() => {
     const container = containerRef.current;
     if (!container) return;
 
     let cached = iframeCache.get(src);
+    let ownedIframe: HTMLIFrameElement | null = null;
+    let timeoutId: ReturnType<typeof setTimeout> | null = null;
 
-    if (cached) {
-      // Reuse existing iframe - just move it to this container
-      console.log('[useStableIframe] Reusing cached iframe:', src);
-      container.appendChild(cached.iframe);
-      cached.iframe.style.display = 'block';
+    // Case 1: Cached iframe exists and is available (not in another container)
+    if (cached && (cached.activeContainer === null || cached.activeContainer === container)) {
+      // If already in this container, nothing to do
+      if (cached.activeContainer === container && cached.iframe.parentElement === container) {
+        console.log('[useStableIframe] Iframe already in container:', src);
+        ownedIframe = cached.iframe;
+        if (cached.ready) {
+          onReadyRef.current(cached.height);
+        }
+      } else {
+        // Move cached iframe to this container
+        console.log('[useStableIframe] Reusing cached iframe:', src);
+        container.appendChild(cached.iframe);
+        cached.iframe.style.display = 'block';
+        cached.activeContainer = container;
+        ownedIframe = cached.iframe;
 
-      // If already ready, notify immediately
-      if (cached.ready) {
-        onReady(cached.height);
+        if (cached.ready) {
+          onReadyRef.current(cached.height);
+        }
       }
-    } else {
-      // Create new iframe
-      console.log('[useStableIframe] Creating new iframe:', src);
+    }
+    // Case 2: No cache OR cached iframe is in use elsewhere - create new
+    else {
+      // First, clean up any orphaned iframes in this container
+      const existingIframes = container.querySelectorAll('iframe');
+      existingIframes.forEach(iframe => {
+        console.warn('[useStableIframe] Removing orphaned iframe from container');
+        iframe.remove();
+      });
+
+      if (cached) {
+        console.log('[useStableIframe] Cached iframe in use elsewhere, creating new:', src);
+      } else {
+        console.log('[useStableIframe] Creating new iframe:', src);
+      }
+
       const iframe = document.createElement('iframe');
       iframe.src = previewUrl;
       iframe.className = 'w-full rounded-md bg-transparent';
@@ -137,39 +193,66 @@ export function useStableIframe({
       iframe.sandbox.add('allow-scripts', 'allow-same-origin');
       iframe.loading = 'lazy';
 
-      iframe.onerror = () => onError('Failed to load block');
+      iframe.onerror = () => onErrorRef.current('Failed to load block');
 
-      cached = { iframe, ready: false, height: 100 };
-      iframeCache.set(src, cached);
+      // Cache this iframe (overwrites any existing cache for this src)
+      // This is intentional - the old cached iframe must be in use by another component
+      // which will clean it up on unmount
+      if (!cached) {
+        cached = { iframe, ready: false, height: 100, activeContainer: container };
+        iframeCache.set(src, cached);
+        ownedIframe = iframe;
+      }
       container.appendChild(iframe);
 
       // Fallback timeout
-      const timeout = setTimeout(() => {
-        if (!cached!.ready) {
-          cached!.ready = true;
-          cached!.height = 100;
+      timeoutId = setTimeout(() => {
+        const currentCached = iframeCache.get(src);
+        if (currentCached && currentCached.iframe === iframe && !currentCached.ready) {
+          currentCached.ready = true;
+          currentCached.height = 100;
           const css = getThemeVariables();
           const isDark = document.documentElement.classList.contains('dark');
           iframe.contentWindow?.postMessage({ type: 'theme', css, isDark }, '*');
-          onReady(100);
+          onReadyRef.current(100);
         }
       }, 3000);
-
-      return () => clearTimeout(timeout);
     }
 
     mountedRef.current = true;
 
+    // Cleanup
     return () => {
-      // Don't destroy iframe - just hide it and keep in cache
-      if (cached) {
-        cached.iframe.style.display = 'none';
-        // Move to a hidden container to keep it alive
-        document.body.appendChild(cached.iframe);
+      if (timeoutId) {
+        clearTimeout(timeoutId);
       }
+
+      const currentCached = iframeCache.get(src);
+
+      // Only release/cleanup if we own this iframe
+      if (ownedIframe && currentCached && currentCached.iframe === ownedIframe) {
+        if (currentCached.activeContainer === container) {
+          // Release cached iframe back to body (hidden)
+          currentCached.iframe.style.display = 'none';
+          currentCached.activeContainer = null;
+          document.body.appendChild(currentCached.iframe);
+          console.log('[useStableIframe] Released iframe to cache:', src);
+        }
+      } else if (!ownedIframe) {
+        // We didn't own the cached iframe - remove any non-cached iframes we created
+        const iframes = container.querySelectorAll('iframe');
+        iframes.forEach(iframe => {
+          const isCached = currentCached && currentCached.iframe === iframe;
+          if (!isCached) {
+            console.log('[useStableIframe] Removing non-cached iframe:', src);
+            iframe.remove();
+          }
+        });
+      }
+
       mountedRef.current = false;
     };
-  }, [src, previewUrl, onReady, onError]);
+  }, [src, previewUrl]); // Only depend on src and previewUrl - callbacks use refs
 
   // Update height when it changes
   const cached = iframeCache.get(src);
@@ -210,9 +293,9 @@ export function useStableIframe({
       iframe.sandbox.add('allow-scripts', 'allow-same-origin');
       iframe.loading = 'lazy';
 
-      iframe.onerror = () => onError('Failed to load block');
+      iframe.onerror = () => onErrorRef.current('Failed to load block');
 
-      const newCached = { iframe, ready: false, height: 100 };
+      const newCached = { iframe, ready: false, height: 100, activeContainer: container };
       iframeCache.set(src, newCached);
       callbackRegistry.set(src, { onReady, onResize, onError });
       container.appendChild(iframe);
@@ -225,7 +308,7 @@ export function useStableIframe({
           const css = getThemeVariables();
           const isDark = document.documentElement.classList.contains('dark');
           iframe.contentWindow?.postMessage({ type: 'theme', css, isDark }, '*');
-          onReady(100);
+          onReadyRef.current(100);
         }
       }, 3000);
     }
@@ -254,9 +337,18 @@ export function isIframeCached(src: string): boolean {
   return cached?.ready ?? false;
 }
 
-// Get cached iframe state (height, ready status)
-export function getCachedIframeState(src: string): { ready: boolean; height: number } | null {
+// Get cached iframe state (height, ready status, availability)
+export function getCachedIframeState(src: string): {
+  ready: boolean;
+  height: number;
+  /** Whether the cached iframe is available (not in use by another component) */
+  available: boolean;
+} | null {
   const cached = iframeCache.get(src);
   if (!cached) return null;
-  return { ready: cached.ready, height: cached.height };
+  return {
+    ready: cached.ready,
+    height: cached.height,
+    available: cached.activeContainer === null,
+  };
 }

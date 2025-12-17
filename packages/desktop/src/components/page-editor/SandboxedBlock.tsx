@@ -32,7 +32,7 @@ import { useInView } from 'react-intersection-observer';
 import { cn } from '@/lib/utils';
 import { PORTS } from '@/lib/ports';
 import { HandsLogo } from '@/components/ui/hands-logo';
-import { useStableIframe } from './useStableIframe';
+import { useStableIframe, getCachedIframeState } from './useStableIframe';
 import { useCreateSession, useSendMessage } from '@/hooks/useSession';
 
 // Detailed error info from sandbox-error messages (render errors from BlockErrorBoundary)
@@ -504,14 +504,25 @@ export function SandboxedBlockElement(props: PlateElementProps) {
   });
 
   // Get cached state or use defaults
-  const cached = src ? blockStateCache.get(src) : null;
+  // IMPORTANT: Check iframe cache first - if iframe DOM is already cached, ready,
+  // AND available (not in use by another block), we can skip loading state entirely
+  const blockCached = src ? blockStateCache.get(src) : null;
+  const iframeCached = src ? getCachedIframeState(src) : null;
+
+  // Derive initial state: iframe cache is source of truth for ready state
+  // Only skip loading if iframe is both ready AND available for reuse
+  const canReuseIframe = iframeCached?.ready && iframeCached?.available;
+  const initialState: BlockState = canReuseIframe
+    ? 'ready'
+    : (blockCached?.state ?? 'loading');
+  const initialIframeHeight = iframeCached?.height ?? blockCached?.height ?? initialHeight;
 
   // State management - initialize from cache if available
-  const [state, setState] = useState<BlockState>(cached?.state ?? 'loading');
-  const [error, setError] = useState<string | null>(cached?.error ?? null);
-  const [errorInfo, setErrorInfo] = useState<SandboxErrorInfo | null>(cached?.errorInfo ?? null);
+  const [state, setState] = useState<BlockState>(initialState);
+  const [error, setError] = useState<string | null>(blockCached?.error ?? null);
+  const [errorInfo, setErrorInfo] = useState<SandboxErrorInfo | null>(blockCached?.errorInfo ?? null);
   const [isHovered, setIsHovered] = useState(false);
-  const [iframeHeight, setIframeHeight] = useState(cached?.height ?? initialHeight);
+  const [iframeHeight, setIframeHeight] = useState(initialIframeHeight);
   const [retryCount, setRetryCount] = useState(0);
   const [autoRetryCount, setAutoRetryCount] = useState(0);
   const [isAutoRetrying, setIsAutoRetrying] = useState(false);
@@ -519,7 +530,8 @@ export function SandboxedBlockElement(props: PlateElementProps) {
   const [isResizing, setIsResizing] = useState(false);
   const [isFixingWithAI, setIsFixingWithAI] = useState(false);
   // Track if content has ever loaded successfully (for subtle reload indicator)
-  const [hasLoadedOnce, setHasLoadedOnce] = useState(cached?.state === 'ready');
+  // If iframe is already cached, ready, and available, content has definitely loaded before
+  const [hasLoadedOnce, setHasLoadedOnce] = useState(canReuseIframe || blockCached?.state === 'ready');
   const retryTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const iframeReloadRef = useRef<(() => void) | null>(null);
   const persistHeightTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -553,7 +565,7 @@ export function SandboxedBlockElement(props: PlateElementProps) {
     };
   }, []);
 
-  // Update cache when state changes
+  // Update block state cache when state changes
   useEffect(() => {
     if (src) {
       blockStateCache.set(src, { state, height: iframeHeight, error, errorInfo });
