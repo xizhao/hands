@@ -12,6 +12,7 @@ import { useCallback, useEffect, useRef } from "react";
 import { EditorKit } from "./editor-kit";
 import { type Frontmatter, FrontmatterHeader, serializeFrontmatter, parseFrontmatter as parseFrontmatterFromSource } from "./frontmatter";
 import { usePageSource } from "./hooks/usePageSource";
+import { useBlockCreation } from "./hooks/useBlockCreation";
 import { FloatingToolbar } from "./ui/floating-toolbar";
 
 // ============================================================================
@@ -56,6 +57,18 @@ export function PageEditor({
 
   // Store editor ref for keyboard navigation
   editorRef.current = editor;
+
+  // Hook to handle AI block creation
+  useBlockCreation({
+    editor,
+    pageId,
+    onBlockCreated: (elementId, blockId) => {
+      console.log("[PageEditor] Block created via AI:", blockId);
+    },
+    onBlockError: (elementId, error) => {
+      console.error("[PageEditor] Block creation error:", error);
+    },
+  });
 
   // Serialize editor content to markdown source
   const serializeEditor = useCallback(() => {
