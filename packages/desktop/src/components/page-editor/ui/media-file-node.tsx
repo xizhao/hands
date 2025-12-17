@@ -2,7 +2,7 @@
 
 import { useMediaState } from '@platejs/media/react';
 import { ResizableProvider } from '@platejs/resizable';
-import { FileUpIcon } from 'lucide-react';
+import { FileArrowUp } from '@phosphor-icons/react';
 import {
   PlateElement,
   type PlateElementProps,
@@ -27,13 +27,13 @@ export const MediaFileElement = withHOC(
     return (
       <PlateElement className="my-px rounded-sm" {...props}>
         <div
-          className="group relative m-0 flex cursor-pointer items-center rounded px-0.5 py-[3px] transition-bg-ease hover:bg-muted"
+          className="group relative m-0 flex cursor-pointer items-center rounded px-0.5 py-px transition-bg-ease hover:bg-muted"
           contentEditable={false}
           onClick={onDownload}
           role="button"
         >
           <div className="flex items-center gap-1 p-1">
-            <FileUpIcon className="size-5" />
+            <FileArrowUp className="size-5" />
             <div>{name}</div>
           </div>
 

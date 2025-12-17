@@ -232,7 +232,7 @@ const GROUP = {
 
 const aiChatItems = {
   accept: {
-    icon: <CheckIcon />,
+    icon: <Check />,
     label: 'Accept',
     value: 'accept',
     onSelect: ({ aiEditor, editor }) => {
@@ -249,7 +249,7 @@ const aiChatItems = {
     },
   },
   continueWrite: {
-    icon: <PenLineIcon />,
+    icon: <PencilLine />,
     label: 'Continue writing',
     value: 'continueWrite',
     onSelect: ({ editor, input }) => {
@@ -282,7 +282,7 @@ Start writing a new paragraph AFTER <Document> ONLY ONE SENTENCE`
     },
   },
   explain: {
-    icon: <BadgeHelpIcon />,
+    icon: <Question />,
     label: 'Explain',
     value: 'explain',
     onSelect: ({ editor, input }) => {
@@ -296,7 +296,7 @@ Start writing a new paragraph AFTER <Document> ONLY ONE SENTENCE`
     },
   },
   fixSpelling: {
-    icon: <CheckIcon />,
+    icon: <Check />,
     label: 'Fix spelling & grammar',
     value: 'fixSpelling',
     onSelect: ({ editor, input }) => {
@@ -309,7 +309,7 @@ Start writing a new paragraph AFTER <Document> ONLY ONE SENTENCE`
   [GROUP.LANGUAGES]: {
     component: TranslateMenuItems,
     filterItems: true,
-    icon: <LanguagesIcon className="text-green-800" />,
+    icon: <Translate className="text-green-800" />,
     items: [
       { label: 'English', value: 'translate_english' },
       { label: 'Korean', value: 'translate_korean' },
@@ -341,7 +341,7 @@ Start writing a new paragraph AFTER <Document> ONLY ONE SENTENCE`
   [GROUP.SELECTION_LANGUAGES]: {
     component: TranslateMenuItems,
     filterItems: true,
-    icon: <LanguagesIcon className="text-green-800" />,
+    icon: <Translate className="text-green-800" />,
     items: [
       { label: 'English', value: 'translate_english' },
       { label: 'Korean', value: 'translate_korean' },
@@ -371,7 +371,7 @@ Start writing a new paragraph AFTER <Document> ONLY ONE SENTENCE`
     value: GROUP.LANGUAGES,
   },
   improveWriting: {
-    icon: <Wand />,
+    icon: <MagicWand />,
     label: 'Improve writing',
     value: 'improveWriting',
     onSelect: ({ editor, input }) => {
@@ -392,7 +392,7 @@ Start writing a new paragraph AFTER <Document> ONLY ONE SENTENCE`
     },
   },
   makeLonger: {
-    icon: <ListPlusIcon />,
+    icon: <ListPlus />,
     label: 'Make longer',
     value: 'makeLonger',
     onSelect: ({ editor, input }) => {
@@ -403,7 +403,7 @@ Start writing a new paragraph AFTER <Document> ONLY ONE SENTENCE`
     },
   },
   makeShorter: {
-    icon: <ListMinusIcon />,
+    icon: <ListMinus />,
     label: 'Make shorter',
     value: 'makeShorter',
     onSelect: ({ editor, input }) => {
@@ -414,7 +414,7 @@ Start writing a new paragraph AFTER <Document> ONLY ONE SENTENCE`
     },
   },
   simplifyLanguage: {
-    icon: <FeatherIcon />,
+    icon: <Feather />,
     label: 'Simplify language',
     value: 'simplifyLanguage',
     onSelect: ({ editor, input }) => {
@@ -425,7 +425,7 @@ Start writing a new paragraph AFTER <Document> ONLY ONE SENTENCE`
     },
   },
   summarize: {
-    icon: <AlbumIcon />,
+    icon: <Notebook />,
     label: 'Add a summary',
     value: 'summarize',
     onSelect: ({ editor, input }) => {
@@ -440,7 +440,7 @@ Start writing a new paragraph AFTER <Document> ONLY ONE SENTENCE`
     },
   },
   tryAgain: {
-    icon: <CornerUpLeftIcon />,
+    icon: <ArrowBendUpLeft />,
     label: 'Try again',
     value: 'tryAgain',
     onSelect: ({ editor, store }) => {
@@ -721,7 +721,7 @@ function SubmitIcon() {
         'flex size-5 items-center justify-center rounded-full bg-brand'
       )}
     >
-      <ArrowUpIcon className="size-3! stroke-[3px] text-background" />
+      <ArrowUp className="size-3! text-background" weight="bold" />
     </div>
   );
 }

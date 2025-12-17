@@ -1,7 +1,7 @@
 'use client';
 
 import { SuggestionPlugin } from '@platejs/suggestion/react';
-import { PencilLineIcon } from 'lucide-react';
+import { PencilLine } from '@phosphor-icons/react';
 import { useEditorPlugin, usePluginOption } from 'platejs/react';
 import * as React from 'react';
 
@@ -20,7 +20,7 @@ export function SuggestionToolbarButton() {
       onMouseDown={(e) => e.preventDefault()}
       tooltip={isSuggesting ? 'Turn off suggesting' : 'Suggestion edits'}
     >
-      <PencilLineIcon />
+      <PencilLine />
     </ToolbarButton>
   );
 }

@@ -1,19 +1,19 @@
 'use client';
 
 import {
-  ChevronDownIcon,
-  Code2Icon,
-  Columns3Icon,
-  Heading1Icon,
-  Heading2Icon,
-  Heading3Icon,
-  LightbulbIcon,
-  ListIcon,
-  ListOrderedIcon,
-  PilcrowIcon,
-  QuoteIcon,
-  SquareIcon,
-} from 'lucide-react';
+  CaretDown,
+  Code,
+  Columns,
+  TextHOne,
+  TextHTwo,
+  TextHThree,
+  Lightbulb,
+  List,
+  ListNumbers,
+  Paragraph,
+  Quotes,
+  Square,
+} from '@phosphor-icons/react';
 import { KEYS } from 'platejs';
 import { useEditorRef, useSelectionFragmentProp } from 'platejs/react';
 import * as React from 'react';
@@ -39,73 +39,73 @@ import { ToolbarButton } from './toolbar';
 
 export const turnIntoItems = [
   {
-    icon: <PilcrowIcon />,
+    icon: <Paragraph />,
     keywords: ['paragraph'],
     label: 'Text',
     value: KEYS.p,
   },
   {
-    icon: <Heading1Icon />,
+    icon: <TextHOne />,
     keywords: ['title', 'h1'],
     label: 'Heading 1',
     value: KEYS.h1,
   },
   {
-    icon: <Heading2Icon />,
+    icon: <TextHTwo />,
     keywords: ['subtitle', 'h2'],
     label: 'Heading 2',
     value: KEYS.h2,
   },
   {
-    icon: <Heading3Icon />,
+    icon: <TextHThree />,
     keywords: ['subtitle', 'h3'],
     label: 'Heading 3',
     value: KEYS.h3,
   },
   {
-    icon: <SquareIcon />,
+    icon: <Square />,
     keywords: ['checklist', 'task', 'checkbox', '[]'],
     label: 'To-do list',
     value: KEYS.listTodo,
   },
   {
-    icon: <ListIcon />,
+    icon: <List />,
     keywords: ['unordered', 'ul', '-'],
     label: 'Bulleted list',
     value: KEYS.ul,
   },
   {
-    icon: <ListOrderedIcon />,
+    icon: <ListNumbers />,
     keywords: ['ordered', 'ol', '1'],
     label: 'Numbered list',
     value: KEYS.ol,
   },
   {
-    icon: <ChevronDownIcon />,
+    icon: <CaretDown />,
     keywords: ['collapsible', 'expandable'],
     label: 'Toggle list',
     value: KEYS.toggle,
   },
   {
-    icon: <Code2Icon />,
+    icon: <Code />,
     keywords: ['```'],
     label: 'Code',
     value: KEYS.codeBlock,
   },
   {
-    icon: <QuoteIcon />,
+    icon: <Quotes />,
     keywords: ['citation', 'blockquote', '>'],
     label: 'Quote',
     value: KEYS.blockquote,
   },
   {
-    icon: <LightbulbIcon />,
+    icon: <Lightbulb />,
     keywords: ['highlight', 'note', 'important'],
     label: 'Callout',
     value: KEYS.callout,
   },
   {
-    icon: <Columns3Icon />,
+    icon: <Columns />,
     label: '3 columns',
     value: 'action_three_columns',
   },

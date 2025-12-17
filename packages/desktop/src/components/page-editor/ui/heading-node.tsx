@@ -7,7 +7,7 @@ import { PlateElement } from 'platejs/react';
 import * as React from 'react';
 
 const headingVariants = cva(
-  'relative mb-1 px-0.5 py-[3px] font-semibold leading-[1.3]!',
+  'relative mb-1 px-0.5 py-px font-semibold leading-[1.3]!',
   {
     variants: {
       isFirstBlock: {
