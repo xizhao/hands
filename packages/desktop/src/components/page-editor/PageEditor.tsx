@@ -225,7 +225,7 @@ export function PageEditor({
           {/* Editor content */}
           <PlateContent
             className={cn(
-              "py-4 pl-16 pr-6 min-h-[200px] outline-none",
+              "pt-4 pb-32 pl-16 pr-6 min-h-[200px] outline-none",
               "prose prose-sm dark:prose-invert max-w-none",
               "[&_p]:my-2",
               "[&_h1]:mt-6 [&_h1]:mb-4 [&_h1]:text-3xl [&_h1]:font-bold",

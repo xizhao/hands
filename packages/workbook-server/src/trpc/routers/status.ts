@@ -17,9 +17,6 @@ export interface StatusContext {
     rscReady: boolean;
     rscPort: number | null;
     rscError: string | null;
-    editorReady: boolean;
-    editorPort: number | null;
-    editorRestartCount: number;
     buildErrors: string[];
   };
 }
@@ -57,11 +54,6 @@ export const statusRouter = t.router({
           ready: state.rscReady,
           port: state.rscPort,
           error: state.rscError,
-        },
-        editor: {
-          ready: state.editorReady,
-          port: state.editorPort,
-          restartCount: state.editorRestartCount,
         },
       },
       buildErrors: state.buildErrors,

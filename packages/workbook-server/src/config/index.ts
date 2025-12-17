@@ -72,39 +72,6 @@ export function getStdlibSourcePath(): string {
 }
 
 /**
- * Get the actual path to @hands/editor source
- * Works in both development (monorepo) and production
- */
-export function getEditorSourcePath(): string {
-  // In development, editor is a sibling package in packages/editor
-  const devPath = resolve(import.meta.dir, "../../../editor");
-  if (existsSync(join(devPath, "package.json"))) {
-    try {
-      return realpathSync(devPath);
-    } catch {
-      return devPath;
-    }
-  }
-  // Fallback: check relative to workbook-server package root
-  const workbookServerRoot = resolve(import.meta.dir, "../..");
-  const altDevPath = resolve(workbookServerRoot, "../editor");
-  if (existsSync(join(altDevPath, "package.json"))) {
-    try {
-      return realpathSync(altDevPath);
-    } catch {
-      return altDevPath;
-    }
-  }
-  // Last resort: node_modules
-  const nodeModulesPath = resolve(import.meta.dir, "../../node_modules/@hands/editor");
-  try {
-    return realpathSync(nodeModulesPath);
-  } catch {
-    return nodeModulesPath;
-  }
-}
-
-/**
  * Get the actual path to @hands/runtime source
  * This is the Vite runtime package with vite.config.mts
  * Works in both development (monorepo) and production

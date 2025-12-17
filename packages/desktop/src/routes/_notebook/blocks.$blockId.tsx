@@ -1,5 +1,5 @@
 import { EmptyBlockView } from "@/components/workbook/EmptyBlockView";
-import { EditorSandbox } from "@/components/workbook/editor/EditorSandbox";
+import { BlockPreview } from "@/components/workbook/BlockPreview";
 import { useBlockContent } from "@/hooks/useWorkbook";
 import { useQueryClient } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
@@ -53,6 +53,6 @@ function BlockView() {
     );
   }
 
-  // Non-empty block - sandbox handles canvas styling
-  return <EditorSandbox blockId={blockId} className="h-full" />;
+  // Render block preview directly from runtime (no editor server needed)
+  return <BlockPreview blockId={blockId} className="h-full" />;
 }

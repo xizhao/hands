@@ -40,7 +40,7 @@ export const setCommonHeaders =
       : "frame-ancestors 'self'";
     response.headers.set(
       "Content-Security-Policy",
-      `default-src 'self'; script-src 'self' 'unsafe-eval' 'nonce-${nonce}' https://challenges.cloudflare.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; ${frameAncestors}; frame-src 'self' https://challenges.cloudflare.com; object-src 'none';`
+      `default-src 'self'; script-src 'self' 'unsafe-eval' 'nonce-${nonce}' https://challenges.cloudflare.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; connect-src 'self' https://www.react-grab.com; ${frameAncestors}; frame-src 'self' https://challenges.cloudflare.com; object-src 'none';`
     );
   };
 

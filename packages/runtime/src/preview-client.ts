@@ -5,25 +5,78 @@
  * - Receives theme styles from parent
  * - Reports errors back to parent
  * - Signals when ready
+ * - React-grab for element selection context capture
  */
 
-// Listen for styles from parent
+import { init as initGrab } from "react-grab/core";
+
+// Extract block ID from URL path: /preview/:blockId
+const blockId = window.location.pathname.split("/preview/")[1] || "";
+
+// Initialize react-grab with callbacks and postMessage
+const grabApi = initGrab({
+  theme: {
+    enabled: true,
+    crosshair: { enabled: true },
+    elementLabel: { enabled: true },
+  },
+
+  onElementSelect: (element: Element) => {
+    window.parent.postMessage({
+      type: "grab-select",
+      blockId,
+      tagName: element.tagName,
+    }, "*");
+  },
+
+  onCopySuccess: (_elements: Element[], content: string) => {
+    window.parent.postMessage({
+      type: "grab-context",
+      content,
+      blockId,
+    }, "*");
+  },
+
+  onStateChange: (state: { isActive: boolean }) => {
+    window.parent.postMessage({
+      type: "grab-state",
+      isActive: state.isActive,
+      blockId,
+    }, "*");
+  },
+});
+
+// Expose API for debugging
+(window as any).__GRAB_API__ = grabApi;
+console.log("[preview-client] react-grab ready, api:", grabApi);
+
+// Listen for messages from parent
 window.addEventListener("message", (e) => {
-  if (e.data?.type === "styles") {
-    let style = document.getElementById("parent-styles") as HTMLStyleElement | null;
+  // Theme sync
+  if (e.data?.type === "theme") {
+    let style = document.getElementById("theme-vars") as HTMLStyleElement | null;
     if (!style) {
       style = document.createElement("style");
-      style.id = "parent-styles";
+      style.id = "theme-vars";
       document.head.appendChild(style);
     }
     style.textContent = e.data.css;
 
-    // Toggle dark class based on parent's theme
+    // Sync dark mode class
     if (e.data.isDark) {
       document.documentElement.classList.add("dark");
     } else {
       document.documentElement.classList.remove("dark");
     }
+  }
+
+  // React-grab control from parent
+  if (e.data?.type === "grab-activate") {
+    grabApi.activate();
+  } else if (e.data?.type === "grab-deactivate") {
+    grabApi.deactivate();
+  } else if (e.data?.type === "grab-toggle") {
+    grabApi.toggle();
   }
 });
 

@@ -9,6 +9,7 @@ import { editorPlugin } from "./src/vite-plugin-editor";
 import { dbTypesPlugin } from "./src/vite-plugin-db-types";
 import { pagesPlugin } from "./src/vite-plugin-pages";
 import { staleDepRetryPlugin } from "./src/vite-plugin-stale-dep-retry";
+import { tailwindSourcePlugin } from "./src/vite-plugin-tailwind-source";
 import { tunnelPlugin } from "./src/vite-plugin-tunnel";
 
 const isDev = process.env.NODE_ENV !== "production";
@@ -129,6 +130,8 @@ export default defineConfig({
         path.resolve(workbookPath, "ui/**/*.tsx"),
       ],
     }),
+    // Inject @source directives into styles.css for workbook content
+    tailwindSourcePlugin({ workbookPath }),
     tailwindcss(),
   ],
   resolve: {

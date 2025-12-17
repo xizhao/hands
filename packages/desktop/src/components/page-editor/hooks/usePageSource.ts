@@ -118,17 +118,16 @@ export function usePageSource({
 
   // Refs for tracking
   const confirmedServerSource = useRef<string | null>(null);
-  const localEditVersion = useRef(0);
-  const savedVersion = useRef(0);
   const pendingSource = useRef<string | null>(null);
   const lastSaveTime = useRef(0);
+  const hasPendingEdits = useRef(false);
   const SAVE_GRACE_PERIOD_MS = 2000;
 
   // tRPC mutations
   const saveSourceMutation = trpc.pages.saveSource.useMutation();
 
   // Compute derived state
-  const isDirty = localEditVersion.current > savedVersion.current;
+  const isDirty = hasPendingEdits.current;
   const { frontmatter, contentStart } = source
     ? parseFrontmatter(source)
     : { frontmatter: {}, contentStart: 0 };
@@ -180,7 +179,7 @@ export function usePageSource({
         }
 
         // If no local edits, apply external change
-        if (localEditVersion.current <= savedVersion.current) {
+        if (!hasPendingEdits.current) {
           setSourceState(serverSource);
           confirmedServerSource.current = serverSource;
         } else {
@@ -213,6 +212,7 @@ export function usePageSource({
 
         confirmedServerSource.current = newSource;
         lastSaveTime.current = Date.now();
+        hasPendingEdits.current = false;
 
         return true;
       } catch (err) {
@@ -257,6 +257,7 @@ export function usePageSource({
       if (readOnly) return;
 
       console.log("[usePageSource] queuing debounced save");
+      hasPendingEdits.current = true;
       setSourceState(newSource);
       debouncedSave(newSource);
     },

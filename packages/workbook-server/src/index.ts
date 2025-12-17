@@ -25,7 +25,7 @@ import {
   startScheduler,
   stopScheduler,
 } from "./actions/index.js";
-import { getEditorSourcePath, getRuntimeSourcePath } from "./config/index.js";
+import { getRuntimeSourcePath } from "./config/index.js";
 import { PORTS, waitForPortFree } from "./ports.js";
 import { registerSourceRoutes } from "./sources/index.js";
 import { registerTRPCRoutes } from "./trpc/index.js";
@@ -35,7 +35,6 @@ interface RuntimeConfig {
   workbookId: string;
   workbookDir: string;
   port: number;
-  noEditor?: boolean;
 }
 
 interface RuntimeState {
@@ -44,13 +43,6 @@ interface RuntimeState {
   rscPort: number | null;
   rscProc: ChildProcess | null;
   rscError: string | null;
-  editorReady: boolean;
-  editorPort: number | null;
-  editorProc: ChildProcess | null;
-  editorRestartCount: number;
-  editorReadyPromise: Promise<void> | null;
-  editorReadyResolve: (() => void) | null;
-  editorConfig: RuntimeConfig | null;
   fileWatchers: FSWatcher[];
   buildErrors: string[];
   pageRegistry: PageRegistry | null;
@@ -62,20 +54,10 @@ const state: RuntimeState = {
   rscPort: null,
   rscProc: null,
   rscError: null,
-  editorReady: false,
-  editorPort: null,
-  editorProc: null,
-  editorRestartCount: 0,
-  editorReadyPromise: null,
-  editorReadyResolve: null,
-  editorConfig: null,
   buildErrors: [],
   fileWatchers: [],
   pageRegistry: null,
 };
-
-// Max restarts before giving up
-const MAX_EDITOR_RESTARTS = 3;
 
 /**
  * Format a block source file with Biome + TypeScript import organization
@@ -150,7 +132,7 @@ function parseArgs(): RuntimeConfig {
 
   if (!args.workbook_id || !args.workbook_dir) {
     console.error(
-      "Usage: hands-runtime --workbook-id=<id> --workbook-dir=<dir> [--port=<port>] [--no-editor]",
+      "Usage: hands-runtime --workbook-id=<id> --workbook-dir=<dir> [--port=<port>]",
     );
     process.exit(1);
   }
@@ -159,7 +141,6 @@ function parseArgs(): RuntimeConfig {
     workbookId: args.workbook_id,
     workbookDir: args.workbook_dir,
     port: args.port ? parseInt(args.port, 10) : PORTS.RUNTIME,
-    noEditor: "no_editor" in args,
   };
 }
 
@@ -717,9 +698,6 @@ function createApp(config: RuntimeConfig) {
       rscReady: state.rscReady,
       rscPort: state.rscPort,
       rscError: state.rscError,
-      editorReady: state.editorReady,
-      editorPort: state.editorPort,
-      editorRestartCount: state.editorRestartCount,
       buildErrors: state.buildErrors,
     }),
     // External manifest provides sources, actions, config (blocks/pages now come from discovery)
@@ -1166,92 +1144,6 @@ export const __SECRET_INTERNALS_DO_NOT_USE_OR_YOU_WILL_BE_FIRED = RD.__SECRET_IN
     }
   });
 
-  // Proxy editor sandbox routes to editor Vite dev server
-  // Desktop loads editor via /sandbox/sandbox.html
-  // Awaits the editor ready promise if not yet ready
-  app.all("/sandbox/*", async (c) => {
-    // If editor not ready, await the readiness promise
-    if (!state.editorReady || !state.editorPort) {
-      // If editor is down and we have config, try to restart it
-      if (
-        !state.editorProc &&
-        state.editorConfig &&
-        state.editorRestartCount < MAX_EDITOR_RESTARTS
-      ) {
-        console.log("[runtime] Editor down on request, triggering restart...");
-        state.editorRestartCount++;
-        bootEditor(state.editorConfig, true);
-      }
-
-      // Await the editor ready promise with a timeout
-      if (state.editorReadyPromise) {
-        const timeoutPromise = new Promise<void>((_, reject) => {
-          setTimeout(() => reject(new Error("Editor startup timeout")), 30000);
-        });
-        try {
-          await Promise.race([state.editorReadyPromise, timeoutPromise]);
-        } catch {
-          // Timeout or error - fall through to check state
-        }
-      }
-
-      // Final check after awaiting
-      if (!state.editorReady || !state.editorPort) {
-        return c.json(
-          {
-            error: "Editor not ready",
-            booting: !!state.editorProc,
-            restartCount: state.editorRestartCount,
-          },
-          503,
-        );
-      }
-    }
-
-    // Rewrite /sandbox/foo to /foo on the editor server
-    const url = new URL(c.req.url);
-    url.host = `localhost:${state.editorPort}`;
-    url.pathname = url.pathname.replace(/^\/sandbox/, "");
-
-    try {
-      const response = await fetch(url.toString(), {
-        method: c.req.method,
-        headers: c.req.raw.headers,
-        body: c.req.method !== "GET" ? await c.req.text() : undefined,
-      });
-
-      const headers = new Headers(response.headers);
-      headers.delete("transfer-encoding");
-
-      // For HTML responses, rewrite Vite's internal paths to use /sandbox prefix
-      // This ensures /@vite/client and /@react-refresh resolve correctly
-      const contentType = response.headers.get("content-type") || "";
-      if (contentType.includes("text/html")) {
-        let html = await response.text();
-        // Rewrite absolute Vite paths to use /sandbox prefix
-        html = html.replace(/"\/@vite\//g, '"/sandbox/@vite/');
-        html = html.replace(/"\/@react-refresh/g, '"/sandbox/@react-refresh');
-        html = html.replace(/"\/@fs\//g, '"/sandbox/@fs/');
-        return new Response(html, {
-          status: response.status,
-          headers,
-        });
-      }
-
-      return new Response(response.body, {
-        status: response.status,
-        headers,
-      });
-    } catch (err) {
-      // If proxy fails, editor might have crashed - mark as not ready
-      if (state.editorReady) {
-        console.error("[runtime] Editor proxy failed, marking as not ready:", err);
-        state.editorReady = false;
-      }
-      return c.json({ error: `Editor proxy failed: ${String(err)}` }, 502);
-    }
-  });
-
   return app;
 }
 
@@ -1477,150 +1369,6 @@ async function bootRuntime(config: RuntimeConfig) {
 }
 
 /**
- * Boot the editor sandbox Vite dev server
- * This serves the visual editor UI that runs inside the iframe
- * Supports automatic restart on crash (up to MAX_EDITOR_RESTARTS times)
- *
- * Returns a promise that resolves when the editor is ready.
- * Also stores the promise in state.editorReadyPromise for request handlers to await.
- */
-async function bootEditor(config: RuntimeConfig, isRestart = false) {
-  // Store config for potential restarts
-  state.editorConfig = config;
-
-  const editorPort = PORTS.EDITOR;
-  const editorPath = getEditorSourcePath();
-
-  // Ensure editor port is free before starting
-  const portFree = await waitForPortFree(editorPort, 3000, true);
-  if (!portFree) {
-    console.error(`[runtime] Editor port ${editorPort} is still in use after cleanup attempt`);
-  }
-
-  if (!existsSync(editorPath)) {
-    console.warn(`[runtime] Editor package not found at ${editorPath}, skipping editor server`);
-    // Resolve promise immediately since there's nothing to wait for
-    state.editorReadyPromise = Promise.resolve();
-    return;
-  }
-
-  // Create a new promise that will resolve when the editor is ready
-  // This allows request handlers to await editor readiness
-  state.editorReadyPromise = new Promise<void>((resolve) => {
-    state.editorReadyResolve = resolve;
-  });
-
-  if (isRestart) {
-    console.log(
-      `[runtime] Restarting editor sandbox (attempt ${state.editorRestartCount + 1}/${MAX_EDITOR_RESTARTS})...`,
-    );
-  } else {
-    console.log(`[runtime] Starting editor sandbox on port ${editorPort}...`);
-  }
-
-  try {
-    // Start Vite for the editor sandbox using bun to run the package script
-    // This ensures we use the package's local vite version
-    state.editorProc = spawn(
-      "bun",
-      [
-        "run",
-        "vite",
-        "--config",
-        "vite.sandbox.config.ts",
-        "--port",
-        String(editorPort),
-        "--host",
-        "127.0.0.1",
-      ],
-      {
-        cwd: editorPath,
-        stdio: ["ignore", "pipe", "pipe"],
-        env: {
-          ...process.env,
-          // Pass runtime port so editor knows where to fetch RSC/API
-          RUNTIME_PORT: String(config.port),
-        },
-      },
-    );
-
-    let stderrBuffer = "";
-
-    // Forward output
-    state.editorProc.stdout?.on("data", (data) => {
-      process.stdout.write(`[editor] ${data}`);
-    });
-    state.editorProc.stderr?.on("data", (data) => {
-      const str = data.toString();
-      stderrBuffer += str;
-      process.stderr.write(`[editor] ${str}`);
-    });
-
-    state.editorProc.on("exit", (code, signal) => {
-      const wasReady = state.editorReady;
-      state.editorReady = false;
-      state.editorProc = null;
-
-      if (wasReady) {
-        console.error(`[runtime] Editor crashed (code=${code}, signal=${signal})`);
-        if (stderrBuffer) {
-          console.error(`[runtime] Editor stderr: ${stderrBuffer.slice(-500)}`);
-        }
-
-        // Attempt restart if under limit
-        if (state.editorRestartCount < MAX_EDITOR_RESTARTS && state.editorConfig) {
-          state.editorRestartCount++;
-          console.log(`[runtime] Attempting editor restart in 1s...`);
-          setTimeout(() => {
-            bootEditor(state.editorConfig!, true);
-          }, 1000);
-        } else if (state.editorRestartCount >= MAX_EDITOR_RESTARTS) {
-          console.error(
-            `[runtime] Editor exceeded max restarts (${MAX_EDITOR_RESTARTS}), giving up`,
-          );
-        }
-      }
-    });
-
-    // Wait for editor to be ready
-    const timeout = 30000;
-    const startTime = Date.now();
-
-    while (Date.now() - startTime < timeout) {
-      try {
-        const response = await fetch(`http://localhost:${editorPort}/sandbox.html`, {
-          signal: AbortSignal.timeout(1000),
-        });
-        if (response.ok) {
-          state.editorPort = editorPort;
-          state.editorReady = true;
-          // Reset restart count on successful boot
-          if (isRestart) {
-            console.log(`[runtime] Editor recovered successfully on port ${editorPort}`);
-          } else {
-            console.log(`[runtime] Editor ready on port ${editorPort}`);
-          }
-          state.editorRestartCount = 0;
-          // Resolve the promise so any waiting requests can proceed
-          if (state.editorReadyResolve) {
-            state.editorReadyResolve();
-            state.editorReadyResolve = null;
-          }
-          return;
-        }
-      } catch {
-        // Not ready yet
-      }
-      await new Promise((resolve) => setTimeout(resolve, 500));
-    }
-
-    console.error("[runtime] Editor failed to start within timeout");
-  } catch (err) {
-    console.error("[runtime] Editor boot failed:", err);
-  }
-}
-
-/**
  * Run the check command - diagnostics without starting server
  *
  * Usage: hands-runtime check <workbook-dir> [--json] [--fix]
@@ -1749,18 +1497,10 @@ async function main() {
   );
 
   // Boot Vite (block server) - can take a few seconds
-  // Editor/sandbox will show loading state until worker is ready
   bootRuntime(config).catch((err) => {
     console.error("[runtime] Vite boot failed:", err);
     state.rscError = err instanceof Error ? err.message : String(err);
   });
-
-  // Editor can start in parallel with Vite
-  if (!config.noEditor) {
-    bootEditor(config);
-  } else {
-    console.log("[runtime] Editor disabled (--no-editor)");
-  }
 
   // 4. Start file watcher for real-time manifest updates
   startFileWatcher(config);
@@ -1776,7 +1516,6 @@ async function main() {
     }
     // Close runtime process (SQLite database lives in runtime)
     if (state.rscProc) state.rscProc.kill();
-    if (state.editorProc) state.editorProc.kill();
     server.stop();
     process.exit(0);
   };

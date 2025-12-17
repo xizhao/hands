@@ -20,43 +20,45 @@ import {
   useSelected,
 } from 'platejs/react';
 import * as React from 'react';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import { cn } from '@/lib/utils';
 import { PORTS } from '@/lib/ports';
+import { HandsLogo } from '@/components/ui/hands-logo';
+
+// Cache for block states to persist across remounts
+const blockStateCache = new Map<string, {
+  state: 'loading' | 'error' | 'ready';
+  height: number;
+  error: string | null;
+}>();
 
 export const SANDBOXED_BLOCK_KEY = 'sandboxed_block';
 
-// CSS variables to inject into iframe (must match theme)
-const CSS_VARS = [
-  'background', 'foreground', 'card', 'card-foreground', 'popover', 'popover-foreground',
-  'primary', 'primary-foreground', 'secondary', 'secondary-foreground',
-  'muted', 'muted-foreground', 'accent', 'accent-foreground',
-  'destructive', 'destructive-foreground', 'border', 'input', 'ring', 'radius',
-  'chart-1', 'chart-2', 'chart-3', 'chart-4', 'chart-5',
-  'brand', 'brand-foreground', 'brand-active', 'brand-15', 'brand-25', 'brand-50',
-  'highlight', 'subtle-foreground',
-];
+/**
+ * Get CSS variables using getComputedStyle (FAST - no stylesheet iteration)
+ * Only extracts the theme variables we use, not all CSS rules
+ */
+function getThemeVariables(): string {
+  const computed = getComputedStyle(document.documentElement);
+  const vars: string[] = [];
 
-// HSL vars that need hsl() wrapper
-const HSL_VARS = new Set(CSS_VARS.filter((v) => v !== 'radius'));
+  const varNames = [
+    '--background', '--foreground', '--card', '--card-foreground',
+    '--popover', '--popover-foreground', '--primary', '--primary-foreground',
+    '--secondary', '--secondary-foreground', '--muted', '--muted-foreground',
+    '--accent', '--accent-foreground', '--destructive', '--destructive-foreground',
+    '--border', '--input', '--ring', '--radius',
+    '--brand', '--brand-foreground', '--brand-10', '--brand-15', '--brand-25',
+    '--brand-50', '--brand-80', '--brand-90', '--highlight',
+  ];
 
-/** Generate CSS string from current theme */
-function generateThemeStyles(): string {
-  const root = document.documentElement;
-  const computedStyle = getComputedStyle(root);
+  for (const name of varNames) {
+    const value = computed.getPropertyValue(name).trim();
+    if (value) vars.push(`${name}:${value}`);
+  }
 
-  const cssVars = CSS_VARS.map((v) => {
-    const value = computedStyle.getPropertyValue(`--${v}`).trim();
-    if (!value) return null;
-    // Wrap HSL values in hsl() for Tailwind v4
-    if (HSL_VARS.has(v) && !value.startsWith('hsl') && !value.startsWith('rgb')) {
-      return `--${v}:hsl(${value})`;
-    }
-    return `--${v}:${value}`;
-  }).filter(Boolean).join(';');
-
-  return `:root{${cssVars}}`;
+  return `:root{${vars.join(';')}}`;
 }
 
 // ============================================================================
@@ -73,36 +75,21 @@ export interface TSandboxedBlockElement extends TElement {
   prompt?: string;
   /** Height of the iframe */
   height?: number;
+  /** Tables linked/referenced by this block's SQL queries */
+  linkedTables?: string[];
 }
 
 // ============================================================================
-// Loading Skeleton
+// Loading Placeholder
 // ============================================================================
 
-function LoadingSkeleton() {
+function LoadingPlaceholder() {
   return (
-    <div className="animate-pulse space-y-3 p-4">
-      {/* Header skeleton */}
-      <div className="flex items-center gap-3">
-        <div className="h-8 w-8 rounded-lg bg-muted/60" />
-        <div className="h-4 w-32 rounded bg-muted/60" />
-      </div>
-      {/* Content skeleton */}
-      <div className="space-y-2">
-        <div className="h-3 w-full rounded bg-muted/40" />
-        <div className="h-3 w-4/5 rounded bg-muted/40" />
-        <div className="h-3 w-3/5 rounded bg-muted/40" />
-      </div>
-      {/* Chart-like skeleton */}
-      <div className="flex h-24 items-end gap-1 pt-4">
-        {[40, 65, 45, 80, 55, 70, 50, 85, 60, 75].map((h, i) => (
-          <div
-            key={i}
-            className="flex-1 rounded-t bg-muted/50"
-            style={{ height: `${h}%` }}
-          />
-        ))}
-      </div>
+    <div className="flex items-center gap-3 rounded-lg border border-border/50 bg-muted/30 px-4 py-3">
+      {/* Spinner */}
+      <div className="size-8 shrink-0 animate-spin rounded-full border-2 border-muted-foreground/20 border-t-muted-foreground/60" />
+      {/* Text */}
+      <span className="text-sm text-muted-foreground">Loading block...</span>
     </div>
   );
 }
@@ -113,14 +100,14 @@ function LoadingSkeleton() {
 
 function EditingPlaceholder({ prompt }: { prompt?: string }) {
   return (
-    <div className="relative flex items-center gap-3 overflow-hidden rounded-lg border border-primary/20 bg-gradient-to-r from-primary/5 via-primary/10 to-primary/5 px-4 py-3">
-      {/* Shimmer sweep */}
-      <div className="absolute inset-0 animate-shimmer bg-gradient-to-r from-transparent via-primary/30 to-transparent" />
+    <div className="relative flex items-center gap-3 overflow-hidden rounded-lg border border-brand/30 bg-brand/5 px-4 py-3">
+      {/* Aggressive shimmer sweep */}
+      <div className="absolute inset-0 animate-shimmer-fast bg-gradient-to-r from-transparent via-brand/40 to-transparent" />
 
       {/* Icon */}
-      <div className="relative flex size-8 shrink-0 items-center justify-center rounded-md bg-primary/10">
+      <div className="relative flex size-8 shrink-0 items-center justify-center rounded-md bg-brand/10">
         <svg
-          className="size-5 text-primary"
+          className="size-5 text-brand"
           viewBox="0 0 32 32"
           fill="currentColor"
         >
@@ -129,8 +116,8 @@ function EditingPlaceholder({ prompt }: { prompt?: string }) {
       </div>
 
       {/* Text */}
-      <span className="text-sm font-medium text-primary/80">
-        Creating {prompt ? `"${prompt}"` : 'block'} with Hands...
+      <span className="text-sm font-medium text-brand/80">
+        Creating {prompt ? `"${prompt}"` : 'block'}...
       </span>
     </div>
   );
@@ -181,6 +168,138 @@ function ErrorPlaceholder({
 }
 
 // ============================================================================
+// Memoized Iframe Component
+// ============================================================================
+
+interface BlockIframeProps {
+  src: string;
+  previewUrl: string;
+  height: number;
+  isLoading: boolean;
+  isGrabActive: boolean;
+  onReady: (height: number) => void;
+  onResize: (height: number) => void;
+  onError: (error: string) => void;
+  onGrabActivate: () => void;
+  onGrabDeactivate: () => void;
+}
+
+const BlockIframe = memo(function BlockIframe({
+  src,
+  previewUrl,
+  height,
+  isLoading,
+  isGrabActive,
+  onReady,
+  onResize,
+  onError,
+  onGrabActivate,
+  onGrabDeactivate,
+}: BlockIframeProps) {
+  const iframeRef = useRef<HTMLIFrameElement>(null);
+  const readyRef = useRef(false);
+
+  // Send theme variables to iframe (fast - uses getComputedStyle, no iteration)
+  const sendTheme = useCallback(() => {
+    const iframe = iframeRef.current;
+    if (!iframe?.contentWindow) return;
+
+    const css = getThemeVariables();
+    const isDark = document.documentElement.classList.contains('dark');
+    iframe.contentWindow.postMessage({ type: 'theme', css, isDark }, '*');
+  }, []);
+
+  // Listen for messages from iframe
+  useEffect(() => {
+    const handleMessage = (e: MessageEvent) => {
+      if (e.source !== iframeRef.current?.contentWindow) return;
+
+      if (e.data?.type === 'sandbox-ready' && !readyRef.current) {
+        readyRef.current = true;
+        sendTheme();
+        const h = typeof e.data.height === 'number' && e.data.height > 0 ? e.data.height : 100;
+        onReady(h);
+      }
+
+      if (e.data?.type === 'sandbox-resize') {
+        if (typeof e.data.height === 'number' && e.data.height > 0) {
+          onResize(e.data.height);
+        }
+      }
+
+      if (e.data?.type === 'sandbox-error') {
+        console.error('[SandboxedBlock] Error from iframe:', e.data.error);
+        onError(e.data.error?.message || 'Unknown error in block');
+      }
+    };
+
+    window.addEventListener('message', handleMessage);
+    return () => window.removeEventListener('message', handleMessage);
+  }, [onReady, onResize, onError, sendTheme]);
+
+  // Fallback timeout
+  useEffect(() => {
+    const timeout = setTimeout(() => {
+      if (!readyRef.current) {
+        readyRef.current = true;
+        sendTheme();
+        onReady(100);
+      }
+    }, 3000);
+
+    return () => clearTimeout(timeout);
+  }, [onReady, sendTheme]);
+
+  // Sync theme changes (debounced)
+  useEffect(() => {
+    if (!readyRef.current) return;
+
+    let timer: ReturnType<typeof setTimeout>;
+    const observer = new MutationObserver(() => {
+      clearTimeout(timer);
+      timer = setTimeout(sendTheme, 50);
+    });
+
+    observer.observe(document.documentElement, {
+      attributes: true,
+      attributeFilter: ['class'],
+    });
+
+    return () => {
+      observer.disconnect();
+      clearTimeout(timer);
+    };
+  }, [sendTheme]);
+
+  // Send grab activate/deactivate to iframe
+  useEffect(() => {
+    const iframe = iframeRef.current;
+    if (!iframe?.contentWindow || !readyRef.current) return;
+
+    if (isGrabActive) {
+      iframe.contentWindow.postMessage({ type: 'grab-activate' }, '*');
+    } else {
+      iframe.contentWindow.postMessage({ type: 'grab-deactivate' }, '*');
+    }
+  }, [isGrabActive]);
+
+  return (
+    <iframe
+      ref={iframeRef}
+      className={cn(
+        'w-full rounded-md bg-transparent',
+        isLoading && 'invisible'
+      )}
+      src={previewUrl}
+      style={{ height, border: 'none' }}
+      title={`Block: ${src}`}
+      sandbox="allow-scripts allow-same-origin"
+      onError={() => onError('Failed to load block')}
+    />
+  );
+});
+
+// ============================================================================
 // Component
 // ============================================================================
 
@@ -190,112 +309,66 @@ export function SandboxedBlockElement(props: PlateElementProps) {
   const element = useElement<TSandboxedBlockElement>();
   const selected = useSelected();
   const readOnly = useReadOnly();
-  const iframeRef = useRef<HTMLIFrameElement>(null);
 
-  const { src, editing, prompt, height: initialHeight = 400 } = element;
+  const { src, editing, prompt, height: initialHeight = 400, linkedTables = [] } = element;
 
-  // State management
-  const [state, setState] = useState<BlockState>('loading');
-  const [error, setError] = useState<string | null>(null);
+  // Get cached state or use defaults
+  const cached = src ? blockStateCache.get(src) : null;
+
+  // State management - initialize from cache if available
+  const [state, setState] = useState<BlockState>(cached?.state ?? 'loading');
+  const [error, setError] = useState<string | null>(cached?.error ?? null);
   const [isHovered, setIsHovered] = useState(false);
-  const [iframeHeight, setIframeHeight] = useState(initialHeight);
+  const [iframeHeight, setIframeHeight] = useState(cached?.height ?? initialHeight);
+  const [retryCount, setRetryCount] = useState(0);
+  const [isGrabActive, setIsGrabActive] = useState(false);
 
-  const previewUrl = src ? `http://localhost:${PORTS.WORKER}/preview/${src}` : null;
+  // Memoize the URL to prevent unnecessary re-renders
+  const previewUrl = useMemo(
+    () => src ? `http://localhost:${PORTS.WORKER}/preview/${src}` : null,
+    [src]
+  );
 
-  // Send styles to iframe
-  const sendStyles = useCallback(() => {
-    if (!iframeRef.current?.contentWindow) return;
-    const css = generateThemeStyles();
-    const isDark = document.documentElement.classList.contains('dark');
-    iframeRef.current.contentWindow.postMessage({ type: 'styles', css, isDark }, '*');
-  }, []);
-
-  // Listen for messages from this specific iframe
-  useEffect(() => {
-    const handleMessage = (e: MessageEvent) => {
-      // Only handle messages from our iframe
-      if (e.source !== iframeRef.current?.contentWindow) return;
-
-      if (e.data?.type === 'sandbox-ready') {
-        sendStyles();
-        setState('ready');
-        setError(null);
-        // Set initial height from iframe if provided
-        if (typeof e.data.height === 'number' && e.data.height > 0) {
-          setIframeHeight(e.data.height);
-        }
-      }
-
-      if (e.data?.type === 'sandbox-resize') {
-        // Update height when content size changes
-        if (typeof e.data.height === 'number' && e.data.height > 0) {
-          setIframeHeight(e.data.height);
-        }
-      }
-
-      if (e.data?.type === 'sandbox-error') {
-        console.error('[SandboxedBlock] Error from iframe:', e.data.error);
-        setState('error');
-        setError(e.data.error?.message || 'Unknown error in block');
-      }
-    };
-    window.addEventListener('message', handleMessage);
-    return () => window.removeEventListener('message', handleMessage);
-  }, [sendStyles]);
-
-  // Fallback: if no ready message after 5s, try sending styles anyway
-  useEffect(() => {
-    if (state !== 'loading' || !previewUrl) return;
-
-    const timeout = setTimeout(() => {
-      if (state === 'loading' && iframeRef.current?.contentWindow) {
-        console.warn('[SandboxedBlock] No ready message received, sending styles anyway');
-        sendStyles();
-        setState('ready');
-      }
-    }, 5000);
-
-    return () => clearTimeout(timeout);
-  }, [state, previewUrl, sendStyles]);
-
-  // Re-send styles when theme changes
-  useEffect(() => {
-    if (state !== 'ready') return;
-
-    const observer = new MutationObserver(() => {
-      sendStyles();
-    });
-
-    observer.observe(document.documentElement, {
-      attributes: true,
-      attributeFilter: ['class', 'style'],
-    });
-
-    return () => observer.disconnect();
-  }, [state, sendStyles]);
-
-  // Handle iframe error
-  const handleError = useCallback(() => {
-    setState('error');
-    setError('Failed to load block');
-  }, []);
-
-  // Retry loading
-  const handleRetry = useCallback(() => {
-    setState('loading');
-    setError(null);
-    // Force iframe reload
-    if (iframeRef.current && previewUrl) {
-      iframeRef.current.src = previewUrl;
-    }
-  }, [previewUrl]);
-
-  // Reset state when src changes
+  // Update cache when state changes
   useEffect(() => {
     if (src) {
-      setState('loading');
-      setError(null);
+      blockStateCache.set(src, { state, height: iframeHeight, error });
     }
+  }, [src, state, iframeHeight, error]);
+
+  // Memoized callbacks for iframe
+  const handleReady = useCallback((height: number) => {
+    setState('ready');
+    setError(null);
+    setIframeHeight(height);
+  }, []);
+
+  const handleResize = useCallback((height: number) => {
+    setIframeHeight(height);
+  }, []);
+
+  const handleError = useCallback((errorMsg: string) => {
+    setState('error');
+    setError(errorMsg);
+  }, []);
+
+  // Grab mode handlers
+  const handleGrabActivate = useCallback(() => {
+    setIsGrabActive(true);
+  }, []);
+
+  const handleGrabDeactivate = useCallback(() => {
+    setIsGrabActive(false);
+  }, []);
+
+  // Retry loading - clear cache and force remount
+  const handleRetry = useCallback(() => {
+    if (src) {
+      blockStateCache.delete(src);
+    }
+    setState('loading');
+    setError(null);
+    setRetryCount((c) => c + 1);
   }, [src]);
 
   // Render content based on state
@@ -315,29 +388,81 @@ export function SandboxedBlockElement(props: PlateElementProps) {
       return <ErrorPlaceholder error={error} onRetry={handleRetry} />;
     }
 
-    // Loading or ready - show iframe (with skeleton overlay when loading)
+    // Loading or ready - show iframe (with loading overlay when loading)
     return (
       <div className="relative" style={{ minHeight: iframeHeight }}>
-        {/* Loading skeleton overlay */}
+        {/* Loading overlay */}
         {state === 'loading' && (
           <div className="absolute inset-0 z-10 bg-background">
-            <LoadingSkeleton />
+            <LoadingPlaceholder />
           </div>
         )}
 
-        {/* Iframe */}
-        <iframe
-          ref={iframeRef}
-          className={cn(
-            'w-full rounded-md bg-transparent',
-            state === 'loading' && 'invisible'
-          )}
-          src={previewUrl}
-          style={{ height: iframeHeight, border: 'none' }}
-          title={`Block: ${src}`}
-          sandbox="allow-scripts allow-same-origin"
+        {/* Memoized Iframe - keyed by src+retry to prevent remounts */}
+        <BlockIframe
+          key={`${src}-${retryCount}`}
+          src={src}
+          previewUrl={previewUrl}
+          height={iframeHeight}
+          isLoading={state === 'loading'}
+          isGrabActive={isGrabActive}
+          onReady={handleReady}
+          onResize={handleResize}
           onError={handleError}
+          onGrabActivate={handleGrabActivate}
+          onGrabDeactivate={handleGrabDeactivate}
         />
+
+        {/* Hover overlay with Edit button (left) and linked tables (right) */}
+        {state === 'ready' && isHovered && !readOnly && (
+          <div className="absolute inset-0 z-20 pointer-events-none">
+            {/* Edit button - top left */}
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                if (isGrabActive) {
+                  handleGrabDeactivate();
+                } else {
+                  handleGrabActivate();
+                }
+              }}
+              onBlur={handleGrabDeactivate}
+              className={cn(
+                'pointer-events-auto absolute left-2 top-2 flex items-center gap-1.5 rounded-md px-2 py-1 text-xs font-medium shadow-sm transition-all',
+                isGrabActive
+                  ? 'bg-brand text-brand-foreground'
+                  : 'bg-background/90 text-foreground hover:bg-brand hover:text-brand-foreground border border-border/50'
+              )}
+            >
+              <HandsLogo className="size-3.5" />
+              Edit
+            </button>
+
+            {/* Linked tables - top right */}
+            {linkedTables.length > 0 && (
+              <div className="pointer-events-auto absolute right-2 top-2 flex items-center gap-1">
+                {linkedTables.map((table) => (
+                  <button
+                    key={table}
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      // TODO: Navigate to table in data browser
+                      console.log('[SandboxedBlock] Navigate to table:', table);
+                    }}
+                    className="flex items-center gap-1 rounded-md bg-background/90 px-2 py-1 text-xs font-medium text-muted-foreground shadow-sm transition-colors hover:bg-muted hover:text-foreground border border-border/50"
+                  >
+                    <svg className="size-3" viewBox="0 0 16 16" fill="currentColor">
+                      <path d="M0 2a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H2a2 2 0 0 1-2-2V2zm15 2h-4v3h4V4zm0 4h-4v3h4V8zm0 4h-4v3h3a1 1 0 0 0 1-1v-2zm-5 3v-3H6v3h4zm-5 0v-3H1v2a1 1 0 0 0 1 1h3zm-4-4h4V8H1v3zm0-4h4V4H1v3zm5-3v3h4V4H6zm4 4H6v3h4V8z"/>
+                    </svg>
+                    {table}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
       </div>
     );
   };

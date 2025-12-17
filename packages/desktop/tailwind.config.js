@@ -183,6 +183,19 @@ export default {
             backgroundPosition: "200% 0",
           },
         },
+        "shimmer-fast": {
+          "0%": {
+            transform: "translateX(-100%)",
+            opacity: "0",
+          },
+          "50%": {
+            opacity: "1",
+          },
+          "100%": {
+            transform: "translateX(100%)",
+            opacity: "0",
+          },
+        },
         pulse: {
           "0%, 100%": {
             opacity: "1",
@@ -204,6 +217,7 @@ export default {
         "accordion-down": "accordion-down 0.2s ease-out",
         "accordion-up": "accordion-up 0.2s ease-out",
         shimmer: "shimmer 2s linear infinite",
+        "shimmer-fast": "shimmer-fast 1.5s ease-in-out infinite",
         pulse: "pulse 2s ease-in-out infinite",
         "typing-dot": "typing-dot 1.4s ease-in-out infinite",
       },
