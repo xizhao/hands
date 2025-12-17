@@ -39,7 +39,7 @@ export const SANDBOXED_BLOCK_KEY = 'sandboxed_block';
  * Get CSS variables using getComputedStyle (FAST - no stylesheet iteration)
  * Only extracts the theme variables we use, not all CSS rules
  */
-function getThemeVariables(): string {
+export function getThemeVariables(): string {
   const computed = getComputedStyle(document.documentElement);
   const vars: string[] = [];
 
@@ -168,23 +168,23 @@ function ErrorPlaceholder({
 }
 
 // ============================================================================
-// Memoized Iframe Component
+// Memoized Iframe Component (exported for standalone use)
 // ============================================================================
 
-interface BlockIframeProps {
+export interface BlockIframeProps {
   src: string;
   previewUrl: string;
   height: number;
   isLoading: boolean;
-  isGrabActive: boolean;
+  isGrabActive?: boolean;
   onReady: (height: number) => void;
   onResize: (height: number) => void;
   onError: (error: string) => void;
-  onGrabActivate: () => void;
-  onGrabDeactivate: () => void;
+  onGrabActivate?: () => void;
+  onGrabDeactivate?: () => void;
 }
 
-const BlockIframe = memo(function BlockIframe({
+export const BlockIframe = memo(function BlockIframe({
   src,
   previewUrl,
   height,
