@@ -6,7 +6,7 @@
  */
 
 // @ts-expect-error - Bun text import
-import blockTypesRaw from "../../runtime/src/types/block.ts" with { type: "text" };
+import blockTypesRaw from "../../runtime/src/types/block.js" with { type: "text" };
 
 /**
  * Raw TypeScript source for block types
@@ -23,6 +23,7 @@ export const BLOCK_API_DOCS = `
 Every block follows this exact pattern:
 
 \`\`\`typescript
+"use server";
 import type { BlockFn, BlockMeta } from "@hands/runtime";
 import { sql } from "@hands/db";
 
@@ -63,6 +64,12 @@ export default MyBlock;
 - Types from \`@hands/runtime\`: BlockFn, BlockMeta
 - Database from \`@hands/db\`: sql
 - UI components from \`@ui\`: Card, Button, etc. (install with ui tool)
+
+Blocks require the \`"use server"\` directive at the top.  All client interactivity should be factored into a separate client component in ui/ imported into the Block.
+
+**Design Guidelines:**
+- When creating blocks, make sure they feel like inline elements, not full pages.
+- Use a compact minimalist style when designing blocks.
 
 ## Auto-Generated Types with pgtyped
 

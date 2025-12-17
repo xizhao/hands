@@ -36,7 +36,7 @@ Top customers:
 \`\`\`
 
 ### Blocks (TSX) - Server Components
-Single-file components: query + view together. One concept = one file.
+Single-file components: query + view together. One concept = one file. 
 
 \`\`\`tsx
 "use server";
@@ -69,6 +69,7 @@ export default async function RevenueChart({ period = "30d" }) {
 - Read-only (no INSERT/UPDATE/DELETE - use Actions for writes)
 - One file per concept
 - CANNOT use useState, useEffect, onClick, etc. (client patterns)
+- All client interactivity should be factored into a separate client component in ui/ imported into the Block
 - Use the ui tool to install interactive components to @ui
 - Style with Tailwind CSS
 

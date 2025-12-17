@@ -6,8 +6,8 @@
  */
 
 import type { AgentConfig } from "@opencode-ai/sdk";
+import { BLOCK_API_DOCS } from "../docs/blocks-guide.js";
 import { HANDS_ARCHITECTURE } from "../docs/hands-guide.js";
-import { BLOCK_API_DOCS } from "../docs/stdlib.js";
 
 const CODER_PROMPT = `You are the technical implementation specialist for Hands. You create blocks (TSX) and pages (MDX) when delegated by the primary agent.
 
@@ -167,7 +167,7 @@ Keep responses concise - the primary agent will communicate with the user.`;
 export const coderAgent: AgentConfig = {
   description: "Technical specialist for creating blocks (TSX) and pages (MDX)",
   mode: "subagent",
-  model: "anthropic/claude-opus-4-5-20251101",
+  model: "google/gemini-3-flash-preview",
   prompt: CODER_PROMPT,
   tools: {
     // Files
