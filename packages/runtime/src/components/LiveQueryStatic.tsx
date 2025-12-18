@@ -2,7 +2,7 @@
  * LiveQueryStatic - Server Component for SQL Query Rendering
  *
  * RSC component that queries the database and renders results.
- * Uses the same template binding system as the editor's LiveQueryElement.
+ * Uses PlateStatic for consistent rendering with the editor.
  *
  * This is the "static" counterpart to LiveQueryElement (dynamic editor mode).
  *
@@ -11,6 +11,9 @@
  * - Table mode: columns prop specifies table rendering
  */
 
+import type { TElement, TText } from "platejs";
+import { createSlateEditor } from "platejs";
+import { PlateStatic } from "platejs/static";
 import { Suspense, type ReactNode } from "react";
 import { sql } from "../db/dev";
 
@@ -22,21 +25,6 @@ export interface ColumnConfig {
   key: string;
   label: string;
   width?: number;
-}
-
-export interface TemplateNode {
-  type: string;
-  className?: string;
-  children?: (TemplateNode | TextNode)[];
-}
-
-export interface TextNode {
-  text: string;
-  bold?: boolean;
-  italic?: boolean;
-  underline?: boolean;
-  strikethrough?: boolean;
-  code?: boolean;
 }
 
 export type LiveQueryMode = "template" | "table";
@@ -51,7 +39,7 @@ export interface LiveQueryStaticProps {
   /** Custom className for the container */
   className?: string;
   /** Children are the template content with {{field}} bindings */
-  children?: (TemplateNode | TextNode)[];
+  children?: (TElement | TText)[];
 }
 
 // ============================================================================
@@ -61,7 +49,7 @@ export interface LiveQueryStaticProps {
 /**
  * Check if children contain actual template content (not just empty text)
  */
-function hasTemplateContent(children?: (TemplateNode | TextNode)[]): boolean {
+function hasTemplateContent(children?: (TElement | TText)[]): boolean {
   if (!children || children.length === 0) return false;
   // Single empty text node means no template
   if (children.length === 1 && "text" in children[0] && !children[0].text) {
@@ -70,11 +58,20 @@ function hasTemplateContent(children?: (TemplateNode | TextNode)[]): boolean {
   return true;
 }
 
-function replaceTextBindings(text: string, data: Record<string, unknown>): string {
+function replaceTextBindings(
+  text: string,
+  data: Record<string, unknown>,
+  index?: number
+): string {
   const keys = Object.keys(data);
   const firstKey = keys[0];
 
   return text.replace(/\{\{(\w+)\}\}/g, (_, field) => {
+    // Special _index field for numbered lists
+    if (field === "_index" && index !== undefined) {
+      return String(index);
+    }
+
     // Try exact field match first
     if (field in data) {
       const value = data[field];
@@ -94,59 +91,40 @@ function replaceTextBindings(text: string, data: Record<string, unknown>): strin
 }
 
 function replaceBindings(
-  node: TemplateNode | TextNode,
-  data: Record<string, unknown>
-): TemplateNode | TextNode {
+  node: TElement | TText,
+  data: Record<string, unknown>,
+  index?: number
+): TElement | TText {
   if ("text" in node) {
     return {
       ...node,
-      text: replaceTextBindings(node.text, data),
+      text: replaceTextBindings(String(node.text ?? ""), data, index),
     };
   }
 
   return {
     ...node,
-    children: node.children?.map((child) => replaceBindings(child, data)),
+    children: node.children?.map((child) => replaceBindings(child, data, index)) ?? [],
   };
 }
 
-function renderNode(node: TemplateNode | TextNode, key: string | number): ReactNode {
-  if ("text" in node) {
-    let content: ReactNode = node.text;
-    if (node.bold) content = <strong>{content}</strong>;
-    if (node.italic) content = <em>{content}</em>;
-    if (node.underline) content = <u>{content}</u>;
-    if (node.strikethrough) content = <s>{content}</s>;
-    if (node.code) content = <code className="bg-gray-100 px-1 rounded text-sm">{content}</code>;
-    return <span key={key}>{content}</span>;
-  }
+/**
+ * Render template with data bindings using PlateStatic
+ */
+function renderTemplate(
+  template: (TElement | TText)[],
+  data: Record<string, unknown>,
+  index: number
+): ReactNode {
+  const boundTemplate = template.map((node) =>
+    replaceBindings(node, data, index)
+  ) as TElement[];
 
-  const children = node.children?.map((child, i) => renderNode(child, i));
+  const editor = createSlateEditor({
+    value: boundTemplate,
+  });
 
-  switch (node.type) {
-    case "h1":
-      return <h1 key={key} className={node.className ?? "text-3xl font-bold mt-6 mb-2"}>{children}</h1>;
-    case "h2":
-      return <h2 key={key} className={node.className ?? "text-2xl font-bold mt-5 mb-2"}>{children}</h2>;
-    case "h3":
-      return <h3 key={key} className={node.className ?? "text-xl font-semibold mt-4 mb-2"}>{children}</h3>;
-    case "p":
-      return <p key={key} className={node.className ?? "my-1"}>{children}</p>;
-    case "ul":
-      return <ul key={key} className={node.className ?? "list-disc list-inside my-2"}>{children}</ul>;
-    case "ol":
-      return <ol key={key} className={node.className ?? "list-decimal list-inside my-2"}>{children}</ol>;
-    case "li":
-      return <li key={key} className={node.className}>{children}</li>;
-    case "lic":
-      return <span key={key} className={node.className}>{children}</span>;
-    case "div":
-      return <div key={key} className={node.className}>{children}</div>;
-    case "span":
-      return <span key={key} className={node.className}>{children}</span>;
-    default:
-      return <div key={key} className={node.className}>{children}</div>;
-  }
+  return <PlateStatic editor={editor} />;
 }
 
 // ============================================================================
@@ -254,14 +232,13 @@ async function LiveQueryData({
     return renderTable(data, resolvedColumns);
   }
 
-  // Template mode - use children as template
+  // Template mode - use PlateStatic for rendering
   const isSingleRow = data.length === 1;
 
   if (isSingleRow) {
-    const boundTemplate = template!.map((node) => replaceBindings(node, data[0]));
     return (
       <div className="my-2">
-        {boundTemplate.map((node, i) => renderNode(node as TemplateNode, i))}
+        {renderTemplate(template!, data[0], 1)}
       </div>
     );
   }
@@ -269,16 +246,11 @@ async function LiveQueryData({
   // Multiple rows: render template for each row
   return (
     <div className="my-2 space-y-1">
-      {data.map((row, rowIndex) => {
-        // Inject _index for numbered lists
-        const rowWithIndex = { ...row, _index: rowIndex + 1 };
-        const boundTemplate = template!.map((node) => replaceBindings(node, rowWithIndex));
-        return (
-          <div key={rowIndex}>
-            {boundTemplate.map((node, i) => renderNode(node as TemplateNode, `${rowIndex}-${i}`))}
-          </div>
-        );
-      })}
+      {data.map((row, rowIndex) => (
+        <div key={rowIndex}>
+          {renderTemplate(template!, row, rowIndex + 1)}
+        </div>
+      ))}
     </div>
   );
 }

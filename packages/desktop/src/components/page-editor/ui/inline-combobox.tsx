@@ -388,6 +388,15 @@ function useInlineComboboxSearchValue() {
   return store?.useState('value') ?? '';
 }
 
+/**
+ * Hook to access the inline combobox's removeInput function.
+ * Call this to close the combobox and remove the input element.
+ */
+function useInlineComboboxRemove() {
+  const { removeInput } = React.useContext(InlineComboboxContext);
+  return removeInput;
+}
+
 export {
   InlineCombobox,
   InlineComboboxContent,
@@ -398,4 +407,5 @@ export {
   InlineComboboxItem,
   InlineComboboxRow,
   useInlineComboboxSearchValue,
+  useInlineComboboxRemove,
 };

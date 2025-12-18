@@ -14,35 +14,30 @@
  * - Table mode: <LiveQuery query="..." columns="auto" />
  */
 
-import type { TElement, TText } from "platejs";
+import { Lightning } from "@phosphor-icons/react";
+import { createSlateEditor, type TElement, type TText } from "platejs";
 import {
   createPlatePlugin,
-  Plate,
-  PlateContent,
   PlateElement,
   type PlateElementProps,
   useElement,
-  usePlateEditor,
   useReadOnly,
   useSelected,
 } from "platejs/react";
+import { PlateStatic } from "platejs/static";
 import { memo, useMemo, type ReactNode } from "react";
 
 import { cn } from "@/lib/utils";
 import { useLiveQuery } from "@/lib/live-query";
 import { useActiveRuntime } from "@/hooks/useWorkbook";
-import {
-  LiveQueryProvider,
-  replaceTextBindings,
-} from "../lib/live-query-context";
-import { BasicBlocksKit } from "./basic-blocks-kit";
-import { BasicMarksKit } from "./basic-marks-kit";
+import { replaceTextBindings } from "../lib/live-query-context";
 
 // ============================================================================
 // Types
 // ============================================================================
 
 export const LIVE_QUERY_KEY = "live_query";
+export const INLINE_LIVE_QUERY_KEY = "live_query_inline";
 
 export interface ColumnConfig {
   key: string;
@@ -64,6 +59,22 @@ export interface TLiveQueryElement extends TElement {
   className?: string;
   /** Children are the template content with {{field}} bindings */
   children: (TElement | TText)[];
+}
+
+/**
+ * Inline LiveQuery element - renders as a badge/span within text.
+ * Used for single values that should appear inline, like "I have {{count}} customers"
+ */
+export interface TInlineLiveQueryElement extends TElement {
+  type: typeof INLINE_LIVE_QUERY_KEY;
+  /** SQL query string */
+  query: string;
+  /** Named parameters */
+  params?: Record<string, unknown>;
+  /** CSS class for the inline element */
+  className?: string;
+  /** Children must be empty for void inline element */
+  children: [{ text: "" }];
 }
 
 // ============================================================================
@@ -106,53 +117,25 @@ function replaceBindings(
 }
 
 /**
- * Minimal plugins for the nested live template editor.
- * Supports basic blocks and marks for template rendering.
+ * Render bound template using PlateStatic.
+ *
+ * Uses Plate's static renderer for read-only content - lightweight, no editor overhead.
+ * The template is pre-processed to replace {{field}} bindings with actual data.
  */
-const LiveTemplatePlugins = [
-  ...BasicBlocksKit,
-  ...BasicMarksKit,
-];
+function renderBoundTemplate(
+  template: (TElement | TText)[],
+  data: Record<string, unknown>,
+  index: number
+): ReactNode {
+  // Deep clone and replace bindings
+  const boundValue = template.map((node) =>
+    replaceBindings(node, data, index)
+  ) as TElement[];
 
-/**
- * Component to render template content using a nested Plate editor.
- * Uses dynamic editor for future DnD and interactive features.
- */
-function LiveTemplateEditor({
-  template,
-  data,
-  rows,
-  index,
-  readOnly = true,
-}: {
-  template: (TElement | TText)[];
-  data: Record<string, unknown>;
-  rows: Record<string, unknown>[];
-  index: number;
-  readOnly?: boolean;
-}) {
-  // Transform template with data bindings
-  const boundTemplate = useMemo(
-    () => template.map((node) => replaceBindings(node, data, index)) as TElement[],
-    [template, data, index]
-  );
+  // Create lightweight static editor
+  const editor = createSlateEditor({ value: boundValue });
 
-  // Create a nested editor with usePlateEditor
-  const editor = usePlateEditor({
-    plugins: LiveTemplatePlugins,
-    value: boundTemplate,
-  });
-
-  return (
-    <LiveQueryProvider row={data} rows={rows} index={index}>
-      <Plate editor={editor}>
-        <PlateContent
-          readOnly={readOnly}
-          className="outline-none"
-        />
-      </Plate>
-    </LiveQueryProvider>
-  );
+  return <PlateStatic editor={editor} className="pointer-events-none" />;
 }
 
 // ============================================================================
@@ -259,6 +242,103 @@ function LiveQueryEmpty() {
 }
 
 // ============================================================================
+// Inline LiveQuery Component (badge/span style)
+// ============================================================================
+
+/**
+ * InlineLiveQueryElement - Renders a single SQL value as an inline badge.
+ * Used within text like: "I have <inline-live-query>300</inline-live-query> customers"
+ *
+ * Follows Plate inline element patterns:
+ * - isInline: true, isVoid: true in plugin config
+ * - Renders as inline-block span
+ * - contentEditable={false} on content
+ * - children included but empty for void
+ */
+function InlineLiveQueryElement(props: PlateElementProps) {
+  const element = useElement<TInlineLiveQueryElement>();
+  const readOnly = useReadOnly();
+  const selected = useSelected();
+  const { data: runtime } = useActiveRuntime();
+  const runtimePort = runtime?.runtime_port ?? null;
+
+  const { query, params, className } = element;
+
+  // Convert named params to positional array
+  const paramArray = useMemo(() => {
+    if (!params) return [];
+    return Object.values(params);
+  }, [params]);
+
+  const { data, isLoading, error } = useLiveQuery<Record<string, unknown>>({
+    sql: query,
+    params: paramArray,
+    enabled: !!query && !!runtimePort,
+    runtimePort,
+  });
+
+  // Extract the first value from the first row
+  const displayValue = useMemo(() => {
+    if (!data || data.length === 0) return null;
+    const row = data[0];
+    const keys = Object.keys(row);
+    if (keys.length === 0) return null;
+    const value = row[keys[0]];
+    if (value === null || value === undefined) return null;
+    return String(value);
+  }, [data]);
+
+  // Extract table/column reference for tooltip
+  const queryRef = useMemo(() => extractQueryReference(query), [query]);
+  const tooltip = queryRef.column
+    ? `${queryRef.table}.${queryRef.column}`
+    : queryRef.table || "Live Query";
+
+  return (
+    <PlateElement
+      {...props}
+      attributes={{
+        ...props.attributes,
+        contentEditable: false,
+        "data-slate-value": displayValue ?? "",
+        draggable: true,
+      }}
+      className={cn(
+        "inline-block cursor-default align-baseline",
+        className
+      )}
+    >
+      <span
+        title={tooltip}
+        className={cn(
+          "inline-flex items-center gap-1 px-1.5 py-0.5 rounded font-medium text-sm transition-all",
+          // Base styling - badge/code like appearance
+          "bg-violet-500/10 text-violet-700 dark:text-violet-300 border border-violet-500/20",
+          // Selected state
+          selected && !readOnly && "ring-2 ring-violet-500/50 ring-offset-1 ring-offset-background",
+          // Hover state
+          "hover:bg-violet-500/15 hover:border-violet-500/30"
+        )}
+      >
+        <Lightning weight="fill" className="size-3 shrink-0 opacity-60" />
+        {isLoading ? (
+          <span className="inline-block animate-pulse bg-violet-500/20 rounded px-2 min-w-[2ch]">
+            <span className="invisible">...</span>
+          </span>
+        ) : error ? (
+          <span className="text-destructive text-xs">err</span>
+        ) : displayValue === null ? (
+          <span className="text-muted-foreground text-xs italic">—</span>
+        ) : (
+          <span className="tabular-nums">{displayValue}</span>
+        )}
+      </span>
+      {props.children}
+    </PlateElement>
+  );
+}
+
+// ============================================================================
 // Main Component
 // ============================================================================
 
@@ -288,6 +368,9 @@ function LiveQueryElement(props: PlateElementProps) {
     runtimePort,
   });
 
+  // Extract table/column reference for the chip
+  const queryRef = useMemo(() => extractQueryReference(query), [query]);
+
   // Determine what to render
   const content = useMemo(() => {
     if (isLoading) return <LiveQuerySkeleton />;
@@ -302,70 +385,68 @@ function LiveQueryElement(props: PlateElementProps) {
       return renderTable(data, resolvedColumns);
     }
 
-    // Template mode - use nested Plate editor for native rendering
+    // Template mode - use PlateStatic for lightweight read-only rendering
     const isSingleRow = data.length === 1;
 
     if (isSingleRow) {
-      // Single row: render template once with bindings
       return (
         <div className="my-2">
-          <LiveTemplateEditor
-            template={template}
-            data={data[0]}
-            rows={data}
-            index={1}
-          />
+          {renderBoundTemplate(template, data[0], 1)}
         </div>
       );
     }
 
-    // Multiple rows: render template for each row
+    // Multiple rows
     return (
       <div className="my-2 space-y-1">
         {data.map((row, rowIndex) => (
           <div key={rowIndex}>
-            <LiveTemplateEditor
-              template={template}
-              data={row}
-              rows={data}
-              index={rowIndex + 1}
-            />
+            {renderBoundTemplate(template, row, rowIndex + 1)}
           </div>
         ))}
       </div>
     );
   }, [data, isLoading, error, template, columns, isTemplateMode, refetch]);
 
+  const showChip = selected && !readOnly;
+
   return (
     <PlateElement
       {...props}
       className={cn(
-        "relative",
-        selected && !readOnly && "ring-2 ring-ring ring-offset-2 rounded-lg",
+        "relative group rounded-lg transition-colors",
+        // Padding for clickable area
+        "py-2 -mx-2 px-2",
+        // Hover state
+        !selected && "hover:bg-muted/30",
+        // Selected state
+        selected && !readOnly && "bg-muted/40 ring-2 ring-violet-500/50",
         className
       )}
     >
       <div contentEditable={false}>
-        {/* Edit mode indicator */}
-        {!readOnly && selected && (
-          <div className="absolute -top-6 left-0 px-2 py-0.5 bg-primary text-primary-foreground text-xs rounded-t-md font-mono">
-            LiveQuery
+        {/* Purple chip with lightning bolt - shown when selected */}
+        {showChip && (
+          <div className="absolute -top-7 left-0 flex items-center gap-2">
+            <div className="flex items-center gap-1.5 px-2 py-1 rounded-full bg-violet-500/10 border border-violet-500/30 text-violet-600 dark:text-violet-400">
+              <Lightning weight="fill" className="size-3.5" />
+              <span className="text-xs font-medium">
+                {queryRef.column ? (
+                  <>
+                    <span className="opacity-70">{queryRef.table}.</span>
+                    {queryRef.column}
+                  </>
+                ) : queryRef.table ? (
+                  queryRef.table
+                ) : (
+                  "Query"
+                )}
+              </span>
+            </div>
           </div>
         )}
 
         {content}
-
-        {/* Query debug (shown when selected in edit mode) */}
-        {selected && !readOnly && (
-          <div className="mt-2 p-2 bg-muted/50 rounded text-xs font-mono text-muted-foreground border border-border">
-            <div className="truncate">{query}</div>
-            {params && Object.keys(params).length > 0 && (
-              <div className="mt-1 text-[10px] opacity-70">
-                Params: {JSON.stringify(params)}
-              </div>
-            )}
-          </div>
-        )}
       </div>
       {/* Hidden children for Plate - template is rendered via content above */}
       <div className="hidden">{props.children}</div>
@@ -407,7 +488,32 @@ export const TEMPLATES = {
       { text: "{{value}}" },
     ]},
   ] as TElement[],
+
+  table: [] as TElement[], // Empty = table mode
 };
+
+export type TemplateKey = keyof typeof TEMPLATES;
+
+/**
+ * Extract table/column reference from SQL query for display
+ */
+function extractQueryReference(sql: string): { table?: string; column?: string } {
+  const fromMatch = sql.match(/FROM\s+["']?(\w+)["']?/i);
+  const selectMatch = sql.match(/SELECT\s+([\w,\s*]+)\s+FROM/i);
+
+  const table = fromMatch?.[1];
+  let column: string | undefined;
+
+  if (selectMatch) {
+    const cols = selectMatch[1].trim();
+    if (cols !== "*") {
+      // Get first column, remove alias
+      column = cols.split(",")[0].trim().split(/\s+AS\s+/i)[0].trim();
+    }
+  }
+
+  return { table, column };
+}
 
 // ============================================================================
 // Plugin
@@ -423,7 +529,23 @@ export const LiveQueryPlugin = createPlatePlugin({
   },
 });
 
-export const LiveQueryKit = [LiveQueryPlugin];
+/**
+ * Inline LiveQuery Plugin
+ *
+ * Renders single values as inline badges within text.
+ * Configured as inline + void element following Plate conventions.
+ */
+export const InlineLiveQueryPlugin = createPlatePlugin({
+  key: INLINE_LIVE_QUERY_KEY,
+  node: {
+    isElement: true,
+    isInline: true,
+    isVoid: true,
+    component: memo(InlineLiveQueryElement),
+  },
+});
+
+export const LiveQueryKit = [LiveQueryPlugin, InlineLiveQueryPlugin];
 
 // ============================================================================
 // Insertion Helpers
@@ -454,6 +576,22 @@ export function createTableQuery(query: string, columns?: ColumnConfig[]): TLive
 
 export function createTemplateQuery(query: string, template: (TElement | TText)[]): TLiveQueryElement {
   return createLiveQueryElement(query, { children: template });
+}
+
+/**
+ * Create an inline LiveQuery element for single values.
+ * Renders as a badge/span within text flow.
+ */
+export function createInlineLiveQueryElement(
+  query: string,
+  params?: Record<string, unknown>
+): TInlineLiveQueryElement {
+  return {
+    type: INLINE_LIVE_QUERY_KEY,
+    query,
+    params,
+    children: [{ text: "" }],
+  };
 }
 
 // ============================================================================
@@ -524,6 +662,40 @@ export const liveQueryMarkdownRule = {
       };
     },
   },
+
+  /**
+   * Serialize InlineLiveQuery element to MDX.
+   * Renders as: <LiveValue query="SELECT ..." />
+   * Uses mdxJsxTextElement for inline rendering.
+   */
+  [INLINE_LIVE_QUERY_KEY]: {
+    serialize: (node: TInlineLiveQueryElement) => {
+      const attributes: Array<{ type: "mdxJsxAttribute"; name: string; value: unknown }> = [
+        { type: "mdxJsxAttribute", name: "query", value: node.query },
+      ];
+
+      // Add params if present
+      if (node.params && Object.keys(node.params).length > 0) {
+        attributes.push({
+          type: "mdxJsxAttribute",
+          name: "params",
+          value: { type: "mdxJsxAttributeValueExpression", value: JSON.stringify(node.params) },
+        });
+      }
+
+      // Add className if present
+      if (node.className) {
+        attributes.push({ type: "mdxJsxAttribute", name: "className", value: node.className });
+      }
+
+      return {
+        type: "mdxJsxTextElement", // Inline element
+        name: "LiveValue",
+        attributes,
+        children: [],
+      };
+    },
+  },
 };
 
 /**
@@ -570,6 +742,48 @@ export function deserializeLiveQueryElement(
     columns: props.columns as ColumnConfig[] | "auto" | undefined,
     className: props.className as string | undefined,
     // Plate fills in children from the MDX content for non-void elements
+    children: [{ text: "" }],
+  };
+}
+
+/**
+ * Deserialize <LiveValue> MDX element to TInlineLiveQueryElement.
+ * Inline void element - no children.
+ */
+export function deserializeInlineLiveQueryElement(
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  node: any
+): TInlineLiveQueryElement {
+  const attributes = node.attributes || [];
+  const props: Record<string, unknown> = {};
+
+  for (const attr of attributes) {
+    if (attr.type === "mdxJsxAttribute") {
+      const name = attr.name;
+      const value = attr.value;
+
+      if (value === null || value === undefined) {
+        props[name] = true;
+      } else if (typeof value === "string") {
+        props[name] = value;
+      } else if (typeof value === "object" && value !== null) {
+        const expr = value as Record<string, unknown>;
+        if (expr.type === "mdxJsxAttributeValueExpression" && typeof expr.value === "string") {
+          try {
+            props[name] = JSON.parse(expr.value);
+          } catch {
+            props[name] = expr.value;
+          }
+        }
+      }
+    }
+  }
+
+  return {
+    type: INLINE_LIVE_QUERY_KEY,
+    query: (props.query as string) || "",
+    params: props.params as Record<string, unknown> | undefined,
+    className: props.className as string | undefined,
     children: [{ text: "" }],
   };
 }

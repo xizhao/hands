@@ -10,7 +10,6 @@
 
 import { ChatBar } from "@/components/ChatBar";
 import { FileDropOverlay } from "@/components/FileDropOverlay";
-import { NewWorkbookModal } from "@/components/NewWorkbookModal";
 import { SaveStatusIndicator } from "@/components/SaveStatusIndicator";
 import {
   DropdownMenu,
@@ -392,32 +391,24 @@ export function NotebookShell({ children }: NotebookShellProps) {
     [clearNavigation, openWorkbook]
   );
 
-  // Handle create new workbook - opens modal
+  // Handle create new workbook - creates directly with default name
   const handleCreateWorkbook = useCallback(() => {
-    setShowNewWorkbookModal(true);
-  }, []);
-
-  // Handle actual workbook creation from modal
-  const handleWorkbookCreate = useCallback(
-    (name: string, description?: string, templateId?: string) => {
-      createWorkbook.mutate(
-        { name, description },
-        {
-          onSuccess: (newWorkbook) => {
-            // Clear route state and navigate to / before opening new workbook
-            clearNavigation();
-            openWorkbook.mutate(newWorkbook);
-            setShowNewWorkbookModal(false);
-            // TODO: Apply template if templateId is provided
-            if (templateId) {
-              console.log(`Applying template: ${templateId}`);
-            }
-          },
-        }
-      );
-    },
-    [clearNavigation, createWorkbook, openWorkbook]
-  );
+    createWorkbook.mutate(
+      { name: "Untitled Workbook" },
+      {
+        onSuccess: (newWorkbook) => {
+          // Clear route state before opening new workbook
+          clearNavigation();
+          openWorkbook.mutate(newWorkbook, {
+            onSuccess: () => {
+              // Navigate to welcome page after workbook opens
+              router.navigate({ to: "/pages/$pageId", params: { pageId: "welcome" } });
+            },
+          });
+        },
+      }
+    );
+  }, [clearNavigation, createWorkbook, openWorkbook, router]);
 
   // Handle close page (navigate back to index)
   const handleClosePage = useCallback(() => {
@@ -501,9 +492,6 @@ export function NotebookShell({ children }: NotebookShellProps) {
     currentSource,
     chatState.setPendingAttachment,
   ]);
-
-  // New workbook modal state
-  const [showNewWorkbookModal, setShowNewWorkbookModal] = useState(false);
 
   // File drop handler - sets filepath attachment and auto-submits
   // Lightweight: no file loading, no copying - agent handles everything
@@ -1167,14 +1155,6 @@ export function NotebookShell({ children }: NotebookShellProps) {
         <FileDropOverlay
           onFileDrop={handleFileDrop}
           disabled={!activeWorkbookId}
-        />
-
-        {/* New workbook modal */}
-        <NewWorkbookModal
-          open={showNewWorkbookModal}
-          onOpenChange={setShowNewWorkbookModal}
-          onCreate={handleWorkbookCreate}
-          isCreating={createWorkbook.isPending}
         />
       </div>
     </TooltipProvider>

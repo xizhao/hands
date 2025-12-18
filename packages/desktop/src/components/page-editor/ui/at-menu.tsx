@@ -1,42 +1,47 @@
 /**
  * At Menu - Data query menu for inserting data-bound elements
  *
- * Type "@" to trigger, enter natural language query,
- * get SQL + appropriate data visualization elements.
+ * Type "@" to trigger, shows unified list of suggestions sorted by relevance.
+ * Two-stage flow: select data source → pick format (insert as).
  *
  * Flow:
  * 1. Type natural language query
- * 2. Text-to-SQL parses and shows result shape
- * 3. Select element type based on shape
- * 4. Insert data block into editor
+ * 2. All matching data shown as suggestions (tables, columns, SQL) sorted by score
+ * 3. Select suggestion → shows "Insert as" picker with format options
+ * 4. Pick format (inline/metric/list/table) → inserts LiveQuery
  */
 
 import {
-  ChartBar,
   Database,
+  Lightning,
   ListBullets,
   MagnifyingGlass,
-  NumberCircleOne,
   Table,
-  TextT,
 } from "@phosphor-icons/react";
+import type { TElement } from "platejs";
 import type { PlateEditor, PlateElementProps } from "platejs/react";
 import { PlateElement } from "platejs/react";
-import { useMemo } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { cn } from "@/lib/utils";
 import { useRuntimeState, type TableSchema } from "@/hooks/useRuntimeState";
 import { SANDBOXED_BLOCK_KEY, type TSandboxedBlockElement } from "../SandboxedBlock";
-import {
-  textToSQL,
-  getAutocompleteSuggestions,
-  type TextToSQLResult,
-  type ResultShape,
-} from "../lib/text-to-sql";
+import { textToSQL } from "../lib/text-to-sql";
 import {
   LIVE_QUERY_KEY,
+  INLINE_LIVE_QUERY_KEY,
   type TLiveQueryElement,
-  TEMPLATES,
-  type ColumnConfig,
+  type TInlineLiveQueryElement,
 } from "../plugins/live-query-kit";
+import {
+  type DataShape,
+  type FormatKey,
+  inferShapeFromSQL,
+  getValidFormats,
+  getDefaultFormat,
+  getTemplate,
+  isTableMode,
+  isInlineMode,
+} from "../lib/live-query-formats";
 import {
   InlineCombobox,
   InlineComboboxContent,
@@ -51,157 +56,58 @@ import {
 // Types
 // ============================================================================
 
-interface ElementOption {
+interface Suggestion {
   id: string;
+  type: "table" | "column" | "sql";
   label: string;
-  description: string;
+  sublabel: string;
+  sql: string;
+  score: number;
   icon: React.ReactNode;
-  /** Template for creating the block */
-  template: string;
+  /** Data shape determines valid formats */
+  shape: DataShape;
 }
 
 // ============================================================================
-// Element Options by Shape
-// ============================================================================
-
-const ELEMENT_OPTIONS: Record<ResultShape, ElementOption[]> = {
-  single: [
-    {
-      id: "metric",
-      label: "Metric",
-      description: "Large single value display",
-      icon: <NumberCircleOne weight="fill" className="size-4" />,
-      template: "metric",
-    },
-    {
-      id: "stat-card",
-      label: "Stat Card",
-      description: "Value with label and trend",
-      icon: <TextT weight="fill" className="size-4" />,
-      template: "stat-card",
-    },
-  ],
-  list: [
-    {
-      id: "bullet-list",
-      label: "Bullet List",
-      description: "Simple bulleted list",
-      icon: <ListBullets weight="fill" className="size-4" />,
-      template: "bullet-list",
-    },
-    {
-      id: "numbered-list",
-      label: "Numbered List",
-      description: "Ordered numbered list",
-      icon: <ListBullets weight="fill" className="size-4" />,
-      template: "numbered-list",
-    },
-  ],
-  table: [
-    {
-      id: "data-table",
-      label: "Data Table",
-      description: "Full-featured sortable table",
-      icon: <Table weight="fill" className="size-4" />,
-      template: "data-table",
-    },
-    {
-      id: "simple-table",
-      label: "Simple Table",
-      description: "Basic table view",
-      icon: <Table className="size-4" />,
-      template: "simple-table",
-    },
-  ],
-  "multi-dim": [
-    {
-      id: "bar-chart",
-      label: "Bar Chart",
-      description: "Grouped bar visualization",
-      icon: <ChartBar weight="fill" className="size-4" />,
-      template: "bar-chart",
-    },
-    {
-      id: "pivot-table",
-      label: "Pivot Table",
-      description: "Cross-tabulated data",
-      icon: <Table weight="fill" className="size-4" />,
-      template: "pivot-table",
-    },
-  ],
-};
-
-// ============================================================================
-// Insert Functions
+// Insert Function
 // ============================================================================
 
 /**
- * Get the recommended element type for a result shape
+ * Insert a LiveQuery block with the given SQL and format.
  */
-function getRecommendedElement(shape: ResultShape): ElementOption {
-  const options = ELEMENT_OPTIONS[shape];
-  return options[0]; // First option is always recommended
-}
-
-/**
- * Get template children for element type
- */
-function getTemplateChildren(elementType: string): TLiveQueryElement["children"] | undefined {
-  switch (elementType) {
-    case "metric":
-      return TEMPLATES.metric;
-    case "stat-card":
-      return TEMPLATES["stat-card"];
-    case "bullet-list":
-      return TEMPLATES["bullet-list"];
-    case "numbered-list":
-      return TEMPLATES["numbered-list"];
-    default:
-      return undefined; // Will use table mode
-  }
-}
-
-/**
- * Check if element type should use table mode
- */
-function isTableType(elementType: string): boolean {
-  return ["data-table", "simple-table", "pivot-table"].includes(elementType);
-}
-
-/**
- * Insert a LiveQuery block with SQL query
- */
-function insertDataBlock(
+function insertLiveQueryBlock(
   editor: PlateEditor,
   sql: string,
-  elementType: string,
-  _preview: string
+  formatKey: FormatKey
 ) {
-  const templateChildren = getTemplateChildren(elementType);
-  const useTable = isTableType(elementType);
+  // Inline mode: insert a badge-style inline element
+  if (isInlineMode(formatKey)) {
+    const node: TInlineLiveQueryElement = {
+      type: INLINE_LIVE_QUERY_KEY,
+      query: sql,
+      children: [{ text: "" }],
+    };
+    editor.tf.insertNodes(node);
+    editor.tf.move({ unit: "offset" });
+    return;
+  }
+
+  // Block mode: insert with template
+  const template = getTemplate(formatKey);
+  const tableMode = isTableMode(formatKey);
 
   const node: TLiveQueryElement = {
     type: LIVE_QUERY_KEY,
     query: sql,
-    // Use columns for table types
-    ...(useTable ? { columns: "auto" as const } : {}),
-    // Children are the template content (or empty for table mode)
-    children: templateChildren ?? [{ text: "" }],
+    ...(tableMode ? { columns: "auto" as const } : {}),
+    children: tableMode ? [{ text: "" }] : template,
   };
 
   editor.tf.insertNodes(node);
 }
 
 /**
- * Insert using the recommended element for the result shape
- */
-function insertRecommendedBlock(editor: PlateEditor, result: TextToSQLResult) {
-  const recommended = getRecommendedElement(result.shape);
-  insertDataBlock(editor, result.sql, recommended.template, result.preview);
-}
-
-/**
- * Insert a "Find Data" block that dispatches Hands agent to find/add data sources
+ * Insert a "Find Data" block for when no matches found
  */
 function insertFindDataBlock(editor: PlateEditor, query: string) {
   const prompt = `Find data source for: "${query}"
@@ -209,11 +115,9 @@ function insertFindDataBlock(editor: PlateEditor, query: string) {
 The user is looking for data that matches this query but it doesn't exist in the database yet.
 
 Please help them:
-1. Search for relevant public APIs, datasets, or data sources that could provide this data
-2. Suggest how to import or connect this data to the workbook
-3. If possible, create a source that fetches and imports this data
-
-Focus on finding real, accessible data sources that match their needs.`;
+1. Search for relevant public APIs, datasets, or data sources
+2. Suggest how to import or connect this data
+3. If possible, create a source that fetches and imports this data`;
 
   const node: TSandboxedBlockElement = {
     type: SANDBOXED_BLOCK_KEY,
@@ -224,9 +128,10 @@ Focus on finding real, accessible data sources that match their needs.`;
   editor.tf.insertNodes(node);
 }
 
-/**
- * Ordinal keywords for single row queries
- */
+// ============================================================================
+// Ordinal Detection
+// ============================================================================
+
 const ORDINAL_PATTERNS: Array<{ keywords: string[]; order: "ASC" | "DESC"; offset?: number }> = [
   { keywords: ["first", "1st", "earliest", "oldest"], order: "ASC" },
   { keywords: ["last", "latest", "newest", "most recent"], order: "DESC" },
@@ -234,9 +139,6 @@ const ORDINAL_PATTERNS: Array<{ keywords: string[]; order: "ASC" | "DESC"; offse
   { keywords: ["third", "3rd"], order: "ASC", offset: 2 },
 ];
 
-/**
- * Detect ordinal keywords in query
- */
 function detectOrdinal(query: string): { order: "ASC" | "DESC"; offset: number } | null {
   const lower = query.toLowerCase();
   for (const pattern of ORDINAL_PATTERNS) {
@@ -249,153 +151,139 @@ function detectOrdinal(query: string): { order: "ASC" | "DESC"; offset: number }
   return null;
 }
 
-/**
- * Get matching columns across all tables
- */
-function getMatchingColumns(
-  query: string,
-  schema: TableSchema[]
-): Array<{
-  table: TableSchema;
-  column: { name: string; type: string };
-  score: number;
-}> {
-  if (!query.trim() || schema.length === 0) return [];
+// ============================================================================
+// Fuzzy Scoring
+// ============================================================================
 
-  const words = query.toLowerCase().split(/\s+/);
-  const results: Array<{
-    table: TableSchema;
-    column: { name: string; type: string };
-    score: number;
-  }> = [];
+function fuzzyScore(query: string, target: string): number {
+  const q = query.toLowerCase();
+  const t = target.toLowerCase();
+  if (q === t) return 1;
+  if (t.startsWith(q)) return 0.9;
+  if (t.includes(q)) return 0.7;
 
-  for (const table of schema) {
-    for (const col of table.columns) {
-      let score = 0;
-      for (const word of words) {
-        // Skip ordinal keywords for column matching
-        const isOrdinal = ORDINAL_PATTERNS.some(p => p.keywords.includes(word));
-        if (isOrdinal) continue;
-
-        if (col.name.toLowerCase().includes(word)) {
-          score += 2;
-        }
-        // Boost if table name also matches
-        if (table.table_name.toLowerCase().includes(word)) {
-          score += 1;
-        }
-      }
-      if (score > 0) {
-        results.push({ table, column: col, score });
-      }
-    }
+  let score = 0, qIdx = 0;
+  for (let tIdx = 0; tIdx < t.length && qIdx < q.length; tIdx++) {
+    if (t[tIdx] === q[qIdx]) { score++; qIdx++; }
   }
-
-  return results.sort((a, b) => b.score - a.score).slice(0, 5);
+  if (qIdx === q.length) return 0.5 * (score / t.length);
+  return 0;
 }
 
-/**
- * Get matching tables with their columns for the data preview
- */
-function getMatchingTables(
+// ============================================================================
+// Build Suggestions
+// ============================================================================
+
+function buildSuggestions(
   query: string,
-  schema: TableSchema[]
-): Array<{
-  table: TableSchema;
-  matchingColumns: string[];
-  score: number;
-}> {
-  if (!query.trim() || schema.length === 0) return [];
+  tables: TableSchema[],
+  ordinal: ReturnType<typeof detectOrdinal>
+): Suggestion[] {
+  if (tables.length === 0) return [];
 
-  const words = query.toLowerCase().split(/\s+/);
-  const results: Array<{
-    table: TableSchema;
-    matchingColumns: string[];
-    score: number;
-  }> = [];
+  const suggestions: Suggestion[] = [];
+  const words = query.toLowerCase().split(/\s+/).filter(w =>
+    !ORDINAL_PATTERNS.some(p => p.keywords.includes(w))
+  );
 
-  for (const table of schema) {
-    let score = 0;
-    const matchingColumns: string[] = [];
-
-    // Check table name match
+  // Score and add table suggestions
+  for (const table of tables) {
+    let tableScore = 0;
     for (const word of words) {
-      // Skip ordinal keywords for table matching
-      const isOrdinal = ORDINAL_PATTERNS.some(p => p.keywords.includes(word));
-      if (isOrdinal) continue;
-
-      if (table.table_name.toLowerCase().includes(word)) {
-        score += 2;
-      }
+      const s = fuzzyScore(word, table.table_name);
+      if (s > tableScore) tableScore = s;
     }
 
-    // Check column matches
+    // Add table suggestion
+    if (tableScore > 0.3 || !query.trim()) {
+      suggestions.push({
+        id: `table-${table.table_name}`,
+        type: "table",
+        label: table.table_name,
+        sublabel: `${table.columns.length} columns`,
+        sql: `SELECT * FROM "${table.table_name}"`,
+        score: tableScore || 0.5,
+        icon: <Table weight="fill" className="size-4 text-muted-foreground" />,
+        shape: "table",
+      });
+    }
+
+    // Score and add column suggestions
     for (const col of table.columns) {
+      let colScore = 0;
       for (const word of words) {
-        const isOrdinal = ORDINAL_PATTERNS.some(p => p.keywords.includes(word));
-        if (isOrdinal) continue;
+        const s = fuzzyScore(word, col.name);
+        if (s > colScore) colScore = s;
+        // Boost if table also matches
+        const ts = fuzzyScore(word, table.table_name);
+        if (ts > 0.3) colScore += ts * 0.3;
+      }
 
-        if (col.name.toLowerCase().includes(word)) {
-          score += 1;
-          if (!matchingColumns.includes(col.name)) {
-            matchingColumns.push(col.name);
-          }
-        }
+      if (colScore > 0.3) {
+        const orderClause = ordinal
+          ? ` ORDER BY rowid ${ordinal.order} LIMIT 1${ordinal.offset > 0 ? ` OFFSET ${ordinal.offset}` : ""}`
+          : "";
+        const alias = ordinal ? "value" : "name";
+        const sql = `SELECT "${col.name}" AS ${alias} FROM "${table.table_name}"${orderClause}`;
+
+        suggestions.push({
+          id: `col-${table.table_name}-${col.name}`,
+          type: "column",
+          label: col.name,
+          sublabel: ordinal
+            ? `single value from ${table.table_name}`
+            : `from ${table.table_name}`,
+          sql,
+          score: colScore,
+          icon: ordinal
+            ? <Lightning weight="fill" className="size-4 text-violet-500" />
+            : <ListBullets weight="fill" className="size-4 text-muted-foreground" />,
+          shape: ordinal ? "single" : "list",
+        });
       }
     }
+  }
 
-    if (score > 0) {
-      results.push({ table, matchingColumns, score });
+  // Try to generate SQL from natural language
+  if (query.trim()) {
+    const sqlResult = textToSQL(query, tables);
+    if (sqlResult && sqlResult.confidence > 0.4) {
+      // Use shape from textToSQL result, with fallback to inference
+      const shape: DataShape = (sqlResult.shape as DataShape) ?? inferShapeFromSQL(sqlResult.sql) ?? "table";
+      suggestions.push({
+        id: "sql-generated",
+        type: "sql",
+        label: sqlResult.preview,
+        sublabel: sqlResult.sql,
+        sql: sqlResult.sql,
+        score: sqlResult.confidence + 0.5,
+        icon: <Database weight="fill" className="size-4 text-violet-500" />,
+        shape,
+      });
     }
   }
 
-  return results.sort((a, b) => b.score - a.score).slice(0, 3);
+  // Sort by score descending
+  return suggestions.sort((a, b) => b.score - a.score).slice(0, 10);
 }
 
 // ============================================================================
-// Menu Content Component
+// Menu Content
 // ============================================================================
 
-/**
- * Shape icon component
- */
-function ShapeIcon({ shape }: { shape: ResultShape }) {
-  switch (shape) {
-    case "single":
-      return <NumberCircleOne weight="fill" className="size-4 text-brand" />;
-    case "list":
-      return <ListBullets weight="fill" className="size-4 text-brand" />;
-    case "table":
-      return <Table weight="fill" className="size-4 text-brand" />;
-    case "multi-dim":
-      return <ChartBar weight="fill" className="size-4 text-brand" />;
-  }
-}
-
-/**
- * Main menu content - shows data preview, SQL options, and Find Data
- *
- * Flow:
- * 1. Type query → shows matching tables from "My Data" with columns
- * 2. If SQL parseable → shows Quick Insert with recommended element
- * 3. Arrow down → "Find Data with Hands" to search for new data sources
- *
- * Fast keyboard:
- * - Enter on SQL result → inserts recommended element
- * - Enter on table → queries all from that table
- * - Enter on Find Data → dispatches Hands agent to find data
- */
-function AtMenuContent({ editor }: { editor: PlateEditor }) {
+function AtMenuContent({ editor, element }: { editor: PlateEditor; element: TElement }) {
   const { schema, manifest } = useRuntimeState();
   const searchValue = useInlineComboboxSearchValue();
 
-  // Use schema if available, otherwise fall back to manifest.tables
-  // Manifest has different structure: { name, columns: string[] }
-  // Schema has: { table_name, columns: { name, type, nullable }[] }
+  // Track which suggestion is being configured for "insert as"
+  const [insertAsSuggestion, setInsertAsSuggestion] = useState<Suggestion | null>(null);
+
+  // Keyboard navigation state
+  const [selectedIndex, setSelectedIndex] = useState(0);
+
+  // Normalize tables from schema or manifest
   const tables: TableSchema[] = useMemo(() => {
     if (schema.length > 0) return schema;
-
-    // Fall back to manifest tables if schema not ready
     if (manifest?.tables?.length) {
       return manifest.tables.map(t => ({
         table_name: t.name,
@@ -406,235 +294,194 @@ function AtMenuContent({ editor }: { editor: PlateEditor }) {
   }, [schema, manifest?.tables]);
 
   const hasSearchValue = searchValue && searchValue.trim().length > 0;
+  const ordinal = useMemo(() =>
+    hasSearchValue ? detectOrdinal(searchValue) : null,
+    [searchValue, hasSearchValue]
+  );
 
-  // Debug
-  console.log("[AtMenu] schema:", schema.length, "manifest.tables:", manifest?.tables?.length, "tables:", tables.length);
-  console.log("[AtMenu] searchValue:", JSON.stringify(searchValue));
+  // Build unified suggestions list
+  const suggestions = useMemo(() =>
+    buildSuggestions(hasSearchValue ? searchValue : "", tables, ordinal),
+    [searchValue, hasSearchValue, tables, ordinal]
+  );
 
-  // Parse current query to SQL
-  const sqlResult = useMemo(() => {
-    if (!hasSearchValue || !tables.length) return null;
-    return textToSQL(searchValue, tables);
-  }, [searchValue, hasSearchValue, tables]);
+  const hasSuggestions = suggestions.length > 0;
 
-  // Get matching tables with columns for data preview
-  // When searching: filter to matching tables
-  // When not searching: show all tables
-  const matchingTables = useMemo(() => {
-    if (!hasSearchValue) {
-      // No search - return all tables with empty matchingColumns
-      return tables.map(table => ({
-        table,
-        matchingColumns: [] as string[],
-        score: 1,
-      }));
+  // Get valid formats for the selected suggestion's shape
+  const validFormats = useMemo(() =>
+    insertAsSuggestion ? getValidFormats(insertAsSuggestion.shape) : [],
+    [insertAsSuggestion]
+  );
+
+  // Reset selection when suggestions or formats change
+  useEffect(() => {
+    setSelectedIndex(0);
+  }, [suggestions.length, searchValue, insertAsSuggestion]);
+
+  // Select suggestion (show insert-as picker)
+  const selectSuggestion = useCallback((suggestion: Suggestion) => {
+    setInsertAsSuggestion(suggestion);
+    setSelectedIndex(0);
+  }, []);
+
+  // Insert with format
+  const doInsert = useCallback((suggestion: Suggestion, formatKey: FormatKey) => {
+    const path = editor.api.findPath(element);
+    if (path) {
+      editor.tf.removeNodes({ at: path });
     }
-    return getMatchingTables(searchValue, tables);
-  }, [searchValue, hasSearchValue, tables]);
+    insertLiveQueryBlock(editor, suggestion.sql, formatKey);
+    setInsertAsSuggestion(null);
+  }, [editor, element]);
 
-  // Get matching individual columns (for single column / list queries)
-  const matchingColumns = useMemo(() => {
-    if (!hasSearchValue) return [];
-    return getMatchingColumns(searchValue, tables);
-  }, [searchValue, hasSearchValue, tables]);
+  // Keyboard navigation
+  useEffect(() => {
+    if (!hasSuggestions && !insertAsSuggestion) return;
 
-  // Detect ordinal for single row queries (first, last, etc.)
-  const ordinal = useMemo(() => {
-    if (!hasSearchValue) return null;
-    return detectOrdinal(searchValue);
-  }, [searchValue, hasSearchValue]);
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // In insert-as picker mode
+      if (insertAsSuggestion && validFormats.length > 0) {
+        const optionCount = validFormats.length;
+        if (e.key === "ArrowLeft" || e.key === "ArrowUp" || (e.key === "Tab" && e.shiftKey)) {
+          e.preventDefault();
+          setSelectedIndex(i => (i - 1 + optionCount) % optionCount);
+        } else if (e.key === "ArrowRight" || e.key === "ArrowDown" || (e.key === "Tab" && !e.shiftKey)) {
+          e.preventDefault();
+          setSelectedIndex(i => (i + 1) % optionCount);
+        } else if (e.key === "Enter") {
+          e.preventDefault();
+          const format = validFormats[selectedIndex];
+          if (format) {
+            doInsert(insertAsSuggestion, format.key);
+          }
+        } else if (e.key === "Escape" || e.key === "Backspace") {
+          e.preventDefault();
+          setInsertAsSuggestion(null);
+          setSelectedIndex(0);
+        }
+        return;
+      }
 
-  console.log("[AtMenu] matchingTables:", matchingTables.length, "matchingColumns:", matchingColumns.length, "ordinal:", ordinal);
+      // In suggestions mode
+      if (e.key === "ArrowUp" || (e.key === "Tab" && e.shiftKey)) {
+        e.preventDefault();
+        setSelectedIndex(i => (i - 1 + suggestions.length) % suggestions.length);
+      } else if (e.key === "ArrowDown" || (e.key === "Tab" && !e.shiftKey)) {
+        e.preventDefault();
+        setSelectedIndex(i => (i + 1) % suggestions.length);
+      } else if (e.key === "Enter") {
+        e.preventDefault();
+        const suggestion = suggestions[selectedIndex];
+        if (suggestion) {
+          selectSuggestion(suggestion);
+        }
+      }
+    };
 
-  // Get element options based on shape
-  const elementOptions = useMemo(() => {
-    if (!sqlResult) return [];
-    return ELEMENT_OPTIONS[sqlResult.shape] || ELEMENT_OPTIONS.table;
-  }, [sqlResult]);
-
-  // Check if we have any data to show
-  const hasData = tables.length > 0;
-  const hasMatches = sqlResult || matchingTables.length > 0 || matchingColumns.length > 0;
+    document.addEventListener("keydown", handleKeyDown);
+    return () => document.removeEventListener("keydown", handleKeyDown);
+  }, [hasSuggestions, suggestions, selectedIndex, insertAsSuggestion, validFormats, doInsert, selectSuggestion]);
 
   return (
     <>
-      {/* SQL Quick Insert - when we have a parseable query (first for fast Enter) */}
-      {sqlResult && (
-        <>
+      {/* Insert-As picker - shows when a suggestion is selected */}
+      {insertAsSuggestion && (
+        <div>
           <div className="mt-1.5 mb-2 px-3 font-medium text-muted-foreground text-xs uppercase tracking-wider">
-            Quick Insert
+            Insert as
           </div>
-          <InlineComboboxItem
-            alwaysShow
-            keywords={["sql", "query", "data", sqlResult.shape]}
-            label={sqlResult.preview}
-            onClick={() => insertRecommendedBlock(editor, sqlResult)}
-            value="sql-quick-insert"
-          >
-            <div className="flex size-8 shrink-0 items-center justify-center rounded border border-brand/30 bg-brand/10">
-              <ShapeIcon shape={sqlResult.shape} />
-            </div>
-            <div className="ml-2 flex flex-1 flex-col truncate">
-              <span className="text-foreground text-sm">
-                {getRecommendedElement(sqlResult.shape).label}
-              </span>
-              <span className="truncate text-muted-foreground text-xs font-mono">
-                {sqlResult.sql}
-              </span>
-            </div>
-            <div className="ml-2 flex items-center gap-1">
-              <span className="rounded bg-brand/10 text-brand px-1.5 py-0.5 text-xs font-medium">
-                Enter
-              </span>
-            </div>
-          </InlineComboboxItem>
-
-          {/* Other element options */}
-          {elementOptions.length > 1 && (
-            <>
-              <div className="mt-2.5 mb-2 px-3 font-medium text-muted-foreground text-xs uppercase tracking-wider">
-                Other Elements
+          <div className="px-2 pb-2">
+            <div className="flex items-center gap-1 p-1.5 bg-muted/30 rounded-lg border border-border mb-2">
+              <div className="flex size-6 shrink-0 items-center justify-center">
+                {insertAsSuggestion.icon}
               </div>
-              {elementOptions.slice(1).map((option) => (
-                <InlineComboboxItem
-                  key={option.id}
-                  keywords={[option.id, option.label, sqlResult.shape]}
-                  label={option.label}
-                  onClick={() => {
-                    insertDataBlock(editor, sqlResult.sql, option.template, sqlResult.preview);
-                  }}
-                  value={`element-${option.id}`}
+              <span className="text-sm font-medium truncate flex-1">{insertAsSuggestion.label}</span>
+              <button
+                onClick={() => setInsertAsSuggestion(null)}
+                className="text-xs text-muted-foreground hover:text-foreground px-1"
+              >
+                ←
+              </button>
+            </div>
+            <div className={cn(
+              "grid gap-1",
+              validFormats.length <= 2 ? "grid-cols-2" :
+              validFormats.length === 3 ? "grid-cols-3" : "grid-cols-4"
+            )}>
+              {validFormats.map((format, index) => (
+                <button
+                  key={format.key}
+                  onClick={() => doInsert(insertAsSuggestion, format.key)}
+                  className={cn(
+                    "flex flex-col items-center gap-1 p-2 rounded-md transition-colors",
+                    index === selectedIndex
+                      ? "bg-violet-500/20 text-violet-600 dark:text-violet-400 ring-1 ring-violet-500/50"
+                      : "hover:bg-violet-500/10 hover:text-violet-600 dark:hover:text-violet-400 text-muted-foreground"
+                  )}
+                  title={format.description}
                 >
-                  <div className="flex size-8 shrink-0 items-center justify-center rounded border border-border bg-background">
-                    {option.icon}
-                  </div>
-                  <div className="ml-2 flex flex-1 flex-col truncate">
-                    <span className="text-foreground text-sm">{option.label}</span>
-                    <span className="truncate text-muted-foreground text-xs">
-                      {option.description}
-                    </span>
-                  </div>
-                </InlineComboboxItem>
+                  {format.icon}
+                  <span className="text-[10px] font-medium">{format.label}</span>
+                </button>
               ))}
-            </>
-          )}
-        </>
+            </div>
+          </div>
+        </div>
       )}
 
-      {/* My Data - matching tables with columns */}
-      {matchingTables.length > 0 && (
+      {/* Unified suggestions list sorted by relevance */}
+      {!insertAsSuggestion && hasSuggestions && (
         <>
           <div className="mt-1.5 mb-2 px-3 font-medium text-muted-foreground text-xs uppercase tracking-wider">
-            My Data
+            {hasSearchValue ? "Suggestions" : "My Data"}
           </div>
-          {matchingTables.slice(0, 5).map(({ table, matchingColumns }) => (
-            <InlineComboboxItem
-              alwaysShow
-              key={table.table_name}
-              keywords={[table.table_name, ...table.columns.map((c) => c.name)]}
-              label={table.table_name}
-              onClick={() => {
-                // Insert a table query for all columns
-                const sql = `SELECT * FROM ${table.table_name}`;
-                insertDataBlock(editor, sql, "data-table", `All data from ${table.table_name}`);
-              }}
-              value={`table-${table.table_name}`}
+          {suggestions.map((suggestion, index) => (
+            <button
+              key={suggestion.id}
+              type="button"
+              onClick={() => selectSuggestion(suggestion)}
+              className={cn(
+                "relative mx-1 flex w-[calc(100%-8px)] select-none items-center rounded-sm px-2 py-1 text-foreground text-sm outline-hidden transition-bg-ease",
+                "cursor-pointer",
+                index === selectedIndex
+                  ? "bg-accent text-accent-foreground"
+                  : "hover:bg-accent hover:text-accent-foreground"
+              )}
             >
               <div className="flex size-8 shrink-0 items-center justify-center rounded border border-border bg-background">
-                <Database className="size-4 text-muted-foreground" />
+                {suggestion.icon}
               </div>
-              <div className="ml-2 flex flex-1 flex-col truncate">
+              <div className="ml-2 flex flex-1 flex-col truncate text-left">
                 <span className="text-foreground text-sm font-medium">
-                  {table.table_name}
+                  {suggestion.label}
                 </span>
                 <span className="truncate text-muted-foreground text-xs">
-                  {matchingColumns.length > 0 ? (
-                    // Show matching columns highlighted
-                    <>
-                      <span className="text-foreground/70">{matchingColumns.join(", ")}</span>
-                      {table.columns.length > matchingColumns.length && (
-                        <span> +{table.columns.length - matchingColumns.length} more</span>
-                      )}
-                    </>
+                  {suggestion.type === "sql" ? (
+                    <span className="font-mono">{suggestion.sublabel}</span>
                   ) : (
-                    // Show first few columns when no specific match
-                    <>
-                      {table.columns.slice(0, 3).map((c) => c.name).join(", ")}
-                      {table.columns.length > 3 && ` +${table.columns.length - 3} more`}
-                    </>
+                    suggestion.sublabel
                   )}
                 </span>
               </div>
-            </InlineComboboxItem>
+              <div className="ml-2 opacity-50 group-hover:opacity-100 transition-opacity">
+                <span className="text-[10px] text-muted-foreground">
+                  pick format →
+                </span>
+              </div>
+            </button>
           ))}
-          {matchingTables.length > 5 && (
-            <div className="px-3 py-1 text-xs text-muted-foreground">
-              +{matchingTables.length - 5} more tables...
-            </div>
-          )}
         </>
       )}
 
-      {/* Matching Columns - for single column / list queries */}
-      {matchingColumns.length > 0 && (
-        <>
-          <div className="mt-1.5 mb-2 px-3 font-medium text-muted-foreground text-xs uppercase tracking-wider">
-            {ordinal ? "Single Value" : "Columns"}
-          </div>
-          {matchingColumns.slice(0, 4).map(({ table, column }) => {
-            // Build SQL based on whether ordinal is detected
-            // Alias column to match template expectations:
-            // - metric template expects {{value}}
-            // - list templates expect {{name}}
-            const orderClause = ordinal
-              ? ` ORDER BY rowid ${ordinal.order} LIMIT 1${ordinal.offset > 0 ? ` OFFSET ${ordinal.offset}` : ""}`
-              : "";
-            const alias = ordinal ? "value" : "name";
-            const sql = `SELECT ${column.name} AS ${alias} FROM ${table.table_name}${orderClause}`;
-            const elementType = ordinal ? "metric" : "bullet-list";
-
-            return (
-              <InlineComboboxItem
-                alwaysShow
-                key={`${table.table_name}-${column.name}`}
-                keywords={[column.name, table.table_name]}
-                label={`${column.name} from ${table.table_name}`}
-                onClick={() => {
-                  insertDataBlock(editor, sql, elementType, `${column.name} from ${table.table_name}`);
-                }}
-                value={`column-${table.table_name}-${column.name}`}
-              >
-                <div className="flex size-8 shrink-0 items-center justify-center rounded border border-border bg-background">
-                  {ordinal ? (
-                    <NumberCircleOne weight="fill" className="size-4 text-muted-foreground" />
-                  ) : (
-                    <ListBullets weight="fill" className="size-4 text-muted-foreground" />
-                  )}
-                </div>
-                <div className="ml-2 flex flex-1 flex-col truncate">
-                  <span className="text-foreground text-sm">
-                    <span className="font-medium">{column.name}</span>
-                    <span className="text-muted-foreground"> from {table.table_name}</span>
-                  </span>
-                  <span className="truncate text-muted-foreground text-xs font-mono">
-                    {sql}
-                  </span>
-                </div>
-              </InlineComboboxItem>
-            );
-          })}
-        </>
-      )}
-
-      {/* Find Data with Hands - only show when no matching data */}
-      {hasSearchValue && !hasMatches && (
+      {/* Find Data - only when no matches and not in insert-as mode */}
+      {!insertAsSuggestion && hasSearchValue && !hasSuggestions && (
         <>
           <div className="mt-2.5 mb-2 px-3 font-medium text-muted-foreground text-xs uppercase tracking-wider">
             No matching data
           </div>
           <InlineComboboxItem
             alwaysShow
-            keywords={["find", "search", "add", "import", "new", "data", "source"]}
+            keywords={["find", "search", "add", "import"]}
             label="Find Data with Hands"
             onClick={() => insertFindDataBlock(editor, searchValue.trim())}
             value="find-data"
@@ -646,11 +493,6 @@ function AtMenuContent({ editor }: { editor: PlateEditor }) {
               <span className="text-foreground text-sm">Find Data with Hands</span>
               <span className="truncate text-muted-foreground text-xs">
                 Search for "{searchValue.trim()}" and add to your data
-              </span>
-            </div>
-            <div className="ml-2 flex items-center gap-1">
-              <span className="rounded bg-muted px-1.5 py-0.5 text-xs text-muted-foreground">
-                ↓
               </span>
             </div>
           </InlineComboboxItem>
@@ -670,16 +512,22 @@ export function AtInputElement(props: PlateElementProps) {
   return (
     <PlateElement {...props} as="span">
       <InlineCombobox element={element} trigger="@">
-        <InlineComboboxInput placeholder="Query data (e.g., 'active users by month')..." />
+        <InlineComboboxInput
+          placeholder="Search your data..."
+          autoComplete="off"
+          autoCorrect="off"
+          autoCapitalize="off"
+          spellCheck={false}
+        />
 
         <InlineComboboxContent variant="slash">
           <InlineComboboxEmpty>
             <span className="text-muted-foreground">
-              Type a natural language query to search your data
+              Type to search tables and columns
             </span>
           </InlineComboboxEmpty>
-          <InlineComboboxGroup>
-            <AtMenuContent editor={editor} />
+          <InlineComboboxGroup className="!block">
+            <AtMenuContent editor={editor} element={element} />
           </InlineComboboxGroup>
         </InlineComboboxContent>
       </InlineCombobox>

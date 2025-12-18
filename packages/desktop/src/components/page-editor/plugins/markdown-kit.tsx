@@ -17,6 +17,7 @@ import { SANDBOXED_BLOCK_KEY, sandboxedBlockMarkdownRule } from '../SandboxedBlo
 import {
   liveQueryMarkdownRule,
   deserializeLiveQueryElement,
+  deserializeInlineLiveQueryElement,
 } from './live-query-kit';
 
 /**
@@ -128,7 +129,11 @@ export const MarkdownKit = [
         LiveQuery: {
           deserialize: (node, options) => deserializeLiveQueryElement(node, options),
         },
-        // LiveQuery - serialize to <LiveQuery query="..." />
+        // LiveValue (inline) element - deserialize <LiveValue query="..." /> to live_query_inline
+        LiveValue: {
+          deserialize: (node) => deserializeInlineLiveQueryElement(node),
+        },
+        // LiveQuery & LiveValue - serialize to MDX
         ...liveQueryMarkdownRule,
       },
     },

@@ -362,6 +362,30 @@ export function generateWorkbookTsConfig(workbookDir: string): string {
   return JSON.stringify(tsconfig, null, 2);
 }
 
+// Welcome page template
+const WELCOME_PAGE_TEMPLATE = `---
+title: "Welcome"
+---
+
+# Welcome to Hands
+
+This is your new workbook. Here's how to get started:
+
+## Getting Started
+
+1. **Import Data** - Drag and drop CSV, JSON, or Parquet files into the chat
+2. **Ask Questions** - Use natural language to query and analyze your data
+3. **Create Pages** - Click the + button in the sidebar to add more pages
+
+## Quick Tips
+
+- Use \`@\` to reference tables and data sources in your queries
+- Pages auto-save as you edit
+- Each workbook has its own embedded database
+
+Happy analyzing!
+`;
+
 /**
  * Initialize a new workbook with standard structure and starter files.
  * This is the single source of truth for workbook creation - used by CLI and desktop app.
@@ -373,11 +397,12 @@ export async function initWorkbook(options: InitWorkbookOptions): Promise<void> 
 
   const slug = slugify(name);
 
-  // Create directory structure (no pages/ or blocks/ - user creates on demand)
+  // Create directory structure
   mkdirSync(join(directory, "migrations"), { recursive: true });
   mkdirSync(join(directory, "lib"), { recursive: true });
   mkdirSync(join(directory, "sources"), { recursive: true });
   mkdirSync(join(directory, "ui"), { recursive: true });
+  mkdirSync(join(directory, "pages"), { recursive: true });
 
   // Create package.json with hands config embedded
   const packageJson = {
@@ -421,4 +446,7 @@ db/
 *.log
 `;
   writeFileSync(join(directory, ".gitignore"), gitignore);
+
+  // Create welcome page
+  writeFileSync(join(directory, "pages", "welcome.mdx"), WELCOME_PAGE_TEMPLATE);
 }

@@ -1,6 +1,5 @@
 import { FolderOpen, Loader2, MoreVertical, Plus, Trash2 } from "lucide-react";
-import { useState } from "react";
-import { NewWorkbookModal } from "@/components/NewWorkbookModal";
+import { useNavigate } from "@tanstack/react-router";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -101,23 +100,22 @@ export function WorkbookPicker() {
   const createWorkbook = useCreateWorkbook();
   const deleteWorkbook = useDeleteWorkbook();
   const openWorkbook = useOpenWorkbook();
-  const [showNewDialog, setShowNewDialog] = useState(false);
+  const navigate = useNavigate();
 
   const handleSelectWorkbook = (workbook: Workbook) => {
     openWorkbook.mutate(workbook);
   };
 
-  const handleCreateWorkbook = (name: string, description?: string, templateId?: string) => {
+  const handleCreateWorkbook = () => {
     createWorkbook.mutate(
-      { name, description },
+      { name: "Untitled Workbook" },
       {
         onSuccess: (workbook) => {
-          openWorkbook.mutate(workbook);
-          setShowNewDialog(false);
-          // TODO: Apply template if templateId is provided
-          if (templateId) {
-            console.log(`Applying template: ${templateId}`);
-          }
+          openWorkbook.mutate(workbook, {
+            onSuccess: () => {
+              navigate({ to: "/pages/$pageId", params: { pageId: "welcome" } });
+            },
+          });
         },
       },
     );
@@ -140,7 +138,7 @@ export function WorkbookPicker() {
           <Button
             variant="outline"
             size="xs"
-            onClick={() => setShowNewDialog(true)}
+            onClick={handleCreateWorkbook}
             disabled={createWorkbook.isPending}
           >
             <Plus className="h-4 w-4 mr-2" />
@@ -159,7 +157,7 @@ export function WorkbookPicker() {
             <p className="text-xs text-muted-foreground mb-4">
               Create your first workbook to get started
             </p>
-            <Button onClick={() => setShowNewDialog(true)}>
+            <Button onClick={handleCreateWorkbook} disabled={createWorkbook.isPending}>
               <Plus className="h-4 w-4 mr-2" />
               Create Workbook
             </Button>
@@ -179,13 +177,6 @@ export function WorkbookPicker() {
           </ScrollArea>
         )}
       </div>
-
-      <NewWorkbookModal
-        open={showNewDialog}
-        onOpenChange={setShowNewDialog}
-        onCreate={handleCreateWorkbook}
-        isCreating={createWorkbook.isPending}
-      />
     </div>
   );
 }
