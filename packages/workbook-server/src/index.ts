@@ -29,6 +29,7 @@ import { getRuntimeSourcePath } from "./config/index.js";
 import { PORTS, waitForPortFree } from "./ports.js";
 import { registerSourceRoutes } from "./sources/index.js";
 import { registerTRPCRoutes } from "./trpc/index.js";
+import { getDbSubscriptionManager } from "./sqlite/trpc.js";
 import { PageRegistry, createPageRegistry, renderPage, type PageRenderContext } from "./pages/index.js";
 
 interface RuntimeConfig {
@@ -555,6 +556,28 @@ function createApp(config: RuntimeConfig) {
     }
     // Context is ready - Vite will call this to check
     return c.json({ ready: true });
+  });
+
+  // ============================================
+  // Database Change Subscription (SSE)
+  // ============================================
+  app.get("/db/subscribe", async (c) => {
+    if (!state.rscReady || !state.rscPort) {
+      return c.json({ error: "Database not ready" }, 503);
+    }
+
+    const runtimeUrl = `http://localhost:${state.rscPort}`;
+    const manager = getDbSubscriptionManager(runtimeUrl);
+    const stream = manager.createStream();
+
+    return new Response(stream, {
+      headers: {
+        "Content-Type": "text/event-stream",
+        "Cache-Control": "no-cache",
+        "Connection": "keep-alive",
+        "Access-Control-Allow-Origin": "*",
+      },
+    });
   });
 
   // Stop endpoint for graceful shutdown (used by Tauri)

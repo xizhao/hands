@@ -30,9 +30,6 @@ export interface TRPCConfig {
     rscReady: boolean;
     rscPort: number | null;
     rscError: string | null;
-    editorReady: boolean;
-    editorPort: number | null;
-    editorRestartCount: number;
     buildErrors: string[];
   };
   /** Optional: provides sources, actions, config (blocks/pages now come from discovery) */

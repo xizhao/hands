@@ -25,9 +25,11 @@ import { FontKit } from "./plugins/font-kit";
 import { ListKit } from "./plugins/list-kit";
 import { MarkdownKit } from "./plugins/markdown-kit";
 import { SlashKit } from "./plugins/slash-kit";
+import { AtKit } from "./plugins/at-kit";
 import { SandboxedBlockPlugin } from "./SandboxedBlock";
 import { TableKit } from "./plugins/table-kit";
 import { ToggleKit } from "./plugins/toggle-kit";
+import { LiveQueryKit } from "./plugins/live-query-kit";
 
 export const EditorKit = [
   // Elements
@@ -37,6 +39,7 @@ export const EditorKit = [
   ...ToggleKit,
   ...CalloutKit,
   SandboxedBlockPlugin,
+  ...LiveQueryKit,
 
   // Marks
   ...BasicMarksKit,
@@ -46,6 +49,7 @@ export const EditorKit = [
   ...ListKit,
 
   // Editing
+  ...AtKit,
   ...SlashKit,
   ...EmojiKit,
   ...AutoformatKit,

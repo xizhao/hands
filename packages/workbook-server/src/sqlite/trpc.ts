@@ -184,3 +184,134 @@ export const sqliteTRPCRouter = t.router({
 });
 
 export type SQLiteTRPCRouter = typeof sqliteTRPCRouter;
+
+// ============================================================================
+// SSE Subscription for Live Queries
+// ============================================================================
+
+export interface DbChangeEvent {
+  type: "change";
+  dataVersion: number;
+  timestamp: number;
+}
+
+export interface DbSubscriptionState {
+  lastDataVersion: number;
+  clients: Set<ReadableStreamDefaultController>;
+}
+
+/**
+ * Create a subscription manager for database changes
+ */
+export function createDbSubscriptionManager(runtimeUrl: string) {
+  const state: DbSubscriptionState = {
+    lastDataVersion: 0,
+    clients: new Set(),
+  };
+
+  let pollInterval: ReturnType<typeof setInterval> | null = null;
+
+  /**
+   * Poll SQLite for data_version changes
+   */
+  async function pollForChanges() {
+    try {
+      const response = await fetch(`${runtimeUrl}/db/query`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ sql: "PRAGMA data_version" }),
+      });
+
+      if (!response.ok) return;
+
+      const result = (await response.json()) as { rows: Array<{ data_version: number }> };
+      const currentVersion = result.rows[0]?.data_version ?? 0;
+
+      if (currentVersion !== state.lastDataVersion && state.lastDataVersion !== 0) {
+        // Data changed - notify all clients
+        const event: DbChangeEvent = {
+          type: "change",
+          dataVersion: currentVersion,
+          timestamp: Date.now(),
+        };
+        broadcast(event);
+      }
+
+      state.lastDataVersion = currentVersion;
+    } catch {
+      // Ignore errors during polling
+    }
+  }
+
+  /**
+   * Broadcast event to all connected clients
+   */
+  function broadcast(event: DbChangeEvent) {
+    const data = `data: ${JSON.stringify(event)}\n\n`;
+    for (const controller of state.clients) {
+      try {
+        controller.enqueue(new TextEncoder().encode(data));
+      } catch {
+        // Client disconnected, remove from set
+        state.clients.delete(controller);
+      }
+    }
+  }
+
+  /**
+   * Start polling if not already running
+   */
+  function startPolling() {
+    if (pollInterval) return;
+    pollInterval = setInterval(pollForChanges, 500); // Poll every 500ms
+    pollForChanges(); // Initial poll
+  }
+
+  /**
+   * Stop polling if no clients connected
+   */
+  function maybeStopPolling() {
+    if (state.clients.size === 0 && pollInterval) {
+      clearInterval(pollInterval);
+      pollInterval = null;
+    }
+  }
+
+  /**
+   * Create SSE stream for a new client
+   */
+  function createStream(): ReadableStream {
+    let controller: ReadableStreamDefaultController;
+
+    return new ReadableStream({
+      start(ctrl) {
+        controller = ctrl;
+        state.clients.add(controller);
+        startPolling();
+
+        // Send initial connection event
+        const initEvent = `data: ${JSON.stringify({ type: "connected", dataVersion: state.lastDataVersion })}\n\n`;
+        controller.enqueue(new TextEncoder().encode(initEvent));
+      },
+      cancel() {
+        state.clients.delete(controller);
+        maybeStopPolling();
+      },
+    });
+  }
+
+  return { createStream, broadcast };
+}
+
+// Global subscription manager (lazily initialized)
+let subscriptionManager: ReturnType<typeof createDbSubscriptionManager> | null = null;
+
+/**
+ * Get or create the subscription manager
+ */
+export function getDbSubscriptionManager(runtimeUrl: string) {
+  if (!subscriptionManager) {
+    subscriptionManager = createDbSubscriptionManager(runtimeUrl);
+  }
+  return subscriptionManager;
+}

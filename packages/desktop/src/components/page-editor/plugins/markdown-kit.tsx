@@ -14,6 +14,10 @@ import type { MdxJsxTextElement, MdxJsxAttribute } from 'mdast-util-mdx-jsx';
 import type { Text as MdastText } from 'mdast';
 
 import { SANDBOXED_BLOCK_KEY, sandboxedBlockMarkdownRule } from '../SandboxedBlock';
+import {
+  liveQueryMarkdownRule,
+  deserializeLiveQueryElement,
+} from './live-query-kit';
 
 /**
  * Serialize text with fontColor mark to <span style="color: ...">
@@ -120,6 +124,12 @@ export const MarkdownKit = [
         },
         // Sandboxed block - serialize to <Block src="..." />
         ...sandboxedBlockMarkdownRule,
+        // LiveQuery element - deserialize <LiveQuery query="..." /> to live_query
+        LiveQuery: {
+          deserialize: (node, options) => deserializeLiveQueryElement(node, options),
+        },
+        // LiveQuery - serialize to <LiveQuery query="..." />
+        ...liveQueryMarkdownRule,
       },
     },
   }),
