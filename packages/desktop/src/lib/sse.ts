@@ -21,6 +21,10 @@ import {
 } from "@/lib/api";
 import { setSessionError } from "@/hooks/useChatState";
 
+// Set to true for verbose SSE logging (or localStorage.setItem("DEBUG_SSE", "true"))
+const DEBUG_SSE = typeof localStorage !== "undefined" && localStorage.getItem("DEBUG_SSE") === "true";
+const log = DEBUG_SSE ? console.log.bind(console) : () => {};
+
 // Navigation callback - set by the app to handle navigate tool
 let navigateCallback: ((page: string) => void) | null = null;
 
@@ -32,7 +36,7 @@ export function setNavigateCallback(callback: (page: string) => void) {
 const navigatedParts = new Set<string>();
 
 export function startSSESync(queryClient: QueryClient): () => void {
-  console.log("[sse] Starting SSE sync with React Query");
+  log("[sse] Starting SSE sync with React Query");
 
   const cleanup = subscribeToEvents(
     (event: ServerEvent, directory?: string) => {
@@ -94,14 +98,14 @@ function processEvent(event: ServerEvent, queryClient: QueryClient, directory?: 
       handleSessionIdle(event.properties.sessionID, queryClient, directory);
       break;
     default:
-      console.log("[sse] Unknown event:", (event as { type: string }).type);
+      log("[sse] Unknown event:", (event as { type: string }).type);
   }
 }
 
 // ============ EVENT HANDLERS ============
 
 function handleSessionCreated(session: Session, queryClient: QueryClient, directory?: string) {
-  console.log("[sse] session.created:", session.id, "directory:", directory);
+  log("[sse] session.created:", session.id, "directory:", directory);
 
   // Add to sessions list - prefer specific directory if known
   if (directory) {
@@ -121,7 +125,7 @@ function handleSessionCreated(session: Session, queryClient: QueryClient, direct
 }
 
 function handleSessionUpdated(session: Session, queryClient: QueryClient, directory?: string) {
-  console.log("[sse] session.updated:", session.id, "directory:", directory);
+  log("[sse] session.updated:", session.id, "directory:", directory);
 
   // Update in sessions list
   queryClient.setQueriesData<Session[]>({ queryKey: ["sessions"], exact: false }, (old) =>
@@ -136,7 +140,7 @@ function handleSessionUpdated(session: Session, queryClient: QueryClient, direct
 }
 
 function handleSessionDeleted(sessionId: string, queryClient: QueryClient, directory?: string) {
-  console.log("[sse] session.deleted:", sessionId, "directory:", directory);
+  log("[sse] session.deleted:", sessionId, "directory:", directory);
 
   // Check if session was busy (indicates unexpected termination)
   const statuses = queryClient.getQueryData<Record<string, SessionStatus>>([
@@ -172,7 +176,7 @@ function handleSessionStatus(
   queryClient: QueryClient,
   directory?: string,
 ) {
-  console.log("[sse] session.status:", sessionId, status.type, "directory:", directory);
+  log("[sse] session.status:", sessionId, status.type, "directory:", directory);
 
   // Map SDK status to our SessionStatus type
   const mappedStatus: SessionStatus =
@@ -219,7 +223,7 @@ function handleMessageUpdated(message: SdkMessage, queryClient: QueryClient, dir
   if (directory) {
     const exactKey = ["messages", message.sessionID, directory];
     const existing = queryClient.getQueryData<MessageWithParts[]>(exactKey);
-    console.log("[sse] message.updated: Checking exact key:", exactKey, "exists:", !!existing);
+    log("[sse] message.updated: Checking exact key:", exactKey, "exists:", !!existing);
 
     if (existing !== undefined) {
       // Query exists, update it
@@ -261,7 +265,7 @@ function handleMessageUpdated(message: SdkMessage, queryClient: QueryClient, dir
 
   // If no queries were updated and we have a directory, create the cache entry directly
   if (updated.length === 0 && directory) {
-    console.log("[sse] message.updated: Creating new cache entry for:", [
+    log("[sse] message.updated: Creating new cache entry for:", [
       "messages",
       message.sessionID,
       directory,
@@ -281,7 +285,7 @@ function handleMessageUpdated(message: SdkMessage, queryClient: QueryClient, dir
 }
 
 function handleMessageRemoved(messageId: string, queryClient: QueryClient) {
-  console.log("[sse] message.removed:", messageId);
+  log("[sse] message.removed:", messageId);
 
   // Remove from all messages lists
   queryClient.setQueriesData<MessageWithParts[]>({ queryKey: ["messages"], exact: false }, (old) =>
@@ -321,7 +325,7 @@ function handlePartUpdated(part: SdkPart, queryClient: QueryClient, directory?: 
 
           // Build path from routeType + id
           const routePath = `/${parsed.routeType}s/${parsed.id}`;
-          console.log("[sse] Navigate tool completed, navigating to:", routePath);
+          log("[sse] Navigate tool completed, navigating to:", routePath);
 
           // If refresh is requested, invalidate relevant queries before navigation
           if (parsed.refresh) {
@@ -383,7 +387,7 @@ function handlePartUpdated(part: SdkPart, queryClient: QueryClient, directory?: 
     // Check if message exists - if not, create placeholder
     const messageExists = old.some((m) => m.info.id === part.messageID);
     if (!messageExists) {
-      console.log("[sse] part.updated: message not found, creating placeholder:", part.messageID);
+      log("[sse] part.updated: message not found, creating placeholder:", part.messageID);
       return [
         ...old,
         {
@@ -432,7 +436,7 @@ function handlePartUpdated(part: SdkPart, queryClient: QueryClient, directory?: 
 }
 
 function handlePartRemoved(partId: string, queryClient: QueryClient) {
-  console.log("[sse] part.removed:", partId);
+  log("[sse] part.removed:", partId);
 
   // Remove from all messages
   queryClient.setQueriesData<MessageWithParts[]>({ queryKey: ["messages"], exact: false }, (old) =>
@@ -449,7 +453,7 @@ function handleTodosUpdated(
   queryClient: QueryClient,
   directory?: string,
 ) {
-  console.log("[sse] todos.updated:", sessionId, todos.length, "todos", "directory:", directory);
+  log("[sse] todos.updated:", sessionId, todos.length, "todos", "directory:", directory);
 
   // If we have a directory, set specific query
   if (directory) {

@@ -11,6 +11,9 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useActiveWorkbookDirectory } from "@/hooks/useRuntimeState";
 import { api, type MessageWithParts, type PermissionResponse, type Session } from "@/lib/api";
 
+const DEBUG = typeof localStorage !== "undefined" && localStorage.getItem("DEBUG_HOOKS") === "true";
+const log = DEBUG ? console.log.bind(console) : () => {};
+
 // ============ SESSION HOOKS ============
 
 /**
@@ -99,16 +102,16 @@ export function useMessages(sessionId: string | null) {
   const status = sessionId ? statuses?.[sessionId] : null;
   const isBusy = status?.type === "busy" || status?.type === "running";
 
-  console.log("[useMessages] sessionId:", sessionId, "directory:", directory, "isBusy:", isBusy);
+  log("[useMessages] sessionId:", sessionId, "directory:", directory, "isBusy:", isBusy);
 
   return useQuery({
     queryKey: ["messages", sessionId, directory],
     queryFn: async () => {
-      console.log("[useMessages] Fetching messages for session:", sessionId);
+      log("[useMessages] Fetching messages for session:", sessionId);
       try {
         // biome-ignore lint/style/noNonNullAssertion: sessionId is checked via enabled option
         const result = await api.messages.list(sessionId!, directory);
-        console.log("[useMessages] Fetched", result.length, "messages");
+        log("[useMessages] Fetched", result.length, "messages");
         return result;
       } catch (err) {
         // Handle "required following item" error during streaming/HMR

@@ -8,6 +8,9 @@ import { useDeleteSession, useMessages, useSessionStatuses, useSessions } from "
 import type { Session } from "@/lib/api";
 import { cn } from "@/lib/utils";
 
+const DEBUG = typeof localStorage !== "undefined" && localStorage.getItem("DEBUG_UI") === "true";
+const log = DEBUG ? console.log.bind(console) : () => {};
+
 interface ThreadProps {
   expanded: boolean;
   onCollapse: () => void;
@@ -26,8 +29,8 @@ export function Thread({ expanded, onCollapse, onExpand }: ThreadProps) {
   const [showBackgroundSessions, setShowBackgroundSessions] = useState(false);
 
   // Debug logging
-  console.log("[Thread] render - activeSessionId:", activeSessionId, "expanded:", expanded);
-  console.log("[Thread] messages:", messages.length, "isLoading:", isLoading, "error:", error);
+  log("[Thread] render - activeSessionId:", activeSessionId, "expanded:", expanded);
+  log("[Thread] messages:", messages.length, "isLoading:", isLoading, "error:", error);
 
   // Current session status
   const currentStatus = activeSessionId ? sessionStatuses[activeSessionId] : null;
