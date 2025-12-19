@@ -16,13 +16,11 @@ import type { Text as MdastText } from 'mdast';
 import { SANDBOXED_BLOCK_KEY, sandboxedBlockMarkdownRule } from '../SandboxedBlock';
 import {
   liveQueryMarkdownRule,
-  deserializeLiveValueElement,
-  deserializeLiveQueryElement,
-  deserializeInlineLiveQueryElement,
+  deserializeLiveValue,
   deserializeLiveActionElement,
   deserializeActionButtonElement,
 } from './live-query-kit';
-import { GHOST_PROMPT_KEY } from './ghost-prompt-kit';
+import { PROMPT_KEY } from './prompt-kit';
 
 /**
  * Serialize text with fontColor mark to <span style="color: ...">
@@ -129,13 +127,13 @@ export const MarkdownKit = [
         },
         // Sandboxed block - serialize to <Block src="..." />
         ...sandboxedBlockMarkdownRule,
-        // LiveValue - unified element with display prop
+        // LiveValue - single deserializer picks inline vs block type based on display prop
         LiveValue: {
-          deserialize: (node, options) => deserializeLiveValueElement(node, options),
+          deserialize: (node) => deserializeLiveValue(node),
         },
         // Legacy: LiveQuery maps to LiveValue
         LiveQuery: {
-          deserialize: (node, options) => deserializeLiveQueryElement(node, options),
+          deserialize: (node) => deserializeLiveValue(node),
         },
         // LiveAction element
         LiveAction: {
@@ -147,11 +145,33 @@ export const MarkdownKit = [
         },
         // Serialize all live elements to MDX
         ...liveQueryMarkdownRule,
-        // Ghost prompt - serialize as inline code (ephemeral element, shouldn't persist)
-        [GHOST_PROMPT_KEY]: {
+        // Prompt element - deserialize <Prompt text="..." />
+        Prompt: {
+          deserialize: (node: any) => {
+            const attrs = node.attributes || [];
+            let text = '';
+            for (const attr of attrs) {
+              if (attr.type === 'mdxJsxAttribute' && attr.name === 'text') {
+                text = attr.value || '';
+              }
+            }
+            return {
+              type: PROMPT_KEY,
+              text,
+              status: 'pending',
+              children: [{ text: '' }],
+            };
+          },
+        },
+        // Serialize Prompt element to MDX
+        [PROMPT_KEY]: {
           serialize: (node: any) => ({
-            type: 'inlineCode',
-            value: node.prompt || '',
+            type: 'mdxJsxFlowElement',
+            name: 'Prompt',
+            attributes: [
+              { type: 'mdxJsxAttribute', name: 'text', value: node.text || '' },
+            ],
+            children: [],
           }),
         },
       },

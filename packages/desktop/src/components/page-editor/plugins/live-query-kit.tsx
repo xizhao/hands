@@ -1027,11 +1027,13 @@ export const liveQueryMarkdownRule = {
 // ============================================================================
 
 /**
- * Deserialize <LiveValue> MDX element.
+ * Single canonical deserializer for LiveValue/LiveQuery MDX elements.
+ *
+ * Always returns inline type - Slate elements are always inline.
+ * The display prop controls HOW it renders (badge vs table), not WHERE.
  */
-export function deserializeLiveValueElement(
-  node: { attributes?: Array<{ type: string; name: string; value: unknown }> },
-  _options?: unknown
+export function deserializeLiveValue(
+  node: { attributes?: Array<{ type: string; name: string; value: unknown }> }
 ): TLiveValueElement {
   const attributes = node.attributes || [];
   const props: Record<string, unknown> = {};
@@ -1059,31 +1061,14 @@ export function deserializeLiveValueElement(
   }
 
   return {
-    type: LIVE_VALUE_KEY,
+    type: INLINE_LIVE_QUERY_KEY, // Always inline
     query: (props.query as string) || "",
-    display: props.display as DisplayMode | undefined,
+    display: (props.display as DisplayMode | undefined) ?? "inline",
     params: props.params as Record<string, unknown> | undefined,
     columns: props.columns as ColumnConfig[] | "auto" | undefined,
     className: props.className as string | undefined,
     children: [{ text: "" }],
-  };
-}
-
-// Legacy deserializers - map to LiveValue
-export function deserializeLiveQueryElement(
-  node: { attributes?: Array<{ type: string; name: string; value: unknown }> },
-  options?: unknown
-): TLiveValueElement {
-  return deserializeLiveValueElement(node, options);
-}
-
-export function deserializeInlineLiveQueryElement(
-  node: { attributes?: Array<{ type: string; name: string; value: unknown }> }
-): TLiveValueElement {
-  const element = deserializeLiveValueElement(node);
-  // Force inline display for legacy LiveValue/inline elements
-  element.display = "inline";
-  return element;
+  } as TLiveValueElement;
 }
 
 export function deserializeLiveActionElement(

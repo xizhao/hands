@@ -234,7 +234,7 @@ const comboboxVariants = cva(
         default: '',
         emoji: 'max-h-[270px] w-[408px]',
         mention: 'w-[300px]',
-        slash: 'w-[320px]',
+        slash: 'w-fit', // Natural width based on content
       },
     },
   }

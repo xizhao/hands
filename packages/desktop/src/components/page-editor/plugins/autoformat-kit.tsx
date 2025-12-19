@@ -72,7 +72,11 @@ const autoformatMarks: AutoformatRule[] = [
     mode: 'mark',
     type: KEYS.sub,
   },
-  // Backtick handling is in ghost-prompt-kit.tsx via keyDown handler
+  {
+    match: '`',
+    mode: 'mark',
+    type: KEYS.code,
+  },
 ];
 
 const autoformatBlocks: AutoformatRule[] = [
