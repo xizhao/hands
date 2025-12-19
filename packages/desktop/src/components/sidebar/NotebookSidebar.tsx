@@ -1208,169 +1208,6 @@ export default function Placeholder() {
             )}
           </div>
 
-          {/* Blocks Section */}
-          <div className="space-y-1">
-            <div className="flex items-center justify-between">
-              <button
-                onClick={() => setBlocksExpanded(!blocksExpanded)}
-                className="flex items-center gap-1 text-[10px] font-medium text-muted-foreground/80 uppercase tracking-wider hover:text-muted-foreground transition-colors"
-              >
-                {blocksExpanded ? (
-                  <ChevronDown className="h-3 w-3" />
-                ) : (
-                  <ChevronRight className="h-3 w-3" />
-                )}
-                Blocks
-              </button>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <button
-                    onClick={handleStartNewBlock}
-                    className="p-0.5 text-muted-foreground/60 hover:text-muted-foreground transition-colors"
-                    title="New block"
-                  >
-                    <Plus className="h-3 w-3" />
-                  </button>
-                </TooltipTrigger>
-                <TooltipContent side="right">New block</TooltipContent>
-              </Tooltip>
-            </div>
-
-            {blocksExpanded && (
-              <div className="space-y-0">
-                {/* Inline new block input */}
-                {isCreatingNewBlock && (
-                  <div className={cn(listItemStyles, "pr-1")}>
-                    <BlockIcon />
-                    <input
-                      ref={newBlockInputRef}
-                      type="text"
-                      value={newBlockName}
-                      onChange={(e) => setNewBlockName(e.target.value)}
-                      onKeyDown={handleNewBlockKeyDown}
-                      onBlur={handleConfirmNewBlock}
-                      placeholder="block-name"
-                      disabled={isCreatingBlock}
-                      className="flex-1 bg-transparent border-none outline-none text-sm placeholder:text-muted-foreground/50"
-                    />
-                    {isCreatingBlock && (
-                      <CircleNotch
-                        weight="bold"
-                        className="h-3 w-3 animate-spin text-muted-foreground"
-                      />
-                    )}
-                  </div>
-                )}
-                {blocksLoading ? (
-                  <div className={emptyStateStyles}>Loading...</div>
-                ) : blocks.length > 0 || isCreatingNewBlock ? (
-                  <>
-                    {/* Directories */}
-                    {Array.from(blockTree.directories.keys())
-                      .sort()
-                      .map((dir) => {
-                        const isExpanded = expandedDirs.has(dir);
-                        const dirBlocks = blockTree.directories.get(dir) || [];
-                        const filteredDirBlocks = searchQuery
-                          ? dirBlocks.filter((b) =>
-                              b.title.toLowerCase().includes(searchQuery.toLowerCase()),
-                            )
-                          : dirBlocks;
-
-                        if (searchQuery && filteredDirBlocks.length === 0) return null;
-
-                        return (
-                          <div key={dir}>
-                            <button
-                              onClick={() => toggleDir(dir)}
-                              className={cn(listItemStyles, "group")}
-                            >
-                              {isExpanded ? (
-                                <FolderOpen
-                                  weight="duotone"
-                                  className="h-4 w-4 shrink-0 text-amber-500"
-                                />
-                              ) : (
-                                <Folder
-                                  weight="duotone"
-                                  className="h-4 w-4 shrink-0 text-amber-500"
-                                />
-                              )}
-                              <span className="flex-1 truncate text-left">{dir}</span>
-                              <span className="text-xs text-muted-foreground/60">
-                                {filteredDirBlocks.length}
-                              </span>
-                            </button>
-                            {(isExpanded || searchQuery) && (
-                              <div className="ml-4 border-l border-border/50 pl-2">
-                                {filteredDirBlocks.map((block) => (
-                                  <ThumbnailHoverCard
-                                    key={block.id}
-                                    type="block"
-                                    contentId={block.id}
-                                    onMouseEnter={() => prefetchThumbnail("block", block.id)}
-                                  >
-                                    <div className={listItemStyles}>
-                                      <BlockIcon empty={block.uninitialized} />
-                                      <button
-                                        onClick={() => handleBlockClick(block.id)}
-                                        className="flex-1 truncate text-left hover:underline"
-                                      >
-                                        {block.title || block.id}
-                                      </button>
-                                      <ItemActions
-                                        onCopy={() => handleCopyBlock(block.id)}
-                                        onDelete={() => handleDeleteBlock(block.id)}
-                                        onOpenChange={onMenuOpenChange}
-                                      />
-                                    </div>
-                                  </ThumbnailHoverCard>
-                                ))}
-                              </div>
-                            )}
-                          </div>
-                        );
-                      })}
-                    {/* Root blocks */}
-                    {(searchQuery
-                      ? blockTree.rootBlocks.filter((b) =>
-                          b.title.toLowerCase().includes(searchQuery.toLowerCase()),
-                        )
-                      : blockTree.rootBlocks
-                    ).map((block) => (
-                      <ThumbnailHoverCard
-                        key={block.id}
-                        type="block"
-                        contentId={block.id}
-                        onMouseEnter={() => prefetchThumbnail("block", block.id)}
-                      >
-                        <div className={listItemStyles}>
-                          <BlockIcon empty={block.uninitialized} />
-                          <button
-                            onClick={() => handleBlockClick(block.id)}
-                            className="flex-1 truncate text-left hover:underline"
-                          >
-                            {block.title || block.id}
-                          </button>
-                          <ItemActions
-                            onCopy={() => handleCopyBlock(block.id)}
-                            onDelete={() => handleDeleteBlock(block.id)}
-                            onOpenChange={onMenuOpenChange}
-                          />
-                        </div>
-                      </ThumbnailHoverCard>
-                    ))}
-                  </>
-                ) : (
-                  <div className={emptyStateStyles}>
-                    <BlockIcon empty />
-                    <span>No blocks</span>
-                  </div>
-                )}
-              </div>
-            )}
-          </div>
-
           {/* Data Section - Contains Sources (with their tables) and Unassociated Tables */}
           <div className="space-y-1">
             <div className="flex items-center justify-between">
@@ -1617,6 +1454,169 @@ export default function Placeholder() {
                       </div>
                     )}
                 </>
+              </div>
+            )}
+          </div>
+
+          {/* Blocks Section */}
+          <div className="space-y-1">
+            <div className="flex items-center justify-between">
+              <button
+                onClick={() => setBlocksExpanded(!blocksExpanded)}
+                className="flex items-center gap-1 text-[10px] font-medium text-muted-foreground/80 uppercase tracking-wider hover:text-muted-foreground transition-colors"
+              >
+                {blocksExpanded ? (
+                  <ChevronDown className="h-3 w-3" />
+                ) : (
+                  <ChevronRight className="h-3 w-3" />
+                )}
+                Blocks
+              </button>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <button
+                    onClick={handleStartNewBlock}
+                    className="p-0.5 text-muted-foreground/60 hover:text-muted-foreground transition-colors"
+                    title="New block"
+                  >
+                    <Plus className="h-3 w-3" />
+                  </button>
+                </TooltipTrigger>
+                <TooltipContent side="right">New block</TooltipContent>
+              </Tooltip>
+            </div>
+
+            {blocksExpanded && (
+              <div className="space-y-0">
+                {/* Inline new block input */}
+                {isCreatingNewBlock && (
+                  <div className={cn(listItemStyles, "pr-1")}>
+                    <BlockIcon />
+                    <input
+                      ref={newBlockInputRef}
+                      type="text"
+                      value={newBlockName}
+                      onChange={(e) => setNewBlockName(e.target.value)}
+                      onKeyDown={handleNewBlockKeyDown}
+                      onBlur={handleConfirmNewBlock}
+                      placeholder="block-name"
+                      disabled={isCreatingBlock}
+                      className="flex-1 bg-transparent border-none outline-none text-sm placeholder:text-muted-foreground/50"
+                    />
+                    {isCreatingBlock && (
+                      <CircleNotch
+                        weight="bold"
+                        className="h-3 w-3 animate-spin text-muted-foreground"
+                      />
+                    )}
+                  </div>
+                )}
+                {blocksLoading ? (
+                  <div className={emptyStateStyles}>Loading...</div>
+                ) : blocks.length > 0 || isCreatingNewBlock ? (
+                  <>
+                    {/* Directories */}
+                    {Array.from(blockTree.directories.keys())
+                      .sort()
+                      .map((dir) => {
+                        const isExpanded = expandedDirs.has(dir);
+                        const dirBlocks = blockTree.directories.get(dir) || [];
+                        const filteredDirBlocks = searchQuery
+                          ? dirBlocks.filter((b) =>
+                              b.title.toLowerCase().includes(searchQuery.toLowerCase()),
+                            )
+                          : dirBlocks;
+
+                        if (searchQuery && filteredDirBlocks.length === 0) return null;
+
+                        return (
+                          <div key={dir}>
+                            <button
+                              onClick={() => toggleDir(dir)}
+                              className={cn(listItemStyles, "group")}
+                            >
+                              {isExpanded ? (
+                                <FolderOpen
+                                  weight="duotone"
+                                  className="h-4 w-4 shrink-0 text-amber-500"
+                                />
+                              ) : (
+                                <Folder
+                                  weight="duotone"
+                                  className="h-4 w-4 shrink-0 text-amber-500"
+                                />
+                              )}
+                              <span className="flex-1 truncate text-left">{dir}</span>
+                              <span className="text-xs text-muted-foreground/60">
+                                {filteredDirBlocks.length}
+                              </span>
+                            </button>
+                            {(isExpanded || searchQuery) && (
+                              <div className="ml-4 border-l border-border/50 pl-2">
+                                {filteredDirBlocks.map((block) => (
+                                  <ThumbnailHoverCard
+                                    key={block.id}
+                                    type="block"
+                                    contentId={block.id}
+                                    onMouseEnter={() => prefetchThumbnail("block", block.id)}
+                                  >
+                                    <div className={listItemStyles}>
+                                      <BlockIcon empty={block.uninitialized} />
+                                      <button
+                                        onClick={() => handleBlockClick(block.id)}
+                                        className="flex-1 truncate text-left hover:underline"
+                                      >
+                                        {block.title || block.id}
+                                      </button>
+                                      <ItemActions
+                                        onCopy={() => handleCopyBlock(block.id)}
+                                        onDelete={() => handleDeleteBlock(block.id)}
+                                        onOpenChange={onMenuOpenChange}
+                                      />
+                                    </div>
+                                  </ThumbnailHoverCard>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
+                    {/* Root blocks */}
+                    {(searchQuery
+                      ? blockTree.rootBlocks.filter((b) =>
+                          b.title.toLowerCase().includes(searchQuery.toLowerCase()),
+                        )
+                      : blockTree.rootBlocks
+                    ).map((block) => (
+                      <ThumbnailHoverCard
+                        key={block.id}
+                        type="block"
+                        contentId={block.id}
+                        onMouseEnter={() => prefetchThumbnail("block", block.id)}
+                      >
+                        <div className={listItemStyles}>
+                          <BlockIcon empty={block.uninitialized} />
+                          <button
+                            onClick={() => handleBlockClick(block.id)}
+                            className="flex-1 truncate text-left hover:underline"
+                          >
+                            {block.title || block.id}
+                          </button>
+                          <ItemActions
+                            onCopy={() => handleCopyBlock(block.id)}
+                            onDelete={() => handleDeleteBlock(block.id)}
+                            onOpenChange={onMenuOpenChange}
+                          />
+                        </div>
+                      </ThumbnailHoverCard>
+                    ))}
+                  </>
+                ) : (
+                  <div className={emptyStateStyles}>
+                    <BlockIcon empty />
+                    <span>No blocks</span>
+                  </div>
+                )}
               </div>
             )}
           </div>

@@ -124,7 +124,7 @@ Renders SQL query results as rich content. Supports template mode, table mode, a
 <!-- Template mode: custom rendering with bindings -->
 <LiveQuery query="SELECT name, revenue FROM top_customers LIMIT 5">
 ## {{name}}
-Revenue: **${{revenue}}**
+Revenue: **\${{revenue}}**
 </LiveQuery>
 \`\`\`
 
@@ -232,6 +232,85 @@ import { createInlineLiveQueryElement } from "@/components/page-editor/plugins/l
 
 const element = createInlineLiveQueryElement("SELECT COUNT(*) FROM users");
 \`\`\`
+`;
+
+// ============================================================================
+// All Supported Elements
+// ============================================================================
+
+export const ALL_ELEMENTS_DOCS = `
+## All Supported Page Elements
+
+Pages support standard markdown plus these special elements:
+
+### Text Formatting (Marks)
+- **Bold** (\`**text**\` or Cmd+B)
+- *Italic* (\`*text*\` or Cmd+I)
+- <u>Underline</u> (\`__text__\` or Cmd+U)
+- ~~Strikethrough~~ (\`~~text~~\`)
+- \`Inline code\` (\\\`code\\\`)
+- ^Superscript^ (\`^text^\`)
+- ~Subscript~ (\`~text~\`)
+- Font color (\`<span style="color: red">text</span>\`)
+- Background color (\`<span style="background-color: yellow">text</span>\`)
+
+### Block Elements
+| Element | Markdown | Description |
+|---------|----------|-------------|
+| Headings | \`# ## ###\` | H1, H2, H3 |
+| Paragraph | (default) | Normal text |
+| Blockquote | \`> text\` | Quoted text |
+| Code Block | \`\`\`\`\`\`lang\` | Syntax-highlighted code |
+| Horizontal Rule | \`---\` | Divider line |
+
+### Lists
+| Type | Markdown | Description |
+|------|----------|-------------|
+| Bulleted | \`- item\` or \`* item\` | Unordered list |
+| Numbered | \`1. item\` | Ordered list |
+| To-do | \`[] item\` or \`[x] item\` | Checkbox list |
+| Toggle | \`+ item\` | Collapsible section |
+
+### Tables (GFM)
+\`\`\`markdown
+| Header 1 | Header 2 | Header 3 |
+|----------|----------|----------|
+| Cell 1   | Cell 2   | Cell 3   |
+| Cell 4   | Cell 5   | Cell 6   |
+\`\`\`
+
+Tables support:
+- Column alignment (\`:---\`, \`:---:\`, \`---:\`)
+- Header row styling
+- Cell editing
+
+### Callouts
+\`\`\`markdown
+:::note
+This is a callout with important information.
+:::
+\`\`\`
+
+Callouts are highlighted boxes for tips, warnings, or important notes.
+
+### MDX Components
+| Component | Usage | Description |
+|-----------|-------|-------------|
+| \`<Block>\` | \`<Block src="chart" />\` | Embed TSX block |
+| \`<LiveValue>\` | \`<LiveValue query="..." />\` | Inline SQL value |
+| \`<LiveQuery>\` | \`<LiveQuery query="...">...</LiveQuery>\` | Block SQL result |
+
+### Inline Elements
+- Links: \`[text](url)\`
+- Emoji: Type \`:smile:\` or use emoji picker
+- Mentions: \`@user\` or \`@block\`
+- Equations: \`\$x^2\$\` (inline math)
+
+### Special Features
+- **Slash commands**: Type \`/\` to insert blocks
+- **@ mentions**: Type \`@\` to reference blocks or data
+- **Autoformat**: Markdown shortcuts auto-convert as you type
+- **Drag & drop**: Reorder blocks by dragging
 `;
 
 // ============================================================================
@@ -394,6 +473,8 @@ Complete reference for the page editor's markdown/MDX syntax.
 ${MARKDOWN_SYNTAX}
 
 ${FRONTMATTER_DOCS}
+
+${ALL_ELEMENTS_DOCS}
 
 ${LIVEQUERY_DOCS}
 

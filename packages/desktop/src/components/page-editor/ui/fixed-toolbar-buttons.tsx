@@ -2,15 +2,19 @@
 
 import {
   Code,
+  Lightbulb,
   List,
   ListNumbers,
   Quotes,
   Square,
+  Table,
   TextB,
   TextItalic,
   TextStrikethrough,
   TextUnderline,
 } from "@phosphor-icons/react";
+import { insertCallout } from "@platejs/callout";
+import { insertTable } from "@platejs/table";
 import { KEYS } from "platejs";
 import { useEditorReadOnly, useEditorRef, useSelectionFragmentProp } from "platejs/react";
 import { useCallback } from "react";
@@ -22,7 +26,7 @@ import { InlineEquationToolbarButton } from "./equation-toolbar-button";
 import { FontColorToolbarButton } from "./font-color-toolbar-button";
 import { LinkToolbarButton } from "./link-toolbar-button";
 import { MarkToolbarButton } from "./mark-toolbar-button";
-import { ToolbarGroup } from "./toolbar";
+import { ToolbarButton, ToolbarGroup } from "./toolbar";
 import { TurnIntoToolbarButton } from "./turn-into-toolbar-button";
 
 // ============================================================================
@@ -64,6 +68,40 @@ function BlockTypeButton({ type, icon, tooltip }: BlockTypeButtonProps) {
     >
       {icon}
     </button>
+  );
+}
+
+// ============================================================================
+// Insert Buttons
+// ============================================================================
+
+function InsertTableButton() {
+  const editor = useEditorRef();
+
+  const handleClick = useCallback(() => {
+    insertTable(editor, { rowCount: 3, colCount: 3 }, { select: true });
+    editor.tf.focus();
+  }, [editor]);
+
+  return (
+    <ToolbarButton onClick={handleClick} tooltip="Insert table">
+      <Table size={16} />
+    </ToolbarButton>
+  );
+}
+
+function InsertCalloutButton() {
+  const editor = useEditorRef();
+
+  const handleClick = useCallback(() => {
+    insertCallout(editor, { select: true });
+    editor.tf.focus();
+  }, [editor]);
+
+  return (
+    <ToolbarButton onClick={handleClick} tooltip="Insert callout">
+      <Lightbulb size={16} />
+    </ToolbarButton>
   );
 }
 
@@ -150,6 +188,12 @@ export function FixedToolbarButtons() {
           icon={<Code size={16} weight="bold" />}
           tooltip="Code Block"
         />
+      </ToolbarGroup>
+
+      {/* Insert Elements */}
+      <ToolbarGroup>
+        <InsertTableButton />
+        <InsertCalloutButton />
       </ToolbarGroup>
     </div>
   );

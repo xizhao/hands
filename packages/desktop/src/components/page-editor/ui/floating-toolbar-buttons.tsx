@@ -16,7 +16,7 @@ import { ToolbarButton } from "./toolbar";
  * When clicked with text selected:
  * 1. Gets the selected text and page context
  * 2. Starts a Hands thread with a prompt to convert to live data
- * 3. Hands will create the SQL and replace with <LiveValue sql={...}/>
+ * 3. Hands will create the SQL and replace with <LiveValue query={...}/>
  */
 function MakeLiveToolbarButton() {
   const editor = useEditorRef();
@@ -28,14 +28,12 @@ function MakeLiveToolbarButton() {
   const sendMessage = useSendMessage();
 
   const handleMakeLive = useCallback(async () => {
-    // Get selected text
     const selection = editor.selection;
     if (!selection) return;
 
     const selectedText = editor.api.string(selection);
     if (!selectedText) return;
 
-    // Build the prompt for Hands
     const prompt = `Make this text live by converting it to a database-backed value.
 
 **Selected text:** "${selectedText}"
@@ -49,9 +47,6 @@ Instructions:
 
 The selected text "${selectedText}" should be replaced with a live query that fetches this value from the database.`;
 
-    console.log("[MakeLive] Starting with prompt:", prompt);
-
-    // Create session if needed, then send message
     let sessionId = activeSessionId;
     if (!sessionId) {
       try {
@@ -66,7 +61,6 @@ The selected text "${selectedText}" should be replaced with a live query that fe
       }
     }
 
-    // Send the message to Hands
     try {
       await sendMessage.mutateAsync({
         sessionId,
@@ -83,7 +77,7 @@ The selected text "${selectedText}" should be replaced with a live query that fe
     <ToolbarButton
       onClick={handleMakeLive}
       onMouseDown={(e) => e.preventDefault()}
-      tooltip="Make Live - Convert to database-backed value"
+      tooltip="Make Live - Convert to database value"
       className="gap-1.5 px-2"
       disabled={isLoading}
     >

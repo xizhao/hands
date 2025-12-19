@@ -15,6 +15,7 @@
  */
 
 import { Lightning } from "@phosphor-icons/react";
+import { useNavigate } from "@tanstack/react-router";
 import { createSlateEditor, type TElement, type TText } from "platejs";
 import {
   createPlatePlugin,
@@ -25,8 +26,14 @@ import {
   useSelected,
 } from "platejs/react";
 import { PlateStatic } from "platejs/static";
-import { memo, useMemo, type ReactNode } from "react";
+import { memo, useMemo, useCallback, type ReactNode } from "react";
 
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
 import { useLiveQuery } from "@/lib/live-query";
 import { useActiveRuntime } from "@/hooks/useWorkbook";
@@ -201,6 +208,91 @@ function formatCellValue(value: unknown): string {
 }
 
 // ============================================================================
+// Auto Display Selection (DRY - single code path)
+// ============================================================================
+
+export type DisplayType = "inline-value" | "bullet-list" | "table";
+
+/**
+ * Select the most minimal display type based on data shape.
+ * Used by both LiveQuery (block) and ghost-prompt insertion.
+ */
+export function selectDisplayType(data: Record<string, unknown>[]): DisplayType {
+  if (!data || data.length === 0) return "table";
+
+  const rowCount = data.length;
+  const colCount = Object.keys(data[0]).length;
+
+  // Single value (1 row, 1 col) → inline value
+  if (rowCount === 1 && colCount === 1) {
+    return "inline-value";
+  }
+
+  // Multiple rows, single col → bullet list
+  if (colCount === 1) {
+    return "bullet-list";
+  }
+
+  // Everything else → table
+  return "table";
+}
+
+/**
+ * Render inline value badge (same style as InlineLiveQueryElement)
+ */
+function renderInlineValue(value: unknown, query?: string): ReactNode {
+  const queryRef = extractQueryReference(query);
+  const tooltip = queryRef.column
+    ? `${queryRef.table}.${queryRef.column}`
+    : queryRef.table || "Live Query";
+
+  return (
+    <span
+      title={tooltip}
+      className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded font-medium text-sm bg-violet-500/10 text-violet-700 dark:text-violet-300 border border-violet-500/20"
+    >
+      <Lightning weight="fill" className="size-3 shrink-0 opacity-60" />
+      <span className="tabular-nums">{formatCellValue(value)}</span>
+    </span>
+  );
+}
+
+/**
+ * Render bullet list
+ */
+function renderBulletList(data: Record<string, unknown>[]): ReactNode {
+  const key = Object.keys(data[0])[0];
+  return (
+    <ul className="my-2 space-y-0.5 list-disc list-inside text-sm">
+      {data.map((row, i) => (
+        <li key={i}>{formatCellValue(row[key])}</li>
+      ))}
+    </ul>
+  );
+}
+
+/**
+ * Auto-render data based on shape (DRY helper)
+ */
+export function renderAutoDisplay(
+  data: Record<string, unknown>[],
+  query?: string
+): ReactNode {
+  const displayType = selectDisplayType(data);
+
+  switch (displayType) {
+    case "inline-value": {
+      const value = data[0][Object.keys(data[0])[0]];
+      return renderInlineValue(value, query);
+    }
+    case "bullet-list":
+      return renderBulletList(data);
+    case "table":
+      return renderTable(data, autoDetectColumns(data));
+  }
+}
+
+// ============================================================================
 // Loading & Error States
 // ============================================================================
 
@@ -254,11 +346,16 @@ function LiveQueryEmpty() {
  * - Renders as inline-block span
  * - contentEditable={false} on content
  * - children included but empty for void
+ *
+ * Features:
+ * - Hover: Shows tooltip with table.column reference
+ * - Click: Navigates to the table page
  */
 function InlineLiveQueryElement(props: PlateElementProps) {
   const element = useElement<TInlineLiveQueryElement>();
   const readOnly = useReadOnly();
   const selected = useSelected();
+  const navigate = useNavigate();
   const { data: runtime } = useActiveRuntime();
   const runtimePort = runtime?.runtime_port ?? null;
 
@@ -288,11 +385,63 @@ function InlineLiveQueryElement(props: PlateElementProps) {
     return String(value);
   }, [data]);
 
-  // Extract table/column reference for tooltip
+  // Extract table/column reference for tooltip and navigation
   const queryRef = useMemo(() => extractQueryReference(query), [query]);
-  const tooltip = queryRef.column
-    ? `${queryRef.table}.${queryRef.column}`
-    : queryRef.table || "Live Query";
+
+  // Build tooltip content
+  const tooltipContent = useMemo(() => {
+    if (queryRef.column && queryRef.table) {
+      return (
+        <div className="flex flex-col gap-0.5">
+          <span className="opacity-70">from</span>
+          <span>{queryRef.table}.{queryRef.column}</span>
+        </div>
+      );
+    }
+    if (queryRef.table) {
+      return (
+        <div className="flex flex-col gap-0.5">
+          <span className="opacity-70">from</span>
+          <span>{queryRef.table}</span>
+        </div>
+      );
+    }
+    return "Live Query";
+  }, [queryRef]);
+
+  // Navigate to table on click
+  const handleClick = useCallback((e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (queryRef.table) {
+      navigate({ to: "/tables/$tableId", params: { tableId: queryRef.table } });
+    }
+  }, [navigate, queryRef.table]);
+
+  const badge = (
+    <span
+      onClick={queryRef.table ? handleClick : undefined}
+      className={cn(
+        "inline font-semibold text-violet-600 dark:text-violet-400 transition-colors",
+        // Dashed underline
+        "underline decoration-dashed decoration-violet-400/50 underline-offset-2",
+        // Selected state
+        selected && !readOnly && "bg-violet-500/10 rounded px-0.5 -mx-0.5",
+        // Hover state
+        queryRef.table ? "cursor-pointer hover:text-violet-700 dark:hover:text-violet-300 hover:decoration-violet-500" : "hover:decoration-violet-400"
+      )}
+    >
+      {isLoading ? (
+        <span className="animate-pulse">...</span>
+      ) : error ? (
+        <span className="text-destructive">err</span>
+      ) : displayValue === null ? (
+        <span className="text-muted-foreground italic">—</span>
+      ) : (
+        <span className="tabular-nums">{displayValue}</span>
+      )}
+    </span>
+  );
 
   return (
     <PlateElement
@@ -304,35 +453,20 @@ function InlineLiveQueryElement(props: PlateElementProps) {
         draggable: true,
       }}
       className={cn(
-        "inline-block cursor-default align-baseline",
+        "inline-block align-baseline",
         className
       )}
     >
-      <span
-        title={tooltip}
-        className={cn(
-          "inline-flex items-center gap-1 px-1.5 py-0.5 rounded font-medium text-sm transition-all",
-          // Base styling - badge/code like appearance
-          "bg-violet-500/10 text-violet-700 dark:text-violet-300 border border-violet-500/20",
-          // Selected state
-          selected && !readOnly && "ring-2 ring-violet-500/50 ring-offset-1 ring-offset-background",
-          // Hover state
-          "hover:bg-violet-500/15 hover:border-violet-500/30"
-        )}
-      >
-        <Lightning weight="fill" className="size-3 shrink-0 opacity-60" />
-        {isLoading ? (
-          <span className="inline-block animate-pulse bg-violet-500/20 rounded px-2 min-w-[2ch]">
-            <span className="invisible">...</span>
-          </span>
-        ) : error ? (
-          <span className="text-destructive text-xs">err</span>
-        ) : displayValue === null ? (
-          <span className="text-muted-foreground text-xs italic">—</span>
-        ) : (
-          <span className="tabular-nums">{displayValue}</span>
-        )}
-      </span>
+      <TooltipProvider>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            {badge}
+          </TooltipTrigger>
+          <TooltipContent side="top" sideOffset={6}>
+            {tooltipContent}
+          </TooltipContent>
+        </Tooltip>
+      </TooltipProvider>
       {props.children}
     </PlateElement>
   );
@@ -406,73 +540,8 @@ function LiveQueryElement(props: PlateElementProps) {
       return renderTable(data, resolvedColumns);
     }
 
-    // AUTO-PICK: No template or columns - pick best display based on data shape
-    const rowCount = data.length;
-    const colCount = Object.keys(data[0]).length;
-    const firstRow = data[0];
-    const keys = Object.keys(firstRow);
-
-    // Single value (1 row, 1 col) → Big metric
-    if (rowCount === 1 && colCount === 1) {
-      const value = firstRow[keys[0]];
-      return (
-        <div className="my-4">
-          <span className="text-4xl font-bold tabular-nums">
-            {formatCellValue(value)}
-          </span>
-        </div>
-      );
-    }
-
-    // Single row, multiple cols → Key-value pairs
-    if (rowCount === 1 && colCount <= 6) {
-      return (
-        <div className="my-4 flex flex-wrap gap-6">
-          {keys.map((key) => (
-            <div key={key} className="flex flex-col">
-              <span className="text-xs text-muted-foreground uppercase tracking-wide">
-                {key.replace(/_/g, ' ')}
-              </span>
-              <span className="text-2xl font-semibold tabular-nums">
-                {formatCellValue(firstRow[key])}
-              </span>
-            </div>
-          ))}
-        </div>
-      );
-    }
-
-    // Multiple rows, single col → Bullet list
-    if (colCount === 1) {
-      const key = keys[0];
-      return (
-        <ul className="my-4 space-y-1 list-disc list-inside">
-          {data.map((row, i) => (
-            <li key={i} className="text-sm">
-              {formatCellValue(row[key])}
-            </li>
-          ))}
-        </ul>
-      );
-    }
-
-    // Multiple rows, 2 cols → Name-value list
-    if (colCount === 2) {
-      const [labelKey, valueKey] = keys;
-      return (
-        <div className="my-4 space-y-2">
-          {data.map((row, i) => (
-            <div key={i} className="flex items-center justify-between border-b border-border/50 pb-1 last:border-0">
-              <span className="text-sm text-muted-foreground">{formatCellValue(row[labelKey])}</span>
-              <span className="text-sm font-medium tabular-nums">{formatCellValue(row[valueKey])}</span>
-            </div>
-          ))}
-        </div>
-      );
-    }
-
-    // Multiple rows, multiple cols → Table
-    return renderTable(data, autoDetectColumns(data));
+    // AUTO-PICK: No template or columns - use DRY helper
+    return renderAutoDisplay(data, query);
   }, [data, isLoading, error, template, columns, isTemplateMode, refetch]);
 
   const showChip = selected && !readOnly;

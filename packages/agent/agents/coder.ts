@@ -7,7 +7,9 @@
 
 import type { AgentConfig } from "@opencode-ai/sdk";
 import { BLOCK_API_DOCS } from "../docs/blocks-guide.js";
+import { DATA_GUIDE } from "../docs/data-guide.js";
 import { HANDS_ARCHITECTURE } from "../docs/hands-guide.js";
+import { ALL_ELEMENTS_DOCS, LIVEQUERY_DOCS, LIVEVALUE_DOCS } from "../docs/pages-guide.js";
 
 const CODER_PROMPT = `You are the technical implementation specialist for Hands. You create blocks (TSX) and pages (MDX) when delegated by the primary agent.
 
@@ -80,9 +82,21 @@ title: Dashboard
 <Block src="sales-summary" />
 
 <Block src="sales-chart" period="6 months" />
+
+We have <LiveValue query="SELECT COUNT(*) FROM customers" /> customers.
+
+<LiveQuery query="SELECT name, total FROM top_customers LIMIT 5" />
 \`\`\`
 
 **Block props** are passed as attributes: \`<Block src="name" myProp="value" />\`
+
+${LIVEQUERY_DOCS}
+
+${LIVEVALUE_DOCS}
+
+${ALL_ELEMENTS_DOCS}
+
+${DATA_GUIDE}
 
 ## Workflow
 

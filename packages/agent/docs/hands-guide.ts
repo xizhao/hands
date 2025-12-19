@@ -1,149 +1,148 @@
 /**
  * Hands App Architecture Guide
  *
- * Concise reference for agents building Hands workbooks.
+ * Balanced overview of all four primitives: Pages, Data, Blocks, Actions.
  * Keep this tight - it goes in system prompts.
  */
 
 export const HANDS_ARCHITECTURE = `
-## Hands App Architecture
+## Hands Architecture
 
-Four primitives: **Pages**, **Blocks**, **Tables**, **Actions**.
+Four primitives: **Pages**, **Data (Tables + Sources)**, **Blocks**, **Actions**.
 
 \`\`\`
 workbook/
-├── pages/        # MDX documents (what users see)
-├── blocks/       # TSX components (query + view)
-├── sources/      # Table definitions + sync logic
-└── package.json  # Config (hands field)
+├── pages/        # MDX documents (user-facing)
+├── blocks/       # TSX components (data visualizations)
+├── sources/      # Data connectors (API sync)
+├── actions/      # Scheduled/triggered tasks
+└── ui/           # Client components (interactivity)
 \`\`\`
 
-### Pages (MDX)
-User-facing documents that compose blocks.
+### 1. Pages (MDX)
+
+User-facing documents that compose content, data, and blocks.
 
 \`\`\`mdx
 ---
 title: Sales Dashboard
 ---
 
-# Sales Overview
+# Overview
 
-<Block src="revenue-chart" period="30d" />
+We have <LiveValue query="SELECT COUNT(*) FROM customers" /> customers.
 
-Top customers:
+<Block src="revenue-chart" />
 
-<Block src="top-customers" limit={10} />
+<LiveQuery query="SELECT name, total FROM top_customers LIMIT 5" />
 \`\`\`
 
-### Blocks (TSX) - Server Components
-Single-file components: query + view together. One concept = one file. 
+**Key components:**
+- \`<LiveValue>\` - Inline SQL result (single value, shows as badge)
+- \`<LiveQuery>\` - Block-level SQL result (auto-formatted table/list/metrics)
+- \`<Block>\` - Embedded TSX component from blocks/
+
+**When to use:** User-facing dashboards, reports, documentation with live data.
+
+### 2. Data (Tables + Sources)
+
+All data lives in PostgreSQL tables. Two ways to get data in:
+
+**Sources** - Code-based API connectors (recurring sync):
+\`\`\`
+sources action='add' name='hackernews'  # Add connector
+sources action='sync' name='hackernews' # Trigger sync
+\`\`\`
+Creates prefixed tables like \`hackernews_stories\`.
+
+**@import** - One-time file ingestion:
+\`\`\`
+@import /path/to/data.csv
+\`\`\`
+User names the table.
+
+**Querying:**
+\`\`\`
+sql query="SELECT * FROM customers LIMIT 10"
+schema table="orders"  # View columns
+\`\`\`
+
+**When to use:** Sources for APIs, @import for files.
+
+### 3. Blocks (TSX)
+
+Server components that query data and render visualizations.
 
 \`\`\`tsx
 "use server";
-
 import { sql } from "@hands/db";
 
 export default async function RevenueChart({ period = "30d" }) {
-  const data = await sql\`
-    SELECT date_trunc('day', created_at) as day, SUM(amount) as revenue
-    FROM orders
-    WHERE created_at > NOW() - INTERVAL '\${period}'
-    GROUP BY 1 ORDER BY 1
-  \`;
-
-  return (
-    <div className="p-4">
-      <h3 className="font-semibold mb-2">Revenue</h3>
-      <ul>
-        {data.map((row) => (
-          <li key={row.day}>{row.day}: {row.revenue}</li>
-        ))}
-      </ul>
-    </div>
-  );
+  const data = await sql\`SELECT date, SUM(amount) as revenue FROM orders GROUP BY date\`;
+  return <Chart data={data} />;
 }
 \`\`\`
 
-**Block rules:**
-- MUST have \`"use server"\` directive at the top
-- Read-only (no INSERT/UPDATE/DELETE - use Actions for writes)
-- One file per concept
-- CANNOT use useState, useEffect, onClick, etc. (client patterns)
-- All client interactivity should be factored into a separate client component in ui/ imported into the Block
-- Use the ui tool to install interactive components to @ui
-- Style with Tailwind CSS
+**Rules:**
+- MUST have \`"use server"\` directive
+- Read-only (SELECT only, no INSERT/UPDATE)
+- One concept per file
+- No useState/useEffect (use ui/ components for interactivity)
 
-### UI Components (Client)
-Interactive components live in \`ui/\` with \`"use client"\` directive.
+**When to use:** Reusable charts, tables, metrics that appear in multiple pages.
 
-\`\`\`tsx
-"use client";
+### 4. Actions (Write Operations)
 
-import { useState } from "react";
+Scheduled or triggered tasks that write data.
 
-export function Counter({ initial = 0 }) {
-  const [count, setCount] = useState(initial);
-  return <button onClick={() => setCount(c => c + 1)}>{count}</button>;
-}
-\`\`\`
-
-**UI rules:**
-- MUST have \`"use client"\` directive at the top
-- CAN use hooks (useState, useEffect, etc.) and event handlers
-- CANNOT use \`sql\` or async data fetching
-- Receive data as props from server blocks
-
-### Server + Client Pattern
-When blocks need interactivity, import client components from \`@ui\`:
-
-\`\`\`tsx
-// blocks/users.tsx
-"use server";
-
-import { sql } from "@hands/db";
-import { UserTable } from "@ui/user-table";
-
-export default async function Users() {
-  const users = await sql\`SELECT * FROM users\`;
-  return <UserTable users={users} />;  // Pass data to client component
-}
-\`\`\`
-
-### Tables (SQLite)
-Data lives in SQLite. Query with \`sql\` tagged template:
-\`\`\`tsx
-import { sql } from "@hands/db";
-const users = await sql<User>\`SELECT * FROM users WHERE active = \${true}\`;
-\`\`\`
-
-### Actions (Write Operations)
-Actions write data. Triggered by schedule, webhook, or manual.
 \`\`\`
 workbook/actions/
-  sync-stripe.ts      # Scheduled API sync
-  process-upload.ts   # Webhook handler
+├── sync-stripe.ts      # Runs on schedule
+├── daily-report.ts     # Cron job
+└── webhook-handler.ts  # HTTP trigger
 \`\`\`
+
+**Triggers:**
+- Schedule (cron)
+- Webhook (HTTP)
+- Manual (run button)
+
+**When to use:** Data syncs, report generation, any write operations.
 
 ### Data Flow
 
 \`\`\`
-[External APIs] → Actions → [Tables] → Blocks → [Pages]
-                   write              read-only
+[External APIs] → Sources/Actions → [Tables] → Blocks/LiveQuery → [Pages]
+                     write              store        read             display
 \`\`\`
 
-### shadcn Components
-
-Use the \`ui\` tool to install shadcn components to \`ui/\`:
-- Search: \`ui search "chart"\` to find components
-- Install: \`ui add button card\` to install
-- Import: \`import { Button } from "@ui/button"\`
-
-### Quick Reference
+### Quick Decision Guide
 
 | Want to... | Use |
 |------------|-----|
-| Show data to users | Page with Blocks |
-| Query + visualize | Block with \`"use server"\` + sql |
-| Write/sync data | Action |
-| Interactive UI | \`ui/\` components with \`"use client"\` |
+| Show live data inline | \`<LiveValue query="...">\` in Page |
+| Show query results | \`<LiveQuery query="...">\` in Page |
+| Build reusable chart | Block in blocks/ |
+| Connect an API | Source |
+| Import a file | @import agent |
+| Schedule data sync | Action |
+| Add interactivity | ui/ component |
+
+### UI Components (Client)
+
+For interactivity, use client components in \`ui/\`:
+
+\`\`\`tsx
+"use client";
+import { useState } from "react";
+
+export function Counter() {
+  const [count, setCount] = useState(0);
+  return <button onClick={() => setCount(c => c + 1)}>{count}</button>;
+}
+\`\`\`
+
+Import into blocks: \`import { Counter } from "@ui/counter"\`
+
+Install shadcn components: \`ui add button card chart\`
 `;
