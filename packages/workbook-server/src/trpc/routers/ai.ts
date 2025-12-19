@@ -131,47 +131,38 @@ ${prompt}
 
       const systemPrompt = `You are an MDX generator for a data-driven document editor. Given a request and database schema, decide:
 
-1. **Simple request** → Output MDX directly using LiveValue/LiveAction components
-2. **Complex request** → Output \`<Prompt text="detailed task description" />\` to dispatch to a background agent
+1. **Data display** → LiveValue with appropriate display mode
+2. **Interactive action** → LiveAction with ActionButton
+3. **Complex/multi-step** → \`<Prompt text="..." />\` to dispatch to background agent
+4. **Non-data request** → Return the original prompt as plain text
 
-## Simple Request Examples (output MDX directly)
+## LiveValue Examples (data display)
 - "count of users" → \`<LiveValue query="SELECT COUNT(*) FROM users" display="inline" />\`
-- "list of features" → \`<LiveValue query="SELECT name FROM features" display="list" />\`
-- "table of orders" → \`<LiveValue query="SELECT * FROM orders LIMIT 20" display="table" />\`
-- "increment counter" → \`<LiveAction sql="UPDATE counters SET value = value + 1"><ActionButton>+1</ActionButton></LiveAction>\`
+- "list of products" → \`<LiveValue query="SELECT name FROM products" display="list" />\`
+- "all orders" → \`<LiveValue query="SELECT * FROM orders LIMIT 20" display="table" />\`
+- "current value" → \`<LiveValue query="SELECT value FROM counters WHERE id=1" display="inline" />\`
 
-## Complex Request Examples (output <Prompt>)
-- "create a form for adding users" → \`<Prompt text="Create a form with fields for name, email, and role that inserts into the users table" />\`
-- "build a dashboard" → \`<Prompt text="Create a dashboard with key metrics and charts" />\`
-- "add a chart showing trends" → \`<Prompt text="Create a chart visualization showing data trends over time" />\`
+## LiveAction Examples (interactive buttons)
+- "increment counter" → \`<LiveAction sql="UPDATE counters SET value = value + 1 WHERE id = 1"><ActionButton>+1</ActionButton></LiveAction>\`
+- "delete item" → \`<LiveAction sql="DELETE FROM items WHERE id = 1"><ActionButton variant="destructive">Delete</ActionButton></LiveAction>\`
+- "toggle status" → \`<LiveAction sql="UPDATE tasks SET done = NOT done WHERE id = 1"><ActionButton variant="outline">Toggle</ActionButton></LiveAction>\`
 
-## Components
+## Prompt Examples (complex - delegate to agent)
+- "create a form for adding users" → \`<Prompt text="Create a form with fields for name, email, role that inserts into users table" />\`
+- "build a dashboard" → \`<Prompt text="Create a dashboard showing key metrics from the database" />\`
+- "add a chart" → \`<Prompt text="Create a chart visualization showing trends over time" />\`
 
-### LiveValue - Display SQL query results
-\`\`\`mdx
-<LiveValue query="SELECT COUNT(*) FROM users" display="inline" />
-<LiveValue query="SELECT name FROM users" display="list" />
-<LiveValue query="SELECT * FROM users LIMIT 10" display="table" />
-\`\`\`
-
-### LiveAction - Interactive write operations
-\`\`\`mdx
-<LiveAction sql="UPDATE counters SET value = value + 1">
-  <ActionButton>Increment</ActionButton>
-</LiveAction>
-\`\`\`
-
-### Prompt - Delegate to background agent
-\`\`\`mdx
-<Prompt text="detailed description of what needs to be built" />
-\`\`\`
+## Plain Text (non-data requests)
+If the request doesn't involve data queries or actions, return it as plain text:
+- "hello world" → \`hello world\`
+- "note to self" → \`note to self\`
 
 ## Rules
-- Output ONLY valid MDX, no explanation or markdown code fences
+- Output ONLY valid MDX or plain text, no markdown code fences
 - Use only tables/columns from the schema for SQL queries
-- Simple data queries/displays → use LiveValue/LiveAction directly
-- Complex UI (forms, charts, dashboards, multi-step) → use Prompt
-- Keep it concise - you have ~300 chars max`;
+- Simple data → LiveValue, Interactive → LiveAction, Complex → Prompt, Other → plain text
+- ActionButton variants: default, outline, ghost, destructive
+- Keep it concise (~300 chars max)`;
 
       const userPrompt = `## Schema
 ${schemaContext}

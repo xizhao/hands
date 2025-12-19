@@ -1,17 +1,19 @@
 /**
  * At-Kit Plugin
  *
- * Type "@" to trigger AI completion menu.
+ * Type "@prompt" to trigger AI completion with ghost text preview:
  * - Prefetches MDX while typing (debounced)
- * - Shows "Insert" option
- * - Inserts inline loader that uses prefetched result
+ * - Shows ghost text preview when result is ready
+ * - Tab: Accept ghost text (inserts content directly)
+ * - Enter: Insert loader element (lazy swaps when API returns)
+ * - Escape: Cancel
  */
 
 import { MentionInputPlugin, MentionPlugin } from "@platejs/mention/react";
 import { createPlatePlugin } from "platejs/react";
 import { type TElement } from "platejs";
 
-import { AtInputElement } from "../ui/at-menu";
+import { AtGhostInputElement } from "../ui/at-ghost-input";
 import { AtLoaderElement } from "../ui/at-loader-node";
 
 // ============================================================================
@@ -62,7 +64,7 @@ export const AtKit = [
       triggerPreviousCharPattern: /^$|^[\s"']$/,
     },
   }).extendPlugin(MentionInputPlugin, {
-    render: { node: AtInputElement },
+    render: { node: AtGhostInputElement },
   }),
   AtLoaderPlugin,
 ];

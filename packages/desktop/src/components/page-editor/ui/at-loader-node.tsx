@@ -71,7 +71,8 @@ export function AtLoaderElement(props: PlateElementProps) {
               editor.tf.removeNodes({ at: path });
               editor.tf.insertNodes(nodes as any, { at: path });
             });
-            editor.tf.move({ unit: 'offset' });
+            // Add trailing space and position cursor after
+            editor.tf.insertText(" ");
           }
         } catch (err) {
           console.error('[at-loader] Failed to deserialize MDX:', err);
