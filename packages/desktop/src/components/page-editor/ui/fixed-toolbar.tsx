@@ -27,6 +27,7 @@ export function FixedToolbar({
         'px-4 py-1.5',
         'flex items-center gap-1',
         'overflow-x-auto scrollbar-hide',
+        'opacity-80 hover:opacity-100 transition-opacity duration-150',
         className
       )}
       {...props}

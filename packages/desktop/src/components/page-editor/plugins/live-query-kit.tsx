@@ -1,17 +1,19 @@
 "use client";
 
 /**
- * LiveQuery Plugin
+ * LiveValue Plugin
  *
- * Renders live SQL query results as native Plate elements.
- * Children contain the template with {{field}} bindings that get replaced with data.
+ * Single element for displaying live SQL data with multiple display modes.
+ * Auto-selects minimal display based on data shape, or use explicit `display` prop.
  *
- * Uses PlateStatic for template rendering instead of custom renderPlateNode.
- * Provides LiveQueryContext for data binding.
+ * Display modes:
+ * - "inline" (1×1): Single value as inline badge
+ * - "list" (N×1): Bullet list
+ * - "table" (N×M): HTML table
+ * - "auto": Auto-select based on data shape (default)
  *
- * Modes:
- * - Template mode: <LiveQuery query="...">template content</LiveQuery>
- * - Table mode: <LiveQuery query="..." columns="auto" />
+ * Template mode:
+ * - Children contain {{field}} bindings that get replaced with data
  */
 
 import { Lightning } from "@phosphor-icons/react";
@@ -26,7 +28,8 @@ import {
   useSelected,
 } from "platejs/react";
 import { PlateStatic } from "platejs/static";
-import { memo, useMemo, useCallback, type ReactNode } from "react";
+import { memo, useMemo, useCallback, useState, createContext, useContext, type ReactNode } from "react";
+import { toast } from "sonner";
 
 import {
   Tooltip,
@@ -37,14 +40,21 @@ import {
 import { cn } from "@/lib/utils";
 import { useLiveQuery } from "@/lib/live-query";
 import { useActiveRuntime } from "@/hooks/useWorkbook";
+import { trpc } from "@/lib/trpc";
 import { replaceTextBindings } from "../lib/live-query-context";
 
 // ============================================================================
 // Types
 // ============================================================================
 
+export const LIVE_VALUE_KEY = "live_value";
+export const LIVE_ACTION_KEY = "live_action";
+
+// Legacy keys for backwards compatibility during migration
 export const LIVE_QUERY_KEY = "live_query";
 export const INLINE_LIVE_QUERY_KEY = "live_query_inline";
+
+export type DisplayMode = "auto" | "inline" | "list" | "table";
 
 export interface ColumnConfig {
   key: string;
@@ -54,13 +64,26 @@ export interface ColumnConfig {
   filterable?: boolean;
 }
 
-export interface TLiveQueryElement extends TElement {
-  type: typeof LIVE_QUERY_KEY;
+/**
+ * Unified LiveValue element - displays SQL query results in various formats.
+ *
+ * Display prop controls rendering:
+ * - "auto" (default): Select based on data shape
+ * - "inline": Single value badge (for 1×1 data)
+ * - "list": Bullet list (for N×1 data)
+ * - "table": HTML table (for N×M data)
+ *
+ * Template mode: If children contain content, use as template with {{field}} bindings.
+ */
+export interface TLiveValueElement extends TElement {
+  type: typeof LIVE_VALUE_KEY;
   /** SQL query string */
   query: string;
+  /** Display mode - auto-selects based on data shape if not specified */
+  display?: DisplayMode;
   /** Named parameters */
   params?: Record<string, unknown>;
-  /** For table mode: column configuration (if set, ignores children template) */
+  /** For table mode: column configuration */
   columns?: ColumnConfig[] | "auto";
   /** CSS class for the container */
   className?: string;
@@ -69,89 +92,149 @@ export interface TLiveQueryElement extends TElement {
 }
 
 /**
- * Inline LiveQuery element - renders as a badge/span within text.
- * Used for single values that should appear inline, like "I have {{count}} customers"
+ * LiveAction element - wraps interactive content that triggers SQL write operations.
  */
-export interface TInlineLiveQueryElement extends TElement {
-  type: typeof INLINE_LIVE_QUERY_KEY;
-  /** SQL query string */
-  query: string;
-  /** Named parameters */
+export interface TLiveActionElement extends TElement {
+  type: typeof LIVE_ACTION_KEY;
+  /** SQL statement to execute (UPDATE, INSERT, DELETE) */
+  sql?: string;
+  /** Alternative: action ID reference */
+  src?: string;
+  /** Named parameters for SQL */
   params?: Record<string, unknown>;
-  /** CSS class for the inline element */
-  className?: string;
-  /** Children must be empty for void inline element */
-  children: [{ text: "" }];
+  /** Children are the interactive content */
+  children: (TElement | TText)[];
+}
+
+// Legacy type aliases for backwards compatibility
+export type TLiveQueryElement = TLiveValueElement;
+export type TInlineLiveQueryElement = TLiveValueElement;
+
+export const ACTION_BUTTON_KEY = "action_button";
+
+/**
+ * ActionButton element - a button that triggers the parent LiveAction on click.
+ * Must be used inside a LiveAction element.
+ */
+export interface TActionButtonElement extends TElement {
+  type: typeof ACTION_BUTTON_KEY;
+  /** Button label - uses children text if not specified */
+  label?: string;
+  /** Button variant styling */
+  variant?: "default" | "outline" | "ghost" | "destructive";
+  /** Children are the button content */
+  children: (TElement | TText)[];
+}
+
+// ============================================================================
+// LiveAction Context
+// ============================================================================
+
+interface LiveActionContextValue {
+  trigger: () => Promise<void>;
+  isPending: boolean;
+  error: Error | null;
+}
+
+const LiveActionContext = createContext<LiveActionContextValue | null>(null);
+
+export function useLiveAction(): LiveActionContextValue {
+  const ctx = useContext(LiveActionContext);
+  if (!ctx) {
+    throw new Error("useLiveAction must be used within a LiveAction element");
+  }
+  return ctx;
+}
+
+// ============================================================================
+// Display Type Selection
+// ============================================================================
+
+export type DisplayType = "inline" | "list" | "table";
+
+/**
+ * Select display type based on data shape.
+ * Biases towards minimal/simplest display.
+ */
+export function selectDisplayType(data: Record<string, unknown>[]): DisplayType {
+  if (!data || data.length === 0) return "table";
+
+  const rowCount = data.length;
+  const colCount = Object.keys(data[0]).length;
+
+  // Single value (1×1) → inline
+  if (rowCount === 1 && colCount === 1) {
+    return "inline";
+  }
+
+  // Multiple rows, single col → list
+  if (colCount === 1) {
+    return "list";
+  }
+
+  // Everything else → table
+  return "table";
+}
+
+/**
+ * Resolve display mode from prop and data.
+ * "auto" → select based on data shape
+ */
+function resolveDisplayMode(
+  displayProp: DisplayMode | undefined,
+  data: Record<string, unknown>[]
+): DisplayType {
+  if (!displayProp || displayProp === "auto") {
+    return selectDisplayType(data);
+  }
+  return displayProp;
 }
 
 // ============================================================================
 // Template Binding System
 // ============================================================================
 
-/**
- * Check if children contain actual template content (not just empty text)
- */
 function hasTemplateContent(children: (TElement | TText)[]): boolean {
   if (!children || children.length === 0) return false;
-  // Single empty text node means no template
   if (children.length === 1 && "text" in children[0] && !children[0].text) {
     return false;
   }
   return true;
 }
 
-/**
- * Deep clone a Plate node and replace all {{field}} bindings
- */
 function replaceBindings(
   node: TElement | TText,
   data: Record<string, unknown>,
   index?: number
 ): TElement | TText {
-  // Text node - replace bindings in text
   if ("text" in node) {
     return {
       ...node,
       text: replaceTextBindings(String(node.text ?? ""), data, index),
     };
   }
-
-  // Element node - recurse into children
   return {
     ...node,
     children: node.children?.map((child) => replaceBindings(child, data, index)) ?? [],
   };
 }
 
-/**
- * Render bound template using PlateStatic.
- *
- * Uses Plate's static renderer for read-only content - lightweight, no editor overhead.
- * The template is pre-processed to replace {{field}} bindings with actual data.
- */
 function renderBoundTemplate(
   template: (TElement | TText)[],
   data: Record<string, unknown>,
   index: number
 ): ReactNode {
-  // Deep clone and replace bindings
   const boundValue = template.map((node) =>
     replaceBindings(node, data, index)
   ) as TElement[];
-
-  // Create lightweight static editor
   const editor = createSlateEditor({ value: boundValue });
-
   return <PlateStatic editor={editor} className="pointer-events-none" />;
 }
 
 // ============================================================================
-// Table Generation
+// Rendering Helpers
 // ============================================================================
 
-/**
- * Generate columns from data if set to "auto"
- */
 function autoDetectColumns(data: Record<string, unknown>[]): ColumnConfig[] {
   if (data.length === 0) return [];
   const firstRow = data[0];
@@ -161,19 +244,119 @@ function autoDetectColumns(data: Record<string, unknown>[]): ColumnConfig[] {
   }));
 }
 
-/**
- * Render data as a native HTML table (styled to match Plate tables)
- */
-function renderTable(
-  data: Record<string, unknown>[],
-  columns: ColumnConfig[]
-): ReactNode {
+function formatCellValue(value: unknown): string {
+  if (value === null || value === undefined) return "";
+  if (typeof value === "boolean") return value ? "Yes" : "No";
+  if (value instanceof Date) return value.toLocaleDateString();
+  return String(value);
+}
+
+function extractQueryReference(sql: string | undefined): { table?: string; column?: string } {
+  if (!sql) return {};
+  const fromMatch = sql.match(/FROM\s+["']?(\w+)["']?/i);
+  const selectMatch = sql.match(/SELECT\s+([\w,\s*]+)\s+FROM/i);
+
+  const table = fromMatch?.[1];
+  let column: string | undefined;
+
+  if (selectMatch) {
+    const cols = selectMatch[1].trim();
+    if (cols !== "*") {
+      column = cols.split(",")[0].trim().split(/\s+AS\s+/i)[0].trim();
+    }
+  }
+
+  return { table, column };
+}
+
+// ============================================================================
+// Display Components
+// ============================================================================
+
+interface DisplayProps {
+  data: Record<string, unknown>[];
+  query?: string;
+  columns?: ColumnConfig[] | "auto";
+  queryRef: { table?: string; column?: string };
+  onTableClick?: () => void;
+}
+
+/** Inline value - single value as styled text */
+function InlineDisplay({ data, queryRef, onTableClick }: DisplayProps) {
+  const value = data[0][Object.keys(data[0])[0]];
+  const displayValue = formatCellValue(value);
+
+  const tooltipContent = useMemo(() => {
+    if (queryRef.column && queryRef.table) {
+      return (
+        <div className="flex flex-col gap-0.5">
+          <span className="opacity-70">from</span>
+          <span>{queryRef.table}.{queryRef.column}</span>
+        </div>
+      );
+    }
+    if (queryRef.table) {
+      return (
+        <div className="flex flex-col gap-0.5">
+          <span className="opacity-70">from</span>
+          <span>{queryRef.table}</span>
+        </div>
+      );
+    }
+    return "Live Value";
+  }, [queryRef]);
+
+  const badge = (
+    <span
+      onClick={queryRef.table ? onTableClick : undefined}
+      className={cn(
+        "inline font-semibold text-violet-600 dark:text-violet-400 transition-colors",
+        "underline decoration-dashed decoration-violet-400/50 underline-offset-2",
+        queryRef.table
+          ? "cursor-pointer hover:text-violet-700 dark:hover:text-violet-300 hover:decoration-violet-500"
+          : "hover:decoration-violet-400"
+      )}
+    >
+      <span className="tabular-nums">{displayValue}</span>
+    </span>
+  );
+
+  return (
+    <TooltipProvider>
+      <Tooltip>
+        <TooltipTrigger asChild>{badge}</TooltipTrigger>
+        <TooltipContent side="top" sideOffset={6}>
+          {tooltipContent}
+        </TooltipContent>
+      </Tooltip>
+    </TooltipProvider>
+  );
+}
+
+/** Bullet list display */
+function ListDisplay({ data }: DisplayProps) {
+  const key = Object.keys(data[0])[0];
+  return (
+    <ul className="my-2 space-y-0.5 list-disc list-inside text-sm">
+      {data.map((row, i) => (
+        <li key={i}>{formatCellValue(row[key])}</li>
+      ))}
+    </ul>
+  );
+}
+
+/** Table display */
+function TableDisplay({ data, columns }: DisplayProps) {
+  const resolvedColumns = columns === "auto" || !columns
+    ? autoDetectColumns(data)
+    : columns;
+
   return (
     <div className="my-4 overflow-x-auto">
       <table className="w-full border-collapse">
         <thead>
           <tr className="bg-muted/50 border-b border-border">
-            {columns.map((col) => (
+            {resolvedColumns.map((col) => (
               <th
                 key={col.key}
                 className="px-4 py-2 text-left text-sm font-medium text-muted-foreground"
@@ -187,7 +370,7 @@ function renderTable(
         <tbody>
           {data.map((row, i) => (
             <tr key={i} className="border-b border-border last:border-0 hover:bg-muted/30">
-              {columns.map((col) => (
+              {resolvedColumns.map((col) => (
                 <td key={col.key} className="px-4 py-2 text-sm">
                   {formatCellValue(row[col.key])}
                 </td>
@@ -200,103 +383,14 @@ function renderTable(
   );
 }
 
-function formatCellValue(value: unknown): string {
-  if (value === null || value === undefined) return "";
-  if (typeof value === "boolean") return value ? "Yes" : "No";
-  if (value instanceof Date) return value.toLocaleDateString();
-  return String(value);
-}
-
-// ============================================================================
-// Auto Display Selection (DRY - single code path)
-// ============================================================================
-
-export type DisplayType = "inline-value" | "bullet-list" | "table";
-
-/**
- * Select the most minimal display type based on data shape.
- * Used by both LiveQuery (block) and ghost-prompt insertion.
- */
-export function selectDisplayType(data: Record<string, unknown>[]): DisplayType {
-  if (!data || data.length === 0) return "table";
-
-  const rowCount = data.length;
-  const colCount = Object.keys(data[0]).length;
-
-  // Single value (1 row, 1 col) → inline value
-  if (rowCount === 1 && colCount === 1) {
-    return "inline-value";
-  }
-
-  // Multiple rows, single col → bullet list
-  if (colCount === 1) {
-    return "bullet-list";
-  }
-
-  // Everything else → table
-  return "table";
-}
-
-/**
- * Render inline value badge (same style as InlineLiveQueryElement)
- */
-function renderInlineValue(value: unknown, query?: string): ReactNode {
-  const queryRef = extractQueryReference(query);
-  const tooltip = queryRef.column
-    ? `${queryRef.table}.${queryRef.column}`
-    : queryRef.table || "Live Query";
-
-  return (
-    <span
-      title={tooltip}
-      className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded font-medium text-sm bg-violet-500/10 text-violet-700 dark:text-violet-300 border border-violet-500/20"
-    >
-      <Lightning weight="fill" className="size-3 shrink-0 opacity-60" />
-      <span className="tabular-nums">{formatCellValue(value)}</span>
-    </span>
-  );
-}
-
-/**
- * Render bullet list
- */
-function renderBulletList(data: Record<string, unknown>[]): ReactNode {
-  const key = Object.keys(data[0])[0];
-  return (
-    <ul className="my-2 space-y-0.5 list-disc list-inside text-sm">
-      {data.map((row, i) => (
-        <li key={i}>{formatCellValue(row[key])}</li>
-      ))}
-    </ul>
-  );
-}
-
-/**
- * Auto-render data based on shape (DRY helper)
- */
-export function renderAutoDisplay(
-  data: Record<string, unknown>[],
-  query?: string
-): ReactNode {
-  const displayType = selectDisplayType(data);
-
-  switch (displayType) {
-    case "inline-value": {
-      const value = data[0][Object.keys(data[0])[0]];
-      return renderInlineValue(value, query);
-    }
-    case "bullet-list":
-      return renderBulletList(data);
-    case "table":
-      return renderTable(data, autoDetectColumns(data));
-  }
-}
-
 // ============================================================================
 // Loading & Error States
 // ============================================================================
 
-function LiveQuerySkeleton() {
+function LiveValueSkeleton({ isInline }: { isInline: boolean }) {
+  if (isInline) {
+    return <span className="animate-pulse text-muted-foreground">...</span>;
+  }
   return (
     <div className="animate-pulse space-y-2 my-4">
       <div className="h-4 bg-muted/50 rounded w-3/4" />
@@ -306,7 +400,10 @@ function LiveQuerySkeleton() {
   );
 }
 
-function LiveQueryError({ error, onRetry }: { error: Error; onRetry: () => void }) {
+function LiveValueError({ error, onRetry, isInline }: { error: Error; onRetry: () => void; isInline: boolean }) {
+  if (isInline) {
+    return <span className="text-destructive">err</span>;
+  }
   return (
     <div className="my-4 rounded-lg border border-destructive/50 bg-destructive/10 p-4">
       <div className="flex items-center justify-between">
@@ -325,7 +422,10 @@ function LiveQueryError({ error, onRetry }: { error: Error; onRetry: () => void 
   );
 }
 
-function LiveQueryEmpty() {
+function LiveValueEmpty({ isInline }: { isInline: boolean }) {
+  if (isInline) {
+    return <span className="text-muted-foreground italic">—</span>;
+  }
   return (
     <div className="my-4 text-center py-8 text-muted-foreground text-sm border border-dashed border-border rounded-lg">
       No data
@@ -334,162 +434,21 @@ function LiveQueryEmpty() {
 }
 
 // ============================================================================
-// Inline LiveQuery Component (badge/span style)
+// Main LiveValue Component
 // ============================================================================
 
-/**
- * InlineLiveQueryElement - Renders a single SQL value as an inline badge.
- * Used within text like: "I have <inline-live-query>300</inline-live-query> customers"
- *
- * Follows Plate inline element patterns:
- * - isInline: true, isVoid: true in plugin config
- * - Renders as inline-block span
- * - contentEditable={false} on content
- * - children included but empty for void
- *
- * Features:
- * - Hover: Shows tooltip with table.column reference
- * - Click: Navigates to the table page
- */
-function InlineLiveQueryElement(props: PlateElementProps) {
-  const element = useElement<TInlineLiveQueryElement>();
+function LiveValueElement(props: PlateElementProps) {
+  const element = useElement<TLiveValueElement>();
   const readOnly = useReadOnly();
   const selected = useSelected();
   const navigate = useNavigate();
   const { data: runtime } = useActiveRuntime();
   const runtimePort = runtime?.runtime_port ?? null;
 
-  const { query, params, className } = element;
-
-  // Convert named params to positional array
-  const paramArray = useMemo(() => {
-    if (!params) return [];
-    return Object.values(params);
-  }, [params]);
-
-  const { data, isLoading, error } = useLiveQuery<Record<string, unknown>>({
-    sql: query,
-    params: paramArray,
-    enabled: !!query && !!runtimePort,
-    runtimePort,
-  });
-
-  // Extract the first value from the first row
-  const displayValue = useMemo(() => {
-    if (!data || data.length === 0) return null;
-    const row = data[0];
-    const keys = Object.keys(row);
-    if (keys.length === 0) return null;
-    const value = row[keys[0]];
-    if (value === null || value === undefined) return null;
-    return String(value);
-  }, [data]);
-
-  // Extract table/column reference for tooltip and navigation
-  const queryRef = useMemo(() => extractQueryReference(query), [query]);
-
-  // Build tooltip content
-  const tooltipContent = useMemo(() => {
-    if (queryRef.column && queryRef.table) {
-      return (
-        <div className="flex flex-col gap-0.5">
-          <span className="opacity-70">from</span>
-          <span>{queryRef.table}.{queryRef.column}</span>
-        </div>
-      );
-    }
-    if (queryRef.table) {
-      return (
-        <div className="flex flex-col gap-0.5">
-          <span className="opacity-70">from</span>
-          <span>{queryRef.table}</span>
-        </div>
-      );
-    }
-    return "Live Query";
-  }, [queryRef]);
-
-  // Navigate to table on click
-  const handleClick = useCallback((e: React.MouseEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-    if (queryRef.table) {
-      navigate({ to: "/tables/$tableId", params: { tableId: queryRef.table } });
-    }
-  }, [navigate, queryRef.table]);
-
-  const badge = (
-    <span
-      onClick={queryRef.table ? handleClick : undefined}
-      className={cn(
-        "inline font-semibold text-violet-600 dark:text-violet-400 transition-colors",
-        // Dashed underline
-        "underline decoration-dashed decoration-violet-400/50 underline-offset-2",
-        // Selected state
-        selected && !readOnly && "bg-violet-500/10 rounded px-0.5 -mx-0.5",
-        // Hover state
-        queryRef.table ? "cursor-pointer hover:text-violet-700 dark:hover:text-violet-300 hover:decoration-violet-500" : "hover:decoration-violet-400"
-      )}
-    >
-      {isLoading ? (
-        <span className="animate-pulse">...</span>
-      ) : error ? (
-        <span className="text-destructive">err</span>
-      ) : displayValue === null ? (
-        <span className="text-muted-foreground italic">—</span>
-      ) : (
-        <span className="tabular-nums">{displayValue}</span>
-      )}
-    </span>
-  );
-
-  return (
-    <PlateElement
-      {...props}
-      attributes={{
-        ...props.attributes,
-        contentEditable: false,
-        "data-slate-value": displayValue ?? "",
-        draggable: true,
-      }}
-      className={cn(
-        "inline-block align-baseline",
-        className
-      )}
-    >
-      <TooltipProvider>
-        <Tooltip>
-          <TooltipTrigger asChild>
-            {badge}
-          </TooltipTrigger>
-          <TooltipContent side="top" sideOffset={6}>
-            {tooltipContent}
-          </TooltipContent>
-        </Tooltip>
-      </TooltipProvider>
-      {props.children}
-    </PlateElement>
-  );
-}
-
-// ============================================================================
-// Main Component
-// ============================================================================
-
-function LiveQueryElement(props: PlateElementProps) {
-  const element = useElement<TLiveQueryElement>();
-  const readOnly = useReadOnly();
-  const selected = useSelected();
-  const { data: runtime } = useActiveRuntime();
-  const runtimePort = runtime?.runtime_port ?? null;
-
-  const { query, params, columns, className } = element;
-
-  // Children are the template
+  const { query, params, display, columns, className } = element;
   const template = element.children;
-  const isTemplateMode = hasTemplateContent(template) && !columns;
+  const hasTemplate = hasTemplateContent(template);
 
-  // Convert named params to positional array
   const paramArray = useMemo(() => {
     if (!params) return [];
     return Object.values(params);
@@ -502,17 +461,30 @@ function LiveQueryElement(props: PlateElementProps) {
     runtimePort,
   });
 
-  // Extract table/column reference for the chip
   const queryRef = useMemo(() => extractQueryReference(query), [query]);
 
-  // Determine what to render - auto-pick best template based on data shape
-  const content = useMemo(() => {
-    if (isLoading) return <LiveQuerySkeleton />;
-    if (error) return <LiveQueryError error={error} onRetry={refetch} />;
-    if (!data || data.length === 0) return <LiveQueryEmpty />;
+  // Determine display mode
+  const displayMode = useMemo(() => {
+    if (!data || data.length === 0) return display === "inline" ? "inline" : "table";
+    return resolveDisplayMode(display, data);
+  }, [data, display]);
 
-    // If explicit template provided, use it
-    if (isTemplateMode) {
+  const isInline = displayMode === "inline";
+
+  const handleTableClick = useCallback(() => {
+    if (queryRef.table) {
+      navigate({ to: "/tables/$tableId", params: { tableId: queryRef.table } });
+    }
+  }, [navigate, queryRef.table]);
+
+  // Render content based on display mode
+  const content = useMemo(() => {
+    if (isLoading) return <LiveValueSkeleton isInline={isInline} />;
+    if (error) return <LiveValueError error={error} onRetry={refetch} isInline={isInline} />;
+    if (!data || data.length === 0) return <LiveValueEmpty isInline={isInline} />;
+
+    // Template mode (has children with bindings)
+    if (hasTemplate) {
       const isSingleRow = data.length === 1;
       if (isSingleRow) {
         return (
@@ -532,36 +504,57 @@ function LiveQueryElement(props: PlateElementProps) {
       );
     }
 
-    // If explicit columns provided, use table
-    if (columns) {
-      const resolvedColumns = columns === "auto"
-        ? autoDetectColumns(data)
-        : columns;
-      return renderTable(data, resolvedColumns);
+    const displayProps: DisplayProps = {
+      data,
+      query,
+      columns,
+      queryRef,
+      onTableClick: handleTableClick,
+    };
+
+    switch (displayMode) {
+      case "inline":
+        return <InlineDisplay {...displayProps} />;
+      case "list":
+        return <ListDisplay {...displayProps} />;
+      case "table":
+        return <TableDisplay {...displayProps} />;
     }
+  }, [data, isLoading, error, displayMode, hasTemplate, template, columns, query, queryRef, handleTableClick, refetch, isInline]);
 
-    // AUTO-PICK: No template or columns - use DRY helper
-    return renderAutoDisplay(data, query);
-  }, [data, isLoading, error, template, columns, isTemplateMode, refetch]);
+  const showChip = selected && !readOnly && !isInline;
 
-  const showChip = selected && !readOnly;
+  // Inline rendering (no block wrapper)
+  if (isInline) {
+    return (
+      <PlateElement
+        {...props}
+        attributes={{
+          ...props.attributes,
+          contentEditable: false,
+          draggable: true,
+        }}
+        className={cn("inline-block align-baseline", className)}
+      >
+        {content}
+        {props.children}
+      </PlateElement>
+    );
+  }
 
+  // Block rendering
   return (
     <PlateElement
       {...props}
       className={cn(
         "relative group rounded-lg transition-colors",
-        // Padding for clickable area
         "py-2 -mx-2 px-2",
-        // Hover state
         !selected && "hover:bg-muted/30",
-        // Selected state
         selected && !readOnly && "bg-muted/40 ring-2 ring-violet-500/50",
         className
       )}
     >
       <div contentEditable={false}>
-        {/* Purple chip with lightning bolt - shown when selected */}
         {showChip && (
           <div className="absolute -top-7 left-0 flex items-center gap-2">
             <div className="flex items-center gap-1.5 px-2 py-1 rounded-full bg-violet-500/10 border border-violet-500/30 text-violet-600 dark:text-violet-400">
@@ -581,17 +574,588 @@ function LiveQueryElement(props: PlateElementProps) {
             </div>
           </div>
         )}
-
         {content}
       </div>
-      {/* Hidden children for Plate - template is rendered via content above */}
       <div className="hidden">{props.children}</div>
     </PlateElement>
   );
 }
 
 // ============================================================================
-// Default Templates (as Plate element arrays for insertion)
+// LiveAction Component
+// ============================================================================
+
+function LiveActionElement(props: PlateElementProps) {
+  const element = useElement<TLiveActionElement>();
+  const { data: runtime } = useActiveRuntime();
+  const runtimePort = runtime?.runtime_port ?? null;
+
+  const { sql, params } = element;
+
+  const [isPending, setIsPending] = useState(false);
+  const [error, setError] = useState<Error | null>(null);
+
+  const dbQuery = trpc.db.query.useMutation();
+
+  const paramArray = useMemo(() => {
+    if (!params) return [];
+    return Object.values(params);
+  }, [params]);
+
+  const trigger = useCallback(async () => {
+    if (!sql) {
+      toast.error("No SQL configured for this action");
+      return;
+    }
+    if (!runtimePort) {
+      toast.error("Runtime not available");
+      return;
+    }
+
+    setIsPending(true);
+    setError(null);
+
+    try {
+      await dbQuery.mutateAsync({ sql, params: paramArray });
+    } catch (err) {
+      const e = err instanceof Error ? err : new Error(String(err));
+      setError(e);
+      toast.error(`Action failed: ${e.message}`);
+    } finally {
+      setIsPending(false);
+    }
+  }, [sql, paramArray, runtimePort, dbQuery]);
+
+  const contextValue = useMemo(
+    () => ({ trigger, isPending, error }),
+    [trigger, isPending, error]
+  );
+
+  return (
+    <PlateElement {...props}>
+      <LiveActionContext.Provider value={contextValue}>
+        <div className="relative">
+          {props.children}
+          {isPending && (
+            <div className="absolute inset-0 bg-background/50 flex items-center justify-center pointer-events-none">
+              <div className="size-4 animate-spin rounded-full border-2 border-muted-foreground/30 border-t-muted-foreground" />
+            </div>
+          )}
+        </div>
+      </LiveActionContext.Provider>
+    </PlateElement>
+  );
+}
+
+// ============================================================================
+// ActionButton Component
+// ============================================================================
+
+/**
+ * ActionButtonElement - A button that triggers the parent LiveAction.
+ * Automatically wires up onClick to call useLiveAction().trigger().
+ */
+function ActionButtonElement(props: PlateElementProps) {
+  const element = useElement<TActionButtonElement>();
+  const { variant = "default" } = element;
+
+  // Try to get context - will be null if not inside LiveAction
+  const actionCtx = useContext(LiveActionContext);
+
+  const handleClick = useCallback(
+    (e: React.MouseEvent) => {
+      e.preventDefault();
+      e.stopPropagation();
+      if (actionCtx) {
+        actionCtx.trigger();
+      } else {
+        toast.error("ActionButton must be inside a LiveAction element");
+      }
+    },
+    [actionCtx]
+  );
+
+  const isPending = actionCtx?.isPending ?? false;
+
+  // Variant styles
+  const variantStyles = {
+    default: "bg-primary text-primary-foreground hover:bg-primary/90",
+    outline: "border border-input bg-background hover:bg-accent hover:text-accent-foreground",
+    ghost: "hover:bg-accent hover:text-accent-foreground",
+    destructive: "bg-destructive text-destructive-foreground hover:bg-destructive/90",
+  };
+
+  return (
+    <PlateElement {...props} as="span">
+      <button
+        onClick={handleClick}
+        disabled={isPending}
+        contentEditable={false}
+        className={cn(
+          "inline-flex items-center justify-center gap-2 px-4 py-2 rounded-md text-sm font-medium",
+          "transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+          "disabled:pointer-events-none disabled:opacity-50",
+          variantStyles[variant]
+        )}
+      >
+        {isPending ? (
+          <>
+            <span className="size-3 animate-spin rounded-full border-2 border-current border-t-transparent" />
+            <span>Loading...</span>
+          </>
+        ) : (
+          props.children
+        )}
+      </button>
+    </PlateElement>
+  );
+}
+
+// ============================================================================
+// Plugins
+// ============================================================================
+
+/**
+ * LiveValue Plugin - unified display element for SQL query results.
+ *
+ * Can be inline or block based on display mode.
+ * Configured as NOT void so children can contain templates.
+ */
+export const LiveValuePlugin = createPlatePlugin({
+  key: LIVE_VALUE_KEY,
+  node: {
+    isElement: true,
+    isVoid: false,
+    component: memo(LiveValueElement),
+  },
+});
+
+/**
+ * Legacy LiveQuery Plugin - maps to LiveValue for backwards compatibility.
+ */
+export const LiveQueryPlugin = createPlatePlugin({
+  key: LIVE_QUERY_KEY,
+  node: {
+    isElement: true,
+    isVoid: false,
+    component: memo(LiveValueElement),
+  },
+});
+
+/**
+ * Legacy InlineLiveQuery Plugin - maps to LiveValue for backwards compatibility.
+ */
+export const InlineLiveQueryPlugin = createPlatePlugin({
+  key: INLINE_LIVE_QUERY_KEY,
+  node: {
+    isElement: true,
+    isInline: true,
+    isVoid: true,
+    component: memo(LiveValueElement),
+  },
+});
+
+/**
+ * LiveAction Plugin
+ */
+export const LiveActionPlugin = createPlatePlugin({
+  key: LIVE_ACTION_KEY,
+  node: {
+    isElement: true,
+    isVoid: false,
+    component: memo(LiveActionElement),
+  },
+});
+
+/**
+ * ActionButton Plugin - inline button that triggers parent LiveAction.
+ */
+export const ActionButtonPlugin = createPlatePlugin({
+  key: ACTION_BUTTON_KEY,
+  node: {
+    isElement: true,
+    isInline: true,
+    isVoid: false, // Has children (button text)
+    component: memo(ActionButtonElement),
+  },
+});
+
+export const LiveQueryKit = [LiveValuePlugin, LiveQueryPlugin, InlineLiveQueryPlugin, LiveActionPlugin, ActionButtonPlugin];
+
+// ============================================================================
+// Insertion Helpers
+// ============================================================================
+
+/**
+ * Create a LiveValue element.
+ */
+export function createLiveValueElement(
+  query: string,
+  options?: {
+    display?: DisplayMode;
+    params?: Record<string, unknown>;
+    columns?: ColumnConfig[] | "auto";
+    children?: (TElement | TText)[];
+  }
+): TLiveValueElement {
+  return {
+    type: LIVE_VALUE_KEY,
+    query,
+    display: options?.display,
+    params: options?.params,
+    columns: options?.columns,
+    children: options?.children ?? [{ text: "" }],
+  };
+}
+
+// Legacy helpers - map to createLiveValueElement
+export function createLiveQueryElement(
+  query: string,
+  options?: {
+    params?: Record<string, unknown>;
+    columns?: ColumnConfig[] | "auto";
+    children?: (TElement | TText)[];
+  }
+): TLiveValueElement {
+  return createLiveValueElement(query, options);
+}
+
+export function createTableQuery(query: string, columns?: ColumnConfig[]): TLiveValueElement {
+  return createLiveValueElement(query, { display: "table", columns: columns ?? "auto" });
+}
+
+export function createTemplateQuery(query: string, template: (TElement | TText)[]): TLiveValueElement {
+  return createLiveValueElement(query, { children: template });
+}
+
+export function createInlineLiveQueryElement(
+  query: string,
+  params?: Record<string, unknown>
+): TLiveValueElement {
+  return createLiveValueElement(query, { display: "inline", params });
+}
+
+/**
+ * Create a LiveAction element that wraps interactive content.
+ */
+export function createLiveActionElement(
+  options: { sql?: string; src?: string; params?: Record<string, unknown> },
+  children?: (TElement | TText)[]
+): TLiveActionElement {
+  return {
+    type: LIVE_ACTION_KEY,
+    sql: options.sql,
+    src: options.src,
+    params: options.params,
+    children: children ?? [{ type: "p", children: [{ text: "" }] }],
+  };
+}
+
+/**
+ * Create an ActionButton element that triggers parent LiveAction.
+ */
+export function createActionButtonElement(
+  label: string,
+  variant?: TActionButtonElement["variant"]
+): TActionButtonElement {
+  return {
+    type: ACTION_BUTTON_KEY,
+    variant,
+    children: [{ text: label }],
+  };
+}
+
+// ============================================================================
+// Markdown Serialization
+// ============================================================================
+
+/**
+ * Serialize LiveValue to MDX.
+ *
+ * Examples:
+ *   <LiveValue query="SELECT COUNT(*) FROM users" />
+ *   <LiveValue query="SELECT id FROM features" display="list" />
+ *   <LiveValue query="SELECT * FROM orders" display="table" />
+ *   <LiveValue query="SELECT name, value FROM metrics">
+ *     # {{value}}
+ *   </LiveValue>
+ */
+export const liveQueryMarkdownRule = {
+  [LIVE_VALUE_KEY]: {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    serialize: (node: TLiveValueElement, options?: any) => {
+      const attributes: Array<{ type: "mdxJsxAttribute"; name: string; value: unknown }> = [
+        { type: "mdxJsxAttribute", name: "query", value: node.query },
+      ];
+
+      // Add display if not "auto"
+      if (node.display && node.display !== "auto") {
+        attributes.push({ type: "mdxJsxAttribute", name: "display", value: node.display });
+      }
+
+      // Add params if present
+      if (node.params && Object.keys(node.params).length > 0) {
+        attributes.push({
+          type: "mdxJsxAttribute",
+          name: "params",
+          value: { type: "mdxJsxAttributeValueExpression", value: JSON.stringify(node.params) },
+        });
+      }
+
+      // Add columns if present
+      if (node.columns) {
+        if (node.columns === "auto") {
+          attributes.push({ type: "mdxJsxAttribute", name: "columns", value: "auto" });
+        } else {
+          attributes.push({
+            type: "mdxJsxAttribute",
+            name: "columns",
+            value: { type: "mdxJsxAttributeValueExpression", value: JSON.stringify(node.columns) },
+          });
+        }
+      }
+
+      if (node.className) {
+        attributes.push({ type: "mdxJsxAttribute", name: "className", value: node.className });
+      }
+
+      const children = options?.children ?? [];
+      const hasContent = children.length > 0;
+
+      return {
+        type: hasContent ? "mdxJsxFlowElement" : "mdxJsxTextElement",
+        name: "LiveValue",
+        attributes,
+        children,
+      };
+    },
+  },
+
+  // Legacy: Serialize old live_query as LiveValue
+  [LIVE_QUERY_KEY]: {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    serialize: (node: TLiveValueElement, options?: any) => {
+      // Delegate to LiveValue serialization
+      return liveQueryMarkdownRule[LIVE_VALUE_KEY].serialize(node, options);
+    },
+  },
+
+  // Legacy: Serialize old live_query_inline as LiveValue with display="inline"
+  [INLINE_LIVE_QUERY_KEY]: {
+    serialize: (node: TLiveValueElement) => {
+      const attributes: Array<{ type: "mdxJsxAttribute"; name: string; value: unknown }> = [
+        { type: "mdxJsxAttribute", name: "query", value: node.query },
+        { type: "mdxJsxAttribute", name: "display", value: "inline" },
+      ];
+
+      if (node.params && Object.keys(node.params).length > 0) {
+        attributes.push({
+          type: "mdxJsxAttribute",
+          name: "params",
+          value: { type: "mdxJsxAttributeValueExpression", value: JSON.stringify(node.params) },
+        });
+      }
+
+      if (node.className) {
+        attributes.push({ type: "mdxJsxAttribute", name: "className", value: node.className });
+      }
+
+      return {
+        type: "mdxJsxTextElement",
+        name: "LiveValue",
+        attributes,
+        children: [],
+      };
+    },
+  },
+
+  [LIVE_ACTION_KEY]: {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    serialize: (node: TLiveActionElement, options?: any) => {
+      const attributes: Array<{ type: "mdxJsxAttribute"; name: string; value: unknown }> = [];
+
+      if (node.sql) {
+        attributes.push({ type: "mdxJsxAttribute", name: "sql", value: node.sql });
+      }
+
+      if (node.src) {
+        attributes.push({ type: "mdxJsxAttribute", name: "src", value: node.src });
+      }
+
+      if (node.params && Object.keys(node.params).length > 0) {
+        attributes.push({
+          type: "mdxJsxAttribute",
+          name: "params",
+          value: { type: "mdxJsxAttributeValueExpression", value: JSON.stringify(node.params) },
+        });
+      }
+
+      const children = options?.children ?? [];
+
+      return {
+        type: "mdxJsxFlowElement",
+        name: "LiveAction",
+        attributes,
+        children,
+      };
+    },
+  },
+
+  [ACTION_BUTTON_KEY]: {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    serialize: (node: TActionButtonElement, options?: any) => {
+      const attributes: Array<{ type: "mdxJsxAttribute"; name: string; value: unknown }> = [];
+
+      if (node.variant && node.variant !== "default") {
+        attributes.push({ type: "mdxJsxAttribute", name: "variant", value: node.variant });
+      }
+
+      const children = options?.children ?? [];
+
+      return {
+        type: "mdxJsxTextElement", // Inline element
+        name: "ActionButton",
+        attributes,
+        children,
+      };
+    },
+  },
+};
+
+// ============================================================================
+// Markdown Deserialization
+// ============================================================================
+
+/**
+ * Deserialize <LiveValue> MDX element.
+ */
+export function deserializeLiveValueElement(
+  node: { attributes?: Array<{ type: string; name: string; value: unknown }> },
+  _options?: unknown
+): TLiveValueElement {
+  const attributes = node.attributes || [];
+  const props: Record<string, unknown> = {};
+
+  for (const attr of attributes) {
+    if (attr.type === "mdxJsxAttribute") {
+      const name = attr.name;
+      const value = attr.value;
+
+      if (value === null || value === undefined) {
+        props[name] = true;
+      } else if (typeof value === "string") {
+        props[name] = value;
+      } else if (typeof value === "object" && value !== null) {
+        const expr = value as Record<string, unknown>;
+        if (expr.type === "mdxJsxAttributeValueExpression" && typeof expr.value === "string") {
+          try {
+            props[name] = JSON.parse(expr.value as string);
+          } catch {
+            props[name] = expr.value;
+          }
+        }
+      }
+    }
+  }
+
+  return {
+    type: LIVE_VALUE_KEY,
+    query: (props.query as string) || "",
+    display: props.display as DisplayMode | undefined,
+    params: props.params as Record<string, unknown> | undefined,
+    columns: props.columns as ColumnConfig[] | "auto" | undefined,
+    className: props.className as string | undefined,
+    children: [{ text: "" }],
+  };
+}
+
+// Legacy deserializers - map to LiveValue
+export function deserializeLiveQueryElement(
+  node: { attributes?: Array<{ type: string; name: string; value: unknown }> },
+  options?: unknown
+): TLiveValueElement {
+  return deserializeLiveValueElement(node, options);
+}
+
+export function deserializeInlineLiveQueryElement(
+  node: { attributes?: Array<{ type: string; name: string; value: unknown }> }
+): TLiveValueElement {
+  const element = deserializeLiveValueElement(node);
+  // Force inline display for legacy LiveValue/inline elements
+  element.display = "inline";
+  return element;
+}
+
+export function deserializeLiveActionElement(
+  node: { attributes?: Array<{ type: string; name: string; value: unknown }> },
+  _options?: unknown
+): TLiveActionElement {
+  const attributes = node.attributes || [];
+  const props: Record<string, unknown> = {};
+
+  for (const attr of attributes) {
+    if (attr.type === "mdxJsxAttribute") {
+      const name = attr.name;
+      const value = attr.value;
+
+      if (value === null || value === undefined) {
+        props[name] = true;
+      } else if (typeof value === "string") {
+        props[name] = value;
+      } else if (typeof value === "object" && value !== null) {
+        const expr = value as Record<string, unknown>;
+        if (expr.type === "mdxJsxAttributeValueExpression" && typeof expr.value === "string") {
+          try {
+            props[name] = JSON.parse(expr.value as string);
+          } catch {
+            props[name] = expr.value;
+          }
+        }
+      }
+    }
+  }
+
+  return {
+    type: LIVE_ACTION_KEY,
+    sql: props.sql as string | undefined,
+    src: props.src as string | undefined,
+    params: props.params as Record<string, unknown> | undefined,
+    children: [{ text: "" }],
+  };
+}
+
+/**
+ * Deserialize <ActionButton> MDX element.
+ */
+export function deserializeActionButtonElement(
+  node: { attributes?: Array<{ type: string; name: string; value: unknown }> },
+  _options?: unknown
+): TActionButtonElement {
+  const attributes = node.attributes || [];
+  const props: Record<string, unknown> = {};
+
+  for (const attr of attributes) {
+    if (attr.type === "mdxJsxAttribute") {
+      const name = attr.name;
+      const value = attr.value;
+
+      if (value === null || value === undefined) {
+        props[name] = true;
+      } else if (typeof value === "string") {
+        props[name] = value;
+      }
+    }
+  }
+
+  return {
+    type: ACTION_BUTTON_KEY,
+    variant: props.variant as TActionButtonElement["variant"],
+    children: [{ text: "" }],
+  };
+}
+
+// ============================================================================
+// Templates (for slash menu)
 // ============================================================================
 
 export const TEMPLATES = {
@@ -625,302 +1189,7 @@ export const TEMPLATES = {
     ]},
   ] as TElement[],
 
-  table: [] as TElement[], // Empty = table mode
+  table: [] as TElement[],
 };
 
 export type TemplateKey = keyof typeof TEMPLATES;
-
-/**
- * Extract table/column reference from SQL query for display
- */
-function extractQueryReference(sql: string | undefined): { table?: string; column?: string } {
-  if (!sql) return {};
-  const fromMatch = sql.match(/FROM\s+["']?(\w+)["']?/i);
-  const selectMatch = sql.match(/SELECT\s+([\w,\s*]+)\s+FROM/i);
-
-  const table = fromMatch?.[1];
-  let column: string | undefined;
-
-  if (selectMatch) {
-    const cols = selectMatch[1].trim();
-    if (cols !== "*") {
-      // Get first column, remove alias
-      column = cols.split(",")[0].trim().split(/\s+AS\s+/i)[0].trim();
-    }
-  }
-
-  return { table, column };
-}
-
-// ============================================================================
-// Plugin
-// ============================================================================
-
-export const LiveQueryPlugin = createPlatePlugin({
-  key: LIVE_QUERY_KEY,
-  node: {
-    isElement: true,
-    // NOT void - children are the template content
-    isVoid: false,
-    component: memo(LiveQueryElement),
-  },
-});
-
-/**
- * Inline LiveQuery Plugin
- *
- * Renders single values as inline badges within text.
- * Configured as inline + void element following Plate conventions.
- */
-export const InlineLiveQueryPlugin = createPlatePlugin({
-  key: INLINE_LIVE_QUERY_KEY,
-  node: {
-    isElement: true,
-    isInline: true,
-    isVoid: true,
-    component: memo(InlineLiveQueryElement),
-  },
-});
-
-export const LiveQueryKit = [LiveQueryPlugin, InlineLiveQueryPlugin];
-
-// ============================================================================
-// Insertion Helpers
-// ============================================================================
-
-export function createLiveQueryElement(
-  query: string,
-  options?: {
-    params?: Record<string, unknown>;
-    columns?: ColumnConfig[] | "auto";
-    /** Template children - if not provided, uses empty text (table mode) */
-    children?: (TElement | TText)[];
-  }
-): TLiveQueryElement {
-  return {
-    type: LIVE_QUERY_KEY,
-    query,
-    params: options?.params,
-    columns: options?.columns,
-    // Children are the template content
-    children: options?.children ?? [{ text: "" }],
-  };
-}
-
-export function createTableQuery(query: string, columns?: ColumnConfig[]): TLiveQueryElement {
-  return createLiveQueryElement(query, { columns: columns ?? "auto" });
-}
-
-export function createTemplateQuery(query: string, template: (TElement | TText)[]): TLiveQueryElement {
-  return createLiveQueryElement(query, { children: template });
-}
-
-/**
- * Create an inline LiveQuery element for single values.
- * Renders as a badge/span within text flow.
- */
-export function createInlineLiveQueryElement(
-  query: string,
-  params?: Record<string, unknown>
-): TInlineLiveQueryElement {
-  return {
-    type: INLINE_LIVE_QUERY_KEY,
-    query,
-    params,
-    children: [{ text: "" }],
-  };
-}
-
-// ============================================================================
-// Markdown Serialization
-// ============================================================================
-
-/**
- * Serialize LiveQuery element to MDX.
- *
- * Table mode (no children or columns prop):
- *   <LiveQuery query="SELECT * FROM users" columns="auto" />
- *
- * Template mode (has children):
- *   <LiveQuery query="SELECT name, value FROM metrics">
- *
- *   # {{value}}
- *
- *   *{{name}}*
- *
- *   </LiveQuery>
- *
- * Children are serialized by Plate's markdown plugin automatically
- * since isVoid is false.
- */
-export const liveQueryMarkdownRule = {
-  [LIVE_QUERY_KEY]: {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    serialize: (node: TLiveQueryElement, options?: any) => {
-      const attributes: Array<{ type: "mdxJsxAttribute"; name: string; value: unknown }> = [
-        { type: "mdxJsxAttribute", name: "query", value: node.query },
-      ];
-
-      // Add params if present
-      if (node.params && Object.keys(node.params).length > 0) {
-        attributes.push({
-          type: "mdxJsxAttribute",
-          name: "params",
-          value: { type: "mdxJsxAttributeValueExpression", value: JSON.stringify(node.params) },
-        });
-      }
-
-      // Add columns if present (table mode)
-      if (node.columns) {
-        if (node.columns === "auto") {
-          attributes.push({ type: "mdxJsxAttribute", name: "columns", value: "auto" });
-        } else {
-          attributes.push({
-            type: "mdxJsxAttribute",
-            name: "columns",
-            value: { type: "mdxJsxAttributeValueExpression", value: JSON.stringify(node.columns) },
-          });
-        }
-      }
-
-      // Add className if present
-      if (node.className) {
-        attributes.push({ type: "mdxJsxAttribute", name: "className", value: node.className });
-      }
-
-      // Get serialized children from options if available, otherwise Plate handles it
-      const children = options?.children ?? [];
-
-      return {
-        type: "mdxJsxFlowElement",
-        name: "LiveQuery",
-        attributes,
-        children,
-      };
-    },
-  },
-
-  /**
-   * Serialize InlineLiveQuery element to MDX.
-   * Renders as: <LiveValue query="SELECT ..." />
-   * Uses mdxJsxTextElement for inline rendering.
-   */
-  [INLINE_LIVE_QUERY_KEY]: {
-    serialize: (node: TInlineLiveQueryElement) => {
-      const attributes: Array<{ type: "mdxJsxAttribute"; name: string; value: unknown }> = [
-        { type: "mdxJsxAttribute", name: "query", value: node.query },
-      ];
-
-      // Add params if present
-      if (node.params && Object.keys(node.params).length > 0) {
-        attributes.push({
-          type: "mdxJsxAttribute",
-          name: "params",
-          value: { type: "mdxJsxAttributeValueExpression", value: JSON.stringify(node.params) },
-        });
-      }
-
-      // Add className if present
-      if (node.className) {
-        attributes.push({ type: "mdxJsxAttribute", name: "className", value: node.className });
-      }
-
-      return {
-        type: "mdxJsxTextElement", // Inline element
-        name: "LiveValue",
-        attributes,
-        children: [],
-      };
-    },
-  },
-};
-
-/**
- * Deserialize <LiveQuery> MDX element to TLiveQueryElement.
- * Children are deserialized by Plate's markdown plugin automatically.
- */
-export function deserializeLiveQueryElement(
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  node: any,
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  _options?: any
-): TLiveQueryElement {
-  const attributes = node.attributes || [];
-  const props: Record<string, unknown> = {};
-
-  for (const attr of attributes) {
-    if (attr.type === "mdxJsxAttribute") {
-      const name = attr.name;
-      const value = attr.value;
-
-      if (value === null || value === undefined) {
-        props[name] = true;
-      } else if (typeof value === "string") {
-        props[name] = value;
-      } else if (typeof value === "object" && value !== null) {
-        // Expression value like params={{...}} or columns={[...]}
-        const expr = value as Record<string, unknown>;
-        if (expr.type === "mdxJsxAttributeValueExpression" && typeof expr.value === "string") {
-          try {
-            props[name] = JSON.parse(expr.value);
-          } catch {
-            props[name] = expr.value;
-          }
-        }
-      }
-    }
-  }
-
-  // Return element - Plate will handle children deserialization for non-void elements
-  return {
-    type: LIVE_QUERY_KEY,
-    query: (props.query as string) || "",
-    params: props.params as Record<string, unknown> | undefined,
-    columns: props.columns as ColumnConfig[] | "auto" | undefined,
-    className: props.className as string | undefined,
-    // Plate fills in children from the MDX content for non-void elements
-    children: [{ text: "" }],
-  };
-}
-
-/**
- * Deserialize <LiveValue> MDX element to TInlineLiveQueryElement.
- * Inline void element - no children.
- */
-export function deserializeInlineLiveQueryElement(
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  node: any
-): TInlineLiveQueryElement {
-  const attributes = node.attributes || [];
-  const props: Record<string, unknown> = {};
-
-  for (const attr of attributes) {
-    if (attr.type === "mdxJsxAttribute") {
-      const name = attr.name;
-      const value = attr.value;
-
-      if (value === null || value === undefined) {
-        props[name] = true;
-      } else if (typeof value === "string") {
-        props[name] = value;
-      } else if (typeof value === "object" && value !== null) {
-        const expr = value as Record<string, unknown>;
-        if (expr.type === "mdxJsxAttributeValueExpression" && typeof expr.value === "string") {
-          try {
-            props[name] = JSON.parse(expr.value);
-          } catch {
-            props[name] = expr.value;
-          }
-        }
-      }
-    }
-  }
-
-  return {
-    type: INLINE_LIVE_QUERY_KEY,
-    query: (props.query as string) || "",
-    params: props.params as Record<string, unknown> | undefined,
-    className: props.className as string | undefined,
-    children: [{ text: "" }],
-  };
-}

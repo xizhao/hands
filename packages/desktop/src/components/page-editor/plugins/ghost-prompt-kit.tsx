@@ -4,14 +4,13 @@
  * Ghost Prompt Plugin
  *
  * Inline void element that captures a user prompt between backticks,
- * sends it to the AI for completion, and shows the response as ghost text.
+ * sends it to the AI text-to-sql, and replaces itself with a LiveValue.
  *
  * Flow:
- * 1. User types `some prompt` -> creates ghost_prompt element
- * 2. Debounce timer (500ms) starts
- * 3. After debounce, sends to /api/ai/copilot with FITM context
- * 4. Shows AI response as ghost text
- * 5. Tab to accept, Esc to reject (converts to inline code)
+ * 1. User types `some prompt` -> keyDown handler creates ghost_prompt element
+ * 2. Component mounts, calls AI text-to-sql
+ * 3. On success: replaces itself with LiveValue element
+ * 4. On error: converts to inline code
  */
 
 import { createPlatePlugin } from 'platejs/react';
@@ -25,10 +24,6 @@ export interface TGhostPromptElement extends TElement {
   type: typeof GHOST_PROMPT_KEY;
   /** The user's prompt text */
   prompt: string;
-  /** AI-generated response (null while loading, string when complete) */
-  response?: string | null;
-  /** Loading state */
-  isLoading?: boolean;
   /** Required void element children */
   children: [{ text: '' }];
 }
@@ -40,9 +35,6 @@ export const GhostPromptPlugin = createPlatePlugin({
     isInline: true,
     isVoid: true,
     component: GhostPromptElement,
-  },
-  options: {
-    debounceDelay: 500,
   },
   handlers: {
     onKeyDown: ({ editor, event }) => {
@@ -79,7 +71,7 @@ export const GhostPromptPlugin = createPlatePlugin({
       // Get the prompt text between backticks
       const promptText = textBefore.slice(lastBacktickIndex + 1).trim();
 
-      // Don't convert empty backticks to ghost prompt
+      // Don't convert empty backticks to ghost prompt - let it become inline code
       if (!promptText) return;
 
       // Prevent the default backtick insertion
@@ -91,16 +83,17 @@ export const GhostPromptPlugin = createPlatePlugin({
         offset: cursorPoint.offset - (textBefore.length - lastBacktickIndex),
       };
 
-      // Delete the backtick and prompt text
-      editor.tf.delete({
-        at: { anchor: deleteStart, focus: cursorPoint },
-      });
+      // Delete the backtick and prompt text, then insert ghost prompt
+      editor.tf.withoutNormalizing(() => {
+        editor.tf.delete({
+          at: { anchor: deleteStart, focus: cursorPoint },
+        });
 
-      // Insert the ghost prompt element
-      const ghostElement = createGhostPromptElement(promptText);
-      console.log('[ghost-prompt-kit] Creating element:', ghostElement);
-      editor.tf.insertNodes(ghostElement);
-      editor.tf.move({ unit: 'offset' });
+        const ghostElement = createGhostPromptElement(promptText);
+        console.log('[ghost-prompt-kit] Creating element for:', promptText);
+        editor.tf.insertNodes(ghostElement);
+        editor.tf.move({ unit: 'offset' });
+      });
     },
   },
 });
@@ -114,8 +107,6 @@ export function createGhostPromptElement(prompt: string): TGhostPromptElement {
   return {
     type: GHOST_PROMPT_KEY,
     prompt,
-    response: null,
-    isLoading: false,
     children: [{ text: '' }],
   };
 }

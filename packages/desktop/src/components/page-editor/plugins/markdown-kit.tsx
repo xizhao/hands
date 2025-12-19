@@ -16,9 +16,13 @@ import type { Text as MdastText } from 'mdast';
 import { SANDBOXED_BLOCK_KEY, sandboxedBlockMarkdownRule } from '../SandboxedBlock';
 import {
   liveQueryMarkdownRule,
+  deserializeLiveValueElement,
   deserializeLiveQueryElement,
   deserializeInlineLiveQueryElement,
+  deserializeLiveActionElement,
+  deserializeActionButtonElement,
 } from './live-query-kit';
+import { GHOST_PROMPT_KEY } from './ghost-prompt-kit';
 
 /**
  * Serialize text with fontColor mark to <span style="color: ...">
@@ -125,16 +129,31 @@ export const MarkdownKit = [
         },
         // Sandboxed block - serialize to <Block src="..." />
         ...sandboxedBlockMarkdownRule,
-        // LiveQuery element - deserialize <LiveQuery query="..." /> to live_query
+        // LiveValue - unified element with display prop
+        LiveValue: {
+          deserialize: (node, options) => deserializeLiveValueElement(node, options),
+        },
+        // Legacy: LiveQuery maps to LiveValue
         LiveQuery: {
           deserialize: (node, options) => deserializeLiveQueryElement(node, options),
         },
-        // LiveValue (inline) element - deserialize <LiveValue query="..." /> to live_query_inline
-        LiveValue: {
-          deserialize: (node) => deserializeInlineLiveQueryElement(node),
+        // LiveAction element
+        LiveAction: {
+          deserialize: (node, options) => deserializeLiveActionElement(node, options),
         },
-        // LiveQuery & LiveValue - serialize to MDX
+        // ActionButton element - auto-wires trigger() from LiveAction context
+        ActionButton: {
+          deserialize: (node, options) => deserializeActionButtonElement(node, options),
+        },
+        // Serialize all live elements to MDX
         ...liveQueryMarkdownRule,
+        // Ghost prompt - serialize as inline code (ephemeral element, shouldn't persist)
+        [GHOST_PROMPT_KEY]: {
+          serialize: (node: any) => ({
+            type: 'inlineCode',
+            value: node.prompt || '',
+          }),
+        },
       },
     },
   }),

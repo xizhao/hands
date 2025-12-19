@@ -104,134 +104,235 @@ const yaml = serializeFrontmatter({ title: "My Page", description: "..." });
 `;
 
 // ============================================================================
-// LiveQuery - Block-Level Data Display
+// LiveValue - Unified Data Display Element
 // ============================================================================
 
 export const LIVEQUERY_DOCS = `
-## LiveQuery (Block Element)
+## LiveValue Element
 
-Renders SQL query results as rich content. Supports template mode, table mode, and auto-pick mode.
+Unified element for displaying SQL query results. Auto-selects minimal display based on data shape, or use explicit \`display\` prop.
+
+### Display Modes
+
+| Data Shape | Display | Description |
+|------------|---------|-------------|
+| 1×1 (single value) | \`inline\` | Styled text within paragraph |
+| N×1 (single column) | \`list\` | Bullet list |
+| N×M (multiple columns) | \`table\` | HTML table |
 
 ### MDX Syntax
 
 \`\`\`mdx
-<!-- Auto-pick mode: detects best display automatically -->
-<LiveQuery query="SELECT COUNT(*) as total FROM orders" />
+<!-- Auto-select display based on data shape (recommended) -->
+<LiveValue query="SELECT COUNT(*) FROM orders" />
 
-<!-- Table mode: explicit columns -->
-<LiveQuery query="SELECT * FROM customers" columns="auto" />
+<!-- Explicit inline display (for single values in text) -->
+We have <LiveValue query="SELECT COUNT(*) FROM orders" display="inline" /> orders.
+
+<!-- Explicit list display -->
+<LiveValue query="SELECT name FROM users" display="list" />
+
+<!-- Explicit table display -->
+<LiveValue query="SELECT * FROM customers" display="table" />
 
 <!-- Template mode: custom rendering with bindings -->
-<LiveQuery query="SELECT name, revenue FROM top_customers LIMIT 5">
+<LiveValue query="SELECT name, revenue FROM top_customers LIMIT 5">
 ## {{name}}
 Revenue: **\${{revenue}}**
-</LiveQuery>
+</LiveValue>
 \`\`\`
 
 ### Template Bindings
 
-Use \`{{field}}\` syntax inside LiveQuery children:
+Use \`{{field}}\` syntax inside LiveValue children:
 - \`{{fieldName}}\` - exact column match
 - \`{{value}}\` or \`{{name}}\` - fallback to first column
 - \`{{_index}}\` - current row number (1-indexed)
 
-### Auto-Pick Display Modes
-
-Based on data shape, LiveQuery auto-selects:
-- **1 row, 1 col** -> Big metric (e.g., "12,345")
-- **1 row, N cols** -> Key-value card layout
-- **N rows, 1 col** -> Bullet list
-- **N rows, 2 cols** -> Label-value pairs
-- **N rows, N cols** -> HTML table
-
-### Built-in Templates
-
-\`\`\`typescript
-import { TEMPLATES } from "@/components/page-editor/plugins/live-query-kit";
-
-// Available: "metric", "stat-card", "bullet-list", "numbered-list", "card", "row", "table"
-\`\`\`
-
 ### Plate Element Type
 
 \`\`\`typescript
-interface TLiveQueryElement extends TElement {
-  type: "live_query";
+interface TLiveValueElement extends TElement {
+  type: "live_value";
   query: string;                    // SQL query
+  display?: "auto" | "inline" | "list" | "table";
   params?: Record<string, unknown>; // Named parameters
-  columns?: ColumnConfig[] | "auto"; // Table mode config
+  columns?: ColumnConfig[] | "auto"; // For table mode
   className?: string;               // CSS class
   children: (TElement | TText)[];   // Template content
-}
-\`\`\`
-
-### Creating LiveQuery Elements
-
-\`\`\`typescript
-import {
-  createLiveQueryElement,
-  createTableQuery,
-  createTemplateQuery,
-} from "@/components/page-editor/plugins/live-query-kit";
-
-// Generic
-const element = createLiveQueryElement("SELECT * FROM users", {
-  columns: "auto",
-});
-
-// Table mode shorthand
-const tableEl = createTableQuery("SELECT * FROM users");
-
-// Template mode shorthand
-const templateEl = createTemplateQuery("SELECT name FROM users", [
-  { type: "p", children: [{ text: "User: {{name}}" }] },
-]);
-\`\`\`
-`;
-
-// ============================================================================
-// LiveValue - Inline Data Display
-// ============================================================================
-
-export const LIVEVALUE_DOCS = `
-## LiveValue (Inline Element)
-
-Renders a single SQL value as an inline badge within text.
-
-### MDX Syntax
-
-\`\`\`mdx
-We have <LiveValue query="SELECT COUNT(*) FROM customers" /> active customers.
-
-Revenue this month: <LiveValue query="SELECT SUM(amount) FROM orders WHERE date > '2024-01-01'" />
-\`\`\`
-
-### Rendering
-
-Displays as a violet badge with lightning bolt icon:
-- Shows first column of first row
-- Loading spinner while fetching
-- Error indicator on failure
-
-### Plate Element Type
-
-\`\`\`typescript
-interface TInlineLiveQueryElement extends TElement {
-  type: "live_query_inline";
-  query: string;                    // SQL query
-  params?: Record<string, unknown>; // Named parameters
-  className?: string;               // CSS class
-  children: [{ text: "" }];         // Void element
 }
 \`\`\`
 
 ### Creating LiveValue Elements
 
 \`\`\`typescript
-import { createInlineLiveQueryElement } from "@/components/page-editor/plugins/live-query-kit";
+import { createLiveValueElement } from "@/components/page-editor/plugins/live-query-kit";
 
-const element = createInlineLiveQueryElement("SELECT COUNT(*) FROM users");
+// Auto-display (recommended - selects based on data shape)
+const element = createLiveValueElement("SELECT * FROM users");
+
+// Explicit inline
+const inline = createLiveValueElement("SELECT COUNT(*) FROM users", {
+  display: "inline",
+});
+
+// Explicit table
+const table = createLiveValueElement("SELECT * FROM users", {
+  display: "table",
+  columns: "auto",
+});
+
+// Template mode
+const templated = createLiveValueElement("SELECT name FROM users", {
+  children: [{ type: "p", children: [{ text: "User: {{name}}" }] }],
+});
 \`\`\`
+`;
+
+// LIVEVALUE_DOCS is now empty - consolidated into LIVEQUERY_DOCS above
+export const LIVEVALUE_DOCS = ``;
+
+// ============================================================================
+// LiveAction - Interactive Write Operations
+// ============================================================================
+
+export const LIVEACTION_DOCS = `
+## LiveAction (Block Element)
+
+Wraps interactive content that triggers SQL write operations. Children can call \`useLiveAction().trigger()\` to execute the action.
+
+### MDX Syntax
+
+\`\`\`mdx
+<!-- Simple counter increment -->
+<LiveAction sql="UPDATE counters SET value = value + 1 WHERE id = 1">
+
+Click to increment: <LiveValue query="SELECT value FROM counters WHERE id = 1" />
+
+<button>+1</button>
+
+</LiveAction>
+
+<!-- With parameters -->
+<LiveAction sql="INSERT INTO clicks (user_id, timestamp) VALUES (1, datetime('now'))">
+
+<button>Log Click</button>
+
+</LiveAction>
+\`\`\`
+
+### How It Works
+
+1. **Provider Pattern**: LiveAction wraps children and provides a React context
+2. **Children call trigger()**: Any child component can call \`useLiveAction().trigger()\` on click/submit/etc.
+3. **Auto-refresh**: After the write, LiveValue nodes automatically refetch via SSE subscription
+4. **Error handling**: Failures show a toast notification via sonner
+
+### Using the Hook
+
+\`\`\`typescript
+import { useLiveAction } from "@/components/page-editor/plugins/live-query-kit";
+
+function ActionButton({ children }) {
+  const { trigger, isPending, error } = useLiveAction();
+
+  return (
+    <button onClick={trigger} disabled={isPending}>
+      {isPending ? "Loading..." : children}
+    </button>
+  );
+}
+\`\`\`
+
+### Context Value
+
+\`\`\`typescript
+interface LiveActionContextValue {
+  trigger: () => Promise<void>;  // Execute the SQL
+  isPending: boolean;            // Loading state
+  error: Error | null;           // Last error
+}
+\`\`\`
+
+### Plate Element Type
+
+\`\`\`typescript
+interface TLiveActionElement extends TElement {
+  type: "live_action";
+  sql?: string;                   // SQL statement (UPDATE/INSERT/DELETE)
+  src?: string;                   // Alternative: action ID reference
+  params?: Record<string, unknown>; // Named parameters
+  children: (TElement | TText)[]; // Interactive content
+}
+\`\`\`
+
+### Creating LiveAction Elements
+
+\`\`\`typescript
+import { createLiveActionElement } from "@/components/page-editor/plugins/live-query-kit";
+
+const element = createLiveActionElement(
+  { sql: "UPDATE counters SET value = value + 1 WHERE id = 1" },
+  [{ type: "p", children: [{ text: "Click me!" }] }]
+);
+\`\`\`
+
+### Features
+
+- **Loading overlay**: Shows spinner during execution
+- **Toast notifications**: Errors displayed via sonner
+- **SSE auto-refresh**: LiveValue nodes inside automatically update after write
+- **Non-void element**: Children are editable in the editor
+
+## ActionButton Element
+
+Built-in button that auto-wires \`trigger()\` from LiveAction context. Use inside LiveAction for automatic click handling.
+
+### MDX Syntax
+
+\`\`\`mdx
+<LiveAction sql="UPDATE counters SET value = value + 1 WHERE id = 1">
+  <ActionButton>+1</ActionButton>
+</LiveAction>
+
+<!-- With variant styling -->
+<LiveAction sql="DELETE FROM items WHERE id = 1">
+  <ActionButton variant="destructive">Delete</ActionButton>
+</LiveAction>
+
+<!-- Combining with LiveValue -->
+<LiveAction sql="UPDATE counters SET value = value + 1 WHERE id = 1">
+  <ActionButton>
+    Count: <LiveValue query="SELECT value FROM counters WHERE id = 1" display="inline" />
+  </ActionButton>
+</LiveAction>
+\`\`\`
+
+### Variants
+
+| Variant | Style | Use Case |
+|---------|-------|----------|
+| \`default\` | Primary blue | Default action |
+| \`outline\` | Border only | Secondary action |
+| \`ghost\` | Text only | Subtle action |
+| \`destructive\` | Red | Delete/remove actions |
+
+### Plate Element Type
+
+\`\`\`typescript
+interface TActionButtonElement extends TElement {
+  type: "action_button";
+  variant?: "default" | "outline" | "ghost" | "destructive";
+  children: (TElement | TText)[]; // Button content
+}
+\`\`\`
+
+### Behavior
+
+- **Auto-trigger**: Calls \`useLiveAction().trigger()\` on click
+- **Loading state**: Shows spinner and disables during execution
+- **Error handling**: Falls back to toast if not inside LiveAction
+- **Non-void element**: Children are editable (text, LiveValue, etc.)
 `;
 
 // ============================================================================
@@ -297,8 +398,9 @@ Callouts are highlighted boxes for tips, warnings, or important notes.
 | Component | Usage | Description |
 |-----------|-------|-------------|
 | \`<Block>\` | \`<Block src="chart" />\` | Embed TSX block |
-| \`<LiveValue>\` | \`<LiveValue query="..." />\` | Inline SQL value |
-| \`<LiveQuery>\` | \`<LiveQuery query="...">...</LiveQuery>\` | Block SQL result |
+| \`<LiveValue>\` | \`<LiveValue query="..." />\` | SQL query display (auto-selects inline/list/table) |
+| \`<LiveAction>\` | \`<LiveAction sql="...">...</LiveAction>\` | Interactive write trigger |
+| \`<ActionButton>\` | \`<ActionButton>Click</ActionButton>\` | Button that auto-triggers LiveAction |
 
 ### Inline Elements
 - Links: \`[text](url)\`
@@ -386,7 +488,7 @@ const nodes = api.markdown.deserialize(markdownText);
 
 MarkdownKit uses:
 - \`remark-gfm\` - GitHub Flavored Markdown (tables, strikethrough, etc.)
-- \`remark-mdx\` - MDX JSX component support (<Block>, <LiveQuery>, etc.)
+- \`remark-mdx\` - MDX JSX component support (<Block>, <LiveValue>, etc.)
 
 ### Custom Serialization Rules
 
@@ -394,8 +496,9 @@ The following elements have custom MDX serialization:
 
 | Plate Element | MDX Tag |
 |---------------|---------|
-| \`live_query\` | \`<LiveQuery query="..." />\` |
-| \`live_query_inline\` | \`<LiveValue query="..." />\` |
+| \`live_value\` | \`<LiveValue query="..." display="..." />\` |
+| \`live_action\` | \`<LiveAction sql="...">...</LiveAction>\` |
+| \`action_button\` | \`<ActionButton variant="...">...</ActionButton>\` |
 | \`sandboxed_block\` | \`<Block src="..." />\` |
 | \`fontColor\` mark | \`<span style="color: ...">\` |
 | \`fontBackgroundColor\` mark | \`<span style="background-color: ...">\` |
@@ -480,6 +583,8 @@ ${LIVEQUERY_DOCS}
 
 ${LIVEVALUE_DOCS}
 
+${LIVEACTION_DOCS}
+
 ${BLOCK_ELEMENT_DOCS}
 
 ${MARKDOWN_KIT_DOCS}
@@ -491,11 +596,15 @@ ${AUTOFORMAT_DOCS}
 ### Creating Elements Programmatically
 
 \`\`\`typescript
-// LiveQuery (block)
-import { createLiveQueryElement, createTableQuery } from "@/components/page-editor/plugins/live-query-kit";
+import { createLiveValueElement } from "@/components/page-editor/plugins/live-query-kit";
 
-// LiveValue (inline)
-import { createInlineLiveQueryElement } from "@/components/page-editor/plugins/live-query-kit";
+// Auto-select display based on data shape
+const auto = createLiveValueElement("SELECT * FROM users");
+
+// Explicit display mode
+const inline = createLiveValueElement("SELECT COUNT(*) FROM users", { display: "inline" });
+const list = createLiveValueElement("SELECT name FROM users", { display: "list" });
+const table = createLiveValueElement("SELECT * FROM users", { display: "table" });
 
 // Insert into editor
 editor.tf.insertNodes(element);
@@ -518,7 +627,6 @@ page.mdx
 │   ---
 ├── # Heading      # Standard markdown
 ├── <Block ... />  # MDX components
-├── <LiveQuery>    # Data queries
-└── <LiveValue>    # Inline values
+└── <LiveValue>    # Data queries (inline/list/table)
 \`\`\`
 `;

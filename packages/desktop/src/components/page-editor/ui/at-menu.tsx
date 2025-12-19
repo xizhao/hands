@@ -27,10 +27,9 @@ import { useRuntimeState, type TableSchema } from "@/hooks/useRuntimeState";
 import { SANDBOXED_BLOCK_KEY, type TSandboxedBlockElement } from "../SandboxedBlock";
 import { textToSQL } from "../lib/text-to-sql";
 import {
-  LIVE_QUERY_KEY,
-  INLINE_LIVE_QUERY_KEY,
-  type TLiveQueryElement,
-  type TInlineLiveQueryElement,
+  LIVE_VALUE_KEY,
+  type TLiveValueElement,
+  createLiveValueElement,
 } from "../plugins/live-query-kit";
 import {
   type DataShape,
@@ -73,37 +72,36 @@ interface Suggestion {
 // ============================================================================
 
 /**
- * Insert a LiveQuery block with the given SQL and format.
+ * Insert a LiveValue block with the given SQL and format.
+ * Uses the new unified LiveValue element with display prop.
  */
-function insertLiveQueryBlock(
+function insertLiveValueBlock(
   editor: PlateEditor,
   sql: string,
   formatKey: FormatKey
 ) {
-  // Inline mode: insert a badge-style inline element
-  if (isInlineMode(formatKey)) {
-    const node: TInlineLiveQueryElement = {
-      type: INLINE_LIVE_QUERY_KEY,
-      query: sql,
-      children: [{ text: "" }],
-    };
-    editor.tf.insertNodes(node);
-    editor.tf.move({ unit: "offset" });
-    return;
-  }
+  // Map format key to display mode
+  const displayMode = isInlineMode(formatKey) ? "inline" as const
+    : isTableMode(formatKey) ? "table" as const
+    : "list" as const;
 
-  // Block mode: insert with template
-  const template = getTemplate(formatKey);
-  const tableMode = isTableMode(formatKey);
+  // Get template for non-table block formats
+  const template = !isInlineMode(formatKey) && !isTableMode(formatKey)
+    ? getTemplate(formatKey)
+    : undefined;
 
-  const node: TLiveQueryElement = {
-    type: LIVE_QUERY_KEY,
-    query: sql,
-    ...(tableMode ? { columns: "auto" as const } : {}),
-    children: tableMode ? [{ text: "" }] : template,
-  };
+  const node = createLiveValueElement(sql, {
+    display: displayMode,
+    columns: isTableMode(formatKey) ? "auto" : undefined,
+    children: template,
+  });
 
   editor.tf.insertNodes(node);
+
+  // Move cursor after inline elements
+  if (isInlineMode(formatKey)) {
+    editor.tf.move({ unit: "offset" });
+  }
 }
 
 /**
@@ -330,7 +328,7 @@ function AtMenuContent({ editor, element }: { editor: PlateEditor; element: TEle
     if (path) {
       editor.tf.removeNodes({ at: path });
     }
-    insertLiveQueryBlock(editor, suggestion.sql, formatKey);
+    insertLiveValueBlock(editor, suggestion.sql, formatKey);
     setInsertAsSuggestion(null);
   }, [editor, element]);
 

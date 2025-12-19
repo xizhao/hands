@@ -2,7 +2,9 @@
 
 import {
   Code,
+  CursorClick,
   Lightbulb,
+  Lightning,
   List,
   ListNumbers,
   Quotes,
@@ -18,6 +20,12 @@ import { insertTable } from "@platejs/table";
 import { KEYS } from "platejs";
 import { useEditorReadOnly, useEditorRef, useSelectionFragmentProp } from "platejs/react";
 import { useCallback } from "react";
+
+import {
+  createLiveValueElement,
+  createLiveActionElement,
+  createActionButtonElement,
+} from "../plugins/live-query-kit";
 
 import { cn } from "@/lib/utils";
 import { getBlockType, setBlockType } from "../transforms";
@@ -101,6 +109,43 @@ function InsertCalloutButton() {
   return (
     <ToolbarButton onClick={handleClick} tooltip="Insert callout">
       <Lightbulb size={16} />
+    </ToolbarButton>
+  );
+}
+
+function InsertLiveValueButton() {
+  const editor = useEditorRef();
+
+  const handleClick = useCallback(() => {
+    const element = createLiveValueElement("SELECT 'Hello' AS message");
+    editor.tf.insertNodes(element);
+    editor.tf.focus();
+  }, [editor]);
+
+  return (
+    <ToolbarButton onClick={handleClick} tooltip="Insert LiveValue query">
+      <Lightning size={16} weight="fill" className="text-violet-500" />
+    </ToolbarButton>
+  );
+}
+
+function InsertLiveActionButton() {
+  const editor = useEditorRef();
+
+  const handleClick = useCallback(() => {
+    // Create a LiveAction with an ActionButton child
+    const actionButton = createActionButtonElement("Click me");
+    const element = createLiveActionElement(
+      { sql: "-- UPDATE table SET column = value WHERE id = 1" },
+      [{ type: "p", children: [actionButton] }]
+    );
+    editor.tf.insertNodes(element);
+    editor.tf.focus();
+  }, [editor]);
+
+  return (
+    <ToolbarButton onClick={handleClick} tooltip="Insert LiveAction (interactive button)">
+      <CursorClick size={16} className="text-amber-500" />
     </ToolbarButton>
   );
 }
@@ -194,6 +239,12 @@ export function FixedToolbarButtons() {
       <ToolbarGroup>
         <InsertTableButton />
         <InsertCalloutButton />
+      </ToolbarGroup>
+
+      {/* Live Data */}
+      <ToolbarGroup>
+        <InsertLiveValueButton />
+        <InsertLiveActionButton />
       </ToolbarGroup>
     </div>
   );

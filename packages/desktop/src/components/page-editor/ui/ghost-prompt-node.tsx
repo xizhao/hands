@@ -4,7 +4,7 @@
  * Ghost Prompt Element
  *
  * Inline void element that captures a user prompt between backticks,
- * calls the AI text-to-sql API, and inserts a LiveQuery element.
+ * calls the AI text-to-sql API, and inserts a LiveValue element.
  * Dynamically selects inline vs block based on data shape.
  */
 
@@ -15,27 +15,29 @@ import {
   useElement,
   useReadOnly,
 } from 'platejs/react';
-import { useEffect, useRef, useCallback } from 'react';
+import { useEffect, useRef, useCallback, useState } from 'react';
 
 import { useManifest } from '@/hooks/useRuntimeState';
 import { trpc } from '@/lib/trpc';
-import { type TGhostPromptElement } from '../plugins/ghost-prompt-kit';
+import { type TGhostPromptElement, GHOST_PROMPT_KEY } from '../plugins/ghost-prompt-kit';
 import {
-  createInlineLiveQueryElement,
-  createLiveQueryElement,
+  createLiveValueElement,
   selectDisplayType,
+  type DisplayType,
 } from '../plugins/live-query-kit';
 
 export function GhostPromptElement(props: PlateElementProps) {
   const element = useElement<TGhostPromptElement>();
   const editor = useEditorRef();
   const readOnly = useReadOnly();
-  const { data: manifest } = useManifest();
+  const { data: manifest, isLoading: isManifestLoading } = useManifest();
 
   const { prompt } = element;
   const hasCalledRef = useRef(false);
-  const elementRef = useRef(element);
-  elementRef.current = element;
+
+  // Track local loading state (since element may be replaced before state updates)
+  const [isProcessing, setIsProcessing] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const tables = manifest?.tables ?? [];
 
@@ -44,64 +46,120 @@ export function GhostPromptElement(props: PlateElementProps) {
   const dbQuery = trpc.db.query.useMutation();
 
   const handleSuccess = useCallback((sql: string, data: Record<string, unknown>[]) => {
-    const path = editor.api.findPath(elementRef.current);
-    if (!path) return;
+    try {
+      // Find path by searching for ghost_prompt with matching prompt
+      const entries = Array.from(
+        editor.api.nodes({
+          match: { type: GHOST_PROMPT_KEY, prompt },
+        })
+      );
 
-    // Select display type based on data shape
-    const displayType = selectDisplayType(data);
+      if (entries.length === 0) {
+        console.warn('[ghost-prompt] Could not find element for replacement');
+        return;
+      }
 
-    editor.tf.removeNodes({ at: path });
+      const [node, path] = entries[0];
 
-    if (displayType === 'inline-value') {
-      // Single value - insert inline element
-      const inlineNode = createInlineLiveQueryElement(sql);
-      editor.tf.insertNodes(inlineNode, { at: path });
-    } else {
-      // List or table - insert block element (will use auto-display)
-      const blockNode = createLiveQueryElement(sql);
-      editor.tf.insertNodes(blockNode, { at: path });
+      // Select display type based on data shape (biases towards minimal)
+      const displayType: DisplayType = selectDisplayType(data);
+      console.log('[ghost-prompt] Replacing node:', node, 'at path:', path, 'with display:', displayType);
+
+      // Create LiveValue with explicit display prop
+      const liveValueNode = createLiveValueElement(sql, { display: displayType });
+      console.log('[ghost-prompt] New node:', liveValueNode);
+
+      // Remove the ghost prompt and insert LiveValue
+      editor.tf.removeNodes({ at: path });
+      console.log('[ghost-prompt] Removed node, inserting new one');
+      editor.tf.insertNodes(liveValueNode, { at: path, select: true });
+      console.log('[ghost-prompt] Insertion complete');
+    } catch (err) {
+      console.error('[ghost-prompt] Error in handleSuccess:', err);
     }
-  }, [editor]);
+  }, [editor, prompt]);
 
-  const handleError = useCallback((error: Error) => {
-    console.error('[ghost-prompt] Error:', error.message);
+  const handleError = useCallback((errorMsg: string) => {
+    console.error('[ghost-prompt] Error:', errorMsg);
+    setError(errorMsg);
 
-    const path = editor.api.findPath(elementRef.current);
-    if (!path) return;
-
-    editor.tf.removeNodes({ at: path });
-    editor.tf.insertNodes(
-      { text: prompt, code: true },
-      { at: path }
+    // Find path by searching for ghost_prompt with matching prompt
+    const entries = Array.from(
+      editor.api.nodes({
+        match: { type: GHOST_PROMPT_KEY, prompt },
+      })
     );
+
+    if (entries.length === 0) {
+      console.warn('[ghost-prompt] Could not find element for error replacement');
+      return;
+    }
+
+    const [, path] = entries[0];
+    console.log('[ghost-prompt] Converting to code at path:', path);
+
+    // Convert to inline code on error
+    editor.tf.withoutNormalizing(() => {
+      editor.tf.removeNodes({ at: path });
+      editor.tf.insertNodes({ text: prompt, code: true }, { at: path });
+    });
   }, [editor, prompt]);
 
   useEffect(() => {
+    // Don't run in read-only mode or if already called
     if (readOnly || hasCalledRef.current) return;
-    if (tables.length === 0) return; // Wait for manifest
+
+    // Wait for manifest to load (don't fail silently)
+    if (isManifestLoading) {
+      console.log('[ghost-prompt] Waiting for manifest...');
+      return;
+    }
+
+    // No tables available - convert to code immediately
+    if (tables.length === 0) {
+      console.warn('[ghost-prompt] No tables in manifest, converting to code');
+      hasCalledRef.current = true;
+      handleError('No tables available');
+      return;
+    }
 
     hasCalledRef.current = true;
+    setIsProcessing(true);
+
+    console.log('[ghost-prompt] Starting text-to-sql for:', prompt, 'tables:', tables.map(t => t.name));
 
     // Step 1: Get SQL from AI
     textToSql.mutateAsync({ prompt, tables })
       .then(async (aiResult) => {
         const sql = aiResult.sql?.trim();
+        console.log('[ghost-prompt] AI returned SQL:', sql);
+
         if (!sql) {
           throw new Error('No SQL generated');
         }
 
         // Step 2: Execute query to check data shape
+        console.log('[ghost-prompt] Executing query:', sql);
         const queryResult = await dbQuery.mutateAsync({ sql, params: [] });
         const data = (queryResult.rows ?? []) as Record<string, unknown>[];
+        console.log('[ghost-prompt] Query returned', data.length, 'rows');
 
         // Step 3: Insert appropriate element based on data shape
         handleSuccess(sql, data);
       })
       .catch((err) => {
-        handleError(err instanceof Error ? err : new Error(String(err)));
+        const message = err instanceof Error ? err.message : String(err);
+        handleError(message);
+      })
+      .finally(() => {
+        setIsProcessing(false);
       });
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [readOnly, prompt, tables.length]);
+  }, [readOnly, prompt, tables.length, isManifestLoading]);
+
+  // Determine visual state
+  const isLoading = isManifestLoading || isProcessing || textToSql.isPending || dbQuery.isPending;
+  const hasError = !!error || textToSql.isError || dbQuery.isError;
 
   return (
     <PlateElement
@@ -114,11 +172,11 @@ export function GhostPromptElement(props: PlateElementProps) {
     >
       <span className="text-muted-foreground/50 italic">
         {prompt}
-        {(textToSql.isPending || dbQuery.isPending || tables.length === 0) && (
-          <span className="animate-pulse">...</span>
+        {isLoading && (
+          <span className="animate-pulse ml-0.5">...</span>
         )}
-        {(textToSql.isError || dbQuery.isError) && (
-          <span className="text-red-500 ml-1">(error)</span>
+        {hasError && (
+          <span className="text-red-500/70 ml-1 text-xs">(failed)</span>
         )}
       </span>
       {props.children}

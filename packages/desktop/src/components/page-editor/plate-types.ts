@@ -100,6 +100,18 @@ export interface MySandboxedBlockElement extends MyBlockElement {
   height?: number;
 }
 
+export interface MyLiveActionElement extends MyBlockElement {
+  type: 'live_action';
+  /** SQL statement to execute (UPDATE, INSERT, DELETE) */
+  sql?: string;
+  /** Alternative: action ID reference */
+  src?: string;
+  /** Named parameters for SQL */
+  params?: Record<string, unknown>;
+  /** Children are the interactive content */
+  children: (TElement | TText)[];
+}
+
 export interface MyMentionElement extends TMentionElement {
   children: [EmptyText];
   type: typeof KEYS.mention;
@@ -158,6 +170,7 @@ export type MyValue = (
   | MyH3Element
   | MyHrElement
   | MyImageElement
+  | MyLiveActionElement
   | MyMediaEmbedElement
   | MyParagraphElement
   | MySandboxedBlockElement
