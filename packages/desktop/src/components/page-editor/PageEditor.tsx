@@ -14,6 +14,7 @@ import { type Frontmatter, FrontmatterHeader, serializeFrontmatter, parseFrontma
 import { usePageSource } from "./hooks/usePageSource";
 import { useBlockCreation } from "./hooks/useBlockCreation";
 import { FloatingToolbar } from "./ui/floating-toolbar";
+import { PageContextPlugin } from "./plugins/page-context-kit";
 
 // ============================================================================
 // Types
@@ -70,6 +71,13 @@ export function PageEditor({
     },
   });
 
+  // Sync page context (title, description) to PageContextPlugin for CopilotPlugin access
+  useEffect(() => {
+    editor.setOption(PageContextPlugin, 'title', frontmatter.title);
+    editor.setOption(PageContextPlugin, 'description', frontmatter.description);
+    editor.setOption(PageContextPlugin, 'pageId', pageId);
+  }, [editor, frontmatter.title, frontmatter.description, pageId]);
+
   // Serialize editor content to markdown source
   const serializeEditor = useCallback(() => {
     try {
@@ -84,20 +92,15 @@ export function PageEditor({
 
   // Handle editor changes - serialize and save (debounced)
   const handleChange = useCallback(({ value }: { value: any }) => {
-    console.log("[PageEditor] handleChange called", { readOnly, isExternal: isExternalUpdateRef.current });
     if (readOnly || isExternalUpdateRef.current) return;
 
     const newSource = serializeEditor();
-    console.log("[PageEditor] serialized", { hasSource: !!newSource, length: newSource?.length });
     if (!newSource) return;
 
     // Only save if actually changed
     if (newSource !== lastSourceRef.current) {
-      console.log("[PageEditor] source changed, calling setSource");
       lastSourceRef.current = newSource;
       setSource(newSource); // usePageSource handles debouncing
-    } else {
-      console.log("[PageEditor] source unchanged, skipping save");
     }
   }, [readOnly, serializeEditor, setSource]);
 

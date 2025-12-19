@@ -196,19 +196,16 @@ export function usePageSource({
 
   const performSave = useCallback(
     async (newSource: string): Promise<boolean> => {
-      console.log("[usePageSource] performSave called", { readOnly, length: newSource.length });
       if (readOnly) return false;
 
       pendingSource.current = newSource;
       setIsSaving(true);
 
       try {
-        console.log("[usePageSource] calling saveSourceMutation", { route: pageId, length: newSource.length });
         await saveSourceMutation.mutateAsync({
           route: pageId,
           source: newSource,
         });
-        console.log("[usePageSource] save successful");
 
         confirmedServerSource.current = newSource;
         lastSaveTime.current = Date.now();
@@ -234,7 +231,6 @@ export function usePageSource({
   const debouncedSave = useMemo(
     () =>
       debounce((newSource: string) => {
-        console.log("[usePageSource] debounce fired, calling performSave");
         performSaveRef.current(newSource);
       }, debounceMs),
     [debounceMs] // Only recreate if debounceMs changes
@@ -253,10 +249,8 @@ export function usePageSource({
 
   const setSource = useCallback(
     (newSource: string) => {
-      console.log("[usePageSource] setSource called", { readOnly, length: newSource.length });
       if (readOnly) return;
 
-      console.log("[usePageSource] queuing debounced save");
       hasPendingEdits.current = true;
       setSourceState(newSource);
       debouncedSave(newSource);

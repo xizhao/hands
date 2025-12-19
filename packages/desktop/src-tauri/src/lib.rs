@@ -485,6 +485,7 @@ async fn force_cleanup_workbook_server() {
 async fn spawn_workbook_server(
     workbook_id: &str,
     directory: &str,
+    env_vars: HashMap<String, String>,
 ) -> Result<(Child, u16), String> {
     // Force cleanup any stale processes before starting
     force_cleanup_workbook_server().await;
@@ -500,6 +501,7 @@ async fn spawn_workbook_server(
             &format!("--workbook-id={}", workbook_id),
             &format!("--workbook-dir={}", directory),
         ])
+        .envs(&env_vars)
         .current_dir(directory)
         .stdout(Stdio::piped())
         .stderr(Stdio::inherit())
@@ -550,7 +552,7 @@ async fn spawn_workbook_server(
 }
 
 /// Start runtime monitoring task that auto-restarts crashed runtimes
-fn start_workbook_server_monitor(state: Arc<Mutex<AppState>>) {
+fn start_workbook_server_monitor(state: Arc<Mutex<AppState>>, app: tauri::AppHandle) {
     const MAX_RESTARTS: u32 = 5;
     const RESTART_DELAY_MS: u64 = 2000;
 
@@ -608,7 +610,8 @@ fn start_workbook_server_monitor(state: Arc<Mutex<AppState>>) {
 
                 println!("[monitor] Restarting runtime for {}...", workbook_id);
 
-                match spawn_workbook_server(&workbook_id, &directory).await {
+                let env_vars = get_api_keys_from_store(&app);
+                match spawn_workbook_server(&workbook_id, &directory, env_vars).await {
                     Ok((child, runtime_port)) => {
                         let mut state_guard = state.lock().await;
                         state_guard.workbook_servers.insert(workbook_id.clone(), WorkbookServerProcess {
@@ -634,6 +637,7 @@ fn start_workbook_server_monitor(state: Arc<Mutex<AppState>>) {
 /// Start the hands-runtime for a workbook
 #[tauri::command]
 async fn start_workbook_server(
+    app: tauri::AppHandle,
     state: tauri::State<'_, Arc<Mutex<AppState>>>,
     workbook_id: String,
     directory: String,
@@ -669,8 +673,9 @@ async fn start_workbook_server(
     kill_processes_on_port(runtime_port_default);
     tokio::time::sleep(Duration::from_millis(300)).await;
 
+    let env_vars = get_api_keys_from_store(&app);
     let (child, runtime_port) =
-        spawn_workbook_server(&workbook_id, &directory).await?;
+        spawn_workbook_server(&workbook_id, &directory, env_vars).await?;
 
     // Re-acquire lock and store
     let mut state_guard = state.lock().await;
@@ -951,11 +956,27 @@ async fn check_server_health(port: u16) -> Result<HealthCheck, String> {
 fn get_api_keys_from_store(app: &tauri::AppHandle) -> HashMap<String, String> {
     let mut env_vars = HashMap::new();
 
+    // First, try to read from .env.local in the desktop package (dev mode)
+    let env_local_path = format!("{}/../.env.local", env!("CARGO_MANIFEST_DIR"));
+    if let Ok(contents) = std::fs::read_to_string(&env_local_path) {
+        for line in contents.lines() {
+            if let Some((key, value)) = line.split_once('=') {
+                let key = key.trim();
+                let value = value.trim();
+                if !key.is_empty() && !value.is_empty() && !key.starts_with('#') {
+                    env_vars.insert(key.to_string(), value.to_string());
+                }
+            }
+        }
+    }
+
+    // Then override with store values (settings UI takes precedence)
     if let Ok(store) = app.store("settings.json") {
         let keys = [
             ("anthropic_api_key", "ANTHROPIC_API_KEY"),
             ("openai_api_key", "OPENAI_API_KEY"),
             ("google_api_key", "GOOGLE_GENERATIVE_AI_API_KEY"),
+            ("hands_ai_api_key", "HANDS_AI_API_KEY"),
         ];
 
         for (store_key, env_key) in keys {
@@ -1426,7 +1447,7 @@ pub fn run() {
             app.manage(state.clone());
 
             // Start runtime monitor for auto-restart
-            start_workbook_server_monitor(state.clone());
+            start_workbook_server_monitor(state.clone(), app.handle().clone());
 
             // Build the application menu
             let app_handle = app.handle();

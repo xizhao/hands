@@ -1,43 +1,14 @@
 'use client';
 
 import { CopilotPlugin } from '@platejs/ai/react';
-import { useElement, usePluginOption } from 'platejs/react';
-import * as React from 'react';
-import ReactMarkdown, { type Components } from 'react-markdown';
+import { MarkdownPlugin } from '@platejs/markdown';
+import { type TElement } from 'platejs';
+import { createPlateEditor, useElement, usePluginOption, usePlateEditor } from 'platejs/react';
+import { PlateStatic } from 'platejs/static';
+import { useMemo } from 'react';
 
+import { EditorKit } from '../editor-kit';
 import { HoverCard, HoverCardContent, HoverCardTrigger } from './hover-card';
-
-const MarkdownComponents: Components = {
-  a: ({ children, href }) => (
-    <a
-      className="font-medium underline decoration-primary underline-offset-4"
-      href={href}
-      rel="noopener noreferrer"
-      target="_blank"
-    >
-      {children}
-    </a>
-  ),
-  blockquote: ({ children }) => <span>{children}</span>,
-  code: ({ children }) => (
-    <code className="whitespace-pre-wrap rounded-md bg-muted px-[0.3em] py-[0.2em] font-mono text-sm">
-      {children}
-    </code>
-  ),
-  em: ({ children }) => <em>{children}</em>,
-  h1: ({ children }) => <>{children}</>,
-  h2: ({ children }) => <>{children}</>,
-  h3: ({ children }) => <>{children}</>,
-  h4: ({ children }) => <>{children}</>,
-  h5: ({ children }) => <>{children}</>,
-  h6: ({ children }) => <>{children}</>,
-  li: ({ children }) => <>{children}</>,
-  ol: ({ children }) => <>{children}</>,
-  p: ({ children }) => <>{children}</>,
-  pre: ({ children }) => <>{children}</>,
-  strong: ({ children }) => <strong>{children}</strong>,
-  text: ({ children }) => <span>{children}</span>,
-};
 
 export function GhostText() {
   const element = useElement();
@@ -55,7 +26,59 @@ export function GhostText() {
 
 function GhostTextContent() {
   const suggestionText = usePluginOption(CopilotPlugin, 'suggestionText');
+  const editor = usePlateEditor();
   const hasLeadingSpace = suggestionText?.startsWith(' ');
+
+  // Parse suggestion as Plate nodes using the editor's markdown deserializer
+  const ghostNodes = useMemo(() => {
+    if (!suggestionText) return null;
+
+    try {
+      // Get the markdown API from the editor
+      const markdownApi = editor.getApi(MarkdownPlugin);
+      if (!markdownApi?.markdown?.deserialize) {
+        // Fallback: just render as text
+        return null;
+      }
+
+      // Deserialize the suggestion into Plate nodes
+      const parsed = markdownApi.markdown.deserialize(suggestionText);
+
+      if (!parsed || parsed.length === 0) return null;
+
+      // For inline suggestions (single paragraph), extract just the text content
+      // to render inline with the existing text
+      if (parsed.length === 1 && parsed[0].type === 'p') {
+        return parsed;
+      }
+
+      return parsed;
+    } catch {
+      // Parsing failed - will fall back to text rendering
+      return null;
+    }
+  }, [suggestionText, editor]);
+
+  // Create a static editor for rendering the ghost nodes with full plugin support
+  const ghostContent = useMemo(() => {
+    if (!ghostNodes) {
+      // Fallback: render as plain text
+      return <span>{suggestionText}</span>;
+    }
+
+    // Create editor with same plugins to render custom elements (LiveValue, etc.)
+    const staticEditor = createPlateEditor({
+      plugins: EditorKit,
+      value: ghostNodes as TElement[],
+    });
+
+    return (
+      <PlateStatic
+        editor={staticEditor}
+        className="inline [&_*]:!text-muted-foreground [&_*]:!opacity-70"
+      />
+    );
+  }, [ghostNodes, suggestionText]);
 
   return (
     <HoverCard>
@@ -70,12 +93,7 @@ function GhostTextContent() {
           contentEditable={false}
         >
           {hasLeadingSpace && <span> </span>}
-
-          {suggestionText && (
-            <ReactMarkdown components={MarkdownComponents}>
-              {suggestionText}
-            </ReactMarkdown>
-          )}
+          {ghostContent}
         </span>
       </HoverCardTrigger>
 

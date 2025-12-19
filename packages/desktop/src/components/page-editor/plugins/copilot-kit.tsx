@@ -1,55 +1,98 @@
 'use client';
 
 import { CopilotPlugin } from '@platejs/ai/react';
-import { serializeMd, stripMarkdown } from '@platejs/markdown';
+import { serializeMd } from '@platejs/markdown';
 import type { TElement } from 'platejs';
+
+import { PORTS } from '@/lib/ports';
 
 import { GhostText } from '../ui/ghost-text';
 
 import { MarkdownKit } from './markdown-kit';
+import { PageContextPlugin } from './page-context-kit';
 
 export const CopilotKit = [
   ...MarkdownKit,
   CopilotPlugin.configure(({ api }) => ({
     options: {
+      autoTrigger: true, // Enable auto-suggestions as you type
+      autoTriggerQuery: ({ editor }) => {
+        // Only trigger if there's some text to complete
+        const text = editor.api.string([]);
+        return text.length > 3; // At least 3 chars before triggering
+      },
       completeOptions: {
-        api: '/api/ai/copilot',
-        body: {
-          system: `You are an advanced AI writing assistant, similar to VSCode Copilot but for general text. Your task is to predict and generate the next part of the text based on the given context.
-  
-  Rules:
-  - Continue the text naturally up to the next punctuation mark (., ,, ;, :, ?, or !).
-  - Maintain style and tone. Don't repeat given text.
-  - For unclear context, provide the most likely continuation.
-  - Handle code snippets, lists, or structured text if needed.
-  - Don't include """ in your response.
-  - CRITICAL: Always end with a punctuation mark.
-  - CRITICAL: Avoid starting a new block. Do not use block formatting like >, #, 1., 2., -, etc. The suggestion should continue in the same block as the context.
-  - If no context is provided or you can't generate a continuation, return "0" without explanation.`,
+        api: `http://localhost:${PORTS.RUNTIME}/api/ai/copilot`,
+        // Custom fetch with 5s timeout to allow for LLM latency
+        fetch: (async (input: RequestInfo | URL, init?: RequestInit) => {
+          const controller = new AbortController();
+          const timeout = setTimeout(() => controller.abort(), 5000);
+          try {
+            return await fetch(input, {
+              ...init,
+              signal: controller.signal,
+            });
+          } finally {
+            clearTimeout(timeout);
+          }
+        }) as typeof fetch,
+        onError: (err) => {
+          console.error('[Copilot] API error:', err);
         },
         onFinish: (_, completion) => {
-          if (completion === '0') return;
+          // Skip empty/null completions
+          if (!completion || completion === '0' || completion.trim() === '') {
+            return;
+          }
+
+          // Clean up the completion - remove any markdown code block wrappers
+          let cleaned = completion;
+          if (cleaned.startsWith('```') && cleaned.includes('\n')) {
+            const lines = cleaned.split('\n');
+            lines.shift(); // Remove opening ```
+            if (lines[lines.length - 1]?.trim() === '```') {
+              lines.pop(); // Remove closing ```
+            }
+            cleaned = lines.join('\n');
+          }
 
           api.copilot.setBlockSuggestion({
-            text: stripMarkdown(completion),
+            text: cleaned,
           });
         },
       },
-      debounceDelay: 500,
+      debounceDelay: 150, // Fast - Plate auto-cancels in-flight requests
       renderGhostText: GhostText,
       getPrompt: ({ editor }) => {
+        // Get page context (title, description) from PageContextPlugin
+        const title = editor.getOption(PageContextPlugin, 'title');
+        const description = editor.getOption(PageContextPlugin, 'description');
+
+        // Get the full document as markdown for context
+        const fullDoc = serializeMd(editor, { value: editor.children as TElement[] });
+
+        // Get current block for more focused context
         const contextEntry = editor.api.block({ highest: true });
+        if (!contextEntry) {
+          return '';
+        }
 
-        if (!contextEntry) return '';
-
-        const prompt = serializeMd(editor, {
+        const currentBlock = serializeMd(editor, {
           value: [contextEntry[0] as TElement],
         });
 
-        return `Continue the text up to the next punctuation mark:
-  """
-  ${prompt}
-  """`;
+        // Find where current block starts in full doc to split prefix/suffix
+        const blockIndex = fullDoc.indexOf(currentBlock);
+        const prefix = blockIndex >= 0
+          ? fullDoc.slice(0, blockIndex) + currentBlock
+          : currentBlock;
+        const suffix = blockIndex >= 0
+          ? fullDoc.slice(blockIndex + currentBlock.length)
+          : '';
+
+        // Return as JSON that the API will parse
+        // The CopilotPlugin sends this as the 'prompt' field
+        return JSON.stringify({ prefix, suffix, title, description });
       },
     },
     shortcuts: {

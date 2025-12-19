@@ -14,23 +14,33 @@
  *   4. Progressive readiness - manifest first, then DB, then RSC
  */
 
-import { type ChildProcess, spawn } from "node:child_process";
-import { existsSync, type FSWatcher, readdirSync, readFileSync, rmSync, watch, writeFileSync } from "node:fs";
-import { join } from "node:path";
+import { gateway } from "@ai-sdk/gateway";
 import type { SourceDefinitionV2 } from "@hands/stdlib/sources";
+import { generateText } from "ai";
 import { Hono } from "hono";
 import { cors } from "hono/cors";
+import { type ChildProcess, spawn } from "node:child_process";
 import {
-  discoverActions,
-  startScheduler,
-  stopScheduler,
-} from "./actions/index.js";
+  existsSync,
+  type FSWatcher,
+  readdirSync,
+  readFileSync,
+  rmSync,
+  watch,
+} from "node:fs";
+import { join } from "node:path";
+import { discoverActions, stopScheduler } from "./actions/index.js";
 import { getRuntimeSourcePath } from "./config/index.js";
+import {
+  createPageRegistry,
+  PageRegistry,
+  type PageRenderContext,
+  renderPage,
+} from "./pages/index.js";
 import { PORTS, waitForPortFree } from "./ports.js";
 import { registerSourceRoutes } from "./sources/index.js";
-import { registerTRPCRoutes } from "./trpc/index.js";
 import { getDbSubscriptionManager } from "./sqlite/trpc.js";
-import { PageRegistry, createPageRegistry, renderPage, type PageRenderContext } from "./pages/index.js";
+import { registerTRPCRoutes } from "./trpc/index.js";
 
 interface RuntimeConfig {
   workbookId: string;
@@ -64,7 +74,10 @@ const state: RuntimeState = {
  * Format a block source file with Biome + TypeScript import organization
  * Runs silently - errors are logged but don't fail the operation
  */
-async function formatBlockSource(filePath: string, workbookDir: string): Promise<boolean> {
+async function formatBlockSource(
+  filePath: string,
+  workbookDir: string
+): Promise<boolean> {
   try {
     const blocksDir = join(workbookDir, "blocks");
 
@@ -89,7 +102,13 @@ async function formatBlockSource(filePath: string, workbookDir: string): Promise
     // Step 2: Biome format + lint fixes
     const { spawnSync } = await import("node:child_process");
     const biomePath = join(workbookDir, "node_modules", ".bin", "biome");
-    const globalBiomePath = join(import.meta.dirname, "..", "node_modules", ".bin", "biome");
+    const globalBiomePath = join(
+      import.meta.dirname,
+      "..",
+      "node_modules",
+      ".bin",
+      "biome"
+    );
     const biomeCmd = existsSync(biomePath) ? biomePath : globalBiomePath;
 
     // Ensure biome config exists
@@ -104,11 +123,13 @@ async function formatBlockSource(filePath: string, workbookDir: string): Promise
             organizeImports: { enabled: true },
             linter: { enabled: true },
             formatter: { enabled: true, indentStyle: "space", indentWidth: 2 },
-            javascript: { formatter: { semicolons: "asNeeded", quoteStyle: "single" } },
+            javascript: {
+              formatter: { semicolons: "asNeeded", quoteStyle: "single" },
+            },
           },
           null,
-          2,
-        ),
+          2
+        )
       );
     }
 
@@ -133,7 +154,7 @@ function parseArgs(): RuntimeConfig {
 
   if (!args.workbook_id || !args.workbook_dir) {
     console.error(
-      "Usage: hands-runtime --workbook-id=<id> --workbook-dir=<dir> [--port=<port>]",
+      "Usage: hands-runtime --workbook-id=<id> --workbook-dir=<dir> [--port=<port>]"
     );
     process.exit(1);
   }
@@ -178,7 +199,10 @@ async function getManifest(workbookDir: string, workbookId: string) {
   if (existsSync(blocksDir)) {
     walkDirectory(blocksDir, blocksDir, (filePath, relativePath) => {
       const filename = filePath.split("/").pop() || "";
-      if ((filename.endsWith(".tsx") || filename.endsWith(".ts")) && !filename.startsWith("_")) {
+      if (
+        (filename.endsWith(".tsx") || filename.endsWith(".ts")) &&
+        !filename.startsWith("_")
+      ) {
         // ID is relative path without extension (e.g., "ui/email-events")
         const id = relativePath.replace(/\.tsx?$/, "");
         // parentDir is the directory portion (e.g., "ui" or "" for root)
@@ -285,7 +309,8 @@ async function getManifest(workbookDir: string, workbookId: string) {
     sources,
     actions,
     config,
-    isEmpty: blocks.length === 0 && sources.length === 0 && actions.length === 0,
+    isEmpty:
+      blocks.length === 0 && sources.length === 0 && actions.length === 0,
   };
 }
 
@@ -295,7 +320,7 @@ async function getManifest(workbookDir: string, workbookId: string) {
 function walkDirectory(
   dir: string,
   baseDir: string,
-  callback: (filePath: string, relativePath: string) => void,
+  callback: (filePath: string, relativePath: string) => void
 ) {
   const entries = readdirSync(dir, { withFileTypes: true });
   for (const entry of entries) {
@@ -315,7 +340,7 @@ function walkDirectory(
 function extractBlockTitle(content: string): string | null {
   // Look for: export const meta = { title: "..." }
   const metaMatch = content.match(
-    /export\s+const\s+meta\s*=\s*{[\s\S]*?title\s*:\s*["']([^"']+)["']/,
+    /export\s+const\s+meta\s*=\s*{[\s\S]*?title\s*:\s*["']([^"']+)["']/
   );
   if (metaMatch) return metaMatch[1];
   return null;
@@ -364,7 +389,10 @@ function getBlockIds(blocksDir: string): Set<string> {
 
   walkDirectory(blocksDir, blocksDir, (filePath, relativePath) => {
     const filename = filePath.split("/").pop() || "";
-    if ((filename.endsWith(".tsx") || filename.endsWith(".ts")) && !filename.startsWith("_")) {
+    if (
+      (filename.endsWith(".tsx") || filename.endsWith(".ts")) &&
+      !filename.startsWith("_")
+    ) {
       // ID is relative path without extension (e.g., "ui/email-events")
       const id = relativePath.replace(/\.tsx?$/, "");
       blockIds.add(id);
@@ -404,7 +432,6 @@ async function hotReloadBlocks(_config: RuntimeConfig) {
     try {
       // Runtime package uses import.meta.glob for dynamic discovery
       // Vite's file watcher handles HMR automatically
-      console.log("[runtime] Block files changed - Vite will handle HMR");
     } finally {
       blockReloadPending = false;
       blockReloadTimer = null;
@@ -425,40 +452,53 @@ function startFileWatcher(config: RuntimeConfig) {
 
   // Initialize known block IDs
   knownBlockIds = getBlockIds(blocksDir);
-  console.log(`[runtime] Initial blocks: ${[...knownBlockIds].join(", ") || "(none)"}`);
+  console.log(
+    `[runtime] Initial blocks: ${[...knownBlockIds].join(", ") || "(none)"}`
+  );
 
   // Watch blocks directory
   if (existsSync(blocksDir)) {
     try {
-      const watcher = watch(blocksDir, { recursive: true }, async (_event, filename) => {
-        if (filename && (filename.endsWith(".ts") || filename.endsWith(".tsx"))) {
-          // Skip .types.ts files to avoid infinite loops
-          if (filename.endsWith(".types.ts")) return;
+      const watcher = watch(
+        blocksDir,
+        { recursive: true },
+        async (_event, filename) => {
+          if (
+            filename &&
+            (filename.endsWith(".ts") || filename.endsWith(".tsx"))
+          ) {
+            // Skip .types.ts files to avoid infinite loops
+            if (filename.endsWith(".types.ts")) return;
 
-          console.log(`[runtime] Block file event: ${filename}`);
+            // Check if block list changed (add/remove)
+            const currentBlockIds = getBlockIds(blocksDir);
+            const added = [...currentBlockIds].filter(
+              (id) => !knownBlockIds.has(id)
+            );
+            const removed = [...knownBlockIds].filter(
+              (id) => !currentBlockIds.has(id)
+            );
 
-          // Check if block list changed (add/remove)
-          const currentBlockIds = getBlockIds(blocksDir);
-          const added = [...currentBlockIds].filter((id) => !knownBlockIds.has(id));
-          const removed = [...knownBlockIds].filter((id) => !currentBlockIds.has(id));
+            if (added.length > 0 || removed.length > 0) {
+              if (added.length > 0)
+                console.log(`[runtime] Blocks added: ${added.join(", ")}`);
+              if (removed.length > 0)
+                console.log(`[runtime] Blocks removed: ${removed.join(", ")}`);
 
-          if (added.length > 0 || removed.length > 0) {
-            if (added.length > 0) console.log(`[runtime] Blocks added: ${added.join(", ")}`);
-            if (removed.length > 0) console.log(`[runtime] Blocks removed: ${removed.join(", ")}`);
+              // Update known blocks
+              knownBlockIds = currentBlockIds;
 
-            // Update known blocks
-            knownBlockIds = currentBlockIds;
-
-            // Hot-reload blocks via HMR (or fallback to restart)
-            await hotReloadBlocks(config);
-          } else {
-            // Just a file edit - Vite handles HMR automatically
-            console.log(`[runtime] Block file edited: ${filename}`);
+              // Hot-reload blocks via HMR (or fallback to restart)
+              await hotReloadBlocks(config);
+            }
+            // File edits are handled by Vite HMR automatically
           }
         }
-      });
+      );
       state.fileWatchers.push(watcher);
-      console.log("[runtime] Watching blocks/ for changes (restarts Vite on add/remove)");
+      console.log(
+        "[runtime] Watching blocks/ for changes (restarts Vite on add/remove)"
+      );
     } catch (err) {
       console.warn("[runtime] Could not watch blocks/:", err);
     }
@@ -468,21 +508,27 @@ function startFileWatcher(config: RuntimeConfig) {
   const pagesDir = join(workbookDir, "pages");
   if (existsSync(pagesDir)) {
     try {
-      const pagesWatcher = watch(pagesDir, { recursive: true }, async (_event, filename) => {
-        if (filename && (filename.endsWith(".md") || filename.endsWith(".mdx") || filename.endsWith(".plate.json"))) {
-          console.log(`[runtime] Page file event: ${filename}`);
-
-          // Reload page registry to pick up changes
-          if (state.pageRegistry) {
-            try {
-              await state.pageRegistry.load();
-              console.log("[runtime] Page registry reloaded");
-            } catch (err) {
-              console.warn("[runtime] Failed to reload page registry:", err);
+      const pagesWatcher = watch(
+        pagesDir,
+        { recursive: true },
+        async (_event, filename) => {
+          if (
+            filename &&
+            (filename.endsWith(".md") ||
+              filename.endsWith(".mdx") ||
+              filename.endsWith(".plate.json"))
+          ) {
+            // Reload page registry to pick up changes
+            if (state.pageRegistry) {
+              try {
+                await state.pageRegistry.load();
+              } catch (err) {
+                console.warn("[runtime] Failed to reload page registry:", err);
+              }
             }
           }
         }
-      });
+      );
       state.fileWatchers.push(pagesWatcher);
       console.log("[runtime] Watching pages/ for changes");
     } catch (err) {
@@ -507,7 +553,10 @@ function createApp(config: RuntimeConfig) {
   // Render a page (server-side)
   app.get("/pages/:path{.+}", async (c) => {
     if (!state.pageRegistry) {
-      return c.html("<html><body><h1>Page registry not initialized</h1></body></html>", 503);
+      return c.html(
+        "<html><body><h1>Page registry not initialized</h1></body></html>",
+        503
+      );
     }
 
     const pagePath = c.req.param("path");
@@ -539,8 +588,10 @@ function createApp(config: RuntimeConfig) {
     } catch (err) {
       console.error("[runtime] Page render failed:", err);
       return c.html(
-        `<html><body><h1>Render Error</h1><pre>${err instanceof Error ? err.message : String(err)}</pre></body></html>`,
-        500,
+        `<html><body><h1>Render Error</h1><pre>${
+          err instanceof Error ? err.message : String(err)
+        }</pre></body></html>`,
+        500
       );
     }
   });
@@ -574,7 +625,7 @@ function createApp(config: RuntimeConfig) {
       headers: {
         "Content-Type": "text/event-stream",
         "Cache-Control": "no-cache",
-        "Connection": "keep-alive",
+        Connection: "keep-alive",
         "Access-Control-Allow-Origin": "*",
       },
     });
@@ -604,7 +655,10 @@ function createApp(config: RuntimeConfig) {
       const allowedTypes = ["image/", "video/", "audio/"];
       const isMedia = allowedTypes.some((type) => file.type.startsWith(type));
       if (!isMedia) {
-        return c.json({ error: "Only image, video, and audio files are allowed" }, 400);
+        return c.json(
+          { error: "Only image, video, and audio files are allowed" },
+          400
+        );
       }
 
       // Create public directory if it doesn't exist
@@ -630,7 +684,9 @@ function createApp(config: RuntimeConfig) {
       const { writeFileSync } = await import("node:fs");
       writeFileSync(filePath, Buffer.from(buffer));
 
-      console.log(`[runtime] Uploaded media: ${filename} (${file.type}, ${file.size} bytes)`);
+      console.log(
+        `[runtime] Uploaded media: ${filename} (${file.type}, ${file.size} bytes)`
+      );
 
       // Return URL relative to public/
       return c.json({
@@ -689,6 +745,148 @@ function createApp(config: RuntimeConfig) {
   });
 
   // ============================================
+  // AI Copilot Route (FIM completion for editor)
+  // ============================================
+  app.post("/api/ai/copilot", async (c) => {
+    try {
+      const body = await c.req.json();
+      let { prompt } = body;
+      let prefix = body.prefix;
+      let suffix = body.suffix;
+
+      // CopilotPlugin sends getPrompt result as 'prompt' - parse if JSON
+      let title: string | undefined;
+      let description: string | undefined;
+      if (prompt && prefix === undefined) {
+        try {
+          const parsed = JSON.parse(prompt);
+          if (parsed.prefix !== undefined) {
+            prefix = parsed.prefix;
+            suffix = parsed.suffix ?? "";
+            title = parsed.title;
+            description = parsed.description;
+            prompt = null; // Use FIM mode
+          }
+        } catch {
+          // Not JSON, use as regular prompt
+        }
+      }
+
+      const apiKey = process.env.HANDS_AI_API_KEY;
+      if (!apiKey) {
+        console.error("[copilot] HANDS_AI_API_KEY not set");
+        return c.json({ error: "HANDS_AI_API_KEY not set" }, 500);
+      }
+      // Gateway SDK uses AI_GATEWAY_API_KEY
+      process.env.AI_GATEWAY_API_KEY = apiKey;
+
+      // Fetch current schema for context
+      const runtimeUrl =
+        state.rscReady && state.rscPort
+          ? `http://localhost:${state.rscPort}`
+          : null;
+
+      let schema: Array<{
+        table_name: string;
+        columns: Array<{ name: string; type: string; nullable: boolean }>;
+      }> = [];
+      if (runtimeUrl) {
+        try {
+          const schemaRes = await fetch(`${runtimeUrl}/db/schema`);
+          if (schemaRes.ok) {
+            schema = await schemaRes.json();
+          }
+        } catch {
+          // Schema fetch failed - proceed without it
+        }
+      }
+
+      // STATIC system prompt (cacheable - put all static content here)
+      const systemPrompt = `You are a precision MDX autocompletion engine for a data dashboard.
+
+## Output Rules
+- Output ONLY the completion text, nothing else.
+- NEVER wrap in markdown code blocks.
+- NEVER explain or add filler.
+- CRITICAL: If you start an MDX tag like <LiveValue or <LiveQuery, you MUST complete the ENTIRE tag including the closing />. Never leave tags incomplete.
+- Match the style and tone of the existing content.
+
+## MDX Components
+
+### LiveValue (inline) - for single values in text
+<LiveValue query="SELECT COUNT(*) FROM users" />
+
+### LiveQuery (block) - for tables/lists
+<LiveQuery query="SELECT * FROM table" columns="auto" />
+
+## Rules
+- Use LiveValue for counts, totals, single metrics inline.
+- Use LiveQuery with columns="auto" for tables.
+- SQL must be valid for the provided schema.
+- Return "0" if no sensible completion.`;
+
+      // DYNAMIC user prompt (schema + context - structured for partial caching)
+      // Schema first (changes rarely), then prefix/suffix (changes often)
+      const schemaContext =
+        schema.length > 0
+          ? schema
+              .map(
+                (t) =>
+                  `${t.table_name}(${t.columns.map((c) => c.name).join(", ")})`
+              )
+              .join("\n")
+          : "No tables yet";
+
+      // Build page context section if available
+      const pageContext =
+        title || description
+          ? `## Page\nTitle: ${title || "Untitled"}\n${
+              description ? `Description: ${description}\n` : ""
+            }`
+          : "";
+
+      const userPrompt =
+        prefix !== undefined
+          ? `## Schema
+${schemaContext}
+
+${pageContext}## Complete this (fill in <middle>):
+<prefix>
+${prefix.slice(-300)}
+</prefix>
+<suffix>
+${(suffix || "").slice(0, 100)}
+</suffix>
+<middle>`
+          : prompt;
+
+      if (!userPrompt) {
+        return c.json({ error: "Missing prompt or prefix" }, 400);
+      }
+
+      console.log(`[copilot] API key ends with: ...${apiKey.slice(-6)}`);
+
+      const start = performance.now();
+      const result = await generateText({
+        model: gateway("google/gemini-2.5-flash-lite"),
+        system: systemPrompt,
+        prompt: userPrompt,
+        maxOutputTokens: 400,
+        temperature: 0,
+        abortSignal: AbortSignal.timeout(10000), // 10s timeout
+      });
+      const latency = performance.now() - start;
+      console.log(`[copilot] Latency: ${latency.toFixed(0)}ms`);
+
+      // Return JSON with `text` field (required by @platejs/ai CopilotPlugin)
+      return c.json({ text: result.text || "" });
+    } catch (err) {
+      console.error("[copilot] Error:", err);
+      return c.json({ error: String(err) }, 500);
+    }
+  });
+
+  // ============================================
   // Source Management Routes
   // ============================================
   registerSourceRoutes(app, {
@@ -715,7 +913,10 @@ function createApp(config: RuntimeConfig) {
     workbookId: config.workbookId,
     workbookDir: config.workbookDir,
     // SQLite database lives in the runtime - provide runtime URL
-    getRuntimeUrl: () => (state.rscReady && state.rscPort ? `http://localhost:${state.rscPort}` : null),
+    getRuntimeUrl: () =>
+      state.rscReady && state.rscPort
+        ? `http://localhost:${state.rscPort}`
+        : null,
     isDbReady: () => state.rscReady,
     getState: () => ({
       rscReady: state.rscReady,
@@ -732,11 +933,14 @@ function createApp(config: RuntimeConfig) {
         config: manifest.config,
       };
     },
-    formatBlockSource: (filePath: string) => formatBlockSource(filePath, config.workbookDir),
+    formatBlockSource: (filePath: string) =>
+      formatBlockSource(filePath, config.workbookDir),
     generateDefaultBlockSource,
     onSchemaChange: async () => {
       // Schema regeneration is handled by the runtime
-      console.log("[runtime] Schema changed - runtime will handle regeneration");
+      console.log(
+        "[runtime] Schema changed - runtime will handle regeneration"
+      );
     },
     getPageRegistry: () => state.pageRegistry,
     createPageRegistry: (pagesDir: string) => {
@@ -773,7 +977,9 @@ function createApp(config: RuntimeConfig) {
       });
 
       if (!response.ok) {
-        console.error(`[runtime] Failed to fetch client module: ${viteUrl} -> ${response.status}`);
+        console.error(
+          `[runtime] Failed to fetch client module: ${viteUrl} -> ${response.status}`
+        );
         return c.json({ error: `Module not found: ${modulePath}` }, 404);
       }
 
@@ -787,16 +993,25 @@ function createApp(config: RuntimeConfig) {
       // Rewrite Vite's special paths to go through our proxy
       // /@vite/client, /@react-refresh, /node_modules/.vite/deps/*, etc.
       // Include query strings like ?v=xxx
-      content = content.replace(/from\s+["'](\/[^"']+)["']/g, (_match, path) => {
-        return `from "${runtimeOrigin}/vite-proxy${path}"`;
-      });
-      content = content.replace(/import\s+["'](\/[^"']+)["']/g, (_match, path) => {
-        return `import "${runtimeOrigin}/vite-proxy${path}"`;
-      });
+      content = content.replace(
+        /from\s+["'](\/[^"']+)["']/g,
+        (_match, path) => {
+          return `from "${runtimeOrigin}/vite-proxy${path}"`;
+        }
+      );
+      content = content.replace(
+        /import\s+["'](\/[^"']+)["']/g,
+        (_match, path) => {
+          return `import "${runtimeOrigin}/vite-proxy${path}"`;
+        }
+      );
       // Also handle import() calls
-      content = content.replace(/import\(["'](\/[^"']+)["']\)/g, (_match, path) => {
-        return `import("${runtimeOrigin}/vite-proxy${path}")`;
-      });
+      content = content.replace(
+        /import\(["'](\/[^"']+)["']\)/g,
+        (_match, path) => {
+          return `import("${runtimeOrigin}/vite-proxy${path}")`;
+        }
+      );
 
       // Return transformed JavaScript module
       const headers = new Headers();
@@ -904,7 +1119,9 @@ export const Fragment = JSX.Fragment;
     };
 
     // Check if this is a React dep request
-    const depMatch = vitePath.match(/\/node_modules\/\.vite\/deps\/(react[^?]*)/);
+    const depMatch = vitePath.match(
+      /\/node_modules\/\.vite\/deps\/(react[^?]*)/
+    );
     if (depMatch) {
       const depName = depMatch[1];
       const shim = reactShims[depName];
@@ -928,7 +1145,9 @@ export const Fragment = JSX.Fragment;
       });
 
       if (!response.ok) {
-        console.error(`[runtime] Failed to fetch vite dep: ${viteUrl} -> ${response.status}`);
+        console.error(
+          `[runtime] Failed to fetch vite dep: ${viteUrl} -> ${response.status}`
+        );
         return c.json({ error: `Vite dependency not found: ${vitePath}` }, 404);
       }
 
@@ -942,11 +1161,15 @@ export const Fragment = JSX.Fragment;
           content.includes("node_modules/react/cjs/react.development.js") ||
           content.includes("node_modules/react/cjs/react.production");
         const isReactDOMChunk =
-          content.includes("node_modules/react-dom/cjs/react-dom.development.js") ||
+          content.includes(
+            "node_modules/react-dom/cjs/react-dom.development.js"
+          ) ||
           content.includes("node_modules/react-dom/cjs/react-dom.production");
 
         if (isReactChunk) {
-          console.debug(`[runtime] Detected React chunk, replacing with shim: ${vitePath}`);
+          console.debug(
+            `[runtime] Detected React chunk, replacing with shim: ${vitePath}`
+          );
           const shimContent = `
 // Shim: React chunk -> window.__HANDS_REACT__
 const R = window.__HANDS_REACT__?.React;
@@ -1001,7 +1224,9 @@ export const __SECRET_INTERNALS_DO_NOT_USE_OR_YOU_WILL_BE_FIRED = R.__SECRET_INT
         }
 
         if (isReactDOMChunk) {
-          console.debug(`[runtime] Detected ReactDOM chunk, replacing with shim: ${vitePath}`);
+          console.debug(
+            `[runtime] Detected ReactDOM chunk, replacing with shim: ${vitePath}`
+          );
           const shimContent = `
 // Shim: ReactDOM chunk -> window.__HANDS_REACT__
 const R = window.__HANDS_REACT__?.React;
@@ -1033,15 +1258,24 @@ export const __SECRET_INTERNALS_DO_NOT_USE_OR_YOU_WILL_BE_FIRED = RD.__SECRET_IN
 
       // Rewrite any nested imports in Vite deps to go through our proxy
       const runtimeOrigin = `http://localhost:${config.port}`;
-      content = content.replace(/from\s+["'](\/[^"']+)["']/g, (_match, path) => {
-        return `from "${runtimeOrigin}/vite-proxy${path}"`;
-      });
-      content = content.replace(/import\s+["'](\/[^"']+)["']/g, (_match, path) => {
-        return `import "${runtimeOrigin}/vite-proxy${path}"`;
-      });
-      content = content.replace(/import\(["'](\/[^"']+)["']\)/g, (_match, path) => {
-        return `import("${runtimeOrigin}/vite-proxy${path}")`;
-      });
+      content = content.replace(
+        /from\s+["'](\/[^"']+)["']/g,
+        (_match, path) => {
+          return `from "${runtimeOrigin}/vite-proxy${path}"`;
+        }
+      );
+      content = content.replace(
+        /import\s+["'](\/[^"']+)["']/g,
+        (_match, path) => {
+          return `import "${runtimeOrigin}/vite-proxy${path}"`;
+        }
+      );
+      content = content.replace(
+        /import\(["'](\/[^"']+)["']\)/g,
+        (_match, path) => {
+          return `import("${runtimeOrigin}/vite-proxy${path}")`;
+        }
+      );
 
       const headers = new Headers();
       headers.set("Content-Type", "application/javascript; charset=utf-8");
@@ -1064,13 +1298,21 @@ export const __SECRET_INTERNALS_DO_NOT_USE_OR_YOU_WILL_BE_FIRED = RD.__SECRET_IN
     }
 
     try {
-      const response = await fetch(`http://localhost:${state.rscPort}/__hands__`, {
-        signal: AbortSignal.timeout(2000),
-      });
+      const response = await fetch(
+        `http://localhost:${state.rscPort}/__hands__`,
+        {
+          signal: AbortSignal.timeout(2000),
+        }
+      );
       const data = await response.json();
       return c.json(data);
     } catch {
-      return c.json({ publicUrl: null, localUrl: "", status: "error", error: "Failed to fetch tunnel status" });
+      return c.json({
+        publicUrl: null,
+        localUrl: "",
+        status: "error",
+        error: "Failed to fetch tunnel status",
+      });
     }
   });
 
@@ -1257,7 +1499,9 @@ async function bootRuntime(config: RuntimeConfig) {
   console.log(`[runtime] Using runtime at: ${runtimePath}`);
 
   if (!existsSync(join(runtimePath, "vite.config.mts"))) {
-    console.error(`[runtime] vite.config.mts not found in runtime package at ${runtimePath}`);
+    console.error(
+      `[runtime] vite.config.mts not found in runtime package at ${runtimePath}`
+    );
     state.rscError = "Runtime package vite.config.mts not found";
     return;
   }
@@ -1282,7 +1526,7 @@ async function bootRuntime(config: RuntimeConfig) {
           ...process.env,
           HANDS_WORKBOOK_PATH: workbookDir,
         },
-      },
+      }
     );
 
     // Forward runtime output with [worker] prefix for visibility
@@ -1296,7 +1540,10 @@ async function bootRuntime(config: RuntimeConfig) {
     };
     const prefixLines = (data: Buffer, prefix: string) => {
       const str = data.toString();
-      return str.split('\n').map(line => line ? `${prefix} ${line}` : '').join('\n');
+      return str
+        .split("\n")
+        .map((line) => (line ? `${prefix} ${line}` : ""))
+        .join("\n");
     };
     state.rscProc.stdout?.on("data", (data) => {
       captureOutput(data);
@@ -1316,9 +1563,13 @@ async function bootRuntime(config: RuntimeConfig) {
     // Monitor for crashes and auto-restart
     state.rscProc.on("exit", (code, signal) => {
       const wasReady = state.rscReady;
-      console.error(`[runtime] RSC runtime exited (code=${code}, signal=${signal}, wasReady=${wasReady})`);
+      console.error(
+        `[runtime] RSC runtime exited (code=${code}, signal=${signal}, wasReady=${wasReady})`
+      );
       state.rscReady = false;
-      state.rscError = extractViteError(outputBuffer) || `RSC runtime exited with code ${code}`;
+      state.rscError =
+        extractViteError(outputBuffer) ||
+        `RSC runtime exited with code ${code}`;
       state.rscProc = null;
 
       // Clear cache on crash
@@ -1362,7 +1613,9 @@ async function bootRuntime(config: RuntimeConfig) {
         if (response.status >= 400) {
           try {
             const text = await response.text();
-            const moduleMatch = text.match(/Cannot find module ['"]([^'"]+)['"]/);
+            const moduleMatch = text.match(
+              /Cannot find module ['"]([^'"]+)['"]/
+            );
             if (moduleMatch) {
               state.rscError = `Cannot find module '${moduleMatch[1]}'`;
             }
@@ -1379,7 +1632,8 @@ async function bootRuntime(config: RuntimeConfig) {
     // Timeout
     if (!state.rscError) {
       const extractedError = extractViteError(outputBuffer);
-      state.rscError = extractedError || "RSC runtime failed to start within timeout";
+      state.rscError =
+        extractedError || "RSC runtime failed to start within timeout";
     }
     console.error("[runtime] RSC runtime failed to start within timeout");
     if (outputBuffer) {
@@ -1422,7 +1676,9 @@ async function runCheck() {
   }
 
   // Use preflight system for all checks
-  const { runPreflight, printPreflightResults } = await import("./preflight.js");
+  const { runPreflight, printPreflightResults } = await import(
+    "./preflight.js"
+  );
   const result = await runPreflight({
     workbookDir,
     autoFix,
@@ -1446,8 +1702,8 @@ async function runCheck() {
           })),
         },
         null,
-        2,
-      ),
+        2
+      )
     );
   } else {
     // Human-readable output
@@ -1489,11 +1745,19 @@ async function main() {
         },
       });
 
-      console.log(`[runtime] Server ready on http://localhost:${port}${retried ? " (after retry)" : ""}`);
-      console.log(`[runtime] Manifest available at http://localhost:${port}/workbook/manifest`);
+      console.log(
+        `[runtime] Server ready on http://localhost:${port}${
+          retried ? " (after retry)" : ""
+        }`
+      );
+      console.log(
+        `[runtime] Manifest available at http://localhost:${port}/workbook/manifest`
+      );
     } catch (err: any) {
       if (err?.code === "EADDRINUSE" && !retried) {
-        console.error(`[runtime] Port ${port} in use, attempting to free it...`);
+        console.error(
+          `[runtime] Port ${port} in use, attempting to free it...`
+        );
         const { killProcessOnPort } = await import("./ports.js");
         await killProcessOnPort(port);
         await new Promise((resolve) => setTimeout(resolve, 1000));
@@ -1516,7 +1780,7 @@ async function main() {
     JSON.stringify({
       type: "ready",
       runtimePort: port,
-    }),
+    })
   );
 
   // Boot Vite (block server) - can take a few seconds

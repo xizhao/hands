@@ -19,6 +19,7 @@
     "tauri:build": "bun run build:docs && tauri build"
   },
   "dependencies": {
+    "@ai-sdk/anthropic": "^2.0.56",
     "@ariakit/react": "0.4.7",
     "@craftjs/core": "^0.2.12",
     "@craftjs/layers": "^0.2.7",
@@ -83,6 +84,7 @@
     "@trpc/client": "^11.0.0",
     "@trpc/react-query": "^11.0.0",
     "@udecode/cn": "^52.0.1",
+    "ai": "^5.0.115",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "cmdk": "^1.1.1",

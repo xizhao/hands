@@ -4,7 +4,6 @@
  * Plate Editor Kit
  *
  * Full-featured editor based on Potion template.
- * Note: AI, Comment, and Suggestion features are disabled - they require additional setup.
  */
 
 import { TrailingBlockPlugin, type Value } from "platejs";
@@ -17,13 +16,14 @@ import { BasicMarksKit } from "./plugins/basic-marks-kit";
 import { BlockSelectionKit } from "./plugins/block-selection-kit";
 import { CalloutKit } from "./plugins/callout-kit";
 import { CodeBlockKit } from "./plugins/code-block-kit";
+import { CopilotKit } from "./plugins/copilot-kit";
 import { DndKit } from "./plugins/dnd-kit";
 import { EmojiKit } from "./plugins/emoji-kit";
 import { ExitBreakKit } from "./plugins/exit-break-kit";
 import { FloatingToolbarKit } from "./plugins/floating-toolbar-kit";
 import { FontKit } from "./plugins/font-kit";
 import { ListKit } from "./plugins/list-kit";
-import { MarkdownKit } from "./plugins/markdown-kit";
+import { PageContextPlugin } from "./plugins/page-context-kit";
 import { SlashKit } from "./plugins/slash-kit";
 import { AtKit } from "./plugins/at-kit";
 import { SandboxedBlockPlugin } from "./SandboxedBlock";
@@ -32,6 +32,9 @@ import { ToggleKit } from "./plugins/toggle-kit";
 import { LiveQueryKit } from "./plugins/live-query-kit";
 
 export const EditorKit = [
+  // Page Context (for other plugins to access metadata)
+  PageContextPlugin,
+
   // Elements
   ...BasicBlocksKit,
   ...CodeBlockKit,
@@ -61,8 +64,8 @@ export const EditorKit = [
   ...BlockSelectionKit,
   ...FloatingToolbarKit,
 
-  // Serialization
-  ...MarkdownKit,
+  // AI
+  ...CopilotKit,
 ];
 
 export type MyEditor = TPlateEditor<Value, (typeof EditorKit)[number]>;
