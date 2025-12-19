@@ -497,7 +497,8 @@ export type TemplateKey = keyof typeof TEMPLATES;
 /**
  * Extract table/column reference from SQL query for display
  */
-function extractQueryReference(sql: string): { table?: string; column?: string } {
+function extractQueryReference(sql: string | undefined): { table?: string; column?: string } {
+  if (!sql) return {};
   const fromMatch = sql.match(/FROM\s+["']?(\w+)["']?/i);
   const selectMatch = sql.match(/SELECT\s+([\w,\s*]+)\s+FROM/i);
 

@@ -33,6 +33,8 @@ export const BlockDraggable: RenderNodeWrapper = (props) => {
   const { editor, element, path } = props;
 
   const enabled = React.useMemo(() => {
+    // Guard for static rendering (PlateStatic doesn't provide path)
+    if (!path) return false;
     if (editor.dom.readOnly) return false;
     if (path.length === 1 && !isType(editor, element, UNDRAGGABLE_KEYS)) {
       return true;

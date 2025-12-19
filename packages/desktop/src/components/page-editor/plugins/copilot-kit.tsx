@@ -1,7 +1,7 @@
 'use client';
 
 import { CopilotPlugin } from '@platejs/ai/react';
-import { serializeMd } from '@platejs/markdown';
+import { MarkdownPlugin, serializeMd } from '@platejs/markdown';
 import type { TElement } from 'platejs';
 
 import { PORTS } from '@/lib/ports';
@@ -98,6 +98,40 @@ export const CopilotKit = [
     shortcuts: {
       accept: {
         keys: 'tab',
+        handler: ({ editor }) => {
+          // Get the suggestion text
+          const suggestionText = editor.getOption(CopilotPlugin, 'suggestionText');
+          if (!suggestionText) return;
+
+          // Clear the suggestion first
+          api.copilot.reject();
+
+          // Deserialize the suggestion as MDX/markdown into Plate nodes
+          try {
+            const markdownApi = editor.getApi(MarkdownPlugin);
+            if (markdownApi?.markdown?.deserialize) {
+              const nodes = markdownApi.markdown.deserialize(suggestionText);
+
+              if (nodes && nodes.length > 0) {
+                // For inline completions (single paragraph), extract just the inline content
+                if (nodes.length === 1 && nodes[0].type === 'p') {
+                  // Insert the children (inline nodes) of the paragraph
+                  const inlineNodes = (nodes[0] as TElement).children;
+                  editor.tf.insertNodes(inlineNodes);
+                } else {
+                  // Multi-block: insert all nodes
+                  editor.tf.insertNodes(nodes);
+                }
+                return;
+              }
+            }
+          } catch (err) {
+            console.error('[Copilot] Failed to deserialize suggestion:', err);
+          }
+
+          // Fallback: insert as plain text
+          editor.tf.insertText(suggestionText);
+        },
       },
       acceptNextWord: {
         keys: 'mod+right',

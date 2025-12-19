@@ -1,11 +1,10 @@
 'use client';
 
 import { CopilotPlugin } from '@platejs/ai/react';
-import { MarkdownPlugin } from '@platejs/markdown';
+import { deserializeMd } from '@platejs/markdown';
 import { type TElement } from 'platejs';
-import { createPlateEditor, useElement, usePluginOption, usePlateEditor } from 'platejs/react';
-import { PlateStatic } from 'platejs/static';
-import { useMemo } from 'react';
+import { createPlateEditor, Plate, PlateContent, useElement, usePluginOption } from 'platejs/react';
+import { useMemo, useRef } from 'react';
 
 import { EditorKit } from '../editor-kit';
 import { HoverCard, HoverCardContent, HoverCardTrigger } from './hover-card';
@@ -26,59 +25,42 @@ export function GhostText() {
 
 function GhostTextContent() {
   const suggestionText = usePluginOption(CopilotPlugin, 'suggestionText');
-  const editor = usePlateEditor();
   const hasLeadingSpace = suggestionText?.startsWith(' ');
 
-  // Parse suggestion as Plate nodes using the editor's markdown deserializer
-  const ghostNodes = useMemo(() => {
+  // Cache parser editor in ref - created once per component lifetime
+  const parserRef = useRef<ReturnType<typeof createPlateEditor> | null>(null);
+
+  // Parse markdown and create editor with full plugin support
+  const ghostEditor = useMemo(() => {
     if (!suggestionText) return null;
 
     try {
-      // Get the markdown API from the editor
-      const markdownApi = editor.getApi(MarkdownPlugin);
-      if (!markdownApi?.markdown?.deserialize) {
-        // Fallback: just render as text
-        return null;
+      // Lazy create parser with full EditorKit
+      if (!parserRef.current) {
+        parserRef.current = createPlateEditor({ plugins: EditorKit });
       }
 
-      // Deserialize the suggestion into Plate nodes
-      const parsed = markdownApi.markdown.deserialize(suggestionText);
-
+      const parsed = deserializeMd(parserRef.current, suggestionText);
       if (!parsed || parsed.length === 0) return null;
 
-      // For inline suggestions (single paragraph), extract just the text content
-      // to render inline with the existing text
-      if (parsed.length === 1 && parsed[0].type === 'p') {
-        return parsed;
-      }
-
-      return parsed;
-    } catch {
-      // Parsing failed - will fall back to text rendering
+      // Create display editor with full EditorKit for live plugin rendering
+      return createPlateEditor({
+        plugins: EditorKit,
+        value: parsed as TElement[],
+      });
+    } catch (err) {
+      console.error('[ghost-text] parse error:', err);
       return null;
     }
-  }, [suggestionText, editor]);
+  }, [suggestionText]);
 
-  // Create a static editor for rendering the ghost nodes with full plugin support
-  const ghostContent = useMemo(() => {
-    if (!ghostNodes) {
-      // Fallback: render as plain text
-      return <span>{suggestionText}</span>;
-    }
-
-    // Create editor with same plugins to render custom elements (LiveValue, etc.)
-    const staticEditor = createPlateEditor({
-      plugins: EditorKit,
-      value: ghostNodes as TElement[],
-    });
-
-    return (
-      <PlateStatic
-        editor={staticEditor}
-        className="inline [&_*]:!text-muted-foreground [&_*]:!opacity-70"
-      />
-    );
-  }, [ghostNodes, suggestionText]);
+  const ghostContent = ghostEditor ? (
+    <Plate editor={ghostEditor} readOnly>
+      <PlateContent className="inline" readOnly />
+    </Plate>
+  ) : (
+    <span>{suggestionText}</span>
+  );
 
   return (
     <HoverCard>
@@ -89,7 +71,7 @@ function GhostTextContent() {
         }}
       >
         <span
-          className="text-muted-foreground max-sm:hidden"
+          className="text-muted-foreground/70 max-sm:hidden"
           contentEditable={false}
         >
           {hasLeadingSpace && <span> </span>}

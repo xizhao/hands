@@ -66,7 +66,8 @@ export function detectDataShape(data: Record<string, unknown>[]): DataShapeInfo 
  * Infer data shape from SQL query (heuristic).
  * Used when data hasn't been fetched yet.
  */
-export function inferShapeFromSQL(sql: string): DataShape | null {
+export function inferShapeFromSQL(sql: string | undefined): DataShape | null {
+  if (!sql) return null;
   const upper = sql.toUpperCase().trim();
 
   // COUNT/SUM/AVG/MAX/MIN without GROUP BY → single value
