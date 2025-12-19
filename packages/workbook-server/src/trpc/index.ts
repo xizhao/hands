@@ -13,6 +13,7 @@ import { gitRouter } from "../git/trpc.js";
 import type { PageRegistry } from "../pages/index.js";
 import { sourcesRouter, type TRPCContext } from "../sources/trpc.js";
 import { sqliteTRPCRouter, type SQLiteTRPCContext } from "../sqlite/trpc.js";
+import { aiRouter, type AIContext } from "./routers/ai.js";
 import { pagesRouter, type PagesContext } from "./routers/pages.js";
 import { secretsRouter, type SecretsContext } from "./routers/secrets.js";
 import { statusRouter, type StatusContext } from "./routers/status.js";
@@ -72,7 +73,8 @@ interface CombinedContext
     SecretsContext,
     WorkbookContext,
     PagesContext,
-    ThumbnailsContext {}
+    ThumbnailsContext,
+    AIContext {}
 
 // Create a merged router that includes all routes
 const t = initTRPC.context<CombinedContext>().create();
@@ -96,6 +98,8 @@ const appRouter = t.router({
   actions: actionsRouter,
   // Git routes (status, commit, history, push, pull)
   git: gitRouter,
+  // AI routes (text-to-sql, copilot)
+  ai: aiRouter,
 });
 
 export type AppRouter = typeof appRouter;
@@ -162,6 +166,7 @@ export type { GitRouter } from "../git/trpc.js";
 // Re-export router types for client usage
 export type { SourcesRouter } from "../sources/trpc.js";
 export type { SQLiteTRPCRouter as DbRouter } from "../sqlite/trpc.js";
+export type { AIRouter } from "./routers/ai.js";
 export type { PagesRouter } from "./routers/pages.js";
 export type { SecretsRouter } from "./routers/secrets.js";
 export type { StatusRouter } from "./routers/status.js";

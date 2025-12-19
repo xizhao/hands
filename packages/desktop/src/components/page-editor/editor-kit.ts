@@ -30,6 +30,7 @@ import { SandboxedBlockPlugin } from "./SandboxedBlock";
 import { TableKit } from "./plugins/table-kit";
 import { ToggleKit } from "./plugins/toggle-kit";
 import { LiveQueryKit } from "./plugins/live-query-kit";
+import { GhostPromptKit } from "./plugins/ghost-prompt-kit";
 
 export const EditorKit = [
   // Page Context (for other plugins to access metadata)
@@ -43,6 +44,7 @@ export const EditorKit = [
   ...CalloutKit,
   SandboxedBlockPlugin,
   ...LiveQueryKit,
+  ...GhostPromptKit,
 
   // Marks
   ...BasicMarksKit,

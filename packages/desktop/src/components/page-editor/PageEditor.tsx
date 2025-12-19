@@ -13,7 +13,8 @@ import { EditorKit } from "./editor-kit";
 import { type Frontmatter, FrontmatterHeader, serializeFrontmatter, parseFrontmatter as parseFrontmatterFromSource } from "./frontmatter";
 import { usePageSource } from "./hooks/usePageSource";
 import { useBlockCreation } from "./hooks/useBlockCreation";
-import { FloatingToolbar } from "./ui/floating-toolbar";
+import { FixedToolbar } from "./ui/fixed-toolbar";
+import { FixedToolbarButtons } from "./ui/fixed-toolbar-buttons";
 import { PageContextPlugin } from "./plugins/page-context-kit";
 
 // ============================================================================
@@ -219,6 +220,11 @@ export function PageEditor({
   return (
     <div className={cn("h-full flex flex-col", className)}>
       <Plate editor={editor} onChange={handleChange}>
+        {/* Fixed toolbar at top */}
+        <FixedToolbar>
+          <FixedToolbarButtons />
+        </FixedToolbar>
+
         <div className="relative h-full cursor-text overflow-y-auto">
           {/* Frontmatter header */}
           <FrontmatterHeader
@@ -234,9 +240,6 @@ export function PageEditor({
               Saving...
             </div>
           )}
-
-          {/* Floating toolbar */}
-          <FloatingToolbar />
 
           {/* Editor content */}
           <PlateContent

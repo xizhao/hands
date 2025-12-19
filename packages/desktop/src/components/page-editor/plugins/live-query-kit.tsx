@@ -371,41 +371,108 @@ function LiveQueryElement(props: PlateElementProps) {
   // Extract table/column reference for the chip
   const queryRef = useMemo(() => extractQueryReference(query), [query]);
 
-  // Determine what to render
+  // Determine what to render - auto-pick best template based on data shape
   const content = useMemo(() => {
     if (isLoading) return <LiveQuerySkeleton />;
     if (error) return <LiveQueryError error={error} onRetry={refetch} />;
     if (!data || data.length === 0) return <LiveQueryEmpty />;
 
-    // Table mode (explicit columns or no template)
-    if (columns || !isTemplateMode) {
-      const resolvedColumns = columns === "auto" || !columns
+    // If explicit template provided, use it
+    if (isTemplateMode) {
+      const isSingleRow = data.length === 1;
+      if (isSingleRow) {
+        return (
+          <div className="my-2">
+            {renderBoundTemplate(template, data[0], 1)}
+          </div>
+        );
+      }
+      return (
+        <div className="my-2 space-y-1">
+          {data.map((row, rowIndex) => (
+            <div key={rowIndex}>
+              {renderBoundTemplate(template, row, rowIndex + 1)}
+            </div>
+          ))}
+        </div>
+      );
+    }
+
+    // If explicit columns provided, use table
+    if (columns) {
+      const resolvedColumns = columns === "auto"
         ? autoDetectColumns(data)
         : columns;
       return renderTable(data, resolvedColumns);
     }
 
-    // Template mode - use PlateStatic for lightweight read-only rendering
-    const isSingleRow = data.length === 1;
+    // AUTO-PICK: No template or columns - pick best display based on data shape
+    const rowCount = data.length;
+    const colCount = Object.keys(data[0]).length;
+    const firstRow = data[0];
+    const keys = Object.keys(firstRow);
 
-    if (isSingleRow) {
+    // Single value (1 row, 1 col) → Big metric
+    if (rowCount === 1 && colCount === 1) {
+      const value = firstRow[keys[0]];
       return (
-        <div className="my-2">
-          {renderBoundTemplate(template, data[0], 1)}
+        <div className="my-4">
+          <span className="text-4xl font-bold tabular-nums">
+            {formatCellValue(value)}
+          </span>
         </div>
       );
     }
 
-    // Multiple rows
-    return (
-      <div className="my-2 space-y-1">
-        {data.map((row, rowIndex) => (
-          <div key={rowIndex}>
-            {renderBoundTemplate(template, row, rowIndex + 1)}
-          </div>
-        ))}
-      </div>
-    );
+    // Single row, multiple cols → Key-value pairs
+    if (rowCount === 1 && colCount <= 6) {
+      return (
+        <div className="my-4 flex flex-wrap gap-6">
+          {keys.map((key) => (
+            <div key={key} className="flex flex-col">
+              <span className="text-xs text-muted-foreground uppercase tracking-wide">
+                {key.replace(/_/g, ' ')}
+              </span>
+              <span className="text-2xl font-semibold tabular-nums">
+                {formatCellValue(firstRow[key])}
+              </span>
+            </div>
+          ))}
+        </div>
+      );
+    }
+
+    // Multiple rows, single col → Bullet list
+    if (colCount === 1) {
+      const key = keys[0];
+      return (
+        <ul className="my-4 space-y-1 list-disc list-inside">
+          {data.map((row, i) => (
+            <li key={i} className="text-sm">
+              {formatCellValue(row[key])}
+            </li>
+          ))}
+        </ul>
+      );
+    }
+
+    // Multiple rows, 2 cols → Name-value list
+    if (colCount === 2) {
+      const [labelKey, valueKey] = keys;
+      return (
+        <div className="my-4 space-y-2">
+          {data.map((row, i) => (
+            <div key={i} className="flex items-center justify-between border-b border-border/50 pb-1 last:border-0">
+              <span className="text-sm text-muted-foreground">{formatCellValue(row[labelKey])}</span>
+              <span className="text-sm font-medium tabular-nums">{formatCellValue(row[valueKey])}</span>
+            </div>
+          ))}
+        </div>
+      );
+    }
+
+    // Multiple rows, multiple cols → Table
+    return renderTable(data, autoDetectColumns(data));
   }, [data, isLoading, error, template, columns, isTemplateMode, refetch]);
 
   const showChip = selected && !readOnly;

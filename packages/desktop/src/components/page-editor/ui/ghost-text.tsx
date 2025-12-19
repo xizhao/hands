@@ -4,10 +4,36 @@ import { CopilotPlugin } from '@platejs/ai/react';
 import { deserializeMd } from '@platejs/markdown';
 import { type TElement } from 'platejs';
 import { createPlateEditor, Plate, PlateContent, useElement, usePluginOption } from 'platejs/react';
-import { useMemo, useRef } from 'react';
+import { Component, type ErrorInfo, type ReactNode, useMemo, useRef } from 'react';
 
 import { EditorKit } from '../editor-kit';
 import { HoverCard, HoverCardContent, HoverCardTrigger } from './hover-card';
+
+// Silent error boundary - catches render errors and returns null
+class GhostTextErrorBoundary extends Component<
+  { children: ReactNode },
+  { hasError: boolean }
+> {
+  constructor(props: { children: ReactNode }) {
+    super(props);
+    this.state = { hasError: false };
+  }
+
+  static getDerivedStateFromError(_: Error) {
+    return { hasError: true };
+  }
+
+  componentDidCatch(_error: Error, _errorInfo: ErrorInfo) {
+    // Silently fail - don't log to avoid noise
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return null;
+    }
+    return this.props.children;
+  }
+}
 
 export function GhostText() {
   const element = useElement();
@@ -20,7 +46,11 @@ export function GhostText() {
 
   if (!isSuggested) return null;
 
-  return <GhostTextContent />;
+  return (
+    <GhostTextErrorBoundary>
+      <GhostTextContent />
+    </GhostTextErrorBoundary>
+  );
 }
 
 function GhostTextContent() {
@@ -48,18 +78,20 @@ function GhostTextContent() {
         plugins: EditorKit,
         value: parsed as TElement[],
       });
-    } catch (err) {
-      console.error('[ghost-text] parse error:', err);
+    } catch {
+      // Silently fail - return null to show plain text fallback
       return null;
     }
   }, [suggestionText]);
 
   const ghostContent = ghostEditor ? (
-    <Plate editor={ghostEditor} readOnly>
-      <PlateContent className="inline" readOnly />
-    </Plate>
+    <span className="inline opacity-50">
+      <Plate editor={ghostEditor} readOnly>
+        <PlateContent className="inline" readOnly />
+      </Plate>
+    </span>
   ) : (
-    <span>{suggestionText}</span>
+    <span className="opacity-50">{suggestionText}</span>
   );
 
   return (
@@ -71,7 +103,7 @@ function GhostTextContent() {
         }}
       >
         <span
-          className="text-muted-foreground/70 max-sm:hidden"
+          className="max-sm:hidden"
           contentEditable={false}
         >
           {hasLeadingSpace && <span> </span>}
