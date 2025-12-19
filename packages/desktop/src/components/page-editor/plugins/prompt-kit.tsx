@@ -18,12 +18,10 @@ export const PROMPT_KEY = 'prompt';
 
 export interface TPromptElement extends TElement {
   type: typeof PROMPT_KEY;
-  /** The prompt text for the background agent */
-  text: string;
-  /** Status of the agent processing */
-  status?: 'pending' | 'processing' | 'complete' | 'error';
-  /** Error message if failed */
-  error?: string;
+  /** The prompt text (present when pending, removed when processing) */
+  promptText?: string;
+  /** OpenCode session/thread ID (present when processing) */
+  threadId?: string;
   children: [{ text: '' }];
 }
 
@@ -31,6 +29,7 @@ export const PromptPlugin = createPlatePlugin({
   key: PROMPT_KEY,
   node: {
     isElement: true,
+    isInline: true,
     isVoid: true,
     component: PromptElement,
   },
@@ -38,11 +37,10 @@ export const PromptPlugin = createPlatePlugin({
 
 export const PromptKit = [PromptPlugin];
 
-export function createPromptElement(text: string): TPromptElement {
+export function createPromptElement(promptText: string): TPromptElement {
   return {
     type: PROMPT_KEY,
-    text,
-    status: 'pending',
+    promptText,
     children: [{ text: '' }],
   };
 }

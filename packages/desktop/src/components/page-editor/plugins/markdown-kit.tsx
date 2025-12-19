@@ -145,34 +145,46 @@ export const MarkdownKit = [
         },
         // Serialize all live elements to MDX
         ...liveQueryMarkdownRule,
-        // Prompt element - deserialize <Prompt text="..." />
+        // Prompt element - deserialize <Prompt text="..." /> or <Prompt threadId="..." />
         Prompt: {
           deserialize: (node: any) => {
             const attrs = node.attributes || [];
-            let text = '';
+            let promptText: string | undefined;
+            let threadId: string | undefined;
             for (const attr of attrs) {
-              if (attr.type === 'mdxJsxAttribute' && attr.name === 'text') {
-                text = attr.value || '';
+              if (attr.type === 'mdxJsxAttribute') {
+                if (attr.name === 'text') {
+                  promptText = attr.value || undefined;
+                } else if (attr.name === 'threadId') {
+                  threadId = attr.value || undefined;
+                }
               }
             }
             return {
               type: PROMPT_KEY,
-              text,
-              status: 'pending',
+              promptText,
+              threadId,
               children: [{ text: '' }],
             };
           },
         },
         // Serialize Prompt element to MDX
         [PROMPT_KEY]: {
-          serialize: (node: any) => ({
-            type: 'mdxJsxFlowElement',
-            name: 'Prompt',
-            attributes: [
-              { type: 'mdxJsxAttribute', name: 'text', value: node.text || '' },
-            ],
-            children: [],
-          }),
+          serialize: (node: any) => {
+            const attrs: MdxJsxAttribute[] = [];
+            // Only include text OR threadId, not both
+            if (node.threadId) {
+              attrs.push({ type: 'mdxJsxAttribute', name: 'threadId', value: node.threadId });
+            } else if (node.promptText) {
+              attrs.push({ type: 'mdxJsxAttribute', name: 'text', value: node.promptText });
+            }
+            return {
+              type: 'mdxJsxFlowElement',
+              name: 'Prompt',
+              attributes: attrs,
+              children: [],
+            };
+          },
         },
       },
     },

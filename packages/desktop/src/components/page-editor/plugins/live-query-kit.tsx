@@ -389,7 +389,11 @@ function TableDisplay({ data, columns }: DisplayProps) {
 
 function LiveValueSkeleton({ isInline }: { isInline: boolean }) {
   if (isInline) {
-    return <span className="animate-pulse text-muted-foreground">...</span>;
+    return (
+      <span className="inline-block align-baseline animate-pulse">
+        <span className="inline-block h-[1em] w-12 bg-muted/60 rounded-sm align-baseline" />
+      </span>
+    );
   }
   return (
     <div className="animate-pulse space-y-2 my-4">
@@ -400,9 +404,34 @@ function LiveValueSkeleton({ isInline }: { isInline: boolean }) {
   );
 }
 
-function LiveValueError({ error, onRetry, isInline }: { error: Error; onRetry: () => void; isInline: boolean }) {
+function LiveValueError({
+  error,
+  onRetry,
+  isInline,
+  isRetrying,
+}: {
+  error: Error;
+  onRetry: () => void;
+  isInline: boolean;
+  isRetrying?: boolean;
+  retryCount?: number;
+}) {
+  // Show shimmer during retry (no error display, silent retry)
+  if (isRetrying) {
+    return <LiveValueSkeleton isInline={isInline} />;
+  }
+
+  // Final error state (after all retries exhausted)
   if (isInline) {
-    return <span className="text-destructive">err</span>;
+    return (
+      <span
+        className="text-destructive cursor-pointer hover:underline"
+        onClick={onRetry}
+        title={`${error.message} - Click to retry`}
+      >
+        error
+      </span>
+    );
   }
   return (
     <div className="my-4 rounded-lg border border-destructive/50 bg-destructive/10 p-4">
@@ -454,7 +483,7 @@ function LiveValueElement(props: PlateElementProps) {
     return Object.values(params);
   }, [params]);
 
-  const { data, isLoading, error, refetch } = useLiveQuery<Record<string, unknown>>({
+  const { data, isLoading, error, isRetrying, retryCount, refetch } = useLiveQuery<Record<string, unknown>>({
     sql: query,
     params: paramArray,
     enabled: !!query && !!runtimePort,
@@ -480,7 +509,7 @@ function LiveValueElement(props: PlateElementProps) {
   // Render content based on display mode
   const content = useMemo(() => {
     if (isLoading) return <LiveValueSkeleton isInline={isInline} />;
-    if (error) return <LiveValueError error={error} onRetry={refetch} isInline={isInline} />;
+    if (error) return <LiveValueError error={error} onRetry={refetch} isInline={isInline} isRetrying={isRetrying} retryCount={retryCount} />;
     if (!data || data.length === 0) return <LiveValueEmpty isInline={isInline} />;
 
     // Template mode (has children with bindings)
@@ -520,7 +549,7 @@ function LiveValueElement(props: PlateElementProps) {
       case "table":
         return <TableDisplay {...displayProps} />;
     }
-  }, [data, isLoading, error, displayMode, hasTemplate, template, columns, query, queryRef, handleTableClick, refetch, isInline]);
+  }, [data, isLoading, error, isRetrying, retryCount, displayMode, hasTemplate, template, columns, query, queryRef, handleTableClick, refetch, isInline]);
 
   const showChip = selected && !readOnly && !isInline;
 
@@ -1061,14 +1090,14 @@ export function deserializeLiveValue(
   }
 
   return {
-    type: INLINE_LIVE_QUERY_KEY, // Always inline
+    type: LIVE_VALUE_KEY,
     query: (props.query as string) || "",
     display: (props.display as DisplayMode | undefined) ?? "inline",
     params: props.params as Record<string, unknown> | undefined,
     columns: props.columns as ColumnConfig[] | "auto" | undefined,
     className: props.className as string | undefined,
     children: [{ text: "" }],
-  } as TLiveValueElement;
+  };
 }
 
 export function deserializeLiveActionElement(

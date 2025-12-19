@@ -38,27 +38,29 @@ import { EditorKit } from "../editor-kit";
 // ============================================================================
 
 function AtGhostPreview({ mdx, editor: mainEditor }: { mdx: string; editor: ReturnType<typeof useEditorRef> }) {
-  // Deserialize and render inline using the main editor's plugins
+  // Deserialize and render using the main editor's plugins
   const ghostEditor = useMemo(() => {
     if (!mdx) return null;
 
     try {
       const api = mainEditor.getApi(MarkdownPlugin);
       let parsed = api.markdown.deserialize(mdx);
+      console.log('[ghost-preview] Parsed MDX:', JSON.stringify(parsed, null, 2));
 
       if (!parsed || parsed.length === 0) return null;
 
       // Unwrap single paragraph for inline display
       if (parsed.length === 1 && parsed[0].type === "p" && parsed[0].children) {
-        parsed = parsed[0].children;
+        parsed = parsed[0].children as typeof parsed;
       }
 
       // Wrap in a paragraph for the ghost editor
       return createPlateEditor({
         plugins: EditorKit,
-        value: [{ type: "p", children: parsed }] as TElement[],
+        value: [{ type: "p", children: parsed as any }] as TElement[],
       });
-    } catch {
+    } catch (err) {
+      console.error('[ghost-preview] Parse error:', err);
       return null;
     }
   }, [mdx, mainEditor]);
@@ -68,7 +70,7 @@ function AtGhostPreview({ mdx, editor: mainEditor }: { mdx: string; editor: Retu
   }
 
   return (
-    <span className="inline opacity-50 [&_p]:inline [&_p]:m-0">
+    <span className="inline opacity-50 [&_p]:inline [&_p]:m-0 [&_.my-1]:my-0">
       <Plate editor={ghostEditor} readOnly>
         <PlateContent className="inline [&>div]:inline" readOnly />
       </Plate>
@@ -131,6 +133,9 @@ export function AtGhostInputElement(props: PlateElementProps) {
   const [prefetchedPrompt, setPrefetchedPrompt] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [showHints, setShowHints] = useState(false);
+  const retryCountRef = useRef(0);
+  const errorsRef = useRef<string[]>([]);
+  const isHandlingKeyRef = useRef(false); // Prevent blur during key handling
 
   const prompt = inputValue.trim();
   const hasResult = !!(prefetchedMdx && prefetchedPrompt === prompt);
@@ -140,12 +145,12 @@ export function AtGhostInputElement(props: PlateElementProps) {
     inputRef.current?.focus();
   }, []);
 
-  // Fetch MDX for prompt
-  const fetchMdx = useCallback((promptText: string, force = false) => {
+  // Fetch MDX for prompt (with optional error context for retries)
+  const fetchMdx = useCallback((promptText: string, force = false, errors?: string[]) => {
     if (!promptText) return;
 
-    // Clear cache if forcing retry
-    if (force) {
+    // Clear cache if forcing retry or if we have errors
+    if (force || errors?.length) {
       pendingMdxQueries.delete(promptText);
     }
 
@@ -157,12 +162,19 @@ export function AtGhostInputElement(props: PlateElementProps) {
         columns: t.columns,
       }));
 
-      queryPromise = generateMdxRef.current.mutateAsync({ prompt: promptText, tables });
-      pendingMdxQueries.set(promptText, queryPromise);
-
-      queryPromise.finally(() => {
-        setTimeout(() => pendingMdxQueries.delete(promptText), 5000);
+      queryPromise = generateMdxRef.current.mutateAsync({
+        prompt: promptText,
+        tables,
+        errors: errors?.length ? errors : undefined,
       });
+
+      // Only cache if no errors (don't cache retry requests)
+      if (!errors?.length) {
+        pendingMdxQueries.set(promptText, queryPromise);
+        queryPromise.finally(() => {
+          setTimeout(() => pendingMdxQueries.delete(promptText), 5000);
+        });
+      }
     }
 
     const currentFetchId = ++fetchIdRef.current;
@@ -234,29 +246,51 @@ export function AtGhostInputElement(props: PlateElementProps) {
   }, [editor, element]);
 
   // Insert deserialized content directly, with trailing space
+  // Auto-retries on error up to 3 times
   const insertContent = useCallback(
-    (mdx: string) => {
+    (mdx: string, promptText: string) => {
+      console.log('[at-ghost] Received MDX to insert:', JSON.stringify(mdx));
       try {
-        const api = editor.getApi(MarkdownPlugin);
-        let nodes = api.markdown.deserialize(mdx);
+        const mdApi = editor.getApi(MarkdownPlugin);
+        let nodes = mdApi.markdown.deserialize(mdx);
+        console.log('[at-ghost] Deserialized nodes:', JSON.stringify(nodes, null, 2));
+
+        if (!nodes || nodes.length === 0) {
+          throw new Error("Deserialization produced empty result");
+        }
 
         // Unwrap single paragraph for inline insertion
-        if (nodes?.length === 1 && nodes[0].type === "p" && nodes[0].children) {
-          nodes = nodes[0].children;
+        if (nodes.length === 1 && nodes[0].type === "p" && nodes[0].children) {
+          nodes = nodes[0].children as typeof nodes;
+          console.log('[at-ghost] Unwrapped to:', JSON.stringify(nodes, null, 2));
         }
 
-        if (nodes?.length > 0) {
-          removeInput();
-          editor.tf.insertNodes(nodes as any);
-          // Add trailing space and position cursor after
-          editor.tf.insertText(" ");
-        }
-      } catch {
+        retryCountRef.current = 0;
+        errorsRef.current = [];
         removeInput();
-        editor.tf.insertText(mdx + " ");
+        editor.tf.insertNodes(nodes as any);
+        // Add trailing space and position cursor after
+        editor.tf.insertText(" ");
+      } catch (err) {
+        const errorMsg = err instanceof Error ? err.message : String(err);
+
+        // Auto-retry up to 3 times
+        if (retryCountRef.current < 3) {
+          retryCountRef.current++;
+          errorsRef.current = [...errorsRef.current, errorMsg];
+          console.log(`[at-ghost] Retry ${retryCountRef.current}/3 due to error:`, errorMsg);
+          fetchMdx(promptText, true, errorsRef.current);
+        } else {
+          // Max retries reached, insert as plain text
+          console.warn("[at-ghost] Max retries reached, inserting as plain text");
+          retryCountRef.current = 0;
+          errorsRef.current = [];
+          removeInput();
+          editor.tf.insertText(mdx + " ");
+        }
       }
     },
-    [editor, removeInput]
+    [editor, removeInput, fetchMdx]
   );
 
   // Insert loader element for lazy swap
@@ -275,26 +309,35 @@ export function AtGhostInputElement(props: PlateElementProps) {
       if (e.key === "Enter") {
         // Insert: content if ready, loader if not
         e.preventDefault();
+        isHandlingKeyRef.current = true;
+        console.log('[at-ghost] Enter pressed:', { hasResult, prefetchedMdx: prefetchedMdx?.slice(0, 50), prompt });
         if (hasResult && prefetchedMdx) {
-          insertContent(prefetchedMdx);
+          insertContent(prefetchedMdx, prompt);
         } else if (prompt) {
+          console.log('[at-ghost] No result ready, inserting loader');
           insertLoader();
         }
       } else if (e.key === "Tab") {
-        // Retry: force re-fetch
+        // Retry: force re-fetch (reset error state)
         e.preventDefault();
+        isHandlingKeyRef.current = true;
         if (prompt) {
+          retryCountRef.current = 0;
+          errorsRef.current = [];
           fetchMdx(prompt, true);
         }
+        isHandlingKeyRef.current = false;
       } else if (e.key === "Escape") {
         // Cancel
         e.preventDefault();
+        isHandlingKeyRef.current = true;
         removeInput();
         if (inputValue) {
           editor.tf.insertText("@" + inputValue);
         }
       } else if (e.key === "Backspace" && inputValue === "") {
         e.preventDefault();
+        isHandlingKeyRef.current = true;
         removeInput();
       }
     },
@@ -313,35 +356,46 @@ export function AtGhostInputElement(props: PlateElementProps) {
 
   return (
     <PlateElement {...props} as="span">
-      <span contentEditable={false} className="relative inline-flex items-baseline">
-        {/* @ trigger */}
-        <span className="text-violet-500">@</span>
+      <span contentEditable={false} className="inline-flex items-baseline">
+        {/* @ trigger + input wrapper - dropdown anchors here */}
+        <span className="relative inline-flex items-baseline">
+          <span className="inline rounded bg-violet-500/15 px-1 py-0.5 text-violet-600 dark:text-violet-400">
+            <span>@</span>
+            <input
+              ref={inputRef}
+              type="text"
+              value={inputValue}
+              onChange={(e) => setInputValue(e.target.value)}
+              onKeyDown={handleKeyDown}
+              onBlur={() => {
+                // Skip if we're handling a key action (Enter/Tab/Escape)
+                if (isHandlingKeyRef.current) {
+                  console.log('[at-ghost] Blur skipped - handling key');
+                  return;
+                }
+                console.log('[at-ghost] Blur triggered');
+                if (inputValue) {
+                  removeInput();
+                  editor.tf.insertText("@" + inputValue + " ");
+                } else {
+                  removeInput();
+                }
+              }}
+              className="inline-block bg-transparent outline-none text-violet-600 dark:text-violet-400 placeholder:text-violet-400/50"
+              size={Math.max(1, inputValue.length)}
+              placeholder="..."
+              autoComplete="off"
+              autoCorrect="off"
+              autoCapitalize="off"
+              spellCheck={false}
+            />
+          </span>
 
-        {/* Inline input */}
-        <input
-          ref={inputRef}
-          type="text"
-          value={inputValue}
-          onChange={(e) => setInputValue(e.target.value)}
-          onKeyDown={handleKeyDown}
-          onBlur={() => {
-            if (inputValue) {
-              removeInput();
-              editor.tf.insertText("@" + inputValue + " ");
-            } else {
-              removeInput();
-            }
-          }}
-          className="inline bg-transparent outline-none text-inherit min-w-[1ch]"
-          style={{ width: `${Math.max(1, inputValue.length)}ch` }}
-          placeholder="..."
-          autoComplete="off"
-          autoCorrect="off"
-          autoCapitalize="off"
-          spellCheck={false}
-        />
+          {/* Hints dropdown - anchored under @prompt */}
+          {showHints && prompt && <HintsDropdown hasResult={hasResult} isLoading={isLoading} />}
+        </span>
 
-        {/* Ghost preview */}
+        {/* Ghost preview - after the input area */}
         {hasResult && prefetchedMdx && (
           <span className="ml-1">
             <AtGhostPreview mdx={prefetchedMdx} editor={editor} />
@@ -352,9 +406,6 @@ export function AtGhostInputElement(props: PlateElementProps) {
         {isLoading && !hasResult && (
           <span className="ml-1 opacity-40">...</span>
         )}
-
-        {/* Hints dropdown */}
-        {showHints && prompt && <HintsDropdown hasResult={hasResult} isLoading={isLoading} />}
       </span>
 
       {children}

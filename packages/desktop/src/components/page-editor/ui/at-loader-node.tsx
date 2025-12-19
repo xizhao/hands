@@ -22,6 +22,8 @@ import { trpc } from '@/lib/trpc';
 import { useManifest } from '@/hooks/useRuntimeState';
 import { type TAtLoaderElement, pendingMdxQueries } from '../plugins/at-kit';
 
+const MAX_RETRIES = 3;
+
 export function AtLoaderElement(props: PlateElementProps) {
   // Use props.element - this is the stable reference passed by Plate
   const element = props.element as TAtLoaderElement;
@@ -29,29 +31,38 @@ export function AtLoaderElement(props: PlateElementProps) {
   const readOnly = useReadOnly();
   const { data: manifest } = useManifest();
   const hasCalledRef = useRef(false);
+  const retryCountRef = useRef(0);
+  const errorsRef = useRef<string[]>([]);
 
   const { prompt } = element;
 
   const generateMdx = trpc.ai.generateMdx.useMutation();
+  const generateMdxRef = useRef(generateMdx);
+  generateMdxRef.current = generateMdx;
 
   useEffect(() => {
     if (readOnly || hasCalledRef.current) return;
     hasCalledRef.current = true;
 
-    // Check for prefetched promise first
-    let queryPromise = pendingMdxQueries.get(prompt);
+    const fetchAndSwap = async (errors?: string[]) => {
+      // Check for prefetched promise first (only on initial call)
+      let queryPromise = errors?.length ? null : pendingMdxQueries.get(prompt);
 
-    if (!queryPromise) {
-      // No prefetch available, make our own request
-      const tables = (manifest?.tables ?? []).map(t => ({
-        name: t.name,
-        columns: t.columns,
-      }));
-      queryPromise = generateMdx.mutateAsync({ prompt, tables });
-    }
+      if (!queryPromise) {
+        const tables = (manifest?.tables ?? []).map(t => ({
+          name: t.name,
+          columns: t.columns,
+        }));
+        queryPromise = generateMdxRef.current.mutateAsync({
+          prompt,
+          tables,
+          errors: errors?.length ? errors : undefined,
+        });
+      }
 
-    queryPromise
-      .then((result) => {
+      try {
+        const result = await queryPromise;
+
         // Find path using props.element (stable reference from Plate)
         const path = editor.api.findPath(element);
         if (!path) return;
@@ -63,7 +74,7 @@ export function AtLoaderElement(props: PlateElementProps) {
 
           // If wrapped in a single paragraph, extract children for inline insertion
           if (nodes?.length === 1 && nodes[0].type === 'p' && nodes[0].children) {
-            nodes = nodes[0].children;
+            nodes = nodes[0].children as typeof nodes;
           }
 
           if (nodes?.length > 0) {
@@ -73,18 +84,34 @@ export function AtLoaderElement(props: PlateElementProps) {
             });
             // Add trailing space and position cursor after
             editor.tf.insertText(" ");
+          } else {
+            throw new Error("Deserialization produced empty result");
           }
         } catch (err) {
-          console.error('[at-loader] Failed to deserialize MDX:', err);
-          editor.tf.withoutNormalizing(() => {
-            editor.tf.removeNodes({ at: path });
-            editor.tf.insertNodes({ text: result.mdx }, { at: path });
-          });
-        }
-      })
-      .catch((err) => {
-        console.error('[at-loader] Generation failed:', err);
+          const errorMsg = err instanceof Error ? err.message : String(err);
 
+          // Auto-retry up to MAX_RETRIES times
+          if (retryCountRef.current < MAX_RETRIES) {
+            retryCountRef.current++;
+            errorsRef.current = [...errorsRef.current, errorMsg];
+            console.log(`[at-loader] Retry ${retryCountRef.current}/${MAX_RETRIES} due to error:`, errorMsg);
+            // Clear cache and retry with errors
+            pendingMdxQueries.delete(prompt);
+            await fetchAndSwap(errorsRef.current);
+          } else {
+            // Max retries reached, insert as plain text
+            console.warn('[at-loader] Max retries reached, inserting as plain text');
+            const path = editor.api.findPath(element);
+            if (path) {
+              editor.tf.withoutNormalizing(() => {
+                editor.tf.removeNodes({ at: path });
+                editor.tf.insertNodes({ text: result.mdx + " " }, { at: path });
+              });
+            }
+          }
+        }
+      } catch (err) {
+        console.error('[at-loader] Generation failed:', err);
         const path = editor.api.findPath(element);
         if (!path) return;
 
@@ -92,7 +119,10 @@ export function AtLoaderElement(props: PlateElementProps) {
           editor.tf.removeNodes({ at: path });
           editor.tf.insertNodes({ text: '[Error]' }, { at: path });
         });
-      });
+      }
+    };
+
+    fetchAndSwap();
   }, [readOnly, prompt, manifest?.tables, editor, element]);
 
   return (

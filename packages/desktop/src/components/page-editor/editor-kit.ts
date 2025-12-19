@@ -30,6 +30,7 @@ import { SandboxedBlockPlugin } from "./SandboxedBlock";
 import { TableKit } from "./plugins/table-kit";
 import { ToggleKit } from "./plugins/toggle-kit";
 import { LiveQueryKit } from "./plugins/live-query-kit";
+import { MarkdownKit } from "./plugins/markdown-kit";
 import { PromptKit } from "./plugins/prompt-kit";
 
 export const EditorKit = [
@@ -68,6 +69,9 @@ export const EditorKit = [
 
   // AI
   ...CopilotKit,
+
+  // Markdown (serialization/deserialization with MDX support)
+  ...MarkdownKit,
 ];
 
 export type MyEditor = TPlateEditor<Value, (typeof EditorKit)[number]>;

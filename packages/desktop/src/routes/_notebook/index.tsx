@@ -1,14 +1,17 @@
+import { useEffect } from "react";
 import { NotebookSidebar } from "@/components/sidebar/NotebookSidebar";
 import { EmptyWorkbookState } from "@/components/workbook/EmptyWorkbookState";
 import { useChatState } from "@/hooks/useChatState";
 import { useRuntimeState } from "@/hooks/useRuntimeState";
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { getLastPageId } from "./pages.$pageId";
 
 export const Route = createFileRoute("/_notebook/")({
   component: IndexPage,
 });
 
 function IndexPage() {
+  const navigate = useNavigate();
   const {
     manifest,
     schema: dbSchema,
@@ -22,7 +25,22 @@ function IndexPage() {
   const manifestTableCount = manifest?.tables?.length ?? 0;
   const blockCount = manifest?.blocks?.length ?? 0;
   const sourceCount = manifest?.sources?.length ?? 0;
-  const pageCount = manifest?.pages?.length ?? 0;
+  const pages = manifest?.pages ?? [];
+  const pageCount = pages.length;
+
+  // Redirect to last visited page, or first page if pages exist
+  useEffect(() => {
+    if (pageCount > 0) {
+      const lastPageId = getLastPageId();
+      // Check if last page still exists in manifest
+      const lastPageExists = lastPageId && pages.some(p => p.id === lastPageId);
+      const targetPageId = lastPageExists ? lastPageId : pages[0]?.id;
+
+      if (targetPageId) {
+        navigate({ to: "/pages/$pageId", params: { pageId: targetPageId } });
+      }
+    }
+  }, [pageCount, pages, navigate]);
 
   // Still loading: no manifest yet OR db still booting (unless we have blocks to show)
   const isLoading = !manifest || isStarting || isDbBooting;

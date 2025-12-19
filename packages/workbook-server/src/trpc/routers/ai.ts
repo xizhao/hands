@@ -110,11 +110,12 @@ ${prompt}
     .input(z.object({
       prompt: z.string().min(1),
       tables: z.array(tableSchema),
+      errors: z.array(z.string()).optional(), // Previous errors for retry context
     }))
     .mutation(async ({ input }) => {
-      const { prompt, tables } = input;
+      const { prompt, tables, errors } = input;
 
-      console.log('[ai.generateMdx] Request received:', { prompt, tableCount: tables.length });
+      console.log('[ai.generateMdx] Request received:', { prompt, tableCount: tables.length, errorCount: errors?.length ?? 0 });
 
       const apiKey = process.env.HANDS_AI_API_KEY;
       if (!apiKey) {
@@ -129,46 +130,51 @@ ${prompt}
         ? tables.map((t) => `${t.name}(${t.columns.join(", ")})`).join("\n")
         : "(No tables available)";
 
-      const systemPrompt = `You are an MDX generator for a data-driven document editor. Given a request and database schema, decide:
+      const systemPrompt = `You are an MDX generator for a data-driven document editor. Classify requests and output the appropriate MDX:
 
-1. **Data display** → LiveValue with appropriate display mode
-2. **Interactive action** → LiveAction with ActionButton
-3. **Complex/multi-step** → \`<Prompt text="..." />\` to dispatch to background agent
-4. **Non-data request** → Return the original prompt as plain text
-
-## LiveValue Examples (data display)
+## 1. LiveValue - Simple data display (single query)
+Use for: showing data, counts, lists, tables
 - "count of users" → \`<LiveValue query="SELECT COUNT(*) FROM users" display="inline" />\`
 - "list of products" → \`<LiveValue query="SELECT name FROM products" display="list" />\`
 - "all orders" → \`<LiveValue query="SELECT * FROM orders LIMIT 20" display="table" />\`
-- "current value" → \`<LiveValue query="SELECT value FROM counters WHERE id=1" display="inline" />\`
+- "feature count" → \`<LiveValue query="SELECT COUNT(*) FROM features" display="inline" />\`
 
-## LiveAction Examples (interactive buttons)
+## 2. LiveAction - Single database mutation with button
+Use for: simple actions like increment, delete, toggle
 - "increment counter" → \`<LiveAction sql="UPDATE counters SET value = value + 1 WHERE id = 1"><ActionButton>+1</ActionButton></LiveAction>\`
 - "delete item" → \`<LiveAction sql="DELETE FROM items WHERE id = 1"><ActionButton variant="destructive">Delete</ActionButton></LiveAction>\`
-- "toggle status" → \`<LiveAction sql="UPDATE tasks SET done = NOT done WHERE id = 1"><ActionButton variant="outline">Toggle</ActionButton></LiveAction>\`
 
-## Prompt Examples (complex - delegate to agent)
-- "create a form for adding users" → \`<Prompt text="Create a form with fields for name, email, role that inserts into users table" />\`
-- "build a dashboard" → \`<Prompt text="Create a dashboard showing key metrics from the database" />\`
-- "add a chart" → \`<Prompt text="Create a chart visualization showing trends over time" />\`
+## 3. Prompt - Delegate complex requests to background agent
+Use when the proper response would be TOO COMPLEX to fit in ~300 tokens (forms, dashboards, charts, multi-component UI):
+- "create a form for features" → \`<Prompt text="Create a form with fields for title, description, priority, status that inserts into features table" />\`
+- "build a dashboard" → \`<Prompt text="Create a dashboard showing key metrics" />\`
+- "add a chart" → \`<Prompt text="Create a chart visualization" />\`
 
-## Plain Text (non-data requests)
-If the request doesn't involve data queries or actions, return it as plain text:
+## 4. Plain text - Literal text content
 - "hello world" → \`hello world\`
-- "note to self" → \`note to self\`
+- "note: remember to..." → \`note: remember to...\`
+
+## Decision Logic
+1. Can the full response fit in ~300 tokens? If NO → use Prompt to delegate
+2. Is it a data query? → LiveValue
+3. Is it a single mutation? → LiveAction
+4. Otherwise → plain text
 
 ## Rules
-- Output ONLY valid MDX or plain text, no markdown code fences
-- Use only tables/columns from the schema for SQL queries
-- Simple data → LiveValue, Interactive → LiveAction, Complex → Prompt, Other → plain text
-- ActionButton variants: default, outline, ghost, destructive
-- Keep it concise (~300 chars max)`;
+- Output ONLY valid MDX, no markdown code fences
+- Use tables/columns from schema for SQL
+- If generating the full UI would exceed token budget, use Prompt instead`;
+
+      // Include error context if this is a retry
+      const errorContext = errors?.length
+        ? `\n\n## Previous Errors (fix these issues)\n${errors.map((e, i) => `${i + 1}. ${e}`).join('\n')}`
+        : '';
 
       const userPrompt = `## Schema
 ${schemaContext}
 
 ## Request
-${prompt}
+${prompt}${errorContext}
 
 ## MDX Output`;
 
@@ -182,11 +188,15 @@ ${prompt}
           abortSignal: AbortSignal.timeout(10000),
         });
 
-        let mdx = result.text?.trim() || "";
+        const rawText = result.text || "";
+        console.log('[ai.generateMdx] RAW response:', JSON.stringify(rawText));
+
+        let mdx = rawText.trim();
 
         // Clean up any markdown code fences if present
         if (mdx.startsWith("```")) {
           mdx = mdx.replace(/^```\w*\n?/, "").replace(/\n?```$/, "");
+          console.log('[ai.generateMdx] After fence cleanup:', JSON.stringify(mdx));
         }
 
         if (!mdx) {
@@ -196,7 +206,7 @@ ${prompt}
           });
         }
 
-        console.log('[ai.generateMdx] Generated MDX:', mdx);
+        console.log('[ai.generateMdx] Final MDX:', mdx);
         return { mdx };
       } catch (err) {
         if (err instanceof TRPCError) throw err;
