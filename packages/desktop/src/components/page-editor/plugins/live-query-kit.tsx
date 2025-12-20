@@ -1196,6 +1196,7 @@ export const LiveActionPlugin = createPlatePlugin({
   node: {
     isElement: true,
     isVoid: false,
+    isContainer: true,
     component: memo(LiveActionElement),
   },
 });

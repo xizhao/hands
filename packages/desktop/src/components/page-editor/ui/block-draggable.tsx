@@ -39,6 +39,16 @@ export const BlockDraggable: RenderNodeWrapper = (props) => {
     if (path.length === 1 && !isType(editor, element, UNDRAGGABLE_KEYS)) {
       return true;
     }
+    // Enable dragging for children inside container elements (e.g., LiveAction)
+    if (path.length === 2 && !isType(editor, element, UNDRAGGABLE_KEYS)) {
+      const parentEntry = editor.api.parent(path);
+      if (parentEntry) {
+        const parentPlugin = getPluginByType(editor, parentEntry[0].type as string);
+        if (parentPlugin?.node.isContainer) {
+          return true;
+        }
+      }
+    }
     if (path.length === 3 && !isType(editor, element, UNDRAGGABLE_KEYS)) {
       const block = editor.api.some({
         at: path,

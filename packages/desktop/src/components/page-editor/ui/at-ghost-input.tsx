@@ -48,6 +48,20 @@ function isPendingPrompt(node: Descendant): node is TPromptElement & { promptTex
   );
 }
 
+// Parse routing Prompt from MDX: <Prompt reasoning="low|mid|high" text="..." />
+function parseRoutingPrompt(mdx: string): { reasoning: "low" | "mid" | "high"; text: string } | null {
+  const match = mdx.match(/<Prompt\s+reasoning=["']?(low|mid|high)["']?\s+text=["']([^"']+)["']\s*\/?>/);
+  if (!match) {
+    // Try alternate attribute order
+    const altMatch = mdx.match(/<Prompt\s+text=["']([^"']+)["']\s+reasoning=["']?(low|mid|high)["']?\s*\/?>/);
+    if (altMatch) {
+      return { reasoning: altMatch[2] as "low" | "mid" | "high", text: altMatch[1] };
+    }
+    return null;
+  }
+  return { reasoning: match[1] as "low" | "mid" | "high", text: match[2] };
+}
+
 // Build system prompt for Hands agent
 function buildPromptSystemMessage(pageId?: string, tables?: Array<{ name: string; columns: string[] }>) {
   const schemaContext = tables?.length
@@ -207,8 +221,13 @@ export function AtGhostInputElement(props: PlateElementProps) {
   const generateMdx = trpc.ai.generateMdx.useMutation({
     onError: () => {}, // Suppress global error handler - we handle locally
   });
+  const generateMdxBlock = trpc.ai.generateMdxBlock.useMutation({
+    onError: () => {},
+  });
   const generateMdxRef = useRef(generateMdx);
+  const generateMdxBlockRef = useRef(generateMdxBlock);
   generateMdxRef.current = generateMdx;
+  generateMdxBlockRef.current = generateMdxBlock;
 
   const inputRef = useRef<HTMLInputElement>(null);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -232,6 +251,7 @@ export function AtGhostInputElement(props: PlateElementProps) {
   }, []);
 
   // Fetch MDX for prompt (with optional error context for retries)
+  // Handles routing: if autocomplete returns <Prompt reasoning="low|mid">, calls generateMdxBlock
   const fetchMdx = useCallback((promptText: string, force = false, errors?: string[]) => {
     if (!promptText) return;
 
@@ -251,15 +271,43 @@ export function AtGhostInputElement(props: PlateElementProps) {
       // Get document context (prefix/suffix around cursor)
       const { prefix, suffix } = getDocumentContext(editor);
 
+      // First call autocomplete (fast router)
       queryPromise = generateMdxRef.current.mutateAsync({
         prompt: promptText,
         tables,
         errors: errors?.length ? errors : undefined,
-        // Page context
         prefix,
         suffix,
         title: title ?? undefined,
         description: description ?? undefined,
+      }).then(async (result) => {
+        // Check if this is a routing prompt
+        const routing = parseRoutingPrompt(result.mdx);
+
+        if (routing) {
+          console.log('[at-ghost] Routing detected:', routing);
+
+          if (routing.reasoning === "high") {
+            // Return as-is for high complexity - insertContent will create agent session
+            return { mdx: `<Prompt text="${routing.text}" />` };
+          }
+
+          // Route to block builder for low/mid complexity
+          const blockResult = await generateMdxBlockRef.current.mutateAsync({
+            prompt: routing.text,
+            tables,
+            reasoning: routing.reasoning,
+            prefix,
+            suffix,
+            title: title ?? undefined,
+            description: description ?? undefined,
+          });
+
+          return blockResult;
+        }
+
+        // No routing, return direct result
+        return result;
       });
 
       // Only cache if no errors (don't cache retry requests)
