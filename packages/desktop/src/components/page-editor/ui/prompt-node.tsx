@@ -14,16 +14,18 @@ import {
   PlateElement,
   type PlateElementProps,
   useEditorRef,
+  usePluginOption,
   useReadOnly,
 } from 'platejs/react';
 import { useEffect, useRef, useState } from 'react';
 import { Sparkle } from '@phosphor-icons/react';
-import { useQuery } from '@tanstack/react-query';
 
 import { api, subscribeToEvents } from '@/lib/api';
 import { useActiveRuntime } from '@/hooks/useWorkbook';
 import { useManifest } from '@/hooks/useRuntimeState';
+import { HandsLogo } from '@/components/ui/hands-logo';
 import { type TPromptElement } from '../plugins/prompt-kit';
+import { PageContextPlugin } from '../plugins/page-context-kit';
 
 export function PromptElement(props: PlateElementProps) {
   const element = props.element as TPromptElement;
@@ -31,6 +33,7 @@ export function PromptElement(props: PlateElementProps) {
   const readOnly = useReadOnly();
   const { data: manifest } = useManifest();
   const { data: runtime } = useActiveRuntime();
+  const pageId = usePluginOption(PageContextPlugin, 'pageId');
   const hasStartedRef = useRef(false);
 
   const { promptText, threadId } = element;
@@ -59,9 +62,9 @@ export function PromptElement(props: PlateElementProps) {
     // Subscribe to live updates
     const unsubscribe = subscribeToEvents((event) => {
       if (event.type === 'message.part.updated') {
-        const props = event.properties as { sessionID: string; part: { type: string; text?: string } };
-        if (props.sessionID === threadId && props.part.type === 'text' && props.part.text) {
-          setStatusText(props.part.text.slice(0, 100));
+        const { part } = event.properties;
+        if (part.sessionID === threadId && part.type === 'text' && 'text' in part) {
+          setStatusText(part.text.slice(0, 100));
         }
       }
     });
@@ -96,18 +99,25 @@ export function PromptElement(props: PlateElementProps) {
           ? `Available tables:\n${manifest.tables.map(t => `- ${t.name}(${t.columns.join(', ')})`).join('\n')}`
           : '';
 
-        // System prompt for MDX generation
-        const systemPrompt = `You are a UI component generator for a document editor. Generate MDX content that will be inserted into the document.
+        // System prompt for MDX generation - includes file path and clear edit instructions
+        const systemPrompt = `You are editing an MDX page file. Your task is to replace the <Prompt> element with appropriate MDX content.
+
+**File to edit:** source://${pageId}
 
 ${schemaContext}
 
-Available components:
-- <LiveValue query="SQL" display="inline|list|table" /> - Display live data
-- <LiveAction sql="SQL"><ActionButton>Label</ActionButton></LiveAction> - Database mutation buttons
-- <Block src="component.tsx" /> - Custom React components
+## Available MDX Components
 
-Generate ONLY the MDX content, no explanation or markdown code fences.
-Replace the <Prompt> element in the file with your generated content.`;
+- \`<LiveValue query="SQL" />\` - Display live data (auto-selects inline/list/table based on result shape)
+- \`<LiveValue query="SQL" display="inline" />\` - Inline value in text
+- \`<LiveAction sql="SQL"><ActionButton>Label</ActionButton></LiveAction>\` - Interactive button that runs SQL
+
+## Instructions
+
+1. Read the page file at source://${pageId}
+2. Find the <Prompt text="..."> element
+3. Use the edit tool to REPLACE the <Prompt> line with your generated MDX content
+4. Generate ONLY valid MDX - no code fences, no explanations`;
 
         // Send the prompt
         await api.promptAsync(session.id, promptText!, {
@@ -122,7 +132,7 @@ Replace the <Prompt> element in the file with your generated content.`;
     };
 
     startAgent();
-  }, [readOnly, isPending, promptText, editor, element, directory, manifest?.tables]);
+  }, [readOnly, isPending, promptText, editor, element, directory, manifest?.tables, pageId]);
 
   return (
     <PlateElement
@@ -134,15 +144,19 @@ Replace the <Prompt> element in the file with your generated content.`;
       className="my-1"
     >
       <div className="inline-flex items-center gap-2 px-2 py-1 rounded-md border border-violet-500/30 bg-violet-500/5 text-sm">
-        <Sparkle
-          weight="fill"
-          className="size-4 text-violet-600 dark:text-violet-400 animate-pulse shrink-0"
-        />
+        {isProcessing ? (
+          <HandsLogo className="size-4 text-violet-600 dark:text-violet-400 animate-pulse shrink-0" />
+        ) : (
+          <Sparkle
+            weight="fill"
+            className="size-4 text-violet-600 dark:text-violet-400 animate-pulse shrink-0"
+          />
+        )}
         <span className="text-muted-foreground truncate max-w-[300px]">
           {isPending ? (
-            <>Hands will build it: <span className="text-foreground">{promptText}</span></>
+            <>{promptText}</>
           ) : (
-            <>Hands: <span className="text-foreground">{statusText || '...'}</span></>
+            <span className="text-foreground">{statusText || '...'}</span>
           )}
         </span>
       </div>

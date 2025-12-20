@@ -7,7 +7,7 @@
  * Uses remark plugins for GFM and MDX support.
  */
 
-import { MarkdownPlugin, remarkMdx } from '@platejs/markdown';
+import { MarkdownPlugin, remarkMdx, convertChildrenDeserialize, convertNodesSerialize } from '@platejs/markdown';
 import { KEYS } from 'platejs';
 import remarkGfm from 'remark-gfm';
 import type { MdxJsxTextElement, MdxJsxAttribute } from 'mdast-util-mdx-jsx';
@@ -19,6 +19,10 @@ import {
   deserializeLiveValue,
   deserializeLiveActionElement,
   deserializeActionButtonElement,
+  LIVE_ACTION_KEY,
+  ACTION_BUTTON_KEY,
+  type TLiveActionElement,
+  type TActionButtonElement,
 } from './live-query-kit';
 import { PROMPT_KEY } from './prompt-kit';
 
@@ -127,24 +131,80 @@ export const MarkdownKit = [
         },
         // Sandboxed block - serialize to <Block src="..." />
         ...sandboxedBlockMarkdownRule,
-        // LiveValue - single deserializer picks inline vs block type based on display prop
+        // LiveValue - inline element, display prop controls rendering
         LiveValue: {
           deserialize: (node) => deserializeLiveValue(node),
         },
-        // Legacy: LiveQuery maps to LiveValue
+        // Legacy MDX tag - maps to LiveValue
         LiveQuery: {
           deserialize: (node) => deserializeLiveValue(node),
         },
-        // LiveAction element
+        // LiveAction element - non-void, has children
         LiveAction: {
-          deserialize: (node, options) => deserializeLiveActionElement(node, options),
+          deserialize: (node, deco, options) => {
+            const children = convertChildrenDeserialize(node.children || [], deco, options);
+            return deserializeLiveActionElement(node, { children });
+          },
         },
-        // ActionButton element - auto-wires trigger() from LiveAction context
+        // ActionButton element - non-void, has children (button text/content)
         ActionButton: {
-          deserialize: (node, options) => deserializeActionButtonElement(node, options),
+          deserialize: (node, deco, options) => {
+            const children = convertChildrenDeserialize(node.children || [], deco, options);
+            return deserializeActionButtonElement(node, { children });
+          },
         },
         // Serialize all live elements to MDX
         ...liveQueryMarkdownRule,
+        // Override LiveAction serialization to properly serialize children
+        [LIVE_ACTION_KEY]: {
+          serialize: (node: TLiveActionElement, options: any) => {
+            const attributes: Array<{ type: 'mdxJsxAttribute'; name: string; value: unknown }> = [];
+
+            if (node.sql) {
+              attributes.push({ type: 'mdxJsxAttribute', name: 'sql', value: node.sql });
+            }
+            if (node.src) {
+              attributes.push({ type: 'mdxJsxAttribute', name: 'src', value: node.src });
+            }
+            if (node.params && Object.keys(node.params).length > 0) {
+              attributes.push({
+                type: 'mdxJsxAttribute',
+                name: 'params',
+                value: { type: 'mdxJsxAttributeValueExpression', value: JSON.stringify(node.params) },
+              });
+            }
+
+            // Recursively serialize children
+            const children = convertNodesSerialize(node.children || [], options);
+
+            return {
+              type: 'mdxJsxFlowElement',
+              name: 'LiveAction',
+              attributes,
+              children,
+            };
+          },
+        },
+        // Override ActionButton serialization to properly serialize children
+        [ACTION_BUTTON_KEY]: {
+          serialize: (node: TActionButtonElement, options: any) => {
+            const attributes: Array<{ type: 'mdxJsxAttribute'; name: string; value: unknown }> = [];
+
+            if (node.variant && node.variant !== 'default') {
+              attributes.push({ type: 'mdxJsxAttribute', name: 'variant', value: node.variant });
+            }
+
+            // Recursively serialize children
+            const children = convertNodesSerialize(node.children || [], options);
+
+            return {
+              type: 'mdxJsxTextElement',
+              name: 'ActionButton',
+              attributes,
+              children,
+            };
+          },
+        },
         // Prompt element - deserialize <Prompt text="..." /> or <Prompt threadId="..." />
         Prompt: {
           deserialize: (node: any) => {

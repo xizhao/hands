@@ -89,7 +89,10 @@ export function useLiveQuery<T = Record<string, unknown>>(
   }, []);
 
   // tRPC mutation for queries
-  const queryMutation = trpc.db.query.useMutation();
+  // onError suppresses global toast - we handle errors locally in the component
+  const queryMutation = trpc.db.query.useMutation({
+    onError: () => {}, // Suppress global error handler
+  });
 
   // Fetch data with retry logic
   const fetchData = useCallback(async (isRetryAttempt = false) => {

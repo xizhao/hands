@@ -15,6 +15,7 @@ import {
   PlateContent,
   PlateElement,
   useEditorRef,
+  usePluginOption,
 } from "platejs/react";
 import { MarkdownPlugin } from "@platejs/markdown";
 import {
@@ -25,13 +26,53 @@ import {
   useMemo,
   type KeyboardEvent,
 } from "react";
-import type { TElement } from "platejs";
+import type { Descendant, TElement } from "platejs";
 
 import { cn } from "@/lib/utils";
 import { trpc } from "@/lib/trpc";
 import { useManifest } from "@/hooks/useRuntimeState";
+import { useCreateSession, useSendMessage } from "@/hooks/useSession";
 import { createAtLoaderElement, pendingMdxQueries } from "../plugins/at-kit";
+import { PROMPT_KEY, type TPromptElement } from "../plugins/prompt-kit";
+import { PageContextPlugin } from "../plugins/page-context-kit";
 import { EditorKit } from "../editor-kit";
+
+// Type guard for Prompt elements that need session creation
+function isPendingPrompt(node: Descendant): node is TPromptElement & { promptText: string } {
+  return (
+    'type' in node &&
+    node.type === PROMPT_KEY &&
+    'promptText' in node &&
+    typeof node.promptText === 'string' &&
+    !('threadId' in node && node.threadId)
+  );
+}
+
+// Build system prompt for Hands agent
+function buildPromptSystemMessage(pageId?: string, tables?: Array<{ name: string; columns: string[] }>) {
+  const schemaContext = tables?.length
+    ? `Available tables:\n${tables.map(t => `- ${t.name}(${t.columns.join(', ')})`).join('\n')}`
+    : '';
+
+  return `You are editing an MDX page file. Your task is to replace the <Prompt> element with appropriate MDX content.
+
+**File to edit:** source://${pageId}
+
+${schemaContext}
+
+## Available MDX Components
+
+- \`<LiveValue query="SQL" />\` - Display live data (auto-selects inline/list/table based on result shape)
+- \`<LiveValue query="SQL" display="inline" />\` - Inline value in text
+- \`<LiveAction sql="SQL"><ActionButton>Label</ActionButton></LiveAction>\` - Interactive button that runs SQL
+
+## Instructions
+
+1. Read the page file at source://${pageId}
+2. Find the <Prompt text="..."> element
+3. Use the edit tool to REPLACE the <Prompt> line with your generated MDX content
+4. Generate ONLY valid MDX - no code fences, no explanations`;
+}
 
 // ============================================================================
 // Ghost Text Preview Component
@@ -44,20 +85,23 @@ function AtGhostPreview({ mdx, editor: mainEditor }: { mdx: string; editor: Retu
 
     try {
       const api = mainEditor.getApi(MarkdownPlugin);
-      let parsed = api.markdown.deserialize(mdx);
-      console.log('[ghost-preview] Parsed MDX:', JSON.stringify(parsed, null, 2));
+      const deserialized = api.markdown.deserialize(mdx);
+      console.log('[ghost-preview] Parsed MDX:', JSON.stringify(deserialized, null, 2));
 
-      if (!parsed || parsed.length === 0) return null;
+      if (!deserialized || deserialized.length === 0) return null;
 
       // Unwrap single paragraph for inline display
-      if (parsed.length === 1 && parsed[0].type === "p" && parsed[0].children) {
-        parsed = parsed[0].children as typeof parsed;
+      let nodes: Descendant[];
+      if (deserialized.length === 1 && deserialized[0].type === "p" && deserialized[0].children) {
+        nodes = deserialized[0].children;
+      } else {
+        nodes = deserialized;
       }
 
       // Wrap in a paragraph for the ghost editor
       return createPlateEditor({
         plugins: EditorKit,
-        value: [{ type: "p", children: parsed as any }] as TElement[],
+        value: [{ type: "p", children: nodes }] as TElement[],
       });
     } catch (err) {
       console.error('[ghost-preview] Parse error:', err);
@@ -119,8 +163,15 @@ export function AtGhostInputElement(props: PlateElementProps) {
   const { children, element } = props;
   const editor = useEditorRef();
   const { data: manifest } = useManifest();
+  const pageId = usePluginOption(PageContextPlugin, 'pageId');
 
-  const generateMdx = trpc.ai.generateMdx.useMutation();
+  // Session hooks for Prompt elements (hooks handle directory internally)
+  const createSession = useCreateSession();
+  const sendMessage = useSendMessage();
+
+  const generateMdx = trpc.ai.generateMdx.useMutation({
+    onError: () => {}, // Suppress global error handler - we handle locally
+  });
   const generateMdxRef = useRef(generateMdx);
   generateMdxRef.current = generateMdx;
 
@@ -246,29 +297,53 @@ export function AtGhostInputElement(props: PlateElementProps) {
   }, [editor, element]);
 
   // Insert deserialized content directly, with trailing space
+  // If content contains a Prompt element, create session first and insert with threadId
   // Auto-retries on error up to 3 times
   const insertContent = useCallback(
-    (mdx: string, promptText: string) => {
+    async (mdx: string, promptText: string) => {
       console.log('[at-ghost] Received MDX to insert:', JSON.stringify(mdx));
       try {
         const mdApi = editor.getApi(MarkdownPlugin);
-        let nodes = mdApi.markdown.deserialize(mdx);
-        console.log('[at-ghost] Deserialized nodes:', JSON.stringify(nodes, null, 2));
+        const deserialized = mdApi.markdown.deserialize(mdx);
+        console.log('[at-ghost] Deserialized nodes:', JSON.stringify(deserialized, null, 2));
 
-        if (!nodes || nodes.length === 0) {
+        if (!deserialized || deserialized.length === 0) {
           throw new Error("Deserialization produced empty result");
         }
 
         // Unwrap single paragraph for inline insertion
-        if (nodes.length === 1 && nodes[0].type === "p" && nodes[0].children) {
-          nodes = nodes[0].children as typeof nodes;
+        let nodes: Descendant[];
+        if (deserialized.length === 1 && deserialized[0].type === "p" && deserialized[0].children) {
+          nodes = deserialized[0].children;
           console.log('[at-ghost] Unwrapped to:', JSON.stringify(nodes, null, 2));
+        } else {
+          nodes = deserialized;
         }
+
+        // For any pending Prompt nodes, create session and replace with threadId
+        const preparedNodes = await Promise.all(
+          nodes.map(async (node) => {
+            if (!isPendingPrompt(node)) return node;
+
+            const session = await createSession.mutateAsync({
+              title: node.promptText.slice(0, 50),
+            });
+
+            sendMessage.mutate({
+              sessionId: session.id,
+              content: node.promptText,
+              system: buildPromptSystemMessage(pageId, manifest?.tables),
+            });
+
+            return { ...node, promptText: undefined, threadId: session.id };
+          })
+        );
+        nodes = preparedNodes;
 
         retryCountRef.current = 0;
         errorsRef.current = [];
         removeInput();
-        editor.tf.insertNodes(nodes as any);
+        editor.tf.insertNodes(nodes);
         // Add trailing space and position cursor after
         editor.tf.insertText(" ");
       } catch (err) {
@@ -290,7 +365,7 @@ export function AtGhostInputElement(props: PlateElementProps) {
         }
       }
     },
-    [editor, removeInput, fetchMdx]
+    [editor, removeInput, fetchMdx, createSession, sendMessage, manifest?.tables]
   );
 
   // Insert loader element for lazy swap

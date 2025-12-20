@@ -16,6 +16,7 @@ import {
   useReadOnly,
 } from 'platejs/react';
 import { MarkdownPlugin } from '@platejs/markdown';
+import type { Descendant } from 'platejs';
 import { useEffect, useRef } from 'react';
 
 import { trpc } from '@/lib/trpc';
@@ -36,7 +37,9 @@ export function AtLoaderElement(props: PlateElementProps) {
 
   const { prompt } = element;
 
-  const generateMdx = trpc.ai.generateMdx.useMutation();
+  const generateMdx = trpc.ai.generateMdx.useMutation({
+    onError: () => {}, // Suppress global error handler - we handle locally
+  });
   const generateMdxRef = useRef(generateMdx);
   generateMdxRef.current = generateMdx;
 
@@ -70,17 +73,20 @@ export function AtLoaderElement(props: PlateElementProps) {
         // Deserialize MDX
         try {
           const api = editor.getApi(MarkdownPlugin);
-          let nodes = api.markdown.deserialize(result.mdx);
+          const deserialized = api.markdown.deserialize(result.mdx);
 
           // If wrapped in a single paragraph, extract children for inline insertion
-          if (nodes?.length === 1 && nodes[0].type === 'p' && nodes[0].children) {
-            nodes = nodes[0].children as typeof nodes;
+          let nodes: Descendant[];
+          if (deserialized?.length === 1 && deserialized[0].type === 'p' && deserialized[0].children) {
+            nodes = deserialized[0].children;
+          } else {
+            nodes = deserialized ?? [];
           }
 
-          if (nodes?.length > 0) {
+          if (nodes.length > 0) {
             editor.tf.withoutNormalizing(() => {
               editor.tf.removeNodes({ at: path });
-              editor.tf.insertNodes(nodes as any, { at: path });
+              editor.tf.insertNodes(nodes, { at: path });
             });
             // Add trailing space and position cursor after
             editor.tf.insertText(" ");

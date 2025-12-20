@@ -50,10 +50,6 @@ import { replaceTextBindings } from "../lib/live-query-context";
 export const LIVE_VALUE_KEY = "live_value";
 export const LIVE_ACTION_KEY = "live_action";
 
-// Legacy keys for backwards compatibility during migration
-export const LIVE_QUERY_KEY = "live_query";
-export const INLINE_LIVE_QUERY_KEY = "live_query_inline";
-
 export type DisplayMode = "auto" | "inline" | "list" | "table";
 
 export interface ColumnConfig {
@@ -105,10 +101,6 @@ export interface TLiveActionElement extends TElement {
   /** Children are the interactive content */
   children: (TElement | TText)[];
 }
-
-// Legacy type aliases for backwards compatibility
-export type TLiveQueryElement = TLiveValueElement;
-export type TInlineLiveQueryElement = TLiveValueElement;
 
 export const ACTION_BUTTON_KEY = "action_button";
 
@@ -624,7 +616,9 @@ function LiveActionElement(props: PlateElementProps) {
   const [isPending, setIsPending] = useState(false);
   const [error, setError] = useState<Error | null>(null);
 
-  const dbQuery = trpc.db.query.useMutation();
+  const dbQuery = trpc.db.query.useMutation({
+    onError: () => {}, // Suppress global error handler - we show our own toast
+  });
 
   const paramArray = useMemo(() => {
     if (!params) return [];
@@ -745,37 +739,11 @@ function ActionButtonElement(props: PlateElementProps) {
 // ============================================================================
 
 /**
- * LiveValue Plugin - unified display element for SQL query results.
- *
- * Can be inline or block based on display mode.
- * Configured as NOT void so children can contain templates.
+ * LiveValue Plugin - inline element for SQL query results.
+ * Display prop controls rendering (inline badge, list, or table).
  */
 export const LiveValuePlugin = createPlatePlugin({
   key: LIVE_VALUE_KEY,
-  node: {
-    isElement: true,
-    isVoid: false,
-    component: memo(LiveValueElement),
-  },
-});
-
-/**
- * Legacy LiveQuery Plugin - maps to LiveValue for backwards compatibility.
- */
-export const LiveQueryPlugin = createPlatePlugin({
-  key: LIVE_QUERY_KEY,
-  node: {
-    isElement: true,
-    isVoid: false,
-    component: memo(LiveValueElement),
-  },
-});
-
-/**
- * Legacy InlineLiveQuery Plugin - maps to LiveValue for backwards compatibility.
- */
-export const InlineLiveQueryPlugin = createPlatePlugin({
-  key: INLINE_LIVE_QUERY_KEY,
   node: {
     isElement: true,
     isInline: true,
@@ -809,7 +777,7 @@ export const ActionButtonPlugin = createPlatePlugin({
   },
 });
 
-export const LiveQueryKit = [LiveValuePlugin, LiveQueryPlugin, InlineLiveQueryPlugin, LiveActionPlugin, ActionButtonPlugin];
+export const LiveQueryKit = [LiveValuePlugin, LiveActionPlugin, ActionButtonPlugin];
 
 // ============================================================================
 // Insertion Helpers
@@ -835,33 +803,6 @@ export function createLiveValueElement(
     columns: options?.columns,
     children: options?.children ?? [{ text: "" }],
   };
-}
-
-// Legacy helpers - map to createLiveValueElement
-export function createLiveQueryElement(
-  query: string,
-  options?: {
-    params?: Record<string, unknown>;
-    columns?: ColumnConfig[] | "auto";
-    children?: (TElement | TText)[];
-  }
-): TLiveValueElement {
-  return createLiveValueElement(query, options);
-}
-
-export function createTableQuery(query: string, columns?: ColumnConfig[]): TLiveValueElement {
-  return createLiveValueElement(query, { display: "table", columns: columns ?? "auto" });
-}
-
-export function createTemplateQuery(query: string, template: (TElement | TText)[]): TLiveValueElement {
-  return createLiveValueElement(query, { children: template });
-}
-
-export function createInlineLiveQueryElement(
-  query: string,
-  params?: Record<string, unknown>
-): TLiveValueElement {
-  return createLiveValueElement(query, { display: "inline", params });
 }
 
 /**
@@ -956,44 +897,6 @@ export const liveQueryMarkdownRule = {
         name: "LiveValue",
         attributes,
         children,
-      };
-    },
-  },
-
-  // Legacy: Serialize old live_query as LiveValue
-  [LIVE_QUERY_KEY]: {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    serialize: (node: TLiveValueElement, options?: any) => {
-      // Delegate to LiveValue serialization
-      return liveQueryMarkdownRule[LIVE_VALUE_KEY].serialize(node, options);
-    },
-  },
-
-  // Legacy: Serialize old live_query_inline as LiveValue with display="inline"
-  [INLINE_LIVE_QUERY_KEY]: {
-    serialize: (node: TLiveValueElement) => {
-      const attributes: Array<{ type: "mdxJsxAttribute"; name: string; value: unknown }> = [
-        { type: "mdxJsxAttribute", name: "query", value: node.query },
-        { type: "mdxJsxAttribute", name: "display", value: "inline" },
-      ];
-
-      if (node.params && Object.keys(node.params).length > 0) {
-        attributes.push({
-          type: "mdxJsxAttribute",
-          name: "params",
-          value: { type: "mdxJsxAttributeValueExpression", value: JSON.stringify(node.params) },
-        });
-      }
-
-      if (node.className) {
-        attributes.push({ type: "mdxJsxAttribute", name: "className", value: node.className });
-      }
-
-      return {
-        type: "mdxJsxTextElement",
-        name: "LiveValue",
-        attributes,
-        children: [],
       };
     },
   },
@@ -1101,8 +1004,10 @@ export function deserializeLiveValue(
 }
 
 export function deserializeLiveActionElement(
-  node: { attributes?: Array<{ type: string; name: string; value: unknown }> },
-  _options?: unknown
+  node: {
+    attributes?: Array<{ type: string; name: string; value: unknown }>;
+  },
+  options?: { children?: (TElement | TText)[] }
 ): TLiveActionElement {
   const attributes = node.attributes || [];
   const props: Record<string, unknown> = {};
@@ -1129,12 +1034,17 @@ export function deserializeLiveActionElement(
     }
   }
 
+  // Use deserialized children from options, or fallback to empty paragraph
+  const children = options?.children?.length
+    ? options.children
+    : [{ type: "p" as const, children: [{ text: "" }] }];
+
   return {
     type: LIVE_ACTION_KEY,
     sql: props.sql as string | undefined,
     src: props.src as string | undefined,
     params: props.params as Record<string, unknown> | undefined,
-    children: [{ text: "" }],
+    children,
   };
 }
 
@@ -1142,8 +1052,10 @@ export function deserializeLiveActionElement(
  * Deserialize <ActionButton> MDX element.
  */
 export function deserializeActionButtonElement(
-  node: { attributes?: Array<{ type: string; name: string; value: unknown }> },
-  _options?: unknown
+  node: {
+    attributes?: Array<{ type: string; name: string; value: unknown }>;
+  },
+  options?: { children?: (TElement | TText)[] }
 ): TActionButtonElement {
   const attributes = node.attributes || [];
   const props: Record<string, unknown> = {};
@@ -1161,10 +1073,15 @@ export function deserializeActionButtonElement(
     }
   }
 
+  // Use deserialized children from options, or fallback to empty text
+  const children = options?.children?.length
+    ? options.children
+    : [{ text: "" }];
+
   return {
     type: ACTION_BUTTON_KEY,
     variant: props.variant as TActionButtonElement["variant"],
-    children: [{ text: "" }],
+    children,
   };
 }
 
