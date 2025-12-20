@@ -2,10 +2,13 @@
  * useLiveQuery Hook
  *
  * Reactive SQL queries that automatically update when the database changes.
- * Uses tRPC for data fetching and SSE for change notifications.
+ * Uses tRPC useQuery for caching/deduplication and SSE for change notifications.
+ *
+ * Same SQL query = same cache entry = automatic deduplication across components.
  */
 
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useEffect, useCallback, useRef } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { useDbSubscription, type DbChangeEvent } from "../db-subscription";
 import { trpc } from "../trpc";
 
@@ -46,7 +49,12 @@ export interface LiveQueryResult<T> {
 }
 
 /**
- * Hook for reactive SQL queries with automatic updates on database changes
+ * Hook for reactive SQL queries with automatic updates on database changes.
+ *
+ * Uses TanStack Query's useQuery for automatic caching and deduplication:
+ * - Same SQL + params = same cache entry
+ * - Multiple components with same query share one fetch
+ * - SSE invalidates all queries at once
  */
 export function useLiveQuery<T = Record<string, unknown>>(
   options: UseLiveQueryOptions
@@ -61,133 +69,69 @@ export function useLiveQuery<T = Record<string, unknown>>(
     retryDelay = 1000,
   } = options;
 
-  const [data, setData] = useState<T[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [isFetching, setIsFetching] = useState(false);
-  const [error, setError] = useState<Error | null>(null);
-  const [isRetrying, setIsRetrying] = useState(false);
-  const [retryCount, setRetryCount] = useState(0);
-  const [dataVersion, setDataVersion] = useState(0);
+  const queryClient = useQueryClient();
+  const dataVersionRef = useRef(0);
 
-  // Refs for stable callbacks
-  const sqlRef = useRef(sql);
-  const paramsRef = useRef(params);
-  const retryTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const mountedRef = useRef(true);
-  sqlRef.current = sql;
-  paramsRef.current = params;
-
-  // Cleanup on unmount
-  useEffect(() => {
-    mountedRef.current = true;
-    return () => {
-      mountedRef.current = false;
-      if (retryTimeoutRef.current) {
-        clearTimeout(retryTimeoutRef.current);
-      }
-    };
-  }, []);
-
-  // tRPC mutation for queries
-  // onError suppresses global toast - we handle errors locally in the component
-  const queryMutation = trpc.db.query.useMutation({
-    onError: () => {}, // Suppress global error handler
-  });
-
-  // Fetch data with retry logic
-  const fetchData = useCallback(async (isRetryAttempt = false) => {
-    if (!enabled) return;
-
-    if (!isRetryAttempt) {
-      setIsFetching(true);
-      setRetryCount(0);
-      setIsRetrying(false);
+  // Use tRPC's useQuery for caching/deduplication
+  // Same sql + params = same cache entry across all components
+  const {
+    data: result,
+    isLoading,
+    isFetching,
+    error: queryError,
+    refetch: trpcRefetch,
+    failureCount,
+    isRefetching,
+  } = trpc.db.select.useQuery(
+    { sql, params },
+    {
+      enabled: enabled && !!sql,
+      staleTime: 0, // Always fresh - deduplication still works within same render
+      retry: maxRetries,
+      retryDelay: (attemptIndex) => retryDelay * Math.pow(2, attemptIndex),
+      meta: { suppressError: true }, // Handle errors locally in component
     }
-
-    try {
-      const result = await queryMutation.mutateAsync({
-        sql: sqlRef.current,
-        params: paramsRef.current,
-      });
-      if (!mountedRef.current) return;
-      setData(result.rows as T[]);
-      setError(null);
-      setIsRetrying(false);
-      setRetryCount(0);
-    } catch (err) {
-      if (!mountedRef.current) return;
-      const newError = err instanceof Error ? err : new Error(String(err));
-      setError(newError);
-
-      // Auto-retry with exponential backoff
-      const currentRetry = isRetryAttempt ? retryCount : 0;
-      if (currentRetry < maxRetries) {
-        const nextRetry = currentRetry + 1;
-        const delay = retryDelay * Math.pow(2, currentRetry); // Exponential backoff
-
-        setIsRetrying(true);
-        setRetryCount(nextRetry);
-
-        retryTimeoutRef.current = setTimeout(() => {
-          if (mountedRef.current) {
-            fetchData(true);
-          }
-        }, delay);
-      } else {
-        setIsRetrying(false);
-      }
-    } finally {
-      if (mountedRef.current) {
-        setIsLoading(false);
-        setIsFetching(false);
-      }
-    }
-  }, [enabled, queryMutation, maxRetries, retryDelay, retryCount]);
-
-  // Initial fetch and refetch when sql/params change
-  useEffect(() => {
-    if (enabled) {
-      fetchData();
-    }
-  }, [sql, JSON.stringify(params), enabled]);
+  );
 
   // Subscribe to database changes via SSE
+  // Invalidates all live queries when database changes
   useDbSubscription(runtimePort ?? null, (event: DbChangeEvent) => {
     if (event.type === "change") {
-      setDataVersion(event.dataVersion);
-      fetchData();
+      dataVersionRef.current = event.dataVersion;
+      // Invalidate all db.select queries - they'll refetch automatically
+      queryClient.invalidateQueries({ queryKey: [["db", "select"]] });
     } else if (event.type === "connected") {
-      setDataVersion(event.dataVersion);
+      dataVersionRef.current = event.dataVersion;
     }
   });
 
-  // Fallback polling if enabled
+  // Fallback polling if enabled (in case SSE fails)
   useEffect(() => {
     if (!enabled || pollInterval <= 0) return;
 
-    const interval = setInterval(fetchData, pollInterval);
+    const interval = setInterval(() => {
+      queryClient.invalidateQueries({ queryKey: [["db", "select"]] });
+    }, pollInterval);
     return () => clearInterval(interval);
-  }, [enabled, pollInterval, fetchData]);
+  }, [enabled, pollInterval, queryClient]);
 
-  // Wrap refetch to reset retry state
+  // Wrap refetch for stable reference
   const refetch = useCallback(async () => {
-    if (retryTimeoutRef.current) {
-      clearTimeout(retryTimeoutRef.current);
-    }
-    setRetryCount(0);
-    setIsRetrying(false);
-    await fetchData(false);
-  }, [fetchData]);
+    await trpcRefetch();
+  }, [trpcRefetch]);
+
+  // Convert query error to Error type
+  const error = queryError instanceof Error ? queryError : queryError ? new Error(String(queryError)) : null;
 
   return {
-    data,
+    data: (result?.rows as T[]) ?? [],
     isLoading,
     isFetching,
     error,
-    isRetrying,
-    retryCount,
+    isRetrying: failureCount > 0 && isRefetching,
+    retryCount: failureCount,
     refetch,
-    dataVersion,
+    dataVersion: dataVersionRef.current,
   };
 }
 

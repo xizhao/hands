@@ -111,11 +111,16 @@ ${prompt}
       prompt: z.string().min(1),
       tables: z.array(tableSchema),
       errors: z.array(z.string()).optional(), // Previous errors for retry context
+      // Page context (like copilot)
+      prefix: z.string().optional(), // Markdown content before cursor
+      suffix: z.string().optional(), // Markdown content after cursor
+      title: z.string().optional(),  // Page title from frontmatter
+      description: z.string().optional(), // Page description from frontmatter
     }))
     .mutation(async ({ input }) => {
-      const { prompt, tables, errors } = input;
+      const { prompt, tables, errors, prefix, suffix, title, description } = input;
 
-      console.log('[ai.generateMdx] Request received:', { prompt, tableCount: tables.length, errorCount: errors?.length ?? 0 });
+      console.log('[ai.generateMdx] Request received:', { prompt, tableCount: tables.length, errorCount: errors?.length ?? 0, hasContext: !!(prefix || suffix) });
 
       const apiKey = process.env.HANDS_AI_API_KEY;
       if (!apiKey) {
@@ -170,9 +175,19 @@ Use when the proper response would be TOO COMPLEX to fit in ~300 tokens (forms, 
         ? `\n\n## Previous Errors (fix these issues)\n${errors.map((e, i) => `${i + 1}. ${e}`).join('\n')}`
         : '';
 
+      // Build page context section
+      const pageContext = (title || description)
+        ? `## Page Context\n${title ? `Title: ${title}\n` : ''}${description ? `Description: ${description}\n` : ''}`
+        : '';
+
+      // Build document context (prefix/suffix around cursor)
+      const documentContext = (prefix || suffix)
+        ? `## Document Context\n<prefix>\n${prefix?.slice(-1500) || '(start of document)'}\n</prefix>\n[CURSOR - INSERT HERE]\n<suffix>\n${suffix?.slice(0, 500) || '(end of document)'}\n</suffix>`
+        : '';
+
       const userPrompt = `## Schema
 ${schemaContext}
-
+${pageContext}${documentContext}
 ## Request
 ${prompt}${errorContext}
 

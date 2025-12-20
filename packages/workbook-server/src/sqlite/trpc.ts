@@ -113,7 +113,28 @@ async function getSchema(runtimeUrl: string): Promise<{
 // ============================================================================
 
 export const sqliteTRPCRouter = t.router({
-  /** Execute a SQL query */
+  /**
+   * Execute a read-only SELECT query (useQuery - cached/deduplicated)
+   * Used by LiveValue for reactive data display
+   */
+  select: publicProcedure.input(queryInput).query(async ({ ctx, input }) => {
+    // Validate it's a SELECT query
+    const upperSql = input.sql.trim().toUpperCase();
+    if (!upperSql.startsWith("SELECT") && !upperSql.startsWith("PRAGMA")) {
+      throw new TRPCError({
+        code: "BAD_REQUEST",
+        message: "db.select only allows SELECT queries. Use db.query for mutations.",
+      });
+    }
+
+    const result = await executeQuery(ctx.runtimeUrl, input.sql, input.params);
+    return {
+      rows: result.rows,
+      rowCount: result.rows.length,
+    };
+  }),
+
+  /** Execute a SQL query/mutation (useMutation - not cached) */
   query: publicProcedure.input(queryInput).mutation(async ({ ctx, input }) => {
     const result = await executeQuery(ctx.runtimeUrl, input.sql, input.params);
 

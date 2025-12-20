@@ -13,15 +13,34 @@ import {
   PlateElement,
   type PlateElementProps,
   useEditorRef,
+  usePluginOption,
   useReadOnly,
 } from 'platejs/react';
-import { MarkdownPlugin } from '@platejs/markdown';
-import type { Descendant } from 'platejs';
+import { MarkdownPlugin, serializeMd } from '@platejs/markdown';
+import type { Descendant, TElement } from 'platejs';
 import { useEffect, useRef } from 'react';
 
 import { trpc } from '@/lib/trpc';
 import { useManifest } from '@/hooks/useRuntimeState';
 import { type TAtLoaderElement, pendingMdxQueries } from '../plugins/at-kit';
+import { PageContextPlugin } from '../plugins/page-context-kit';
+
+// Helper to get document context (prefix/suffix around cursor)
+function getDocumentContext(editor: ReturnType<typeof useEditorRef>) {
+  try {
+    const fullDoc = serializeMd(editor, { value: editor.children as TElement[] });
+    const contextEntry = editor.api.block({ highest: true });
+    if (!contextEntry) return { prefix: fullDoc, suffix: "" };
+
+    const currentBlock = serializeMd(editor, { value: [contextEntry[0] as TElement] });
+    const blockIndex = fullDoc.indexOf(currentBlock);
+    const prefix = blockIndex >= 0 ? fullDoc.slice(0, blockIndex + currentBlock.length) : currentBlock;
+    const suffix = blockIndex >= 0 ? fullDoc.slice(blockIndex + currentBlock.length) : "";
+    return { prefix, suffix };
+  } catch {
+    return { prefix: "", suffix: "" };
+  }
+}
 
 const MAX_RETRIES = 3;
 
@@ -31,6 +50,8 @@ export function AtLoaderElement(props: PlateElementProps) {
   const editor = useEditorRef();
   const readOnly = useReadOnly();
   const { data: manifest } = useManifest();
+  const title = usePluginOption(PageContextPlugin, 'title');
+  const description = usePluginOption(PageContextPlugin, 'description');
   const hasCalledRef = useRef(false);
   const retryCountRef = useRef(0);
   const errorsRef = useRef<string[]>([]);
@@ -56,10 +77,16 @@ export function AtLoaderElement(props: PlateElementProps) {
           name: t.name,
           columns: t.columns,
         }));
+        // Get document context
+        const { prefix, suffix } = getDocumentContext(editor);
         queryPromise = generateMdxRef.current.mutateAsync({
           prompt,
           tables,
           errors: errors?.length ? errors : undefined,
+          prefix,
+          suffix,
+          title: title ?? undefined,
+          description: description ?? undefined,
         });
       }
 
@@ -129,7 +156,7 @@ export function AtLoaderElement(props: PlateElementProps) {
     };
 
     fetchAndSwap();
-  }, [readOnly, prompt, manifest?.tables, editor, element]);
+  }, [readOnly, prompt, manifest?.tables, editor, element, title, description]);
 
   return (
     <PlateElement

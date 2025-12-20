@@ -17,7 +17,7 @@ import {
   useEditorRef,
   usePluginOption,
 } from "platejs/react";
-import { MarkdownPlugin } from "@platejs/markdown";
+import { MarkdownPlugin, serializeMd } from "@platejs/markdown";
 import {
   useCallback,
   useEffect,
@@ -159,11 +159,46 @@ function HintsDropdown({ hasResult, isLoading }: { hasResult: boolean; isLoading
 // Main Input Component
 // ============================================================================
 
+// Helper to get document context (prefix/suffix around cursor)
+function getDocumentContext(editor: ReturnType<typeof useEditorRef>) {
+  try {
+    // Get the full document as markdown
+    const fullDoc = serializeMd(editor, {
+      value: editor.children as TElement[],
+    });
+
+    // Get current block for cursor position
+    const contextEntry = editor.api.block({ highest: true });
+    if (!contextEntry) {
+      return { prefix: fullDoc, suffix: "" };
+    }
+
+    const currentBlock = serializeMd(editor, {
+      value: [contextEntry[0] as TElement],
+    });
+
+    // Find where current block starts in full doc to split prefix/suffix
+    const blockIndex = fullDoc.indexOf(currentBlock);
+    const prefix = blockIndex >= 0
+      ? fullDoc.slice(0, blockIndex + currentBlock.length)
+      : currentBlock;
+    const suffix = blockIndex >= 0
+      ? fullDoc.slice(blockIndex + currentBlock.length)
+      : "";
+
+    return { prefix, suffix };
+  } catch {
+    return { prefix: "", suffix: "" };
+  }
+}
+
 export function AtGhostInputElement(props: PlateElementProps) {
   const { children, element } = props;
   const editor = useEditorRef();
   const { data: manifest } = useManifest();
   const pageId = usePluginOption(PageContextPlugin, 'pageId');
+  const title = usePluginOption(PageContextPlugin, 'title');
+  const description = usePluginOption(PageContextPlugin, 'description');
 
   // Session hooks for Prompt elements (hooks handle directory internally)
   const createSession = useCreateSession();
@@ -213,10 +248,18 @@ export function AtGhostInputElement(props: PlateElementProps) {
         columns: t.columns,
       }));
 
+      // Get document context (prefix/suffix around cursor)
+      const { prefix, suffix } = getDocumentContext(editor);
+
       queryPromise = generateMdxRef.current.mutateAsync({
         prompt: promptText,
         tables,
         errors: errors?.length ? errors : undefined,
+        // Page context
+        prefix,
+        suffix,
+        title: title ?? undefined,
+        description: description ?? undefined,
       });
 
       // Only cache if no errors (don't cache retry requests)
@@ -247,7 +290,7 @@ export function AtGhostInputElement(props: PlateElementProps) {
           setIsLoading(false);
         }
       });
-  }, [manifest?.tables]);
+  }, [manifest?.tables, editor, title, description]);
 
   // Debounced prefetch while typing
   useEffect(() => {
