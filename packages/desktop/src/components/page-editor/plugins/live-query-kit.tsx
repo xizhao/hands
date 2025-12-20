@@ -52,6 +52,7 @@ import { cn } from "@/lib/utils";
 import { useLiveQuery } from "@/lib/live-query";
 import { useActiveRuntime } from "@/hooks/useWorkbook";
 import { trpc } from "@/lib/trpc";
+import { convertNodesSerialize } from "@platejs/markdown";
 import { replaceTextBindings } from "../lib/live-query-context";
 
 // ============================================================================
@@ -140,7 +141,8 @@ export const CHECKBOX_KEY = "checkbox";
 export const TEXTAREA_KEY = "textarea";
 
 /**
- * ActionInput element - text input that registers its value for form submission.
+ * Input element - text input that registers its value for form submission.
+ * Children are the label text.
  */
 export interface TInputElement extends TElement {
   type: typeof INPUT_KEY;
@@ -162,20 +164,19 @@ export interface TInputElement extends TElement {
   max?: number | string;
   /** Step value (for number) */
   step?: number;
-  /** Label text */
-  label?: string;
-  children: [{ text: "" }];
+  /** Children are the label text */
+  children: (TElement | TText)[];
 }
 
 /**
- * ActionSelect element - dropdown that registers its value for form submission.
- * Options can be provided via `options` prop OR via ActionOption children.
+ * Select element - dropdown that registers its value for form submission.
+ * Children are the label text.
  */
 export interface TSelectElement extends TElement {
   type: typeof SELECT_KEY;
   /** Field name for form binding */
   name: string;
-  /** Select options (alternative to ActionOption children) */
+  /** Select options */
   options?: Array<{ value: string; label: string }>;
   /** Placeholder text */
   placeholder?: string;
@@ -183,9 +184,7 @@ export interface TSelectElement extends TElement {
   defaultValue?: string;
   /** Whether field is required */
   required?: boolean;
-  /** Label text */
-  label?: string;
-  /** Children can be ActionOption elements */
+  /** Children are the label text */
   children: (TElement | TText)[];
 }
 
@@ -202,21 +201,22 @@ export interface TOptionElement extends TElement {
 }
 
 /**
- * ActionCheckbox element - checkbox that registers its value for form submission.
+ * Checkbox element - checkbox that registers its value for form submission.
+ * Children are the label text.
  */
 export interface TCheckboxElement extends TElement {
   type: typeof CHECKBOX_KEY;
   /** Field name for form binding */
   name: string;
-  /** Label text displayed next to checkbox */
-  label?: string;
   /** Default checked state */
   defaultChecked?: boolean;
-  children: [{ text: "" }];
+  /** Children are the label text */
+  children: (TElement | TText)[];
 }
 
 /**
- * ActionTextarea element - multi-line text input for form submission.
+ * Textarea element - multi-line text input for form submission.
+ * Children are the label text.
  */
 export interface TTextareaElement extends TElement {
   type: typeof TEXTAREA_KEY;
@@ -230,9 +230,8 @@ export interface TTextareaElement extends TElement {
   rows?: number;
   /** Whether field is required */
   required?: boolean;
-  /** Label text */
-  label?: string;
-  children: [{ text: "" }];
+  /** Children are the label text */
+  children: (TElement | TText)[];
 }
 
 // ============================================================================
@@ -913,10 +912,27 @@ function ButtonElement(props: PlateElementProps) {
 // ============================================================================
 
 /**
+ * Check if element children have text content (not just empty text nodes).
+ */
+function hasLabelContent(element: { children?: Array<{ text?: string } | object> }): boolean {
+  if (!element.children || element.children.length === 0) return false;
+  // Check if any child has non-empty text
+  return element.children.some((child) => {
+    if ("text" in child && typeof child.text === "string") {
+      return child.text.trim().length > 0;
+    }
+    // If it's an element (not text), assume it has content
+    return true;
+  });
+}
+
+/**
  * InputElement - Text input that registers with parent LiveAction.
+ * Children are rendered as the label.
  */
 function InputElement(props: PlateElementProps) {
   const element = useElement<TInputElement>();
+  const selected = useSelected();
   const {
     name,
     inputType = "text",
@@ -927,7 +943,6 @@ function InputElement(props: PlateElementProps) {
     min,
     max,
     step,
-    label,
   } = element;
 
   const actionCtx = useContext(LiveActionContext);
@@ -951,11 +966,19 @@ function InputElement(props: PlateElementProps) {
   }, [actionCtx, name, inputType]);
 
   const isPending = actionCtx?.isPending ?? false;
+  const showLabel = hasLabelContent(element);
 
   return (
-    <PlateElement {...props} as="span">
-      <span contentEditable={false} className="inline-flex items-center gap-2">
-        {label && <Label className="text-sm">{label}</Label>}
+    <PlateElement
+      {...props}
+      as="div"
+      className={cn(
+        "my-2 rounded-md p-0.5",
+        selected && "ring-2 ring-ring ring-offset-1"
+      )}
+    >
+      <div className="flex flex-col gap-1.5">
+        {showLabel && <Label className="text-sm font-medium">{props.children}</Label>}
         <Input
           type={inputType}
           value={value}
@@ -967,20 +990,23 @@ function InputElement(props: PlateElementProps) {
           max={max}
           step={step}
           disabled={isPending}
-          className="w-auto min-w-[120px]"
+          contentEditable={false}
+          className="w-full"
         />
-      </span>
-      {props.children}
+        {!showLabel && <span className="hidden">{props.children}</span>}
+      </div>
     </PlateElement>
   );
 }
 
 /**
  * SelectElement - Dropdown that registers with parent LiveAction.
+ * Children are rendered as the label.
  */
 function SelectElement(props: PlateElementProps) {
   const element = useElement<TSelectElement>();
-  const { name, placeholder, defaultValue, label } = element;
+  const selected = useSelected();
+  const { name, placeholder, defaultValue } = element;
 
   // Ensure options is always an array (handle string/undefined cases)
   const rawOptions = element.options;
@@ -1012,13 +1038,21 @@ function SelectElement(props: PlateElementProps) {
   }, [actionCtx, name]);
 
   const isPending = actionCtx?.isPending ?? false;
+  const showLabel = hasLabelContent(element);
 
   return (
-    <PlateElement {...props} as="span">
-      <span contentEditable={false} className="inline-flex items-center gap-2">
-        {label && <Label className="text-sm">{label}</Label>}
+    <PlateElement
+      {...props}
+      as="div"
+      className={cn(
+        "my-2 rounded-md p-0.5",
+        selected && "ring-2 ring-ring ring-offset-1"
+      )}
+    >
+      <div className="flex flex-col gap-1.5">
+        {showLabel && <Label className="text-sm font-medium">{props.children}</Label>}
         <Select value={value} onValueChange={setValue} disabled={isPending}>
-          <SelectTrigger className="w-auto min-w-[120px] h-[28px]">
+          <SelectTrigger className="w-full" contentEditable={false}>
             <SelectValue placeholder={placeholder ?? "Select..."} />
           </SelectTrigger>
           <SelectContent>
@@ -1029,18 +1063,20 @@ function SelectElement(props: PlateElementProps) {
             ))}
           </SelectContent>
         </Select>
-      </span>
-      {props.children}
+        {!showLabel && <span className="hidden">{props.children}</span>}
+      </div>
     </PlateElement>
   );
 }
 
 /**
  * CheckboxElement - Checkbox that registers with parent LiveAction.
+ * Children are rendered as the label.
  */
 function CheckboxElement(props: PlateElementProps) {
   const element = useElement<TCheckboxElement>();
-  const { name, label, defaultChecked } = element;
+  const selected = useSelected();
+  const { name, defaultChecked } = element;
 
   const actionCtx = useContext(LiveActionContext);
   const [checked, setChecked] = useState(defaultChecked ?? false);
@@ -1057,28 +1093,39 @@ function CheckboxElement(props: PlateElementProps) {
   }, [actionCtx, name]);
 
   const isPending = actionCtx?.isPending ?? false;
+  const showLabel = hasLabelContent(element);
 
   return (
-    <PlateElement {...props} as="span">
-      <span contentEditable={false} className="inline-flex items-center gap-2">
+    <PlateElement
+      {...props}
+      as="div"
+      className={cn(
+        "my-2 rounded-md p-0.5",
+        selected && "ring-2 ring-ring ring-offset-1"
+      )}
+    >
+      <div className="flex items-center gap-2">
         <Checkbox
           checked={checked}
           onCheckedChange={(c) => setChecked(c === true)}
           disabled={isPending}
+          contentEditable={false}
         />
-        {label && <Label className="text-sm cursor-pointer">{label}</Label>}
-      </span>
-      {props.children}
+        {showLabel && <Label className="text-sm font-medium cursor-pointer">{props.children}</Label>}
+        {!showLabel && <span className="hidden">{props.children}</span>}
+      </div>
     </PlateElement>
   );
 }
 
 /**
  * TextareaElement - Multi-line input that registers with parent LiveAction.
+ * Children are rendered as the label.
  */
 function TextareaElement(props: PlateElementProps) {
   const element = useElement<TTextareaElement>();
-  const { name, placeholder, defaultValue, rows = 3, label } = element;
+  const selected = useSelected();
+  const { name, placeholder, defaultValue, rows = 3 } = element;
 
   const actionCtx = useContext(LiveActionContext);
   const [value, setValue] = useState(defaultValue ?? "");
@@ -1095,21 +1142,30 @@ function TextareaElement(props: PlateElementProps) {
   }, [actionCtx, name]);
 
   const isPending = actionCtx?.isPending ?? false;
+  const showLabel = hasLabelContent(element);
 
   return (
-    <PlateElement {...props} as="div" className="my-2">
-      <div contentEditable={false} className="flex flex-col gap-1">
-        {label && <Label className="text-sm">{label}</Label>}
+    <PlateElement
+      {...props}
+      as="div"
+      className={cn(
+        "my-2 rounded-md p-0.5",
+        selected && "ring-2 ring-ring ring-offset-1"
+      )}
+    >
+      <div className="flex flex-col gap-1.5">
+        {showLabel && <Label className="text-sm font-medium">{props.children}</Label>}
         <Textarea
           value={value}
           onChange={(e) => setValue(e.target.value)}
           placeholder={placeholder}
           rows={rows}
           disabled={isPending}
+          contentEditable={false}
           className="w-full"
         />
+        {!showLabel && <span className="hidden">{props.children}</span>}
       </div>
-      {props.children}
     </PlateElement>
   );
 }
@@ -1158,53 +1214,57 @@ export const ButtonPlugin = createPlatePlugin({
 });
 
 /**
- * ActionInput Plugin - inline text input for form submission.
+ * Input Plugin - block text input for form submission.
+ * Children are the label text.
  */
 export const InputPlugin = createPlatePlugin({
   key: INPUT_KEY,
   node: {
     isElement: true,
-    isInline: true,
-    isVoid: true,
+    isInline: false, // Block element for proper form layout
+    isVoid: false,   // Has children (label text)
     component: memo(InputElement),
   },
 });
 
 /**
- * ActionSelect Plugin - inline dropdown for form submission.
+ * Select Plugin - block dropdown for form submission.
+ * Children are the label text.
  */
 export const SelectPlugin = createPlatePlugin({
   key: SELECT_KEY,
   node: {
     isElement: true,
-    isInline: true,
-    isVoid: true,
+    isInline: false, // Block element for proper form layout
+    isVoid: false,   // Has children (label text)
     component: memo(SelectElement),
   },
 });
 
 /**
- * ActionCheckbox Plugin - inline checkbox for form submission.
+ * Checkbox Plugin - block checkbox for form submission.
+ * Children are the label text.
  */
 export const CheckboxPlugin = createPlatePlugin({
   key: CHECKBOX_KEY,
   node: {
     isElement: true,
-    isInline: true,
-    isVoid: true,
+    isInline: false, // Block element for proper form layout
+    isVoid: false,   // Has children (label text)
     component: memo(CheckboxElement),
   },
 });
 
 /**
- * ActionTextarea Plugin - block textarea for form submission.
+ * Textarea Plugin - block textarea for form submission.
+ * Children are the label text.
  */
 export const TextareaPlugin = createPlatePlugin({
   key: TEXTAREA_KEY,
   node: {
     isElement: true,
     isInline: false, // Block element
-    isVoid: true,
+    isVoid: false,   // Has children (label text)
     component: memo(TextareaElement),
   },
 });
@@ -1394,7 +1454,7 @@ export const liveQueryMarkdownRule = {
   },
 
   [INPUT_KEY]: {
-    serialize: (node: TInputElement) => {
+    serialize: (node: TInputElement, options: any) => {
       const attributes: Array<{ type: "mdxJsxAttribute"; name: string; value: unknown }> = [
         { type: "mdxJsxAttribute", name: "name", value: node.name },
       ];
@@ -1435,21 +1495,21 @@ export const liveQueryMarkdownRule = {
           value: { type: "mdxJsxAttributeValueExpression", value: String(node.step) },
         });
       }
-      if (node.label) {
-        attributes.push({ type: "mdxJsxAttribute", name: "label", value: node.label });
-      }
+
+      // Serialize children (label text)
+      const children = convertNodesSerialize(node.children || [], options);
 
       return {
-        type: "mdxJsxTextElement",
+        type: "mdxJsxFlowElement", // Block element
         name: "Input",
         attributes,
-        children: [],
+        children,
       };
     },
   },
 
   [SELECT_KEY]: {
-    serialize: (node: TSelectElement) => {
+    serialize: (node: TSelectElement, options: any) => {
       const attributes: Array<{ type: "mdxJsxAttribute"; name: string; value: unknown }> = [
         { type: "mdxJsxAttribute", name: "name", value: node.name },
       ];
@@ -1475,43 +1535,43 @@ export const liveQueryMarkdownRule = {
       if (node.required) {
         attributes.push({ type: "mdxJsxAttribute", name: "required", value: null });
       }
-      if (node.label) {
-        attributes.push({ type: "mdxJsxAttribute", name: "label", value: node.label });
-      }
+
+      // Serialize children (label text)
+      const children = convertNodesSerialize(node.children || [], options);
 
       return {
-        type: "mdxJsxTextElement",
+        type: "mdxJsxFlowElement", // Block element
         name: "Select",
         attributes,
-        children: [],
+        children,
       };
     },
   },
 
   [CHECKBOX_KEY]: {
-    serialize: (node: TCheckboxElement) => {
+    serialize: (node: TCheckboxElement, options: any) => {
       const attributes: Array<{ type: "mdxJsxAttribute"; name: string; value: unknown }> = [
         { type: "mdxJsxAttribute", name: "name", value: node.name },
       ];
 
-      if (node.label) {
-        attributes.push({ type: "mdxJsxAttribute", name: "label", value: node.label });
-      }
       if (node.defaultChecked) {
         attributes.push({ type: "mdxJsxAttribute", name: "defaultChecked", value: null });
       }
 
+      // Serialize children (label text)
+      const children = convertNodesSerialize(node.children || [], options);
+
       return {
-        type: "mdxJsxTextElement",
+        type: "mdxJsxFlowElement", // Block element
         name: "Checkbox",
         attributes,
-        children: [],
+        children,
       };
     },
   },
 
   [TEXTAREA_KEY]: {
-    serialize: (node: TTextareaElement) => {
+    serialize: (node: TTextareaElement, options: any) => {
       const attributes: Array<{ type: "mdxJsxAttribute"; name: string; value: unknown }> = [
         { type: "mdxJsxAttribute", name: "name", value: node.name },
       ];
@@ -1532,15 +1592,15 @@ export const liveQueryMarkdownRule = {
       if (node.required) {
         attributes.push({ type: "mdxJsxAttribute", name: "required", value: null });
       }
-      if (node.label) {
-        attributes.push({ type: "mdxJsxAttribute", name: "label", value: node.label });
-      }
+
+      // Serialize children (label text)
+      const children = convertNodesSerialize(node.children || [], options);
 
       return {
         type: "mdxJsxFlowElement", // Block element
         name: "Textarea",
         attributes,
-        children: [],
+        children,
       };
     },
   },
@@ -1708,12 +1768,19 @@ function parseAttributes(
 }
 
 /**
- * Deserialize <ActionInput> MDX element.
+ * Deserialize <Input> MDX element.
+ * Children are the label text.
  */
 export function deserializeInputElement(
-  node: { attributes?: Array<{ type: string; name: string; value: unknown }> }
+  node: { attributes?: Array<{ type: string; name: string; value: unknown }> },
+  options?: { children?: (TElement | TText)[] }
 ): TInputElement {
   const props = parseAttributes(node);
+
+  // Use deserialized children from options, or fallback to empty text
+  const children = options?.children?.length
+    ? options.children
+    : [{ text: "" }];
 
   return {
     type: INPUT_KEY,
@@ -1726,18 +1793,24 @@ export function deserializeInputElement(
     min: props.min as number | string | undefined,
     max: props.max as number | string | undefined,
     step: props.step as number | undefined,
-    label: props.label as string | undefined,
-    children: [{ text: "" }],
+    children,
   };
 }
 
 /**
- * Deserialize <ActionSelect> MDX element.
+ * Deserialize <Select> MDX element.
+ * Children are the label text.
  */
 export function deserializeSelectElement(
-  node: { attributes?: Array<{ type: string; name: string; value: unknown }> }
+  node: { attributes?: Array<{ type: string; name: string; value: unknown }> },
+  options?: { children?: (TElement | TText)[] }
 ): TSelectElement {
   const props = parseAttributes(node);
+
+  // Use deserialized children from options, or fallback to empty text
+  const children = options?.children?.length
+    ? options.children
+    : [{ text: "" }];
 
   return {
     type: SELECT_KEY,
@@ -1746,35 +1819,47 @@ export function deserializeSelectElement(
     placeholder: props.placeholder as string | undefined,
     defaultValue: props.defaultValue as string | undefined,
     required: props.required === true,
-    label: props.label as string | undefined,
-    children: [{ text: "" }],
+    children,
   };
 }
 
 /**
- * Deserialize <ActionCheckbox> MDX element.
+ * Deserialize <Checkbox> MDX element.
+ * Children are the label text.
  */
 export function deserializeCheckboxElement(
-  node: { attributes?: Array<{ type: string; name: string; value: unknown }> }
+  node: { attributes?: Array<{ type: string; name: string; value: unknown }> },
+  options?: { children?: (TElement | TText)[] }
 ): TCheckboxElement {
   const props = parseAttributes(node);
+
+  // Use deserialized children from options, or fallback to empty text
+  const children = options?.children?.length
+    ? options.children
+    : [{ text: "" }];
 
   return {
     type: CHECKBOX_KEY,
     name: (props.name as string) || "",
-    label: props.label as string | undefined,
     defaultChecked: props.defaultChecked === true,
-    children: [{ text: "" }],
+    children,
   };
 }
 
 /**
- * Deserialize <ActionTextarea> MDX element.
+ * Deserialize <Textarea> MDX element.
+ * Children are the label text.
  */
 export function deserializeTextareaElement(
-  node: { attributes?: Array<{ type: string; name: string; value: unknown }> }
+  node: { attributes?: Array<{ type: string; name: string; value: unknown }> },
+  options?: { children?: (TElement | TText)[] }
 ): TTextareaElement {
   const props = parseAttributes(node);
+
+  // Use deserialized children from options, or fallback to empty text
+  const children = options?.children?.length
+    ? options.children
+    : [{ text: "" }];
 
   return {
     type: TEXTAREA_KEY,
@@ -1783,8 +1868,7 @@ export function deserializeTextareaElement(
     defaultValue: props.defaultValue as string | undefined,
     rows: typeof props.rows === "number" ? props.rows : undefined,
     required: props.required === true,
-    label: props.label as string | undefined,
-    children: [{ text: "" }],
+    children,
   };
 }
 

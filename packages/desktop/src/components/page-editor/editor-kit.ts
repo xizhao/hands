@@ -30,6 +30,7 @@ import { SandboxedBlockPlugin } from "./SandboxedBlock";
 import { TableKit } from "./plugins/table-kit";
 import { ToggleKit } from "./plugins/toggle-kit";
 import { LiveQueryKit } from "./plugins/live-query-kit";
+import { CardKit } from "./plugins/card-kit";
 import { MarkdownKit } from "./plugins/markdown-kit";
 import { PromptKit } from "./plugins/prompt-kit";
 
@@ -45,6 +46,7 @@ export const EditorKit = [
   ...CalloutKit,
   SandboxedBlockPlugin,
   ...LiveQueryKit,
+  ...CardKit,
   ...PromptKit,
 
   // Marks

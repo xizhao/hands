@@ -354,11 +354,13 @@ Form controls let you build interactive forms inside LiveAction. Values are capt
 
 ### MDX Syntax
 
+Form controls are **non-void elements** - their children are the label text. This makes labels editable in the editor.
+
 \`\`\`mdx
-<!-- Simple form with text inputs -->
+<!-- Simple form with text inputs (children = label) -->
 <LiveAction sql="INSERT INTO contacts (name, email) VALUES ({{name}}, {{email}})">
-  <Input name="name" placeholder="Full Name" required />
-  <Input name="email" type="email" placeholder="Email Address" />
+  <Input name="name" placeholder="Full Name" required>Full Name</Input>
+  <Input name="email" type="email" placeholder="Email Address">Email</Input>
   <Button>Add Contact</Button>
 </LiveAction>
 
@@ -371,26 +373,26 @@ Form controls let you build interactive forms inside LiveAction. Values are capt
       { value: "in_progress", label: "In Progress" },
       { value: "done", label: "Done" }
     ]}
-  />
+  >Status</Select>
   <Button>Update Status</Button>
 </LiveAction>
 
 <!-- Form with checkbox -->
 <LiveAction sql="UPDATE users SET newsletter = {{subscribe}} WHERE id = 1">
-  <Checkbox name="subscribe" label="Subscribe to newsletter" />
+  <Checkbox name="subscribe">Subscribe to newsletter</Checkbox>
   <Button>Save Preferences</Button>
 </LiveAction>
 
 <!-- Form with textarea -->
 <LiveAction sql="INSERT INTO notes (content, created_at) VALUES ({{content}}, datetime('now'))">
-  <Textarea name="content" placeholder="Write your note..." rows={4} />
+  <Textarea name="content" placeholder="Write your note..." rows={4}>Note Content</Textarea>
   <Button>Save Note</Button>
 </LiveAction>
 \`\`\`
 
 ### Input Element
 
-Text input for single-line values. Inline element.
+Text input for single-line values. Block element with editable label as children.
 
 | Prop | Type | Description |
 |------|------|-------------|
@@ -403,7 +405,7 @@ Text input for single-line values. Inline element.
 | \`min\` | number | Min value (for number inputs) |
 | \`max\` | number | Max value (for number inputs) |
 | \`step\` | number | Step increment (for number inputs) |
-| \`label\` | string | Label text displayed before input |
+| **children** | nodes | Label text (editable in editor) |
 
 \`\`\`typescript
 interface TInputElement extends TElement {
@@ -417,13 +419,13 @@ interface TInputElement extends TElement {
   min?: number | string;
   max?: number | string;
   step?: number;
-  label?: string;
+  children: (TElement | TText)[]; // Label text
 }
 \`\`\`
 
 ### Select Element
 
-Dropdown select for choosing from options. Inline element.
+Dropdown select for choosing from options. Block element with editable label as children.
 
 | Prop | Type | Description |
 |------|------|-------------|
@@ -432,7 +434,7 @@ Dropdown select for choosing from options. Inline element.
 | \`placeholder\` | string | Placeholder text when no selection |
 | \`defaultValue\` | string | Initially selected value |
 | \`required\` | boolean | Mark as required |
-| \`label\` | string | Label text displayed before select |
+| **children** | nodes | Label text (editable in editor) |
 
 \`\`\`typescript
 interface TSelectElement extends TElement {
@@ -442,32 +444,32 @@ interface TSelectElement extends TElement {
   placeholder?: string;
   defaultValue?: string;
   required?: boolean;
-  label?: string;
+  children: (TElement | TText)[]; // Label text
 }
 \`\`\`
 
 ### Checkbox Element
 
-Checkbox for boolean values. Inline element. Returns TRUE/FALSE in SQL.
+Checkbox for boolean values. Block element with editable label as children. Returns TRUE/FALSE in SQL.
 
 | Prop | Type | Description |
 |------|------|-------------|
 | \`name\` | string | **Required.** Field name for {{name}} binding |
-| \`label\` | string | Label text displayed after checkbox |
 | \`defaultChecked\` | boolean | Initial checked state |
+| **children** | nodes | Label text (editable in editor) |
 
 \`\`\`typescript
 interface TCheckboxElement extends TElement {
   type: "checkbox";
   name: string;
-  label?: string;
   defaultChecked?: boolean;
+  children: (TElement | TText)[]; // Label text
 }
 \`\`\`
 
 ### Textarea Element
 
-Multi-line text input. Block element.
+Multi-line text input. Block element with editable label as children.
 
 | Prop | Type | Description |
 |------|------|-------------|
@@ -476,7 +478,7 @@ Multi-line text input. Block element.
 | \`defaultValue\` | string | Initial value |
 | \`rows\` | number | Visible rows (default: 3) |
 | \`required\` | boolean | Mark as required |
-| \`label\` | string | Label text displayed above textarea |
+| **children** | nodes | Label text (editable in editor) |
 
 \`\`\`typescript
 interface TTextareaElement extends TElement {
@@ -486,7 +488,7 @@ interface TTextareaElement extends TElement {
   defaultValue?: string;
   rows?: number;
   required?: boolean;
-  label?: string;
+  children: (TElement | TText)[]; // Label text
 }
 \`\`\`
 
@@ -559,26 +561,107 @@ const notesTextarea = createTextareaElement("notes", {
 
 **Customer Details**
 
-<Input name="name" label="Name" placeholder="Full name" required />
+<Input name="name" placeholder="Full name" required>Name</Input>
 
-<Input name="email" type="email" label="Email" placeholder="email@example.com" />
+<Input name="email" type="email" placeholder="email@example.com">Email</Input>
 
 <Select
   name="tier"
-  label="Tier"
   options={[
     { value: "free", label: "Free" },
     { value: "pro", label: "Pro" },
     { value: "enterprise", label: "Enterprise" }
   ]}
   defaultValue="free"
-/>
+>Tier</Select>
 
-<Textarea name="notes" label="Notes" placeholder="Optional notes..." rows={3} />
+<Textarea name="notes" placeholder="Optional notes..." rows={3}>Notes</Textarea>
 
 <Button>Create Customer</Button>
 
 </LiveAction>
+\`\`\`
+`;
+
+// ============================================================================
+// Card Layout Components
+// ============================================================================
+
+export const CARD_DOCS = `
+## Card Layout Components
+
+Cards are layout containers for grouping related content with visual styling (borders, shadows).
+
+### MDX Syntax
+
+\`\`\`mdx
+<Card>
+  <CardHeader>
+    <CardTitle>Dashboard Stats</CardTitle>
+    <CardDescription>Overview of key metrics</CardDescription>
+  </CardHeader>
+  <CardContent>
+    Total Users: <LiveValue query="SELECT COUNT(*) FROM users" display="inline" />
+  </CardContent>
+  <CardFooter>
+    <Button>View All</Button>
+  </CardFooter>
+</Card>
+\`\`\`
+
+### Components
+
+| Component | Description |
+|-----------|-------------|
+| \`<Card>\` | Container with border, shadow, rounded corners |
+| \`<CardHeader>\` | Header section with padding |
+| \`<CardTitle>\` | Semibold title text |
+| \`<CardDescription>\` | Muted description text |
+| \`<CardContent>\` | Main content area with padding |
+| \`<CardFooter>\` | Footer section with padding |
+
+### Usage Patterns
+
+**Stats Card:**
+\`\`\`mdx
+<Card>
+  <CardHeader>
+    <CardTitle>Revenue</CardTitle>
+  </CardHeader>
+  <CardContent>
+    <h1><LiveValue query="SELECT SUM(amount) FROM orders" display="inline" /></h1>
+  </CardContent>
+</Card>
+\`\`\`
+
+**Form Card:**
+\`\`\`mdx
+<Card>
+  <CardHeader>
+    <CardTitle>Add Contact</CardTitle>
+    <CardDescription>Fill in the details below</CardDescription>
+  </CardHeader>
+  <CardContent>
+    <LiveAction sql="INSERT INTO contacts (name, email) VALUES ({{name}}, {{email}})">
+      <Input name="name" placeholder="Name">Name</Input>
+      <Input name="email" type="email" placeholder="Email">Email</Input>
+      <Button>Submit</Button>
+    </LiveAction>
+  </CardContent>
+</Card>
+\`\`\`
+
+**Multiple Cards (Dashboard):**
+\`\`\`mdx
+<Card>
+  <CardHeader><CardTitle>Users</CardTitle></CardHeader>
+  <CardContent><LiveValue query="SELECT COUNT(*) FROM users" display="inline" /></CardContent>
+</Card>
+
+<Card>
+  <CardHeader><CardTitle>Orders</CardTitle></CardHeader>
+  <CardContent><LiveValue query="SELECT COUNT(*) FROM orders" display="inline" /></CardContent>
+</Card>
 \`\`\`
 `;
 
@@ -648,10 +731,16 @@ Callouts are highlighted boxes for tips, warnings, or important notes.
 | \`<LiveValue>\` | \`<LiveValue query="..." />\` | SQL query display (auto-selects inline/list/table) |
 | \`<LiveAction>\` | \`<LiveAction sql="...">...</LiveAction>\` | Interactive write trigger |
 | \`<Button>\` | \`<Button>Click</Button>\` | Button that auto-triggers LiveAction |
-| \`<Input>\` | \`<Input name="field" />\` | Text input for forms |
-| \`<Select>\` | \`<Select name="field" options={...} />\` | Dropdown for forms |
-| \`<Checkbox>\` | \`<Checkbox name="field" />\` | Checkbox for forms |
-| \`<Textarea>\` | \`<Textarea name="field" />\` | Multi-line input for forms |
+| \`<Input>\` | \`<Input name="field">Label</Input>\` | Text input for forms |
+| \`<Select>\` | \`<Select name="field" options={...}>Label</Select>\` | Dropdown for forms |
+| \`<Checkbox>\` | \`<Checkbox name="field">Label</Checkbox>\` | Checkbox for forms |
+| \`<Textarea>\` | \`<Textarea name="field">Label</Textarea>\` | Multi-line input for forms |
+| \`<Card>\` | \`<Card>...</Card>\` | Card container with shadow/border |
+| \`<CardHeader>\` | \`<CardHeader>...</CardHeader>\` | Card header section |
+| \`<CardTitle>\` | \`<CardTitle>Title</CardTitle>\` | Card title |
+| \`<CardDescription>\` | \`<CardDescription>...</CardDescription>\` | Card description |
+| \`<CardContent>\` | \`<CardContent>...</CardContent>\` | Card content section |
+| \`<CardFooter>\` | \`<CardFooter>...</CardFooter>\` | Card footer section |
 
 ### Inline Elements
 - Links: \`[text](url)\`
@@ -750,10 +839,16 @@ The following elements have custom MDX serialization:
 | \`live_value\` | \`<LiveValue query="..." display="..." />\` |
 | \`live_action\` | \`<LiveAction sql="...">...</LiveAction>\` |
 | \`button\` | \`<Button variant="...">...</Button>\` |
-| \`input\` | \`<Input name="..." type="..." />\` |
-| \`select\` | \`<Select name="..." options={...} />\` |
-| \`checkbox\` | \`<Checkbox name="..." label="..." />\` |
-| \`textarea\` | \`<Textarea name="..." rows={...} />\` |
+| \`input\` | \`<Input name="...">Label</Input>\` |
+| \`select\` | \`<Select name="..." options={...}>Label</Select>\` |
+| \`checkbox\` | \`<Checkbox name="...">Label</Checkbox>\` |
+| \`textarea\` | \`<Textarea name="...">Label</Textarea>\` |
+| \`card\` | \`<Card>...</Card>\` |
+| \`card_header\` | \`<CardHeader>...</CardHeader>\` |
+| \`card_title\` | \`<CardTitle>...</CardTitle>\` |
+| \`card_description\` | \`<CardDescription>...</CardDescription>\` |
+| \`card_content\` | \`<CardContent>...</CardContent>\` |
+| \`card_footer\` | \`<CardFooter>...</CardFooter>\` |
 | \`sandboxed_block\` | \`<Block src="..." />\` |
 | \`fontColor\` mark | \`<span style="color: ...">\` |
 | \`fontBackgroundColor\` mark | \`<span style="background-color: ...">\` |
@@ -839,6 +934,8 @@ ${LIVEVALUE_DOCS}
 ${LIVEACTION_DOCS}
 
 ${FORM_CONTROLS_DOCS}
+
+${CARD_DOCS}
 
 ${BLOCK_ELEMENT_DOCS}
 

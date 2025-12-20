@@ -28,6 +28,15 @@ import {
   type TLiveActionElement,
   type TButtonElement,
 } from './live-query-kit';
+import {
+  cardMarkdownRule,
+  deserializeCardElement,
+  deserializeCardHeaderElement,
+  deserializeCardContentElement,
+  deserializeCardFooterElement,
+  deserializeCardTitleElement,
+  deserializeCardDescriptionElement,
+} from './card-kit';
 import { PROMPT_KEY } from './prompt-kit';
 
 /**
@@ -157,24 +166,75 @@ export const MarkdownKit = [
             return deserializeButtonElement(node, { children });
           },
         },
-        // Input element - void, text input for forms
+        // Input element - non-void, children are the label text
         Input: {
-          deserialize: (node) => deserializeInputElement(node),
+          deserialize: (node, deco, options) => {
+            const children = convertChildrenDeserialize(node.children || [], deco, options);
+            return deserializeInputElement(node, { children });
+          },
         },
-        // Select element - void, dropdown for forms
+        // Select element - non-void, children are the label text
         Select: {
-          deserialize: (node) => deserializeSelectElement(node),
+          deserialize: (node, deco, options) => {
+            const children = convertChildrenDeserialize(node.children || [], deco, options);
+            return deserializeSelectElement(node, { children });
+          },
         },
-        // Checkbox element - void, checkbox for forms
+        // Checkbox element - non-void, children are the label text
         Checkbox: {
-          deserialize: (node) => deserializeCheckboxElement(node),
+          deserialize: (node, deco, options) => {
+            const children = convertChildrenDeserialize(node.children || [], deco, options);
+            return deserializeCheckboxElement(node, { children });
+          },
         },
-        // Textarea element - void, multi-line input for forms
+        // Textarea element - non-void, children are the label text
         Textarea: {
-          deserialize: (node) => deserializeTextareaElement(node),
+          deserialize: (node, deco, options) => {
+            const children = convertChildrenDeserialize(node.children || [], deco, options);
+            return deserializeTextareaElement(node, { children });
+          },
+        },
+        // Card layout components - non-void, children are content
+        Card: {
+          deserialize: (node, deco, options) => {
+            const children = convertChildrenDeserialize(node.children || [], deco, options);
+            return deserializeCardElement(node, { children });
+          },
+        },
+        CardHeader: {
+          deserialize: (node, deco, options) => {
+            const children = convertChildrenDeserialize(node.children || [], deco, options);
+            return deserializeCardHeaderElement(node, { children });
+          },
+        },
+        CardContent: {
+          deserialize: (node, deco, options) => {
+            const children = convertChildrenDeserialize(node.children || [], deco, options);
+            return deserializeCardContentElement(node, { children });
+          },
+        },
+        CardFooter: {
+          deserialize: (node, deco, options) => {
+            const children = convertChildrenDeserialize(node.children || [], deco, options);
+            return deserializeCardFooterElement(node, { children });
+          },
+        },
+        CardTitle: {
+          deserialize: (node, deco, options) => {
+            const children = convertChildrenDeserialize(node.children || [], deco, options);
+            return deserializeCardTitleElement(node, { children });
+          },
+        },
+        CardDescription: {
+          deserialize: (node, deco, options) => {
+            const children = convertChildrenDeserialize(node.children || [], deco, options);
+            return deserializeCardDescriptionElement(node, { children });
+          },
         },
         // Serialize all live elements to MDX
         ...liveQueryMarkdownRule,
+        // Serialize Card elements to MDX
+        ...cardMarkdownRule,
         // Override LiveAction serialization to properly serialize children
         [LIVE_ACTION_KEY]: {
           serialize: (node: TLiveActionElement, options: any) => {
