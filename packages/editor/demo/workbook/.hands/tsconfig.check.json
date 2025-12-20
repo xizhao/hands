@@ -1,0 +1,64 @@
+{
+  "extends": "/Users/kevin/hands-proto/packages/runtime/tsconfig.json",
+  "compilerOptions": {
+    "baseUrl": "/Users/kevin/hands-proto/packages/runtime",
+    "moduleResolution": "node",
+    "typeRoots": [
+      "/Users/kevin/hands-proto/packages/runtime/node_modules/@types"
+    ],
+    "types": [
+      "node",
+      "react",
+      "react-dom"
+    ],
+    "paths": {
+      "@/*": [
+        "/Users/kevin/hands-proto/packages/runtime/src/*"
+      ],
+      "@hands/db": [
+        "/Users/kevin/hands-proto/packages/runtime/types/hands-db.d.ts"
+      ],
+      "@hands/db/types": [
+        "/Users/kevin/hands-proto/packages/editor/demo/workbook/.hands/db.d.ts"
+      ],
+      "@hands/runtime": [
+        "/Users/kevin/hands-proto/packages/runtime/types/hands-runtime.d.ts"
+      ],
+      "@hands/pages": [
+        "/Users/kevin/hands-proto/packages/runtime/types/pages-placeholder.d.ts"
+      ],
+      "@ui/*": [
+        "/Users/kevin/hands-proto/packages/editor/demo/workbook/ui/*"
+      ],
+      "@/blocks/*": [
+        "/Users/kevin/hands-proto/packages/editor/demo/workbook/blocks/*"
+      ],
+      "react": [
+        "/Users/kevin/hands-proto/packages/runtime/node_modules/react"
+      ],
+      "react/*": [
+        "/Users/kevin/hands-proto/packages/runtime/node_modules/react/*"
+      ],
+      "react-dom": [
+        "/Users/kevin/hands-proto/packages/runtime/node_modules/react-dom"
+      ],
+      "react-dom/*": [
+        "/Users/kevin/hands-proto/packages/runtime/node_modules/react-dom/*"
+      ]
+    }
+  },
+  "include": [
+    "/Users/kevin/hands-proto/packages/editor/demo/workbook/blocks/**/*.ts",
+    "/Users/kevin/hands-proto/packages/editor/demo/workbook/blocks/**/*.tsx",
+    "/Users/kevin/hands-proto/packages/editor/demo/workbook/pages/**/*.ts",
+    "/Users/kevin/hands-proto/packages/editor/demo/workbook/pages/**/*.tsx",
+    "/Users/kevin/hands-proto/packages/editor/demo/workbook/ui/**/*.ts",
+    "/Users/kevin/hands-proto/packages/editor/demo/workbook/ui/**/*.tsx",
+    "/Users/kevin/hands-proto/packages/editor/demo/workbook/lib/**/*.ts",
+    "/Users/kevin/hands-proto/packages/editor/demo/workbook/lib/**/*.tsx"
+  ],
+  "exclude": [
+    "/Users/kevin/hands-proto/packages/editor/demo/workbook/node_modules",
+    "/Users/kevin/hands-proto/packages/editor/demo/workbook/.hands"
+  ]
+}

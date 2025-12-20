@@ -28,7 +28,7 @@ import {
   useSelected,
 } from "platejs/react";
 import { PlateStatic } from "platejs/static";
-import { memo, useMemo, useCallback, useState, createContext, useContext, type ReactNode } from "react";
+import { memo, useMemo, useCallback, useState, useEffect, useRef, createContext, useContext, type ReactNode } from "react";
 import { toast } from "sonner";
 
 import {
@@ -37,6 +37,17 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import { Checkbox } from "@/components/ui/checkbox";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
 import { useLiveQuery } from "@/lib/live-query";
 import { useActiveRuntime } from "@/hooks/useWorkbook";
@@ -102,20 +113,126 @@ export interface TLiveActionElement extends TElement {
   children: (TElement | TText)[];
 }
 
-export const ACTION_BUTTON_KEY = "action_button";
+export const BUTTON_KEY = "button";
 
 /**
  * ActionButton element - a button that triggers the parent LiveAction on click.
  * Must be used inside a LiveAction element.
  */
-export interface TActionButtonElement extends TElement {
-  type: typeof ACTION_BUTTON_KEY;
+export interface TButtonElement extends TElement {
+  type: typeof BUTTON_KEY;
   /** Button label - uses children text if not specified */
   label?: string;
   /** Button variant styling */
   variant?: "default" | "outline" | "ghost" | "destructive";
   /** Children are the button content */
   children: (TElement | TText)[];
+}
+
+// ============================================================================
+// Form Control Types
+// ============================================================================
+
+export const INPUT_KEY = "input";
+export const SELECT_KEY = "select";
+export const OPTION_KEY = "option";
+export const CHECKBOX_KEY = "checkbox";
+export const TEXTAREA_KEY = "textarea";
+
+/**
+ * ActionInput element - text input that registers its value for form submission.
+ */
+export interface TInputElement extends TElement {
+  type: typeof INPUT_KEY;
+  /** Field name for form binding (used in {{name}} SQL substitution) */
+  name: string;
+  /** Input type */
+  inputType?: "text" | "email" | "number" | "password" | "tel" | "url";
+  /** Placeholder text */
+  placeholder?: string;
+  /** Default value */
+  defaultValue?: string;
+  /** Whether field is required */
+  required?: boolean;
+  /** Input pattern for validation */
+  pattern?: string;
+  /** Min value (for number) */
+  min?: number | string;
+  /** Max value (for number) */
+  max?: number | string;
+  /** Step value (for number) */
+  step?: number;
+  /** Label text */
+  label?: string;
+  children: [{ text: "" }];
+}
+
+/**
+ * ActionSelect element - dropdown that registers its value for form submission.
+ * Options can be provided via `options` prop OR via ActionOption children.
+ */
+export interface TSelectElement extends TElement {
+  type: typeof SELECT_KEY;
+  /** Field name for form binding */
+  name: string;
+  /** Select options (alternative to ActionOption children) */
+  options?: Array<{ value: string; label: string }>;
+  /** Placeholder text */
+  placeholder?: string;
+  /** Default value */
+  defaultValue?: string;
+  /** Whether field is required */
+  required?: boolean;
+  /** Label text */
+  label?: string;
+  /** Children can be ActionOption elements */
+  children: (TElement | TText)[];
+}
+
+/**
+ * ActionOption element - an option inside ActionSelect.
+ * Children are the label text.
+ */
+export interface TOptionElement extends TElement {
+  type: typeof OPTION_KEY;
+  /** Option value */
+  value: string;
+  /** Children are the label text */
+  children: (TElement | TText)[];
+}
+
+/**
+ * ActionCheckbox element - checkbox that registers its value for form submission.
+ */
+export interface TCheckboxElement extends TElement {
+  type: typeof CHECKBOX_KEY;
+  /** Field name for form binding */
+  name: string;
+  /** Label text displayed next to checkbox */
+  label?: string;
+  /** Default checked state */
+  defaultChecked?: boolean;
+  children: [{ text: "" }];
+}
+
+/**
+ * ActionTextarea element - multi-line text input for form submission.
+ */
+export interface TTextareaElement extends TElement {
+  type: typeof TEXTAREA_KEY;
+  /** Field name for form binding */
+  name: string;
+  /** Placeholder text */
+  placeholder?: string;
+  /** Default value */
+  defaultValue?: string;
+  /** Number of visible rows */
+  rows?: number;
+  /** Whether field is required */
+  required?: boolean;
+  /** Label text */
+  label?: string;
+  children: [{ text: "" }];
 }
 
 // ============================================================================
@@ -126,6 +243,10 @@ interface LiveActionContextValue {
   trigger: () => Promise<void>;
   isPending: boolean;
   error: Error | null;
+  /** Register a form field by name */
+  registerField: (name: string, getValue: () => unknown) => void;
+  /** Unregister a form field */
+  unregisterField: (name: string) => void;
 }
 
 const LiveActionContext = createContext<LiveActionContextValue | null>(null);
@@ -136,6 +257,36 @@ export function useLiveAction(): LiveActionContextValue {
     throw new Error("useLiveAction must be used within a LiveAction element");
   }
   return ctx;
+}
+
+// ============================================================================
+// Form Binding Substitution
+// ============================================================================
+
+/**
+ * Substitute {{field}} bindings in SQL with form values.
+ * Values are properly escaped for SQL.
+ */
+function substituteFormBindings(
+  sql: string,
+  formValues: Record<string, unknown>
+): string {
+  return sql.replace(/\{\{(\w+)\}\}/g, (match, field) => {
+    if (!(field in formValues)) {
+      console.warn(`[LiveAction] Form field {{${field}}} not found`);
+      return "NULL";
+    }
+
+    const value = formValues[field];
+
+    // SQL value formatting
+    if (value === null || value === undefined || value === "") return "NULL";
+    if (typeof value === "boolean") return value ? "TRUE" : "FALSE";
+    if (typeof value === "number") return String(value);
+
+    // String: escape single quotes
+    return `'${String(value).replace(/'/g, "''")}'`;
+  });
 }
 
 // ============================================================================
@@ -616,6 +767,25 @@ function LiveActionElement(props: PlateElementProps) {
   const [isPending, setIsPending] = useState(false);
   const [error, setError] = useState<Error | null>(null);
 
+  // Form field registration
+  const fieldsRef = useRef<Map<string, () => unknown>>(new Map());
+
+  const registerField = useCallback((name: string, getValue: () => unknown) => {
+    fieldsRef.current.set(name, getValue);
+  }, []);
+
+  const unregisterField = useCallback((name: string) => {
+    fieldsRef.current.delete(name);
+  }, []);
+
+  const getAllFormValues = useCallback(() => {
+    const values: Record<string, unknown> = {};
+    for (const [name, getValue] of fieldsRef.current) {
+      values[name] = getValue();
+    }
+    return values;
+  }, []);
+
   const dbQuery = trpc.db.query.useMutation({
     onError: () => {}, // Suppress global error handler - we show our own toast
   });
@@ -639,7 +809,11 @@ function LiveActionElement(props: PlateElementProps) {
     setError(null);
 
     try {
-      await dbQuery.mutateAsync({ sql, params: paramArray });
+      // Collect form values and substitute in SQL
+      const formValues = getAllFormValues();
+      const substitutedSql = substituteFormBindings(sql, formValues);
+
+      await dbQuery.mutateAsync({ sql: substitutedSql, params: paramArray });
     } catch (err) {
       const e = err instanceof Error ? err : new Error(String(err));
       setError(e);
@@ -647,11 +821,11 @@ function LiveActionElement(props: PlateElementProps) {
     } finally {
       setIsPending(false);
     }
-  }, [sql, paramArray, runtimePort, dbQuery]);
+  }, [sql, paramArray, runtimePort, dbQuery, getAllFormValues]);
 
   const contextValue = useMemo(
-    () => ({ trigger, isPending, error }),
-    [trigger, isPending, error]
+    () => ({ trigger, isPending, error, registerField, unregisterField }),
+    [trigger, isPending, error, registerField, unregisterField]
   );
 
   return (
@@ -675,11 +849,11 @@ function LiveActionElement(props: PlateElementProps) {
 // ============================================================================
 
 /**
- * ActionButtonElement - A button that triggers the parent LiveAction.
+ * ButtonElement - A button that triggers the parent LiveAction.
  * Automatically wires up onClick to call useLiveAction().trigger().
  */
-function ActionButtonElement(props: PlateElementProps) {
-  const element = useElement<TActionButtonElement>();
+function ButtonElement(props: PlateElementProps) {
+  const element = useElement<TButtonElement>();
   const { variant = "default" } = element;
 
   // Try to get context - will be null if not inside LiveAction
@@ -735,6 +909,212 @@ function ActionButtonElement(props: PlateElementProps) {
 }
 
 // ============================================================================
+// Form Control Components
+// ============================================================================
+
+/**
+ * InputElement - Text input that registers with parent LiveAction.
+ */
+function InputElement(props: PlateElementProps) {
+  const element = useElement<TInputElement>();
+  const {
+    name,
+    inputType = "text",
+    placeholder,
+    defaultValue,
+    required,
+    pattern,
+    min,
+    max,
+    step,
+    label,
+  } = element;
+
+  const actionCtx = useContext(LiveActionContext);
+  const [value, setValue] = useState(defaultValue ?? "");
+  const valueRef = useRef(value);
+  valueRef.current = value;
+
+  // Register with parent LiveAction
+  useEffect(() => {
+    if (!actionCtx || !name) return;
+
+    actionCtx.registerField(name, () => {
+      // For number inputs, convert to number
+      if (inputType === "number" && valueRef.current !== "") {
+        return Number(valueRef.current);
+      }
+      return valueRef.current;
+    });
+
+    return () => actionCtx.unregisterField(name);
+  }, [actionCtx, name, inputType]);
+
+  const isPending = actionCtx?.isPending ?? false;
+
+  return (
+    <PlateElement {...props} as="span">
+      <span contentEditable={false} className="inline-flex items-center gap-2">
+        {label && <Label className="text-sm">{label}</Label>}
+        <Input
+          type={inputType}
+          value={value}
+          onChange={(e) => setValue(e.target.value)}
+          placeholder={placeholder}
+          required={required}
+          pattern={pattern}
+          min={min}
+          max={max}
+          step={step}
+          disabled={isPending}
+          className="w-auto min-w-[120px]"
+        />
+      </span>
+      {props.children}
+    </PlateElement>
+  );
+}
+
+/**
+ * SelectElement - Dropdown that registers with parent LiveAction.
+ */
+function SelectElement(props: PlateElementProps) {
+  const element = useElement<TSelectElement>();
+  const { name, placeholder, defaultValue, label } = element;
+
+  // Ensure options is always an array (handle string/undefined cases)
+  const rawOptions = element.options;
+  const options: Array<{ value: string; label: string }> = useMemo(() => {
+    if (Array.isArray(rawOptions)) return rawOptions;
+    if (typeof rawOptions === "string") {
+      try {
+        const parsed = JSON.parse(rawOptions);
+        return Array.isArray(parsed) ? parsed : [];
+      } catch {
+        return [];
+      }
+    }
+    return [];
+  }, [rawOptions]);
+
+  const actionCtx = useContext(LiveActionContext);
+  const [value, setValue] = useState(defaultValue ?? "");
+  const valueRef = useRef(value);
+  valueRef.current = value;
+
+  // Register with parent LiveAction
+  useEffect(() => {
+    if (!actionCtx || !name) return;
+
+    actionCtx.registerField(name, () => valueRef.current);
+
+    return () => actionCtx.unregisterField(name);
+  }, [actionCtx, name]);
+
+  const isPending = actionCtx?.isPending ?? false;
+
+  return (
+    <PlateElement {...props} as="span">
+      <span contentEditable={false} className="inline-flex items-center gap-2">
+        {label && <Label className="text-sm">{label}</Label>}
+        <Select value={value} onValueChange={setValue} disabled={isPending}>
+          <SelectTrigger className="w-auto min-w-[120px] h-[28px]">
+            <SelectValue placeholder={placeholder ?? "Select..."} />
+          </SelectTrigger>
+          <SelectContent>
+            {options.map((opt) => (
+              <SelectItem key={opt.value} value={opt.value}>
+                {opt.label}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </span>
+      {props.children}
+    </PlateElement>
+  );
+}
+
+/**
+ * CheckboxElement - Checkbox that registers with parent LiveAction.
+ */
+function CheckboxElement(props: PlateElementProps) {
+  const element = useElement<TCheckboxElement>();
+  const { name, label, defaultChecked } = element;
+
+  const actionCtx = useContext(LiveActionContext);
+  const [checked, setChecked] = useState(defaultChecked ?? false);
+  const checkedRef = useRef(checked);
+  checkedRef.current = checked;
+
+  // Register with parent LiveAction
+  useEffect(() => {
+    if (!actionCtx || !name) return;
+
+    actionCtx.registerField(name, () => checkedRef.current);
+
+    return () => actionCtx.unregisterField(name);
+  }, [actionCtx, name]);
+
+  const isPending = actionCtx?.isPending ?? false;
+
+  return (
+    <PlateElement {...props} as="span">
+      <span contentEditable={false} className="inline-flex items-center gap-2">
+        <Checkbox
+          checked={checked}
+          onCheckedChange={(c) => setChecked(c === true)}
+          disabled={isPending}
+        />
+        {label && <Label className="text-sm cursor-pointer">{label}</Label>}
+      </span>
+      {props.children}
+    </PlateElement>
+  );
+}
+
+/**
+ * TextareaElement - Multi-line input that registers with parent LiveAction.
+ */
+function TextareaElement(props: PlateElementProps) {
+  const element = useElement<TTextareaElement>();
+  const { name, placeholder, defaultValue, rows = 3, label } = element;
+
+  const actionCtx = useContext(LiveActionContext);
+  const [value, setValue] = useState(defaultValue ?? "");
+  const valueRef = useRef(value);
+  valueRef.current = value;
+
+  // Register with parent LiveAction
+  useEffect(() => {
+    if (!actionCtx || !name) return;
+
+    actionCtx.registerField(name, () => valueRef.current);
+
+    return () => actionCtx.unregisterField(name);
+  }, [actionCtx, name]);
+
+  const isPending = actionCtx?.isPending ?? false;
+
+  return (
+    <PlateElement {...props} as="div" className="my-2">
+      <div contentEditable={false} className="flex flex-col gap-1">
+        {label && <Label className="text-sm">{label}</Label>}
+        <Textarea
+          value={value}
+          onChange={(e) => setValue(e.target.value)}
+          placeholder={placeholder}
+          rows={rows}
+          disabled={isPending}
+          className="w-full"
+        />
+      </div>
+      {props.children}
+    </PlateElement>
+  );
+}
+
+// ============================================================================
 // Plugins
 // ============================================================================
 
@@ -767,17 +1147,77 @@ export const LiveActionPlugin = createPlatePlugin({
 /**
  * ActionButton Plugin - inline button that triggers parent LiveAction.
  */
-export const ActionButtonPlugin = createPlatePlugin({
-  key: ACTION_BUTTON_KEY,
+export const ButtonPlugin = createPlatePlugin({
+  key: BUTTON_KEY,
   node: {
     isElement: true,
     isInline: true,
     isVoid: false, // Has children (button text)
-    component: memo(ActionButtonElement),
+    component: memo(ButtonElement),
   },
 });
 
-export const LiveQueryKit = [LiveValuePlugin, LiveActionPlugin, ActionButtonPlugin];
+/**
+ * ActionInput Plugin - inline text input for form submission.
+ */
+export const InputPlugin = createPlatePlugin({
+  key: INPUT_KEY,
+  node: {
+    isElement: true,
+    isInline: true,
+    isVoid: true,
+    component: memo(InputElement),
+  },
+});
+
+/**
+ * ActionSelect Plugin - inline dropdown for form submission.
+ */
+export const SelectPlugin = createPlatePlugin({
+  key: SELECT_KEY,
+  node: {
+    isElement: true,
+    isInline: true,
+    isVoid: true,
+    component: memo(SelectElement),
+  },
+});
+
+/**
+ * ActionCheckbox Plugin - inline checkbox for form submission.
+ */
+export const CheckboxPlugin = createPlatePlugin({
+  key: CHECKBOX_KEY,
+  node: {
+    isElement: true,
+    isInline: true,
+    isVoid: true,
+    component: memo(CheckboxElement),
+  },
+});
+
+/**
+ * ActionTextarea Plugin - block textarea for form submission.
+ */
+export const TextareaPlugin = createPlatePlugin({
+  key: TEXTAREA_KEY,
+  node: {
+    isElement: true,
+    isInline: false, // Block element
+    isVoid: true,
+    component: memo(TextareaElement),
+  },
+});
+
+export const LiveQueryKit = [
+  LiveValuePlugin,
+  LiveActionPlugin,
+  ButtonPlugin,
+  InputPlugin,
+  SelectPlugin,
+  CheckboxPlugin,
+  TextareaPlugin,
+];
 
 // ============================================================================
 // Insertion Helpers
@@ -824,12 +1264,12 @@ export function createLiveActionElement(
 /**
  * Create an ActionButton element that triggers parent LiveAction.
  */
-export function createActionButtonElement(
+export function createButtonElement(
   label: string,
-  variant?: TActionButtonElement["variant"]
-): TActionButtonElement {
+  variant?: TButtonElement["variant"]
+): TButtonElement {
   return {
-    type: ACTION_BUTTON_KEY,
+    type: BUTTON_KEY,
     variant,
     children: [{ text: label }],
   };
@@ -933,9 +1373,9 @@ export const liveQueryMarkdownRule = {
     },
   },
 
-  [ACTION_BUTTON_KEY]: {
+  [BUTTON_KEY]: {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    serialize: (node: TActionButtonElement, options?: any) => {
+    serialize: (node: TButtonElement, options?: any) => {
       const attributes: Array<{ type: "mdxJsxAttribute"; name: string; value: unknown }> = [];
 
       if (node.variant && node.variant !== "default") {
@@ -946,9 +1386,161 @@ export const liveQueryMarkdownRule = {
 
       return {
         type: "mdxJsxTextElement", // Inline element
-        name: "ActionButton",
+        name: "Button",
         attributes,
         children,
+      };
+    },
+  },
+
+  [INPUT_KEY]: {
+    serialize: (node: TInputElement) => {
+      const attributes: Array<{ type: "mdxJsxAttribute"; name: string; value: unknown }> = [
+        { type: "mdxJsxAttribute", name: "name", value: node.name },
+      ];
+
+      if (node.inputType && node.inputType !== "text") {
+        attributes.push({ type: "mdxJsxAttribute", name: "type", value: node.inputType });
+      }
+      if (node.placeholder) {
+        attributes.push({ type: "mdxJsxAttribute", name: "placeholder", value: node.placeholder });
+      }
+      if (node.defaultValue) {
+        attributes.push({ type: "mdxJsxAttribute", name: "defaultValue", value: node.defaultValue });
+      }
+      if (node.required) {
+        attributes.push({ type: "mdxJsxAttribute", name: "required", value: null });
+      }
+      if (node.pattern) {
+        attributes.push({ type: "mdxJsxAttribute", name: "pattern", value: node.pattern });
+      }
+      if (node.min !== undefined) {
+        attributes.push({
+          type: "mdxJsxAttribute",
+          name: "min",
+          value: { type: "mdxJsxAttributeValueExpression", value: String(node.min) },
+        });
+      }
+      if (node.max !== undefined) {
+        attributes.push({
+          type: "mdxJsxAttribute",
+          name: "max",
+          value: { type: "mdxJsxAttributeValueExpression", value: String(node.max) },
+        });
+      }
+      if (node.step !== undefined) {
+        attributes.push({
+          type: "mdxJsxAttribute",
+          name: "step",
+          value: { type: "mdxJsxAttributeValueExpression", value: String(node.step) },
+        });
+      }
+      if (node.label) {
+        attributes.push({ type: "mdxJsxAttribute", name: "label", value: node.label });
+      }
+
+      return {
+        type: "mdxJsxTextElement",
+        name: "Input",
+        attributes,
+        children: [],
+      };
+    },
+  },
+
+  [SELECT_KEY]: {
+    serialize: (node: TSelectElement) => {
+      const attributes: Array<{ type: "mdxJsxAttribute"; name: string; value: unknown }> = [
+        { type: "mdxJsxAttribute", name: "name", value: node.name },
+      ];
+
+      // Format options as JS object array syntax (not JSON - no quoted keys)
+      if (node.options && node.options.length > 0) {
+        const optionsJs = node.options
+          .map((opt) => `{ value: ${JSON.stringify(opt.value)}, label: ${JSON.stringify(opt.label)} }`)
+          .join(", ");
+        attributes.push({
+          type: "mdxJsxAttribute",
+          name: "options",
+          value: { type: "mdxJsxAttributeValueExpression", value: `[${optionsJs}]` },
+        });
+      }
+
+      if (node.placeholder) {
+        attributes.push({ type: "mdxJsxAttribute", name: "placeholder", value: node.placeholder });
+      }
+      if (node.defaultValue) {
+        attributes.push({ type: "mdxJsxAttribute", name: "defaultValue", value: node.defaultValue });
+      }
+      if (node.required) {
+        attributes.push({ type: "mdxJsxAttribute", name: "required", value: null });
+      }
+      if (node.label) {
+        attributes.push({ type: "mdxJsxAttribute", name: "label", value: node.label });
+      }
+
+      return {
+        type: "mdxJsxTextElement",
+        name: "Select",
+        attributes,
+        children: [],
+      };
+    },
+  },
+
+  [CHECKBOX_KEY]: {
+    serialize: (node: TCheckboxElement) => {
+      const attributes: Array<{ type: "mdxJsxAttribute"; name: string; value: unknown }> = [
+        { type: "mdxJsxAttribute", name: "name", value: node.name },
+      ];
+
+      if (node.label) {
+        attributes.push({ type: "mdxJsxAttribute", name: "label", value: node.label });
+      }
+      if (node.defaultChecked) {
+        attributes.push({ type: "mdxJsxAttribute", name: "defaultChecked", value: null });
+      }
+
+      return {
+        type: "mdxJsxTextElement",
+        name: "Checkbox",
+        attributes,
+        children: [],
+      };
+    },
+  },
+
+  [TEXTAREA_KEY]: {
+    serialize: (node: TTextareaElement) => {
+      const attributes: Array<{ type: "mdxJsxAttribute"; name: string; value: unknown }> = [
+        { type: "mdxJsxAttribute", name: "name", value: node.name },
+      ];
+
+      if (node.placeholder) {
+        attributes.push({ type: "mdxJsxAttribute", name: "placeholder", value: node.placeholder });
+      }
+      if (node.defaultValue) {
+        attributes.push({ type: "mdxJsxAttribute", name: "defaultValue", value: node.defaultValue });
+      }
+      if (node.rows && node.rows !== 3) {
+        attributes.push({
+          type: "mdxJsxAttribute",
+          name: "rows",
+          value: { type: "mdxJsxAttributeValueExpression", value: String(node.rows) },
+        });
+      }
+      if (node.required) {
+        attributes.push({ type: "mdxJsxAttribute", name: "required", value: null });
+      }
+      if (node.label) {
+        attributes.push({ type: "mdxJsxAttribute", name: "label", value: node.label });
+      }
+
+      return {
+        type: "mdxJsxFlowElement", // Block element
+        name: "Textarea",
+        attributes,
+        children: [],
       };
     },
   },
@@ -1051,12 +1643,12 @@ export function deserializeLiveActionElement(
 /**
  * Deserialize <ActionButton> MDX element.
  */
-export function deserializeActionButtonElement(
+export function deserializeButtonElement(
   node: {
     attributes?: Array<{ type: string; name: string; value: unknown }>;
   },
   options?: { children?: (TElement | TText)[] }
-): TActionButtonElement {
+): TButtonElement {
   const attributes = node.attributes || [];
   const props: Record<string, unknown> = {};
 
@@ -1079,9 +1671,186 @@ export function deserializeActionButtonElement(
     : [{ text: "" }];
 
   return {
-    type: ACTION_BUTTON_KEY,
-    variant: props.variant as TActionButtonElement["variant"],
+    type: BUTTON_KEY,
+    variant: props.variant as TButtonElement["variant"],
     children,
+  };
+}
+
+/**
+ * Helper to parse MDX attributes into a props object.
+ */
+function parseAttributes(
+  node: { attributes?: Array<{ type: string; name: string; value: unknown }> }
+): Record<string, unknown> {
+  const props: Record<string, unknown> = {};
+  for (const attr of node.attributes || []) {
+    if (attr.type === "mdxJsxAttribute") {
+      const name = attr.name;
+      const value = attr.value;
+      if (value === null || value === undefined) {
+        props[name] = true;
+      } else if (typeof value === "string") {
+        props[name] = value;
+      } else if (typeof value === "object" && value !== null) {
+        const expr = value as Record<string, unknown>;
+        if (expr.type === "mdxJsxAttributeValueExpression" && typeof expr.value === "string") {
+          try {
+            props[name] = JSON.parse(expr.value as string);
+          } catch {
+            props[name] = expr.value;
+          }
+        }
+      }
+    }
+  }
+  return props;
+}
+
+/**
+ * Deserialize <ActionInput> MDX element.
+ */
+export function deserializeInputElement(
+  node: { attributes?: Array<{ type: string; name: string; value: unknown }> }
+): TInputElement {
+  const props = parseAttributes(node);
+
+  return {
+    type: INPUT_KEY,
+    name: (props.name as string) || "",
+    inputType: props.type as TInputElement["inputType"],
+    placeholder: props.placeholder as string | undefined,
+    defaultValue: props.defaultValue as string | undefined,
+    required: props.required === true,
+    pattern: props.pattern as string | undefined,
+    min: props.min as number | string | undefined,
+    max: props.max as number | string | undefined,
+    step: props.step as number | undefined,
+    label: props.label as string | undefined,
+    children: [{ text: "" }],
+  };
+}
+
+/**
+ * Deserialize <ActionSelect> MDX element.
+ */
+export function deserializeSelectElement(
+  node: { attributes?: Array<{ type: string; name: string; value: unknown }> }
+): TSelectElement {
+  const props = parseAttributes(node);
+
+  return {
+    type: SELECT_KEY,
+    name: (props.name as string) || "",
+    options: (props.options as Array<{ value: string; label: string }>) || [],
+    placeholder: props.placeholder as string | undefined,
+    defaultValue: props.defaultValue as string | undefined,
+    required: props.required === true,
+    label: props.label as string | undefined,
+    children: [{ text: "" }],
+  };
+}
+
+/**
+ * Deserialize <ActionCheckbox> MDX element.
+ */
+export function deserializeCheckboxElement(
+  node: { attributes?: Array<{ type: string; name: string; value: unknown }> }
+): TCheckboxElement {
+  const props = parseAttributes(node);
+
+  return {
+    type: CHECKBOX_KEY,
+    name: (props.name as string) || "",
+    label: props.label as string | undefined,
+    defaultChecked: props.defaultChecked === true,
+    children: [{ text: "" }],
+  };
+}
+
+/**
+ * Deserialize <ActionTextarea> MDX element.
+ */
+export function deserializeTextareaElement(
+  node: { attributes?: Array<{ type: string; name: string; value: unknown }> }
+): TTextareaElement {
+  const props = parseAttributes(node);
+
+  return {
+    type: TEXTAREA_KEY,
+    name: (props.name as string) || "",
+    placeholder: props.placeholder as string | undefined,
+    defaultValue: props.defaultValue as string | undefined,
+    rows: typeof props.rows === "number" ? props.rows : undefined,
+    required: props.required === true,
+    label: props.label as string | undefined,
+    children: [{ text: "" }],
+  };
+}
+
+// ============================================================================
+// Element Creators
+// ============================================================================
+
+/**
+ * Create an ActionInput element.
+ */
+export function createInputElement(
+  name: string,
+  options?: Partial<Omit<TInputElement, "type" | "name" | "children">>
+): TInputElement {
+  return {
+    type: INPUT_KEY,
+    name,
+    ...options,
+    children: [{ text: "" }],
+  };
+}
+
+/**
+ * Create an ActionSelect element.
+ */
+export function createSelectElement(
+  name: string,
+  options: Array<{ value: string; label: string }>,
+  rest?: Partial<Omit<TSelectElement, "type" | "name" | "options" | "children">>
+): TSelectElement {
+  return {
+    type: SELECT_KEY,
+    name,
+    options,
+    ...rest,
+    children: [{ text: "" }],
+  };
+}
+
+/**
+ * Create an ActionCheckbox element.
+ */
+export function createCheckboxElement(
+  name: string,
+  options?: Partial<Omit<TCheckboxElement, "type" | "name" | "children">>
+): TCheckboxElement {
+  return {
+    type: CHECKBOX_KEY,
+    name,
+    ...options,
+    children: [{ text: "" }],
+  };
+}
+
+/**
+ * Create an ActionTextarea element.
+ */
+export function createTextareaElement(
+  name: string,
+  options?: Partial<Omit<TTextareaElement, "type" | "name" | "children">>
+): TTextareaElement {
+  return {
+    type: TEXTAREA_KEY,
+    name,
+    ...options,
+    children: [{ text: "" }],
   };
 }
 

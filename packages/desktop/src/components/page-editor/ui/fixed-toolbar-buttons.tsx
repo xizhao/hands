@@ -24,7 +24,7 @@ import { useCallback } from "react";
 import {
   createLiveValueElement,
   createLiveActionElement,
-  createActionButtonElement,
+  createButtonElement,
 } from "../plugins/live-query-kit";
 
 import { cn } from "@/lib/utils";
@@ -133,11 +133,11 @@ function InsertLiveActionButton() {
   const editor = useEditorRef();
 
   const handleClick = useCallback(() => {
-    // Create a LiveAction with an ActionButton child
-    const actionButton = createActionButtonElement("Click me");
+    // Create a LiveAction with a Button child
+    const button = createButtonElement("Click me");
     const element = createLiveActionElement(
       { sql: "-- UPDATE table SET column = value WHERE id = 1" },
-      [{ type: "p", children: [actionButton] }]
+      [{ type: "p", children: [button] }]
     );
     editor.tf.insertNodes(element);
     editor.tf.focus();

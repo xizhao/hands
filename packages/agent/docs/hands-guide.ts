@@ -1,148 +1,126 @@
 /**
  * Hands App Architecture Guide
  *
- * Balanced overview of all four primitives: Pages, Data, Blocks, Actions.
+ * Core philosophy: Build apps in Markdown using observable MDX grammar.
  * Keep this tight - it goes in system prompts.
  */
 
 export const HANDS_ARCHITECTURE = `
-## Hands Architecture
+## Hands Architecture: Apps in Markdown
 
-Four primitives: **Pages**, **Data (Tables + Sources)**, **Blocks**, **Actions**.
+Hands is a framework for building data apps using **observable MDX** - markdown with live SQL bindings.
 
 \`\`\`
 workbook/
-├── pages/        # MDX documents (user-facing)
-├── blocks/       # TSX components (data visualizations)
+├── pages/        # MDX apps (primary output - where users interact)
+├── blocks/       # TSX components (only for custom visualizations)
 ├── sources/      # Data connectors (API sync)
-├── actions/      # Scheduled/triggered tasks
-└── ui/           # Client components (interactivity)
+└── ui/           # Shared UI components
 \`\`\`
 
-### 1. Pages (MDX)
+### Core Concept: Observable MDX
 
-User-facing documents that compose content, data, and blocks.
+Pages are **living documents** where data flows from SQL into the UI automatically:
 
 \`\`\`mdx
 ---
-title: Sales Dashboard
+title: Customer Dashboard
 ---
 
-# Overview
+# Customers
 
-We have <LiveValue query="SELECT COUNT(*) FROM customers" /> customers.
+We have <LiveValue query="SELECT COUNT(*) FROM customers" display="inline" /> total customers.
 
+## Top Customers
+<LiveValue query="SELECT name, revenue FROM customers ORDER BY revenue DESC LIMIT 10" display="table" />
+
+## Add Customer
+<LiveAction sql="INSERT INTO customers (name, email) VALUES ({{name}}, {{email}})">
+  <Input name="name" placeholder="Customer name" />
+  <Input name="email" type="email" placeholder="Email" />
+  <Button>Add Customer</Button>
+</LiveAction>
+\`\`\`
+
+This single MDX file is a complete CRUD app - no React code needed.
+
+### Observable Grammar
+
+#### LiveValue - Read Data (SELECT)
+
+Display SQL results inline, as lists, or tables. Auto-refreshes when data changes.
+
+| Data Shape | Display | Example |
+|------------|---------|---------|
+| Single value | \`inline\` | \`<LiveValue query="SELECT COUNT(*)" display="inline" />\` |
+| One column | \`list\` | \`<LiveValue query="SELECT name FROM users" display="list" />\` |
+| Multiple columns | \`table\` | \`<LiveValue query="SELECT * FROM orders" display="table" />\` |
+| Auto-detect | (default) | \`<LiveValue query="..." />\` picks best format |
+
+#### LiveAction - Write Data (INSERT/UPDATE/DELETE)
+
+Wrap form controls to collect user input and execute mutations:
+
+\`\`\`mdx
+<LiveAction sql="UPDATE tasks SET status = {{status}} WHERE id = 1">
+  <Select name="status" options={[
+    { value: "todo", label: "To Do" },
+    { value: "done", label: "Done" }
+  ]} />
+  <Button>Update</Button>
+</LiveAction>
+\`\`\`
+
+**Form Controls:**
+- \`<Input name="field">\` - Text, email, number inputs
+- \`<Select name="field" options={...}>\` - Dropdowns
+- \`<Checkbox name="field">\` - Boolean toggle
+- \`<Textarea name="field">\` - Multi-line text
+- \`<Button>\` - Submit button (triggers the SQL)
+
+Values are bound using \`{{fieldName}}\` in the SQL.
+
+#### Block - Custom Visualizations
+
+Only use \`<Block>\` when MDX can't express what you need (charts, complex interactivity):
+
+\`\`\`mdx
 <Block src="revenue-chart" />
-
-<LiveQuery query="SELECT name, total FROM top_customers LIMIT 5" />
 \`\`\`
 
-**Key components:**
-- \`<LiveValue>\` - Inline SQL result (single value, shows as badge)
-- \`<LiveQuery>\` - Block-level SQL result (auto-formatted table/list/metrics)
-- \`<Block>\` - Embedded TSX component from blocks/
+### Decision Guide: MDX First
 
-**When to use:** User-facing dashboards, reports, documentation with live data.
+| Need | Solution |
+|------|----------|
+| Show a count/metric | \`<LiveValue query="SELECT COUNT(*)" display="inline" />\` |
+| Show a table | \`<LiveValue query="SELECT *..." display="table" />\` |
+| Show a list | \`<LiveValue query="SELECT name..." display="list" />\` |
+| Add/edit/delete data | \`<LiveAction>\` with form controls |
+| Simple button action | \`<LiveAction sql="..."><Button>Do It</Button></LiveAction>\` |
+| Dropdown filter → action | \`<Select>\` inside \`<LiveAction>\` |
+| Interactive chart | \`<Block src="..."/>\` (delegate to @coder) |
+| Complex custom UI | \`<Block src="..."/>\` (delegate to @coder) |
 
-### 2. Data (Tables + Sources)
+**90% of data apps can be built with LiveValue + LiveAction. Only use Blocks for truly custom visualizations.**
 
-All data lives in PostgreSQL tables. Two ways to get data in:
+### Data Sources
 
-**Sources** - Code-based API connectors (recurring sync):
+**Sources** - Recurring API sync:
 \`\`\`
-sources action='add' name='hackernews'  # Add connector
-sources action='sync' name='hackernews' # Trigger sync
+sources action='add' name='stripe'
 \`\`\`
-Creates prefixed tables like \`hackernews_stories\`.
 
-**@import** - One-time file ingestion:
+**@import** - One-time file import:
 \`\`\`
 @import /path/to/data.csv
 \`\`\`
-User names the table.
 
-**Querying:**
-\`\`\`
-sql query="SELECT * FROM customers LIMIT 10"
-schema table="orders"  # View columns
-\`\`\`
+### File Patterns
 
-**When to use:** Sources for APIs, @import for files.
-
-### 3. Blocks (TSX)
-
-Server components that query data and render visualizations.
-
-\`\`\`tsx
-"use server";
-import { sql } from "@hands/db";
-
-export default async function RevenueChart({ period = "30d" }) {
-  const data = await sql\`SELECT date, SUM(amount) as revenue FROM orders GROUP BY date\`;
-  return <Chart data={data} />;
-}
-\`\`\`
-
-**Rules:**
-- MUST have \`"use server"\` directive
-- Read-only (SELECT only, no INSERT/UPDATE)
-- One concept per file
-- No useState/useEffect (use ui/ components for interactivity)
-
-**When to use:** Reusable charts, tables, metrics that appear in multiple pages.
-
-### 4. Actions (Write Operations)
-
-Scheduled or triggered tasks that write data.
-
-\`\`\`
-workbook/actions/
-├── sync-stripe.ts      # Runs on schedule
-├── daily-report.ts     # Cron job
-└── webhook-handler.ts  # HTTP trigger
-\`\`\`
-
-**Triggers:**
-- Schedule (cron)
-- Webhook (HTTP)
-- Manual (run button)
-
-**When to use:** Data syncs, report generation, any write operations.
-
-### Data Flow
-
-\`\`\`
-[External APIs] → Sources/Actions → [Tables] → Blocks/LiveQuery → [Pages]
-                     write              store        read             display
-\`\`\`
-
-### Quick Decision Guide
-
-| Want to... | Use |
-|------------|-----|
-| Show live data inline | \`<LiveValue query="...">\` in Page |
-| Show query results | \`<LiveQuery query="...">\` in Page |
-| Build reusable chart | Block in blocks/ |
-| Connect an API | Source |
-| Import a file | @import agent |
-| Schedule data sync | Action |
-| Add interactivity | ui/ component |
-
-### UI Components (Client)
-
-For interactivity, use client components in \`ui/\`:
-
-\`\`\`tsx
-"use client";
-import { useState } from "react";
-
-export function Counter() {
-  const [count, setCount] = useState(0);
-  return <button onClick={() => setCount(c => c + 1)}>{count}</button>;
-}
-\`\`\`
-
-Import into blocks: \`import { Counter } from "@ui/counter"\`
-
-Install shadcn components: \`ui add button card chart\`
+| Directory | Purpose | When to Create |
+|-----------|---------|----------------|
+| \`pages/\` | User-facing MDX apps | Always - this is the primary output |
+| \`blocks/\` | Custom TSX visualizations | Only when MDX can't express it |
+| \`sources/\` | API data connectors | When syncing external data |
+| \`ui/\` | Shared client components | For reusable interactive pieces |
 `;

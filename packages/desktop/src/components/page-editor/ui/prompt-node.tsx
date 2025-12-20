@@ -110,7 +110,7 @@ ${schemaContext}
 
 - \`<LiveValue query="SQL" />\` - Display live data (auto-selects inline/list/table based on result shape)
 - \`<LiveValue query="SQL" display="inline" />\` - Inline value in text
-- \`<LiveAction sql="SQL"><ActionButton>Label</ActionButton></LiveAction>\` - Interactive button that runs SQL
+- \`<LiveAction sql="SQL"><Button>Label</Button></LiveAction>\` - Interactive button that runs SQL
 
 ## Instructions
 

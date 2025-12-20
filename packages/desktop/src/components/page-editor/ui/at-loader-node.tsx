@@ -55,6 +55,7 @@ export function AtLoaderElement(props: PlateElementProps) {
   const hasCalledRef = useRef(false);
   const retryCountRef = useRef(0);
   const errorsRef = useRef<string[]>([]);
+  const previousGenerationsRef = useRef<string[]>([]);
 
   const { prompt } = element;
 
@@ -68,7 +69,7 @@ export function AtLoaderElement(props: PlateElementProps) {
     if (readOnly || hasCalledRef.current) return;
     hasCalledRef.current = true;
 
-    const fetchAndSwap = async (errors?: string[]) => {
+    const fetchAndSwap = async (errors?: string[], previousGenerations?: string[]) => {
       // Check for prefetched promise first (only on initial call)
       let queryPromise = errors?.length ? null : pendingMdxQueries.get(prompt);
 
@@ -83,6 +84,7 @@ export function AtLoaderElement(props: PlateElementProps) {
           prompt,
           tables,
           errors: errors?.length ? errors : undefined,
+          previousGenerations: previousGenerations?.length ? previousGenerations : undefined,
           prefix,
           suffix,
           title: title ?? undefined,
@@ -127,10 +129,11 @@ export function AtLoaderElement(props: PlateElementProps) {
           if (retryCountRef.current < MAX_RETRIES) {
             retryCountRef.current++;
             errorsRef.current = [...errorsRef.current, errorMsg];
-            console.log(`[at-loader] Retry ${retryCountRef.current}/${MAX_RETRIES} due to error:`, errorMsg);
-            // Clear cache and retry with errors
+            previousGenerationsRef.current = [...previousGenerationsRef.current, result.mdx];
+            console.log(`[at-loader] Retry ${retryCountRef.current}/${MAX_RETRIES} due to error:`, errorMsg, 'Previous output:', result.mdx);
+            // Clear cache and retry with errors and previous generations
             pendingMdxQueries.delete(prompt);
-            await fetchAndSwap(errorsRef.current);
+            await fetchAndSwap(errorsRef.current, previousGenerationsRef.current);
           } else {
             // Max retries reached, insert as plain text
             console.warn('[at-loader] Max retries reached, inserting as plain text');

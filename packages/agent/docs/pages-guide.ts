@@ -104,10 +104,10 @@ const yaml = serializeFrontmatter({ title: "My Page", description: "..." });
 `;
 
 // ============================================================================
-// LiveValue - Unified Data Display Element
+// LiveValue - Unified Data Display Element (Read-only SQL queries)
 // ============================================================================
 
-export const LIVEQUERY_DOCS = `
+export const LIVEVALUE_DOCS = `
 ## LiveValue Element
 
 Unified element for displaying SQL query results. Auto-selects minimal display based on data shape, or use explicit \`display\` prop.
@@ -189,8 +189,8 @@ const templated = createLiveValueElement("SELECT name FROM users", {
 \`\`\`
 `;
 
-// LIVEVALUE_DOCS is now empty - consolidated into LIVEQUERY_DOCS above
-export const LIVEVALUE_DOCS = ``;
+// Alias for backward compatibility (LIVEQUERY_DOCS was the old name)
+export const LIVEQUERY_DOCS = LIVEVALUE_DOCS;
 
 // ============================================================================
 // LiveAction - Interactive Write Operations
@@ -284,7 +284,7 @@ const element = createLiveActionElement(
 - **SSE auto-refresh**: LiveValue nodes inside automatically update after write
 - **Non-void element**: Children are editable in the editor
 
-## ActionButton Element
+## Button Element
 
 Built-in button that auto-wires \`trigger()\` from LiveAction context. Use inside LiveAction for automatic click handling.
 
@@ -292,19 +292,19 @@ Built-in button that auto-wires \`trigger()\` from LiveAction context. Use insid
 
 \`\`\`mdx
 <LiveAction sql="UPDATE counters SET value = value + 1 WHERE id = 1">
-  <ActionButton>+1</ActionButton>
+  <Button>+1</Button>
 </LiveAction>
 
 <!-- With variant styling -->
 <LiveAction sql="DELETE FROM items WHERE id = 1">
-  <ActionButton variant="destructive">Delete</ActionButton>
+  <Button variant="destructive">Delete</Button>
 </LiveAction>
 
 <!-- Combining with LiveValue -->
 <LiveAction sql="UPDATE counters SET value = value + 1 WHERE id = 1">
-  <ActionButton>
+  <Button>
     Count: <LiveValue query="SELECT value FROM counters WHERE id = 1" display="inline" />
-  </ActionButton>
+  </Button>
 </LiveAction>
 \`\`\`
 
@@ -320,8 +320,8 @@ Built-in button that auto-wires \`trigger()\` from LiveAction context. Use insid
 ### Plate Element Type
 
 \`\`\`typescript
-interface TActionButtonElement extends TElement {
-  type: "action_button";
+interface TButtonElement extends TElement {
+  type: "button";
   variant?: "default" | "outline" | "ghost" | "destructive";
   children: (TElement | TText)[]; // Button content
 }
@@ -333,6 +333,253 @@ interface TActionButtonElement extends TElement {
 - **Loading state**: Shows spinner and disables during execution
 - **Error handling**: Falls back to toast if not inside LiveAction
 - **Non-void element**: Children are editable (text, LiveValue, etc.)
+`;
+
+// ============================================================================
+// Form Controls - Interactive Form Elements
+// ============================================================================
+
+export const FORM_CONTROLS_DOCS = `
+## Form Controls
+
+Form controls let you build interactive forms inside LiveAction. Values are captured and substituted into the SQL using \`{{fieldName}}\` bindings.
+
+### How Form Binding Works
+
+1. Form controls register with their parent LiveAction by \`name\`
+2. SQL uses \`{{name}}\` template syntax for substitution
+3. When Button is clicked, all field values are collected
+4. \`{{fieldName}}\` placeholders are replaced with escaped values
+5. Substituted SQL is executed
+
+### MDX Syntax
+
+\`\`\`mdx
+<!-- Simple form with text inputs -->
+<LiveAction sql="INSERT INTO contacts (name, email) VALUES ({{name}}, {{email}})">
+  <Input name="name" placeholder="Full Name" required />
+  <Input name="email" type="email" placeholder="Email Address" />
+  <Button>Add Contact</Button>
+</LiveAction>
+
+<!-- Form with dropdown selection -->
+<LiveAction sql="UPDATE tasks SET status = {{status}} WHERE id = 1">
+  <Select
+    name="status"
+    options={[
+      { value: "pending", label: "Pending" },
+      { value: "in_progress", label: "In Progress" },
+      { value: "done", label: "Done" }
+    ]}
+  />
+  <Button>Update Status</Button>
+</LiveAction>
+
+<!-- Form with checkbox -->
+<LiveAction sql="UPDATE users SET newsletter = {{subscribe}} WHERE id = 1">
+  <Checkbox name="subscribe" label="Subscribe to newsletter" />
+  <Button>Save Preferences</Button>
+</LiveAction>
+
+<!-- Form with textarea -->
+<LiveAction sql="INSERT INTO notes (content, created_at) VALUES ({{content}}, datetime('now'))">
+  <Textarea name="content" placeholder="Write your note..." rows={4} />
+  <Button>Save Note</Button>
+</LiveAction>
+\`\`\`
+
+### Input Element
+
+Text input for single-line values. Inline element.
+
+| Prop | Type | Description |
+|------|------|-------------|
+| \`name\` | string | **Required.** Field name for {{name}} binding |
+| \`type\` | string | Input type: text, email, number, password, tel, url |
+| \`placeholder\` | string | Placeholder text |
+| \`defaultValue\` | string | Initial value |
+| \`required\` | boolean | Mark as required |
+| \`pattern\` | string | Validation regex pattern |
+| \`min\` | number | Min value (for number inputs) |
+| \`max\` | number | Max value (for number inputs) |
+| \`step\` | number | Step increment (for number inputs) |
+| \`label\` | string | Label text displayed before input |
+
+\`\`\`typescript
+interface TInputElement extends TElement {
+  type: "input";
+  name: string;
+  inputType?: "text" | "email" | "number" | "password" | "tel" | "url";
+  placeholder?: string;
+  defaultValue?: string;
+  required?: boolean;
+  pattern?: string;
+  min?: number | string;
+  max?: number | string;
+  step?: number;
+  label?: string;
+}
+\`\`\`
+
+### Select Element
+
+Dropdown select for choosing from options. Inline element.
+
+| Prop | Type | Description |
+|------|------|-------------|
+| \`name\` | string | **Required.** Field name for {{name}} binding |
+| \`options\` | array | **Required.** Array of { value, label } objects |
+| \`placeholder\` | string | Placeholder text when no selection |
+| \`defaultValue\` | string | Initially selected value |
+| \`required\` | boolean | Mark as required |
+| \`label\` | string | Label text displayed before select |
+
+\`\`\`typescript
+interface TSelectElement extends TElement {
+  type: "select";
+  name: string;
+  options: Array<{ value: string; label: string }>;
+  placeholder?: string;
+  defaultValue?: string;
+  required?: boolean;
+  label?: string;
+}
+\`\`\`
+
+### Checkbox Element
+
+Checkbox for boolean values. Inline element. Returns TRUE/FALSE in SQL.
+
+| Prop | Type | Description |
+|------|------|-------------|
+| \`name\` | string | **Required.** Field name for {{name}} binding |
+| \`label\` | string | Label text displayed after checkbox |
+| \`defaultChecked\` | boolean | Initial checked state |
+
+\`\`\`typescript
+interface TCheckboxElement extends TElement {
+  type: "checkbox";
+  name: string;
+  label?: string;
+  defaultChecked?: boolean;
+}
+\`\`\`
+
+### Textarea Element
+
+Multi-line text input. Block element.
+
+| Prop | Type | Description |
+|------|------|-------------|
+| \`name\` | string | **Required.** Field name for {{name}} binding |
+| \`placeholder\` | string | Placeholder text |
+| \`defaultValue\` | string | Initial value |
+| \`rows\` | number | Visible rows (default: 3) |
+| \`required\` | boolean | Mark as required |
+| \`label\` | string | Label text displayed above textarea |
+
+\`\`\`typescript
+interface TTextareaElement extends TElement {
+  type: "textarea";
+  name: string;
+  placeholder?: string;
+  defaultValue?: string;
+  rows?: number;
+  required?: boolean;
+  label?: string;
+}
+\`\`\`
+
+### Value Substitution Rules
+
+When \`trigger()\` is called, values are substituted as follows:
+
+| Value Type | SQL Output |
+|------------|------------|
+| Empty/null/undefined | \`NULL\` |
+| Boolean true | \`TRUE\` |
+| Boolean false | \`FALSE\` |
+| Number | Number as-is (e.g., \`42\`) |
+| String | Escaped string (e.g., \`'O''Brien'\`) |
+
+### Creating Form Control Elements
+
+\`\`\`typescript
+import {
+  createInputElement,
+  createSelectElement,
+  createCheckboxElement,
+  createTextareaElement,
+} from "@/components/page-editor/plugins/live-query-kit";
+
+// Text input
+const nameInput = createInputElement("name", {
+  placeholder: "Enter your name",
+  required: true,
+});
+
+// Email input
+const emailInput = createInputElement("email", {
+  inputType: "email",
+  placeholder: "Enter email",
+});
+
+// Number input
+const ageInput = createInputElement("age", {
+  inputType: "number",
+  min: 0,
+  max: 120,
+});
+
+// Select dropdown
+const statusSelect = createSelectElement("status", [
+  { value: "active", label: "Active" },
+  { value: "inactive", label: "Inactive" },
+]);
+
+// Checkbox
+const subscribeCheckbox = createCheckboxElement("subscribe", {
+  label: "Subscribe to updates",
+  defaultChecked: true,
+});
+
+// Textarea
+const notesTextarea = createTextareaElement("notes", {
+  placeholder: "Additional notes...",
+  rows: 4,
+});
+\`\`\`
+
+### Complete Form Example
+
+\`\`\`mdx
+## Add New Customer
+
+<LiveAction sql="INSERT INTO customers (name, email, tier, notes) VALUES ({{name}}, {{email}}, {{tier}}, {{notes}})">
+
+**Customer Details**
+
+<Input name="name" label="Name" placeholder="Full name" required />
+
+<Input name="email" type="email" label="Email" placeholder="email@example.com" />
+
+<Select
+  name="tier"
+  label="Tier"
+  options={[
+    { value: "free", label: "Free" },
+    { value: "pro", label: "Pro" },
+    { value: "enterprise", label: "Enterprise" }
+  ]}
+  defaultValue="free"
+/>
+
+<Textarea name="notes" label="Notes" placeholder="Optional notes..." rows={3} />
+
+<Button>Create Customer</Button>
+
+</LiveAction>
+\`\`\`
 `;
 
 // ============================================================================
@@ -400,7 +647,11 @@ Callouts are highlighted boxes for tips, warnings, or important notes.
 | \`<Block>\` | \`<Block src="chart" />\` | Embed TSX block |
 | \`<LiveValue>\` | \`<LiveValue query="..." />\` | SQL query display (auto-selects inline/list/table) |
 | \`<LiveAction>\` | \`<LiveAction sql="...">...</LiveAction>\` | Interactive write trigger |
-| \`<ActionButton>\` | \`<ActionButton>Click</ActionButton>\` | Button that auto-triggers LiveAction |
+| \`<Button>\` | \`<Button>Click</Button>\` | Button that auto-triggers LiveAction |
+| \`<Input>\` | \`<Input name="field" />\` | Text input for forms |
+| \`<Select>\` | \`<Select name="field" options={...} />\` | Dropdown for forms |
+| \`<Checkbox>\` | \`<Checkbox name="field" />\` | Checkbox for forms |
+| \`<Textarea>\` | \`<Textarea name="field" />\` | Multi-line input for forms |
 
 ### Inline Elements
 - Links: \`[text](url)\`
@@ -498,7 +749,11 @@ The following elements have custom MDX serialization:
 |---------------|---------|
 | \`live_value\` | \`<LiveValue query="..." display="..." />\` |
 | \`live_action\` | \`<LiveAction sql="...">...</LiveAction>\` |
-| \`action_button\` | \`<ActionButton variant="...">...</ActionButton>\` |
+| \`button\` | \`<Button variant="...">...</Button>\` |
+| \`input\` | \`<Input name="..." type="..." />\` |
+| \`select\` | \`<Select name="..." options={...} />\` |
+| \`checkbox\` | \`<Checkbox name="..." label="..." />\` |
+| \`textarea\` | \`<Textarea name="..." rows={...} />\` |
 | \`sandboxed_block\` | \`<Block src="..." />\` |
 | \`fontColor\` mark | \`<span style="color: ...">\` |
 | \`fontBackgroundColor\` mark | \`<span style="background-color: ...">\` |
@@ -579,11 +834,11 @@ ${FRONTMATTER_DOCS}
 
 ${ALL_ELEMENTS_DOCS}
 
-${LIVEQUERY_DOCS}
-
 ${LIVEVALUE_DOCS}
 
 ${LIVEACTION_DOCS}
+
+${FORM_CONTROLS_DOCS}
 
 ${BLOCK_ELEMENT_DOCS}
 

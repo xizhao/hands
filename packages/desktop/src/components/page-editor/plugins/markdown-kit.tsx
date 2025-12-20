@@ -18,11 +18,15 @@ import {
   liveQueryMarkdownRule,
   deserializeLiveValue,
   deserializeLiveActionElement,
-  deserializeActionButtonElement,
+  deserializeButtonElement,
+  deserializeInputElement,
+  deserializeSelectElement,
+  deserializeCheckboxElement,
+  deserializeTextareaElement,
   LIVE_ACTION_KEY,
-  ACTION_BUTTON_KEY,
+  BUTTON_KEY,
   type TLiveActionElement,
-  type TActionButtonElement,
+  type TButtonElement,
 } from './live-query-kit';
 import { PROMPT_KEY } from './prompt-kit';
 
@@ -146,12 +150,28 @@ export const MarkdownKit = [
             return deserializeLiveActionElement(node, { children });
           },
         },
-        // ActionButton element - non-void, has children (button text/content)
-        ActionButton: {
+        // Button element - non-void, has children (button text/content)
+        Button: {
           deserialize: (node, deco, options) => {
             const children = convertChildrenDeserialize(node.children || [], deco, options);
-            return deserializeActionButtonElement(node, { children });
+            return deserializeButtonElement(node, { children });
           },
+        },
+        // Input element - void, text input for forms
+        Input: {
+          deserialize: (node) => deserializeInputElement(node),
+        },
+        // Select element - void, dropdown for forms
+        Select: {
+          deserialize: (node) => deserializeSelectElement(node),
+        },
+        // Checkbox element - void, checkbox for forms
+        Checkbox: {
+          deserialize: (node) => deserializeCheckboxElement(node),
+        },
+        // Textarea element - void, multi-line input for forms
+        Textarea: {
+          deserialize: (node) => deserializeTextareaElement(node),
         },
         // Serialize all live elements to MDX
         ...liveQueryMarkdownRule,
@@ -185,9 +205,9 @@ export const MarkdownKit = [
             };
           },
         },
-        // Override ActionButton serialization to properly serialize children
-        [ACTION_BUTTON_KEY]: {
-          serialize: (node: TActionButtonElement, options: any) => {
+        // Override Button serialization to properly serialize children
+        [BUTTON_KEY]: {
+          serialize: (node: TButtonElement, options: any) => {
             const attributes: Array<{ type: 'mdxJsxAttribute'; name: string; value: unknown }> = [];
 
             if (node.variant && node.variant !== 'default') {
@@ -199,7 +219,7 @@ export const MarkdownKit = [
 
             return {
               type: 'mdxJsxTextElement',
-              name: 'ActionButton',
+              name: 'Button',
               attributes,
               children,
             };

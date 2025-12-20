@@ -9,6 +9,12 @@ import {
   validateUIComponent,
 } from "../rsc-validate.js";
 import { findWorkbookRoot } from "../utils.js";
+import {
+  validateMdxPages,
+  loadSchema,
+  formatValidationErrors,
+  type ValidationError,
+} from "../mdx-validate.js";
 
 interface CheckOptions {
   fix?: boolean;
@@ -126,21 +132,63 @@ export async function checkCommand(options: CheckOptions = {}) {
     fixRSCDirectives(workbookPath);
   }
 
-  // Run types and lints in parallel
-  const [typesOk, lintsOk] = await Promise.all([
+  // Run types, lints, and MDX validation in parallel
+  const [typesOk, lintsOk, mdxOk] = await Promise.all([
     runTypes(workbookPath, runtimeDir),
     runLints(workbookPath, runtimeDir, fix),
+    runMdxValidation(workbookPath),
   ]);
 
   // Summary
   console.log("");
-  if (!typesOk || !lintsOk || !configOk) {
+  if (!typesOk || !lintsOk || !configOk || !mdxOk) {
     console.log(pc.red("✗ Check failed"));
     process.exit(1);
   } else {
     console.log(pc.green("✓ All checks passed"));
     process.exit(0);
   }
+}
+
+/**
+ * Validate MDX pages: SQL queries, Block references, etc.
+ */
+async function runMdxValidation(workbookPath: string): Promise<boolean> {
+  console.log(pc.cyan("▶ Pages"));
+
+  const pagesDir = path.join(workbookPath, "pages");
+  if (!existsSync(pagesDir)) {
+    console.log(pc.dim("  (no pages directory)"));
+    return true;
+  }
+
+  // Load schema for SQL validation
+  const schema = loadSchema(workbookPath);
+  if (schema.length === 0) {
+    console.log(pc.yellow("  ⚠ No schema found (.hands/schema.json) - SQL validation skipped"));
+  }
+
+  // Validate all MDX pages
+  const errors = validateMdxPages(workbookPath, schema);
+
+  if (errors.length === 0) {
+    console.log(pc.green("  ✓ All pages valid"));
+    return true;
+  }
+
+  // Group by severity
+  const errorCount = errors.filter((e) => e.severity === "error").length;
+  const warnCount = errors.filter((e) => e.severity === "warning").length;
+
+  formatValidationErrors(errors);
+
+  if (errorCount > 0) {
+    console.log(pc.red(`  ${errorCount} error(s), ${warnCount} warning(s)`));
+    return false;
+  }
+
+  console.log(pc.yellow(`  ${warnCount} warning(s)`));
+  return true;
 }
 
 /**

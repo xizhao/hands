@@ -111,6 +111,7 @@ ${prompt}
       prompt: z.string().min(1),
       tables: z.array(tableSchema),
       errors: z.array(z.string()).optional(), // Previous errors for retry context
+      previousGenerations: z.array(z.string()).optional(), // Previous failed outputs
       // Page context (like copilot)
       prefix: z.string().optional(), // Markdown content before cursor
       suffix: z.string().optional(), // Markdown content after cursor
@@ -118,9 +119,9 @@ ${prompt}
       description: z.string().optional(), // Page description from frontmatter
     }))
     .mutation(async ({ input }) => {
-      const { prompt, tables, errors, prefix, suffix, title, description } = input;
+      const { prompt, tables, errors, previousGenerations, prefix, suffix, title, description } = input;
 
-      console.log('[ai.generateMdx] Request received:', { prompt, tableCount: tables.length, errorCount: errors?.length ?? 0, hasContext: !!(prefix || suffix) });
+      console.log('[ai.generateMdx] Request received:', { prompt, tableCount: tables.length, errorCount: errors?.length ?? 0, previousGenCount: previousGenerations?.length ?? 0, hasContext: !!(prefix || suffix) });
 
       const apiKey = process.env.HANDS_AI_API_KEY;
       if (!apiKey) {
@@ -146,8 +147,8 @@ Use for: showing data, counts, lists, tables
 
 ## 2. LiveAction - Single database mutation with button
 Use for: simple actions like increment, delete, toggle
-- "increment counter" → \`<LiveAction sql="UPDATE counters SET value = value + 1 WHERE id = 1"><ActionButton>+1</ActionButton></LiveAction>\`
-- "delete item" → \`<LiveAction sql="DELETE FROM items WHERE id = 1"><ActionButton variant="destructive">Delete</ActionButton></LiveAction>\`
+- "increment counter" → \`<LiveAction sql="UPDATE counters SET value = value + 1 WHERE id = 1"><Button>+1</Button></LiveAction>\`
+- "delete item" → \`<LiveAction sql="DELETE FROM items WHERE id = 1"><Button variant="destructive">Delete</Button></LiveAction>\`
 
 ## 3. Prompt - Delegate complex requests to background agent
 Use when the proper response would be TOO COMPLEX to fit in ~300 tokens (forms, dashboards, charts, multi-component UI):
@@ -170,10 +171,17 @@ Use when the proper response would be TOO COMPLEX to fit in ~300 tokens (forms, 
 - Use tables/columns from schema for SQL
 - If generating the full UI would exceed token budget, use Prompt instead`;
 
-      // Include error context if this is a retry
-      const errorContext = errors?.length
-        ? `\n\n## Previous Errors (fix these issues)\n${errors.map((e, i) => `${i + 1}. ${e}`).join('\n')}`
-        : '';
+      // Include retry context (previous failed attempts and their errors)
+      let retryContext = '';
+      if (previousGenerations?.length && errors?.length) {
+        retryContext = '\n\n## Previous Attempts (DO NOT repeat these - they failed)\n';
+        for (let i = 0; i < previousGenerations.length; i++) {
+          retryContext += `\nAttempt ${i + 1}:\n\`\`\`\n${previousGenerations[i]}\n\`\`\`\nError: ${errors[i] || 'Unknown error'}\n`;
+        }
+        retryContext += '\nGenerate DIFFERENT, valid MDX that avoids these issues.';
+      } else if (errors?.length) {
+        retryContext = `\n\n## Previous Errors (fix these issues)\n${errors.map((e, i) => `${i + 1}. ${e}`).join('\n')}`;
+      }
 
       // Build page context section
       const pageContext = (title || description)
@@ -189,7 +197,7 @@ Use when the proper response would be TOO COMPLEX to fit in ~300 tokens (forms, 
 ${schemaContext}
 ${pageContext}${documentContext}
 ## Request
-${prompt}${errorContext}
+${prompt}${retryContext}
 
 ## MDX Output`;
 
