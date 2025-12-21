@@ -14,7 +14,6 @@ import {
   serializeFrontmatter,
   type Frontmatter,
   PageContextPlugin,
-  AtKit,
 } from "@hands/editor";
 import { useCallback, useEffect, useRef, type ReactNode } from "react";
 
@@ -206,7 +205,7 @@ export function PageEditor({
       value={content}
       onChange={handleChange}
       customBlocks={[SandboxedBlock, PromptBlock]}
-      plugins={[PageContextPlugin, ...AtKit]}
+      plugins={[PageContextPlugin]}
       frontmatter={frontmatter}
       onFrontmatterChange={handleFrontmatterChange}
       isSaving={isSaving}
