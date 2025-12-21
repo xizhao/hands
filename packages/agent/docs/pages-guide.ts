@@ -5,6 +5,16 @@
  * Keep this concise - it goes in system prompts.
  */
 
+// Import stdlib documentation from @hands/core (single source of truth)
+import {
+  STDLIB_DOCS,
+  STDLIB_QUICK_REF,
+  STDLIB_COMPONENTS,
+} from "@hands/core/docs";
+
+// Re-export for consumers
+export { STDLIB_DOCS, STDLIB_QUICK_REF, STDLIB_COMPONENTS };
+
 // ============================================================================
 // Core Markdown Grammar
 // ============================================================================

@@ -18,6 +18,14 @@ import { readFileSync, existsSync, readdirSync } from "fs";
 import path from "path";
 import pc from "picocolors";
 
+// Import validation constants from @hands/core
+import {
+  VALID_DISPLAY_MODES,
+  VALID_BUTTON_VARIANTS,
+  VALID_INPUT_TYPES,
+  STDLIB_COMPONENT_NAMES,
+} from "@hands/core/types";
+
 // ============================================================================
 // Types
 // ============================================================================
@@ -57,10 +65,11 @@ export interface ValidationContext {
 // MDX Parsing
 // ============================================================================
 
-// Valid prop values for validation
-const VALID_DISPLAY_MODES = ["auto", "inline", "list", "table"] as const;
-const VALID_BUTTON_VARIANTS = ["default", "outline", "ghost", "destructive"] as const;
-const VALID_INPUT_TYPES = ["text", "email", "number", "password", "tel", "url"] as const;
+// Build regex from stdlib component names (plus Block and Prompt which are workbook-specific)
+const STDLIB_COMPONENTS_REGEX = new RegExp(
+  `<(${[...STDLIB_COMPONENT_NAMES, "Block", "Prompt"].join("|")})\\s+([^>]*?)\\s*/?>`,
+  "g"
+);
 
 /**
  * Extract JSX components from MDX content using regex.
@@ -69,12 +78,11 @@ const VALID_INPUT_TYPES = ["text", "email", "number", "password", "tel", "url"] 
 export function extractMdxComponents(content: string): MdxComponent[] {
   const components: MdxComponent[] = [];
 
-  // Match self-closing JSX tags: <ComponentName prop="value" />
-  // and opening tags: <ComponentName prop="value">
-  const tagRegex = /<(LiveValue|LiveAction|Block|Prompt|Button|Input|Select|Checkbox|Textarea)\s+([^>]*?)\s*\/?>/g;
+  // Reset regex state for each call
+  STDLIB_COMPONENTS_REGEX.lastIndex = 0;
 
   let match;
-  while ((match = tagRegex.exec(content)) !== null) {
+  while ((match = STDLIB_COMPONENTS_REGEX.exec(content)) !== null) {
     const name = match[1];
     const propsStr = match[2];
 

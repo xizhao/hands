@@ -7,8 +7,7 @@
  * Uses remark plugins for GFM and MDX support.
  */
 
-import { MarkdownPlugin, remarkMdx, convertChildrenDeserialize, convertNodesSerialize } from '@platejs/markdown';
-import { KEYS } from 'platejs';
+import { MarkdownPlugin, remarkMdx, convertChildrenDeserialize } from '@platejs/markdown';
 import remarkGfm from 'remark-gfm';
 import type { MdxJsxTextElement, MdxJsxAttribute } from 'mdast-util-mdx-jsx';
 import type { Text as MdastText } from 'mdast';
@@ -23,10 +22,6 @@ import {
   deserializeSelectElement,
   deserializeCheckboxElement,
   deserializeTextareaElement,
-  LIVE_ACTION_KEY,
-  BUTTON_KEY,
-  type TLiveActionElement,
-  type TButtonElement,
 } from './live-query-kit';
 import {
   cardMarkdownRule,
@@ -235,56 +230,6 @@ export const MarkdownKit = [
         ...liveQueryMarkdownRule,
         // Serialize Card elements to MDX
         ...cardMarkdownRule,
-        // Override LiveAction serialization to properly serialize children
-        [LIVE_ACTION_KEY]: {
-          serialize: (node: TLiveActionElement, options: any) => {
-            const attributes: Array<{ type: 'mdxJsxAttribute'; name: string; value: unknown }> = [];
-
-            if (node.sql) {
-              attributes.push({ type: 'mdxJsxAttribute', name: 'sql', value: node.sql });
-            }
-            if (node.src) {
-              attributes.push({ type: 'mdxJsxAttribute', name: 'src', value: node.src });
-            }
-            if (node.params && Object.keys(node.params).length > 0) {
-              attributes.push({
-                type: 'mdxJsxAttribute',
-                name: 'params',
-                value: { type: 'mdxJsxAttributeValueExpression', value: JSON.stringify(node.params) },
-              });
-            }
-
-            // Recursively serialize children
-            const children = convertNodesSerialize(node.children || [], options);
-
-            return {
-              type: 'mdxJsxFlowElement',
-              name: 'LiveAction',
-              attributes,
-              children,
-            };
-          },
-        },
-        // Override Button serialization to properly serialize children
-        [BUTTON_KEY]: {
-          serialize: (node: TButtonElement, options: any) => {
-            const attributes: Array<{ type: 'mdxJsxAttribute'; name: string; value: unknown }> = [];
-
-            if (node.variant && node.variant !== 'default') {
-              attributes.push({ type: 'mdxJsxAttribute', name: 'variant', value: node.variant });
-            }
-
-            // Recursively serialize children
-            const children = convertNodesSerialize(node.children || [], options);
-
-            return {
-              type: 'mdxJsxTextElement',
-              name: 'Button',
-              attributes,
-              children,
-            };
-          },
-        },
         // Prompt element - deserialize <Prompt text="..." /> or <Prompt threadId="..." />
         Prompt: {
           deserialize: (node: any) => {

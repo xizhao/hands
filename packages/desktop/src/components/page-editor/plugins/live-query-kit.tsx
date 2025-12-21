@@ -1,19 +1,12 @@
 "use client";
 
 /**
- * LiveValue Plugin
+ * LiveValue Plugin - Desktop Implementation
  *
  * Single element for displaying live SQL data with multiple display modes.
- * Auto-selects minimal display based on data shape, or use explicit `display` prop.
+ * This file provides the desktop-specific implementation with tRPC data fetching.
  *
- * Display modes:
- * - "inline" (1×1): Single value as inline badge
- * - "list" (N×1): Bullet list
- * - "table" (N×M): HTML table
- * - "auto": Auto-select based on data shape (default)
- *
- * Template mode:
- * - Children contain {{field}} bindings that get replaced with data
+ * Types and validation constants are imported from @hands/core.
  */
 
 import { Lightning } from "@phosphor-icons/react";
@@ -55,198 +48,54 @@ import { trpc } from "@/lib/trpc";
 import { convertNodesSerialize } from "@platejs/markdown";
 import { replaceTextBindings } from "../lib/live-query-context";
 
-// ============================================================================
-// Types
-// ============================================================================
+// Import types from @hands/core (single source of truth)
+import {
+  LIVE_VALUE_KEY,
+  LIVE_ACTION_KEY,
+  BUTTON_KEY,
+  INPUT_KEY,
+  SELECT_KEY,
+  OPTION_KEY,
+  CHECKBOX_KEY,
+  TEXTAREA_KEY,
+  type DisplayMode,
+  type ColumnConfig,
+  type TLiveValueElement,
+  type TLiveActionElement,
+  type TButtonElement,
+  type TInputElement,
+  type TSelectElement,
+  type TOptionElement,
+  type TCheckboxElement,
+  type TTextareaElement,
+  type LiveActionContextValue,
+} from "@hands/core/types";
 
-export const LIVE_VALUE_KEY = "live_value";
-export const LIVE_ACTION_KEY = "live_action";
-
-export type DisplayMode = "auto" | "inline" | "list" | "table";
-
-export interface ColumnConfig {
-  key: string;
-  label: string;
-  width?: number;
-  sortable?: boolean;
-  filterable?: boolean;
-}
-
-/**
- * Unified LiveValue element - displays SQL query results in various formats.
- *
- * Display prop controls rendering:
- * - "auto" (default): Select based on data shape
- * - "inline": Single value badge (for 1×1 data)
- * - "list": Bullet list (for N×1 data)
- * - "table": HTML table (for N×M data)
- *
- * Template mode: If children contain content, use as template with {{field}} bindings.
- */
-export interface TLiveValueElement extends TElement {
-  type: typeof LIVE_VALUE_KEY;
-  /** SQL query string */
-  query: string;
-  /** Display mode - auto-selects based on data shape if not specified */
-  display?: DisplayMode;
-  /** Named parameters */
-  params?: Record<string, unknown>;
-  /** For table mode: column configuration */
-  columns?: ColumnConfig[] | "auto";
-  /** CSS class for the container */
-  className?: string;
-  /** Children are the template content with {{field}} bindings */
-  children: (TElement | TText)[];
-}
-
-/**
- * LiveAction element - wraps interactive content that triggers SQL write operations.
- */
-export interface TLiveActionElement extends TElement {
-  type: typeof LIVE_ACTION_KEY;
-  /** SQL statement to execute (UPDATE, INSERT, DELETE) */
-  sql?: string;
-  /** Alternative: action ID reference */
-  src?: string;
-  /** Named parameters for SQL */
-  params?: Record<string, unknown>;
-  /** Children are the interactive content */
-  children: (TElement | TText)[];
-}
-
-export const BUTTON_KEY = "button";
-
-/**
- * ActionButton element - a button that triggers the parent LiveAction on click.
- * Must be used inside a LiveAction element.
- */
-export interface TButtonElement extends TElement {
-  type: typeof BUTTON_KEY;
-  /** Button label - uses children text if not specified */
-  label?: string;
-  /** Button variant styling */
-  variant?: "default" | "outline" | "ghost" | "destructive";
-  /** Children are the button content */
-  children: (TElement | TText)[];
-}
-
-// ============================================================================
-// Form Control Types
-// ============================================================================
-
-export const INPUT_KEY = "input";
-export const SELECT_KEY = "select";
-export const OPTION_KEY = "option";
-export const CHECKBOX_KEY = "checkbox";
-export const TEXTAREA_KEY = "textarea";
-
-/**
- * Input element - text input that registers its value for form submission.
- * Children are the label text.
- */
-export interface TInputElement extends TElement {
-  type: typeof INPUT_KEY;
-  /** Field name for form binding (used in {{name}} SQL substitution) */
-  name: string;
-  /** Input type */
-  inputType?: "text" | "email" | "number" | "password" | "tel" | "url";
-  /** Placeholder text */
-  placeholder?: string;
-  /** Default value */
-  defaultValue?: string;
-  /** Whether field is required */
-  required?: boolean;
-  /** Input pattern for validation */
-  pattern?: string;
-  /** Min value (for number) */
-  min?: number | string;
-  /** Max value (for number) */
-  max?: number | string;
-  /** Step value (for number) */
-  step?: number;
-  /** Children are the label text */
-  children: (TElement | TText)[];
-}
-
-/**
- * Select element - dropdown that registers its value for form submission.
- * Children are the label text.
- */
-export interface TSelectElement extends TElement {
-  type: typeof SELECT_KEY;
-  /** Field name for form binding */
-  name: string;
-  /** Select options */
-  options?: Array<{ value: string; label: string }>;
-  /** Placeholder text */
-  placeholder?: string;
-  /** Default value */
-  defaultValue?: string;
-  /** Whether field is required */
-  required?: boolean;
-  /** Children are the label text */
-  children: (TElement | TText)[];
-}
-
-/**
- * ActionOption element - an option inside ActionSelect.
- * Children are the label text.
- */
-export interface TOptionElement extends TElement {
-  type: typeof OPTION_KEY;
-  /** Option value */
-  value: string;
-  /** Children are the label text */
-  children: (TElement | TText)[];
-}
-
-/**
- * Checkbox element - checkbox that registers its value for form submission.
- * Children are the label text.
- */
-export interface TCheckboxElement extends TElement {
-  type: typeof CHECKBOX_KEY;
-  /** Field name for form binding */
-  name: string;
-  /** Default checked state */
-  defaultChecked?: boolean;
-  /** Children are the label text */
-  children: (TElement | TText)[];
-}
-
-/**
- * Textarea element - multi-line text input for form submission.
- * Children are the label text.
- */
-export interface TTextareaElement extends TElement {
-  type: typeof TEXTAREA_KEY;
-  /** Field name for form binding */
-  name: string;
-  /** Placeholder text */
-  placeholder?: string;
-  /** Default value */
-  defaultValue?: string;
-  /** Number of visible rows */
-  rows?: number;
-  /** Whether field is required */
-  required?: boolean;
-  /** Children are the label text */
-  children: (TElement | TText)[];
-}
+// Re-export types for consumers
+export {
+  LIVE_VALUE_KEY,
+  LIVE_ACTION_KEY,
+  BUTTON_KEY,
+  INPUT_KEY,
+  SELECT_KEY,
+  OPTION_KEY,
+  CHECKBOX_KEY,
+  TEXTAREA_KEY,
+  type DisplayMode,
+  type ColumnConfig,
+  type TLiveValueElement,
+  type TLiveActionElement,
+  type TButtonElement,
+  type TInputElement,
+  type TSelectElement,
+  type TOptionElement,
+  type TCheckboxElement,
+  type TTextareaElement,
+};
 
 // ============================================================================
 // LiveAction Context
 // ============================================================================
-
-interface LiveActionContextValue {
-  trigger: () => Promise<void>;
-  isPending: boolean;
-  error: Error | null;
-  /** Register a form field by name */
-  registerField: (name: string, getValue: () => unknown) => void;
-  /** Unregister a form field */
-  unregisterField: (name: string) => void;
-}
 
 const LiveActionContext = createContext<LiveActionContextValue | null>(null);
 
@@ -1353,18 +1202,14 @@ export function createButtonElement(
  */
 export const liveQueryMarkdownRule = {
   [LIVE_VALUE_KEY]: {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    serialize: (node: TLiveValueElement, options?: any) => {
+    serialize: (node: TLiveValueElement, options: any) => {
       const attributes: Array<{ type: "mdxJsxAttribute"; name: string; value: unknown }> = [
         { type: "mdxJsxAttribute", name: "query", value: node.query },
       ];
 
-      // Add display if not "auto"
       if (node.display && node.display !== "auto") {
         attributes.push({ type: "mdxJsxAttribute", name: "display", value: node.display });
       }
-
-      // Add params if present
       if (node.params && Object.keys(node.params).length > 0) {
         attributes.push({
           type: "mdxJsxAttribute",
@@ -1372,8 +1217,6 @@ export const liveQueryMarkdownRule = {
           value: { type: "mdxJsxAttributeValueExpression", value: JSON.stringify(node.params) },
         });
       }
-
-      // Add columns if present
       if (node.columns) {
         if (node.columns === "auto") {
           attributes.push({ type: "mdxJsxAttribute", name: "columns", value: "auto" });
@@ -1385,36 +1228,35 @@ export const liveQueryMarkdownRule = {
           });
         }
       }
-
       if (node.className) {
         attributes.push({ type: "mdxJsxAttribute", name: "className", value: node.className });
       }
 
-      const children = options?.children ?? [];
-      const hasContent = children.length > 0;
+      // Recursively serialize children (template content)
+      const children = convertNodesSerialize(node.children || [], options);
+      const firstChild = children[0] as { type: string; value?: string } | undefined;
+      const hasContent = children.length > 0 && !(children.length === 1 && firstChild?.type === "text" && !firstChild?.value?.trim());
 
       return {
         type: hasContent ? "mdxJsxFlowElement" : "mdxJsxTextElement",
         name: "LiveValue",
         attributes,
-        children,
+        children: hasContent ? children : [],
       };
     },
   },
 
   [LIVE_ACTION_KEY]: {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    serialize: (node: TLiveActionElement, options?: any) => {
+    serialize: (node: TLiveActionElement, options: any) => {
+      console.log('[LiveAction serialize] node:', JSON.stringify(node, null, 2));
       const attributes: Array<{ type: "mdxJsxAttribute"; name: string; value: unknown }> = [];
 
       if (node.sql) {
         attributes.push({ type: "mdxJsxAttribute", name: "sql", value: node.sql });
       }
-
       if (node.src) {
         attributes.push({ type: "mdxJsxAttribute", name: "src", value: node.src });
       }
-
       if (node.params && Object.keys(node.params).length > 0) {
         attributes.push({
           type: "mdxJsxAttribute",
@@ -1423,7 +1265,9 @@ export const liveQueryMarkdownRule = {
         });
       }
 
-      const children = options?.children ?? [];
+      // Recursively serialize children
+      const children = convertNodesSerialize(node.children || [], options);
+      console.log('[LiveAction serialize] children result:', JSON.stringify(children, null, 2));
 
       return {
         type: "mdxJsxFlowElement",
@@ -1435,18 +1279,18 @@ export const liveQueryMarkdownRule = {
   },
 
   [BUTTON_KEY]: {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    serialize: (node: TButtonElement, options?: any) => {
+    serialize: (node: TButtonElement, options: any) => {
       const attributes: Array<{ type: "mdxJsxAttribute"; name: string; value: unknown }> = [];
 
       if (node.variant && node.variant !== "default") {
         attributes.push({ type: "mdxJsxAttribute", name: "variant", value: node.variant });
       }
 
-      const children = options?.children ?? [];
+      // Recursively serialize children
+      const children = convertNodesSerialize(node.children || [], options);
 
       return {
-        type: "mdxJsxTextElement", // Inline element
+        type: "mdxJsxTextElement",
         name: "Button",
         attributes,
         children,

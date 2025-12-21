@@ -1,0 +1,107 @@
+{
+  "$schema": "https://hands.dev/schema/stdlib.json",
+  "version": "0.1.0",
+  "components": {
+    "LiveValue": {
+      "category": "static",
+      "description": "Displays live SQL query results. Auto-selects display format based on data shape: inline (1×1), list (N×1), or table (N×M). Supports template mode with {{field}} bindings.",
+      "keywords": [
+        "sql",
+        "query",
+        "data",
+        "display",
+        "table",
+        "list",
+        "inline",
+        "live",
+        "reactive"
+      ],
+      "example": "<LiveValue sql=\"SELECT count(*) FROM users\" />\n<LiveValue sql=\"SELECT name FROM users\" display=\"list\" />\n<LiveValue sql=\"SELECT * FROM tasks WHERE status = 'active'\" display=\"table\" />",
+      "file": "src/stdlib/static/live-value.tsx"
+    },
+    "LiveAction": {
+      "category": "active",
+      "description": "Container that wraps form controls and executes SQL mutations on submit. Children can use {{fieldName}} bindings in the SQL that get replaced with form values.",
+      "keywords": [
+        "form",
+        "action",
+        "mutation",
+        "sql",
+        "update",
+        "insert",
+        "delete",
+        "submit"
+      ],
+      "example": "<LiveAction sql=\"UPDATE tasks SET status = {{status}} WHERE id = 1\">\n  <ActionSelect name=\"status\" options={[{value: \"done\", label: \"Done\"}]} />\n  <ActionButton>Update</ActionButton>\n</LiveAction>",
+      "file": "src/stdlib/active/live-action.tsx"
+    },
+    "ActionButton": {
+      "category": "active",
+      "description": "Button that triggers the parent LiveAction's SQL execution on click. Must be used inside a LiveAction container.",
+      "keywords": [
+        "button",
+        "submit",
+        "action",
+        "trigger",
+        "form"
+      ],
+      "example": "<LiveAction sql=\"UPDATE tasks SET done = true WHERE id = 1\">\n  <ActionButton>Mark Complete</ActionButton>\n</LiveAction>",
+      "file": "src/stdlib/active/button.tsx"
+    },
+    "ActionCheckbox": {
+      "category": "active",
+      "description": "Checkbox that registers its value with parent LiveAction for SQL binding. The `name` prop determines the {{name}} placeholder in SQL (returns true/false).",
+      "keywords": [
+        "checkbox",
+        "boolean",
+        "toggle",
+        "form",
+        "field",
+        "binding"
+      ],
+      "example": "<LiveAction sql=\"UPDATE tasks SET done = {{done}} WHERE id = 1\">\n  <ActionCheckbox name=\"done\">Mark as complete</ActionCheckbox>\n  <ActionButton>Save</ActionButton>\n</LiveAction>",
+      "file": "src/stdlib/active/checkbox.tsx"
+    },
+    "ActionSelect": {
+      "category": "active",
+      "description": "Dropdown select that registers its value with parent LiveAction for SQL binding. The `name` prop determines the {{name}} placeholder in SQL.",
+      "keywords": [
+        "select",
+        "dropdown",
+        "form",
+        "field",
+        "binding",
+        "options"
+      ],
+      "example": "<LiveAction sql=\"UPDATE tasks SET status = {{status}} WHERE id = 1\">\n  <ActionSelect\n    name=\"status\"\n    options={[\n      { value: \"pending\", label: \"Pending\" },\n      { value: \"done\", label: \"Done\" }\n    ]}\n  />\n  <ActionButton>Update</ActionButton>\n</LiveAction>",
+      "file": "src/stdlib/active/select.tsx"
+    },
+    "ActionTextarea": {
+      "category": "active",
+      "description": "Multiline text input that registers its value with parent LiveAction for SQL binding. The `name` prop determines the {{name}} placeholder in SQL.",
+      "keywords": [
+        "textarea",
+        "multiline",
+        "text",
+        "form",
+        "field",
+        "binding"
+      ],
+      "example": "<LiveAction sql=\"UPDATE posts SET content = {{content}} WHERE id = 1\">\n  <ActionTextarea name=\"content\" placeholder=\"Enter content...\" rows={5} />\n  <ActionButton>Save</ActionButton>\n</LiveAction>",
+      "file": "src/stdlib/active/textarea.tsx"
+    },
+    "ActionInput": {
+      "category": "active",
+      "description": "Text input that registers its value with parent LiveAction for SQL binding. The `name` prop determines the {{name}} placeholder in SQL.",
+      "keywords": [
+        "input",
+        "text",
+        "form",
+        "field",
+        "binding"
+      ],
+      "example": "<LiveAction sql=\"UPDATE users SET name = {{name}} WHERE id = 1\">\n  <ActionInput name=\"name\" placeholder=\"Enter name\" />\n  <ActionButton>Save</ActionButton>\n</LiveAction>",
+      "file": "src/stdlib/active/input.tsx"
+    }
+  }
+}
