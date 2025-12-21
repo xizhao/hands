@@ -1,7 +1,7 @@
 /**
- * @hands/core/stdlib/static/data-grid
+ * @hands/core/stdlib/data/data-grid
  *
- * High-performance editable data grid component.
+ * High-performance editable data grid component with CRUD support.
  */
 
 export {

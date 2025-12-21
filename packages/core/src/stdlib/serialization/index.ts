@@ -13,7 +13,7 @@ import { liveActionRules } from "./rules/live-action";
 import { chartRules } from "./rules/charts";
 import { kanbanRules } from "./rules/kanban";
 import { dataGridRules } from "./rules/data-grid";
-import { staticRules } from "./rules/static";
+import { viewRules } from "./rules/view";
 import { cardRules } from "./rules/card";
 
 // ============================================================================
@@ -42,8 +42,8 @@ export const serializationRules: MdxSerializationRule<any>[] = [
   // DataGrid
   ...dataGridRules,
 
-  // Static display components
-  ...staticRules,
+  // View display components
+  ...viewRules,
 
   // Card components
   ...cardRules,
@@ -134,5 +134,7 @@ export { liveActionRules, liveActionRule, buttonRule, inputRule, selectRule, che
 export { chartRules, lineChartRule, barChartRule, areaChartRule, pieChartRule } from "./rules/charts";
 export { kanbanRules, kanbanRule } from "./rules/kanban";
 export { dataGridRules, dataGridRule } from "./rules/data-grid";
-export { staticRules, metricRule, badgeRule, progressRule, alertRule, loaderRule } from "./rules/static";
+export { viewRules, metricRule, badgeRule, progressRule, alertRule, loaderRule } from "./rules/view";
+// Legacy alias
+export { viewRules as staticRules } from "./rules/view";
 export { cardRules, cardRule, cardHeaderRule, cardContentRule, cardFooterRule, cardTitleRule, cardDescriptionRule } from "./rules/card";

@@ -2,7 +2,7 @@
 
 /**
  * @component DataGrid
- * @category static
+ * @category data
  * @description High-performance editable data grid with virtualization, keyboard navigation,
  * and comprehensive cell editing. Supports sorting, searching, and clipboard operations.
  * @keywords grid, table, data, spreadsheet, edit, sort, filter, virtual
@@ -30,7 +30,7 @@ import {
   type DataGridColumnConfig,
   type TDataGridElement,
 } from "../../../types";
-import { useLiveValueData } from "../charts/context";
+import { useLiveValueData } from "../../view/charts/context";
 
 // ============================================================================
 // Column Auto-Detection

@@ -17,7 +17,7 @@ import { memo, useContext } from "react";
 
 import { Button, type ButtonProps } from "../../components/ui/button";
 import { BUTTON_KEY, type TButtonElement } from "../../types";
-import { Loader } from "../static/loader";
+import { Loader } from "../view/loader";
 import { LiveActionContext } from "./live-action";
 
 // ============================================================================
@@ -94,7 +94,7 @@ export const ButtonPlugin = createPlatePlugin({
   key: BUTTON_KEY,
   node: {
     isElement: true,
-    isInline: true,
+    isInline: false, // Changed from true - inline elements get stripped during normalization
     isVoid: false,
     component: memo(ButtonElement),
   },

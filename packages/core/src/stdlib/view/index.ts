@@ -1,7 +1,7 @@
 /**
- * @hands/core/stdlib/static
+ * @hands/core/stdlib/view
  *
- * Static display components - render data without user interaction.
+ * View components - display-only rendering without user interaction.
  */
 
 export {
@@ -55,16 +55,6 @@ export {
   type LoaderColor,
   type LoaderSpeed,
 } from "./loader";
-
-// DataGrid
-export {
-  createDataGridElement,
-  type CreateDataGridOptions,
-  DATA_GRID_KEY,
-  DataGrid,
-  DataGridPlugin,
-  type DataGridProps,
-} from "./data-grid";
 
 // Charts
 export {

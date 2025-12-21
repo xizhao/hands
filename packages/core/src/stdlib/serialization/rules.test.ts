@@ -35,7 +35,7 @@ import {
   progressRule,
   alertRule,
   loaderRule,
-} from "./rules/static";
+} from "./rules/view";
 import {
   cardRule,
   cardHeaderRule,

@@ -5,7 +5,7 @@
  *
  * ## Categories
  *
- * ### Static Components
+ * ### View Components
  * Display-only components that render data without user interaction.
  * - `LiveValue` - Display SQL query results (inline/list/table)
  * - `Metric` - KPI display (number + label + change indicator)
@@ -13,61 +13,60 @@
  * - `Progress` - Progress bar for completion status
  * - `Alert` - Callout message box
  * - `Loader` - Animated loading indicator
- * - `DataGrid` - High-performance editable data grid
+ * - Charts: `LineChart`, `BarChart`, `AreaChart`, `PieChart`
  *
- * ### Chart Components
- * Data visualization components that work standalone or inside LiveValue.
- * - `LineChart` - Line graph for trends over time
- * - `BarChart` - Bar graph for categorical comparisons
- * - `AreaChart` - Filled area graph for cumulative trends
- * - `PieChart` - Pie/donut chart for proportional data
- *
- * ### Active Components
- * Interactive components that handle user input and execute SQL mutations.
+ * ### Action Components
+ * Interactive components that trigger discrete actions via LiveAction.
  * - `LiveAction` - Container for form controls that executes SQL on submit
  * - `ActionButton` - Button to trigger parent action
  * - `ActionInput` - Text input with form binding
  * - `ActionSelect` - Dropdown with form binding
  * - `ActionCheckbox` - Checkbox with form binding
  * - `ActionTextarea` - Multiline text with form binding
+ *
+ * ### Data Components
+ * Self-contained data management with CRUD operations.
+ * - `DataGrid` - High-performance editable data grid
+ * - `Kanban` - Drag-and-drop board for grouped data
  */
 
-// Re-export active components
-export * from "./active";
+// Re-export view components
+export * from "./view";
+// Re-export action components
+export * from "./action";
+// Re-export data components
+export * from "./data";
 // Re-export SQL validation utilities
 export * from "./sql-validation";
-// Re-export static components
-export * from "./static";
 // Re-export serialization rules and helpers
 export * from "./serialization";
 
-import { ActiveKit } from "./active";
-// Convenience kit exports
+// Import kits
+import { ActionKit } from "./action";
+import { DataKit } from "./data";
 import {
   AlertPlugin,
   AreaChartPlugin,
   BadgePlugin,
   BarChartPlugin,
-  DataGridPlugin,
   LineChartPlugin,
   LiveValuePlugin,
   LoaderPlugin,
   MetricPlugin,
   PieChartPlugin,
   ProgressPlugin,
-} from "./static";
+} from "./view";
 
 /**
- * Static component plugins for Plate editor.
+ * View component plugins for Plate editor.
  */
-export const StaticKit = [
+export const ViewKit = [
   LiveValuePlugin,
   MetricPlugin,
   BadgePlugin,
   ProgressPlugin,
   AlertPlugin,
   LoaderPlugin,
-  DataGridPlugin,
   LineChartPlugin,
   BarChartPlugin,
   AreaChartPlugin,
@@ -77,6 +76,8 @@ export const StaticKit = [
 /**
  * All stdlib plugins for Plate editor.
  */
-export const StdlibKit = [...StaticKit, ...ActiveKit] as const;
+export const StdlibKit = [...ViewKit, ...ActionKit, ...DataKit] as const;
 
-export { ActiveKit };
+// Legacy aliases for backward compatibility
+export { ActionKit as ActiveKit };
+export { ViewKit as StaticKit };

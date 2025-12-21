@@ -2,7 +2,7 @@
 
 /**
  * @component Kanban
- * @category active
+ * @category data
  * @description Drag-and-drop Kanban board that displays SQL query results grouped by a column.
  * Cards can be dragged between columns to update the underlying data.
  * @keywords kanban, board, drag, drop, cards, columns, status, workflow, tasks
@@ -26,7 +26,7 @@ import {
 
 import { KANBAN_KEY, type TKanbanElement } from "../../../types";
 import { assertReadOnlySQL } from "../../sql-validation";
-import { substituteFormBindings } from "../live-action";
+import { substituteFormBindings } from "../../action/live-action";
 import {
   KanbanBoard,
   findMovedItem,

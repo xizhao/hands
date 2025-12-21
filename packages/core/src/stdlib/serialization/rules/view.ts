@@ -1,7 +1,7 @@
 /**
- * Static Component Serialization Rules
+ * View Component Serialization Rules
  *
- * Handles MDX ↔ Plate conversion for static display elements:
+ * Handles MDX ↔ Plate conversion for view display elements:
  * - Metric
  * - Badge
  * - Progress
@@ -22,6 +22,7 @@ import {
   type TLoaderElement,
 } from "../../../types";
 import type { MdxSerializationRule } from "../types";
+import { convertChildrenDeserialize } from "@platejs/markdown";
 import { parseAttributes, serializeAttributes, createVoidElement } from "../helpers";
 
 // ============================================================================
@@ -104,7 +105,7 @@ export const badgeRule: MdxSerializationRule<TBadgeElement> = {
 
   deserialize: (node, deco, options) => {
     const props = parseAttributes(node);
-    const children = options?.convertChildren?.(node.children || [], deco, options) || [{ text: "" }];
+    const children = (options?.convertChildren ?? convertChildrenDeserialize)(node.children || [], deco, options as any) || [{ text: "" }];
 
     return {
       type: BADGE_KEY,
@@ -222,7 +223,7 @@ export const alertRule: MdxSerializationRule<TAlertElement> = {
 
   deserialize: (node, deco, options) => {
     const props = parseAttributes(node);
-    const children = options?.convertChildren?.(node.children || [], deco, options) || [{ text: "" }];
+    const children = (options?.convertChildren ?? convertChildrenDeserialize)(node.children || [], deco, options as any) || [{ text: "" }];
 
     return {
       type: ALERT_KEY,
@@ -321,4 +322,4 @@ export const loaderRule: MdxSerializationRule<TLoaderElement> = {
 // Export all rules
 // ============================================================================
 
-export const staticRules = [metricRule, badgeRule, progressRule, alertRule, loaderRule];
+export const viewRules = [metricRule, badgeRule, progressRule, alertRule, loaderRule];

@@ -37,7 +37,8 @@ import {
 } from "./rules/live-action";
 
 import { liveValueRule } from "./rules/live-value";
-import { alertRule } from "./rules/static";
+import { alertRule } from "./rules/view";
+import { barChartRule, lineChartRule } from "./rules/charts";
 
 // Import keys from types (only those not exported from rules)
 import {

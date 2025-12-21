@@ -1,5 +1,5 @@
 /**
- * @hands/core/stdlib/static/charts
+ * @hands/core/stdlib/view/charts
  *
  * Chart components for data visualization.
  * Charts can read data from LiveValue context or receive data via props.

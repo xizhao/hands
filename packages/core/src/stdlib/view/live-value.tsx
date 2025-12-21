@@ -2,7 +2,7 @@
 
 /**
  * @component LiveValue
- * @category static
+ * @category view
  * @description Displays live SQL query results. Auto-selects display format based on data shape:
  * inline (1×1), list (N×1), or table (N×M). Supports template mode with {{field}} bindings.
  * @keywords sql, query, data, display, table, list, inline, live, reactive
@@ -30,7 +30,9 @@ import {
   type TLiveValueElement,
 } from "../../types";
 import { assertReadOnlySQL } from "../sql-validation";
-import { DataGrid } from "./data-grid";
+import { LiveValueProvider } from "./charts/context";
+import { DataGrid } from "../data/data-grid";
+import { useMockData } from "../../test-utils/mock-data-provider";
 
 // ============================================================================
 // Display Type Selection
@@ -216,8 +218,29 @@ export function LiveValueDisplay({
 // ============================================================================
 
 /**
+ * Check if element has meaningful children (not just empty text nodes).
+ * Returns true if children contain actual components like charts.
+ */
+function hasMeaningfulChildren(element: TLiveValueElement): boolean {
+  if (!element.children || element.children.length === 0) return false;
+  // Check if it's just a single empty text node (the default for void elements)
+  if (element.children.length === 1) {
+    const child = element.children[0];
+    if ("text" in child && child.text === "") return false;
+  }
+  return true;
+}
+
+/**
  * LiveValue Plate element component.
- * Requires a data provider context to fetch query results.
+ *
+ * Two modes:
+ * 1. **Provider mode** (has children): Wraps children in data context, they handle display
+ *    <LiveValue query="..."><BarChart xKey="x" yKey="y" /></LiveValue>
+ *
+ * 2. **Auto-display mode** (no children): Picks display format based on data shape
+ *    <LiveValue query="..." /> → inline (1×1), list (N×1), or table (N×M)
+ *    <LiveValue query="..." display="table" /> → force table
  */
 function LiveValueElement(props: PlateElementProps) {
   const element = useElement<TLiveValueElement>();
@@ -226,15 +249,21 @@ function LiveValueElement(props: PlateElementProps) {
 
   const { query: _query, display, columns } = element;
 
-  // TODO: Use context provider for data fetching (will use _query)
-  // For now, show placeholder in editor
-  const data: Record<string, unknown>[] = [];
-  const isLoading = false;
-  const error = null;
+  // Check for mock data (for testing) or use real query results
+  const mockData = useMockData();
 
-  // Determine if this is inline display (minimal wrapper) or block (table/list)
+  // TODO: Use context provider for data fetching (will use _query)
+  // For now, use mock data if available, otherwise show placeholder
+  const data: Record<string, unknown>[] = mockData?.data ?? [];
+  const isLoading = mockData?.isLoading ?? false;
+  const error = mockData?.error ?? null;
+
+  // Mode: provider (children handle display) vs auto-display (we handle display)
+  const isProviderMode = hasMeaningfulChildren(element);
+
+  // Block vs inline wrapper
   const displayType = resolveDisplayMode(display, data);
-  const isInline = displayType === "inline";
+  const isInline = displayType === "inline" && !isProviderMode;
 
   return (
     <PlateElement
@@ -242,28 +271,40 @@ function LiveValueElement(props: PlateElementProps) {
       as={isInline ? "span" : "div"}
       className={selected && !readOnly ? "ring-2 ring-ring ring-offset-1 rounded" : undefined}
     >
-      <LiveValueDisplay
-        data={data}
-        isLoading={isLoading}
-        error={error}
-        display={display}
-        columns={columns === "auto" ? undefined : columns}
-      />
-      {/* Hidden children for Plate */}
-      <span className="hidden">{props.children}</span>
+      <LiveValueProvider data={data} isLoading={isLoading} error={error}>
+        {isProviderMode ? (
+          // Provider mode: children render themselves with data context
+          props.children
+        ) : (
+          // Auto-display mode: we pick the display format
+          <>
+            <LiveValueDisplay
+              data={data}
+              isLoading={isLoading}
+              error={error}
+              display={display}
+              columns={columns === "auto" ? undefined : columns}
+            />
+            <span className="hidden">{props.children}</span>
+          </>
+        )}
+      </LiveValueProvider>
     </PlateElement>
   );
 }
 
 /**
  * LiveValue Plugin - displays live SQL query results.
+ *
+ * Note: Not marked as void so children (charts, etc.) render correctly.
+ * When no meaningful children, falls back to auto-display mode.
  */
 export const LiveValuePlugin = createPlatePlugin({
   key: LIVE_VALUE_KEY,
   node: {
     isElement: true,
-    isInline: true,
-    isVoid: true,
+    isInline: false, // Block element when containing charts
+    isVoid: false, // Allow children to render
     component: memo(LiveValueElement),
   },
 });

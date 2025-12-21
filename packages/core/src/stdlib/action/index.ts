@@ -1,7 +1,7 @@
 /**
- * @hands/core/stdlib/active
+ * @hands/core/stdlib/action
  *
- * Active components - handle user interaction and execute SQL mutations.
+ * Action components - handle user interaction and trigger discrete actions.
  */
 
 // Form controls
@@ -56,39 +56,19 @@ export {
   TextareaPlugin,
 } from "./textarea";
 
-// Kanban board
-export {
-  Kanban,
-  KanbanBoard,
-  KanbanPlugin,
-  createKanbanElement,
-  findMovedItem,
-  getColumnOrder,
-  groupByColumn,
-  KANBAN_KEY,
-  type CreateKanbanElementOptions,
-  type KanbanBoardProps,
-  type KanbanBoardValue,
-  type KanbanItem,
-  type KanbanProps,
-  type MovedItem,
-} from "./kanban";
-
 import { ButtonPlugin } from "./button";
 import { CheckboxPlugin } from "./checkbox";
 import { InputPlugin } from "./input";
-import { KanbanPlugin } from "./kanban";
 // Plugin kit for easy registration
 import { LiveActionPlugin } from "./live-action";
 import { SelectPlugin } from "./select";
 import { TextareaPlugin } from "./textarea";
 
-export const ActiveKit = [
+export const ActionKit = [
   LiveActionPlugin,
   ButtonPlugin,
   InputPlugin,
   SelectPlugin,
   CheckboxPlugin,
   TextareaPlugin,
-  KanbanPlugin,
 ] as const;

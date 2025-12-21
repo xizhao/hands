@@ -15,11 +15,12 @@ Core package for the Hands data application framework. Contains the standard lib
 ```typescript
 // Import plugin kits for Plate editor
 import { StdlibKit } from "@hands/core/stdlib";
-import { StaticKit, ActiveKit } from "@hands/core/stdlib";
+import { ViewKit, ActionKit, DataKit } from "@hands/core/stdlib";
 
 // Import individual plugins
-import { LiveValuePlugin } from "@hands/core/stdlib/static";
-import { LiveActionPlugin, ButtonPlugin } from "@hands/core/stdlib/active";
+import { LiveValuePlugin } from "@hands/core/stdlib/view";
+import { LiveActionPlugin, ButtonPlugin } from "@hands/core/stdlib/action";
+import { DataGridPlugin, KanbanPlugin } from "@hands/core/stdlib/data";
 
 // Import types
 import type { TLiveValueElement, TLiveActionElement } from "@hands/core/types";
@@ -28,13 +29,19 @@ import type { TLiveValueElement, TLiveActionElement } from "@hands/core/types";
 import { STDLIB_DOCS } from "@hands/core/docs/stdlib";
 ```
 
-### Static Components
+### View Components
 
 Display-only components that render live data from SQL queries.
 
 - **LiveValue** - Display SQL results as inline value, list, or table
+- **Metric** - KPI display with number, label, and change indicator
+- **Badge** - Inline status indicator
+- **Progress** - Progress bar
+- **Alert** - Callout message box
+- **Loader** - Loading indicator
+- **LineChart**, **BarChart**, **AreaChart**, **PieChart** - Data visualization
 
-### Active Components
+### Action Components
 
 Interactive components that handle user input and execute SQL mutations.
 
@@ -45,6 +52,13 @@ Interactive components that handle user input and execute SQL mutations.
 - **ActionCheckbox** - Checkbox with form binding
 - **ActionTextarea** - Multiline text with form binding
 
+### Data Components
+
+Self-contained data management with CRUD operations.
+
+- **DataGrid** - High-performance editable data grid
+- **Kanban** - Drag-and-drop board for grouped data
+
 ## Documentation Generation
 
 Components are documented via JSDoc annotations:
@@ -52,7 +66,7 @@ Components are documented via JSDoc annotations:
 ```tsx
 /**
  * @component LiveValue
- * @category static
+ * @category view
  * @description Displays live SQL query results.
  * @keywords sql, query, data, display
  * @example

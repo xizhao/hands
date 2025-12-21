@@ -25,6 +25,7 @@ import {
   type TTextareaElement,
 } from "../../../types";
 import type { MdxSerializationRule, DeserializeOptions } from "../types";
+import { convertChildrenDeserialize } from "@platejs/markdown";
 import {
   parseAttributes,
   serializeAttributes,
@@ -51,21 +52,30 @@ export const liveActionRule: MdxSerializationRule<TLiveActionElement> = {
   tagName: "LiveAction",
   key: LIVE_ACTION_KEY,
 
-  deserialize: (node, _deco, options) => {
+  deserialize: (node, deco, options) => {
     const props = parseAttributes(node);
 
-    // Deserialize children (form controls, buttons, etc.)
+    // Deserialize children - use options.convertChildren if available (for tests),
+    // otherwise use Plate's native convertChildrenDeserialize
     let children: TLiveActionElement["children"] = [
       { type: "p" as const, children: [{ text: "" }] },
     ];
-    if (node.children && node.children.length > 0 && options?.convertChildren) {
-      const converted = options.convertChildren(
-        node.children,
-        _deco,
-        options as DeserializeOptions
-      );
+    if (node.children && node.children.length > 0 && options) {
+      const converter = options.convertChildren ?? convertChildrenDeserialize;
+      const converted = converter(node.children, deco, options as any);
       if (converted.length > 0) {
-        children = converted;
+        // Unwrap children if they're wrapped in a single paragraph
+        // This happens when MDX text elements are deserialized
+        if (
+          converted.length === 1 &&
+          "type" in converted[0] &&
+          converted[0].type === "p" &&
+          "children" in converted[0]
+        ) {
+          children = converted[0].children as TLiveActionElement["children"];
+        } else {
+          children = converted;
+        }
       }
     }
 
@@ -119,17 +129,14 @@ export const buttonRule: MdxSerializationRule<TButtonElement> = {
   tagName: "Button",
   key: BUTTON_KEY,
 
-  deserialize: (node, _deco, options) => {
+  deserialize: (node, deco, options) => {
     const props = parseAttributes(node);
 
     // Deserialize children (button text)
     let children: TButtonElement["children"] = [{ text: "" }];
-    if (node.children && node.children.length > 0 && options?.convertChildren) {
-      const converted = options.convertChildren(
-        node.children,
-        _deco,
-        options as DeserializeOptions
-      );
+    if (node.children && node.children.length > 0 && options) {
+      const converter = options.convertChildren ?? convertChildrenDeserialize;
+      const converted = converter(node.children, deco, options as any);
       if (converted.length > 0) {
         children = converted;
       }
@@ -178,17 +185,14 @@ export const inputRule: MdxSerializationRule<TInputElement> = {
   tagName: "Input",
   key: INPUT_KEY,
 
-  deserialize: (node, _deco, options) => {
+  deserialize: (node, deco, options) => {
     const props = parseAttributes(node);
 
     // Deserialize children (label text)
     let children: TInputElement["children"] = [{ text: "" }];
-    if (node.children && node.children.length > 0 && options?.convertChildren) {
-      const converted = options.convertChildren(
-        node.children,
-        _deco,
-        options as DeserializeOptions
-      );
+    if (node.children && node.children.length > 0 && options) {
+      const converter = options.convertChildren ?? convertChildrenDeserialize;
+      const converted = converter(node.children, deco, options as any);
       if (converted.length > 0) {
         children = converted;
       }
@@ -269,17 +273,14 @@ export const selectRule: MdxSerializationRule<TSelectElement> = {
   tagName: "Select",
   key: SELECT_KEY,
 
-  deserialize: (node, _deco, options) => {
+  deserialize: (node, deco, options) => {
     const props = parseAttributes(node);
 
     // Deserialize children (label text)
     let children: TSelectElement["children"] = [{ text: "" }];
-    if (node.children && node.children.length > 0 && options?.convertChildren) {
-      const converted = options.convertChildren(
-        node.children,
-        _deco,
-        options as DeserializeOptions
-      );
+    if (node.children && node.children.length > 0 && options) {
+      const converter = options.convertChildren ?? convertChildrenDeserialize;
+      const converted = converter(node.children, deco, options as any);
       if (converted.length > 0) {
         children = converted;
       }
@@ -341,17 +342,14 @@ export const checkboxRule: MdxSerializationRule<TCheckboxElement> = {
   tagName: "Checkbox",
   key: CHECKBOX_KEY,
 
-  deserialize: (node, _deco, options) => {
+  deserialize: (node, deco, options) => {
     const props = parseAttributes(node);
 
     // Deserialize children (label text)
     let children: TCheckboxElement["children"] = [{ text: "" }];
-    if (node.children && node.children.length > 0 && options?.convertChildren) {
-      const converted = options.convertChildren(
-        node.children,
-        _deco,
-        options as DeserializeOptions
-      );
+    if (node.children && node.children.length > 0 && options) {
+      const converter = options.convertChildren ?? convertChildrenDeserialize;
+      const converted = converter(node.children, deco, options as any);
       if (converted.length > 0) {
         children = converted;
       }
@@ -410,17 +408,14 @@ export const textareaRule: MdxSerializationRule<TTextareaElement> = {
   tagName: "Textarea",
   key: TEXTAREA_KEY,
 
-  deserialize: (node, _deco, options) => {
+  deserialize: (node, deco, options) => {
     const props = parseAttributes(node);
 
     // Deserialize children (label text)
     let children: TTextareaElement["children"] = [{ text: "" }];
-    if (node.children && node.children.length > 0 && options?.convertChildren) {
-      const converted = options.convertChildren(
-        node.children,
-        _deco,
-        options as DeserializeOptions
-      );
+    if (node.children && node.children.length > 0 && options) {
+      const converter = options.convertChildren ?? convertChildrenDeserialize;
+      const converted = converter(node.children, deco, options as any);
       if (converted.length > 0) {
         children = converted;
       }

@@ -1,9 +1,9 @@
 import type { Story } from "@ladle/react";
 import { DataGrid } from "./data-grid";
-import { LiveValueProvider } from "../charts/context";
+import { LiveValueProvider } from "../../view/charts/context";
 
 export default {
-  title: "Static/DataGrid",
+  title: "Data/DataGrid",
 };
 
 const sampleData = [

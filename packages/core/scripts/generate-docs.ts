@@ -17,7 +17,7 @@ import * as path from "path";
 
 interface ComponentDoc {
   name: string;
-  category: "static" | "active";
+  category: "view" | "action" | "data";
   description: string;
   keywords: string[];
   example: string;
@@ -122,8 +122,9 @@ function findTsxFiles(dir: string): string[] {
 // ============================================================================
 
 function generateMarkdown(components: ComponentDoc[]): string {
-  const staticComponents = components.filter((c) => c.category === "static");
-  const activeComponents = components.filter((c) => c.category === "active");
+  const viewComponents = components.filter((c) => c.category === "view");
+  const actionComponents = components.filter((c) => c.category === "action");
+  const dataComponents = components.filter((c) => c.category === "data");
 
   let md = `# Hands Standard Library
 
@@ -131,33 +132,47 @@ Component reference for the Hands data application framework.
 
 ## Overview
 
-The stdlib provides two categories of components:
+The stdlib provides three categories of components:
 
-- **Static** - Display-only components that render data
-- **Active** - Interactive components that handle user input and execute SQL mutations
+- **View** - Display-only components that render data
+- **Action** - Interactive components that trigger discrete actions
+- **Data** - Self-contained data management with CRUD operations
 
 ---
 
-## Static Components
+## View Components
 
 Display-only components that render live data from SQL queries.
 
 `;
 
-  for (const comp of staticComponents) {
+  for (const comp of viewComponents) {
     md += generateComponentSection(comp);
   }
 
   md += `
 ---
 
-## Active Components
+## Action Components
 
-Interactive components for building forms that execute SQL mutations.
+Interactive components for building forms that trigger SQL mutations.
 
 `;
 
-  for (const comp of activeComponents) {
+  for (const comp of actionComponents) {
+    md += generateComponentSection(comp);
+  }
+
+  md += `
+---
+
+## Data Components
+
+Self-contained data management components with full CRUD support.
+
+`;
+
+  for (const comp of dataComponents) {
     md += generateComponentSection(comp);
   }
 
@@ -192,8 +207,9 @@ ${comp.example}
 // ============================================================================
 
 function generateTypeScript(components: ComponentDoc[], markdown: string): string {
-  const staticComponents = components.filter((c) => c.category === "static");
-  const activeComponents = components.filter((c) => c.category === "active");
+  const viewComponents = components.filter((c) => c.category === "view");
+  const actionComponents = components.filter((c) => c.category === "action");
+  const dataComponents = components.filter((c) => c.category === "data");
 
   return `/**
  * Stdlib Documentation - Auto-generated
@@ -222,21 +238,29 @@ export const STDLIB_COMPONENTS = ${JSON.stringify(
   )} as const;
 
 // Component names by category
-export const STATIC_COMPONENTS = ${JSON.stringify(staticComponents.map((c) => c.name))} as const;
-export const ACTIVE_COMPONENTS = ${JSON.stringify(activeComponents.map((c) => c.name))} as const;
+export const VIEW_COMPONENTS = ${JSON.stringify(viewComponents.map((c) => c.name))} as const;
+export const ACTION_COMPONENTS = ${JSON.stringify(actionComponents.map((c) => c.name))} as const;
+export const DATA_COMPONENTS = ${JSON.stringify(dataComponents.map((c) => c.name))} as const;
 
 // All component names
-export const ALL_COMPONENTS = [...STATIC_COMPONENTS, ...ACTIVE_COMPONENTS] as const;
+export const ALL_COMPONENTS = [...VIEW_COMPONENTS, ...ACTION_COMPONENTS, ...DATA_COMPONENTS] as const;
+
+// Legacy aliases
+export const STATIC_COMPONENTS = VIEW_COMPONENTS;
+export const ACTIVE_COMPONENTS = ACTION_COMPONENTS;
 
 // Quick reference for agents (shorter than full docs)
 export const STDLIB_QUICK_REF = ${JSON.stringify(`
 ## Stdlib Components
 
-### Static (Display)
-${staticComponents.map((c) => `- **${c.name}**: ${c.description}`).join("\n")}
+### View (Display)
+${viewComponents.map((c) => `- **${c.name}**: ${c.description}`).join("\n")}
 
-### Active (Interactive)
-${activeComponents.map((c) => `- **${c.name}**: ${c.description}`).join("\n")}
+### Action (Interactive)
+${actionComponents.map((c) => `- **${c.name}**: ${c.description}`).join("\n")}
+
+### Data (CRUD)
+${dataComponents.map((c) => `- **${c.name}**: ${c.description}`).join("\n")}
 `)};
 `;
 }
@@ -268,15 +292,25 @@ async function generateDocs() {
     const parsed = parseJSDocFromFile(file);
 
     if (parsed?.component) {
+      // Map legacy categories to new ones
+      let category: "view" | "action" | "data" = "view";
+      if (parsed.category === "static" || parsed.category === "view") {
+        category = "view";
+      } else if (parsed.category === "active" || parsed.category === "action") {
+        category = "action";
+      } else if (parsed.category === "data") {
+        category = "data";
+      }
+
       components.push({
         name: parsed.component,
-        category: (parsed.category as "static" | "active") || "static",
+        category,
         description: parsed.description || "",
         keywords: parsed.keywords || [],
         example: parsed.example || "",
         file: path.relative(coreRoot, file),
       });
-      console.log(`  Parsed: ${parsed.component} (${parsed.category})`);
+      console.log(`  Parsed: ${parsed.component} (${category})`);
     }
   }
 

@@ -5,9 +5,10 @@
  *
  * ## Exports
  *
- * - `@hands/core/stdlib` - Component library (static + active)
- * - `@hands/core/stdlib/static` - Display-only components
- * - `@hands/core/stdlib/active` - Interactive components
+ * - `@hands/core/stdlib` - Component library (view + action + data)
+ * - `@hands/core/stdlib/view` - Display-only components
+ * - `@hands/core/stdlib/action` - Interactive action components
+ * - `@hands/core/stdlib/data` - Data management components (DataGrid, Kanban)
  * - `@hands/core/types` - TypeScript type definitions
  */
 
