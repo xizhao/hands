@@ -25,7 +25,7 @@ import {
   createLiveValueElement,
   createLiveActionElement,
   createButtonElement,
-} from "../plugins/live-query-kit";
+} from "@hands/core/stdlib";
 
 import { cn } from "@/lib/utils";
 import { getBlockType, setBlockType } from "../transforms";
