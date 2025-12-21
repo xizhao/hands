@@ -58,6 +58,27 @@ import {
 // ============================================================================
 
 /**
+ * All serialization rules for building test options.
+ */
+const allRules = [
+  cardRule,
+  cardHeaderRule,
+  cardTitleRule,
+  cardDescriptionRule,
+  cardContentRule,
+  cardFooterRule,
+  buttonRule,
+  inputRule,
+  selectRule,
+  checkboxRule,
+  liveActionRule,
+  liveValueRule,
+  alertRule,
+  barChartRule,
+  lineChartRule,
+];
+
+/**
  * Mock convertChildren for deserialization.
  * Simulates Plate's recursive conversion of MDX nodes to Plate elements.
  */
@@ -66,26 +87,7 @@ function createMockConvertChildren(): (children: unknown[], deco: unknown, optio
     return (children as any[]).map((child: any): TElement => {
       // Handle MDX JSX elements
       if (child.type === "mdxJsxFlowElement" || child.type === "mdxJsxTextElement") {
-        // Find the appropriate rule based on the element name
-        const rules = [
-          cardRule,
-          cardHeaderRule,
-          cardTitleRule,
-          cardDescriptionRule,
-          cardContentRule,
-          cardFooterRule,
-          buttonRule,
-          inputRule,
-          selectRule,
-          checkboxRule,
-          liveActionRule,
-          liveValueRule,
-          alertRule,
-          barChartRule,
-          lineChartRule,
-        ];
-
-        const rule = rules.find((r) => r.tagName === child.name);
+        const rule = allRules.find((r) => r.tagName === child.name);
         if (rule) {
           return rule.deserialize({ attributes: child.attributes, children: child.children }, _deco, options);
         }
@@ -129,76 +131,76 @@ function createMockConvertChildren(): (children: unknown[], deco: unknown, optio
 }
 
 /**
- * Mock convertNodes for serialization.
- * Simulates Plate's recursive conversion of Plate elements to MDX nodes.
+ * Build serialization rules for testing.
+ * Maps element type keys to their serialize functions.
  */
-function createMockConvertNodes(): (nodes: (TElement | TText)[], options: SerializeOptions) => MdxNode[] {
-  const convertNodes = vi.fn((nodes: (TElement | TText)[], options: SerializeOptions): MdxNode[] => {
-    return nodes.map((node: TElement | TText): MdxNode => {
-      // Handle text nodes
-      if ("text" in node) {
-        return { type: "text", value: node.text } as any;
-      }
+function buildSerializeRules(): Record<string, { serialize: (node: any, opts: SerializeOptions) => unknown }> {
+  const rules: Record<string, { serialize: (node: any, opts: SerializeOptions) => unknown }> = {};
 
-      // Handle element nodes
-      const element = node as TElement;
+  // Add all stdlib rules
+  for (const rule of allRules) {
+    rules[rule.key] = { serialize: rule.serialize as any };
+  }
 
-      // Find the appropriate rule based on element type
-      const rules = [
-        { key: CARD_KEY, rule: cardRule },
-        { key: CARD_HEADER_KEY, rule: cardHeaderRule },
-        { key: CARD_TITLE_KEY, rule: cardTitleRule },
-        { key: CARD_DESCRIPTION_KEY, rule: cardDescriptionRule },
-        { key: CARD_CONTENT_KEY, rule: cardContentRule },
-        { key: CARD_FOOTER_KEY, rule: cardFooterRule },
-        { key: BUTTON_KEY, rule: buttonRule },
-        { key: INPUT_KEY, rule: inputRule },
-        { key: SELECT_KEY, rule: selectRule },
-        { key: CHECKBOX_KEY, rule: checkboxRule },
-        { key: LIVE_ACTION_KEY, rule: liveActionRule },
-        { key: LIVE_VALUE_KEY, rule: liveValueRule },
-        { key: ALERT_KEY, rule: alertRule },
-        { key: BAR_CHART_KEY, rule: barChartRule },
-        { key: LINE_CHART_KEY, rule: lineChartRule },
-      ];
+  // Add standard markdown element handlers that recursively serialize children
+  rules["p"] = {
+    serialize: (node: TElement, opts: SerializeOptions) => ({
+      type: "paragraph",
+      children: serializeNodes(node.children, opts),
+    }),
+  };
 
-      const ruleEntry = rules.find((r) => r.key === element.type);
-      if (ruleEntry) {
-        return ruleEntry.rule.serialize(element as any, options);
-      }
+  for (let i = 1; i <= 6; i++) {
+    rules[`h${i}`] = {
+      serialize: (node: TElement, opts: SerializeOptions) => ({
+        type: "heading",
+        depth: i,
+        children: serializeNodes(node.children, opts),
+      }),
+    };
+  }
 
-      // Handle paragraph
-      if (element.type === "p") {
-        return {
-          type: "paragraph",
-          children: convertNodes(element.children, options),
-        };
-      }
+  rules["strong"] = {
+    serialize: (node: TElement, opts: SerializeOptions) => ({
+      type: "strong",
+      children: serializeNodes(node.children, opts),
+    }),
+  };
 
-      // Handle headings
-      if (element.type.match(/^h[1-6]$/)) {
-        const depth = parseInt(element.type.charAt(1));
-        return {
-          type: "heading",
-          depth,
-          children: convertNodes(element.children, options) as any,
-        } as any;
-      }
+  return rules;
+}
 
-      // Handle strong
-      if (element.type === "strong") {
-        return {
-          type: "strong",
-          children: convertNodes(element.children, options) as any,
-        } as any;
-      }
-
-      // Fallback
-      return node;
-    });
+/**
+ * Recursively serialize Plate nodes to mdast nodes using rules.
+ * Simplified version of convertNodesSerialize that doesn't require an editor.
+ */
+function serializeNodes(nodes: (TElement | TText)[], options: SerializeOptions): unknown[] {
+  const rules = (options as any)._rules as ReturnType<typeof buildSerializeRules>;
+  return nodes.map((node) => {
+    // Handle text nodes
+    if ("text" in node) {
+      return { type: "text", value: node.text };
+    }
+    // Handle element nodes
+    const element = node as TElement;
+    const rule = rules[element.type];
+    if (rule) {
+      return rule.serialize(element, options);
+    }
+    // Fallback: return node as-is
+    return node;
   });
+}
 
-  return convertNodes;
+/**
+ * Create serialize options with rules for testing.
+ * Uses a custom _rules property to avoid needing a real Plate editor.
+ */
+function createSerializeOptions(): SerializeOptions {
+  const rules = buildSerializeRules();
+  return {
+    _rules: rules,
+  } as SerializeOptions;
 }
 
 /**
@@ -315,8 +317,7 @@ describe("Card with full structure", () => {
   });
 
   it("serializes Card with full structure", () => {
-    const convertNodes = createMockConvertNodes();
-    const options: SerializeOptions = { convertNodes };
+    const options = createSerializeOptions();
 
     // Plate structure
     const plateElement = {
@@ -389,9 +390,8 @@ describe("Card with full structure", () => {
 
   it("roundtrips Card structure correctly", () => {
     const convertChildren = createMockConvertChildren();
-    const convertNodes = createMockConvertNodes();
     const deserializeOptions: DeserializeOptions = { convertChildren };
-    const serializeOptions: SerializeOptions = { convertNodes };
+    const serializeOptions = createSerializeOptions();
 
     const mdxNode = {
       attributes: [],
@@ -541,8 +541,7 @@ describe("LiveAction with form controls", () => {
   });
 
   it("serializes LiveAction with form controls", () => {
-    const convertNodes = createMockConvertNodes();
-    const options: SerializeOptions = { convertNodes };
+    const options = createSerializeOptions();
 
     const plateElement = {
       type: LIVE_ACTION_KEY,
@@ -611,9 +610,8 @@ describe("LiveAction with form controls", () => {
 
   it("roundtrips LiveAction with multiple form controls", () => {
     const convertChildren = createMockConvertChildren();
-    const convertNodes = createMockConvertNodes();
     const deserializeOptions: DeserializeOptions = { convertChildren };
-    const serializeOptions: SerializeOptions = { convertNodes };
+    const serializeOptions = createSerializeOptions();
 
     const mdxNode = {
       attributes: [
@@ -725,8 +723,7 @@ describe("LiveValue with template content", () => {
   });
 
   it("serializes LiveValue with template content", () => {
-    const convertNodes = createMockConvertNodes();
-    const options: SerializeOptions = { convertNodes };
+    const options = createSerializeOptions();
 
     const plateElement = {
       type: LIVE_VALUE_KEY,
@@ -762,8 +759,7 @@ describe("LiveValue with template content", () => {
   });
 
   it("serializes LiveValue without template as void element", () => {
-    const convertNodes = createMockConvertNodes();
-    const options: SerializeOptions = { convertNodes };
+    const options = createSerializeOptions();
 
     const plateElement = {
       type: LIVE_VALUE_KEY,
@@ -781,9 +777,8 @@ describe("LiveValue with template content", () => {
 
   it("roundtrips LiveValue with template content", () => {
     const convertChildren = createMockConvertChildren();
-    const convertNodes = createMockConvertNodes();
     const deserializeOptions: DeserializeOptions = { convertChildren };
-    const serializeOptions: SerializeOptions = { convertNodes };
+    const serializeOptions = createSerializeOptions();
 
     const mdxNode = {
       attributes: [
@@ -876,8 +871,7 @@ describe("Alert with nested markdown", () => {
   });
 
   it("serializes Alert with nested markdown", () => {
-    const convertNodes = createMockConvertNodes();
-    const options: SerializeOptions = { convertNodes };
+    const options = createSerializeOptions();
 
     const plateElement = {
       type: ALERT_KEY,
@@ -918,9 +912,8 @@ describe("Alert with nested markdown", () => {
 
   it("roundtrips Alert with complex nested markdown", () => {
     const convertChildren = createMockConvertChildren();
-    const convertNodes = createMockConvertNodes();
     const deserializeOptions: DeserializeOptions = { convertChildren };
-    const serializeOptions: SerializeOptions = { convertNodes };
+    const serializeOptions = createSerializeOptions();
 
     const mdxNode = {
       attributes: [
@@ -986,8 +979,7 @@ describe("Alert with nested markdown", () => {
   });
 
   it("serializes Alert without title attribute when undefined", () => {
-    const convertNodes = createMockConvertNodes();
-    const options: SerializeOptions = { convertNodes };
+    const options = createSerializeOptions();
 
     const plateElement = {
       type: ALERT_KEY,
@@ -1215,8 +1207,7 @@ describe("LiveValue with chart children", () => {
   });
 
   it("serializes LiveValue with BarChart child", () => {
-    const convertNodes = createMockConvertNodes();
-    const options: SerializeOptions = { convertNodes };
+    const options = createSerializeOptions();
 
     const plateElement = {
       type: LIVE_VALUE_KEY,
@@ -1247,9 +1238,8 @@ describe("LiveValue with chart children", () => {
 
   it("roundtrips LiveValue with BarChart child correctly", () => {
     const convertChildren = createMockConvertChildren();
-    const convertNodes = createMockConvertNodes();
     const deserializeOptions: DeserializeOptions = { convertChildren };
-    const serializeOptions: SerializeOptions = { convertNodes };
+    const serializeOptions = createSerializeOptions();
 
     // Original MDX structure
     const originalMdx = {
@@ -1300,9 +1290,8 @@ describe("LiveValue with chart children", () => {
 
   it("handles LiveValue with LineChart child", () => {
     const convertChildren = createMockConvertChildren();
-    const convertNodes = createMockConvertNodes();
     const deserializeOptions: DeserializeOptions = { convertChildren };
-    const serializeOptions: SerializeOptions = { convertNodes };
+    const serializeOptions = createSerializeOptions();
 
     const mdxNode = {
       attributes: [

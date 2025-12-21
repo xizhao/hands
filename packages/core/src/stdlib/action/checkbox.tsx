@@ -31,7 +31,7 @@ import { LiveActionContext } from "./live-action";
 // Standalone Component
 // ============================================================================
 
-export interface ActionCheckboxProps {
+export interface CheckboxProps {
   /** Field name for form binding */
   name: string;
   /** Default checked state */
@@ -54,7 +54,7 @@ export interface ActionCheckboxProps {
  * Standalone checkbox component for use outside Plate editor.
  * Wraps shadcn Checkbox with label and form binding support.
  */
-export function ActionCheckbox({
+export function Checkbox({
   name,
   defaultChecked,
   checked,
@@ -63,7 +63,7 @@ export function ActionCheckbox({
   required,
   label,
   className,
-}: ActionCheckboxProps) {
+}: CheckboxProps) {
   const [internalChecked, setInternalChecked] = useState(defaultChecked || false);
   const displayChecked = checked !== undefined ? checked : internalChecked;
 
@@ -178,3 +178,4 @@ export function createCheckboxElement(
 }
 
 export { CHECKBOX_KEY };
+

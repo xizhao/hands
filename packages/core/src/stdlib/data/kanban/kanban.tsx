@@ -20,6 +20,7 @@ import {
   createPlatePlugin,
   PlateElement,
   type PlateElementProps,
+  useEditorRef,
   useElement,
   useSelected,
 } from "platejs/react";
@@ -60,6 +61,8 @@ export interface KanbanProps {
   idField?: string;
   /** Called when a card is moved to a new column */
   onMove?: (itemId: string | number, newColumn: string) => Promise<void>;
+  /** Called when columns are reordered */
+  onColumnsChange?: (columns: string[]) => void;
   /** Additional class name */
   className?: string;
 }
@@ -77,6 +80,7 @@ export function Kanban({
   cardFields = [],
   idField = "id",
   onMove,
+  onColumnsChange,
   className,
 }: KanbanProps) {
   // Track previous value for diffing
@@ -209,6 +213,7 @@ export function Kanban({
       value={boardValue}
       onValueChange={handleValueChange}
       columns={columns}
+      onColumnsChange={onColumnsChange}
       renderColumnHeader={renderColumnHeader}
       renderCard={renderCard}
       className={className}
@@ -221,6 +226,7 @@ export function Kanban({
 // ============================================================================
 
 function KanbanElement(props: PlateElementProps) {
+  const editor = useEditorRef();
   const element = useElement<TKanbanElement>();
   const selected = useSelected();
 
@@ -259,6 +265,20 @@ function KanbanElement(props: PlateElementProps) {
     [updateSql, idField, groupByColumnField],
   );
 
+  // Handle column reordering - update the element's columnOrder
+  const handleColumnsChange = useCallback(
+    (newColumns: string[]) => {
+      const path = editor.api.findPath(element);
+      if (path) {
+        editor.tf.setNodes(
+          { columnOrder: newColumns },
+          { at: path },
+        );
+      }
+    },
+    [editor, element],
+  );
+
   return (
     <PlateElement
       {...props}
@@ -277,6 +297,7 @@ function KanbanElement(props: PlateElementProps) {
         cardFields={cardFields}
         idField={idField}
         onMove={handleMove}
+        onColumnsChange={handleColumnsChange}
       />
       {/* Hidden children for Plate */}
       <span className="hidden">{props.children}</span>

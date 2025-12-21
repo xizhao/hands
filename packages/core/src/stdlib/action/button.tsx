@@ -15,7 +15,7 @@
 import { createPlatePlugin, PlateElement, type PlateElementProps, useElement } from "platejs/react";
 import { memo, useContext } from "react";
 
-import { Button, type ButtonProps } from "../../components/ui/button";
+import { Button as BaseButton, type ButtonProps as BaseButtonProps } from "../../components/ui/button";
 import { BUTTON_KEY, type TButtonElement } from "../../types";
 import { Loader } from "../view/loader";
 import { LiveActionContext } from "./live-action";
@@ -24,7 +24,7 @@ import { LiveActionContext } from "./live-action";
 // Standalone Component
 // ============================================================================
 
-export interface ActionButtonProps extends Omit<ButtonProps, "onClick"> {
+export interface ButtonProps extends Omit<BaseButtonProps, "onClick"> {
   /** Click handler - usually connected to LiveAction.trigger */
   onClick?: () => void;
   /** Loading state */
@@ -32,18 +32,18 @@ export interface ActionButtonProps extends Omit<ButtonProps, "onClick"> {
 }
 
 /**
- * Standalone button component for use outside Plate editor.
- * Wraps shadcn Button with loading state support.
+ * Button component with loading state support.
+ * Works standalone or inside LiveAction to trigger SQL execution.
  */
-export function ActionButton({
+export function Button({
   onClick,
   disabled,
   isLoading,
   children,
   ...props
-}: ActionButtonProps) {
+}: ButtonProps) {
   return (
-    <Button
+    <BaseButton
       type="button"
       onClick={onClick}
       disabled={disabled || isLoading}
@@ -51,7 +51,7 @@ export function ActionButton({
     >
       {isLoading && <Loader variant="spinner" size="xs" className="mr-1" />}
       {children}
-    </Button>
+    </BaseButton>
   );
 }
 
@@ -63,26 +63,23 @@ function ButtonElement(props: PlateElementProps) {
   const element = useElement<TButtonElement>();
   const { variant = "default" } = element;
 
+  // Optional LiveAction context - Button works standalone too
   const actionCtx = useContext(LiveActionContext);
 
   const handleClick = () => {
-    if (!actionCtx) {
-      console.error("ActionButton must be inside a LiveAction");
-      return;
-    }
-    actionCtx.trigger();
+    // If inside LiveAction, trigger it
+    actionCtx?.trigger();
   };
 
   return (
     <PlateElement {...props} as="span">
-      <ActionButton
+      <Button
         variant={variant}
         onClick={handleClick}
         isLoading={actionCtx?.isPending}
-        disabled={!actionCtx}
       >
         {props.children}
-      </ActionButton>
+      </Button>
     </PlateElement>
   );
 }

@@ -15,6 +15,7 @@ import { kanbanRules } from "./rules/kanban";
 import { dataGridRules } from "./rules/data-grid";
 import { viewRules } from "./rules/view";
 import { cardRules } from "./rules/card";
+import { columnRules } from "./rules/column";
 
 // ============================================================================
 // All Rules Registry
@@ -47,6 +48,9 @@ export const serializationRules: MdxSerializationRule<any>[] = [
 
   // Card components
   ...cardRules,
+
+  // Column layout
+  ...columnRules,
 ];
 
 // ============================================================================
@@ -138,3 +142,4 @@ export { viewRules, metricRule, badgeRule, progressRule, alertRule, loaderRule }
 // Legacy alias
 export { viewRules as staticRules } from "./rules/view";
 export { cardRules, cardRule, cardHeaderRule, cardContentRule, cardFooterRule, cardTitleRule, cardDescriptionRule } from "./rules/card";
+export { columnRules, columnsRule, columnRule } from "./rules/column";

@@ -22,8 +22,8 @@ import {
   type TLoaderElement,
 } from "../../../types";
 import type { MdxSerializationRule } from "../types";
-import { convertChildrenDeserialize, convertNodesSerialize } from "@platejs/markdown";
-import { parseAttributes, serializeAttributes, createVoidElement } from "../helpers";
+import { convertChildrenDeserialize } from "@platejs/markdown";
+import { parseAttributes, serializeAttributes, createVoidElement, serializeChildren } from "../helpers";
 
 // ============================================================================
 // Metric
@@ -105,7 +105,7 @@ export const badgeRule: MdxSerializationRule<TBadgeElement> = {
 
   deserialize: (node, deco, options) => {
     const props = parseAttributes(node);
-    const children = (options?.convertChildren ?? convertChildrenDeserialize)(node.children || [], deco, options as any) || [{ text: "" }];
+    const children = (options?.convertChildren ?? convertChildrenDeserialize)(node.children as any || [], deco as any, options as any) || [{ text: "" }];
 
     return {
       type: BADGE_KEY,
@@ -127,14 +127,13 @@ export const badgeRule: MdxSerializationRule<TBadgeElement> = {
       }
     );
 
-    const converter = options?.convertNodes ?? convertNodesSerialize;
-    const children = converter(element.children, options ?? {});
+    const children = serializeChildren(element.children, options);
 
     return {
       type: "mdxJsxFlowElement",
       name: "Badge",
       attributes: attrs,
-      children,
+      children: children as any[],
     };
   },
 };
@@ -224,7 +223,7 @@ export const alertRule: MdxSerializationRule<TAlertElement> = {
 
   deserialize: (node, deco, options) => {
     const props = parseAttributes(node);
-    const children = (options?.convertChildren ?? convertChildrenDeserialize)(node.children || [], deco, options as any) || [{ text: "" }];
+    const children = (options?.convertChildren ?? convertChildrenDeserialize)(node.children as any || [], deco as any, options as any) || [{ text: "" }];
 
     return {
       type: ALERT_KEY,
@@ -248,14 +247,13 @@ export const alertRule: MdxSerializationRule<TAlertElement> = {
       }
     );
 
-    const converter = options?.convertNodes ?? convertNodesSerialize;
-    const children = converter(element.children, options ?? {});
+    const children = serializeChildren(element.children, options);
 
     return {
       type: "mdxJsxFlowElement",
       name: "Alert",
       attributes: attrs,
-      children,
+      children: children as any[],
     };
   },
 };

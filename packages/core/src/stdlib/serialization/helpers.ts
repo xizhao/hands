@@ -9,7 +9,10 @@ import type {
   MdxJsxAttribute,
   MdxJsxAttributeValueExpression,
   MdxDeserializeNode,
+  SerializeOptions,
 } from "./types";
+import type { TElement, TText } from "platejs";
+import { convertNodesSerialize } from "@platejs/markdown";
 
 // ============================================================================
 // Attribute Parsing (MDX → Props)
@@ -378,4 +381,51 @@ export function createContainerElement<T extends { type: string }>(
     ...props,
     children: children.length > 0 ? children : [{ text: "" }],
   } as unknown as T;
+}
+
+// ============================================================================
+// Child Serialization
+// ============================================================================
+
+/**
+ * Serialize Plate children to mdast nodes.
+ *
+ * Uses convertNodesSerialize when a real editor is available,
+ * falls back to custom _rules for testing.
+ *
+ * @param children - Plate element children to serialize
+ * @param options - Serialization options
+ * @returns Array of mdast nodes
+ */
+export function serializeChildren(
+  children: (TElement | TText)[],
+  options?: SerializeOptions
+): unknown[] {
+  if (!options) return [];
+
+  // Use custom rules for testing (when no editor available)
+  const rules = (options as any)._rules as Record<string, { serialize: (node: any, opts: SerializeOptions) => unknown }> | undefined;
+  if (rules) {
+    return children.map((node) => {
+      // Handle text nodes
+      if ("text" in node) {
+        return { type: "text", value: node.text };
+      }
+      // Handle element nodes
+      const element = node as TElement;
+      const rule = rules[element.type];
+      if (rule) {
+        return rule.serialize(element, options);
+      }
+      // Fallback: return node as-is
+      return node;
+    });
+  }
+
+  // Use Plate's convertNodesSerialize when editor is available
+  if (options.editor) {
+    return convertNodesSerialize(children, options as any);
+  }
+
+  return [];
 }

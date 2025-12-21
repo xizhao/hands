@@ -1,32 +1,51 @@
 /**
  * @hands/core/stdlib/action
  *
- * Action components - handle user interaction and trigger discrete actions.
+ * Action components - form controls and user interaction.
  */
 
 // Form controls
 export {
-  ActionButton,
-  type ActionButtonProps,
+  Button,
+  type ButtonProps,
   BUTTON_KEY,
   ButtonPlugin,
   createButtonElement,
 } from "./button";
+
 export {
-  ActionCheckbox,
-  type ActionCheckboxProps,
+  Checkbox,
+  type CheckboxProps,
   CHECKBOX_KEY,
   CheckboxPlugin,
   createCheckboxElement,
 } from "./checkbox";
 
 export {
-  ActionInput,
-  type ActionInputProps,
-  createInputElement,
+  Input,
+  type InputProps,
   INPUT_KEY,
   InputPlugin,
+  createInputElement,
 } from "./input";
+
+export {
+  Select,
+  type SelectProps,
+  SELECT_KEY,
+  type SelectOption,
+  SelectPlugin,
+  createSelectElement,
+} from "./select";
+
+export {
+  Textarea,
+  type TextareaProps,
+  TEXTAREA_KEY,
+  TextareaPlugin,
+  createTextareaElement,
+} from "./textarea";
+
 // LiveAction container
 export {
   createLiveActionElement,
@@ -39,27 +58,11 @@ export {
   useLiveAction,
   useLiveActionOptional,
 } from "./live-action";
-export {
-  ActionSelect,
-  type ActionSelectProps,
-  createSelectElement,
-  SELECT_KEY,
-  type SelectOption,
-  SelectPlugin,
-} from "./select";
 
-export {
-  ActionTextarea,
-  type ActionTextareaProps,
-  createTextareaElement,
-  TEXTAREA_KEY,
-  TextareaPlugin,
-} from "./textarea";
-
+// Plugin kit for easy registration
 import { ButtonPlugin } from "./button";
 import { CheckboxPlugin } from "./checkbox";
 import { InputPlugin } from "./input";
-// Plugin kit for easy registration
 import { LiveActionPlugin } from "./live-action";
 import { SelectPlugin } from "./select";
 import { TextareaPlugin } from "./textarea";

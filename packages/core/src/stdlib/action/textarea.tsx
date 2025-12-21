@@ -29,7 +29,7 @@ import { LiveActionContext } from "./live-action";
 // Standalone Component
 // ============================================================================
 
-export interface ActionTextareaProps {
+export interface TextareaProps {
   /** Field name for form binding */
   name: string;
   /** Placeholder text */
@@ -55,7 +55,7 @@ export interface ActionTextareaProps {
 /**
  * Standalone textarea component for use outside Plate editor.
  */
-export function ActionTextarea({
+export function Textarea({
   name,
   placeholder,
   defaultValue,
@@ -66,7 +66,7 @@ export function ActionTextarea({
   required,
   label,
   className,
-}: ActionTextareaProps) {
+}: TextareaProps) {
   const [internalValue, setInternalValue] = useState(defaultValue || "");
   const displayValue = value !== undefined ? value : internalValue;
 
@@ -196,3 +196,4 @@ export function createTextareaElement(
 }
 
 export { TEXTAREA_KEY };
+

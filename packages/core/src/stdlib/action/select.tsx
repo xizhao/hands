@@ -44,7 +44,7 @@ export interface SelectOption {
 // Standalone Component
 // ============================================================================
 
-export interface ActionSelectProps {
+export interface SelectProps {
   /** Field name for form binding */
   name: string;
   /** Select options */
@@ -70,7 +70,7 @@ export interface ActionSelectProps {
 /**
  * Standalone select component for use outside Plate editor.
  */
-export function ActionSelect({
+export function Select({
   name,
   options,
   placeholder = "Select...",
@@ -81,7 +81,7 @@ export function ActionSelect({
   required,
   label,
   className,
-}: ActionSelectProps) {
+}: SelectProps) {
   const [internalValue, setInternalValue] = useState(defaultValue || "");
   const displayValue = value !== undefined ? value : internalValue;
 
@@ -224,3 +224,4 @@ export function createSelectElement(
 }
 
 export { SELECT_KEY };
+

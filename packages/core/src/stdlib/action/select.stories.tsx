@@ -1,5 +1,5 @@
 import type { Story } from "@ladle/react";
-import { ActionSelect } from "./select";
+import { Select } from "./select";
 
 export default {
   title: "Active/Select",
@@ -11,10 +11,10 @@ const statusOptions = [
   { value: "done", label: "Done" },
 ];
 
-export const Default: Story = () => <ActionSelect name="status" options={statusOptions} />;
+export const Default: Story = () => <Select name="status" options={statusOptions} />;
 
 export const WithLabel: Story = () => (
-  <ActionSelect
+  <Select
     name="status"
     label="Status"
     options={statusOptions}
@@ -23,7 +23,7 @@ export const WithLabel: Story = () => (
 );
 
 export const Required: Story = () => (
-  <ActionSelect
+  <Select
     name="priority"
     label="Priority"
     options={[
@@ -36,9 +36,9 @@ export const Required: Story = () => (
 );
 
 export const WithDefaultValue: Story = () => (
-  <ActionSelect name="status" label="Status" options={statusOptions} defaultValue="in_progress" />
+  <Select name="status" label="Status" options={statusOptions} defaultValue="in_progress" />
 );
 
 export const Disabled: Story = () => (
-  <ActionSelect name="disabled" label="Disabled Select" options={statusOptions} disabled />
+  <Select name="disabled" label="Disabled Select" options={statusOptions} disabled />
 );

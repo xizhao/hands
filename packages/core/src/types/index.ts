@@ -29,6 +29,8 @@ export const AREA_CHART_KEY = "area_chart";
 export const PIE_CHART_KEY = "pie_chart";
 export const DATA_GRID_KEY = "data_grid";
 export const KANBAN_KEY = "kanban";
+export const COLUMN_GROUP_KEY = "column_group";
+export const COLUMN_KEY = "column";
 
 // ============================================================================
 // Validation Constants (for MDX validation)
@@ -63,6 +65,8 @@ export const STDLIB_COMPONENT_NAMES = [
   "PieChart",
   "DataGrid",
   "Kanban",
+  "Columns",
+  "Column",
 ] as const;
 
 // ============================================================================
@@ -165,14 +169,50 @@ export interface TButtonElement extends TElement {
   children: (TElement | TText)[];
 }
 
+/** Built-in mask pattern names for ActionInput */
+export type MaskPatternKey =
+  | "phone"
+  | "ssn"
+  | "date"
+  | "time"
+  | "creditCard"
+  | "creditCardExpiry"
+  | "zipCode"
+  | "zipCodeExtended"
+  | "currency"
+  | "percentage"
+  | "licensePlate"
+  | "ipv4"
+  | "macAddress"
+  | "isbn"
+  | "ein";
+
+/** Custom mask pattern configuration */
+export interface MaskPatternConfig {
+  /** Pattern string where # = digit placeholder */
+  pattern: string;
+}
+
 /**
- * Input element - text input for form data.
+ * Input element - text input for form data with optional masking and validation.
+ *
+ * @example Basic input
+ * { type: "input", name: "email", inputType: "email" }
+ *
+ * @example Phone with mask
+ * { type: "input", name: "phone", mask: "phone" }
+ *
+ * @example Currency
+ * { type: "input", name: "amount", mask: "currency", currency: "EUR", locale: "de-DE" }
+ *
+ * @example Custom mask
+ * { type: "input", name: "code", mask: { pattern: "##-####-##" } }
  */
 export interface TInputElement extends TElement {
   type: typeof INPUT_KEY;
   /** Field name for form binding (used in {{name}} SQL substitution) */
   name: string;
-  /** Input type */
+  /** Input type (ignored when mask is set) */
   inputType?: "text" | "email" | "number" | "password" | "tel" | "url";
   /** Placeholder text */
   placeholder?: string;
@@ -180,7 +220,7 @@ export interface TInputElement extends TElement {
   defaultValue?: string;
   /** Whether field is required */
   required?: boolean;
-  /** Input pattern for validation */
+  /** Input pattern for validation (HTML5 pattern attribute) */
   pattern?: string;
   /** Min value (for number) */
   min?: number | string;
@@ -188,6 +228,16 @@ export interface TInputElement extends TElement {
   max?: number | string;
   /** Step value (for number) */
   step?: number;
+  /**
+   * Input mask - preset name or custom pattern.
+   * Presets: phone, ssn, date, time, creditCard, creditCardExpiry,
+   * zipCode, zipCodeExtended, currency, percentage, ipv4, ein
+   */
+  mask?: MaskPatternKey | MaskPatternConfig;
+  /** Currency code for currency mask (default: USD) */
+  currency?: string;
+  /** Locale for currency formatting (default: en-US) */
+  locale?: string;
   /** Children are the label text */
   children: (TElement | TText)[];
 }
@@ -543,4 +593,41 @@ export interface LiveActionContextValue {
   registerField: (name: string, getValue: () => unknown) => void;
   /** Unregister a form field */
   unregisterField: (name: string) => void;
+}
+
+// ============================================================================
+// Column Layout Types
+// ============================================================================
+
+/**
+ * ColumnGroup element - container for resizable columns (Notion-style layout).
+ *
+ * @example
+ * ```tsx
+ * <Columns>
+ *   <Column width="50%">Left content</Column>
+ *   <Column width="50%">Right content</Column>
+ * </Columns>
+ * ```
+ */
+export interface TColumnGroupElement extends TElement {
+  type: typeof COLUMN_GROUP_KEY;
+  /** Children are Column elements */
+  children: TColumnElement[];
+}
+
+/**
+ * Column element - individual column within a ColumnGroup.
+ *
+ * @example
+ * ```tsx
+ * <Column width="33.33%">Content here</Column>
+ * ```
+ */
+export interface TColumnElement extends TElement {
+  type: typeof COLUMN_KEY;
+  /** Column width as CSS value (e.g., "50%", "200px", "1fr") */
+  width?: string;
+  /** Children are the column content */
+  children: (TElement | TText)[];
 }

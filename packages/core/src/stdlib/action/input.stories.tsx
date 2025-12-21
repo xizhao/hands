@@ -1,33 +1,28 @@
 import type { Story } from "@ladle/react";
-import { ActionInput } from "./input";
+import { Input } from "./input";
 
 export default {
-  title: "Active/Input",
+  title: "Action/Input",
 };
 
-export const Default: Story = () => <ActionInput name="email" placeholder="Enter your email" />;
-
-export const WithLabel: Story = () => (
-  <ActionInput name="username" label="Username" placeholder="Enter username" />
+export const Default: Story = () => (
+  <Input name="email" label="Email" placeholder="you@example.com" />
 );
 
-export const Required: Story = () => (
-  <ActionInput name="email" label="Email" placeholder="Enter email" required />
-);
-
-export const Types: Story = () => (
+export const Masks: Story = () => (
   <div className="flex flex-col gap-4 max-w-sm">
-    <ActionInput name="text" label="Text" type="text" placeholder="Text input" />
-    <ActionInput name="email" label="Email" type="email" placeholder="email@example.com" />
-    <ActionInput name="password" label="Password" type="password" placeholder="Enter password" />
-    <ActionInput name="number" label="Number" type="number" placeholder="0" />
+    <Input name="phone" label="Phone" mask="phone" placeholder="(555) 123-4567" />
+    <Input name="card" label="Credit Card" mask="creditCard" placeholder="4242 4242 4242 4242" />
+    <Input name="date" label="Date" mask="date" placeholder="MM/DD/YYYY" />
+    <Input name="currency" label="Amount" mask="currency" placeholder="$0.00" />
+    <Input name="ssn" label="SSN" mask="ssn" placeholder="###-##-####" />
+    <Input name="zip" label="Zip" mask="zipCode" placeholder="12345" />
+    <p className="text-xs text-muted-foreground mt-2">
+      Validation on blur - type invalid card number and tab out to see red border
+    </p>
   </div>
 );
 
-export const Disabled: Story = () => (
-  <ActionInput name="disabled" label="Disabled Input" placeholder="Can't edit this" disabled />
-);
-
-export const WithDefaultValue: Story = () => (
-  <ActionInput name="prefilled" label="Pre-filled" defaultValue="Hello world" />
+export const CustomMask: Story = () => (
+  <Input name="code" label="Product Code" mask={{ pattern: "##-####-##" }} placeholder="12-3456-78" />
 );

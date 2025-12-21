@@ -89,14 +89,63 @@ function createMdxNode(
 }
 
 /**
- * Mock convertChildren function for testing
+ * Mock convertChildren function for testing.
+ * Converts mdast text nodes to Plate text format.
  */
-const mockConvertChildren = (children: any[]) => children;
+const mockConvertChildren = (children: any[]): any[] => {
+  return children.map((child) => {
+    // Convert mdast text nodes to Plate format
+    if (child.type === "text" && "value" in child) {
+      return { text: child.value };
+    }
+    // Convert mdast paragraphs to Plate format
+    if (child.type === "paragraph") {
+      return { type: "p", children: mockConvertChildren(child.children || []) };
+    }
+    return child;
+  });
+};
 
 /**
- * Mock convertNodes function for testing
+ * Build serialization rules that pass through children as-is.
+ * Used for simple unit tests that don't need recursive child serialization.
  */
-const mockConvertNodes = (nodes: any[]) => nodes;
+function buildSimpleRules(): Record<string, { serialize: (node: any, opts: any) => unknown }> {
+  const rules: Record<string, { serialize: (node: any, opts: any) => unknown }> = {
+    // Pass through text nodes
+    text: { serialize: (node: any) => ({ type: "text", value: node.text }) },
+    // Pass through children unchanged for simple testing
+    p: { serialize: (node: any, opts: any) => ({ type: "paragraph", children: serializeWithRules(node.children, opts) }) },
+  };
+  return rules;
+}
+
+/**
+ * Serialize nodes using _rules (mirrors serializeChildren in helpers.ts)
+ */
+function serializeWithRules(nodes: any[], options: any): any[] {
+  const rules = options?._rules;
+  if (!rules || !nodes) return nodes || [];
+  return nodes.map((node: any) => {
+    if ("text" in node) {
+      return { type: "text", value: node.text };
+    }
+    const rule = rules[node.type];
+    if (rule) {
+      return rule.serialize(node, options);
+    }
+    return node;
+  });
+}
+
+/**
+ * Create serialize options for testing
+ */
+function createTestSerializeOptions() {
+  return {
+    _rules: buildSimpleRules(),
+  };
+}
 
 // ============================================================================
 // LiveValue Tests
@@ -143,7 +192,8 @@ describe("liveValueRule", () => {
         convertChildren: mockConvertChildren,
       });
 
-      expect(result.children).toEqual([{ type: "text", value: "## {{name}}" }]);
+      // After deserialization, text nodes are converted to Plate format
+      expect(result.children).toEqual([{ text: "## {{name}}" }]);
     });
   });
 
@@ -200,7 +250,7 @@ describe("liveValueRule", () => {
         children: [{ text: "## {{name}}" }],
       };
       const result = liveValueRule.serialize(element as any, {
-        convertNodes: mockConvertNodes,
+        ...createTestSerializeOptions(),
       });
 
       expect(result.type).toBe("mdxJsxFlowElement");
@@ -377,7 +427,7 @@ describe("buttonRule", () => {
         convertChildren: mockConvertChildren,
       });
       const serialized = buttonRule.serialize(deserialized, {
-        convertNodes: mockConvertNodes,
+        ...createTestSerializeOptions(),
       });
       const roundtrip = buttonRule.deserialize(serialized, undefined, {
         convertChildren: mockConvertChildren,
@@ -1572,7 +1622,7 @@ describe("badgeRule", () => {
         convertChildren: mockConvertChildren,
       });
       const serialized = badgeRule.serialize(deserialized, {
-        convertNodes: mockConvertNodes,
+        ...createTestSerializeOptions(),
       });
       const roundtrip = badgeRule.deserialize(serialized, undefined, {
         convertChildren: mockConvertChildren,
@@ -1777,7 +1827,7 @@ describe("alertRule", () => {
         convertChildren: mockConvertChildren,
       });
       const serialized = alertRule.serialize(deserialized, {
-        convertNodes: mockConvertNodes,
+        ...createTestSerializeOptions(),
       });
       const roundtrip = alertRule.deserialize(serialized, undefined, {
         convertChildren: mockConvertChildren,
@@ -1909,7 +1959,7 @@ describe("cardRule", () => {
         children: [{ type: "p" as const, children: [{ text: "Content" }] }],
       };
       const result = cardRule.serialize(element, {
-        convertNodes: mockConvertNodes,
+        ...createTestSerializeOptions(),
       });
 
       expect(result.name).toBe("Card");
@@ -1928,7 +1978,7 @@ describe("cardRule", () => {
         convertChildren: mockConvertChildren,
       });
       const serialized = cardRule.serialize(deserialized, {
-        convertNodes: mockConvertNodes,
+        ...createTestSerializeOptions(),
       });
       const roundtrip = cardRule.deserialize(serialized, undefined, {
         convertChildren: mockConvertChildren,

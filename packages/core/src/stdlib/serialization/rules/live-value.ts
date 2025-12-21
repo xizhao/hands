@@ -11,12 +11,13 @@ import {
   type TLiveValueElement,
 } from "../../../types";
 import type { MdxSerializationRule, DeserializeOptions } from "../types";
-import { convertChildrenDeserialize, convertNodesSerialize } from "@platejs/markdown";
+import { convertChildrenDeserialize } from "@platejs/markdown";
 import {
   parseAttributes,
   serializeAttributes,
   hasChildContent,
   createVoidElement,
+  serializeChildren,
 } from "../helpers";
 
 /**
@@ -45,7 +46,7 @@ export const liveValueRule: MdxSerializationRule<TLiveValueElement> = {
     let children: TLiveValueElement["children"] = [{ text: "" }];
     if (node.children && node.children.length > 0 && options) {
       const converter = options.convertChildren ?? convertChildrenDeserialize;
-      const converted = converter(node.children, deco, options as any);
+      const converted = converter(node.children as any, deco as any, options as any);
       if (hasChildContent(converted)) {
         children = converted;
       }
@@ -82,12 +83,9 @@ export const liveValueRule: MdxSerializationRule<TLiveValueElement> = {
     );
 
     // Serialize children if template mode
-    // Use options.convertNodes if provided (for tests), otherwise use Plate's native function
-    let children: unknown[] = [];
-    if (hasTemplate) {
-      const converter = options?.convertNodes ?? convertNodesSerialize;
-      children = converter(element.children, options ?? {});
-    }
+    const children = hasTemplate
+      ? serializeChildren(element.children, options)
+      : [];
 
     return {
       type: hasTemplate ? "mdxJsxFlowElement" : "mdxJsxTextElement",

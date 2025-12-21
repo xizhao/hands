@@ -29,8 +29,10 @@ import {
 } from "@dnd-kit/core";
 import {
   SortableContext,
+  arrayMove,
   sortableKeyboardCoordinates,
   useSortable,
+  horizontalListSortingStrategy,
   verticalListSortingStrategy,
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
@@ -52,6 +54,7 @@ export interface KanbanBoardValue {
 interface KanbanContextValue {
   activeItem: KanbanItem | null;
   activeColumn: string | null;
+  draggingColumn: string | null;
 }
 
 interface KanbanColumnContextValue {
@@ -88,6 +91,8 @@ export interface KanbanBoardProps {
   onValueChange: (value: KanbanBoardValue) => void;
   /** Column order (defaults to Object.keys order) */
   columns: string[];
+  /** Called when columns are reordered */
+  onColumnsChange?: (columns: string[]) => void;
   /** Render function for column headers */
   renderColumnHeader: (columnId: string, items: KanbanItem[]) => ReactNode;
   /** Render function for cards */
@@ -100,12 +105,14 @@ export function KanbanBoard({
   value,
   onValueChange,
   columns,
+  onColumnsChange,
   renderColumnHeader,
   renderCard,
   className,
 }: KanbanBoardProps) {
   const [activeItem, setActiveItem] = useState<KanbanItem | null>(null);
   const [activeColumn, setActiveColumn] = useState<string | null>(null);
+  const [draggingColumn, setDraggingColumn] = useState<string | null>(null);
 
   const sensors = useSensors(
     useSensor(PointerSensor, {
@@ -114,6 +121,22 @@ export function KanbanBoard({
     useSensor(KeyboardSensor, {
       coordinateGetter: sortableKeyboardCoordinates,
     }),
+  );
+
+  // Column IDs use a prefix to distinguish from item IDs
+  const columnIds = useMemo(
+    () => columns.map((col) => `column:${col}`),
+    [columns],
+  );
+
+  const isColumnId = useCallback(
+    (id: string | number): boolean => String(id).startsWith("column:"),
+    [],
+  );
+
+  const getColumnFromId = useCallback(
+    (id: string | number): string => String(id).replace("column:", ""),
+    [],
   );
 
   const findItemColumn = useCallback(
@@ -131,16 +154,25 @@ export function KanbanBoard({
   const handleDragStart = useCallback(
     (event: DragStartEvent) => {
       const { active } = event;
-      const column = findItemColumn(active.id);
+      const activeId = active.id;
+
+      // Check if dragging a column
+      if (isColumnId(activeId)) {
+        setDraggingColumn(getColumnFromId(activeId));
+        return;
+      }
+
+      // Dragging an item
+      const column = findItemColumn(activeId);
       if (column) {
-        const item = value[column]?.find((i) => i.id === active.id);
+        const item = value[column]?.find((i) => i.id === activeId);
         if (item) {
           setActiveItem(item);
           setActiveColumn(column);
         }
       }
     },
-    [findItemColumn, value],
+    [findItemColumn, getColumnFromId, isColumnId, value],
   );
 
   const handleDragOver = useCallback(
@@ -151,11 +183,16 @@ export function KanbanBoard({
       const activeId = active.id;
       const overId = over.id;
 
+      // Don't handle column drag in dragOver (only in dragEnd)
+      if (isColumnId(activeId)) return;
+
       const activeCol = findItemColumn(activeId);
       // Check if over is a column or an item
-      const overCol = columns.includes(String(overId))
-        ? String(overId)
-        : findItemColumn(overId);
+      const overCol = isColumnId(overId)
+        ? getColumnFromId(overId)
+        : columns.includes(String(overId))
+          ? String(overId)
+          : findItemColumn(overId);
 
       if (!activeCol || !overCol || activeCol === overCol) return;
 
@@ -175,25 +212,46 @@ export function KanbanBoard({
 
       onValueChange(newValue);
     },
-    [columns, findItemColumn, onValueChange, value],
+    [columns, findItemColumn, getColumnFromId, isColumnId, onValueChange, value],
   );
 
   const handleDragEnd = useCallback(
     (event: DragEndEvent) => {
       const { active, over } = event;
 
+      // Reset state
       setActiveItem(null);
       setActiveColumn(null);
+      setDraggingColumn(null);
 
       if (!over) return;
 
       const activeId = active.id;
       const overId = over.id;
 
+      // Handle column reordering
+      if (isColumnId(activeId) && isColumnId(overId)) {
+        const activeCol = getColumnFromId(activeId);
+        const overCol = getColumnFromId(overId);
+
+        if (activeCol !== overCol && onColumnsChange) {
+          const oldIndex = columns.indexOf(activeCol);
+          const newIndex = columns.indexOf(overCol);
+          if (oldIndex !== -1 && newIndex !== -1) {
+            const newColumns = arrayMove(columns, oldIndex, newIndex);
+            onColumnsChange(newColumns);
+          }
+        }
+        return;
+      }
+
+      // Handle item reordering
       const activeCol = findItemColumn(activeId);
-      const overCol = columns.includes(String(overId))
-        ? String(overId)
-        : findItemColumn(overId);
+      const overCol = isColumnId(overId)
+        ? getColumnFromId(overId)
+        : columns.includes(String(overId))
+          ? String(overId)
+          : findItemColumn(overId);
 
       if (!activeCol || !overCol) return;
 
@@ -213,12 +271,12 @@ export function KanbanBoard({
         }
       }
     },
-    [columns, findItemColumn, onValueChange, value],
+    [columns, findItemColumn, getColumnFromId, isColumnId, onColumnsChange, onValueChange, value],
   );
 
   const contextValue = useMemo<KanbanContextValue>(
-    () => ({ activeItem, activeColumn }),
-    [activeItem, activeColumn],
+    () => ({ activeItem, activeColumn, draggingColumn }),
+    [activeItem, activeColumn, draggingColumn],
   );
 
   return (
@@ -230,22 +288,35 @@ export function KanbanBoard({
         onDragOver={handleDragOver}
         onDragEnd={handleDragEnd}
       >
-        <div className={cn("flex gap-4 overflow-x-auto p-4", className)}>
-          {columns.map((columnId) => (
-            <KanbanColumn
-              key={columnId}
-              columnId={columnId}
-              items={value[columnId] || []}
-              renderHeader={renderColumnHeader}
-              renderCard={renderCard}
-            />
-          ))}
-        </div>
+        <SortableContext items={columnIds} strategy={horizontalListSortingStrategy}>
+          <div className={cn("flex gap-4 overflow-x-auto p-4", className)}>
+            {columns.map((columnId) => (
+              <KanbanColumn
+                key={columnId}
+                columnId={columnId}
+                items={value[columnId] || []}
+                renderHeader={renderColumnHeader}
+                renderCard={renderCard}
+                isDraggable={!!onColumnsChange}
+              />
+            ))}
+          </div>
+        </SortableContext>
 
         <DragOverlay>
           {activeItem ? (
             <div className="rounded-lg border bg-card p-3 shadow-lg opacity-90">
               {renderCard(activeItem)}
+            </div>
+          ) : null}
+          {draggingColumn ? (
+            <div className="w-72 shrink-0 rounded-lg bg-muted/50 border-2 border-primary shadow-lg opacity-90">
+              <div className="p-3 font-medium">
+                {renderColumnHeader(draggingColumn, value[draggingColumn] || [])}
+              </div>
+              <div className="min-h-[100px] p-2 text-muted-foreground text-sm text-center">
+                {(value[draggingColumn] || []).length} items
+              </div>
             </div>
           ) : null}
         </DragOverlay>
@@ -263,10 +334,28 @@ interface KanbanColumnProps {
   items: KanbanItem[];
   renderHeader: (columnId: string, items: KanbanItem[]) => ReactNode;
   renderCard: (item: KanbanItem) => ReactNode;
+  isDraggable?: boolean;
 }
 
-function KanbanColumn({ columnId, items, renderHeader, renderCard }: KanbanColumnProps) {
+function KanbanColumn({ columnId, items, renderHeader, renderCard, isDraggable }: KanbanColumnProps) {
   const itemIds = useMemo(() => items.map((item) => item.id), [items]);
+
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({
+    id: `column:${columnId}`,
+    disabled: !isDraggable,
+  });
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+  };
 
   const contextValue = useMemo<KanbanColumnContextValue>(
     () => ({ columnId }),
@@ -275,9 +364,24 @@ function KanbanColumn({ columnId, items, renderHeader, renderCard }: KanbanColum
 
   return (
     <KanbanColumnContext.Provider value={contextValue}>
-      <div className="flex w-72 shrink-0 flex-col rounded-lg bg-muted/50">
-        {/* Column Header */}
-        <div className="p-3 font-medium">{renderHeader(columnId, items)}</div>
+      <div
+        ref={setNodeRef}
+        style={style}
+        className={cn(
+          "flex w-72 shrink-0 flex-col rounded-lg bg-muted/50",
+          isDragging && "opacity-50",
+        )}
+      >
+        {/* Column Header - drag handle */}
+        <div
+          className={cn(
+            "p-3 font-medium",
+            isDraggable && "cursor-grab active:cursor-grabbing",
+          )}
+          {...(isDraggable ? { ...attributes, ...listeners } : {})}
+        >
+          {renderHeader(columnId, items)}
+        </div>
 
         {/* Cards Container */}
         <SortableContext items={itemIds} strategy={verticalListSortingStrategy}>

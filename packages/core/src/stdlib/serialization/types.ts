@@ -4,7 +4,7 @@
  * Type definitions for the serialization rule system.
  */
 
-import type { TElement, TText } from "platejs";
+import type { TElement, TText, SlateEditor } from "platejs";
 
 // ============================================================================
 // MDX AST Types (from mdast-util-mdx-jsx)
@@ -71,12 +71,16 @@ export interface MdxDeserializeNode {
 // ============================================================================
 
 /**
- * Options passed to serialize functions.
- * Matches Plate's MarkdownPlugin serialize signature.
+ * Options passed to serialize functions by Plate's MarkdownPlugin.
+ * Matches Plate's SerializeMdOptions interface.
  */
 export interface SerializeOptions {
-  /** Recursively serialize child nodes */
-  convertNodes?: (nodes: (TElement | TText)[], options: SerializeOptions) => MdxNode[];
+  /** The Plate editor instance */
+  editor?: SlateEditor;
+  /** Serialization rules - maps element types to serialize functions */
+  rules?: Record<string, { serialize?: (node: TElement, options: SerializeOptions) => unknown }>;
+  /** Other options passed by MarkdownPlugin */
+  [key: string]: unknown;
 }
 
 // ============================================================================

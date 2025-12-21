@@ -8,7 +8,7 @@
 "use client";
 
 import { MarkdownPlugin, remarkMdx } from "@platejs/markdown";
-import { Plate, PlateContent, usePlateEditor, type TElement } from "platejs/react";
+import { Plate, PlateContent, usePlateEditor } from "platejs/react";
 import remarkGfm from "remark-gfm";
 
 import { serializationRules, toMarkdownPluginRules } from "../stdlib/serialization";
@@ -67,17 +67,20 @@ export const StdlibPlugins = [
 /**
  * Markdown plugin configured with all stdlib serialization rules
  */
-export const TestMarkdownPlugin = MarkdownPlugin.configure({
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export const TestMarkdownPlugin: any = MarkdownPlugin.configure({
   options: {
     remarkPlugins: [remarkGfm, remarkMdx],
-    rules: toMarkdownPluginRules(serializationRules),
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    rules: toMarkdownPluginRules(serializationRules) as any,
   },
 });
 
 /**
  * All plugins needed for testing (stdlib + markdown)
  */
-export const TestPlugins = [...StdlibPlugins, TestMarkdownPlugin];
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export const TestPlugins: any[] = [...StdlibPlugins, TestMarkdownPlugin];
 
 interface PlateHarnessProps {
   /** MDX content to deserialize and render */
@@ -101,7 +104,8 @@ export function PlateHarness({ mdx, mockData, className }: PlateHarnessProps) {
     value: (editor) => {
       if (!mdx) return [{ type: "p", children: [{ text: "" }] }];
       try {
-        return editor.api.markdown.deserialize(mdx);
+        const api = editor.getApi(MarkdownPlugin);
+        return api.markdown.deserialize(mdx);
       } catch (error) {
         console.error("Failed to deserialize MDX:", error);
         return [{ type: "p", children: [{ text: `Error: ${error}` }] }];
@@ -138,7 +142,8 @@ export function PlateHarnessDebug({ mdx, mockData, className }: PlateHarnessProp
     value: (editor) => {
       if (!mdx) return [{ type: "p", children: [{ text: "" }] }];
       try {
-        return editor.api.markdown.deserialize(mdx);
+        const api = editor.getApi(MarkdownPlugin);
+        return api.markdown.deserialize(mdx);
       } catch (error) {
         console.error("Failed to deserialize MDX:", error);
         return [{ type: "p", children: [{ text: `Error: ${error}` }] }];
