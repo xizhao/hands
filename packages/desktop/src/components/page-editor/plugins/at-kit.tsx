@@ -61,7 +61,8 @@ export const AtKit = [
   MentionPlugin.configure({
     options: {
       trigger: "@",
-      triggerPreviousCharPattern: /^$|^[\s"']$/,
+      // Trigger after: start of line, space, tab, newline, or quotes
+      triggerPreviousCharPattern: /^$|^[ \t\n\r"']$/,
     },
   }).extendPlugin(MentionInputPlugin, {
     render: { node: AtGhostInputElement },

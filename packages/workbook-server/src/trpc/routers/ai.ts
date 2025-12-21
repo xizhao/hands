@@ -265,26 +265,26 @@ When the request needs MULTIPLE elements, forms, or ~300-2000 tokens of output:
 - \`reasoning="low"\` - straightforward multi-element output (forms, cards, simple layouts)
 - \`reasoning="mid"\` - needs some planning/thinking (complex forms, conditional logic)
 
-Examples:
-- "a form to add users" → \`<Prompt reasoning="low" text="Create a form with name, email fields that inserts into users table" />\`
-- "a card showing user stats" → \`<Prompt reasoning="low" text="Create a Card with user count and recent signups" />\`
-- "a form with validation for orders" → \`<Prompt reasoning="mid" text="Create an order form with customer selection, product list, quantity validation" />\`
+Examples (use EXACT original prompt text):
+- "a form to add users" → \`<Prompt reasoning="low" text="a form to add users" />\`
+- "a card showing user stats" → \`<Prompt reasoning="low" text="a card showing user stats" />\`
+- "a complex order form with validation" → \`<Prompt reasoning="mid" text="a complex order form with validation" />\`
 
 ## 3. Route to Agent - Use <Prompt reasoning="high">
 
 When the request needs iteration, data fetching, complex reasoning, or would exceed 2000 tokens:
-- "build a full dashboard" → \`<Prompt reasoning="high" text="Create a comprehensive dashboard with multiple charts and metrics" />\`
-- "create a chart" → \`<Prompt reasoning="high" text="Create a chart visualization" />\` (charts need agent)
+- "build a full dashboard" → \`<Prompt reasoning="high" text="build a full dashboard" />\`
+- "create a chart" → \`<Prompt reasoning="high" text="create a chart" />\`
 
 ## Decision Flow
 1. Single element, fits in ~300 tokens? → Generate directly
-2. Multi-element, ~300-2000 tokens, straightforward? → \`<Prompt reasoning="low" text="..." />\`
-3. Multi-element, needs planning? → \`<Prompt reasoning="mid" text="..." />\`
-4. Complex, iterative, or charts? → \`<Prompt reasoning="high" text="..." />\`
+2. Multi-element, ~300-2000 tokens, straightforward? → \`<Prompt reasoning="low" text="ORIGINAL_PROMPT" />\`
+3. Multi-element, needs planning? → \`<Prompt reasoning="mid" text="ORIGINAL_PROMPT" />\`
+4. Complex, iterative, or charts? → \`<Prompt reasoning="high" text="ORIGINAL_PROMPT" />\`
 
 ## Rules
 - Output ONLY valid MDX, no markdown code fences
-- For Prompt, include a clear text description of what to build
+- For Prompt routing, use the EXACT original request text (do not rewrite)
 - Use tables/columns from schema for SQL`;
 
       // Include retry context (previous failed attempts and their errors)

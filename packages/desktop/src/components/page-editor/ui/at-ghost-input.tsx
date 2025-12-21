@@ -50,16 +50,16 @@ function isPendingPrompt(node: Descendant): node is TPromptElement & { promptTex
 
 // Parse routing Prompt from MDX: <Prompt reasoning="low|mid|high" text="..." />
 function parseRoutingPrompt(mdx: string): { reasoning: "low" | "mid" | "high"; text: string } | null {
-  const match = mdx.match(/<Prompt\s+reasoning=["']?(low|mid|high)["']?\s+text=["']([^"']+)["']\s*\/?>/);
-  if (!match) {
-    // Try alternate attribute order
-    const altMatch = mdx.match(/<Prompt\s+text=["']([^"']+)["']\s+reasoning=["']?(low|mid|high)["']?\s*\/?>/);
-    if (altMatch) {
-      return { reasoning: altMatch[2] as "low" | "mid" | "high", text: altMatch[1] };
-    }
-    return null;
-  }
-  return { reasoning: match[1] as "low" | "mid" | "high", text: match[2] };
+  // Match reasoning attribute
+  const reasoningMatch = mdx.match(/reasoning=["']?(low|mid|high)["']?/);
+  if (!reasoningMatch) return null;
+
+  // Match text attribute - text is in double quotes, may contain single quotes
+  // Look for text="..." where ... ends at " followed by space or />
+  const textMatch = mdx.match(/text="(.+?)"\s*\/?>/);
+  if (!textMatch) return null;
+
+  return { reasoning: reasoningMatch[1] as "low" | "mid" | "high", text: textMatch[1] };
 }
 
 // Build system prompt for Hands agent
@@ -237,6 +237,7 @@ export function AtGhostInputElement(props: PlateElementProps) {
   const [prefetchedMdx, setPrefetchedMdx] = useState<string | null>(null);
   const [prefetchedPrompt, setPrefetchedPrompt] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
+  const [isThinking, setIsThinking] = useState(false); // Block builder route active
   const [showHints, setShowHints] = useState(false);
   const retryCountRef = useRef(0);
   const errorsRef = useRef<string[]>([]);
@@ -292,6 +293,9 @@ export function AtGhostInputElement(props: PlateElementProps) {
             return { mdx: `<Prompt text="${routing.text}" />` };
           }
 
+          // Show "thinking..." for block builder route
+          setIsThinking(true);
+
           // Route to block builder for low/mid complexity
           const blockResult = await generateMdxBlockRef.current.mutateAsync({
             prompt: routing.text,
@@ -303,6 +307,7 @@ export function AtGhostInputElement(props: PlateElementProps) {
             description: description ?? undefined,
           });
 
+          setIsThinking(false);
           return blockResult;
         }
 
@@ -321,6 +326,7 @@ export function AtGhostInputElement(props: PlateElementProps) {
 
     const currentFetchId = ++fetchIdRef.current;
     setIsLoading(true);
+    setIsThinking(false);
     setPrefetchedMdx(null);
     setPrefetchedPrompt(null);
 
@@ -336,6 +342,7 @@ export function AtGhostInputElement(props: PlateElementProps) {
       .finally(() => {
         if (fetchIdRef.current === currentFetchId) {
           setIsLoading(false);
+          setIsThinking(false);
         }
       });
   }, [manifest?.tables, editor, title, description]);
@@ -346,6 +353,7 @@ export function AtGhostInputElement(props: PlateElementProps) {
       setPrefetchedMdx(null);
       setPrefetchedPrompt(null);
       setIsLoading(false);
+      setIsThinking(false);
       return;
     }
 
@@ -570,7 +578,9 @@ export function AtGhostInputElement(props: PlateElementProps) {
 
         {/* Loading indicator */}
         {isLoading && !hasResult && (
-          <span className="ml-1 opacity-40">...</span>
+          <span className="ml-1 opacity-40 italic">
+            {isThinking ? "thinking..." : "..."}
+          </span>
         )}
       </span>
 
