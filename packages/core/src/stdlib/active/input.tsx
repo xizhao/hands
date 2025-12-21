@@ -22,6 +22,8 @@ import {
 } from "platejs/react";
 import { memo, useContext, useEffect, useRef, useState } from "react";
 
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { INPUT_KEY, type TInputElement } from "../../types";
 import { LiveActionContext } from "./live-action";
 
@@ -54,6 +56,7 @@ export interface ActionInputProps {
 
 /**
  * Standalone input component for use outside Plate editor.
+ * Wraps shadcn Input with label and form binding support.
  */
 export function ActionInput({
   name,
@@ -79,12 +82,12 @@ export function ActionInput({
   return (
     <div className={`flex flex-col gap-1.5 ${className || ""}`}>
       {label && (
-        <label htmlFor={name} className="text-sm font-medium">
+        <Label htmlFor={name}>
           {label}
           {required && <span className="text-destructive ml-1">*</span>}
-        </label>
+        </Label>
       )}
-      <input
+      <Input
         id={name}
         name={name}
         type={type}
@@ -93,7 +96,6 @@ export function ActionInput({
         placeholder={placeholder}
         disabled={disabled}
         required={required}
-        className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
       />
     </div>
   );
@@ -137,8 +139,8 @@ function InputElement(props: PlateElementProps) {
       className={`my-2 rounded-md p-0.5 ${selected ? "ring-2 ring-ring ring-offset-1" : ""}`}
     >
       <div className="flex flex-col gap-1.5">
-        {hasLabel && <label className="text-sm font-medium">{props.children}</label>}
-        <input
+        {hasLabel && <Label>{props.children}</Label>}
+        <Input
           type={inputType}
           value={value}
           onChange={(e) => setValue(e.target.value)}
@@ -146,7 +148,6 @@ function InputElement(props: PlateElementProps) {
           disabled={isPending}
           required={required}
           contentEditable={false}
-          className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
         />
         {!hasLabel && <span className="hidden">{props.children}</span>}
       </div>

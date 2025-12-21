@@ -2,6 +2,21 @@
   "$schema": "https://hands.dev/schema/stdlib.json",
   "version": "0.1.0",
   "components": {
+    "Loader": {
+      "category": "static",
+      "description": "Animated loading indicator with multiple visual styles. Supports spinner, dots, bars, pulse, ring, bounce, wave, and square variants.",
+      "keywords": [
+        "loader",
+        "loading",
+        "spinner",
+        "dots",
+        "progress",
+        "animation",
+        "wait"
+      ],
+      "example": "<Loader />\n<Loader variant=\"dots\" size=\"lg\" />\n<Loader variant=\"bars\" color=\"primary\" label=\"Loading...\" />",
+      "file": "src/stdlib/static/loader.tsx"
+    },
     "Progress": {
       "category": "static",
       "description": "Progress bar for displaying completion status or loading states. Supports determinate (with value) and indeterminate (loading) modes.",
@@ -32,6 +47,62 @@
       ],
       "example": "<LiveValue sql=\"SELECT count(*) FROM users\" />\n<LiveValue sql=\"SELECT name FROM users\" display=\"list\" />\n<LiveValue sql=\"SELECT * FROM tasks WHERE status = 'active'\" display=\"table\" />",
       "file": "src/stdlib/static/live-value.tsx"
+    },
+    "AreaChart": {
+      "category": "static",
+      "description": "Area chart for visualizing trends with filled regions. Supports stacking for comparing cumulative values.",
+      "keywords": [
+        "chart",
+        "area",
+        "filled",
+        "trend",
+        "cumulative",
+        "visualization"
+      ],
+      "example": "<AreaChart data={data} xKey=\"date\" yKey=\"pageviews\" />\n<AreaChart data={data} xKey=\"month\" yKey={[\"revenue\", \"costs\"]} stacked />",
+      "file": "src/stdlib/static/charts/area-chart.tsx"
+    },
+    "BarChart": {
+      "category": "static",
+      "description": "Bar chart for comparing categorical data. Supports vertical/horizontal orientation and stacked bars.",
+      "keywords": [
+        "chart",
+        "bar",
+        "column",
+        "comparison",
+        "category",
+        "visualization"
+      ],
+      "example": "<BarChart data={data} xKey=\"category\" yKey=\"value\" />\n<BarChart data={data} xKey=\"month\" yKey={[\"sales\", \"costs\"]} stacked />",
+      "file": "src/stdlib/static/charts/bar-chart.tsx"
+    },
+    "PieChart": {
+      "category": "static",
+      "description": "Pie/donut chart for showing proportional data. Set innerRadius > 0 to create a donut chart.",
+      "keywords": [
+        "chart",
+        "pie",
+        "donut",
+        "proportion",
+        "percentage",
+        "visualization"
+      ],
+      "example": "<PieChart data={data} valueKey=\"count\" nameKey=\"category\" />\n<PieChart data={data} valueKey=\"amount\" nameKey=\"type\" innerRadius={60} />",
+      "file": "src/stdlib/static/charts/pie-chart.tsx"
+    },
+    "LineChart": {
+      "category": "static",
+      "description": "Line chart for visualizing trends over time or continuous data. Works standalone or inside LiveValue for live SQL data.",
+      "keywords": [
+        "chart",
+        "line",
+        "graph",
+        "trend",
+        "time series",
+        "visualization"
+      ],
+      "example": "<LineChart data={data} xKey=\"date\" yKey=\"revenue\" />\n<LineChart data={data} xKey=\"month\" yKey={[\"sales\", \"expenses\"]} showLegend />",
+      "file": "src/stdlib/static/charts/line-chart.tsx"
     },
     "Metric": {
       "category": "static",

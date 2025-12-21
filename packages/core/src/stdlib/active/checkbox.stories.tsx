@@ -6,40 +6,28 @@ export default {
 };
 
 export const Default: Story = () => (
-  <ActionCheckbox name="agree">I agree to the terms</ActionCheckbox>
+  <ActionCheckbox name="agree" label="I agree to the terms" />
 );
 
 export const Checked: Story = () => (
-  <ActionCheckbox name="checked" defaultChecked>
-    Already checked
-  </ActionCheckbox>
+  <ActionCheckbox name="checked" defaultChecked label="Already checked" />
 );
 
 export const Required: Story = () => (
-  <ActionCheckbox name="required" required>
-    This is required
-  </ActionCheckbox>
+  <ActionCheckbox name="required" required label="This is required" />
 );
 
 export const Disabled: Story = () => (
   <div className="flex flex-col gap-2">
-    <ActionCheckbox name="disabled1" disabled>
-      Disabled unchecked
-    </ActionCheckbox>
-    <ActionCheckbox name="disabled2" disabled defaultChecked>
-      Disabled checked
-    </ActionCheckbox>
+    <ActionCheckbox name="disabled1" disabled label="Disabled unchecked" />
+    <ActionCheckbox name="disabled2" disabled defaultChecked label="Disabled checked" />
   </div>
 );
 
 export const Group: Story = () => (
   <div className="flex flex-col gap-2">
-    <ActionCheckbox name="email" defaultChecked>
-      Email notifications
-    </ActionCheckbox>
-    <ActionCheckbox name="sms">SMS notifications</ActionCheckbox>
-    <ActionCheckbox name="push" defaultChecked>
-      Push notifications
-    </ActionCheckbox>
+    <ActionCheckbox name="email" defaultChecked label="Email notifications" />
+    <ActionCheckbox name="sms" label="SMS notifications" />
+    <ActionCheckbox name="push" defaultChecked label="Push notifications" />
   </div>
 );

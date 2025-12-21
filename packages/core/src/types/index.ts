@@ -22,6 +22,11 @@ export const METRIC_KEY = "metric";
 export const BADGE_KEY = "badge";
 export const PROGRESS_KEY = "progress";
 export const ALERT_KEY = "alert";
+export const LOADER_KEY = "loader";
+export const LINE_CHART_KEY = "line_chart";
+export const BAR_CHART_KEY = "bar_chart";
+export const AREA_CHART_KEY = "area_chart";
+export const PIE_CHART_KEY = "pie_chart";
 
 // ============================================================================
 // Validation Constants (for MDX validation)
@@ -49,6 +54,11 @@ export const STDLIB_COMPONENT_NAMES = [
   "Badge",
   "Progress",
   "Alert",
+  "Loader",
+  "LineChart",
+  "BarChart",
+  "AreaChart",
+  "PieChart",
 ] as const;
 
 // ============================================================================
@@ -313,6 +323,111 @@ export interface TAlertElement extends TElement {
   /** Visual variant */
   variant?: "default" | "success" | "warning" | "destructive";
   /** Children are the alert message content */
+  children: (TElement | TText)[];
+}
+
+/**
+ * Loader element - animated loading indicator with multiple styles.
+ */
+export interface TLoaderElement extends TElement {
+  type: typeof LOADER_KEY;
+  /** Loading animation style */
+  variant?: "spinner" | "dots" | "bars" | "pulse" | "ring" | "bounce" | "wave" | "square";
+  /** Size of the loader */
+  size?: "xs" | "sm" | "md" | "lg" | "xl";
+  /** Color variant */
+  color?: "default" | "primary" | "secondary" | "muted";
+  /** Optional label text below the loader */
+  label?: string;
+  /** Speed of animation */
+  speed?: "slow" | "normal" | "fast";
+  /** Children are unused (void element) */
+  children: (TElement | TText)[];
+}
+
+// ============================================================================
+// Chart Element Types
+// ============================================================================
+
+/** Base chart configuration shared across all chart types */
+export interface ChartBaseConfig {
+  /** Data key for X axis */
+  xKey?: string;
+  /** Data key(s) for Y axis - single key or array for multi-series */
+  yKey?: string | string[];
+  /** Chart height in pixels */
+  height?: number;
+  /** Show legend */
+  showLegend?: boolean;
+  /** Show grid */
+  showGrid?: boolean;
+  /** Show tooltip on hover */
+  showTooltip?: boolean;
+  /** Custom colors for series */
+  colors?: string[];
+}
+
+/**
+ * LineChart element - displays data as a line graph.
+ */
+export interface TLineChartElement extends TElement, ChartBaseConfig {
+  type: typeof LINE_CHART_KEY;
+  /** Curve type for lines */
+  curve?: "linear" | "monotone" | "step";
+  /** Show dots on data points */
+  showDots?: boolean;
+  /** Children are unused (void element) */
+  children: (TElement | TText)[];
+}
+
+/**
+ * BarChart element - displays data as vertical bars.
+ */
+export interface TBarChartElement extends TElement, ChartBaseConfig {
+  type: typeof BAR_CHART_KEY;
+  /** Stack bars on top of each other */
+  stacked?: boolean;
+  /** Orientation of bars */
+  layout?: "vertical" | "horizontal";
+  /** Children are unused (void element) */
+  children: (TElement | TText)[];
+}
+
+/**
+ * AreaChart element - displays data as a filled area graph.
+ */
+export interface TAreaChartElement extends TElement, ChartBaseConfig {
+  type: typeof AREA_CHART_KEY;
+  /** Curve type for areas */
+  curve?: "linear" | "monotone" | "step";
+  /** Stack areas on top of each other */
+  stacked?: boolean;
+  /** Area fill opacity (0-1) */
+  fillOpacity?: number;
+  /** Children are unused (void element) */
+  children: (TElement | TText)[];
+}
+
+/**
+ * PieChart element - displays data as a pie/donut chart.
+ */
+export interface TPieChartElement extends TElement {
+  type: typeof PIE_CHART_KEY;
+  /** Data key for values */
+  valueKey?: string;
+  /** Data key for labels */
+  nameKey?: string;
+  /** Chart height in pixels */
+  height?: number;
+  /** Inner radius for donut chart (0 = pie, >0 = donut) */
+  innerRadius?: number;
+  /** Show legend */
+  showLegend?: boolean;
+  /** Show labels on slices */
+  showLabels?: boolean;
+  /** Custom colors for slices */
+  colors?: string[];
+  /** Children are unused (void element) */
   children: (TElement | TText)[];
 }
 

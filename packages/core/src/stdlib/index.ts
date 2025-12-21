@@ -12,6 +12,14 @@
  * - `Badge` - Inline status indicator
  * - `Progress` - Progress bar for completion status
  * - `Alert` - Callout message box
+ * - `Loader` - Animated loading indicator
+ *
+ * ### Chart Components
+ * Data visualization components that work standalone or inside LiveValue.
+ * - `LineChart` - Line graph for trends over time
+ * - `BarChart` - Bar graph for categorical comparisons
+ * - `AreaChart` - Filled area graph for cumulative trends
+ * - `PieChart` - Pie/donut chart for proportional data
  *
  * ### Active Components
  * Interactive components that handle user input and execute SQL mutations.
@@ -32,7 +40,18 @@ export * from "./static";
 
 import { ActiveKit } from "./active";
 // Convenience kit exports
-import { AlertPlugin, BadgePlugin, LiveValuePlugin, MetricPlugin, ProgressPlugin } from "./static";
+import {
+  AlertPlugin,
+  AreaChartPlugin,
+  BadgePlugin,
+  BarChartPlugin,
+  LineChartPlugin,
+  LiveValuePlugin,
+  LoaderPlugin,
+  MetricPlugin,
+  PieChartPlugin,
+  ProgressPlugin,
+} from "./static";
 
 /**
  * Static component plugins for Plate editor.
@@ -43,6 +62,11 @@ export const StaticKit = [
   BadgePlugin,
   ProgressPlugin,
   AlertPlugin,
+  LoaderPlugin,
+  LineChartPlugin,
+  BarChartPlugin,
+  AreaChartPlugin,
+  PieChartPlugin,
 ] as const;
 
 /**

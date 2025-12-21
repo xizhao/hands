@@ -22,6 +22,8 @@ import {
 } from "platejs/react";
 import { memo, useContext, useEffect, useRef, useState } from "react";
 
+import { Checkbox } from "@/components/ui/checkbox";
+import { Label } from "@/components/ui/label";
 import { CHECKBOX_KEY, type TCheckboxElement } from "../../types";
 import { LiveActionContext } from "./live-action";
 
@@ -43,13 +45,14 @@ export interface ActionCheckboxProps {
   /** Required field */
   required?: boolean;
   /** Label content */
-  children?: React.ReactNode;
+  label?: string;
   /** Additional CSS classes */
   className?: string;
 }
 
 /**
  * Standalone checkbox component for use outside Plate editor.
+ * Wraps shadcn Checkbox with label and form binding support.
  */
 export function ActionCheckbox({
   name,
@@ -58,33 +61,37 @@ export function ActionCheckbox({
   onChange,
   disabled,
   required,
-  children,
+  label,
   className,
 }: ActionCheckboxProps) {
   const [internalChecked, setInternalChecked] = useState(defaultChecked || false);
   const displayChecked = checked !== undefined ? checked : internalChecked;
 
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const newValue = e.target.checked;
+  const handleChange = (value: boolean | "indeterminate") => {
+    const newValue = value === true;
     setInternalChecked(newValue);
     onChange?.(newValue);
   };
 
   return (
-    <label
-      className={`flex items-center gap-2 cursor-pointer ${disabled ? "cursor-not-allowed opacity-50" : ""} ${className || ""}`}
-    >
-      <input
-        type="checkbox"
+    <div className={`flex items-center gap-2 ${className || ""}`}>
+      <Checkbox
+        id={name}
         name={name}
         checked={displayChecked}
-        onChange={handleChange}
+        onCheckedChange={handleChange}
         disabled={disabled}
         required={required}
-        className="h-4 w-4 rounded border border-input bg-background text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed"
       />
-      {children && <span className="text-sm">{children}</span>}
-    </label>
+      {label && (
+        <Label
+          htmlFor={name}
+          className={disabled ? "cursor-not-allowed opacity-50" : "cursor-pointer"}
+        >
+          {label}
+        </Label>
+      )}
+    </div>
   );
 }
 
@@ -120,18 +127,15 @@ function CheckboxElement(props: PlateElementProps) {
       as="div"
       className={`my-2 rounded-md p-0.5 ${selected ? "ring-2 ring-ring ring-offset-1" : ""}`}
     >
-      <label className="flex items-center gap-2 cursor-pointer">
-        <input
-          type="checkbox"
+      <div className="flex items-center gap-2">
+        <Checkbox
           checked={checked}
-          onChange={(e) => setChecked(e.target.checked)}
+          onCheckedChange={(value) => setChecked(value === true)}
           disabled={isPending}
           required={required}
-          contentEditable={false}
-          className="h-4 w-4 rounded border border-input bg-background text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed"
         />
-        <span className="text-sm">{props.children}</span>
-      </label>
+        <Label className="cursor-pointer">{props.children}</Label>
+      </div>
     </PlateElement>
   );
 }

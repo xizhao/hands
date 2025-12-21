@@ -15,6 +15,19 @@ The stdlib provides two categories of components:
 
 Display-only components that render live data from SQL queries.
 
+### Loader
+
+Animated loading indicator with multiple visual styles. Supports spinner, dots, bars, pulse, ring, bounce, wave, and square variants.
+
+**Keywords:** loader, loading, spinner, dots, progress, animation, wait
+
+**Example:**
+```tsx
+<Loader />
+<Loader variant="dots" size="lg" />
+<Loader variant="bars" color="primary" label="Loading..." />
+```
+
 ### Progress
 
 Progress bar for displaying completion status or loading states. Supports determinate (with value) and indeterminate (loading) modes.
@@ -39,6 +52,54 @@ Displays live SQL query results. Auto-selects display format based on data shape
 <LiveValue sql="SELECT count(*) FROM users" />
 <LiveValue sql="SELECT name FROM users" display="list" />
 <LiveValue sql="SELECT * FROM tasks WHERE status = 'active'" display="table" />
+```
+
+### AreaChart
+
+Area chart for visualizing trends with filled regions. Supports stacking for comparing cumulative values.
+
+**Keywords:** chart, area, filled, trend, cumulative, visualization
+
+**Example:**
+```tsx
+<AreaChart data={data} xKey="date" yKey="pageviews" />
+<AreaChart data={data} xKey="month" yKey={["revenue", "costs"]} stacked />
+```
+
+### BarChart
+
+Bar chart for comparing categorical data. Supports vertical/horizontal orientation and stacked bars.
+
+**Keywords:** chart, bar, column, comparison, category, visualization
+
+**Example:**
+```tsx
+<BarChart data={data} xKey="category" yKey="value" />
+<BarChart data={data} xKey="month" yKey={["sales", "costs"]} stacked />
+```
+
+### PieChart
+
+Pie/donut chart for showing proportional data. Set innerRadius > 0 to create a donut chart.
+
+**Keywords:** chart, pie, donut, proportion, percentage, visualization
+
+**Example:**
+```tsx
+<PieChart data={data} valueKey="count" nameKey="category" />
+<PieChart data={data} valueKey="amount" nameKey="type" innerRadius={60} />
+```
+
+### LineChart
+
+Line chart for visualizing trends over time or continuous data. Works standalone or inside LiveValue for live SQL data.
+
+**Keywords:** chart, line, graph, trend, time series, visualization
+
+**Example:**
+```tsx
+<LineChart data={data} xKey="date" yKey="revenue" />
+<LineChart data={data} xKey="month" yKey={["sales", "expenses"]} showLegend />
 ```
 
 ### Metric

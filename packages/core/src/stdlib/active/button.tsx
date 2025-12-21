@@ -15,64 +15,43 @@
 import { createPlatePlugin, PlateElement, type PlateElementProps, useElement } from "platejs/react";
 import { memo, useContext } from "react";
 
+import { Button, type ButtonProps } from "@/components/ui/button";
 import { BUTTON_KEY, type TButtonElement } from "../../types";
+import { Loader } from "../static/loader";
 import { LiveActionContext } from "./live-action";
 
 // ============================================================================
 // Standalone Component
 // ============================================================================
 
-export interface ActionButtonProps {
-  /** Button variant styling */
-  variant?: "default" | "outline" | "ghost" | "destructive";
+export interface ActionButtonProps extends Omit<ButtonProps, "onClick"> {
   /** Click handler - usually connected to LiveAction.trigger */
   onClick?: () => void;
-  /** Disabled state */
-  disabled?: boolean;
   /** Loading state */
   isLoading?: boolean;
-  /** Button content */
-  children: React.ReactNode;
-  /** Additional CSS classes */
-  className?: string;
 }
 
 /**
  * Standalone button component for use outside Plate editor.
+ * Wraps shadcn Button with loading state support.
  */
 export function ActionButton({
-  variant = "default",
   onClick,
   disabled,
   isLoading,
   children,
-  className,
+  ...props
 }: ActionButtonProps) {
-  const variantClasses = {
-    default: "bg-primary text-primary-foreground hover:bg-primary/90",
-    outline: "border border-input bg-background hover:bg-accent hover:text-accent-foreground",
-    ghost: "hover:bg-accent hover:text-accent-foreground",
-    destructive: "bg-destructive text-destructive-foreground hover:bg-destructive/90",
-  };
-
   return (
-    <button
+    <Button
       type="button"
       onClick={onClick}
       disabled={disabled || isLoading}
-      className={`
-        inline-flex items-center justify-center gap-2 rounded-md px-4 py-2 text-sm font-medium
-        transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring
-        disabled:pointer-events-none disabled:opacity-50
-        ${variantClasses[variant]}
-        ${className || ""}
-      `}
+      {...props}
     >
-      {isLoading && (
-        <div className="size-4 animate-spin rounded-full border-2 border-current/30 border-t-current" />
-      )}
+      {isLoading && <Loader variant="spinner" size="xs" className="mr-1" />}
       {children}
-    </button>
+    </Button>
   );
 }
 
