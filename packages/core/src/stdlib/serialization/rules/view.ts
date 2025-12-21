@@ -22,7 +22,7 @@ import {
   type TLoaderElement,
 } from "../../../types";
 import type { MdxSerializationRule } from "../types";
-import { convertChildrenDeserialize } from "@platejs/markdown";
+import { convertChildrenDeserialize, convertNodesSerialize } from "@platejs/markdown";
 import { parseAttributes, serializeAttributes, createVoidElement } from "../helpers";
 
 // ============================================================================
@@ -127,7 +127,8 @@ export const badgeRule: MdxSerializationRule<TBadgeElement> = {
       }
     );
 
-    const children = options?.convertNodes?.(element.children, options) || [];
+    const converter = options?.convertNodes ?? convertNodesSerialize;
+    const children = converter(element.children, options ?? {});
 
     return {
       type: "mdxJsxFlowElement",
@@ -247,7 +248,8 @@ export const alertRule: MdxSerializationRule<TAlertElement> = {
       }
     );
 
-    const children = options?.convertNodes?.(element.children, options) || [];
+    const converter = options?.convertNodes ?? convertNodesSerialize;
+    const children = converter(element.children, options ?? {});
 
     return {
       type: "mdxJsxFlowElement",

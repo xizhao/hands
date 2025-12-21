@@ -11,7 +11,7 @@ import {
   type TLiveValueElement,
 } from "../../../types";
 import type { MdxSerializationRule, DeserializeOptions } from "../types";
-import { convertChildrenDeserialize } from "@platejs/markdown";
+import { convertChildrenDeserialize, convertNodesSerialize } from "@platejs/markdown";
 import {
   parseAttributes,
   serializeAttributes,
@@ -82,9 +82,11 @@ export const liveValueRule: MdxSerializationRule<TLiveValueElement> = {
     );
 
     // Serialize children if template mode
+    // Use options.convertNodes if provided (for tests), otherwise use Plate's native function
     let children: unknown[] = [];
-    if (hasTemplate && options?.convertNodes) {
-      children = options.convertNodes(element.children, options);
+    if (hasTemplate) {
+      const converter = options?.convertNodes ?? convertNodesSerialize;
+      children = converter(element.children, options ?? {});
     }
 
     return {

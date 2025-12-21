@@ -10,7 +10,7 @@
  * - CardDescription (container with text)
  */
 
-import { convertChildrenDeserialize } from "@platejs/markdown";
+import { convertChildrenDeserialize, convertNodesSerialize } from "@platejs/markdown";
 import type { MdxSerializationRule, DeserializeOptions } from "../types";
 
 // ============================================================================
@@ -104,10 +104,9 @@ export const cardRule: MdxSerializationRule<TCardElement> = {
   },
 
   serialize: (element, options) => {
-    // Serialize children
-    const children = options?.convertNodes
-      ? options.convertNodes(element.children, options)
-      : [];
+    // Serialize children - use options.convertNodes if provided (for tests), otherwise use Plate's native function
+    const converter = options?.convertNodes ?? convertNodesSerialize;
+    const children = converter(element.children, options ?? {});
 
     return {
       type: "mdxJsxFlowElement",
@@ -161,10 +160,9 @@ export const cardHeaderRule: MdxSerializationRule<TCardHeaderElement> = {
   },
 
   serialize: (element, options) => {
-    // Serialize children
-    const children = options?.convertNodes
-      ? options.convertNodes(element.children, options)
-      : [];
+    // Serialize children - use options.convertNodes if provided (for tests), otherwise use Plate's native function
+    const converter = options?.convertNodes ?? convertNodesSerialize;
+    const children = converter(element.children, options ?? {});
 
     return {
       type: "mdxJsxFlowElement",
@@ -217,10 +215,9 @@ export const cardContentRule: MdxSerializationRule<TCardContentElement> = {
   },
 
   serialize: (element, options) => {
-    // Serialize children
-    const children = options?.convertNodes
-      ? options.convertNodes(element.children, options)
-      : [];
+    // Serialize children - use options.convertNodes if provided (for tests), otherwise use Plate's native function
+    const converter = options?.convertNodes ?? convertNodesSerialize;
+    const children = converter(element.children, options ?? {});
 
     return {
       type: "mdxJsxFlowElement",
@@ -273,10 +270,9 @@ export const cardFooterRule: MdxSerializationRule<TCardFooterElement> = {
   },
 
   serialize: (element, options) => {
-    // Serialize children
-    const children = options?.convertNodes
-      ? options.convertNodes(element.children, options)
-      : [];
+    // Serialize children - use options.convertNodes if provided (for tests), otherwise use Plate's native function
+    const converter = options?.convertNodes ?? convertNodesSerialize;
+    const children = converter(element.children, options ?? {});
 
     return {
       type: "mdxJsxFlowElement",
@@ -325,10 +321,9 @@ export const cardTitleRule: MdxSerializationRule<TCardTitleElement> = {
   },
 
   serialize: (element, options) => {
-    // Serialize children
-    const children = options?.convertNodes
-      ? options.convertNodes(element.children, options)
-      : [];
+    // Serialize children - use options.convertNodes if provided (for tests), otherwise use Plate's native function
+    const converter = options?.convertNodes ?? convertNodesSerialize;
+    const children = converter(element.children, options ?? {});
 
     return {
       type: "mdxJsxFlowElement",
@@ -377,10 +372,9 @@ export const cardDescriptionRule: MdxSerializationRule<TCardDescriptionElement> 
   },
 
   serialize: (element, options) => {
-    // Serialize children
-    const children = options?.convertNodes
-      ? options.convertNodes(element.children, options)
-      : [];
+    // Serialize children - use options.convertNodes if provided (for tests), otherwise use Plate's native function
+    const converter = options?.convertNodes ?? convertNodesSerialize;
+    const children = converter(element.children, options ?? {});
 
     return {
       type: "mdxJsxFlowElement",

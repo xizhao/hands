@@ -25,7 +25,7 @@ import {
   type TTextareaElement,
 } from "../../../types";
 import type { MdxSerializationRule, DeserializeOptions } from "../types";
-import { convertChildrenDeserialize } from "@platejs/markdown";
+import { convertChildrenDeserialize, convertNodesSerialize } from "@platejs/markdown";
 import {
   parseAttributes,
   serializeAttributes,
@@ -98,10 +98,9 @@ export const liveActionRule: MdxSerializationRule<TLiveActionElement> = {
       { include: ["sql", "src", "params"] }
     );
 
-    // Serialize children
-    const children = options?.convertNodes
-      ? options.convertNodes(element.children, options)
-      : [];
+    // Serialize children - use options.convertNodes if provided (for tests), otherwise use Plate's native function
+    const converter = options?.convertNodes ?? convertNodesSerialize;
+    const children = converter(element.children, options ?? {});
 
     return {
       type: "mdxJsxFlowElement",
@@ -155,9 +154,8 @@ export const buttonRule: MdxSerializationRule<TButtonElement> = {
       { defaults: { variant: "default" } }
     );
 
-    const children = options?.convertNodes
-      ? options.convertNodes(element.children, options)
-      : [];
+    const converter = options?.convertNodes ?? convertNodesSerialize;
+    const children = converter(element.children, options ?? {});
 
     return {
       type: "mdxJsxTextElement",
@@ -242,9 +240,8 @@ export const inputRule: MdxSerializationRule<TInputElement> = {
       }
     );
 
-    const children = options?.convertNodes
-      ? options.convertNodes(element.children, options)
-      : [];
+    const converter = options?.convertNodes ?? convertNodesSerialize;
+    const children = converter(element.children, options ?? {});
 
     return {
       type: "mdxJsxFlowElement",
@@ -312,9 +309,8 @@ export const selectRule: MdxSerializationRule<TSelectElement> = {
       }
     );
 
-    const children = options?.convertNodes
-      ? options.convertNodes(element.children, options)
-      : [];
+    const converter = options?.convertNodes ?? convertNodesSerialize;
+    const children = converter(element.children, options ?? {});
 
     return {
       type: "mdxJsxFlowElement",
@@ -377,9 +373,8 @@ export const checkboxRule: MdxSerializationRule<TCheckboxElement> = {
       }
     );
 
-    const children = options?.convertNodes
-      ? options.convertNodes(element.children, options)
-      : [];
+    const converter = options?.convertNodes ?? convertNodesSerialize;
+    const children = converter(element.children, options ?? {});
 
     return {
       type: "mdxJsxFlowElement",
@@ -447,9 +442,8 @@ export const textareaRule: MdxSerializationRule<TTextareaElement> = {
       }
     );
 
-    const children = options?.convertNodes
-      ? options.convertNodes(element.children, options)
-      : [];
+    const converter = options?.convertNodes ?? convertNodesSerialize;
+    const children = converter(element.children, options ?? {});
 
     return {
       type: "mdxJsxFlowElement",
