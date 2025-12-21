@@ -12,8 +12,8 @@
  * </LiveAction>
  */
 
-import { memo, useContext } from "react";
 import { createPlatePlugin, PlateElement, type PlateElementProps, useElement } from "platejs/react";
+import { memo, useContext } from "react";
 
 import { BUTTON_KEY, type TButtonElement } from "../../types";
 import { LiveActionContext } from "./live-action";
@@ -132,7 +132,7 @@ export function createButtonElement(
   label: string,
   options?: {
     variant?: TButtonElement["variant"];
-  }
+  },
 ): TButtonElement {
   return {
     type: BUTTON_KEY,

@@ -2,6 +2,20 @@
   "$schema": "https://hands.dev/schema/stdlib.json",
   "version": "0.1.0",
   "components": {
+    "Progress": {
+      "category": "static",
+      "description": "Progress bar for displaying completion status or loading states. Supports determinate (with value) and indeterminate (loading) modes.",
+      "keywords": [
+        "progress",
+        "bar",
+        "loading",
+        "percentage",
+        "completion",
+        "status"
+      ],
+      "example": "<Progress value={75} />\n<Progress value={45} label=\"Upload Progress\" showValue />\n<Progress indeterminate />",
+      "file": "src/stdlib/static/progress.tsx"
+    },
     "LiveValue": {
       "category": "static",
       "description": "Displays live SQL query results. Auto-selects display format based on data shape: inline (1×1), list (N×1), or table (N×M). Supports template mode with {{field}} bindings.",
@@ -18,6 +32,52 @@
       ],
       "example": "<LiveValue sql=\"SELECT count(*) FROM users\" />\n<LiveValue sql=\"SELECT name FROM users\" display=\"list\" />\n<LiveValue sql=\"SELECT * FROM tasks WHERE status = 'active'\" display=\"table\" />",
       "file": "src/stdlib/static/live-value.tsx"
+    },
+    "Metric": {
+      "category": "static",
+      "description": "KPI display for showing a single metric value with optional label and change indicator. Perfect for dashboards showing counts, percentages, or any key performance indicator.",
+      "keywords": [
+        "metric",
+        "kpi",
+        "number",
+        "stat",
+        "dashboard",
+        "counter",
+        "value",
+        "indicator"
+      ],
+      "example": "<Metric label=\"Total Users\" value={1234} />\n<Metric label=\"Revenue\" value={50000} prefix=\"$\" change={12.5} />\n<Metric label=\"Error Rate\" value={0.5} suffix=\"%\" change={-8} changeLabel=\"vs last week\" />",
+      "file": "src/stdlib/static/metric.tsx"
+    },
+    "Alert": {
+      "category": "static",
+      "description": "Callout message box for displaying info, warnings, errors, or success messages. Use to highlight important information or feedback to users.",
+      "keywords": [
+        "alert",
+        "callout",
+        "message",
+        "info",
+        "warning",
+        "error",
+        "success",
+        "notification"
+      ],
+      "example": "<Alert>This is an informational message.</Alert>\n<Alert variant=\"success\" title=\"Success!\">Your changes have been saved.</Alert>\n<Alert variant=\"warning\">Please review before continuing.</Alert>\n<Alert variant=\"destructive\" title=\"Error\">Something went wrong.</Alert>",
+      "file": "src/stdlib/static/alert.tsx"
+    },
+    "Badge": {
+      "category": "static",
+      "description": "Inline status indicator for labeling items with semantic colors. Use for status indicators, tags, or category labels.",
+      "keywords": [
+        "badge",
+        "tag",
+        "status",
+        "label",
+        "indicator",
+        "pill"
+      ],
+      "example": "<Badge>Active</Badge>\n<Badge variant=\"success\">Completed</Badge>\n<Badge variant=\"warning\">Pending</Badge>\n<Badge variant=\"destructive\">Failed</Badge>",
+      "file": "src/stdlib/static/badge.tsx"
     },
     "LiveAction": {
       "category": "active",

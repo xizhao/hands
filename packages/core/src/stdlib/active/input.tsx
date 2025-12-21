@@ -13,8 +13,14 @@
  * </LiveAction>
  */
 
-import { memo, useState, useRef, useEffect, useContext } from "react";
-import { createPlatePlugin, PlateElement, type PlateElementProps, useElement, useSelected } from "platejs/react";
+import {
+  createPlatePlugin,
+  PlateElement,
+  type PlateElementProps,
+  useElement,
+  useSelected,
+} from "platejs/react";
+import { memo, useContext, useEffect, useRef, useState } from "react";
 
 import { INPUT_KEY, type TInputElement } from "../../types";
 import { LiveActionContext } from "./live-action";
@@ -102,13 +108,7 @@ function InputElement(props: PlateElementProps) {
   const selected = useSelected();
   const actionCtx = useContext(LiveActionContext);
 
-  const {
-    name,
-    inputType = "text",
-    placeholder,
-    defaultValue,
-    required,
-  } = element;
+  const { name, inputType = "text", placeholder, defaultValue, required } = element;
 
   const [value, setValue] = useState(defaultValue || "");
   const valueRef = useRef(value);
@@ -127,7 +127,7 @@ function InputElement(props: PlateElementProps) {
 
   // Check if element has label content in children
   const hasLabel = element.children?.some(
-    (child) => "text" in child && typeof child.text === "string" && child.text.trim()
+    (child) => "text" in child && typeof child.text === "string" && child.text.trim(),
   );
 
   return (
@@ -137,9 +137,7 @@ function InputElement(props: PlateElementProps) {
       className={`my-2 rounded-md p-0.5 ${selected ? "ring-2 ring-ring ring-offset-1" : ""}`}
     >
       <div className="flex flex-col gap-1.5">
-        {hasLabel && (
-          <label className="text-sm font-medium">{props.children}</label>
-        )}
+        {hasLabel && <label className="text-sm font-medium">{props.children}</label>}
         <input
           type={inputType}
           value={value}
@@ -184,7 +182,7 @@ export function createInputElement(
     defaultValue?: string;
     required?: boolean;
     label?: string;
-  }
+  },
 ): TInputElement {
   return {
     type: INPUT_KEY,

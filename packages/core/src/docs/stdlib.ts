@@ -5,10 +5,23 @@
  */
 
 // Full documentation as markdown (for system prompts)
-export const STDLIB_DOCS = "# Hands Standard Library\n\nComponent reference for the Hands data application framework.\n\n## Overview\n\nThe stdlib provides two categories of components:\n\n- **Static** - Display-only components that render data\n- **Active** - Interactive components that handle user input and execute SQL mutations\n\n---\n\n## Static Components\n\nDisplay-only components that render live data from SQL queries.\n\n### LiveValue\n\nDisplays live SQL query results. Auto-selects display format based on data shape: inline (1×1), list (N×1), or table (N×M). Supports template mode with {{field}} bindings.\n\n**Keywords:** sql, query, data, display, table, list, inline, live, reactive\n\n**Example:**\n```tsx\n<LiveValue sql=\"SELECT count(*) FROM users\" />\n<LiveValue sql=\"SELECT name FROM users\" display=\"list\" />\n<LiveValue sql=\"SELECT * FROM tasks WHERE status = 'active'\" display=\"table\" />\n```\n\n\n---\n\n## Active Components\n\nInteractive components for building forms that execute SQL mutations.\n\n### LiveAction\n\nContainer that wraps form controls and executes SQL mutations on submit. Children can use {{fieldName}} bindings in the SQL that get replaced with form values.\n\n**Keywords:** form, action, mutation, sql, update, insert, delete, submit\n\n**Example:**\n```tsx\n<LiveAction sql=\"UPDATE tasks SET status = {{status}} WHERE id = 1\">\n  <ActionSelect name=\"status\" options={[{value: \"done\", label: \"Done\"}]} />\n  <ActionButton>Update</ActionButton>\n</LiveAction>\n```\n\n### ActionButton\n\nButton that triggers the parent LiveAction's SQL execution on click. Must be used inside a LiveAction container.\n\n**Keywords:** button, submit, action, trigger, form\n\n**Example:**\n```tsx\n<LiveAction sql=\"UPDATE tasks SET done = true WHERE id = 1\">\n  <ActionButton>Mark Complete</ActionButton>\n</LiveAction>\n```\n\n### ActionCheckbox\n\nCheckbox that registers its value with parent LiveAction for SQL binding. The `name` prop determines the {{name}} placeholder in SQL (returns true/false).\n\n**Keywords:** checkbox, boolean, toggle, form, field, binding\n\n**Example:**\n```tsx\n<LiveAction sql=\"UPDATE tasks SET done = {{done}} WHERE id = 1\">\n  <ActionCheckbox name=\"done\">Mark as complete</ActionCheckbox>\n  <ActionButton>Save</ActionButton>\n</LiveAction>\n```\n\n### ActionSelect\n\nDropdown select that registers its value with parent LiveAction for SQL binding. The `name` prop determines the {{name}} placeholder in SQL.\n\n**Keywords:** select, dropdown, form, field, binding, options\n\n**Example:**\n```tsx\n<LiveAction sql=\"UPDATE tasks SET status = {{status}} WHERE id = 1\">\n  <ActionSelect\n    name=\"status\"\n    options={[\n      { value: \"pending\", label: \"Pending\" },\n      { value: \"done\", label: \"Done\" }\n    ]}\n  />\n  <ActionButton>Update</ActionButton>\n</LiveAction>\n```\n\n### ActionTextarea\n\nMultiline text input that registers its value with parent LiveAction for SQL binding. The `name` prop determines the {{name}} placeholder in SQL.\n\n**Keywords:** textarea, multiline, text, form, field, binding\n\n**Example:**\n```tsx\n<LiveAction sql=\"UPDATE posts SET content = {{content}} WHERE id = 1\">\n  <ActionTextarea name=\"content\" placeholder=\"Enter content...\" rows={5} />\n  <ActionButton>Save</ActionButton>\n</LiveAction>\n```\n\n### ActionInput\n\nText input that registers its value with parent LiveAction for SQL binding. The `name` prop determines the {{name}} placeholder in SQL.\n\n**Keywords:** input, text, form, field, binding\n\n**Example:**\n```tsx\n<LiveAction sql=\"UPDATE users SET name = {{name}} WHERE id = 1\">\n  <ActionInput name=\"name\" placeholder=\"Enter name\" />\n  <ActionButton>Save</ActionButton>\n</LiveAction>\n```\n\n";
+export const STDLIB_DOCS = "# Hands Standard Library\n\nComponent reference for the Hands data application framework.\n\n## Overview\n\nThe stdlib provides two categories of components:\n\n- **Static** - Display-only components that render data\n- **Active** - Interactive components that handle user input and execute SQL mutations\n\n---\n\n## Static Components\n\nDisplay-only components that render live data from SQL queries.\n\n### Progress\n\nProgress bar for displaying completion status or loading states. Supports determinate (with value) and indeterminate (loading) modes.\n\n**Keywords:** progress, bar, loading, percentage, completion, status\n\n**Example:**\n```tsx\n<Progress value={75} />\n<Progress value={45} label=\"Upload Progress\" showValue />\n<Progress indeterminate />\n```\n\n### LiveValue\n\nDisplays live SQL query results. Auto-selects display format based on data shape: inline (1×1), list (N×1), or table (N×M). Supports template mode with {{field}} bindings.\n\n**Keywords:** sql, query, data, display, table, list, inline, live, reactive\n\n**Example:**\n```tsx\n<LiveValue sql=\"SELECT count(*) FROM users\" />\n<LiveValue sql=\"SELECT name FROM users\" display=\"list\" />\n<LiveValue sql=\"SELECT * FROM tasks WHERE status = 'active'\" display=\"table\" />\n```\n\n### Metric\n\nKPI display for showing a single metric value with optional label and change indicator. Perfect for dashboards showing counts, percentages, or any key performance indicator.\n\n**Keywords:** metric, kpi, number, stat, dashboard, counter, value, indicator\n\n**Example:**\n```tsx\n<Metric label=\"Total Users\" value={1234} />\n<Metric label=\"Revenue\" value={50000} prefix=\"$\" change={12.5} />\n<Metric label=\"Error Rate\" value={0.5} suffix=\"%\" change={-8} changeLabel=\"vs last week\" />\n```\n\n### Alert\n\nCallout message box for displaying info, warnings, errors, or success messages. Use to highlight important information or feedback to users.\n\n**Keywords:** alert, callout, message, info, warning, error, success, notification\n\n**Example:**\n```tsx\n<Alert>This is an informational message.</Alert>\n<Alert variant=\"success\" title=\"Success!\">Your changes have been saved.</Alert>\n<Alert variant=\"warning\">Please review before continuing.</Alert>\n<Alert variant=\"destructive\" title=\"Error\">Something went wrong.</Alert>\n```\n\n### Badge\n\nInline status indicator for labeling items with semantic colors. Use for status indicators, tags, or category labels.\n\n**Keywords:** badge, tag, status, label, indicator, pill\n\n**Example:**\n```tsx\n<Badge>Active</Badge>\n<Badge variant=\"success\">Completed</Badge>\n<Badge variant=\"warning\">Pending</Badge>\n<Badge variant=\"destructive\">Failed</Badge>\n```\n\n\n---\n\n## Active Components\n\nInteractive components for building forms that execute SQL mutations.\n\n### LiveAction\n\nContainer that wraps form controls and executes SQL mutations on submit. Children can use {{fieldName}} bindings in the SQL that get replaced with form values.\n\n**Keywords:** form, action, mutation, sql, update, insert, delete, submit\n\n**Example:**\n```tsx\n<LiveAction sql=\"UPDATE tasks SET status = {{status}} WHERE id = 1\">\n  <ActionSelect name=\"status\" options={[{value: \"done\", label: \"Done\"}]} />\n  <ActionButton>Update</ActionButton>\n</LiveAction>\n```\n\n### ActionButton\n\nButton that triggers the parent LiveAction's SQL execution on click. Must be used inside a LiveAction container.\n\n**Keywords:** button, submit, action, trigger, form\n\n**Example:**\n```tsx\n<LiveAction sql=\"UPDATE tasks SET done = true WHERE id = 1\">\n  <ActionButton>Mark Complete</ActionButton>\n</LiveAction>\n```\n\n### ActionCheckbox\n\nCheckbox that registers its value with parent LiveAction for SQL binding. The `name` prop determines the {{name}} placeholder in SQL (returns true/false).\n\n**Keywords:** checkbox, boolean, toggle, form, field, binding\n\n**Example:**\n```tsx\n<LiveAction sql=\"UPDATE tasks SET done = {{done}} WHERE id = 1\">\n  <ActionCheckbox name=\"done\">Mark as complete</ActionCheckbox>\n  <ActionButton>Save</ActionButton>\n</LiveAction>\n```\n\n### ActionSelect\n\nDropdown select that registers its value with parent LiveAction for SQL binding. The `name` prop determines the {{name}} placeholder in SQL.\n\n**Keywords:** select, dropdown, form, field, binding, options\n\n**Example:**\n```tsx\n<LiveAction sql=\"UPDATE tasks SET status = {{status}} WHERE id = 1\">\n  <ActionSelect\n    name=\"status\"\n    options={[\n      { value: \"pending\", label: \"Pending\" },\n      { value: \"done\", label: \"Done\" }\n    ]}\n  />\n  <ActionButton>Update</ActionButton>\n</LiveAction>\n```\n\n### ActionTextarea\n\nMultiline text input that registers its value with parent LiveAction for SQL binding. The `name` prop determines the {{name}} placeholder in SQL.\n\n**Keywords:** textarea, multiline, text, form, field, binding\n\n**Example:**\n```tsx\n<LiveAction sql=\"UPDATE posts SET content = {{content}} WHERE id = 1\">\n  <ActionTextarea name=\"content\" placeholder=\"Enter content...\" rows={5} />\n  <ActionButton>Save</ActionButton>\n</LiveAction>\n```\n\n### ActionInput\n\nText input that registers its value with parent LiveAction for SQL binding. The `name` prop determines the {{name}} placeholder in SQL.\n\n**Keywords:** input, text, form, field, binding\n\n**Example:**\n```tsx\n<LiveAction sql=\"UPDATE users SET name = {{name}} WHERE id = 1\">\n  <ActionInput name=\"name\" placeholder=\"Enter name\" />\n  <ActionButton>Save</ActionButton>\n</LiveAction>\n```\n\n";
 
 // Component metadata
 export const STDLIB_COMPONENTS = {
+  "Progress": {
+    "category": "static",
+    "description": "Progress bar for displaying completion status or loading states. Supports determinate (with value) and indeterminate (loading) modes.",
+    "keywords": [
+      "progress",
+      "bar",
+      "loading",
+      "percentage",
+      "completion",
+      "status"
+    ],
+    "example": "<Progress value={75} />\n<Progress value={45} label=\"Upload Progress\" showValue />\n<Progress indeterminate />"
+  },
   "LiveValue": {
     "category": "static",
     "description": "Displays live SQL query results. Auto-selects display format based on data shape: inline (1×1), list (N×1), or table (N×M). Supports template mode with {{field}} bindings.",
@@ -24,6 +37,49 @@ export const STDLIB_COMPONENTS = {
       "reactive"
     ],
     "example": "<LiveValue sql=\"SELECT count(*) FROM users\" />\n<LiveValue sql=\"SELECT name FROM users\" display=\"list\" />\n<LiveValue sql=\"SELECT * FROM tasks WHERE status = 'active'\" display=\"table\" />"
+  },
+  "Metric": {
+    "category": "static",
+    "description": "KPI display for showing a single metric value with optional label and change indicator. Perfect for dashboards showing counts, percentages, or any key performance indicator.",
+    "keywords": [
+      "metric",
+      "kpi",
+      "number",
+      "stat",
+      "dashboard",
+      "counter",
+      "value",
+      "indicator"
+    ],
+    "example": "<Metric label=\"Total Users\" value={1234} />\n<Metric label=\"Revenue\" value={50000} prefix=\"$\" change={12.5} />\n<Metric label=\"Error Rate\" value={0.5} suffix=\"%\" change={-8} changeLabel=\"vs last week\" />"
+  },
+  "Alert": {
+    "category": "static",
+    "description": "Callout message box for displaying info, warnings, errors, or success messages. Use to highlight important information or feedback to users.",
+    "keywords": [
+      "alert",
+      "callout",
+      "message",
+      "info",
+      "warning",
+      "error",
+      "success",
+      "notification"
+    ],
+    "example": "<Alert>This is an informational message.</Alert>\n<Alert variant=\"success\" title=\"Success!\">Your changes have been saved.</Alert>\n<Alert variant=\"warning\">Please review before continuing.</Alert>\n<Alert variant=\"destructive\" title=\"Error\">Something went wrong.</Alert>"
+  },
+  "Badge": {
+    "category": "static",
+    "description": "Inline status indicator for labeling items with semantic colors. Use for status indicators, tags, or category labels.",
+    "keywords": [
+      "badge",
+      "tag",
+      "status",
+      "label",
+      "indicator",
+      "pill"
+    ],
+    "example": "<Badge>Active</Badge>\n<Badge variant=\"success\">Completed</Badge>\n<Badge variant=\"warning\">Pending</Badge>\n<Badge variant=\"destructive\">Failed</Badge>"
   },
   "LiveAction": {
     "category": "active",
@@ -106,11 +162,11 @@ export const STDLIB_COMPONENTS = {
 } as const;
 
 // Component names by category
-export const STATIC_COMPONENTS = ["LiveValue"] as const;
+export const STATIC_COMPONENTS = ["Progress","LiveValue","Metric","Alert","Badge"] as const;
 export const ACTIVE_COMPONENTS = ["LiveAction","ActionButton","ActionCheckbox","ActionSelect","ActionTextarea","ActionInput"] as const;
 
 // All component names
 export const ALL_COMPONENTS = [...STATIC_COMPONENTS, ...ACTIVE_COMPONENTS] as const;
 
 // Quick reference for agents (shorter than full docs)
-export const STDLIB_QUICK_REF = "\n## Stdlib Components\n\n### Static (Display)\n- **LiveValue**: Displays live SQL query results. Auto-selects display format based on data shape: inline (1×1), list (N×1), or table (N×M). Supports template mode with {{field}} bindings.\n\n### Active (Interactive)\n- **LiveAction**: Container that wraps form controls and executes SQL mutations on submit. Children can use {{fieldName}} bindings in the SQL that get replaced with form values.\n- **ActionButton**: Button that triggers the parent LiveAction's SQL execution on click. Must be used inside a LiveAction container.\n- **ActionCheckbox**: Checkbox that registers its value with parent LiveAction for SQL binding. The `name` prop determines the {{name}} placeholder in SQL (returns true/false).\n- **ActionSelect**: Dropdown select that registers its value with parent LiveAction for SQL binding. The `name` prop determines the {{name}} placeholder in SQL.\n- **ActionTextarea**: Multiline text input that registers its value with parent LiveAction for SQL binding. The `name` prop determines the {{name}} placeholder in SQL.\n- **ActionInput**: Text input that registers its value with parent LiveAction for SQL binding. The `name` prop determines the {{name}} placeholder in SQL.\n";
+export const STDLIB_QUICK_REF = "\n## Stdlib Components\n\n### Static (Display)\n- **Progress**: Progress bar for displaying completion status or loading states. Supports determinate (with value) and indeterminate (loading) modes.\n- **LiveValue**: Displays live SQL query results. Auto-selects display format based on data shape: inline (1×1), list (N×1), or table (N×M). Supports template mode with {{field}} bindings.\n- **Metric**: KPI display for showing a single metric value with optional label and change indicator. Perfect for dashboards showing counts, percentages, or any key performance indicator.\n- **Alert**: Callout message box for displaying info, warnings, errors, or success messages. Use to highlight important information or feedback to users.\n- **Badge**: Inline status indicator for labeling items with semantic colors. Use for status indicators, tags, or category labels.\n\n### Active (Interactive)\n- **LiveAction**: Container that wraps form controls and executes SQL mutations on submit. Children can use {{fieldName}} bindings in the SQL that get replaced with form values.\n- **ActionButton**: Button that triggers the parent LiveAction's SQL execution on click. Must be used inside a LiveAction container.\n- **ActionCheckbox**: Checkbox that registers its value with parent LiveAction for SQL binding. The `name` prop determines the {{name}} placeholder in SQL (returns true/false).\n- **ActionSelect**: Dropdown select that registers its value with parent LiveAction for SQL binding. The `name` prop determines the {{name}} placeholder in SQL.\n- **ActionTextarea**: Multiline text input that registers its value with parent LiveAction for SQL binding. The `name` prop determines the {{name}} placeholder in SQL.\n- **ActionInput**: Text input that registers its value with parent LiveAction for SQL binding. The `name` prop determines the {{name}} placeholder in SQL.\n";

@@ -13,8 +13,14 @@
  * </LiveAction>
  */
 
-import { memo, useState, useRef, useEffect, useContext } from "react";
-import { createPlatePlugin, PlateElement, type PlateElementProps, useElement, useSelected } from "platejs/react";
+import {
+  createPlatePlugin,
+  PlateElement,
+  type PlateElementProps,
+  useElement,
+  useSelected,
+} from "platejs/react";
+import { memo, useContext, useEffect, useRef, useState } from "react";
 
 import { TEXTAREA_KEY, type TTextareaElement } from "../../types";
 import { LiveActionContext } from "./live-action";
@@ -102,13 +108,7 @@ function TextareaElement(props: PlateElementProps) {
   const selected = useSelected();
   const actionCtx = useContext(LiveActionContext);
 
-  const {
-    name,
-    placeholder,
-    defaultValue,
-    rows = 3,
-    required,
-  } = element;
+  const { name, placeholder, defaultValue, rows = 3, required } = element;
 
   const [value, setValue] = useState(defaultValue || "");
   const valueRef = useRef(value);
@@ -127,7 +127,7 @@ function TextareaElement(props: PlateElementProps) {
 
   // Check if element has label content in children
   const hasLabel = element.children?.some(
-    (child) => "text" in child && typeof child.text === "string" && child.text.trim()
+    (child) => "text" in child && typeof child.text === "string" && child.text.trim(),
   );
 
   return (
@@ -137,9 +137,7 @@ function TextareaElement(props: PlateElementProps) {
       className={`my-2 rounded-md p-0.5 ${selected ? "ring-2 ring-ring ring-offset-1" : ""}`}
     >
       <div className="flex flex-col gap-1.5">
-        {hasLabel && (
-          <label className="text-sm font-medium">{props.children}</label>
-        )}
+        {hasLabel && <label className="text-sm font-medium">{props.children}</label>}
         <textarea
           value={value}
           onChange={(e) => setValue(e.target.value)}
@@ -184,7 +182,7 @@ export function createTextareaElement(
     rows?: number;
     required?: boolean;
     label?: string;
-  }
+  },
 ): TTextareaElement {
   return {
     type: TEXTAREA_KEY,

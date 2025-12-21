@@ -12,8 +12,6 @@
  * <LiveValue sql="SELECT * FROM tasks WHERE status = 'active'" display="table" />
  */
 
-import { memo, useMemo, type ReactNode } from "react";
-import { createSlateEditor, type TElement, type TText } from "platejs";
 import {
   createPlatePlugin,
   PlateElement,
@@ -22,13 +20,15 @@ import {
   useReadOnly,
   useSelected,
 } from "platejs/react";
+import { memo } from "react";
 
 import {
+  type ColumnConfig,
+  type DisplayMode,
   LIVE_VALUE_KEY,
   type TLiveValueElement,
-  type DisplayMode,
-  type ColumnConfig,
 } from "../../types";
+import { assertReadOnlySQL } from "../sql-validation";
 
 // ============================================================================
 // Display Type Selection
@@ -66,7 +66,7 @@ export function selectDisplayType(data: Record<string, unknown>[]): DisplayType 
  */
 export function resolveDisplayMode(
   displayProp: DisplayMode | undefined,
-  data: Record<string, unknown>[]
+  data: Record<string, unknown>[],
 ): DisplayType {
   if (!displayProp || displayProp === "auto") {
     return selectDisplayType(data);
@@ -118,11 +118,7 @@ function InlineDisplay({ data, isLoading, error }: DisplayProps) {
   }
 
   const value = Object.values(data[0])[0];
-  return (
-    <span className="font-medium tabular-nums">
-      {formatCellValue(value)}
-    </span>
-  );
+  return <span className="font-medium tabular-nums">{formatCellValue(value)}</span>;
 }
 
 function ListDisplay({ data, isLoading, error }: DisplayProps) {
@@ -251,9 +247,9 @@ function LiveValueElement(props: PlateElementProps) {
   const selected = useSelected();
   const readOnly = useReadOnly();
 
-  const { query, display, columns, className } = element;
+  const { query: _query, display, columns, className } = element;
 
-  // TODO: Use context provider for data fetching
+  // TODO: Use context provider for data fetching (will use _query)
   // For now, show placeholder in editor
   const data: Record<string, unknown>[] = [];
   const isLoading = false;
@@ -297,6 +293,7 @@ export const LiveValuePlugin = createPlatePlugin({
 
 /**
  * Create a LiveValue element for insertion into editor.
+ * Throws if the query is not read-only (SELECT, WITH, EXPLAIN, etc.)
  */
 export function createLiveValueElement(
   query: string,
@@ -304,8 +301,11 @@ export function createLiveValueElement(
     display?: DisplayMode;
     params?: Record<string, unknown>;
     columns?: ColumnConfig[] | "auto";
-  }
+  },
 ): TLiveValueElement {
+  // Validate that the query is read-only
+  assertReadOnlySQL(query);
+
   return {
     type: LIVE_VALUE_KEY,
     query,

@@ -18,6 +18,10 @@ export const SELECT_KEY = "select";
 export const OPTION_KEY = "option";
 export const CHECKBOX_KEY = "checkbox";
 export const TEXTAREA_KEY = "textarea";
+export const METRIC_KEY = "metric";
+export const BADGE_KEY = "badge";
+export const PROGRESS_KEY = "progress";
+export const ALERT_KEY = "alert";
 
 // ============================================================================
 // Validation Constants (for MDX validation)
@@ -41,6 +45,10 @@ export const STDLIB_COMPONENT_NAMES = [
   "Select",
   "Checkbox",
   "Textarea",
+  "Metric",
+  "Badge",
+  "Progress",
+  "Alert",
 ] as const;
 
 // ============================================================================
@@ -231,6 +239,80 @@ export interface TTextareaElement extends TElement {
   /** Whether field is required */
   required?: boolean;
   /** Children are the label text */
+  children: (TElement | TText)[];
+}
+
+// ============================================================================
+// Static Display Element Types
+// ============================================================================
+
+/**
+ * Metric element - KPI display with value, label, and change indicator.
+ */
+export interface TMetricElement extends TElement {
+  type: typeof METRIC_KEY;
+  /** The metric value to display */
+  value?: number | string;
+  /** Label describing the metric */
+  label?: string;
+  /** Prefix before the value (e.g., "$") */
+  prefix?: string;
+  /** Suffix after the value (e.g., "%") */
+  suffix?: string;
+  /** Change value (positive/negative percentage) */
+  change?: number;
+  /** Label for the change (e.g., "vs last month") */
+  changeLabel?: string;
+  /** Size variant */
+  size?: "sm" | "md" | "lg";
+  /** Children are unused (void element) */
+  children: (TElement | TText)[];
+}
+
+/**
+ * Badge element - inline status indicator.
+ */
+export interface TBadgeElement extends TElement {
+  type: typeof BADGE_KEY;
+  /** Visual variant */
+  variant?: "default" | "secondary" | "success" | "warning" | "destructive" | "outline";
+  /** Children are the badge text */
+  children: (TElement | TText)[];
+}
+
+/**
+ * Progress element - progress bar for completion status.
+ */
+export interface TProgressElement extends TElement {
+  type: typeof PROGRESS_KEY;
+  /** Progress value (0-100) */
+  value?: number;
+  /** Maximum value (default 100) */
+  max?: number;
+  /** Show indeterminate loading animation */
+  indeterminate?: boolean;
+  /** Label text above the bar */
+  label?: string;
+  /** Show value as percentage */
+  showValue?: boolean;
+  /** Visual variant */
+  variant?: "default" | "success" | "warning" | "destructive";
+  /** Size variant */
+  size?: "sm" | "md" | "lg";
+  /** Children are unused (void element) */
+  children: (TElement | TText)[];
+}
+
+/**
+ * Alert element - callout message box.
+ */
+export interface TAlertElement extends TElement {
+  type: typeof ALERT_KEY;
+  /** Optional title */
+  title?: string;
+  /** Visual variant */
+  variant?: "default" | "success" | "warning" | "destructive";
+  /** Children are the alert message content */
   children: (TElement | TText)[];
 }
 

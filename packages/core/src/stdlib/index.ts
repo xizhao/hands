@@ -8,6 +8,10 @@
  * ### Static Components
  * Display-only components that render data without user interaction.
  * - `LiveValue` - Display SQL query results (inline/list/table)
+ * - `Metric` - KPI display (number + label + change indicator)
+ * - `Badge` - Inline status indicator
+ * - `Progress` - Progress bar for completion status
+ * - `Alert` - Callout message box
  *
  * ### Active Components
  * Interactive components that handle user input and execute SQL mutations.
@@ -19,20 +23,27 @@
  * - `ActionTextarea` - Multiline text with form binding
  */
 
+// Re-export active components
+export * from "./active";
+// Re-export SQL validation utilities
+export * from "./sql-validation";
 // Re-export static components
 export * from "./static";
 
-// Re-export active components
-export * from "./active";
-
-// Convenience kit exports
-import { LiveValuePlugin } from "./static";
 import { ActiveKit } from "./active";
+// Convenience kit exports
+import { AlertPlugin, BadgePlugin, LiveValuePlugin, MetricPlugin, ProgressPlugin } from "./static";
 
 /**
  * Static component plugins for Plate editor.
  */
-export const StaticKit = [LiveValuePlugin] as const;
+export const StaticKit = [
+  LiveValuePlugin,
+  MetricPlugin,
+  BadgePlugin,
+  ProgressPlugin,
+  AlertPlugin,
+] as const;
 
 /**
  * All stdlib plugins for Plate editor.

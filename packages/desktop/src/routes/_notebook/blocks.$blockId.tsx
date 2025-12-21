@@ -1,8 +1,6 @@
 import { useCallback, useMemo, useState } from "react";
-import { EmptyBlockView } from "@/components/workbook/EmptyBlockView";
 import { BlockIframe } from "@/components/page-editor/SandboxedBlock";
 import { useBlockContent } from "@/hooks/useWorkbook";
-import { useQueryClient } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
 import { PORTS } from "@/lib/ports";
 
@@ -12,7 +10,6 @@ export const Route = createFileRoute("/_notebook/blocks/$blockId")({
 
 function BlockView() {
   const { blockId } = Route.useParams();
-  const queryClient = useQueryClient();
   const { data: source, isLoading, error } = useBlockContent(blockId);
 
   // Block iframe state
@@ -24,11 +21,6 @@ function BlockView() {
     () => `http://localhost:${PORTS.WORKER}/preview/${blockId}`,
     [blockId]
   );
-
-  // Handler to refresh content after initialization
-  const handleInitialized = () => {
-    queryClient.invalidateQueries({ queryKey: ["block-content", blockId] });
-  };
 
   const handleReady = useCallback((height: number) => {
     setIframeState('ready');
@@ -94,12 +86,23 @@ function BlockView() {
     );
   }
 
-  // Empty or uninitialized block - show template picker
+  // Empty or uninitialized block - show placeholder
   const isUninitialized =
     !source || source.trim() === "" || source.includes("@hands:uninitialized");
   if (isUninitialized) {
     return (
-      <EmptyBlockView blockId={blockId} onInitialized={handleInitialized} />
+      <CanvasWrapper>
+        <div className="h-64 flex items-center justify-center">
+          <div className="text-center">
+            <p className="text-sm font-medium text-muted-foreground">
+              Block not initialized
+            </p>
+            <p className="text-xs text-muted-foreground mt-1">
+              Edit this block to add content
+            </p>
+          </div>
+        </div>
+      </CanvasWrapper>
     );
   }
 

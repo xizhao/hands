@@ -13,8 +13,14 @@
  * </LiveAction>
  */
 
-import { memo, useState, useRef, useEffect, useContext } from "react";
-import { createPlatePlugin, PlateElement, type PlateElementProps, useElement, useSelected } from "platejs/react";
+import {
+  createPlatePlugin,
+  PlateElement,
+  type PlateElementProps,
+  useElement,
+  useSelected,
+} from "platejs/react";
+import { memo, useContext, useEffect, useRef, useState } from "react";
 
 import { CHECKBOX_KEY, type TCheckboxElement } from "../../types";
 import { LiveActionContext } from "./live-action";
@@ -156,7 +162,7 @@ export function createCheckboxElement(
     defaultChecked?: boolean;
     required?: boolean;
     label?: string;
-  }
+  },
 ): TCheckboxElement {
   return {
     type: CHECKBOX_KEY,

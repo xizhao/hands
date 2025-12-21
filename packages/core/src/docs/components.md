@@ -15,6 +15,19 @@ The stdlib provides two categories of components:
 
 Display-only components that render live data from SQL queries.
 
+### Progress
+
+Progress bar for displaying completion status or loading states. Supports determinate (with value) and indeterminate (loading) modes.
+
+**Keywords:** progress, bar, loading, percentage, completion, status
+
+**Example:**
+```tsx
+<Progress value={75} />
+<Progress value={45} label="Upload Progress" showValue />
+<Progress indeterminate />
+```
+
 ### LiveValue
 
 Displays live SQL query results. Auto-selects display format based on data shape: inline (1×1), list (N×1), or table (N×M). Supports template mode with {{field}} bindings.
@@ -26,6 +39,47 @@ Displays live SQL query results. Auto-selects display format based on data shape
 <LiveValue sql="SELECT count(*) FROM users" />
 <LiveValue sql="SELECT name FROM users" display="list" />
 <LiveValue sql="SELECT * FROM tasks WHERE status = 'active'" display="table" />
+```
+
+### Metric
+
+KPI display for showing a single metric value with optional label and change indicator. Perfect for dashboards showing counts, percentages, or any key performance indicator.
+
+**Keywords:** metric, kpi, number, stat, dashboard, counter, value, indicator
+
+**Example:**
+```tsx
+<Metric label="Total Users" value={1234} />
+<Metric label="Revenue" value={50000} prefix="$" change={12.5} />
+<Metric label="Error Rate" value={0.5} suffix="%" change={-8} changeLabel="vs last week" />
+```
+
+### Alert
+
+Callout message box for displaying info, warnings, errors, or success messages. Use to highlight important information or feedback to users.
+
+**Keywords:** alert, callout, message, info, warning, error, success, notification
+
+**Example:**
+```tsx
+<Alert>This is an informational message.</Alert>
+<Alert variant="success" title="Success!">Your changes have been saved.</Alert>
+<Alert variant="warning">Please review before continuing.</Alert>
+<Alert variant="destructive" title="Error">Something went wrong.</Alert>
+```
+
+### Badge
+
+Inline status indicator for labeling items with semantic colors. Use for status indicators, tags, or category labels.
+
+**Keywords:** badge, tag, status, label, indicator, pill
+
+**Example:**
+```tsx
+<Badge>Active</Badge>
+<Badge variant="success">Completed</Badge>
+<Badge variant="warning">Pending</Badge>
+<Badge variant="destructive">Failed</Badge>
 ```
 
 

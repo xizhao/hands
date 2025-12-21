@@ -58,6 +58,10 @@ import {
   OPTION_KEY,
   CHECKBOX_KEY,
   TEXTAREA_KEY,
+  METRIC_KEY,
+  BADGE_KEY,
+  PROGRESS_KEY,
+  ALERT_KEY,
   type DisplayMode,
   type ColumnConfig,
   type TLiveValueElement,
@@ -68,6 +72,10 @@ import {
   type TOptionElement,
   type TCheckboxElement,
   type TTextareaElement,
+  type TMetricElement,
+  type TBadgeElement,
+  type TProgressElement,
+  type TAlertElement,
   type LiveActionContextValue,
 } from "@hands/core/types";
 
@@ -81,6 +89,10 @@ export {
   OPTION_KEY,
   CHECKBOX_KEY,
   TEXTAREA_KEY,
+  METRIC_KEY,
+  BADGE_KEY,
+  PROGRESS_KEY,
+  ALERT_KEY,
   type DisplayMode,
   type ColumnConfig,
   type TLiveValueElement,
@@ -91,6 +103,10 @@ export {
   type TOptionElement,
   type TCheckboxElement,
   type TTextareaElement,
+  type TMetricElement,
+  type TBadgeElement,
+  type TProgressElement,
+  type TAlertElement,
 };
 
 // ============================================================================
@@ -1780,6 +1796,65 @@ export function createTextareaElement(
     name,
     ...options,
     children: [{ text: "" }],
+  };
+}
+
+/**
+ * Create a Metric element for KPI display.
+ */
+export function createMetricElement(
+  value: number | string,
+  options?: Partial<Omit<TMetricElement, "type" | "value" | "children">>
+): TMetricElement {
+  return {
+    type: METRIC_KEY,
+    value,
+    ...options,
+    children: [{ text: "" }],
+  };
+}
+
+/**
+ * Create a Badge element for status indicator.
+ */
+export function createBadgeElement(
+  text: string,
+  variant?: TBadgeElement["variant"]
+): TBadgeElement {
+  return {
+    type: BADGE_KEY,
+    variant,
+    children: [{ text }],
+  };
+}
+
+/**
+ * Create a Progress element.
+ */
+export function createProgressElement(
+  value: number,
+  options?: Partial<Omit<TProgressElement, "type" | "value" | "children">>
+): TProgressElement {
+  return {
+    type: PROGRESS_KEY,
+    value,
+    ...options,
+    children: [{ text: "" }],
+  };
+}
+
+/**
+ * Create an Alert element.
+ */
+export function createAlertElement(
+  message: string,
+  options?: { title?: string; variant?: TAlertElement["variant"] }
+): TAlertElement {
+  return {
+    type: ALERT_KEY,
+    title: options?.title,
+    variant: options?.variant,
+    children: [{ text: message }],
   };
 }
 

@@ -19,8 +19,14 @@
  * </LiveAction>
  */
 
-import { memo, useState, useRef, useEffect, useContext } from "react";
-import { createPlatePlugin, PlateElement, type PlateElementProps, useElement, useSelected } from "platejs/react";
+import {
+  createPlatePlugin,
+  PlateElement,
+  type PlateElementProps,
+  useElement,
+  useSelected,
+} from "platejs/react";
+import { memo, useContext, useEffect, useRef, useState } from "react";
 
 import { SELECT_KEY, type TSelectElement } from "../../types";
 import { LiveActionContext } from "./live-action";
@@ -124,13 +130,7 @@ function SelectElement(props: PlateElementProps) {
   const selected = useSelected();
   const actionCtx = useContext(LiveActionContext);
 
-  const {
-    name,
-    options = [],
-    placeholder = "Select...",
-    defaultValue,
-    required,
-  } = element;
+  const { name, options = [], placeholder = "Select...", defaultValue, required } = element;
 
   const [value, setValue] = useState(defaultValue || "");
   const valueRef = useRef(value);
@@ -149,7 +149,7 @@ function SelectElement(props: PlateElementProps) {
 
   // Check if element has label content in children
   const hasLabel = element.children?.some(
-    (child) => "text" in child && typeof child.text === "string" && child.text.trim()
+    (child) => "text" in child && typeof child.text === "string" && child.text.trim(),
   );
 
   return (
@@ -159,9 +159,7 @@ function SelectElement(props: PlateElementProps) {
       className={`my-2 rounded-md p-0.5 ${selected ? "ring-2 ring-ring ring-offset-1" : ""}`}
     >
       <div className="flex flex-col gap-1.5">
-        {hasLabel && (
-          <label className="text-sm font-medium">{props.children}</label>
-        )}
+        {hasLabel && <label className="text-sm font-medium">{props.children}</label>}
         <select
           value={value}
           onChange={(e) => setValue(e.target.value)}
@@ -212,7 +210,7 @@ export function createSelectElement(
     defaultValue?: string;
     required?: boolean;
     label?: string;
-  }
+  },
 ): TSelectElement {
   return {
     type: SELECT_KEY,

@@ -13,22 +13,10 @@
  * </LiveAction>
  */
 
-import {
-  memo,
-  createContext,
-  useContext,
-  useCallback,
-  useMemo,
-  useRef,
-  useState,
-} from "react";
 import { createPlatePlugin, PlateElement, type PlateElementProps, useElement } from "platejs/react";
+import { createContext, memo, useCallback, useContext, useMemo, useRef, useState } from "react";
 
-import {
-  LIVE_ACTION_KEY,
-  type TLiveActionElement,
-  type LiveActionContextValue,
-} from "../../types";
+import { LIVE_ACTION_KEY, type LiveActionContextValue, type TLiveActionElement } from "../../types";
 
 // ============================================================================
 // Context
@@ -64,10 +52,7 @@ export function useLiveActionOptional(): LiveActionContextValue | null {
  * Substitute {{field}} bindings in SQL with form values.
  * Values are properly escaped for SQL.
  */
-export function substituteFormBindings(
-  sql: string,
-  formValues: Record<string, unknown>
-): string {
+export function substituteFormBindings(sql: string, formValues: Record<string, unknown>): string {
   return sql.replace(/\{\{(\w+)\}\}/g, (match, field) => {
     if (!(field in formValues)) {
       console.warn(`[LiveAction] Form field {{${field}}} not found`);
@@ -104,12 +89,7 @@ export interface LiveActionProps {
 /**
  * Standalone LiveAction component for use outside Plate editor.
  */
-export function LiveAction({
-  sql,
-  onExecute,
-  children,
-  className,
-}: LiveActionProps) {
+export function LiveAction({ sql, onExecute, children, className }: LiveActionProps) {
   const [isPending, setIsPending] = useState(false);
   const [error, setError] = useState<Error | null>(null);
   const fieldsRef = useRef<Map<string, () => unknown>>(new Map());
@@ -154,7 +134,7 @@ export function LiveAction({
 
   const contextValue = useMemo<LiveActionContextValue>(
     () => ({ trigger, isPending, error, registerField, unregisterField }),
-    [trigger, isPending, error, registerField, unregisterField]
+    [trigger, isPending, error, registerField, unregisterField],
   );
 
   return (
@@ -185,7 +165,7 @@ function LiveActionElement(props: PlateElementProps) {
   const [error, setError] = useState<Error | null>(null);
   const fieldsRef = useRef<Map<string, () => unknown>>(new Map());
 
-  const { sql, params } = element;
+  const { sql, params: _params } = element;
 
   const registerField = useCallback((name: string, getValue: () => unknown) => {
     fieldsRef.current.set(name, getValue);
@@ -228,7 +208,7 @@ function LiveActionElement(props: PlateElementProps) {
 
   const contextValue = useMemo<LiveActionContextValue>(
     () => ({ trigger, isPending, error, registerField, unregisterField }),
-    [trigger, isPending, error, registerField, unregisterField]
+    [trigger, isPending, error, registerField, unregisterField],
   );
 
   return (
@@ -272,7 +252,7 @@ export function createLiveActionElement(
   options?: {
     src?: string;
     params?: Record<string, unknown>;
-  }
+  },
 ): TLiveActionElement {
   return {
     type: LIVE_ACTION_KEY,
