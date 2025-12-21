@@ -22,7 +22,7 @@ import {
 } from "platejs/react";
 import { memo, useContext, useEffect, useRef, useState } from "react";
 
-import { Checkbox } from "../../components/ui/checkbox";
+import { Checkbox as BaseCheckbox } from "../../components/ui/checkbox";
 import { Label } from "../../components/ui/label";
 import { CHECKBOX_KEY, type TCheckboxElement } from "../../types";
 import { LiveActionContext } from "./live-action";
@@ -75,7 +75,7 @@ export function Checkbox({
 
   return (
     <div className={`flex items-center gap-2 ${className || ""}`}>
-      <Checkbox
+      <BaseCheckbox
         id={name}
         name={name}
         checked={displayChecked}
@@ -128,7 +128,7 @@ function CheckboxElement(props: PlateElementProps) {
       className={`my-2 rounded-md p-0.5 ${selected ? "ring-2 ring-ring ring-offset-1" : ""}`}
     >
       <div className="flex items-center gap-2">
-        <Checkbox
+        <BaseCheckbox
           checked={checked}
           onCheckedChange={(value) => setChecked(value === true)}
           disabled={isPending}

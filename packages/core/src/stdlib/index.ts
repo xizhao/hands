@@ -42,6 +42,8 @@ export * from "./sql-validation";
 export * from "./serialization";
 // Re-export query provider (for apps to implement data fetching)
 export * from "./query-provider";
+// Re-export custom block factory
+export * from "./custom-block";
 
 // Import kits
 import { ActionKit } from "./action";
