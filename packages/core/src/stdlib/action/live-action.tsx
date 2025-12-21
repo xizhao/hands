@@ -137,16 +137,10 @@ export function LiveAction({ sql, onExecute, children, className }: LiveActionPr
     [trigger, isPending, error, registerField, unregisterField],
   );
 
+  // Invisible container - no added styling/padding
   return (
     <LiveActionContext.Provider value={contextValue}>
-      <div className={`relative ${className || ""}`}>
-        {children}
-        {isPending && (
-          <div className="absolute inset-0 bg-background/50 flex items-center justify-center pointer-events-none">
-            <div className="size-4 animate-spin rounded-full border-2 border-muted-foreground/30 border-t-muted-foreground" />
-          </div>
-        )}
-      </div>
+      {children}
     </LiveActionContext.Provider>
   );
 }
@@ -211,17 +205,11 @@ function LiveActionElement(props: PlateElementProps) {
     [trigger, isPending, error, registerField, unregisterField],
   );
 
+  // Invisible container - no added styling/padding
   return (
     <PlateElement {...props}>
       <LiveActionContext.Provider value={contextValue}>
-        <div className="relative">
-          {props.children}
-          {isPending && (
-            <div className="absolute inset-0 bg-background/50 flex items-center justify-center pointer-events-none">
-              <div className="size-4 animate-spin rounded-full border-2 border-muted-foreground/30 border-t-muted-foreground" />
-            </div>
-          )}
-        </div>
+        {props.children}
       </LiveActionContext.Provider>
     </PlateElement>
   );

@@ -56,6 +56,16 @@ export {
   type LoaderSpeed,
 } from "./loader";
 
+// DataGrid
+export {
+  createDataGridElement,
+  type CreateDataGridOptions,
+  DATA_GRID_KEY,
+  DataGrid,
+  DataGridPlugin,
+  type DataGridProps,
+} from "./data-grid";
+
 // Charts
 export {
   // Chart primitives (shadcn-style)

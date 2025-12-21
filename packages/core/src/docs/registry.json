@@ -150,6 +150,22 @@
       "example": "<Badge>Active</Badge>\n<Badge variant=\"success\">Completed</Badge>\n<Badge variant=\"warning\">Pending</Badge>\n<Badge variant=\"destructive\">Failed</Badge>",
       "file": "src/stdlib/static/badge.tsx"
     },
+    "DataGrid": {
+      "category": "static",
+      "description": "High-performance editable data grid with virtualization, keyboard navigation, and comprehensive cell editing. Supports sorting, searching, and clipboard operations.",
+      "keywords": [
+        "grid",
+        "table",
+        "data",
+        "spreadsheet",
+        "edit",
+        "sort",
+        "filter",
+        "virtual"
+      ],
+      "example": "<DataGrid data={data} />\n<DataGrid data={data} height={400} readOnly />\n<DataGrid data={data} columns={[{key: \"name\", label: \"Name\"}, {key: \"email\", label: \"Email\"}]} />",
+      "file": "src/stdlib/static/data-grid/data-grid.tsx"
+    },
     "LiveAction": {
       "category": "active",
       "description": "Container that wraps form controls and executes SQL mutations on submit. Children can use {{fieldName}} bindings in the SQL that get replaced with form values.",
@@ -165,6 +181,23 @@
       ],
       "example": "<LiveAction sql=\"UPDATE tasks SET status = {{status}} WHERE id = 1\">\n  <ActionSelect name=\"status\" options={[{value: \"done\", label: \"Done\"}]} />\n  <ActionButton>Update</ActionButton>\n</LiveAction>",
       "file": "src/stdlib/active/live-action.tsx"
+    },
+    "Kanban": {
+      "category": "active",
+      "description": "Drag-and-drop Kanban board that displays SQL query results grouped by a column. Cards can be dragged between columns to update the underlying data.",
+      "keywords": [
+        "kanban",
+        "board",
+        "drag",
+        "drop",
+        "cards",
+        "columns",
+        "status",
+        "workflow",
+        "tasks"
+      ],
+      "example": "<Kanban\n  query=\"SELECT id, title, status FROM tasks\"\n  groupByColumn=\"status\"\n  cardTitleField=\"title\"\n  updateSql=\"UPDATE tasks SET status = {{status}} WHERE id = {{id}}\"\n/>",
+      "file": "src/stdlib/active/kanban/kanban.tsx"
     },
     "ActionButton": {
       "category": "active",

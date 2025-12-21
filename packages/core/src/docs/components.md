@@ -143,6 +143,19 @@ Inline status indicator for labeling items with semantic colors. Use for status 
 <Badge variant="destructive">Failed</Badge>
 ```
 
+### DataGrid
+
+High-performance editable data grid with virtualization, keyboard navigation, and comprehensive cell editing. Supports sorting, searching, and clipboard operations.
+
+**Keywords:** grid, table, data, spreadsheet, edit, sort, filter, virtual
+
+**Example:**
+```tsx
+<DataGrid data={data} />
+<DataGrid data={data} height={400} readOnly />
+<DataGrid data={data} columns={[{key: "name", label: "Name"}, {key: "email", label: "Email"}]} />
+```
+
 
 ---
 
@@ -162,6 +175,22 @@ Container that wraps form controls and executes SQL mutations on submit. Childre
   <ActionSelect name="status" options={[{value: "done", label: "Done"}]} />
   <ActionButton>Update</ActionButton>
 </LiveAction>
+```
+
+### Kanban
+
+Drag-and-drop Kanban board that displays SQL query results grouped by a column. Cards can be dragged between columns to update the underlying data.
+
+**Keywords:** kanban, board, drag, drop, cards, columns, status, workflow, tasks
+
+**Example:**
+```tsx
+<Kanban
+  query="SELECT id, title, status FROM tasks"
+  groupByColumn="status"
+  cardTitleField="title"
+  updateSql="UPDATE tasks SET status = {{status}} WHERE id = {{id}}"
+/>
 ```
 
 ### ActionButton

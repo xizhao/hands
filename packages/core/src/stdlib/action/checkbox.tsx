@@ -22,8 +22,8 @@ import {
 } from "platejs/react";
 import { memo, useContext, useEffect, useRef, useState } from "react";
 
-import { Checkbox } from "@/components/ui/checkbox";
-import { Label } from "@/components/ui/label";
+import { Checkbox } from "../../components/ui/checkbox";
+import { Label } from "../../components/ui/label";
 import { CHECKBOX_KEY, type TCheckboxElement } from "../../types";
 import { LiveActionContext } from "./live-action";
 

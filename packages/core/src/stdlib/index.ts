@@ -13,6 +13,7 @@
  * - `Progress` - Progress bar for completion status
  * - `Alert` - Callout message box
  * - `Loader` - Animated loading indicator
+ * - `DataGrid` - High-performance editable data grid
  *
  * ### Chart Components
  * Data visualization components that work standalone or inside LiveValue.
@@ -37,6 +38,8 @@ export * from "./active";
 export * from "./sql-validation";
 // Re-export static components
 export * from "./static";
+// Re-export serialization rules and helpers
+export * from "./serialization";
 
 import { ActiveKit } from "./active";
 // Convenience kit exports
@@ -45,6 +48,7 @@ import {
   AreaChartPlugin,
   BadgePlugin,
   BarChartPlugin,
+  DataGridPlugin,
   LineChartPlugin,
   LiveValuePlugin,
   LoaderPlugin,
@@ -63,6 +67,7 @@ export const StaticKit = [
   ProgressPlugin,
   AlertPlugin,
   LoaderPlugin,
+  DataGridPlugin,
   LineChartPlugin,
   BarChartPlugin,
   AreaChartPlugin,

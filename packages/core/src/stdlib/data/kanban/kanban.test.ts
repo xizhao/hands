@@ -1,0 +1,380 @@
+/**
+ * Kanban Component Tests
+ */
+
+import { describe, expect, it } from "vitest";
+import {
+  findMovedItem,
+  getColumnOrder,
+  groupByColumn,
+  type KanbanBoardValue,
+  type KanbanItem,
+} from "./kanban-board";
+import { createKanbanElement } from "./kanban";
+
+// ============================================================================
+// groupByColumn Tests
+// ============================================================================
+
+describe("groupByColumn", () => {
+  it("groups items by a string column", () => {
+    const items = [
+      { id: 1, title: "Task A", status: "todo" },
+      { id: 2, title: "Task B", status: "done" },
+      { id: 3, title: "Task C", status: "todo" },
+    ];
+
+    const result = groupByColumn(items, "status");
+
+    expect(result).toEqual({
+      todo: [
+        { id: 1, title: "Task A", status: "todo" },
+        { id: 3, title: "Task C", status: "todo" },
+      ],
+      done: [{ id: 2, title: "Task B", status: "done" }],
+    });
+  });
+
+  it("handles empty array", () => {
+    const result = groupByColumn([], "status");
+    expect(result).toEqual({});
+  });
+
+  it("handles items with missing column value", () => {
+    const items = [
+      { id: 1, title: "Task A" },
+      { id: 2, title: "Task B", status: "done" },
+    ];
+
+    const result = groupByColumn(items, "status");
+
+    expect(result).toEqual({
+      "": [{ id: 1, title: "Task A" }],
+      done: [{ id: 2, title: "Task B", status: "done" }],
+    });
+  });
+
+  it("handles null and undefined column values", () => {
+    const items = [
+      { id: 1, title: "Task A", status: null },
+      { id: 2, title: "Task B", status: undefined },
+      { id: 3, title: "Task C", status: "done" },
+    ];
+
+    const result = groupByColumn(items, "status");
+
+    expect(result).toEqual({
+      "": [
+        { id: 1, title: "Task A", status: null },
+        { id: 2, title: "Task B", status: undefined },
+      ],
+      done: [{ id: 3, title: "Task C", status: "done" }],
+    });
+  });
+
+  it("converts non-string values to strings", () => {
+    const items = [
+      { id: 1, title: "Task A", priority: 1 },
+      { id: 2, title: "Task B", priority: 2 },
+      { id: 3, title: "Task C", priority: 1 },
+    ];
+
+    const result = groupByColumn(items, "priority");
+
+    expect(result).toEqual({
+      "1": [
+        { id: 1, title: "Task A", priority: 1 },
+        { id: 3, title: "Task C", priority: 1 },
+      ],
+      "2": [{ id: 2, title: "Task B", priority: 2 }],
+    });
+  });
+});
+
+// ============================================================================
+// getColumnOrder Tests
+// ============================================================================
+
+describe("getColumnOrder", () => {
+  it("returns columns in first-seen order", () => {
+    const items = [
+      { id: 1, status: "todo" },
+      { id: 2, status: "in_progress" },
+      { id: 3, status: "todo" },
+      { id: 4, status: "done" },
+    ];
+
+    const order = getColumnOrder(items, "status");
+
+    expect(order).toEqual(["todo", "in_progress", "done"]);
+  });
+
+  it("handles empty array", () => {
+    const order = getColumnOrder([], "status");
+    expect(order).toEqual([]);
+  });
+
+  it("handles single column", () => {
+    const items = [
+      { id: 1, status: "todo" },
+      { id: 2, status: "todo" },
+    ];
+
+    const order = getColumnOrder(items, "status");
+
+    expect(order).toEqual(["todo"]);
+  });
+
+  it("handles missing column values", () => {
+    const items = [
+      { id: 1 },
+      { id: 2, status: "done" },
+    ];
+
+    const order = getColumnOrder(items, "status");
+
+    expect(order).toEqual(["", "done"]);
+  });
+});
+
+// ============================================================================
+// findMovedItem Tests
+// ============================================================================
+
+describe("findMovedItem", () => {
+  it("detects item moved to different column", () => {
+    const oldValue: KanbanBoardValue = {
+      todo: [
+        { id: 1, title: "Task A" },
+        { id: 2, title: "Task B" },
+      ],
+      done: [],
+    };
+
+    const newValue: KanbanBoardValue = {
+      todo: [{ id: 1, title: "Task A" }],
+      done: [{ id: 2, title: "Task B" }],
+    };
+
+    const moved = findMovedItem(oldValue, newValue);
+
+    expect(moved).toEqual({
+      item: { id: 2, title: "Task B" },
+      fromColumn: "todo",
+      toColumn: "done",
+    });
+  });
+
+  it("returns null when no item moved between columns", () => {
+    const oldValue: KanbanBoardValue = {
+      todo: [
+        { id: 1, title: "Task A" },
+        { id: 2, title: "Task B" },
+      ],
+    };
+
+    // Reordered within same column
+    const newValue: KanbanBoardValue = {
+      todo: [
+        { id: 2, title: "Task B" },
+        { id: 1, title: "Task A" },
+      ],
+    };
+
+    const moved = findMovedItem(oldValue, newValue);
+
+    expect(moved).toBeNull();
+  });
+
+  it("returns null for empty boards", () => {
+    const oldValue: KanbanBoardValue = {};
+    const newValue: KanbanBoardValue = {};
+
+    const moved = findMovedItem(oldValue, newValue);
+
+    expect(moved).toBeNull();
+  });
+
+  it("detects move to new column", () => {
+    const oldValue: KanbanBoardValue = {
+      todo: [{ id: 1, title: "Task A" }],
+    };
+
+    const newValue: KanbanBoardValue = {
+      todo: [],
+      in_progress: [{ id: 1, title: "Task A" }],
+    };
+
+    const moved = findMovedItem(oldValue, newValue);
+
+    expect(moved).toEqual({
+      item: { id: 1, title: "Task A" },
+      fromColumn: "todo",
+      toColumn: "in_progress",
+    });
+  });
+
+  it("handles numeric ids", () => {
+    const oldValue: KanbanBoardValue = {
+      todo: [{ id: 123, title: "Task" }],
+      done: [],
+    };
+
+    const newValue: KanbanBoardValue = {
+      todo: [],
+      done: [{ id: 123, title: "Task" }],
+    };
+
+    const moved = findMovedItem(oldValue, newValue);
+
+    expect(moved).toEqual({
+      item: { id: 123, title: "Task" },
+      fromColumn: "todo",
+      toColumn: "done",
+    });
+  });
+
+  it("handles string ids", () => {
+    const oldValue: KanbanBoardValue = {
+      todo: [{ id: "abc-123", title: "Task" }],
+      done: [],
+    };
+
+    const newValue: KanbanBoardValue = {
+      todo: [],
+      done: [{ id: "abc-123", title: "Task" }],
+    };
+
+    const moved = findMovedItem(oldValue, newValue);
+
+    expect(moved).toEqual({
+      item: { id: "abc-123", title: "Task" },
+      fromColumn: "todo",
+      toColumn: "done",
+    });
+  });
+});
+
+// ============================================================================
+// createKanbanElement Tests
+// ============================================================================
+
+describe("createKanbanElement", () => {
+  it("creates element with required fields", () => {
+    const element = createKanbanElement(
+      "SELECT id, title, status FROM tasks",
+      "status",
+      "title",
+      "UPDATE tasks SET status = {{status}} WHERE id = {{id}}"
+    );
+
+    expect(element).toEqual({
+      type: "kanban",
+      query: "SELECT id, title, status FROM tasks",
+      groupByColumn: "status",
+      cardTitleField: "title",
+      updateSql: "UPDATE tasks SET status = {{status}} WHERE id = {{id}}",
+      columnOrder: undefined,
+      cardFields: undefined,
+      idField: undefined,
+      children: [{ text: "" }],
+    });
+  });
+
+  it("creates element with optional fields", () => {
+    const element = createKanbanElement(
+      "SELECT * FROM tasks",
+      "status",
+      "title",
+      "UPDATE tasks SET status = {{status}} WHERE id = {{id}}",
+      {
+        columnOrder: ["todo", "in_progress", "done"],
+        cardFields: ["priority", "assignee"],
+        idField: "task_id",
+      }
+    );
+
+    expect(element.columnOrder).toEqual(["todo", "in_progress", "done"]);
+    expect(element.cardFields).toEqual(["priority", "assignee"]);
+    expect(element.idField).toBe("task_id");
+  });
+
+  it("throws for non-SELECT query", () => {
+    expect(() =>
+      createKanbanElement(
+        "UPDATE tasks SET status = 'done'",
+        "status",
+        "title",
+        "UPDATE tasks SET status = {{status}} WHERE id = {{id}}"
+      )
+    ).toThrow("is not allowed");
+  });
+
+  it("throws for DELETE query", () => {
+    expect(() =>
+      createKanbanElement(
+        "DELETE FROM tasks WHERE id = 1",
+        "status",
+        "title",
+        "UPDATE tasks SET status = {{status}} WHERE id = {{id}}"
+      )
+    ).toThrow();
+  });
+
+  it("throws for INSERT query", () => {
+    expect(() =>
+      createKanbanElement(
+        "INSERT INTO tasks (title) VALUES ('test')",
+        "status",
+        "title",
+        "UPDATE tasks SET status = {{status}} WHERE id = {{id}}"
+      )
+    ).toThrow();
+  });
+
+  it("accepts SELECT with subquery", () => {
+    const element = createKanbanElement(
+      "SELECT * FROM tasks WHERE project_id IN (SELECT id FROM projects)",
+      "status",
+      "title",
+      "UPDATE tasks SET status = {{status}} WHERE id = {{id}}"
+    );
+
+    expect(element.query).toBe(
+      "SELECT * FROM tasks WHERE project_id IN (SELECT id FROM projects)"
+    );
+  });
+
+  it("accepts case-insensitive SELECT", () => {
+    const element = createKanbanElement(
+      "select id, title, status from tasks",
+      "status",
+      "title",
+      "UPDATE tasks SET status = {{status}} WHERE id = {{id}}"
+    );
+
+    expect(element.type).toBe("kanban");
+  });
+
+  it("accepts SELECT with leading whitespace", () => {
+    const element = createKanbanElement(
+      "   SELECT * FROM tasks",
+      "status",
+      "title",
+      "UPDATE tasks SET status = {{status}} WHERE id = {{id}}"
+    );
+
+    expect(element.type).toBe("kanban");
+  });
+
+  it("accepts WITH CTE queries", () => {
+    const element = createKanbanElement(
+      "WITH active_tasks AS (SELECT * FROM tasks WHERE active = true) SELECT * FROM active_tasks",
+      "status",
+      "title",
+      "UPDATE tasks SET status = {{status}} WHERE id = {{id}}"
+    );
+
+    expect(element.type).toBe("kanban");
+  });
+});

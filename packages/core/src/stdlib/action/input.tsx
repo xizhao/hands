@@ -22,8 +22,8 @@ import {
 } from "platejs/react";
 import { memo, useContext, useEffect, useRef, useState } from "react";
 
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
+import { Input } from "../../components/ui/input";
+import { Label } from "../../components/ui/label";
 import { INPUT_KEY, type TInputElement } from "../../types";
 import { LiveActionContext } from "./live-action";
 

@@ -1,120 +1,19 @@
 /**
  * AI tRPC Router
  *
- * Provides typed AI endpoints for text-to-sql and copilot completions.
+ * Provides typed AI endpoints for copilot completions.
  *
  * Autocomplete routing:
  * 1. generateMdx (fast) - simple completions or returns <Prompt reasoning="low|mid|high">
- * 2. generateMdxBlock (medium) - full MDX docs, higher token budget, optional thinking
- * 3. OpenHands agent (heavy) - delegated via client for reasoning="high"
+ * 2. generateMdxBlock (medium) - full MDX docs, charts, forms, higher token budget
+ * 3. Agent (heavy) - reasoning="high" only for iteration/analysis tasks
  */
 
 import { gateway } from "@ai-sdk/gateway";
 import { initTRPC, TRPCError } from "@trpc/server";
 import { generateText } from "ai";
 import { z } from "zod";
-
-// MDX Component Documentation for Block Builder
-// (Inlined to avoid circular dependency with @hands/agent)
-
-const MDX_COMPONENT_DOCS = `
-## LiveValue - Data Display
-
-Display SQL query results with auto-selected or explicit display mode.
-
-\`\`\`mdx
-<!-- Auto-select based on data shape -->
-<LiveValue query="SELECT COUNT(*) FROM users" />
-
-<!-- Explicit display modes -->
-<LiveValue query="SELECT COUNT(*) FROM orders" display="inline" />  <!-- single value in text -->
-<LiveValue query="SELECT name FROM users" display="list" />          <!-- bullet list -->
-<LiveValue query="SELECT * FROM orders" display="table" />           <!-- HTML table -->
-\`\`\`
-
-## LiveAction - Write Operations
-
-Wraps interactive content that triggers SQL mutations.
-
-\`\`\`mdx
-<LiveAction sql="UPDATE counters SET value = value + 1 WHERE id = 1">
-  <Button>+1</Button>
-</LiveAction>
-
-<!-- With form fields using {{fieldName}} bindings -->
-<LiveAction sql="INSERT INTO users (name, email) VALUES ({{name}}, {{email}})">
-  <Input name="name" placeholder="Name">Name</Input>
-  <Input name="email" type="email" placeholder="Email">Email</Input>
-  <Button>Submit</Button>
-</LiveAction>
-\`\`\`
-
-## Form Controls (inside LiveAction)
-
-Form controls register with parent LiveAction. Use {{fieldName}} in SQL for substitution.
-
-### Input - Text input
-\`\`\`mdx
-<Input name="fieldName" type="text|email|number|password" placeholder="..." required>Label Text</Input>
-\`\`\`
-
-### Select - Dropdown
-\`\`\`mdx
-<Select name="fieldName" options={[{value: "a", label: "A"}, {value: "b", label: "B"}]} placeholder="Choose...">Label</Select>
-\`\`\`
-
-### Checkbox - Boolean toggle
-\`\`\`mdx
-<Checkbox name="fieldName" defaultChecked>Label text</Checkbox>
-\`\`\`
-
-### Textarea - Multi-line input
-\`\`\`mdx
-<Textarea name="fieldName" placeholder="..." rows={4}>Label</Textarea>
-\`\`\`
-
-### Button - Submit trigger
-\`\`\`mdx
-<Button variant="default|outline|ghost|destructive">Click me</Button>
-\`\`\`
-
-## Card - Layout Container
-
-Cards group related content with visual styling.
-
-\`\`\`mdx
-<Card>
-  <CardHeader>
-    <CardTitle>Title</CardTitle>
-    <CardDescription>Description</CardDescription>
-  </CardHeader>
-  <CardContent>
-    Main content here...
-  </CardContent>
-  <CardFooter>
-    <Button>Action</Button>
-  </CardFooter>
-</Card>
-\`\`\`
-
-## Complete Form Example
-
-\`\`\`mdx
-<Card>
-  <CardHeader>
-    <CardTitle>Add Customer</CardTitle>
-  </CardHeader>
-  <CardContent>
-    <LiveAction sql="INSERT INTO customers (name, email, tier) VALUES ({{name}}, {{email}}, {{tier}})">
-      <Input name="name" placeholder="Full name" required>Name</Input>
-      <Input name="email" type="email" placeholder="email@example.com">Email</Input>
-      <Select name="tier" options={[{value: "free", label: "Free"}, {value: "pro", label: "Pro"}]} defaultValue="free">Tier</Select>
-      <Button>Create</Button>
-    </LiveAction>
-  </CardContent>
-</Card>
-\`\`\`
-`.trim();
+import { STDLIB_DOCS, STDLIB_QUICK_REF } from "@hands/core/docs";
 
 // Schema is passed from client (from manifest/useRuntimeState)
 const tableSchema = z.object({
@@ -127,86 +26,6 @@ export interface AIContext {}  // No server-side deps needed
 const t = initTRPC.context<AIContext>().create();
 
 export const aiRouter = t.router({
-  /**
-   * Convert natural language to SQL query
-   */
-  textToSql: t.procedure
-    .input(z.object({
-      prompt: z.string().min(1),
-      tables: z.array(tableSchema).min(1, "No tables in schema"),
-    }))
-    .mutation(async ({ input }) => {
-      const { prompt, tables } = input;
-
-      console.log('[ai.textToSql] Request received:', { prompt, tableCount: tables.length });
-
-      const apiKey = process.env.HANDS_AI_API_KEY;
-      if (!apiKey) {
-        throw new TRPCError({
-          code: "INTERNAL_SERVER_ERROR",
-          message: "HANDS_AI_API_KEY not set",
-        });
-      }
-      process.env.AI_GATEWAY_API_KEY = apiKey;
-
-      // Build schema context from tables (columns are just names from manifest)
-      const schemaContext = tables
-        .map((t) => `${t.name}(${t.columns.join(", ")})`)
-        .join("\n");
-
-      const systemPrompt = `You are a SQL query generator. Given a natural language request and a database schema, output ONLY a valid SQL query.
-
-## Rules
-- Output ONLY the SQL query, nothing else.
-- No markdown, no explanation, no backticks.
-- Use only tables and columns from the provided schema.
-- For counting, use COUNT(*).
-- For single values, use appropriate aggregation (COUNT, SUM, AVG, MIN, MAX).
-- Keep queries simple and efficient.`;
-
-      const userPrompt = `## Schema
-${schemaContext}
-
-## Request
-${prompt}
-
-## SQL Query`;
-
-      try {
-        const result = await generateText({
-          model: gateway("google/gemini-2.5-flash-lite"),
-          system: systemPrompt,
-          prompt: userPrompt,
-          maxOutputTokens: 200,
-          temperature: 0,
-          abortSignal: AbortSignal.timeout(10000),
-        });
-
-        let sql = result.text?.trim() || "";
-
-        // Clean up any markdown if present
-        if (sql.startsWith("```")) {
-          sql = sql.replace(/^```\w*\n?/, "").replace(/\n?```$/, "");
-        }
-
-        if (!sql) {
-          throw new TRPCError({
-            code: "INTERNAL_SERVER_ERROR",
-            message: "Failed to generate SQL",
-          });
-        }
-
-        console.log('[ai.textToSql] Generated SQL:', sql);
-        return { sql };
-      } catch (err) {
-        if (err instanceof TRPCError) throw err;
-        throw new TRPCError({
-          code: "INTERNAL_SERVER_ERROR",
-          message: err instanceof Error ? err.message : "AI generation failed",
-        });
-      }
-    }),
-
   /**
    * Generate MDX partial with LiveValue/LiveAction elements
    * Returns either:
@@ -243,48 +62,45 @@ ${prompt}
         ? tables.map((t) => `${t.name}(${t.columns.join(", ")})`).join("\n")
         : "(No tables available)";
 
-      const systemPrompt = `You are an MDX router/generator for a data-driven document editor. Either generate simple MDX directly, or route to a more capable generator.
+      const systemPrompt = `You are an MDX generator for a data-driven document editor. Generate single stdlib components directly. Only route to other generators for multi-element layouts.
+${STDLIB_QUICK_REF}
+## Generate Directly - Single Component Examples
 
-## 1. Simple - Generate directly (fits in ~300 tokens)
-
-### LiveValue - Data display
+### Data Display
 - "count of users" → \`<LiveValue query="SELECT COUNT(*) FROM users" display="inline" />\`
 - "list of products" → \`<LiveValue query="SELECT name FROM products" display="list" />\`
-- "all orders" → \`<LiveValue query="SELECT * FROM orders LIMIT 20" display="table" />\`
+- "users table" → \`<LiveValue query="SELECT * FROM users" display="table" />\`
 
-### LiveAction - Single mutation
-- "increment counter" → \`<LiveAction sql="UPDATE counters SET value = value + 1 WHERE id = 1"><Button>+1</Button></LiveAction>\`
-- "delete item" → \`<LiveAction sql="DELETE FROM items WHERE id = 1"><Button variant="destructive">Delete</Button></LiveAction>\`
+### Charts (use LiveValue wrapper for SQL data)
+- "bar chart of sales" → \`<LiveValue query="SELECT month, revenue FROM sales"><BarChart xKey="month" yKey="revenue" /></LiveValue>\`
+- "line chart of signups" → \`<LiveValue query="SELECT date, count FROM signups"><LineChart xKey="date" yKey="count" /></LiveValue>\`
+- "pie chart of categories" → \`<LiveValue query="SELECT category, amount FROM expenses"><PieChart nameKey="category" valueKey="amount" /></LiveValue>\`
 
-### Plain text
-- "hello world" → \`hello world\`
+### Metrics & Status
+- "total revenue metric" → \`<LiveValue query="SELECT SUM(amount) as total FROM orders"><Metric label="Revenue" value={{total}} prefix="$" /></LiveValue>\`
+- "active badge" → \`<Badge variant="success">Active</Badge>\`
+- "warning alert" → \`<Alert variant="warning">Check your settings</Alert>\`
+- "75% progress" → \`<Progress value={75} showValue />\`
 
-## 2. Route to Block Builder - Use <Prompt reasoning="low|mid">
+### Actions
+- "delete button" → \`<LiveAction sql="DELETE FROM items WHERE id = 1"><ActionButton variant="destructive">Delete</ActionButton></LiveAction>\`
+- "increment counter" → \`<LiveAction sql="UPDATE counters SET value = value + 1 WHERE id = 1"><ActionButton>+1</ActionButton></LiveAction>\`
 
-When the request needs MULTIPLE elements, forms, or ~300-2000 tokens of output:
-- \`reasoning="low"\` - straightforward multi-element output (forms, cards, simple layouts)
-- \`reasoning="mid"\` - needs some planning/thinking (complex forms, conditional logic)
-
-Examples (use EXACT original prompt text):
+## Route to Block Builder - <Prompt reasoning="low|mid">
+Only for MULTIPLE elements together:
 - "a form to add users" → \`<Prompt reasoning="low" text="a form to add users" />\`
-- "a card showing user stats" → \`<Prompt reasoning="low" text="a card showing user stats" />\`
-- "a complex order form with validation" → \`<Prompt reasoning="mid" text="a complex order form with validation" />\`
+- "dashboard with 3 metrics" → \`<Prompt reasoning="low" text="dashboard with 3 metrics" />\`
+- "complex multi-section layout" → \`<Prompt reasoning="mid" text="complex multi-section layout" />\`
 
-## 3. Route to Agent - Use <Prompt reasoning="high">
-
-When the request needs iteration, data fetching, complex reasoning, or would exceed 2000 tokens:
-- "build a full dashboard" → \`<Prompt reasoning="high" text="build a full dashboard" />\`
-- "create a chart" → \`<Prompt reasoning="high" text="create a chart" />\`
-
-## Decision Flow
-1. Single element, fits in ~300 tokens? → Generate directly
-2. Multi-element, ~300-2000 tokens, straightforward? → \`<Prompt reasoning="low" text="ORIGINAL_PROMPT" />\`
-3. Multi-element, needs planning? → \`<Prompt reasoning="mid" text="ORIGINAL_PROMPT" />\`
-4. Complex, iterative, or charts? → \`<Prompt reasoning="high" text="ORIGINAL_PROMPT" />\`
+## Route to Agent - <Prompt reasoning="high">
+Only for multi-file or multi-iteration tasks:
+- "analyze my data and create a report" → \`<Prompt reasoning="high" text="..." />\`
+- "build a full app with multiple pages" → \`<Prompt reasoning="high" text="..." />\`
 
 ## Rules
 - Output ONLY valid MDX, no markdown code fences
-- For Prompt routing, use the EXACT original request text (do not rewrite)
+- Generate single components DIRECTLY - do not route unless multiple elements needed
+- Wrap charts in LiveValue to provide SQL data
 - Use tables/columns from schema for SQL`;
 
       // Include retry context (previous failed attempts and their errors)
@@ -392,24 +208,21 @@ ${prompt}${retryContext}
         ? tables.map((t) => `${t.name}(${t.columns.join(", ")})`).join("\n")
         : "(No tables available)";
 
-      // Use comprehensive MDX component docs
-      const componentDocs = MDX_COMPONENT_DOCS;
-
       const systemPrompt = `You are an MDX generator for a data-driven document editor. Generate complete, valid MDX using the available components.
 
 ## Available Database Schema
 ${schemaContext}
 
 ## MDX Component Reference
-${componentDocs}
+${STDLIB_DOCS}
 
 ## Rules
 - Output ONLY valid MDX, no markdown code fences or explanations
 - Use the exact component syntax from the reference
-- For forms, use Input/Select/Checkbox/Textarea inside LiveAction with {{fieldName}} bindings
-- For data display, use LiveValue with appropriate display mode
-- For layouts, use Card components to group related content
-- Use tables/columns from the schema for SQL queries`;
+- For forms, wrap form controls inside LiveAction with {{fieldName}} bindings in SQL
+- For data display, use LiveValue with appropriate display mode (inline, list, table)
+- Use tables/columns from the schema for SQL queries
+- ActionButton, ActionInput, ActionSelect, ActionCheckbox, ActionTextarea must be inside LiveAction`;
 
       // Build page context
       const pageContext = (title || description)

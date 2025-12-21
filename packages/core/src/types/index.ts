@@ -27,6 +27,8 @@ export const LINE_CHART_KEY = "line_chart";
 export const BAR_CHART_KEY = "bar_chart";
 export const AREA_CHART_KEY = "area_chart";
 export const PIE_CHART_KEY = "pie_chart";
+export const DATA_GRID_KEY = "data_grid";
+export const KANBAN_KEY = "kanban";
 
 // ============================================================================
 // Validation Constants (for MDX validation)
@@ -59,6 +61,8 @@ export const STDLIB_COMPONENT_NAMES = [
   "BarChart",
   "AreaChart",
   "PieChart",
+  "DataGrid",
+  "Kanban",
 ] as const;
 
 // ============================================================================
@@ -252,6 +256,48 @@ export interface TTextareaElement extends TElement {
   children: (TElement | TText)[];
 }
 
+/**
+ * Kanban element - drag-and-drop board for displaying and mutating grouped data.
+ *
+ * @example
+ * ```tsx
+ * <Kanban
+ *   query="SELECT id, title, status FROM tasks"
+ *   groupByColumn="status"
+ *   cardTitleField="title"
+ *   updateSql="UPDATE tasks SET status = {{status}} WHERE id = {{id}}"
+ * />
+ * ```
+ */
+export interface TKanbanElement extends TElement {
+  type: typeof KANBAN_KEY;
+
+  // Data fetching (like LiveValue)
+  /** SQL SELECT query to fetch data */
+  query: string;
+
+  // Board configuration
+  /** Column field to group cards by (e.g., "status") */
+  groupByColumn: string;
+  /** Explicit column order, or auto-detect from data */
+  columnOrder?: string[];
+
+  // Card display
+  /** Field to use as card title (e.g., "title") */
+  cardTitleField: string;
+  /** Additional fields to display on card */
+  cardFields?: string[];
+
+  // Mutation (like LiveAction)
+  /** SQL UPDATE template with {{id}} and {{groupByColumn}} bindings */
+  updateSql: string;
+  /** Primary key field name (default "id") */
+  idField?: string;
+
+  /** Children are unused (void element) */
+  children: (TElement | TText)[];
+}
+
 // ============================================================================
 // Static Display Element Types
 // ============================================================================
@@ -427,6 +473,54 @@ export interface TPieChartElement extends TElement {
   showLabels?: boolean;
   /** Custom colors for slices */
   colors?: string[];
+  /** Children are unused (void element) */
+  children: (TElement | TText)[];
+}
+
+// ============================================================================
+// DataGrid Types
+// ============================================================================
+
+/** Cell variant types supported by DataGrid */
+export type DataGridCellVariant =
+  | "short-text"
+  | "long-text"
+  | "number"
+  | "date"
+  | "checkbox"
+  | "url"
+  | "select"
+  | "multi-select";
+
+/** Column configuration for DataGrid */
+export interface DataGridColumnConfig {
+  /** Column key matching the data field */
+  key: string;
+  /** Display label for column header */
+  label?: string;
+  /** Column width in pixels */
+  width?: number;
+  /** Cell variant type */
+  type?: DataGridCellVariant;
+  /** Options for select/multi-select variants */
+  options?: Array<{ value: string; label: string }>;
+}
+
+/**
+ * DataGrid element - high-performance editable data grid.
+ */
+export interface TDataGridElement extends TElement {
+  type: typeof DATA_GRID_KEY;
+  /** Column configuration - auto-detect from data if not specified */
+  columns?: DataGridColumnConfig[] | "auto";
+  /** Grid height in pixels */
+  height?: number;
+  /** Read-only mode (no editing) */
+  readOnly?: boolean;
+  /** Enable search */
+  enableSearch?: boolean;
+  /** Enable paste from clipboard */
+  enablePaste?: boolean;
   /** Children are unused (void element) */
   children: (TElement | TText)[];
 }

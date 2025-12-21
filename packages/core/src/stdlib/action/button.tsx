@@ -15,7 +15,7 @@
 import { createPlatePlugin, PlateElement, type PlateElementProps, useElement } from "platejs/react";
 import { memo, useContext } from "react";
 
-import { Button, type ButtonProps } from "@/components/ui/button";
+import { Button, type ButtonProps } from "../../components/ui/button";
 import { BUTTON_KEY, type TButtonElement } from "../../types";
 import { Loader } from "../static/loader";
 import { LiveActionContext } from "./live-action";

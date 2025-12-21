@@ -12,26 +12,8 @@ import remarkGfm from 'remark-gfm';
 import type { MdxJsxTextElement, MdxJsxAttribute } from 'mdast-util-mdx-jsx';
 import type { Text as MdastText } from 'mdast';
 
+import { serializationRules, toMarkdownPluginRules } from '@hands/core/stdlib';
 import { SANDBOXED_BLOCK_KEY, sandboxedBlockMarkdownRule } from '../SandboxedBlock';
-import {
-  liveQueryMarkdownRule,
-  deserializeLiveValue,
-  deserializeLiveActionElement,
-  deserializeButtonElement,
-  deserializeInputElement,
-  deserializeSelectElement,
-  deserializeCheckboxElement,
-  deserializeTextareaElement,
-} from './live-query-kit';
-import {
-  cardMarkdownRule,
-  deserializeCardElement,
-  deserializeCardHeaderElement,
-  deserializeCardContentElement,
-  deserializeCardFooterElement,
-  deserializeCardTitleElement,
-  deserializeCardDescriptionElement,
-} from './card-kit';
 import { PROMPT_KEY } from './prompt-kit';
 
 /**
@@ -82,6 +64,7 @@ function serializeFontBackgroundColorMark(node: any): MdxJsxTextElement | MdastT
 
 /**
  * Deserialize <Block> MDX element to sandboxed_block Plate element
+ * (Desktop-specific - not in core)
  */
 function deserializeBlockElement(node: any) {
   // Extract attributes
@@ -123,114 +106,32 @@ export const MarkdownKit = [
     options: {
       remarkPlugins: [remarkGfm, remarkMdx],
       rules: {
+        // Import all core serialization rules
+        ...toMarkdownPluginRules(serializationRules),
+
+        // Desktop-specific rules (override/extend core rules)
+
         // Font color marks - serialize to <span style="color: ...">
         fontColor: {
           mark: true,
           serialize: (node) => serializeFontColorMark(node),
         },
+
         // Font background color marks - serialize to <span style="background-color: ...">
         fontBackgroundColor: {
           mark: true,
           serialize: (node) => serializeFontBackgroundColorMark(node),
         },
-        // Block element - deserialize <Block src="..." /> to sandboxed_block
+
+        // Block element - deserialize <Block src="..." /> to sandboxed_block (desktop-only)
         Block: {
           deserialize: (node) => deserializeBlockElement(node),
         },
-        // Sandboxed block - serialize to <Block src="..." />
+
+        // Sandboxed block - serialize to <Block src="..." /> (desktop-only)
         ...sandboxedBlockMarkdownRule,
-        // LiveValue - inline element, display prop controls rendering
-        LiveValue: {
-          deserialize: (node) => deserializeLiveValue(node),
-        },
-        // Legacy MDX tag - maps to LiveValue
-        LiveQuery: {
-          deserialize: (node) => deserializeLiveValue(node),
-        },
-        // LiveAction element - non-void, has children
-        LiveAction: {
-          deserialize: (node, deco, options) => {
-            const children = convertChildrenDeserialize(node.children || [], deco, options);
-            return deserializeLiveActionElement(node, { children });
-          },
-        },
-        // Button element - non-void, has children (button text/content)
-        Button: {
-          deserialize: (node, deco, options) => {
-            const children = convertChildrenDeserialize(node.children || [], deco, options);
-            return deserializeButtonElement(node, { children });
-          },
-        },
-        // Input element - non-void, children are the label text
-        Input: {
-          deserialize: (node, deco, options) => {
-            const children = convertChildrenDeserialize(node.children || [], deco, options);
-            return deserializeInputElement(node, { children });
-          },
-        },
-        // Select element - non-void, children are the label text
-        Select: {
-          deserialize: (node, deco, options) => {
-            const children = convertChildrenDeserialize(node.children || [], deco, options);
-            return deserializeSelectElement(node, { children });
-          },
-        },
-        // Checkbox element - non-void, children are the label text
-        Checkbox: {
-          deserialize: (node, deco, options) => {
-            const children = convertChildrenDeserialize(node.children || [], deco, options);
-            return deserializeCheckboxElement(node, { children });
-          },
-        },
-        // Textarea element - non-void, children are the label text
-        Textarea: {
-          deserialize: (node, deco, options) => {
-            const children = convertChildrenDeserialize(node.children || [], deco, options);
-            return deserializeTextareaElement(node, { children });
-          },
-        },
-        // Card layout components - non-void, children are content
-        Card: {
-          deserialize: (node, deco, options) => {
-            const children = convertChildrenDeserialize(node.children || [], deco, options);
-            return deserializeCardElement(node, { children });
-          },
-        },
-        CardHeader: {
-          deserialize: (node, deco, options) => {
-            const children = convertChildrenDeserialize(node.children || [], deco, options);
-            return deserializeCardHeaderElement(node, { children });
-          },
-        },
-        CardContent: {
-          deserialize: (node, deco, options) => {
-            const children = convertChildrenDeserialize(node.children || [], deco, options);
-            return deserializeCardContentElement(node, { children });
-          },
-        },
-        CardFooter: {
-          deserialize: (node, deco, options) => {
-            const children = convertChildrenDeserialize(node.children || [], deco, options);
-            return deserializeCardFooterElement(node, { children });
-          },
-        },
-        CardTitle: {
-          deserialize: (node, deco, options) => {
-            const children = convertChildrenDeserialize(node.children || [], deco, options);
-            return deserializeCardTitleElement(node, { children });
-          },
-        },
-        CardDescription: {
-          deserialize: (node, deco, options) => {
-            const children = convertChildrenDeserialize(node.children || [], deco, options);
-            return deserializeCardDescriptionElement(node, { children });
-          },
-        },
-        // Serialize all live elements to MDX
-        ...liveQueryMarkdownRule,
-        // Serialize Card elements to MDX
-        ...cardMarkdownRule,
-        // Prompt element - deserialize <Prompt text="..." /> or <Prompt threadId="..." />
+
+        // Prompt element - deserialize <Prompt text="..." /> or <Prompt threadId="..." /> (desktop-only)
         Prompt: {
           deserialize: (node: any) => {
             const attrs = node.attributes || [];
@@ -253,7 +154,8 @@ export const MarkdownKit = [
             };
           },
         },
-        // Serialize Prompt element to MDX
+
+        // Serialize Prompt element to MDX (desktop-only)
         [PROMPT_KEY]: {
           serialize: (node: any) => {
             const attrs: MdxJsxAttribute[] = [];

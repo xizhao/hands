@@ -56,9 +56,28 @@ export {
   TextareaPlugin,
 } from "./textarea";
 
+// Kanban board
+export {
+  Kanban,
+  KanbanBoard,
+  KanbanPlugin,
+  createKanbanElement,
+  findMovedItem,
+  getColumnOrder,
+  groupByColumn,
+  KANBAN_KEY,
+  type CreateKanbanElementOptions,
+  type KanbanBoardProps,
+  type KanbanBoardValue,
+  type KanbanItem,
+  type KanbanProps,
+  type MovedItem,
+} from "./kanban";
+
 import { ButtonPlugin } from "./button";
 import { CheckboxPlugin } from "./checkbox";
 import { InputPlugin } from "./input";
+import { KanbanPlugin } from "./kanban";
 // Plugin kit for easy registration
 import { LiveActionPlugin } from "./live-action";
 import { SelectPlugin } from "./select";
@@ -71,4 +90,5 @@ export const ActiveKit = [
   SelectPlugin,
   CheckboxPlugin,
   TextareaPlugin,
+  KanbanPlugin,
 ] as const;

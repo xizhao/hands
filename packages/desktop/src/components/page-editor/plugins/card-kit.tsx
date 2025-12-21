@@ -38,7 +38,6 @@ import {
   CardTitle,
   CardDescription,
 } from "@/components/ui/card";
-import { convertNodesSerialize } from "@platejs/markdown";
 
 // ============================================================================
 // Types
@@ -216,170 +215,14 @@ export const CardKit = [
 ];
 
 // ============================================================================
-// Markdown Serialization
+// NOTE: Markdown Serialization/Deserialization
 // ============================================================================
-
-export const cardMarkdownRule = {
-  [CARD_KEY]: {
-    serialize: (node: TCardElement, options: any) => {
-      const children = convertNodesSerialize(node.children || [], options);
-      return {
-        type: "mdxJsxFlowElement",
-        name: "Card",
-        attributes: [],
-        children,
-      };
-    },
-  },
-
-  [CARD_HEADER_KEY]: {
-    serialize: (node: TCardHeaderElement, options: any) => {
-      const children = convertNodesSerialize(node.children || [], options);
-      return {
-        type: "mdxJsxFlowElement",
-        name: "CardHeader",
-        attributes: [],
-        children,
-      };
-    },
-  },
-
-  [CARD_CONTENT_KEY]: {
-    serialize: (node: TCardContentElement, options: any) => {
-      const children = convertNodesSerialize(node.children || [], options);
-      return {
-        type: "mdxJsxFlowElement",
-        name: "CardContent",
-        attributes: [],
-        children,
-      };
-    },
-  },
-
-  [CARD_FOOTER_KEY]: {
-    serialize: (node: TCardFooterElement, options: any) => {
-      const children = convertNodesSerialize(node.children || [], options);
-      return {
-        type: "mdxJsxFlowElement",
-        name: "CardFooter",
-        attributes: [],
-        children,
-      };
-    },
-  },
-
-  [CARD_TITLE_KEY]: {
-    serialize: (node: TCardTitleElement, options: any) => {
-      const children = convertNodesSerialize(node.children || [], options);
-      return {
-        type: "mdxJsxFlowElement",
-        name: "CardTitle",
-        attributes: [],
-        children,
-      };
-    },
-  },
-
-  [CARD_DESCRIPTION_KEY]: {
-    serialize: (node: TCardDescriptionElement, options: any) => {
-      const children = convertNodesSerialize(node.children || [], options);
-      return {
-        type: "mdxJsxFlowElement",
-        name: "CardDescription",
-        attributes: [],
-        children,
-      };
-    },
-  },
-};
-
-// ============================================================================
-// Deserialization Helpers
-// ============================================================================
-
-export function deserializeCardElement(
-  _node: { attributes?: Array<{ type: string; name: string; value: unknown }> },
-  options?: { children?: (TElement | TText)[] }
-): TCardElement {
-  const children = options?.children?.length
-    ? options.children
-    : [{ type: "p" as const, children: [{ text: "" }] }];
-
-  return {
-    type: CARD_KEY,
-    children,
-  };
-}
-
-export function deserializeCardHeaderElement(
-  _node: { attributes?: Array<{ type: string; name: string; value: unknown }> },
-  options?: { children?: (TElement | TText)[] }
-): TCardHeaderElement {
-  const children = options?.children?.length
-    ? options.children
-    : [{ type: "p" as const, children: [{ text: "" }] }];
-
-  return {
-    type: CARD_HEADER_KEY,
-    children,
-  };
-}
-
-export function deserializeCardContentElement(
-  _node: { attributes?: Array<{ type: string; name: string; value: unknown }> },
-  options?: { children?: (TElement | TText)[] }
-): TCardContentElement {
-  const children = options?.children?.length
-    ? options.children
-    : [{ type: "p" as const, children: [{ text: "" }] }];
-
-  return {
-    type: CARD_CONTENT_KEY,
-    children,
-  };
-}
-
-export function deserializeCardFooterElement(
-  _node: { attributes?: Array<{ type: string; name: string; value: unknown }> },
-  options?: { children?: (TElement | TText)[] }
-): TCardFooterElement {
-  const children = options?.children?.length
-    ? options.children
-    : [{ type: "p" as const, children: [{ text: "" }] }];
-
-  return {
-    type: CARD_FOOTER_KEY,
-    children,
-  };
-}
-
-export function deserializeCardTitleElement(
-  _node: { attributes?: Array<{ type: string; name: string; value: unknown }> },
-  options?: { children?: (TElement | TText)[] }
-): TCardTitleElement {
-  const children = options?.children?.length
-    ? options.children
-    : [{ text: "" }];
-
-  return {
-    type: CARD_TITLE_KEY,
-    children,
-  };
-}
-
-export function deserializeCardDescriptionElement(
-  _node: { attributes?: Array<{ type: string; name: string; value: unknown }> },
-  options?: { children?: (TElement | TText)[] }
-): TCardDescriptionElement {
-  const children = options?.children?.length
-    ? options.children
-    : [{ text: "" }];
-
-  return {
-    type: CARD_DESCRIPTION_KEY,
-    children,
-  };
-}
+//
+// All Card serialization/deserialization rules are now provided by
+// @hands/core/stdlib and imported via markdown-kit.tsx using
+// toMarkdownPluginRules(serializationRules).
+//
+// This keeps serialization logic in a single place (core) and avoids duplication.
 
 // ============================================================================
 // Element Creators

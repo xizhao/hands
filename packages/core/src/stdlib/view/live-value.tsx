@@ -24,11 +24,13 @@ import { memo } from "react";
 
 import {
   type ColumnConfig,
+  type DataGridColumnConfig,
   type DisplayMode,
   LIVE_VALUE_KEY,
   type TLiveValueElement,
 } from "../../types";
 import { assertReadOnlySQL } from "../sql-validation";
+import { DataGrid } from "./data-grid";
 
 // ============================================================================
 // Display Type Selection
@@ -145,47 +147,22 @@ function ListDisplay({ data, isLoading, error }: DisplayProps) {
 }
 
 function TableDisplay({ data, columns, isLoading, error }: DisplayProps) {
-  const cols = columns || autoDetectColumns(data);
-
-  if (error) {
-    return <div className="text-destructive text-sm">Error loading data</div>;
-  }
-  if (isLoading) {
-    return <div className="text-muted-foreground animate-pulse">Loading...</div>;
-  }
-  if (!data || data.length === 0) {
-    return <div className="text-muted-foreground text-sm">No data</div>;
-  }
+  // Convert ColumnConfig to DataGridColumnConfig
+  const gridColumns: DataGridColumnConfig[] | undefined = columns?.map((col) => ({
+    key: col.key,
+    label: col.label,
+    width: col.width,
+  }));
 
   return (
-    <div className="overflow-x-auto">
-      <table className="w-full text-sm border-collapse">
-        <thead>
-          <tr className="border-b">
-            {cols.map((col) => (
-              <th
-                key={col.key}
-                className="text-left p-2 font-medium text-muted-foreground"
-                style={col.width ? { width: col.width } : undefined}
-              >
-                {col.label}
-              </th>
-            ))}
-          </tr>
-        </thead>
-        <tbody>
-          {data.map((row, i) => (
-            <tr key={i} className="border-b last:border-0">
-              {cols.map((col) => (
-                <td key={col.key} className="p-2">
-                  {formatCellValue(row[col.key])}
-                </td>
-              ))}
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
+    <DataGrid
+      data={data}
+      columns={gridColumns ?? "auto"}
+      height={Math.min(400, 36 + data.length * 36)} // Auto-size based on rows
+      readOnly
+      enableSearch={data.length > 10}
+      enablePaste={false}
+    />
   );
 }
 
@@ -247,7 +224,7 @@ function LiveValueElement(props: PlateElementProps) {
   const selected = useSelected();
   const readOnly = useReadOnly();
 
-  const { query: _query, display, columns, className } = element;
+  const { query: _query, display, columns } = element;
 
   // TODO: Use context provider for data fetching (will use _query)
   // For now, show placeholder in editor
@@ -255,11 +232,15 @@ function LiveValueElement(props: PlateElementProps) {
   const isLoading = false;
   const error = null;
 
+  // Determine if this is inline display (minimal wrapper) or block (table/list)
+  const displayType = resolveDisplayMode(display, data);
+  const isInline = displayType === "inline";
+
   return (
     <PlateElement
       {...props}
-      as="span"
-      className={`inline-flex items-center ${selected && !readOnly ? "ring-2 ring-ring ring-offset-1 rounded" : ""} ${className || ""}`}
+      as={isInline ? "span" : "div"}
+      className={selected && !readOnly ? "ring-2 ring-ring ring-offset-1 rounded" : undefined}
     >
       <LiveValueDisplay
         data={data}
