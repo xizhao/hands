@@ -108,7 +108,12 @@ export function AtLoaderElement(props: PlateElementProps) {
               editor.tf.removeNodes({ at: path });
               editor.tf.insertNodes(nodes, { at: path });
             });
-            editor.tf.insertText(" ");
+
+            // Only insert trailing space for inline content
+            const isInline = nodes.length === 1 && !("type" in nodes[0]);
+            if (isInline) {
+              editor.tf.insertText(" ");
+            }
           } else {
             throw new Error("Deserialization produced empty result");
           }

@@ -32,7 +32,7 @@ import { createMarkdownKit, type MarkdownRule } from "./plugins/markdown-kit";
 import { createCopilotKit, type CopilotConfig } from "./plugins/copilot-kit";
 import { useEditorTrpc, useEditorTables } from "./context";
 import { FrontmatterHeader, type Frontmatter } from "./frontmatter";
-import { FixedToolbar, FixedToolbarButtons } from "./ui";
+import { FixedToolbar, FixedToolbarButtons, TooltipProvider } from "./ui";
 
 // ============================================================================
 // Editor Handle (exposed via ref)
@@ -391,6 +391,7 @@ export const Editor = forwardRef<EditorHandle, EditorProps>(function Editor(
   ) : null);
 
   const content = (
+    <TooltipProvider>
     <div className={cn("h-full flex flex-col", className)}>
       <Plate editor={editor} onChange={handleChange}>
         {/* Toolbar */}
@@ -435,6 +436,7 @@ export const Editor = forwardRef<EditorHandle, EditorProps>(function Editor(
         </div>
       </Plate>
     </div>
+    </TooltipProvider>
   );
 
   return Wrapper ? <Wrapper>{content}</Wrapper> : content;

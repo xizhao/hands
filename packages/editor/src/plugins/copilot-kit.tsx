@@ -158,12 +158,14 @@ export function createCopilotKit(config: CopilotConfig) {
 
                 if (nodes && nodes.length > 0) {
                   if (nodes.length === 1 && nodes[0].type === "p") {
+                    // Inline content - insert children and trailing space
                     const inlineNodes = (nodes[0] as TElement).children;
                     editor.tf.insertNodes(inlineNodes);
+                    editor.tf.insertText(" ");
                   } else {
+                    // Block content - no trailing space (would corrupt selection)
                     editor.tf.insertNodes(nodes);
                   }
-                  editor.tf.insertText(" ");
                   return;
                 }
               }

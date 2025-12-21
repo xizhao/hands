@@ -76,6 +76,7 @@ export const liveValueRule: MdxSerializationRule<TLiveValueElement> = {
 
   deserialize: (node, deco, options) => {
     const props = parseAttributes(node);
+    const display = (props.display as DisplayMode | undefined) ?? "auto";
 
     // Handle children if present (template mode or chart children)
     let children: TLiveValueElement["children"] = [{ text: "" }];
@@ -89,13 +90,18 @@ export const liveValueRule: MdxSerializationRule<TLiveValueElement> = {
       }
     }
 
-    // Pick element type: block if has children (charts), inline if no children
-    const elementType = hasChildren ? LIVE_VALUE_KEY : LIVE_VALUE_INLINE_KEY;
+    // Pick element type:
+    // - Block: has children (charts), or explicit table/list display, or is a flow element
+    // - Inline: simple inline display embedded in text
+    const isFlowElement = node.type === "mdxJsxFlowElement";
+    const isBlockDisplay = display === "table" || display === "list";
+    const useBlockType = hasChildren || isBlockDisplay || isFlowElement;
+    const elementType = useBlockType ? LIVE_VALUE_KEY : LIVE_VALUE_INLINE_KEY;
 
     return {
       type: elementType,
       query: (props.query as string) || "",
-      display: (props.display as DisplayMode | undefined) ?? "auto",
+      display,
       params: props.params as Record<string, unknown> | undefined,
       columns: props.columns as ColumnConfig[] | "auto" | undefined,
       className: props.className as string | undefined,

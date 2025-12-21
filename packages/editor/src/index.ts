@@ -14,6 +14,9 @@ export {
   type AdvancedCustomBlock,
 } from "./Editor";
 
+// Preview Editor (read-only, for previewing content)
+export { PreviewEditor, type PreviewEditorProps } from "./PreviewEditor";
+
 // Re-export Frontmatter type from Editor (it's already in frontmatter.ts but nice to have at top level)
 export type { Frontmatter } from "./frontmatter";
 

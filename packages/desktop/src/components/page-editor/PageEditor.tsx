@@ -13,14 +13,14 @@ import {
   parseFrontmatter,
   serializeFrontmatter,
   type Frontmatter,
+  PageContextPlugin,
+  AtKit,
 } from "@hands/editor";
 import { useCallback, useEffect, useRef, type ReactNode } from "react";
 
 import { usePageSource } from "./hooks/usePageSource";
 import { useBlockCreation } from "./hooks/useBlockCreation";
 import { DesktopEditorProvider } from "./DesktopEditorProvider";
-import { PageContextPlugin } from "@hands/editor";
-import { AtKit } from "./plugins/at-kit";
 import { SandboxedBlockPlugin, sandboxedBlockMarkdownRule, SANDBOXED_BLOCK_KEY } from "./SandboxedBlock";
 import { PromptPlugin, PromptMarkdownRules } from "./plugins/prompt-kit";
 

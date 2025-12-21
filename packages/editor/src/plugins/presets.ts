@@ -26,7 +26,7 @@ import { LinkKit } from "./link-kit";
 import { ListKit } from "./list-kit";
 import { MarkdownKit } from "./markdown-kit";
 import { MediaKit } from "./media-kit";
-import { MentionKit } from "./mention-kit";
+import { AtKit } from "./at-kit";
 import { TableKit } from "./table-kit";
 import { TocKit } from "./toc-kit";
 import { ToggleKit } from "./toggle-kit";
@@ -53,7 +53,7 @@ export const EditorCorePlugins = [
   ...LinkKit,
   ...FontKit,
   ...MediaKit,
-  ...MentionKit,
+  ...AtKit,
   ...TocKit,
   ...CardKit,
   ...ExitBreakKit,
@@ -94,7 +94,7 @@ export const RichTextKit = [
   ...LinkKit,
   ...FontKit,
   ...MediaKit,
-  ...MentionKit,
+  ...AtKit,
   ...TocKit,
   ...CardKit,
   ...ExitBreakKit,

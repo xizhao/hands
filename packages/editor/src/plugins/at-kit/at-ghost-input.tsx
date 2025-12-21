@@ -14,21 +14,74 @@
 
 import type { PlateElementProps } from "platejs/react";
 import { PlateElement, useEditorRef } from "platejs/react";
-import { PlateStatic } from "platejs/static";
 import { MarkdownPlugin, serializeMd } from "@platejs/markdown";
 import {
   useCallback,
   useEffect,
   useRef,
   useState,
-  useMemo,
   type KeyboardEvent,
 } from "react";
 import type { Descendant, TElement } from "platejs";
 
 import { useEditorApi, useHasBackend } from "../../context";
-import { FullKit, StaticComponents } from "../presets";
 import { pendingMdxQueries, createAtLoaderElement } from "./index";
+import { PreviewEditor } from "../../PreviewEditor";
+
+// ============================================================================
+// Shimmer Thinking Loader
+// ============================================================================
+
+function ThinkingShimmer() {
+  return (
+    <span className="inline-flex items-center gap-1 ml-1">
+      {/* Shimmer bars that look like text being generated */}
+      <span className="inline-flex items-center gap-0.5">
+        <span
+          className="inline-block h-3 w-8 rounded-sm bg-gradient-to-r from-muted via-muted-foreground/20 to-muted bg-[length:200%_100%] animate-[shimmer_1.5s_ease-in-out_infinite]"
+          style={{ animationDelay: "0ms" }}
+        />
+        <span
+          className="inline-block h-3 w-12 rounded-sm bg-gradient-to-r from-muted via-muted-foreground/20 to-muted bg-[length:200%_100%] animate-[shimmer_1.5s_ease-in-out_infinite]"
+          style={{ animationDelay: "150ms" }}
+        />
+        <span
+          className="inline-block h-3 w-6 rounded-sm bg-gradient-to-r from-muted via-muted-foreground/20 to-muted bg-[length:200%_100%] animate-[shimmer_1.5s_ease-in-out_infinite]"
+          style={{ animationDelay: "300ms" }}
+        />
+      </span>
+      <style>{`
+        @keyframes shimmer {
+          0% { background-position: 200% 0; }
+          100% { background-position: -200% 0; }
+        }
+      `}</style>
+    </span>
+  );
+}
+
+// ============================================================================
+// Helper: Parse routing prompt from AI response
+// ============================================================================
+
+/**
+ * Parse routing Prompt from MDX: <Prompt reasoning="low|mid|high" text="..." />
+ * Returns null if not a routing prompt.
+ */
+function parseRoutingPrompt(
+  mdx: string
+): { reasoning: "low" | "mid" | "high"; text: string } | null {
+  const reasoningMatch = mdx.match(/reasoning=["']?(low|mid|high)["']?/);
+  if (!reasoningMatch) return null;
+
+  const textMatch = mdx.match(/text="(.+?)"\s*\/?>/);
+  if (!textMatch) return null;
+
+  return {
+    reasoning: reasoningMatch[1] as "low" | "mid" | "high",
+    text: textMatch[1],
+  };
+}
 
 // ============================================================================
 // Helper: Get document context
@@ -67,89 +120,60 @@ function getDocumentContext(editor: ReturnType<typeof useEditorRef>) {
 // Ghost Text Preview Component
 // ============================================================================
 
-function AtGhostPreview({
-  mdx,
-  editor: mainEditor,
-}: {
-  mdx: string;
-  editor: ReturnType<typeof useEditorRef>;
-}) {
-  const nodes = useMemo(() => {
-    if (!mdx) return null;
-
-    try {
-      const api = mainEditor.getApi(MarkdownPlugin);
-      const deserialized = api.markdown.deserialize(mdx);
-
-      if (!deserialized || deserialized.length === 0) return null;
-
-      // Unwrap single paragraph for inline display
-      if (
-        deserialized.length === 1 &&
-        deserialized[0].type === "p" &&
-        deserialized[0].children
-      ) {
-        return deserialized[0].children;
-      }
-      return deserialized;
-    } catch (err) {
-      console.error("[ghost-preview] Parse error:", err);
-      return null;
-    }
-  }, [mdx, mainEditor]);
-
-  if (!nodes) {
-    return <span className="opacity-40">{mdx}</span>;
-  }
-
-  // Render nodes using PlateStatic with main editor's plugins
+function AtGhostPreview({ mdx }: { mdx: string }) {
   return (
-    <span className="inline opacity-50">
-      <PlateStatic
-        editor={mainEditor}
-        value={[{ type: "p", children: nodes }] as TElement[]}
-        className="inline [&>div]:inline [&_p]:inline [&_p]:m-0"
-      />
+    <span
+      className="block mt-2"
+      contentEditable={false}
+      style={{ opacity: 0.6, pointerEvents: "none" }}
+    >
+      <PreviewEditor value={mdx} />
     </span>
   );
 }
 
 // ============================================================================
-// Hints Dropdown
+// Action Menu
 // ============================================================================
 
-function HintsDropdown({
-  hasResult,
-  isLoading,
+type ActionType = "accept" | "retry" | "reject";
+
+const ACTIONS: { key: ActionType; label: string; shortcut: string }[] = [
+  { key: "accept", label: "Accept", shortcut: "↵" },
+  { key: "retry", label: "Retry", shortcut: "⇥" },
+  { key: "reject", label: "Reject", shortcut: "esc" },
+];
+
+function ActionMenu({
+  selectedIndex,
+  onSelect,
 }: {
-  hasResult: boolean;
-  isLoading: boolean;
+  selectedIndex: number;
+  onSelect: (action: ActionType) => void;
 }) {
   return (
-    <div className="absolute left-0 top-full mt-1 z-50 min-w-[140px] rounded-md border bg-popover p-1 shadow-md">
-      <div className="flex flex-col gap-0.5 text-xs">
-        <div className="flex items-center justify-between px-2 py-1 rounded hover:bg-accent">
-          <span
-            className={hasResult ? "text-foreground" : "text-muted-foreground"}
+    <div className="absolute left-0 top-full mt-1 z-50 rounded-md border bg-popover px-1 py-0.5 shadow-md">
+      <div className="flex items-center gap-0.5 text-[11px]">
+        {ACTIONS.map((action, idx) => (
+          <button
+            key={action.key}
+            type="button"
+            onMouseDown={(e) => {
+              e.preventDefault(); // Prevent blur
+              onSelect(action.key);
+            }}
+            className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded cursor-pointer transition-colors ${
+              idx === selectedIndex
+                ? "bg-accent text-accent-foreground"
+                : "text-muted-foreground hover:bg-accent/50"
+            }`}
           >
-            {hasResult ? "Insert" : isLoading ? "Loading..." : "Insert"}
-          </span>
-          <kbd className="ml-2 px-1.5 py-0.5 rounded bg-muted text-muted-foreground text-[10px]">
-            Enter
-          </kbd>
-        </div>
-        <div className="flex items-center justify-between px-2 py-1 rounded hover:bg-accent">
-          <span className="text-muted-foreground">Retry</span>
-          <kbd className="ml-2 px-1.5 py-0.5 rounded bg-muted text-muted-foreground text-[10px]">
-            Tab
-          </kbd>
-        </div>
-        <div className="flex items-center justify-between px-2 py-1 rounded hover:bg-accent">
-          <span className="text-muted-foreground">Cancel</span>
-          <kbd className="ml-2 px-1.5 py-0.5 rounded bg-muted text-muted-foreground text-[10px]">
-            Esc
-          </kbd>
-        </div>
+            <kbd className="inline-flex items-center justify-center min-w-[18px] px-1 py-0.5 text-[10px] font-medium rounded border border-border bg-gradient-to-b from-background to-muted shadow-[0_1px_0_1px_hsl(var(--border)),inset_0_1px_0_hsl(var(--background))]">
+              {action.shortcut}
+            </kbd>
+            <span>{action.label}</span>
+          </button>
+        ))}
       </div>
     </div>
   );
@@ -243,6 +267,7 @@ export function AtGhostInputElement(props: PlateElementProps) {
   const [prefetchedPrompt, setPrefetchedPrompt] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [showHints, setShowHints] = useState(false);
+  const [selectedAction, setSelectedAction] = useState(0); // 0=accept, 1=retry, 2=reject
   const retryCountRef = useRef(0);
   const errorsRef = useRef<string[]>([]);
   const isHandlingKeyRef = useRef(false);
@@ -260,7 +285,7 @@ export function AtGhostInputElement(props: PlateElementProps) {
     inputRef.current?.focus();
   }, []);
 
-  // Fetch MDX for prompt
+  // Fetch MDX for prompt (with routing for low/mid/high complexity)
   const fetchMdx = useCallback(
     (promptText: string, force = false, errors?: string[]) => {
       if (!promptText || !api) return;
@@ -274,12 +299,37 @@ export function AtGhostInputElement(props: PlateElementProps) {
       if (!queryPromise) {
         const { prefix, suffix } = getDocumentContext(editor);
 
-        queryPromise = api.generateMdx({
-          prompt: promptText,
-          errors: errors?.length ? errors : undefined,
-          prefix,
-          suffix,
-        });
+        // First call generateMdx (fast router)
+        queryPromise = api
+          .generateMdx({
+            prompt: promptText,
+            errors: errors?.length ? errors : undefined,
+            prefix,
+            suffix,
+          })
+          .then(async (result) => {
+            // Check if this is a routing prompt
+            const routing = parseRoutingPrompt(result.mdx);
+
+            if (routing) {
+              if (routing.reasoning === "high") {
+                // Return as-is for high complexity - Prompt plugin handles it
+                return { mdx: `<Prompt text="${routing.text}" />` };
+              }
+
+              // Route to block builder for low/mid complexity
+              const blockResult = await api.generateMdxBlock({
+                prompt: routing.text,
+                reasoning: routing.reasoning,
+                prefix,
+                suffix,
+              });
+              return blockResult;
+            }
+
+            // No routing, return direct result
+            return result;
+          });
 
         if (!errors?.length) {
           pendingMdxQueries.set(promptText, queryPromise);
@@ -296,6 +346,7 @@ export function AtGhostInputElement(props: PlateElementProps) {
 
       queryPromise
         .then((result) => {
+          console.log('[at-ghost] received mdx:', result.mdx);
           if (fetchIdRef.current === currentFetchId) {
             setPrefetchedMdx(result.mdx);
             setPrefetchedPrompt(promptText);
@@ -360,13 +411,20 @@ export function AtGhostInputElement(props: PlateElementProps) {
   // Insert deserialized content
   const insertContent = useCallback(
     async (mdx: string, promptText: string) => {
+      console.log('[at-ghost] insertContent mdx:', mdx);
       try {
         const mdApi = editor.getApi(MarkdownPlugin);
         const deserialized = mdApi.markdown.deserialize(mdx);
+        console.log('[at-ghost] insertContent deserialized:', JSON.stringify(deserialized, null, 2));
 
         if (!deserialized || deserialized.length === 0) {
           throw new Error("Deserialization produced empty result");
         }
+
+        // Determine if content is block-level or inline
+        const isBlockContent =
+          deserialized.length > 1 ||
+          (deserialized.length === 1 && deserialized[0].type !== "p");
 
         let nodes: Descendant[];
         if (
@@ -374,6 +432,7 @@ export function AtGhostInputElement(props: PlateElementProps) {
           deserialized[0].type === "p" &&
           deserialized[0].children
         ) {
+          // Single paragraph - extract inline children for inline insertion
           nodes = deserialized[0].children;
         } else {
           nodes = deserialized;
@@ -381,9 +440,54 @@ export function AtGhostInputElement(props: PlateElementProps) {
 
         retryCountRef.current = 0;
         errorsRef.current = [];
-        removeInput();
-        editor.tf.insertNodes(nodes);
-        editor.tf.insertText(" ");
+
+        // Get the path before removing
+        const path = editor.api.findPath(element);
+        if (!path) {
+          removeInput();
+          return;
+        }
+
+        if (isBlockContent && path.length > 1) {
+          // Block content: insert at block level, not inline
+          // path is something like [2, 3] (paragraph index, inline position)
+          // We want to insert at [2] (or after it)
+          const parentPath = path.slice(0, -1);
+
+          editor.tf.withoutNormalizing(() => {
+            // Remove the mention_input
+            editor.tf.removeNodes({ at: path });
+
+            // Check if the parent paragraph is now empty (just empty text nodes)
+            const parentNode = editor.api.node(parentPath);
+            const parentChildren = parentNode?.[0]?.children as Descendant[] | undefined;
+            const isParentEmpty = parentChildren?.every((child) =>
+              !('type' in child) && (!('text' in child) || child.text === '')
+            );
+
+            if (isParentEmpty) {
+              // Replace empty paragraph with block content
+              editor.tf.removeNodes({ at: parentPath });
+              editor.tf.insertNodes(nodes, { at: parentPath });
+            } else {
+              // Insert block content after the parent paragraph
+              const insertPath = [parentPath[0] + 1];
+              editor.tf.insertNodes(nodes, { at: insertPath });
+            }
+          });
+        } else {
+          // Inline content: insert at the original position
+          editor.tf.withoutNormalizing(() => {
+            editor.tf.removeNodes({ at: path });
+            editor.tf.insertNodes(nodes, { at: path });
+          });
+
+          // Only insert trailing space for inline content
+          const isInline = nodes.length === 1 && !("type" in nodes[0]);
+          if (isInline) {
+            editor.tf.insertText(" ");
+          }
+        }
       } catch (err) {
         const errorMsg = err instanceof Error ? err.message : String(err);
 
@@ -411,50 +515,67 @@ export function AtGhostInputElement(props: PlateElementProps) {
     editor.tf.insertText(" ");
   }, [editor, prompt, removeInput]);
 
+  // Execute menu action
+  const executeAction = useCallback(
+    (action: ActionType) => {
+      isHandlingKeyRef.current = true;
+      switch (action) {
+        case "accept":
+          if (hasResult && prefetchedMdx) {
+            insertContent(prefetchedMdx, prompt);
+          } else if (prompt) {
+            insertLoader();
+          }
+          break;
+        case "retry":
+          if (prompt) {
+            retryCountRef.current = 0;
+            errorsRef.current = [];
+            fetchMdx(prompt, true);
+          }
+          isHandlingKeyRef.current = false;
+          break;
+        case "reject":
+          removeInput();
+          if (inputValue) {
+            editor.tf.insertText("@" + inputValue);
+          }
+          break;
+      }
+    },
+    [hasResult, prefetchedMdx, prompt, inputValue, insertContent, insertLoader, fetchMdx, removeInput, editor]
+  );
+
   // Handle key events
   const handleKeyDown = useCallback(
     (e: KeyboardEvent<HTMLInputElement>) => {
+      // Arrow navigation for action menu
+      if (e.key === "ArrowLeft" || e.key === "ArrowRight") {
+        e.preventDefault();
+        setSelectedAction((prev) => {
+          if (e.key === "ArrowLeft") return prev > 0 ? prev - 1 : ACTIONS.length - 1;
+          return prev < ACTIONS.length - 1 ? prev + 1 : 0;
+        });
+        return;
+      }
+
+      // Execute selected action on Enter
       if (e.key === "Enter") {
         e.preventDefault();
-        isHandlingKeyRef.current = true;
-        if (hasResult && prefetchedMdx) {
-          insertContent(prefetchedMdx, prompt);
-        } else if (prompt) {
-          insertLoader();
-        }
+        executeAction(ACTIONS[selectedAction].key);
       } else if (e.key === "Tab") {
         e.preventDefault();
-        isHandlingKeyRef.current = true;
-        if (prompt) {
-          retryCountRef.current = 0;
-          errorsRef.current = [];
-          fetchMdx(prompt, true);
-        }
-        isHandlingKeyRef.current = false;
+        executeAction("retry");
       } else if (e.key === "Escape") {
         e.preventDefault();
-        isHandlingKeyRef.current = true;
-        removeInput();
-        if (inputValue) {
-          editor.tf.insertText("@" + inputValue);
-        }
+        executeAction("reject");
       } else if (e.key === "Backspace" && inputValue === "") {
         e.preventDefault();
         isHandlingKeyRef.current = true;
         removeInput();
       }
     },
-    [
-      hasResult,
-      prefetchedMdx,
-      prompt,
-      inputValue,
-      insertContent,
-      insertLoader,
-      fetchMdx,
-      removeInput,
-      editor,
-    ]
+    [selectedAction, inputValue, executeAction, removeInput]
   );
 
   return (
@@ -488,20 +609,19 @@ export function AtGhostInputElement(props: PlateElementProps) {
             />
           </span>
 
+          {/* Action menu dropdown */}
           {showHints && prompt && (
-            <HintsDropdown hasResult={hasResult} isLoading={isLoading} />
+            <ActionMenu selectedIndex={selectedAction} onSelect={executeAction} />
           )}
         </span>
 
+        {/* Ghost preview or loading shimmer */}
         {hasResult && prefetchedMdx && (
           <span className="ml-1">
-            <AtGhostPreview mdx={prefetchedMdx} editor={editor} />
+            <AtGhostPreview mdx={prefetchedMdx} />
           </span>
         )}
-
-        {isLoading && !hasResult && (
-          <span className="ml-1 opacity-40 italic">...</span>
-        )}
+        {isLoading && !hasResult && <ThinkingShimmer />}
       </span>
 
       {children}

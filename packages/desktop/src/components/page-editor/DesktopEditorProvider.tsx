@@ -21,6 +21,7 @@ import {
 import { trpc } from "@/lib/trpc";
 import { useLiveQuery as useDesktopLiveQuery } from "@/lib/live-query";
 import { useActiveRuntime } from "@/hooks/useWorkbook";
+import { useManifest } from "@/hooks/useRuntimeState";
 
 interface DesktopEditorProviderProps {
   children: ReactNode;
@@ -29,6 +30,15 @@ interface DesktopEditorProviderProps {
 export function DesktopEditorProvider({ children }: DesktopEditorProviderProps) {
   const { data: runtime } = useActiveRuntime();
   const runtimePort = runtime?.runtime_port ?? null;
+  const { data: manifest } = useManifest();
+
+  // Get tables for AI context
+  const tables = useMemo(() => {
+    return (manifest?.tables ?? []).map((t) => ({
+      name: t.name,
+      columns: t.columns,
+    }));
+  }, [manifest?.tables]);
 
   // Create tRPC adapter for EditorProvider (AI features)
   const generateMdx = trpc.ai.generateMdx.useMutation();
@@ -83,7 +93,7 @@ export function DesktopEditorProvider({ children }: DesktopEditorProviderProps) 
   };
 
   return (
-    <EditorProvider trpc={editorTrpc}>
+    <EditorProvider trpc={editorTrpc} tables={tables}>
       <LiveQueryProvider
         useQuery={useQueryAdapter}
         useMutation={useMutationAdapter}
