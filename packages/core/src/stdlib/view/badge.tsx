@@ -44,9 +44,9 @@ export function Badge({ children, variant = "default", className }: BadgeProps) 
   const variantClasses = {
     default: "bg-primary text-primary-foreground",
     secondary: "bg-secondary text-secondary-foreground",
-    success: "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-100",
-    warning: "bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-100",
-    destructive: "bg-destructive text-destructive-foreground",
+    success: "bg-success/15 text-success dark:bg-success/20",
+    warning: "bg-warning/15 text-warning dark:bg-warning/20",
+    destructive: "bg-destructive/15 text-destructive dark:bg-destructive/20",
     outline: "border border-input bg-background text-foreground",
   };
 

@@ -1,239 +1,253 @@
 # @hands/editor
 
-A WYSIWYG block editor for React Server Components (RSC) that enables visual editing of JSX/TSX source code for the Hands runtime. Depends on the `@hands/runtime`, which has a special islands-style implementation of RSC that supports RSC-partials.
+Standalone Plate-based rich text editor with MDX support. A pure UI library with no backend dependencies.
 
-## Overview
+## Installation
 
-This editor provides a bidirectional sync between:
-
-- **TSX Source Code** — The single source of truth
-- **Plate Visual Editor** — A block-based WYSIWYG editor (built on [Plate](https://platejs.org/)/Slate)
-
-The key innovation is **source-first editing**: source code is canonical, and all visual edits translate to surgical text mutations.
-
-## Architecture
-
-```
-┌─────────────────────────────────────────────────────────────────────────┐
-│                           @hands/editor                                  │
-├─────────────────────────────────────────────────────────────────────────┤
-│                                                                          │
-│  ┌──────────────┐    parse     ┌──────────────┐    convert   ┌────────┐ │
-│  │  TSX Source  │ ──────────▶  │ EditableNode │ ──────────▶  │ Plate  │ │
-│  │  (string)    │              │ AST (OXC)    │              │ Value  │ │
-│  └──────────────┘              └──────────────┘              └────────┘ │
-│         ▲                                                         │     │
-│         │                                                         │     │
-│         │  surgical mutations                    Slate operations │     │
-│         │  (character-level edits)                               │     │
-│         │                                                         ▼     │
-│         └─────────────────────────────────────────────────────────┘     │
-│                                                                          │
-└─────────────────────────────────────────────────────────────────────────┘
+```bash
+npm install @hands/editor
+# or
+bun add @hands/editor
 ```
 
-### Source as Single Source of Truth
-
-1. **Source → Plate**: When source changes externally (e.g., from a code editor), the Plate value is overwritten
-2. **Plate → Source**: Slate operations are intercepted and translated to surgical text edits
-
-This ensures:
-
-- Non-JSX code (imports, types, expressions) is preserved
-- Source formatting is maintained
-- No information loss during round-trips
-
-## Key Modules
-
-### `/ast` — AST Parsing & Code Generation
-
-| File                    | Purpose                                                                                                |
-| ----------------------- | ------------------------------------------------------------------------------------------------------ |
-| `oxc-parser.ts`         | **OXC-based TSX parser** (~100x faster than Babel). Extracts `EditableNode` tree with source locations |
-| `parser.ts`             | Legacy regex-based parser (fallback for `JsxNode`)                                                     |
-| `generator.ts`          | Generate JSX strings from `JsxNode` trees                                                              |
-| `surgical-mutations.ts` | Apply mutations directly to source using character positions                                           |
-| `slate-operations.ts`   | Convert Slate ops (`insert_node`, `remove_node`, etc.) to source edits                                 |
-| `plate-diff.ts`         | Diff two Plate values to generate `SurgicalMutation[]`                                                 |
-
-**Key Types:**
+## Basic Usage
 
 ```typescript
-interface EditableNode {
-  id: string; // Stable ID based on structural position
-  tagName: string; // 'div', 'Card', 'Button', etc.
-  selfClosing: boolean;
-  props: Record<string, EditableProp>;
-  children: EditableNode[];
-  loc: SourceLocation; // { start: number, end: number }
-  openingTagLoc: SourceLocation;
-  childrenLoc?: SourceLocation;
-}
+import { createPlateEditor } from 'platejs/react';
+import { FullKit } from '@hands/editor';
+
+// Create editor with full plugin preset
+const editor = createPlateEditor({
+  plugins: [...FullKit],
+});
+
+// Deserialize MDX content
+const value = editor.api.markdown.deserialize(mdxContent);
+
+// Serialize back to MDX
+const mdx = editor.api.markdown.serialize({ value });
 ```
 
-### `/plate` — Plate Editor Integration
+## Plugin Presets
 
-| File                     | Purpose                                                                   |
-| ------------------------ | ------------------------------------------------------------------------- |
-| `PlateVisualEditor.tsx`  | Main editor component. Wires source sync via operation interception       |
-| `editor-kit.ts`          | Plate plugin bundle (basic nodes, DnD, slash commands, etc.)              |
-| `surgical-converters.ts` | `sourceToPlateValueSurgical()` — converts source to Plate with stable IDs |
-| `converters.ts`          | Legacy full-serialize converters (fallback)                               |
-| `plate-elements.tsx`     | Standard HTML element renderers (p, h1, h2, blockquote, etc.)             |
+Three presets are available for different use cases:
 
-**Plugins (`/plugins`):**
-| Plugin | Purpose |
-|--------|---------|
-| `element-plugin.tsx` | Unified element renderer. Routes HTML to `React.createElement`, custom components to RSC |
-| `source-sync-plugin.ts` | Intercepts Slate operations and syncs to source |
-| `dnd-kit.tsx` | Drag-and-drop with handles |
-| `block-selection-kit.tsx` | Multi-block selection |
-| `slash-kit.tsx` | Slash command menu (`/`) |
+### BaseKit
+Minimal editor with basic formatting.
+- Paragraphs and headings
+- Bold, italic, underline, strikethrough, code
+- Autoformat shortcuts
+- Markdown serialization
 
-### `/rsc` — React Server Components Integration
-
-The **key hack**: Loading and rendering arbitrary React components in the editor without bundling them.
-
-| File              | Purpose                                                                                             |
-| ----------------- | --------------------------------------------------------------------------------------------------- |
-| `client.ts`       | Fetch Flight streams from runtime, parse via `react-server-dom-webpack/client`                      |
-| `webpack-shim.ts` | **THE HACK**: Shims `globalThis.__webpack_require__` to load client components from Vite dev server |
-| `context.tsx`     | `RscProvider` and `useRsc()` hook for component rendering                                           |
-| `types.ts`        | `RscComponentRequest`, `RscRenderResult`, `RscConfig`                                               |
-
-#### How RSC Integration Works
-
-```
-┌─────────────────────────────────────────────────────────────────────────────┐
-│  Editor (Browser)                                                           │
-│  ┌──────────────────────────────────────────────────────────────────────┐  │
-│  │ 1. Editor encounters <MetricCard title="Revenue" />                  │  │
-│  │ 2. Calls renderComponentViaRsc() with tagName + props                │  │
-│  │ 3. POST to http://localhost:55000/rsc/component                      │  │
-│  └────────────────────────────────┬─────────────────────────────────────┘  │
-│                                   │                                         │
-│                                   ▼                                         │
-│  ┌──────────────────────────────────────────────────────────────────────┐  │
-│  │ Runtime API Server (port 55000)                                      │  │
-│  │ Proxies to Vite worker for RSC rendering                            │  │
-│  └────────────────────────────────┬─────────────────────────────────────┘  │
-│                                   │                                         │
-│                                   ▼                                         │
-│  ┌──────────────────────────────────────────────────────────────────────┐  │
-│  │ Vite Worker (port 55200)                                             │  │
-│  │ - Renders component server-side                                      │  │
-│  │ - Returns Flight stream (text/x-component)                           │  │
-│  └────────────────────────────────┬─────────────────────────────────────┘  │
-│                                   │                                         │
-│                                   ▼                                         │
-│  ┌──────────────────────────────────────────────────────────────────────┐  │
-│  │ 4. Flight stream parsed by createFromReadableStream()                │  │
-│  │ 5. Client components loaded via __webpack_require__ shim             │  │
-│  │    - Shim intercepts module IDs like "/path/to/component.tsx#Button" │  │
-│  │    - Loads via dynamic import from Vite: /@fs/path/to/component.tsx  │  │
-│  │ 6. Rendered React element displayed in editor                        │  │
-│  └──────────────────────────────────────────────────────────────────────┘  │
-└─────────────────────────────────────────────────────────────────────────────┘
+```typescript
+import { BaseKit } from '@hands/editor';
 ```
 
-**The Webpack Shim Hack (`webpack-shim.ts`):**
+### RichTextKit
+Full-featured text editing (includes BaseKit).
+- Tables
+- Bulleted, numbered, and todo lists
+- Code blocks with syntax highlighting
+- Callouts and toggles
+- Links and mentions
+- Math equations (LaTeX)
+- Media embeds
+- Table of contents
 
-React's Flight client (`react-server-dom-webpack/client`) expects Webpack's module system. When the Flight stream references a `"use client"` component, it includes a module ID like `/absolute/path/to/file.tsx#ExportName`.
-
-The shim:
-
-1. Intercepts `__webpack_require__(id)` calls
-2. Parses the module ID: `file#exportName`
-3. Converts to Vite-loadable URL: `http://localhost:55000/vite-proxy/@fs/absolute/path/to/file.tsx`
-4. Uses `React.lazy()` to wrap the dynamically imported component
-5. Returns a module-like object that React expects
-
-### `/scene` — Rendered Scene Graph (Future)
-
-For visual selection and hit-testing on rendered output:
-
-| File         | Purpose                                                                  |
-| ------------ | ------------------------------------------------------------------------ |
-| `capture.ts` | Walk React element tree, build `RenderedScene` with source path mappings |
-| `types.ts`   | `RenderedNode`, `RenderedScene`, `IteratorContext`                       |
-
-### `/sandbox` — Embeddable Editor
-
-Standalone editor that can be embedded in an iframe:
-
-```
-/sandbox?blockId=myBlock&runtimePort=55000
+```typescript
+import { RichTextKit } from '@hands/editor';
 ```
 
-Fetches block source from runtime, auto-saves on changes.
+### FullKit
+Complete editor with all interactive features (includes RichTextKit).
+- Emoji picker
+- Drag-and-drop block reordering
+- Block selection
+- Floating toolbar
 
-## Usage
-
-### Basic Editor
-
-```tsx
-import { PlateVisualEditor } from "@hands/editor";
-import { RscProvider } from "@hands/editor/rsc";
-
-function MyEditor() {
-  const [source, setSource] = useState(initialSource);
-
-  return (
-    <RscProvider port={55000} enabled>
-      <PlateVisualEditor source={source} onSourceChange={setSource} />
-    </RscProvider>
-  );
-}
+```typescript
+import { FullKit } from '@hands/editor';
 ```
 
-### Programmatic AST Access
+## Custom Plugin Composition
 
-```tsx
-import { parseSourceWithLocations, getNodeById } from "@hands/editor/ast";
+Compose your own plugin set from individual kits:
 
-const parseResult = parseSourceWithLocations(source);
-const node = getNodeById(parseResult.root, "div_0.1");
-console.log(node?.loc); // { start: 150, end: 280 }
-```
+```typescript
+import {
+  BasicBlocksKit,
+  BasicMarksKit,
+  TableKit,
+  ListKit,
+  MarkdownKit,
+} from '@hands/editor/plugins';
 
-### Surgical Mutations
+const CustomKit = [
+  ...BasicBlocksKit,
+  ...BasicMarksKit,
+  ...TableKit,
+  ...ListKit,
+  ...MarkdownKit,
+];
 
-```tsx
-import { applySurgicalMutation } from "@hands/editor/ast";
-
-const newSource = applySurgicalMutation(source, {
-  type: "set-prop",
-  nodeId: "card_0.2",
-  propName: "title",
-  value: "New Title",
+const editor = createPlateEditor({
+  plugins: CustomKit,
 });
 ```
 
-## Design Decisions
+## AI Copilot (Optional)
 
-### Why OXC Parser?
+Enable AI-powered text completion with the copilot factory:
 
-[OXC](https://github.com/oxc-project/oxc) is ~100x faster than Babel for parsing TypeScript/JSX. Since we re-parse after every edit to update source locations, speed is critical.
+```typescript
+import { FullKit, createCopilotKit, EditorProvider } from '@hands/editor';
 
-### Why Surgical Mutations?
+// Create tRPC adapter
+const editorTrpc = {
+  ai: {
+    generateMdx: { mutate: (input) => trpc.ai.generateMdx.mutateAsync(input) },
+    generateMdxBlock: { mutate: (input) => trpc.ai.generateMdxBlock.mutateAsync(input) },
+  },
+};
 
-Full serialization (AST → string) loses:
+const copilotKit = createCopilotKit({
+  trpc: editorTrpc,
+  autoTrigger: false,        // Trigger on Ctrl+Space
+  debounceDelay: 150,        // ms to wait before requesting
+  onError: (error) => console.error(error),
+  onComplete: (completion) => console.log('Received:', completion),
+});
 
-- Import statements and non-JSX code
-- Formatting and whitespace
-- Comments
+const editor = createPlateEditor({
+  plugins: [...FullKit, ...copilotKit],
+});
+```
 
-Surgical mutations preserve everything by editing source at exact character positions.
+### CopilotConfig Options
 
-### Why Route ALL Custom Components Through RSC?
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `trpc` | `EditorTrpcClient` | required | tRPC client with AI methods |
+| `autoTrigger` | `boolean` | `false` | Auto-trigger on typing |
+| `debounceDelay` | `number` | `150` | Debounce delay in ms |
+| `onError` | `function` | - | Error callback |
+| `onComplete` | `function` | - | Completion callback |
+| `getPageContext` | `function` | - | Page context for prompts |
+| `tables` | `Array` | `[]` | Database tables for AI context |
 
-The editor doesn't know what components exist ahead of time. By using RSC:
+## UI Components
 
-- **stdlib components** (Button, Card, MetricCard) work automatically
-- **User-defined components** work automatically
-- **Any React component** registered in the workbook works
-- No build step needed for new components
+Import UI components for building custom editor interfaces:
 
-### Path-Based vs ID-Based Operations
+```typescript
+import {
+  MarkToolbarButton,
+  TurnIntoToolbarButton,
+  LinkToolbarButton,
+  ToolbarGroup,
+  ToolbarSeparator,
+} from '@hands/editor/ui';
+```
 
-Slate uses **paths** (e.g., `[0, 2, 1]`) to identify nodes. Our `EditableNode` AST uses stable **IDs** (e.g., `div_0.2.1`). The mapping is straightforward since IDs encode the structural path.
+### Available Components
+
+**Toolbar Components:**
+- `MarkToolbarButton` - Toggle text marks (bold, italic, etc.)
+- `TurnIntoToolbarButton` - Block type selector
+- `LinkToolbarButton` - Insert/edit links
+- `FontColorToolbarButton` - Text color picker
+- `ToolbarGroup`, `ToolbarSeparator` - Layout helpers
+
+**Node Renderers:**
+- `ParagraphNode`, `HeadingNode`, `BlockquoteNode`
+- `CodeBlockNode`, `TableNode`, `ToggleNode`
+- `CalloutNode`, `LinkNode`, `MentionNode`
+- And more...
+
+**Floating Toolbar:**
+- `FloatingToolbar` - Context-aware formatting toolbar
+- `FloatingToolbarButtons` - Default button set
+
+## Hooks
+
+```typescript
+import {
+  useDebounce,
+  useMounted,
+  useCopyToClipboard,
+  useMediaQuery,
+  useIsTouchDevice,
+  useLockScroll,
+  useOnClickOutside,
+} from '@hands/editor/hooks';
+```
+
+## Testing
+
+Create test editors for unit testing:
+
+```typescript
+import { createTestEditor } from '@hands/editor/test';
+
+describe('MDX Serialization', () => {
+  it('roundtrips content', () => {
+    const editor = createTestEditor({ preset: 'full' });
+
+    const mdx = '# Hello World\n\nSome **bold** text.';
+    const value = editor.api.markdown.deserialize(mdx);
+    const serialized = editor.api.markdown.serialize({ value });
+
+    expect(serialized).toContain('# Hello World');
+    expect(serialized).toContain('**bold**');
+  });
+});
+```
+
+### Test Presets
+
+```typescript
+// Full-featured editor (default)
+createTestEditor({ preset: 'full' });
+
+// Rich text editing
+createTestEditor({ preset: 'rich-text' });
+
+// Basic formatting only
+createTestEditor({ preset: 'base' });
+
+// No plugins (custom composition)
+createTestEditor({ preset: 'none', plugins: [...customPlugins] });
+```
+
+## MDX Component Support
+
+The editor supports MDX components from `@hands/core/stdlib`:
+
+```mdx
+# Dashboard
+
+<LiveValue query="SELECT COUNT(*) FROM users" display="table" />
+
+<AreaChart query="SELECT date, revenue FROM sales" height={400} />
+
+<Button onClick={handleClick}>Click me</Button>
+```
+
+For desktop-specific components (like `<Block>` or `<Prompt>`), add custom serialization rules in your application.
+
+## Exports
+
+| Export Path | Contents |
+|-------------|----------|
+| `@hands/editor` | Main exports, presets, types |
+| `@hands/editor/plugins` | Individual plugin kits |
+| `@hands/editor/ui` | UI components |
+| `@hands/editor/hooks` | Utility hooks |
+| `@hands/editor/lib` | Library utilities |
+| `@hands/editor/test` | Test utilities |
+
+## Requirements
+
+- React 18+ or 19+
+- platejs ^52.0.0
+- @hands/core (workspace dependency)

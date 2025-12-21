@@ -8,7 +8,7 @@
 import type { MdxSerializationRule } from "./types";
 
 // Import all rule modules
-import { liveValueRule, liveQueryRule } from "./rules/live-value";
+import { liveValueRule, liveValueInlineRule, liveQueryRule } from "./rules/live-value";
 import { liveActionRules } from "./rules/live-action";
 import { chartRules } from "./rules/charts";
 import { kanbanRules } from "./rules/kanban";
@@ -29,6 +29,7 @@ import { columnRules } from "./rules/column";
 export const serializationRules: MdxSerializationRule<any>[] = [
   // Live data components
   liveValueRule,
+  liveValueInlineRule, // Inline variant (serializes to same MDX)
   liveQueryRule, // Legacy alias
 
   // Form controls and actions
@@ -133,7 +134,7 @@ export {
 } from "./helpers";
 
 // Individual rule modules (for selective imports)
-export { liveValueRule, liveQueryRule } from "./rules/live-value";
+export { liveValueRule, liveValueInlineRule, liveQueryRule } from "./rules/live-value";
 export { liveActionRules, liveActionRule, buttonRule, inputRule, selectRule, checkboxRule, textareaRule } from "./rules/live-action";
 export { chartRules, lineChartRule, barChartRule, areaChartRule, pieChartRule } from "./rules/charts";
 export { kanbanRules, kanbanRule } from "./rules/kanban";

@@ -1,19 +1,45 @@
 /**
- * @hands/editor - WYSIWYG block editor
+ * @hands/editor
  *
- * A structural editor for React Server Component blocks.
+ * Standalone Plate-based rich text editor with MDX support.
  */
 
-// Submodules (can also be imported directly)
-export * as ast from "./ast";
-export type {} from "./plate"; // Placeholder for future type exports
-export * as plate from "./plate";
-// Plate visual editor (re-exported for convenience)
-export { PlateVisualEditor } from "./plate";
-// Core types
+// Main Editor component
+export {
+  Editor,
+  type EditorProps,
+  type EditorHandle,
+  type CustomBlock,
+  type SimpleCustomBlock,
+  type AdvancedCustomBlock,
+} from "./Editor";
+
+// Re-export Frontmatter type from Editor (it's already in frontmatter.ts but nice to have at top level)
+export type { Frontmatter } from "./frontmatter";
+
+// Types
 export * from "./types";
 
-// MDX editor module
-export * as mdx from "./mdx";
-// MDX visual editor (re-exported for convenience)
-export { MdxVisualEditor } from "./mdx";
+// Editor base kit
+export * from "./editor-base-kit";
+
+// Frontmatter support
+export * from "./frontmatter";
+
+// Transforms
+export * from "./transforms";
+
+// Plate elements
+export * from "./plate-elements";
+
+// Plugin presets
+export { BaseKit, RichTextKit, FullKit, EditorCorePlugins } from "./plugins/presets";
+
+// Copilot factory (also available via Editor's copilot prop)
+export { createCopilotKit, type CopilotConfig } from "./plugins/copilot-kit";
+
+// All plugin kits (for custom composition)
+export * from "./plugins";
+
+// Editor context (for backend integration)
+export * from "./context";

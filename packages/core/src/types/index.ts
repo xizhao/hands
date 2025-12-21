@@ -10,7 +10,8 @@ import type { TElement, TText } from "platejs";
 // Element Keys
 // ============================================================================
 
-export const LIVE_VALUE_KEY = "live_value";
+export const LIVE_VALUE_KEY = "live_value"; // Block - for charts/tables
+export const LIVE_VALUE_INLINE_KEY = "live_value_inline"; // Inline - for text values
 export const LIVE_ACTION_KEY = "live_action";
 export const BUTTON_KEY = "button";
 export const INPUT_KEY = "input";

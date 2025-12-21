@@ -55,6 +55,8 @@ export default defineConfig({
     // Webpack compatibility shims for react-server-dom-webpack/client
     // These are required for Flight stream consumption in Vite
     __webpack_require__: "globalThis.__webpack_require__",
+    // Polyfill process.env for libraries that expect Node environment
+    "process.env": {},
   },
   optimizeDeps: {
     include: ["react-server-dom-webpack/client"],

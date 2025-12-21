@@ -86,7 +86,7 @@ export function Metric({
       {change !== undefined && (
         <span
           className={`flex items-center gap-1 ${classes.change} ${
-            change > 0 ? "text-green-600" : change < 0 ? "text-red-600" : "text-muted-foreground"
+            change > 0 ? "text-success" : change < 0 ? "text-destructive" : "text-muted-foreground"
           }`}
         >
           {change > 0 ? "+" : ""}

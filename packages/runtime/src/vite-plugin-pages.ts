@@ -169,7 +169,7 @@ async function processAllPages(
   console.log(`[pages] Processing ${pageFiles.length} page files...`);
 
   // Dynamically import the parser using relative path (workspace deps don't resolve at vite config time)
-  const { parseMdx } = await import("../../editor/src/mdx/parser");
+  const { parseMdx } = await import("../../editor_old/src/mdx/parser");
 
   const pages: PageMeta[] = [];
 

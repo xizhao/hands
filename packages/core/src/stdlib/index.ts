@@ -55,6 +55,7 @@ import {
   BarChartPlugin,
   LineChartPlugin,
   LiveValuePlugin,
+  LiveValueInlinePlugin,
   LoaderPlugin,
   MetricPlugin,
   PieChartPlugin,
@@ -76,6 +77,7 @@ export const ChartKit = [
  */
 export const ViewKit = [
   LiveValuePlugin,
+  LiveValueInlinePlugin,
   MetricPlugin,
   BadgePlugin,
   ProgressPlugin,

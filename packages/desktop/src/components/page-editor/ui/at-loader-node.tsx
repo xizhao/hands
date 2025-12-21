@@ -23,7 +23,7 @@ import { useEffect, useRef } from 'react';
 import { trpc } from '@/lib/trpc';
 import { useManifest } from '@/hooks/useRuntimeState';
 import { type TAtLoaderElement, pendingMdxQueries } from '../plugins/at-kit';
-import { PageContextPlugin } from '../plugins/page-context-kit';
+import { PageContextPlugin } from '@hands/editor';
 
 // Helper to get document context (prefix/suffix around cursor)
 function getDocumentContext(editor: ReturnType<typeof useEditorRef>) {

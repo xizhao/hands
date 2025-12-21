@@ -226,7 +226,7 @@ export const AreaChartPlugin = createPlatePlugin({
   key: AREA_CHART_KEY,
   node: {
     isElement: true,
-    isInline: false,
+    isInline: true, // Inline in Slate model to allow nesting in LiveValue; visual is still block
     isVoid: true,
     component: memo(AreaChartElement),
   },

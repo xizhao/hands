@@ -27,6 +27,12 @@ svg [opacity="0.2"] {
     --accent-foreground: 0 0% 9%;
     --destructive: 0 84.2% 60.2%;
     --destructive-foreground: 0 0% 98%;
+    --success: 142 76% 36%;
+    --success-foreground: 0 0% 98%;
+    --warning: 38 92% 50%;
+    --warning-foreground: 0 0% 9%;
+    --info: 214 100% 50%;
+    --info-foreground: 0 0% 98%;
     --border: 0 0% 89.8%;
     --input: 0 0% 89.8%;
     --ring: 0 0% 3.9%;
@@ -67,6 +73,12 @@ svg [opacity="0.2"] {
     --accent-foreground: 0 0% 98%;
     --destructive: 0 62.8% 30.6%;
     --destructive-foreground: 0 0% 98%;
+    --success: 142 70% 45%;
+    --success-foreground: 0 0% 98%;
+    --warning: 38 80% 45%;
+    --warning-foreground: 0 0% 98%;
+    --info: 214 90% 60%;
+    --info-foreground: 0 0% 98%;
     --border: 0 0% 14.9%;
     --input: 0 0% 14.9%;
     --ring: 0 0% 83.1%;
@@ -175,17 +187,6 @@ svg [opacity="0.2"] {
 /* Selection */
 ::selection {
   background: hsl(var(--primary) / 0.15);
-}
-
-/* Disable browser focus rings on slate editor */
-[data-slate-editor]:focus {
-  outline: none !important;
-  box-shadow: none !important;
-}
-
-[data-slate-editor]:focus-visible {
-  outline: none !important;
-  box-shadow: none !important;
 }
 
 @layer base {

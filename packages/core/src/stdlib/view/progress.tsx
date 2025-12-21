@@ -63,8 +63,8 @@ export function Progress({
 
   const variantClasses = {
     default: "bg-primary",
-    success: "bg-green-600",
-    warning: "bg-yellow-500",
+    success: "bg-success",
+    warning: "bg-warning",
     destructive: "bg-destructive",
   };
 

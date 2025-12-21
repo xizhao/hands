@@ -14,7 +14,7 @@ import {
   type Frontmatter,
   parseFrontmatter,
   serializeFrontmatter,
-} from "../frontmatter";
+} from "@hands/editor";
 
 // ============================================================================
 // Types

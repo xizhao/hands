@@ -27,6 +27,7 @@ import {
   type DataGridColumnConfig,
   type DisplayMode,
   LIVE_VALUE_KEY,
+  LIVE_VALUE_INLINE_KEY,
   type TLiveValueElement,
 } from "../../types";
 import { assertReadOnlySQL } from "../sql-validation";
@@ -256,9 +257,20 @@ function LiveValueElement(props: PlateElementProps) {
   // Mode: provider (children handle display) vs auto-display (we handle display)
   const isProviderMode = hasMeaningfulChildren(element);
 
-  // Block vs inline wrapper
+  // Provider mode: idiomatic pass-through like LiveAction
+  if (isProviderMode) {
+    return (
+      <PlateElement {...props}>
+        <LiveValueProvider data={data} isLoading={isLoading} error={error}>
+          {props.children}
+        </LiveValueProvider>
+      </PlateElement>
+    );
+  }
+
+  // Auto-display mode: we pick the display format
   const displayType = resolveDisplayMode(display, data);
-  const isInline = displayType === "inline" && !isProviderMode;
+  const isInline = displayType === "inline";
 
   return (
     <PlateElement
@@ -267,39 +279,45 @@ function LiveValueElement(props: PlateElementProps) {
       className={selected && !readOnly ? "ring-2 ring-ring ring-offset-1 rounded" : undefined}
     >
       <LiveValueProvider data={data} isLoading={isLoading} error={error}>
-        {isProviderMode ? (
-          // Provider mode: children render themselves with data context
-          props.children
-        ) : (
-          // Auto-display mode: we pick the display format
-          <>
-            <LiveValueDisplay
-              data={data}
-              isLoading={isLoading}
-              error={error}
-              display={display}
-              columns={columns === "auto" ? undefined : columns}
-            />
-            <span className="hidden">{props.children}</span>
-          </>
-        )}
+        <span contentEditable={false} style={{ userSelect: "none" }}>
+          <LiveValueDisplay
+            data={data}
+            isLoading={isLoading}
+            error={error}
+            display={display}
+            columns={columns === "auto" ? undefined : columns}
+          />
+        </span>
       </LiveValueProvider>
     </PlateElement>
   );
 }
 
 /**
- * LiveValue Plugin - displays live SQL query results.
- *
- * Note: Not marked as void so children (charts, etc.) render correctly.
- * When no meaningful children, falls back to auto-display mode.
+ * LiveValue Plugin (Block) - for charts and complex content.
+ * Used when LiveValue has meaningful children (charts, tables, etc.)
  */
 export const LiveValuePlugin = createPlatePlugin({
   key: LIVE_VALUE_KEY,
   node: {
     isElement: true,
-    isInline: false, // Block element when containing charts
-    isVoid: false, // Allow children to render
+    isInline: false,
+    isVoid: false,
+    isContainer: true, // Allows element children but no text insertion
+    component: memo(LiveValueElement),
+  },
+});
+
+/**
+ * LiveValue Inline Plugin - for simple values in text.
+ * Used when LiveValue has no children (e.g., "I have <LiveValue/> apples")
+ */
+export const LiveValueInlinePlugin = createPlatePlugin({
+  key: LIVE_VALUE_INLINE_KEY,
+  node: {
+    isElement: true,
+    isInline: true, // Inline for use in paragraphs
+    isVoid: true, // No children
     component: memo(LiveValueElement),
   },
 });

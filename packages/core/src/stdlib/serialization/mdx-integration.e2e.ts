@@ -116,4 +116,89 @@ test.describe("MDX Integration", () => {
       expect(alert.variant).toBe("warning");
     });
   });
+
+  test.describe("Column Layout", () => {
+    test("deserializes two-column layout correctly", async ({ page }) => {
+      await page.goto("/?story=integration--mdx--columns--two-equal");
+      await page.waitForSelector('[data-testid="plate-harness"]');
+
+      const plateValueText = await page.locator('[data-testid="plate-value"]').textContent();
+      const plateValue = JSON.parse(plateValueText || "[]");
+
+      // Find the column_group element
+      const columnGroup = plateValue.find((el: any) => el.type === "column_group");
+      expect(columnGroup).toBeDefined();
+
+      // Should have exactly 2 columns
+      const columns = columnGroup.children?.filter((child: any) => child.type === "column");
+      expect(columns).toHaveLength(2);
+
+      // Check column widths
+      expect(columns[0].width).toBe("50%");
+      expect(columns[1].width).toBe("50%");
+    });
+
+    test("deserializes three-column layout correctly", async ({ page }) => {
+      await page.goto("/?story=integration--mdx--columns--three-equal");
+      await page.waitForSelector('[data-testid="plate-harness"]');
+
+      const plateValueText = await page.locator('[data-testid="plate-value"]').textContent();
+      const plateValue = JSON.parse(plateValueText || "[]");
+
+      const columnGroup = plateValue.find((el: any) => el.type === "column_group");
+      expect(columnGroup).toBeDefined();
+
+      const columns = columnGroup.children?.filter((child: any) => child.type === "column");
+      expect(columns).toHaveLength(3);
+    });
+
+    test("preserves unequal column widths", async ({ page }) => {
+      await page.goto("/?story=integration--mdx--columns--unequal-width");
+      await page.waitForSelector('[data-testid="plate-harness"]');
+
+      const plateValueText = await page.locator('[data-testid="plate-value"]').textContent();
+      const plateValue = JSON.parse(plateValueText || "[]");
+
+      const columnGroup = plateValue.find((el: any) => el.type === "column_group");
+      expect(columnGroup).toBeDefined();
+
+      const columns = columnGroup.children?.filter((child: any) => child.type === "column");
+      expect(columns).toHaveLength(2);
+      expect(columns[0].width).toBe("70%");
+      expect(columns[1].width).toBe("30%");
+    });
+
+    test("renders columns with flex layout", async ({ page }) => {
+      await page.goto("/?story=integration--mdx--columns--two-equal");
+      await page.waitForSelector('[data-testid="plate-harness"]');
+
+      // Check that the column group container has flex display
+      const flexContainer = page.locator('[data-testid="plate-harness"] .flex');
+      await expect(flexContainer).toBeVisible();
+    });
+
+    test("deserializes components inside columns", async ({ page }) => {
+      await page.goto("/?story=integration--mdx--columns--with-components");
+      await page.waitForSelector('[data-testid="plate-harness"]');
+
+      const plateValueText = await page.locator('[data-testid="plate-value"]').textContent();
+      const plateValue = JSON.parse(plateValueText || "[]");
+
+      const columnGroup = plateValue.find((el: any) => el.type === "column_group");
+      expect(columnGroup).toBeDefined();
+
+      const columns = columnGroup.children?.filter((child: any) => child.type === "column");
+      expect(columns).toHaveLength(2);
+
+      // First column should have a metric
+      const firstColumnMetric = columns[0].children?.find((child: any) => child.type === "metric");
+      expect(firstColumnMetric).toBeDefined();
+      expect(firstColumnMetric.value).toBe(1234);
+
+      // Second column should also have a metric
+      const secondColumnMetric = columns[1].children?.find((child: any) => child.type === "metric");
+      expect(secondColumnMetric).toBeDefined();
+      expect(secondColumnMetric.value).toBe(567);
+    });
+  });
 });

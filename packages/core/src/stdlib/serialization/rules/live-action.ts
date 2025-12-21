@@ -156,7 +156,8 @@ export const buttonRule: MdxSerializationRule<TButtonElement> = {
     const children = serializeChildren(element.children, options);
 
     return {
-      type: "mdxJsxTextElement",
+      // Always use flow element - paragraph serializer handles inline context correctly
+      type: "mdxJsxFlowElement",
       name: "Button",
       attributes: attrs,
       children: children as any[],

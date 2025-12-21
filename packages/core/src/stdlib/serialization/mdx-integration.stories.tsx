@@ -197,3 +197,84 @@ export const ComplexNested: Story = () => (
   />
 );
 ComplexNested.storyName = "Complex Dashboard";
+
+// ============================================================================
+// Column Layout Tests
+// ============================================================================
+
+export const ColumnsTwoEqual: Story = () => (
+  <PlateHarnessDebug
+    mdx={`<Columns>
+  <Column width="50%">
+
+Left column content
+
+  </Column>
+  <Column width="50%">
+
+Right column content
+
+  </Column>
+</Columns>`}
+  />
+);
+ColumnsTwoEqual.storyName = "Columns - Two Equal";
+
+export const ColumnsThreeEqual: Story = () => (
+  <PlateHarnessDebug
+    mdx={`<Columns>
+  <Column width="33.333%">
+
+First column
+
+  </Column>
+  <Column width="33.333%">
+
+Second column
+
+  </Column>
+  <Column width="33.334%">
+
+Third column
+
+  </Column>
+</Columns>`}
+  />
+);
+ColumnsThreeEqual.storyName = "Columns - Three Equal";
+
+export const ColumnsUnequal: Story = () => (
+  <PlateHarnessDebug
+    mdx={`<Columns>
+  <Column width="70%">
+
+Wide column with more content
+
+  </Column>
+  <Column width="30%">
+
+Narrow
+
+  </Column>
+</Columns>`}
+  />
+);
+ColumnsUnequal.storyName = "Columns - Unequal Width";
+
+export const ColumnsWithComponents: Story = () => (
+  <PlateHarnessDebug
+    mdx={`<Columns>
+  <Column width="50%">
+
+<Metric value={1234} label="Users" />
+
+  </Column>
+  <Column width="50%">
+
+<Metric value={567} label="Orders" />
+
+  </Column>
+</Columns>`}
+  />
+);
+ColumnsWithComponents.storyName = "Columns - With Components";

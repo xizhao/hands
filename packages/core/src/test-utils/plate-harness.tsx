@@ -7,9 +7,12 @@
 
 "use client";
 
+import { BaseColumnItemPlugin, BaseColumnPlugin } from "@platejs/layout";
 import { MarkdownPlugin, remarkMdx } from "@platejs/markdown";
 import { Plate, PlateContent, usePlateEditor } from "platejs/react";
+import { SlateElement, type SlateElementProps } from "platejs/static";
 import remarkGfm from "remark-gfm";
+import type { TColumnElement } from "platejs";
 
 import { serializationRules, toMarkdownPluginRules } from "../stdlib/serialization";
 import { MockDataProvider } from "./mock-data-provider";
@@ -37,6 +40,33 @@ import {
 } from "../stdlib/action";
 import { DataGridPlugin, KanbanPlugin } from "../stdlib/data";
 
+// ============================================================================
+// Column Components (inline to avoid circular deps)
+// ============================================================================
+
+function ColumnElementStatic(props: SlateElementProps<TColumnElement>) {
+  const { width } = props.element;
+  return (
+    <SlateElement
+      className="border border-transparent p-1.5"
+      style={{ width: width ?? "100%" }}
+      {...props}
+    />
+  );
+}
+
+function ColumnGroupElementStatic(props: SlateElementProps) {
+  return (
+    <SlateElement className="my-2" {...props}>
+      <div className="flex size-full gap-4 rounded">{props.children}</div>
+    </SlateElement>
+  );
+}
+
+// Column plugins configured with static components
+const ColumnPlugin = BaseColumnPlugin.withComponent(ColumnGroupElementStatic);
+const ColumnItemPlugin = BaseColumnItemPlugin.withComponent(ColumnElementStatic);
+
 /**
  * All stdlib Plate plugins
  */
@@ -62,6 +92,9 @@ export const StdlibPlugins = [
   // Data components
   DataGridPlugin,
   KanbanPlugin,
+  // Layout components
+  ColumnPlugin,
+  ColumnItemPlugin,
 ];
 
 /**

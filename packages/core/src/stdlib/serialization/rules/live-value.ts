@@ -6,6 +6,7 @@
 
 import {
   LIVE_VALUE_KEY,
+  LIVE_VALUE_INLINE_KEY,
   type DisplayMode,
   type ColumnConfig,
   type TLiveValueElement,
@@ -34,6 +35,41 @@ import {
  * </LiveValue>
  * ```
  */
+/**
+ * Shared serialize function for both block and inline LiveValue.
+ */
+function serializeLiveValue(element: TLiveValueElement, options: any) {
+  const hasTemplate = hasChildContent(element.children);
+
+  const attrs = serializeAttributes(
+    {
+      query: element.query,
+      display: element.display,
+      params: element.params,
+      columns: element.columns,
+      className: element.className,
+    },
+    {
+      include: ["query", "display", "params", "columns", "className"],
+      defaults: { display: "auto" },
+    }
+  );
+
+  const children = hasTemplate
+    ? serializeChildren(element.children, options)
+    : [];
+
+  return {
+    type: "mdxJsxFlowElement",
+    name: "LiveValue",
+    attributes: attrs,
+    children: children as any[],
+  };
+}
+
+/**
+ * LiveValue (Block) serialization rule - for charts and complex content.
+ */
 export const liveValueRule: MdxSerializationRule<TLiveValueElement> = {
   tagName: "LiveValue",
   key: LIVE_VALUE_KEY,
@@ -42,18 +78,22 @@ export const liveValueRule: MdxSerializationRule<TLiveValueElement> = {
     const props = parseAttributes(node);
 
     // Handle children if present (template mode or chart children)
-    // Use options.convertChildren if available (for tests), otherwise Plate's native function
     let children: TLiveValueElement["children"] = [{ text: "" }];
+    let hasChildren = false;
     if (node.children && node.children.length > 0 && options) {
       const converter = options.convertChildren ?? convertChildrenDeserialize;
       const converted = converter(node.children as any, deco as any, options as any);
       if (hasChildContent(converted)) {
         children = converted;
+        hasChildren = true;
       }
     }
 
+    // Pick element type: block if has children (charts), inline if no children
+    const elementType = hasChildren ? LIVE_VALUE_KEY : LIVE_VALUE_INLINE_KEY;
+
     return {
-      type: LIVE_VALUE_KEY,
+      type: elementType,
       query: (props.query as string) || "",
       display: (props.display as DisplayMode | undefined) ?? "auto",
       params: props.params as Record<string, unknown> | undefined,
@@ -63,37 +103,17 @@ export const liveValueRule: MdxSerializationRule<TLiveValueElement> = {
     };
   },
 
-  serialize: (element, options) => {
-    // Check if element has template content
-    const hasTemplate = hasChildContent(element.children);
+  serialize: serializeLiveValue,
+};
 
-    // Build attributes
-    const attrs = serializeAttributes(
-      {
-        query: element.query,
-        display: element.display,
-        params: element.params,
-        columns: element.columns,
-        className: element.className,
-      },
-      {
-        include: ["query", "display", "params", "columns", "className"],
-        defaults: { display: "auto" },
-      }
-    );
-
-    // Serialize children if template mode
-    const children = hasTemplate
-      ? serializeChildren(element.children, options)
-      : [];
-
-    return {
-      type: hasTemplate ? "mdxJsxFlowElement" : "mdxJsxTextElement",
-      name: "LiveValue",
-      attributes: attrs,
-      children: children as any[],
-    };
-  },
+/**
+ * LiveValue Inline serialization rule - serializes inline variant to same MDX.
+ */
+export const liveValueInlineRule: MdxSerializationRule<TLiveValueElement> = {
+  tagName: "LiveValue", // Same tag name (handled by liveValueRule for deserialize)
+  key: LIVE_VALUE_INLINE_KEY,
+  deserialize: liveValueRule.deserialize, // Shared deserialize
+  serialize: serializeLiveValue, // Same serialize output
 };
 
 /**

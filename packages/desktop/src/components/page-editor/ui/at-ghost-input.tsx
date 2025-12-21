@@ -10,9 +10,6 @@
 
 import type { PlateElementProps } from "platejs/react";
 import {
-  createPlateEditor,
-  Plate,
-  PlateContent,
   PlateElement,
   useEditorRef,
   usePluginOption,
@@ -23,7 +20,6 @@ import {
   useEffect,
   useRef,
   useState,
-  useMemo,
   type KeyboardEvent,
 } from "react";
 import type { Descendant, TElement } from "platejs";
@@ -34,8 +30,7 @@ import { useManifest } from "@/hooks/useRuntimeState";
 import { useCreateSession, useSendMessage } from "@/hooks/useSession";
 import { createAtLoaderElement, pendingMdxQueries } from "../plugins/at-kit";
 import { PROMPT_KEY, type TPromptElement } from "../plugins/prompt-kit";
-import { PageContextPlugin } from "../plugins/page-context-kit";
-import { EditorKit } from "../editor-kit";
+import { PageContextPlugin } from "@hands/editor";
 
 // Type guard for Prompt elements that need session creation
 function isPendingPrompt(node: Descendant): node is TPromptElement & { promptText: string } {
@@ -92,48 +87,22 @@ ${schemaContext}
 // Ghost Text Preview Component
 // ============================================================================
 
-function AtGhostPreview({ mdx, editor: mainEditor }: { mdx: string; editor: ReturnType<typeof useEditorRef> }) {
-  // Deserialize and render using the main editor's plugins
-  const ghostEditor = useMemo(() => {
-    if (!mdx) return null;
+function AtGhostPreview({ mdx }: { mdx: string }) {
+  // Simple ghost text preview - just show the MDX content
+  // Strip JSX tags for cleaner preview, keep text content
+  const previewText = mdx
+    .replace(/<[^>]+\/>/g, (match) => {
+      // Self-closing tags like <LiveValue query="..." /> → show component name
+      const name = match.match(/<(\w+)/)?.[1];
+      return name ? `[${name}]` : '';
+    })
+    .replace(/<(\w+)[^>]*>(.*?)<\/\1>/g, (_, name, content) => {
+      // Opening/closing tags → show content or component name
+      return content.trim() || `[${name}]`;
+    })
+    .trim();
 
-    try {
-      const api = mainEditor.getApi(MarkdownPlugin);
-      const deserialized = api.markdown.deserialize(mdx);
-      console.log('[ghost-preview] Parsed MDX:', JSON.stringify(deserialized, null, 2));
-
-      if (!deserialized || deserialized.length === 0) return null;
-
-      // Unwrap single paragraph for inline display
-      let nodes: Descendant[];
-      if (deserialized.length === 1 && deserialized[0].type === "p" && deserialized[0].children) {
-        nodes = deserialized[0].children;
-      } else {
-        nodes = deserialized;
-      }
-
-      // Wrap in a paragraph for the ghost editor
-      return createPlateEditor({
-        plugins: EditorKit,
-        value: [{ type: "p", children: nodes }] as TElement[],
-      });
-    } catch (err) {
-      console.error('[ghost-preview] Parse error:', err);
-      return null;
-    }
-  }, [mdx, mainEditor]);
-
-  if (!ghostEditor) {
-    return <span className="opacity-40">{mdx}</span>;
-  }
-
-  return (
-    <span className="inline opacity-50 [&_p]:inline [&_p]:m-0 [&_.my-1]:my-0">
-      <Plate editor={ghostEditor} readOnly>
-        <PlateContent className="inline [&>div]:inline" readOnly />
-      </Plate>
-    </span>
-  );
+  return <span className="opacity-40 italic">{previewText || mdx}</span>;
 }
 
 // ============================================================================
@@ -572,7 +541,7 @@ export function AtGhostInputElement(props: PlateElementProps) {
         {/* Ghost preview - after the input area */}
         {hasResult && prefetchedMdx && (
           <span className="ml-1">
-            <AtGhostPreview mdx={prefetchedMdx} editor={editor} />
+            <AtGhostPreview mdx={prefetchedMdx} />
           </span>
         )}
 

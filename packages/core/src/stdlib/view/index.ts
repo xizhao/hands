@@ -26,6 +26,7 @@ export {
   LIVE_VALUE_KEY,
   LiveValueDisplay,
   LiveValuePlugin,
+  LiveValueInlinePlugin,
   type LiveValueProps,
   resolveDisplayMode,
   selectDisplayType,

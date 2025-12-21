@@ -13,7 +13,8 @@
     "./stdlib/static": "./src/stdlib/view/index.ts",
     "./stdlib/active": "./src/stdlib/action/index.ts",
     "./types": "./src/types/index.ts",
-    "./docs": "./src/docs/stdlib.ts"
+    "./docs": "./src/docs/stdlib.ts",
+    "./styles/theme.css": "./src/styles/theme.css"
   },
   "scripts": {
     "generate:docs": "bun run scripts/generate-docs.ts",
@@ -31,6 +32,7 @@
   },
   "devDependencies": {
     "@ladle/react": "^5.1.1",
+    "@platejs/layout": "^52.0.11",
     "@platejs/markdown": "^52.0.11",
     "@playwright/test": "^1.57.0",
     "@types/react": "^19.0.0",

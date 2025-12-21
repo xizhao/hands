@@ -159,7 +159,8 @@ describe("liveValueRule", () => {
       ]);
       const result = liveValueRule.deserialize(mdxNode);
 
-      expect(result.type).toBe("live_value");
+      // No children → inline variant
+      expect(result.type).toBe("live_value_inline");
       expect(result.query).toBe("SELECT COUNT(*) FROM users");
       expect(result.display).toBe("auto");
       expect(result.children).toEqual([{ text: "" }]);
@@ -175,7 +176,8 @@ describe("liveValueRule", () => {
       ]);
       const result = liveValueRule.deserialize(mdxNode);
 
-      expect(result.type).toBe("live_value");
+      // No children → inline variant
+      expect(result.type).toBe("live_value_inline");
       expect(result.query).toBe("SELECT * FROM tasks");
       expect(result.display).toBe("table");
       expect(result.params).toEqual({ limit: 10 });
@@ -207,7 +209,7 @@ describe("liveValueRule", () => {
       };
       const result = liveValueRule.serialize(element);
 
-      expect(result.type).toBe("mdxJsxTextElement");
+      expect(result.type).toBe("mdxJsxFlowElement");
       expect(result.name).toBe("LiveValue");
       expect(result.attributes).toContainEqual({
         type: "mdxJsxAttribute",
@@ -284,7 +286,8 @@ describe("liveQueryRule", () => {
     ]);
     const result = liveQueryRule.deserialize(mdxNode);
 
-    expect(result.type).toBe("live_value");
+    // No children → inline variant
+    expect(result.type).toBe("live_value_inline");
     expect(liveQueryRule.tagName).toBe("LiveQuery");
     expect(liveQueryRule.key).toBe("live_value");
   });
@@ -395,7 +398,7 @@ describe("buttonRule", () => {
       };
       const result = buttonRule.serialize(element);
 
-      expect(result.type).toBe("mdxJsxTextElement");
+      expect(result.type).toBe("mdxJsxFlowElement");
       expect(result.name).toBe("Button");
       expect(result.attributes).toContainEqual({
         type: "mdxJsxAttribute",

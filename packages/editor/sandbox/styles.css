@@ -1,0 +1,148 @@
+/**
+ * Editor Sandbox Styles
+ *
+ * Demo environment for @hands/editor.
+ * Imports base theme from @hands/core for consistent styling.
+ */
+
+@import "@hands/core/styles/theme.css";
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  background: hsl(var(--background));
+  color: hsl(var(--foreground));
+}
+
+/* ============================================
+ * Sandbox Layout
+ * ============================================ */
+
+.sandbox {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.sandbox-header {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding: 1rem 2rem;
+  border-bottom: 1px solid hsl(var(--border));
+}
+
+.sandbox-header h1 {
+  margin: 0;
+  font-size: 1.25rem;
+  font-weight: 600;
+}
+
+.sandbox-hint {
+  font-size: 0.875rem;
+  color: hsl(var(--muted-foreground));
+}
+
+.panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.5rem 1rem;
+  border-bottom: 1px solid hsl(var(--border));
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: hsl(var(--muted-foreground));
+}
+
+.apply-btn {
+  padding: 0.25rem 0.5rem;
+  font-size: 0.75rem;
+  background: hsl(var(--primary));
+  color: hsl(var(--primary-foreground));
+  border: none;
+  border-radius: 0.25rem;
+  cursor: pointer;
+}
+
+.apply-btn:hover {
+  opacity: 0.9;
+}
+
+.sandbox-main {
+  display: grid;
+  grid-template-columns: 1fr 400px;
+  flex: 1;
+  min-height: 0;
+}
+
+.editor-container {
+  padding: 2rem;
+  overflow-y: auto;
+  border-right: 1px solid hsl(var(--border));
+}
+
+.markdown-panel {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  background: hsl(var(--muted));
+}
+
+.markdown-textarea {
+  flex: 1;
+  margin: 0;
+  padding: 1rem;
+  border: none;
+  background: transparent;
+  font-size: 0.75rem;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  line-height: 1.5;
+  resize: none;
+  outline: none;
+  color: hsl(var(--foreground));
+}
+
+.markdown-textarea:focus {
+  background: hsl(var(--background));
+}
+
+/* ============================================
+ * Editor Styles
+ * ============================================ */
+
+[data-slate-editor] {
+  min-height: 400px;
+  outline: none;
+}
+
+[data-slate-editor] p {
+  margin: 0.5em 0;
+}
+
+[data-slate-editor] h1 {
+  font-size: 2em;
+  font-weight: 700;
+  margin: 0.5em 0;
+}
+
+[data-slate-editor] h2 {
+  font-size: 1.5em;
+  font-weight: 600;
+  margin: 0.5em 0;
+}
+
+[data-slate-editor] h3 {
+  font-size: 1.25em;
+  font-weight: 600;
+  margin: 0.5em 0;
+}

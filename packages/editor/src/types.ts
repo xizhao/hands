@@ -1,160 +1,183 @@
-/**
- * Core types for the WYSIWYG block editor
- */
+'use client';
 
-// ============================================================================
-// AST Types (JSX Tree)
-// ============================================================================
+import type {
+  EmptyText,
+  KEYS,
+  PlainText,
+  TBasicMarks,
+  TCaptionProps,
+  TComboboxInputElement,
+  TCommentText,
+  TElement,
+  TFontMarks,
+  TImageElement,
+  TLineHeightProps,
+  TLinkElement,
+  TListProps,
+  TMediaEmbedElement,
+  TMentionElement,
+  TResizableProps,
+  TTableElement,
+  TText,
+  TTextAlignProps,
+} from 'platejs';
 
-/**
- * Property value in JSX - can be literal, expression, or nested JSX
- */
-export interface PropValue {
-  type: "literal" | "expression" | "jsx";
-  value: string | number | boolean | null | JsxNode;
-  /** Original source for expressions */
-  rawSource?: string;
+export interface EditorBlockElement extends TElement, TListProps {
+  id?: string;
 }
 
-/**
- * A node in the JSX AST
- */
-export interface JsxNode {
-  /** Unique ID for tracking */
+/** Inline Elements */
+
+export interface EditorBlockquoteElement extends EditorTextBlockElement {
+  type: typeof KEYS.blockquote;
+}
+
+export interface EditorCodeBlockElement extends EditorBlockElement {
+  children: EditorCodeLineElement[];
+  type: typeof KEYS.codeBlock;
+}
+
+export interface EditorCodeLineElement extends TElement {
+  children: PlainText[];
+  type: typeof KEYS.codeLine;
+}
+
+export interface EditorH1Element extends EditorTextBlockElement {
+  type: typeof KEYS.h1;
+}
+
+export interface EditorH2Element extends EditorTextBlockElement {
+  type: typeof KEYS.h2;
+}
+
+export interface EditorH3Element extends EditorTextBlockElement {
+  type: typeof KEYS.h3;
+}
+
+export interface EditorHrElement extends EditorBlockElement {
+  children: [EmptyText];
+  type: typeof KEYS.hr;
+}
+
+/** Block props */
+
+export interface EditorImageElement
+  extends EditorBlockElement,
+    TCaptionProps,
+    TImageElement,
+    TResizableProps {
+  children: [EmptyText];
+  type: typeof KEYS.img;
+}
+
+export interface EditorLinkElement extends TLinkElement {
   id: string;
-  /** Node type */
-  type: "element" | "fragment" | "text" | "expression";
-  /** Tag name for elements (e.g., 'div', 'Card', 'Button') */
-  tagName?: string;
-  /** Props for elements */
-  props?: Record<string, PropValue>;
-  /** Child nodes */
-  children?: JsxNode[];
-  /** Text content (for text nodes) */
-  text?: string;
-  /** Expression code (for expression nodes like {data.map(...)}) */
-  expression?: string;
+  children: RichText[];
+  type: typeof KEYS.link;
+  icon?: string;
+  title?: string;
 }
 
-// ============================================================================
-// Path Types
-// ============================================================================
-
-/**
- * Path to a node in the AST
- * e.g., ['children', 0, 'children', 2] means root.children[0].children[2]
- */
-export type NodePath = (string | number)[];
-
-// ============================================================================
-// Scene Types (Rendered Output)
-// ============================================================================
-
-/**
- * Context for nodes rendered from .map() expressions
- */
-export interface IteratorContext {
-  /** The array expression (e.g., "users") */
-  arrayExpression: string;
-  /** The iterator variable (e.g., "u" in users.map(u => ...)) */
-  itemVar: string;
-  /** Index in the array */
-  index: number;
+export interface EditorMediaEmbedElement
+  extends EditorBlockElement,
+    TCaptionProps,
+    TMediaEmbedElement,
+    TResizableProps {
+  children: [EmptyText];
+  type: typeof KEYS.mediaEmbed;
 }
 
-/**
- * A node in the rendered scene graph
- */
-export interface RenderedNode {
-  /** Unique ID for selection/drag-drop */
-  id: string;
-  /** Node type */
-  type: "element" | "text";
-  /** Resolved tag name */
-  tagName: string;
-  /** Computed props (after expression evaluation) */
-  props: Record<string, unknown>;
-  /** Rendered children */
-  children: RenderedNode[];
-  /** Text content for text nodes */
-  text?: string;
-  /** Path to corresponding AST node */
-  sourcePath: NodePath;
-  /** Context if from .map() iteration */
-  iteratorContext?: IteratorContext;
-  /** Bounding box (set after DOM render) */
-  bounds?: DOMRect;
+export interface EditorSandboxedBlockElement extends EditorBlockElement {
+  children: [EmptyText];
+  type: 'sandboxed_block';
+  /** Block source ID - used to fetch from /preview/{src} */
+  src?: string;
+  /** Whether this block is being created */
+  editing?: boolean;
+  /** User prompt for AI to build this block */
+  prompt?: string;
+  /** Height of the iframe */
+  height?: number;
 }
 
-/**
- * The rendered scene
- */
-export interface RenderedScene {
-  /** Root node */
-  root: RenderedNode;
-  /** Mock data used for rendering */
-  mockData: Record<string, unknown>;
+export interface EditorLiveActionElement extends EditorBlockElement {
+  type: 'live_action';
+  /** SQL statement to execute (UPDATE, INSERT, DELETE) */
+  sql?: string;
+  /** Alternative: action ID reference */
+  src?: string;
+  /** Named parameters for SQL */
+  params?: Record<string, unknown>;
+  /** Children are the interactive content */
+  children: (TElement | TText)[];
 }
 
-// ============================================================================
-// Editor State
-// ============================================================================
-
-/**
- * Complete editor state
- */
-export interface EditorState {
-  /** Current TSX source code */
-  source: string;
-  /** Parsed AST */
-  ast: JsxNode;
-  /** Rendered scene */
-  scene: RenderedScene | null;
-  /** Mock data for rendering */
-  mockData: Record<string, unknown>;
-  /** Currently selected node path */
-  selectedPath: NodePath | null;
-  /** Is there an error? */
-  error: string | null;
+export interface EditorMentionElement extends TMentionElement {
+  children: [EmptyText];
+  type: typeof KEYS.mention;
+  key?: string;
+  coverImage?: string;
+  icon?: string;
 }
 
-// ============================================================================
-// Utility Functions
-// ============================================================================
-
-/**
- * Generate a unique ID
- */
-export function generateId(): string {
-  return `${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 7)}`;
+export interface EditorMentionInputElement extends TComboboxInputElement {
+  children: [PlainText];
+  type: typeof KEYS.mentionInput;
 }
 
-/**
- * Create a literal prop value
- */
-export function literal(value: string | number | boolean | null): PropValue {
-  return { type: "literal", value };
+export type EditorNestableBlock = EditorParagraphElement;
+
+export interface EditorParagraphElement extends EditorTextBlockElement {
+  type: typeof KEYS.p;
 }
 
-/**
- * Create an expression prop value
- */
-export function expression(code: string): PropValue {
-  return { type: "expression", value: code, rawSource: code };
+export interface EditorTableCellElement extends TElement {
+  children: EditorNestableBlock[];
+  type: typeof KEYS.td;
 }
 
-/**
- * Compare two paths for equality
- */
-export function pathEquals(a: NodePath, b: NodePath): boolean {
-  if (a.length !== b.length) return false;
-  return a.every((segment, i) => segment === b[i]);
+export interface EditorTableElement extends EditorBlockElement, TTableElement {
+  children: EditorTableRowElement[];
+  type: typeof KEYS.table;
 }
 
-/**
- * Check if path `a` is an ancestor of path `b`
- */
-export function isAncestor(ancestor: NodePath, descendant: NodePath): boolean {
-  if (ancestor.length >= descendant.length) return false;
-  return ancestor.every((segment, i) => segment === descendant[i]);
+export interface EditorTableRowElement extends TElement {
+  children: EditorTableCellElement[];
+  type: typeof KEYS.tr;
+}
+
+export interface EditorTextBlockElement
+  extends TElement,
+    TLineHeightProps,
+    TTextAlignProps {
+  children: (
+    | EditorLinkElement
+    | EditorMentionElement
+    | EditorMentionInputElement
+    | RichText
+  )[];
+}
+
+export interface EditorToggleElement extends EditorTextBlockElement {
+  type: typeof KEYS.toggle;
+}
+
+export type EditorValue = (
+  | EditorBlockquoteElement
+  | EditorCodeBlockElement
+  | EditorH1Element
+  | EditorH2Element
+  | EditorH3Element
+  | EditorHrElement
+  | EditorImageElement
+  | EditorLiveActionElement
+  | EditorMediaEmbedElement
+  | EditorParagraphElement
+  | EditorSandboxedBlockElement
+  | EditorTableElement
+  | EditorToggleElement
+)[];
+
+export interface RichText extends TBasicMarks, TCommentText, TFontMarks, TText {
+  kbd?: boolean;
 }

@@ -45,12 +45,9 @@ export interface AlertProps {
 export function Alert({ children, title, variant = "default", className }: AlertProps) {
   const variantClasses = {
     default: "bg-muted border-border text-foreground",
-    success:
-      "bg-green-50 border-green-200 text-green-900 dark:bg-green-950 dark:border-green-800 dark:text-green-100",
-    warning:
-      "bg-yellow-50 border-yellow-200 text-yellow-900 dark:bg-yellow-950 dark:border-yellow-800 dark:text-yellow-100",
-    destructive:
-      "bg-red-50 border-red-200 text-red-900 dark:bg-red-950 dark:border-red-800 dark:text-red-100",
+    success: "bg-success/10 border-success/30 text-success",
+    warning: "bg-warning/10 border-warning/30 text-warning",
+    destructive: "bg-destructive/10 border-destructive/30 text-destructive",
   };
 
   const iconMap = {

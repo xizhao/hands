@@ -66,8 +66,8 @@ USER REQUEST: ${prompt}`;
 }
 
 export interface UseBlockCreationOptions {
-  /** Plate editor instance */
-  editor: PlateEditor;
+  /** Plate editor instance (optional - hook does nothing if undefined) */
+  editor: PlateEditor | undefined;
   /** Page ID (for context in AI prompt) */
   pageId?: string;
   /** Callback when a block is created */
@@ -99,6 +99,8 @@ export function useBlockCreation({
     element: TSandboxedBlockElement;
     path: number[];
   }> => {
+    if (!editor) return [];
+
     const editingBlocks: Array<{ element: TSandboxedBlockElement; path: number[] }> = [];
 
     try {
@@ -124,6 +126,8 @@ export function useBlockCreation({
    */
   const completeBlock = useCallback(
     (path: number[], blockId: string) => {
+      if (!editor) return;
+
       try {
         editor.tf.setNodes(
           {

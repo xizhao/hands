@@ -25,7 +25,7 @@ import { useActiveRuntime } from '@/hooks/useWorkbook';
 import { useManifest } from '@/hooks/useRuntimeState';
 import { HandsLogo } from '@/components/ui/hands-logo';
 import { type TPromptElement } from '../plugins/prompt-kit';
-import { PageContextPlugin } from '../plugins/page-context-kit';
+import { PageContextPlugin } from '@hands/editor';
 
 export function PromptElement(props: PlateElementProps) {
   const element = props.element as TPromptElement;

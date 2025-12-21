@@ -1,22 +1,75 @@
 /**
- * PageEditor - Native Plate Editor with Frontmatter
+ * PageEditor - Desktop Page Editor
  *
- * Fetches page source via tRPC and renders with Plate.
- * Handles bidirectional sync: markdown <-> Plate value
+ * Thin wrapper around @hands/editor's Editor component.
+ * Handles page source fetching/saving via tRPC.
  */
 
 import { cn } from "@/lib/utils";
-import { deserializeMd, MarkdownPlugin } from "@platejs/markdown";
-import { Plate, PlateContent, usePlateEditor } from "platejs/react";
-import { useCallback, useEffect, useRef } from "react";
-import { EditorKit } from "./editor-kit";
-import { type Frontmatter, FrontmatterHeader, serializeFrontmatter, parseFrontmatter as parseFrontmatterFromSource } from "./frontmatter";
+import {
+  Editor,
+  type EditorHandle,
+  type AdvancedCustomBlock,
+  parseFrontmatter,
+  serializeFrontmatter,
+  type Frontmatter,
+} from "@hands/editor";
+import { useCallback, useEffect, useRef, type ReactNode } from "react";
+
 import { usePageSource } from "./hooks/usePageSource";
 import { useBlockCreation } from "./hooks/useBlockCreation";
-import { FixedToolbar } from "./ui/fixed-toolbar";
-import { FixedToolbarButtons } from "./ui/fixed-toolbar-buttons";
-import { PageContextPlugin } from "./plugins/page-context-kit";
-import { StdlibProvider } from "./plugins/stdlib-provider";
+import { DesktopEditorProvider } from "./DesktopEditorProvider";
+import { PageContextPlugin } from "@hands/editor";
+import { AtKit } from "./plugins/at-kit";
+import { SandboxedBlockPlugin, sandboxedBlockMarkdownRule, SANDBOXED_BLOCK_KEY } from "./SandboxedBlock";
+import { PromptPlugin, PromptMarkdownRules } from "./plugins/prompt-kit";
+
+// ============================================================================
+// Custom Blocks for Desktop
+// ============================================================================
+
+/** Sandboxed Block - renders iframe with block content */
+const SandboxedBlock: AdvancedCustomBlock = {
+  name: "Block",
+  plugin: SandboxedBlockPlugin,
+  rules: {
+    // Deserialize <Block src="..." /> from MDX
+    Block: {
+      deserialize: (node: any) => {
+        const attrs = node.attributes || [];
+        const props: Record<string, any> = {};
+        for (const attr of attrs) {
+          if (attr.type === "mdxJsxAttribute") {
+            if (attr.value === null) props[attr.name] = true;
+            else if (typeof attr.value === "string") props[attr.name] = attr.value;
+            else if (attr.value?.type === "mdxJsxAttributeValueExpression") {
+              try { props[attr.name] = JSON.parse(attr.value.value); }
+              catch { props[attr.name] = attr.value.value; }
+            }
+          }
+        }
+        return {
+          type: SANDBOXED_BLOCK_KEY,
+          src: props.src,
+          editing: props.editing || undefined,
+          prompt: props.prompt,
+          height: typeof props.height === "number" ? props.height : undefined,
+          children: [{ text: "" }],
+        };
+      },
+    },
+    // Serialize sandboxed_block to <Block ... />
+    ...sandboxedBlockMarkdownRule,
+  },
+};
+
+/** Prompt Block - AI prompt element */
+const PromptBlock: AdvancedCustomBlock = {
+  name: "Prompt",
+  plugin: PromptPlugin,
+  rules: PromptMarkdownRules,
+};
+
 
 // ============================================================================
 // Types
@@ -40,120 +93,65 @@ export function PageEditor({
   className,
   readOnly = false,
 }: PageEditorProps) {
-  // Refs for navigation
-  const editorRef = useRef<ReturnType<typeof usePlateEditor> | null>(null);
-  const subtitleRef = useRef<HTMLDivElement>(null);
-
-  // Track sync state to prevent feedback loops
-  const isExternalUpdateRef = useRef(false);
+  const editorRef = useRef<EditorHandle>(null);
   const lastSourceRef = useRef<string | null>(null);
 
-  // Fetch page source with debounced saves and polling
-  const { source, frontmatter, isLoading, isSaving, error, setSource, setFrontmatter, saveSourceNow } =
-    usePageSource({ pageId, readOnly });
+  // Wrapper that provides all context
+  const EditorWrapper = useCallback(
+    ({ children }: { children: ReactNode }) => (
+      <DesktopEditorProvider>{children}</DesktopEditorProvider>
+    ),
+    []
+  );
 
-  // Create editor
-  const editor = usePlateEditor({
-    plugins: EditorKit,
-    value: [{ type: "p", children: [{ text: "" }] }],
-  });
+  // Fetch page source with debounced saves
+  const {
+    source,
+    frontmatter,
+    isLoading,
+    isSaving,
+    error,
+    setSource,
+    setFrontmatter,
+    saveSourceNow,
+  } = usePageSource({ pageId, readOnly });
 
-  // Store editor ref for keyboard navigation
-  editorRef.current = editor;
+  // Extract content (body without frontmatter)
+  const content = source ? source.slice(parseFrontmatter(source).contentStart) : "";
 
   // Hook to handle AI block creation
   useBlockCreation({
-    editor,
+    editor: editorRef.current?.editor,
     pageId,
     onBlockCreated: (elementId, blockId) => {
       console.log("[PageEditor] Block created via AI:", blockId);
     },
-    onBlockError: (elementId, error) => {
-      console.error("[PageEditor] Block creation error:", error);
+    onBlockError: (elementId, err) => {
+      console.error("[PageEditor] Block creation error:", err);
     },
   });
 
-  // Sync page context (title, description) to PageContextPlugin for CopilotPlugin access
+  // Sync page context to PageContextPlugin
   useEffect(() => {
-    editor.setOption(PageContextPlugin, 'title', frontmatter.title);
-    editor.setOption(PageContextPlugin, 'description', frontmatter.description);
-    editor.setOption(PageContextPlugin, 'pageId', pageId);
-  }, [editor, frontmatter.title, frontmatter.description, pageId]);
+    const editor = editorRef.current?.editor;
+    if (!editor) return;
 
-  // Serialize editor content to markdown source
-  const serializeEditor = useCallback(() => {
-    try {
-      const api = editor.getApi(MarkdownPlugin);
-      const markdown = api.markdown.serialize();
-      return serializeFrontmatter(frontmatter) + markdown;
-    } catch (err) {
-      console.error("[PageEditor] Failed to serialize:", err);
-      return null;
-    }
-  }, [editor, frontmatter]);
+    editor.setOption(PageContextPlugin, "title", frontmatter.title);
+    editor.setOption(PageContextPlugin, "description", frontmatter.description);
+    editor.setOption(PageContextPlugin, "pageId", pageId);
+  }, [frontmatter.title, frontmatter.description, pageId]);
 
-  // Handle editor changes - serialize and save (debounced)
-  const handleChange = useCallback(({ value }: { value: any }) => {
-    if (readOnly || isExternalUpdateRef.current) return;
-
-    const newSource = serializeEditor();
-    if (!newSource) return;
-
-    // Only save if actually changed
-    if (newSource !== lastSourceRef.current) {
-      lastSourceRef.current = newSource;
-      setSource(newSource); // usePageSource handles debouncing
-    }
-  }, [readOnly, serializeEditor, setSource]);
-
-  // Cmd+S to force immediate save
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if ((e.metaKey || e.ctrlKey) && e.key === "s") {
-        e.preventDefault();
-        e.stopPropagation();
-
-        if (readOnly) return;
-
-        // Force serialize and save immediately
-        const newSource = serializeEditor();
-        if (newSource) {
-          lastSourceRef.current = newSource;
-          saveSourceNow(newSource);
-        }
+  // Handle content changes from editor
+  const handleChange = useCallback(
+    (markdown: string) => {
+      const newSource = serializeFrontmatter(frontmatter) + markdown;
+      if (newSource !== lastSourceRef.current) {
+        lastSourceRef.current = newSource;
+        setSource(newSource);
       }
-    };
-    window.addEventListener("keydown", handleKeyDown, { capture: true });
-    return () => window.removeEventListener("keydown", handleKeyDown, { capture: true });
-  }, [readOnly, serializeEditor, saveSourceNow]);
-
-  // Sync source to editor when it changes externally
-  useEffect(() => {
-    if (!source) return;
-
-    // Skip if this is from our own save
-    if (source === lastSourceRef.current) return;
-
-    // Parse frontmatter to get content
-    const { contentStart } = parseFrontmatterFromSource(source);
-    const content = source.slice(contentStart);
-
-    // Deserialize markdown content to Plate value
-    try {
-      isExternalUpdateRef.current = true;
-      const value = deserializeMd(editor, content);
-      if (value && value.length > 0) {
-        editor.tf.setValue(value);
-        lastSourceRef.current = source;
-      }
-    } catch (err) {
-      console.error("[PageEditor] Failed to deserialize:", err);
-    } finally {
-      setTimeout(() => {
-        isExternalUpdateRef.current = false;
-      }, 0);
-    }
-  }, [source, editor]);
+    },
+    [frontmatter, setSource]
+  );
 
   // Handle frontmatter changes
   const handleFrontmatterChange = useCallback(
@@ -163,39 +161,23 @@ export function PageEditor({
     [setFrontmatter]
   );
 
-  // Focus editor (called from frontmatter on Enter/ArrowDown)
-  const handleFocusEditor = useCallback(() => {
-    const ed = editorRef.current;
-    if (ed) {
-      ed.tf.focus();
-      ed.tf.select({ path: [0, 0], offset: 0 });
-    }
-  }, []);
+  // Cmd+S to force immediate save
+  useEffect(() => {
+    const handleKeyDown = (e: globalThis.KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key === "s") {
+        e.preventDefault();
+        e.stopPropagation();
+        if (readOnly) return;
 
-  // Handle ArrowUp from editor to navigate to subtitle
-  const handleEditorKeyDown = useCallback((e: React.KeyboardEvent) => {
-    if (e.key === "ArrowUp") {
-      const ed = editorRef.current;
-      if (!ed) return;
-
-      const { selection } = ed;
-      if (selection) {
-        const [start] = ed.api.edges(selection);
-        if (start.path[0] === 0 && start.offset === 0) {
-          e.preventDefault();
-          subtitleRef.current?.focus();
-          if (subtitleRef.current) {
-            const range = document.createRange();
-            const sel = window.getSelection();
-            range.selectNodeContents(subtitleRef.current);
-            range.collapse(false);
-            sel?.removeAllRanges();
-            sel?.addRange(range);
-          }
-        }
+        const markdown = editorRef.current?.getMarkdown() ?? "";
+        const newSource = serializeFrontmatter(frontmatter) + markdown;
+        lastSourceRef.current = newSource;
+        saveSourceNow(newSource);
       }
-    }
-  }, []);
+    };
+    window.addEventListener("keydown", handleKeyDown, { capture: true });
+    return () => window.removeEventListener("keydown", handleKeyDown, { capture: true });
+  }, [readOnly, frontmatter, saveSourceNow]);
 
   // Loading state
   if (isLoading) {
@@ -219,55 +201,18 @@ export function PageEditor({
   }
 
   return (
-    <div className={cn("h-full flex flex-col", className)}>
-      <StdlibProvider>
-        <Plate editor={editor} onChange={handleChange}>
-          {/* Fixed toolbar at top */}
-          <FixedToolbar>
-            <FixedToolbarButtons />
-          </FixedToolbar>
-
-          <div className="relative h-full cursor-text overflow-y-auto">
-            {/* Frontmatter header */}
-            <FrontmatterHeader
-              frontmatter={frontmatter}
-              onFrontmatterChange={handleFrontmatterChange}
-              onFocusEditor={handleFocusEditor}
-              subtitleRef={subtitleRef}
-            />
-
-            {/* Saving indicator */}
-            {isSaving && (
-              <div className="absolute top-2 right-2 text-xs text-muted-foreground">
-                Saving...
-              </div>
-            )}
-
-            {/* Editor content */}
-            <PlateContent
-              className={cn(
-                "pt-4 pb-32 pl-16 pr-6 min-h-[200px] outline-none",
-                "prose prose-sm dark:prose-invert max-w-none",
-                "[&_h1]:mt-6 [&_h1]:mb-4 [&_h1]:text-3xl [&_h1]:font-bold",
-                "[&_h2]:mt-5 [&_h2]:mb-3 [&_h2]:text-2xl [&_h2]:font-semibold",
-                "[&_h3]:mt-4 [&_h3]:mb-2 [&_h3]:text-xl [&_h3]:font-semibold",
-                "[&_h4]:mt-3 [&_h4]:mb-2 [&_h4]:text-lg [&_h4]:font-medium",
-                "[&_h5]:mt-2 [&_h5]:mb-1 [&_h5]:text-base [&_h5]:font-medium",
-                "[&_h6]:mt-2 [&_h6]:mb-1 [&_h6]:text-sm [&_h6]:font-medium",
-                "[&_blockquote]:border-l-2 [&_blockquote]:border-muted-foreground/30 [&_blockquote]:pl-4 [&_blockquote]:italic",
-                "[&_pre]:bg-muted [&_pre]:p-3 [&_pre]:rounded-md [&_pre]:overflow-x-auto",
-                "[&_code]:bg-muted [&_code]:px-1 [&_code]:py-0.5 [&_code]:rounded [&_code]:text-sm",
-                "[&_a]:text-primary [&_a]:underline [&_a]:underline-offset-2",
-                "[&_img]:max-w-full [&_img]:rounded-md",
-                "[&_hr]:my-4 [&_hr]:border-border"
-              )}
-              placeholder="Start typing..."
-              readOnly={readOnly}
-              onKeyDown={handleEditorKeyDown}
-            />
-          </div>
-        </Plate>
-      </StdlibProvider>
-    </div>
+    <Editor
+      ref={editorRef}
+      value={content}
+      onChange={handleChange}
+      customBlocks={[SandboxedBlock, PromptBlock]}
+      plugins={[PageContextPlugin, ...AtKit]}
+      frontmatter={frontmatter}
+      onFrontmatterChange={handleFrontmatterChange}
+      isSaving={isSaving}
+      readOnly={readOnly}
+      className={className}
+      wrapper={EditorWrapper}
+    />
   );
 }

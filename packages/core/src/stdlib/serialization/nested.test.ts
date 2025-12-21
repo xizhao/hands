@@ -770,7 +770,7 @@ describe("LiveValue with template content", () => {
 
     const result = liveValueRule.serialize(plateElement, options);
 
-    expect(result.type).toBe("mdxJsxTextElement"); // No template content
+    expect(result.type).toBe("mdxJsxFlowElement"); // Always flow - paragraph handles inline
     expect(result.name).toBe("LiveValue");
     expect(result.children).toHaveLength(0);
   });
