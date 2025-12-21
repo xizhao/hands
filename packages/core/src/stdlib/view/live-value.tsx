@@ -32,7 +32,7 @@ import {
 import { assertReadOnlySQL } from "../sql-validation";
 import { LiveValueProvider } from "./charts/context";
 import { DataGrid } from "../data/data-grid";
-import { useMockData } from "../../test-utils/mock-data-provider";
+import { useLiveQuery } from "../query-provider";
 
 // ============================================================================
 // Display Type Selection
@@ -247,16 +247,11 @@ function LiveValueElement(props: PlateElementProps) {
   const selected = useSelected();
   const readOnly = useReadOnly();
 
-  const { query: _query, display, columns } = element;
+  const { query, display, columns, params } = element;
 
-  // Check for mock data (for testing) or use real query results
-  const mockData = useMockData();
-
-  // TODO: Use context provider for data fetching (will use _query)
-  // For now, use mock data if available, otherwise show placeholder
-  const data: Record<string, unknown>[] = mockData?.data ?? [];
-  const isLoading = mockData?.isLoading ?? false;
-  const error = mockData?.error ?? null;
+  // Execute query via provider (tRPC, REST, etc.)
+  const { data: queryData, isLoading, error } = useLiveQuery(query, params);
+  const data: Record<string, unknown>[] = queryData ?? [];
 
   // Mode: provider (children handle display) vs auto-display (we handle display)
   const isProviderMode = hasMeaningfulChildren(element);

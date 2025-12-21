@@ -16,6 +16,7 @@ import { useBlockCreation } from "./hooks/useBlockCreation";
 import { FixedToolbar } from "./ui/fixed-toolbar";
 import { FixedToolbarButtons } from "./ui/fixed-toolbar-buttons";
 import { PageContextPlugin } from "./plugins/page-context-kit";
+import { StdlibProvider } from "./plugins/stdlib-provider";
 
 // ============================================================================
 // Types
@@ -219,52 +220,54 @@ export function PageEditor({
 
   return (
     <div className={cn("h-full flex flex-col", className)}>
-      <Plate editor={editor} onChange={handleChange}>
-        {/* Fixed toolbar at top */}
-        <FixedToolbar>
-          <FixedToolbarButtons />
-        </FixedToolbar>
+      <StdlibProvider>
+        <Plate editor={editor} onChange={handleChange}>
+          {/* Fixed toolbar at top */}
+          <FixedToolbar>
+            <FixedToolbarButtons />
+          </FixedToolbar>
 
-        <div className="relative h-full cursor-text overflow-y-auto">
-          {/* Frontmatter header */}
-          <FrontmatterHeader
-            frontmatter={frontmatter}
-            onFrontmatterChange={handleFrontmatterChange}
-            onFocusEditor={handleFocusEditor}
-            subtitleRef={subtitleRef}
-          />
+          <div className="relative h-full cursor-text overflow-y-auto">
+            {/* Frontmatter header */}
+            <FrontmatterHeader
+              frontmatter={frontmatter}
+              onFrontmatterChange={handleFrontmatterChange}
+              onFocusEditor={handleFocusEditor}
+              subtitleRef={subtitleRef}
+            />
 
-          {/* Saving indicator */}
-          {isSaving && (
-            <div className="absolute top-2 right-2 text-xs text-muted-foreground">
-              Saving...
-            </div>
-          )}
-
-          {/* Editor content */}
-          <PlateContent
-            className={cn(
-              "pt-4 pb-32 pl-16 pr-6 min-h-[200px] outline-none",
-              "prose prose-sm dark:prose-invert max-w-none",
-              "[&_h1]:mt-6 [&_h1]:mb-4 [&_h1]:text-3xl [&_h1]:font-bold",
-              "[&_h2]:mt-5 [&_h2]:mb-3 [&_h2]:text-2xl [&_h2]:font-semibold",
-              "[&_h3]:mt-4 [&_h3]:mb-2 [&_h3]:text-xl [&_h3]:font-semibold",
-              "[&_h4]:mt-3 [&_h4]:mb-2 [&_h4]:text-lg [&_h4]:font-medium",
-              "[&_h5]:mt-2 [&_h5]:mb-1 [&_h5]:text-base [&_h5]:font-medium",
-              "[&_h6]:mt-2 [&_h6]:mb-1 [&_h6]:text-sm [&_h6]:font-medium",
-              "[&_blockquote]:border-l-2 [&_blockquote]:border-muted-foreground/30 [&_blockquote]:pl-4 [&_blockquote]:italic",
-              "[&_pre]:bg-muted [&_pre]:p-3 [&_pre]:rounded-md [&_pre]:overflow-x-auto",
-              "[&_code]:bg-muted [&_code]:px-1 [&_code]:py-0.5 [&_code]:rounded [&_code]:text-sm",
-              "[&_a]:text-primary [&_a]:underline [&_a]:underline-offset-2",
-              "[&_img]:max-w-full [&_img]:rounded-md",
-              "[&_hr]:my-4 [&_hr]:border-border"
+            {/* Saving indicator */}
+            {isSaving && (
+              <div className="absolute top-2 right-2 text-xs text-muted-foreground">
+                Saving...
+              </div>
             )}
-            placeholder="Start typing..."
-            readOnly={readOnly}
-            onKeyDown={handleEditorKeyDown}
-          />
-        </div>
-      </Plate>
+
+            {/* Editor content */}
+            <PlateContent
+              className={cn(
+                "pt-4 pb-32 pl-16 pr-6 min-h-[200px] outline-none",
+                "prose prose-sm dark:prose-invert max-w-none",
+                "[&_h1]:mt-6 [&_h1]:mb-4 [&_h1]:text-3xl [&_h1]:font-bold",
+                "[&_h2]:mt-5 [&_h2]:mb-3 [&_h2]:text-2xl [&_h2]:font-semibold",
+                "[&_h3]:mt-4 [&_h3]:mb-2 [&_h3]:text-xl [&_h3]:font-semibold",
+                "[&_h4]:mt-3 [&_h4]:mb-2 [&_h4]:text-lg [&_h4]:font-medium",
+                "[&_h5]:mt-2 [&_h5]:mb-1 [&_h5]:text-base [&_h5]:font-medium",
+                "[&_h6]:mt-2 [&_h6]:mb-1 [&_h6]:text-sm [&_h6]:font-medium",
+                "[&_blockquote]:border-l-2 [&_blockquote]:border-muted-foreground/30 [&_blockquote]:pl-4 [&_blockquote]:italic",
+                "[&_pre]:bg-muted [&_pre]:p-3 [&_pre]:rounded-md [&_pre]:overflow-x-auto",
+                "[&_code]:bg-muted [&_code]:px-1 [&_code]:py-0.5 [&_code]:rounded [&_code]:text-sm",
+                "[&_a]:text-primary [&_a]:underline [&_a]:underline-offset-2",
+                "[&_img]:max-w-full [&_img]:rounded-md",
+                "[&_hr]:my-4 [&_hr]:border-border"
+              )}
+              placeholder="Start typing..."
+              readOnly={readOnly}
+              onKeyDown={handleEditorKeyDown}
+            />
+          </div>
+        </Plate>
+      </StdlibProvider>
     </div>
   );
 }

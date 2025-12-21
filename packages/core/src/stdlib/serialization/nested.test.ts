@@ -49,6 +49,8 @@ import {
   CHECKBOX_KEY,
   LIVE_VALUE_KEY,
   ALERT_KEY,
+  BAR_CHART_KEY,
+  LINE_CHART_KEY,
 } from "../../types";
 
 // ============================================================================
@@ -79,6 +81,8 @@ function createMockConvertChildren(): (children: unknown[], deco: unknown, optio
           liveActionRule,
           liveValueRule,
           alertRule,
+          barChartRule,
+          lineChartRule,
         ];
 
         const rule = rules.find((r) => r.tagName === child.name);
@@ -154,6 +158,8 @@ function createMockConvertNodes(): (nodes: (TElement | TText)[], options: Serial
         { key: LIVE_ACTION_KEY, rule: liveActionRule },
         { key: LIVE_VALUE_KEY, rule: liveValueRule },
         { key: ALERT_KEY, rule: alertRule },
+        { key: BAR_CHART_KEY, rule: barChartRule },
+        { key: LINE_CHART_KEY, rule: lineChartRule },
       ];
 
       const ruleEntry = rules.find((r) => r.key === element.type);
@@ -1160,5 +1166,171 @@ describe("Complex nesting scenarios", () => {
     expect(result.type).toBe(CARD_KEY);
     expect(result.children).toHaveLength(1); // Default empty paragraph
     expect((result.children[0] as TElement).type).toBe("p");
+  });
+});
+
+// ============================================================================
+// LiveValue with Chart Children (Critical Roundtrip Test)
+// ============================================================================
+
+describe("LiveValue with chart children", () => {
+  it("deserializes LiveValue with BarChart child", () => {
+    const convertChildren = createMockConvertChildren();
+    const options: DeserializeOptions = { convertChildren };
+
+    // MDX: <LiveValue query="SELECT status, COUNT(*) as count FROM features GROUP BY status">
+    //        <BarChart xKey="status" yKey="count" />
+    //      </LiveValue>
+    const mdxNode = {
+      attributes: [
+        {
+          type: "mdxJsxAttribute",
+          name: "query",
+          value: "SELECT status, COUNT(*) as count FROM features GROUP BY status",
+        },
+      ],
+      children: [
+        {
+          type: "mdxJsxFlowElement",
+          name: "BarChart",
+          attributes: [
+            { type: "mdxJsxAttribute", name: "xKey", value: "status" },
+            { type: "mdxJsxAttribute", name: "yKey", value: "count" },
+          ],
+          children: [],
+        },
+      ],
+    };
+
+    const result = liveValueRule.deserialize(mdxNode as any, undefined, options);
+
+    expect(result.type).toBe(LIVE_VALUE_KEY);
+    expect(result.query).toBe("SELECT status, COUNT(*) as count FROM features GROUP BY status");
+    // Should have BarChart as child
+    expect(result.children).toHaveLength(1);
+    const barChart = result.children[0] as TElement;
+    expect(barChart.type).toBe(BAR_CHART_KEY);
+    expect((barChart as any).xKey).toBe("status");
+    expect((barChart as any).yKey).toBe("count");
+  });
+
+  it("serializes LiveValue with BarChart child", () => {
+    const convertNodes = createMockConvertNodes();
+    const options: SerializeOptions = { convertNodes };
+
+    const plateElement = {
+      type: LIVE_VALUE_KEY,
+      query: "SELECT status, COUNT(*) as count FROM tasks GROUP BY status",
+      display: "auto",
+      children: [
+        {
+          type: BAR_CHART_KEY,
+          xKey: "status",
+          yKey: "count",
+          height: 300,
+          children: [{ text: "" }],
+        },
+      ],
+    } as any;
+
+    const result = liveValueRule.serialize(plateElement, options);
+
+    expect(result.type).toBe("mdxJsxFlowElement");
+    expect(result.name).toBe("LiveValue");
+    // Should have BarChart child in serialized output
+    expect(result.children).toHaveLength(1);
+    const barChart = result.children[0] as any;
+    expect(barChart.name).toBe("BarChart");
+    expect(barChart.attributes.find((a: any) => a.name === "xKey")?.value).toBe("status");
+    expect(barChart.attributes.find((a: any) => a.name === "yKey")?.value).toBe("count");
+  });
+
+  it("roundtrips LiveValue with BarChart child correctly", () => {
+    const convertChildren = createMockConvertChildren();
+    const convertNodes = createMockConvertNodes();
+    const deserializeOptions: DeserializeOptions = { convertChildren };
+    const serializeOptions: SerializeOptions = { convertNodes };
+
+    // Original MDX structure
+    const originalMdx = {
+      attributes: [
+        {
+          type: "mdxJsxAttribute",
+          name: "query",
+          value: "SELECT category, SUM(amount) as total FROM sales GROUP BY category",
+        },
+      ],
+      children: [
+        {
+          type: "mdxJsxFlowElement",
+          name: "BarChart",
+          attributes: [
+            { type: "mdxJsxAttribute", name: "xKey", value: "category" },
+            { type: "mdxJsxAttribute", name: "yKey", value: "total" },
+            {
+              type: "mdxJsxAttribute",
+              name: "height",
+              value: { type: "mdxJsxAttributeValueExpression", value: "400" },
+            },
+          ],
+          children: [],
+        },
+      ],
+    };
+
+    // Deserialize: MDX → Plate
+    const plateElement = liveValueRule.deserialize(originalMdx as any, undefined, deserializeOptions);
+
+    expect(plateElement.type).toBe(LIVE_VALUE_KEY);
+    expect(plateElement.children).toHaveLength(1);
+    expect((plateElement.children[0] as TElement).type).toBe(BAR_CHART_KEY);
+
+    // Serialize: Plate → MDX
+    const serialized = liveValueRule.serialize(plateElement, serializeOptions);
+
+    expect(serialized.name).toBe("LiveValue");
+    expect(serialized.type).toBe("mdxJsxFlowElement");
+    // Critical: BarChart should be preserved in children
+    expect(serialized.children).toHaveLength(1);
+    const barChart = serialized.children[0] as any;
+    expect(barChart.name).toBe("BarChart");
+    expect(barChart.attributes.find((a: any) => a.name === "xKey")?.value).toBe("category");
+    expect(barChart.attributes.find((a: any) => a.name === "yKey")?.value).toBe("total");
+  });
+
+  it("handles LiveValue with LineChart child", () => {
+    const convertChildren = createMockConvertChildren();
+    const convertNodes = createMockConvertNodes();
+    const deserializeOptions: DeserializeOptions = { convertChildren };
+    const serializeOptions: SerializeOptions = { convertNodes };
+
+    const mdxNode = {
+      attributes: [
+        { type: "mdxJsxAttribute", name: "query", value: "SELECT date, revenue FROM sales" },
+      ],
+      children: [
+        {
+          type: "mdxJsxFlowElement",
+          name: "LineChart",
+          attributes: [
+            { type: "mdxJsxAttribute", name: "xKey", value: "date" },
+            { type: "mdxJsxAttribute", name: "yKey", value: "revenue" },
+          ],
+          children: [],
+        },
+      ],
+    };
+
+    // Deserialize
+    const plateElement = liveValueRule.deserialize(mdxNode as any, undefined, deserializeOptions);
+
+    expect(plateElement.children).toHaveLength(1);
+    expect((plateElement.children[0] as TElement).type).toBe(LINE_CHART_KEY);
+
+    // Serialize
+    const serialized = liveValueRule.serialize(plateElement, serializeOptions);
+
+    expect(serialized.children).toHaveLength(1);
+    expect((serialized.children[0] as any).name).toBe("LineChart");
   });
 });

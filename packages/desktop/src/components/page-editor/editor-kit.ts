@@ -29,10 +29,13 @@ import { AtKit } from "./plugins/at-kit";
 import { SandboxedBlockPlugin } from "./SandboxedBlock";
 import { TableKit } from "./plugins/table-kit";
 import { ToggleKit } from "./plugins/toggle-kit";
-import { LiveQueryKit } from "./plugins/live-query-kit";
 import { CardKit } from "./plugins/card-kit";
 import { MarkdownKit } from "./plugins/markdown-kit";
 import { PromptKit } from "./plugins/prompt-kit";
+
+// All stdlib plugins from core (LiveValue, LiveAction, charts, forms, etc.)
+// Desktop provides data fetching via StdlibProvider
+import { StdlibKit } from "@hands/core/stdlib";
 
 export const EditorKit = [
   // Page Context (for other plugins to access metadata)
@@ -45,9 +48,11 @@ export const EditorKit = [
   ...ToggleKit,
   ...CalloutKit,
   SandboxedBlockPlugin,
-  ...LiveQueryKit,
   ...CardKit,
   ...PromptKit,
+
+  // All stdlib components from core (LiveValue, LiveAction, charts, forms, etc.)
+  ...StdlibKit,
 
   // Marks
   ...BasicMarksKit,

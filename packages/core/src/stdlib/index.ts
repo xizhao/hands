@@ -40,6 +40,8 @@ export * from "./data";
 export * from "./sql-validation";
 // Re-export serialization rules and helpers
 export * from "./serialization";
+// Re-export query provider (for apps to implement data fetching)
+export * from "./query-provider";
 
 // Import kits
 import { ActionKit } from "./action";
@@ -58,6 +60,16 @@ import {
 } from "./view";
 
 /**
+ * Chart plugins only - for apps that provide their own LiveValue implementation.
+ */
+export const ChartKit = [
+  LineChartPlugin,
+  BarChartPlugin,
+  AreaChartPlugin,
+  PieChartPlugin,
+] as const;
+
+/**
  * View component plugins for Plate editor.
  */
 export const ViewKit = [
@@ -67,10 +79,7 @@ export const ViewKit = [
   ProgressPlugin,
   AlertPlugin,
   LoaderPlugin,
-  LineChartPlugin,
-  BarChartPlugin,
-  AreaChartPlugin,
-  PieChartPlugin,
+  ...ChartKit,
 ] as const;
 
 /**

@@ -17,6 +17,7 @@ import { createPlatePlugin, PlateElement, type PlateElementProps, useElement } f
 import { createContext, memo, useCallback, useContext, useMemo, useRef, useState } from "react";
 
 import { LIVE_ACTION_KEY, type LiveActionContextValue, type TLiveActionElement } from "../../types";
+import { useLiveMutation } from "../query-provider";
 
 // ============================================================================
 // Context
@@ -151,15 +152,16 @@ export function LiveAction({ sql, onExecute, children, className }: LiveActionPr
 
 /**
  * LiveAction Plate element component.
- * Requires an onExecute handler via context provider.
+ * Uses LiveQueryProvider for mutation execution.
  */
 function LiveActionElement(props: PlateElementProps) {
   const element = useElement<TLiveActionElement>();
-  const [isPending, setIsPending] = useState(false);
-  const [error, setError] = useState<Error | null>(null);
   const fieldsRef = useRef<Map<string, () => unknown>>(new Map());
 
-  const { sql, params: _params } = element;
+  const { sql } = element;
+
+  // Get mutation function from provider
+  const { mutate, isPending, error } = useLiveMutation();
 
   const registerField = useCallback((name: string, getValue: () => unknown) => {
     fieldsRef.current.set(name, getValue);
@@ -177,28 +179,16 @@ function LiveActionElement(props: PlateElementProps) {
     return values;
   }, []);
 
-  // TODO: Get onExecute from context provider
   const trigger = useCallback(async () => {
     if (!sql) {
       console.error("No SQL configured for this action");
       return;
     }
 
-    setIsPending(true);
-    setError(null);
-
-    try {
-      const formValues = getAllFormValues();
-      const substitutedSql = substituteFormBindings(sql, formValues);
-      // TODO: Execute via context provider
-      console.log("[LiveAction] Would execute:", substitutedSql);
-    } catch (err) {
-      const e = err instanceof Error ? err : new Error(String(err));
-      setError(e);
-    } finally {
-      setIsPending(false);
-    }
-  }, [sql, getAllFormValues]);
+    const formValues = getAllFormValues();
+    const substitutedSql = substituteFormBindings(sql, formValues);
+    await mutate(substitutedSql);
+  }, [sql, getAllFormValues, mutate]);
 
   const contextValue = useMemo<LiveActionContextValue>(
     () => ({ trigger, isPending, error, registerField, unregisterField }),
