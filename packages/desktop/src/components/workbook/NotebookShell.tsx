@@ -367,6 +367,19 @@ export function NotebookShell({ children }: NotebookShellProps) {
     };
   }, [isResizing]);
 
+  // Keyboard shortcut: Cmd/Ctrl+S to toggle sidebar pinned state
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key === "s") {
+        e.preventDefault();
+        setSidebarPinned((prev) => !prev);
+      }
+    };
+
+    document.addEventListener("keydown", handleKeyDown);
+    return () => document.removeEventListener("keydown", handleKeyDown);
+  }, []);
+
   // Workbook title ref
   const titleInputRef = useRef<HTMLSpanElement>(null);
 
@@ -934,6 +947,7 @@ export function NotebookShell({ children }: NotebookShellProps) {
               <div
                 onMouseEnter={handleMouseEnterLeftEdge}
                 onMouseLeave={handleMouseLeaveSidebar}
+                onDoubleClick={() => setSidebarPinned((prev) => !prev)}
                 style={{
                   width: sidebarShown || isResizing ? sidebarWidth : 24,
                 }}

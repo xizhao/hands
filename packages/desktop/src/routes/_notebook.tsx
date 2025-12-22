@@ -153,26 +153,39 @@ function NotebookLayout() {
     [clearNavigation, openWorkbook]
   );
 
-  // When no port, show clean loading state - minimal header only
-  // Keep it simple to avoid jarring transitions
+  // When no port, show clean loading state that matches NotebookShell structure
+  // This prevents layout shifts when transitioning to full UI
   if (!port) {
     return (
-      <div className="h-screen flex flex-col bg-background">
+      <div className="h-screen flex flex-col bg-background overflow-hidden relative before:absolute before:inset-0 before:bg-black/[0.03] before:dark:bg-black/[0.15] before:pointer-events-none">
+        {/* Match NotebookShell's header exactly */}
         <header
           data-tauri-drag-region
           className={cn(
-            "h-11 flex items-center pr-4 border-b border-border/50 bg-background shrink-0",
+            "h-10 flex items-center justify-between pr-4 pt-0.5 shrink-0",
             needsTrafficLightOffset ? "pl-[80px]" : "pl-4"
           )}
         >
           <div className="flex items-center gap-1.5">
             <span className="w-2 h-2 rounded-full bg-muted-foreground/30 animate-pulse" />
-            <span className="text-sm text-muted-foreground">
+            <span className="text-sm font-medium text-muted-foreground">
               {currentWorkbook?.name ?? "Loading..."}
             </span>
           </div>
+          {/* Placeholder for right side buttons */}
+          <div className="flex items-center gap-1">
+            <div className="h-4 w-8 bg-muted/50 rounded animate-pulse" />
+            <div className="h-4 w-8 bg-muted/50 rounded animate-pulse" />
+          </div>
         </header>
-        <div className="flex-1" />
+        {/* Content skeleton matching index page exactly */}
+        <div className="flex-1 flex items-center justify-center">
+          <div className="space-y-3 w-48">
+            <div className="h-3 bg-muted/50 rounded animate-pulse" />
+            <div className="h-3 bg-muted/50 rounded animate-pulse w-3/4" />
+            <div className="h-3 bg-muted/50 rounded animate-pulse w-1/2" />
+          </div>
+        </div>
       </div>
     );
   }

@@ -1,7 +1,6 @@
 import { AnimatePresence, motion } from "framer-motion";
 import {
   AlertCircle,
-  Brain,
   Check,
   CheckCircle2,
   ChevronDown,
@@ -908,56 +907,42 @@ const TextContent = memo(
 
 TextContent.displayName = "TextContent";
 
-// Collapsible reasoning section
+// Minimal inline reasoning - shows duration, expandable to see text
 const ReasoningContent = memo(
   ({ part, compact = false }: { part: ReasoningPart; compact?: boolean }) => {
     const [expanded, setExpanded] = useState(false);
-
-    const labelFont = compact ? MSG_FONT.labelCompact : MSG_FONT.label;
+    const metaFont = compact ? MSG_FONT.metaCompact : MSG_FONT.meta;
 
     // Don't render if no text
     if (!part.text || part.text.trim().length === 0) {
       return null;
     }
 
-    const preview = part.text.slice(0, 50).replace(/\n/g, " ");
+    // Calculate duration from time.start and time.end
+    const duration = part.time?.end && part.time?.start
+      ? Math.round((part.time.end - part.time.start) / 1000)
+      : null;
+
+    const durationText = duration !== null
+      ? `Reasoned for ${duration}s`
+      : "Reasoning...";
 
     return (
-      <div className="my-1">
-        <button
-          onClick={() => setExpanded(!expanded)}
-          className={cn(
-            "flex items-center gap-1.5 px-2 py-1 rounded-lg transition-colors",
-            "text-purple-400/70 hover:text-purple-400 hover:bg-purple-500/10",
-            labelFont,
-          )}
-        >
-          <Brain className="h-3 w-3" />
-          <span className="italic">
-            {expanded ? "Reasoning" : preview + (part.text.length > 50 ? "..." : "")}
-          </span>
-          {expanded ? <ChevronDown className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />}
-        </button>
-
-        <AnimatePresence>
-          {expanded && (
-            <motion.div
-              initial={{ height: 0, opacity: 0 }}
-              animate={{ height: "auto", opacity: 1 }}
-              exit={{ height: 0, opacity: 0 }}
-              className="overflow-hidden"
-            >
-              <pre
-                className={cn(
-                  "mt-1 ml-2 p-2 rounded-lg bg-purple-500/10 font-mono text-purple-300/70 whitespace-pre-wrap max-h-48 overflow-auto",
-                  labelFont,
-                )}
-              >
-                {part.text}
-              </pre>
-            </motion.div>
-          )}
-        </AnimatePresence>
+      <div
+        className={cn(
+          "text-muted-foreground/40 italic cursor-pointer hover:text-muted-foreground/60 transition-colors",
+          metaFont,
+        )}
+        onClick={() => setExpanded(!expanded)}
+      >
+        {expanded ? (
+          <div>
+            <span className="not-italic">{durationText}</span>
+            <div className="mt-1 whitespace-pre-wrap text-muted-foreground/30">{part.text}</div>
+          </div>
+        ) : (
+          <span>{durationText}</span>
+        )}
       </div>
     );
   },
@@ -1235,16 +1220,16 @@ export const ChatMessage = memo(
 
     return (
       <motion.div
-        initial={{ opacity: 0, y: 20 }}
+        initial={{ opacity: 0, y: -10 }}
         animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.25, ease: "easeOut" }}
+        transition={{ duration: 0.2, ease: "easeOut" }}
         className={cn("flex w-full", isUser ? "justify-end" : "justify-start")}
       >
-        {/* User message - on right, corner angled down toward input */}
+        {/* User message - on right, corner points up (toward newer messages) */}
         {isUser && (
           <div
             className={cn(
-              "max-w-[85%] rounded-2xl rounded-br-sm shadow-sm",
+              "max-w-[85%] rounded-2xl rounded-tr-sm shadow-sm",
               "bg-primary text-primary-foreground",
               compact ? "px-2.5 py-1.5" : "px-3.5 py-2",
             )}
@@ -1261,107 +1246,92 @@ export const ChatMessage = memo(
           </div>
         )}
 
-        {/* Hands/Assistant message - on left, corner angled down toward input */}
+        {/* Hands/Assistant message - no bubble styling, plain text */}
         {isAssistant && (
-          <div className="group max-w-[90%] flex items-center gap-2">
-            <div
-              className={cn(
-                "rounded-2xl rounded-bl-sm shadow-sm",
-                "bg-muted text-foreground",
-                compact ? "px-2.5 py-1.5" : "px-3.5 py-2",
+          <div className="max-w-full">
+            <div className="space-y-0.5">
+              {groupedContent.map((group, idx) => {
+                if (group.type === "text") {
+                  const textPart = group.items[0] as TextPart;
+                  return (
+                    <TextContent
+                      key={idx}
+                      text={textPart.text}
+                      isStreaming={isStreaming && idx === groupedContent.length - 1}
+                      compact={compact}
+                    />
+                  );
+                }
+                if (group.type === "tools") {
+                  // Separate task tools from other tools
+                  const taskTools = group.items.filter(
+                    (p) => (p as ToolPart).tool.toLowerCase() === "task",
+                  ) as ToolPart[];
+                  const otherTools = group.items.filter(
+                    (p) => (p as ToolPart).tool.toLowerCase() !== "task",
+                  ) as ToolPart[];
+
+                  return (
+                    <div key={idx} className="space-y-0.5">
+                      {/* Render task tools with TaskToolSummary */}
+                      {taskTools.map((part) => (
+                        <TaskToolSummary
+                          key={part.id}
+                          part={part}
+                          sessionId={message.info.sessionID}
+                          compact={compact}
+                        />
+                      ))}
+                      {/* Show collapsible thread if 3+ other tools, otherwise show inline */}
+                      {otherTools.length >= 3 ? (
+                        <ToolThread tools={otherTools} compact={compact} />
+                      ) : (
+                        otherTools.map((part) => (
+                          <ToolInvocation key={part.id} part={part} compact={compact} />
+                        ))
+                      )}
+                    </div>
+                  );
+                }
+                if (group.type === "reasoning") {
+                  return (
+                    <ReasoningContent
+                      key={idx}
+                      part={group.items[0] as ReasoningPart}
+                      compact={compact}
+                    />
+                  );
+                }
+                if (group.type === "agent") {
+                  const agentPart = group.items[0] as AgentPart;
+                  return (
+                    <SubagentSummary
+                      key={idx}
+                      agentName={agentPart.name}
+                      sessionId={message.info.sessionID}
+                      messageId={agentPart.messageID}
+                      compact={compact}
+                    />
+                  );
+                }
+                return null;
+              })}
+
+              {/* Error display */}
+              {assistantInfo?.error && (
+                <div
+                  className={cn(
+                    "flex items-center gap-2 text-red-400 px-2 py-1 rounded-lg bg-red-500/10",
+                    compact ? MSG_FONT.codeCompact : MSG_FONT.code,
+                  )}
+                >
+                  <AlertCircle className="h-3 w-3" />
+                  <span>
+                    {(assistantInfo.error.data?.message as string) || assistantInfo.error.name}
+                  </span>
+                </div>
               )}
-            >
-              <div className="space-y-0.5">
-                {groupedContent.map((group, idx) => {
-                  if (group.type === "text") {
-                    const textPart = group.items[0] as TextPart;
-                    return (
-                      <TextContent
-                        key={idx}
-                        text={textPart.text}
-                        isStreaming={isStreaming && idx === groupedContent.length - 1}
-                        compact={compact}
-                      />
-                    );
-                  }
-                  if (group.type === "tools") {
-                    // Separate task tools from other tools
-                    const taskTools = group.items.filter(
-                      (p) => (p as ToolPart).tool.toLowerCase() === "task",
-                    ) as ToolPart[];
-                    const otherTools = group.items.filter(
-                      (p) => (p as ToolPart).tool.toLowerCase() !== "task",
-                    ) as ToolPart[];
-
-                    return (
-                      <div key={idx} className="space-y-0.5">
-                        {/* Render task tools with TaskToolSummary */}
-                        {taskTools.map((part) => (
-                          <TaskToolSummary
-                            key={part.id}
-                            part={part}
-                            sessionId={message.info.sessionID}
-                            compact={compact}
-                          />
-                        ))}
-                        {/* Show collapsible thread if 3+ other tools, otherwise show inline */}
-                        {otherTools.length >= 3 ? (
-                          <ToolThread tools={otherTools} compact={compact} />
-                        ) : (
-                          otherTools.map((part) => (
-                            <ToolInvocation key={part.id} part={part} compact={compact} />
-                          ))
-                        )}
-                      </div>
-                    );
-                  }
-                  if (group.type === "reasoning") {
-                    return (
-                      <ReasoningContent
-                        key={idx}
-                        part={group.items[0] as ReasoningPart}
-                        compact={compact}
-                      />
-                    );
-                  }
-                  if (group.type === "agent") {
-                    const agentPart = group.items[0] as AgentPart;
-                    return (
-                      <SubagentSummary
-                        key={idx}
-                        agentName={agentPart.name}
-                        sessionId={message.info.sessionID}
-                        messageId={agentPart.messageID}
-                        compact={compact}
-                      />
-                    );
-                  }
-                  return null;
-                })}
-
-                {/* Error display */}
-                {assistantInfo?.error && (
-                  <div
-                    className={cn(
-                      "flex items-center gap-2 text-red-400 px-2 py-1 rounded-lg bg-red-500/10",
-                      compact ? MSG_FONT.codeCompact : MSG_FONT.code,
-                    )}
-                  >
-                    <AlertCircle className="h-3 w-3" />
-                    <span>
-                      {(assistantInfo.error.data?.message as string) || assistantInfo.error.name}
-                    </span>
-                  </div>
-                )}
-              </div>
             </div>
-
-            {/* Cost indicator - shown to the right of the bubble on hover */}
-            {assistantInfo && !isStreaming && (
-              <div className="shrink-0">
-                <CostIndicator info={assistantInfo} compact={compact} />
-              </div>
-            )}
           </div>
         )}
       </motion.div>

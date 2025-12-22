@@ -78,9 +78,28 @@ export function UnifiedSidebar({ compact = false, onSelectItem }: UnifiedSidebar
   const [isUploadingFile, setIsUploadingFile] = useState(false);
   const [showBackgroundSessions, setShowBackgroundSessions] = useState(false);
   const [isInputExpanded, setIsInputExpanded] = useState(false);
+  const [containerWidth, setContainerWidth] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
   const expandedInputRef = useRef<HTMLInputElement>(null);
-  const messagesEndRef = useRef<HTMLDivElement>(null);
+  const messagesContainerRef = useRef<HTMLDivElement>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  // Track container width to skip popover when wide enough
+  const POPOVER_WIDTH = 400;
+  const needsPopover = containerWidth < POPOVER_WIDTH;
+
+  useEffect(() => {
+    const container = containerRef.current;
+    if (!container) return;
+
+    const observer = new ResizeObserver((entries) => {
+      for (const entry of entries) {
+        setContainerWidth(entry.contentRect.width);
+      }
+    });
+    observer.observe(container);
+    return () => observer.disconnect();
+  }, []);
 
   const status = activeSessionId ? sessionStatuses[activeSessionId] : null;
   const isBusy = status?.type === "busy" || status?.type === "running";
@@ -197,10 +216,13 @@ export function UnifiedSidebar({ compact = false, onSelectItem }: UnifiedSidebar
     }
   }, [chatState, isConnected, isBusy, handleSubmit]);
 
-  // Auto-scroll
+  // Auto-scroll to top (newest messages are at top with flex-col-reverse)
+  // Triggers both when messages change and when switching threads
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages.length]);
+    if (messagesContainerRef.current) {
+      messagesContainerRef.current.scrollTo({ top: 0, behavior: "smooth" });
+    }
+  }, [messages.length, activeSessionId]);
 
   // Session management
   const foregroundSessions = sessions.filter((s) => {
@@ -239,7 +261,14 @@ export function UnifiedSidebar({ compact = false, onSelectItem }: UnifiedSidebar
   const sendError = sendMessage.error || createSession.error;
   const displayError = sendError || chatState.sessionError;
 
-  const handleSwitchThread = (sessionId: string) => setActiveSession(sessionId);
+  const handleSwitchThread = (sessionId: string) => {
+    // Toggle off if clicking the active session to go back to browse view
+    if (sessionId === activeSessionId) {
+      setActiveSession(null);
+    } else {
+      setActiveSession(sessionId);
+    }
+  };
   const handleDeleteThread = (sessionId: string, e: React.MouseEvent) => {
     e.stopPropagation();
     deleteSession.mutate(sessionId);
@@ -254,9 +283,9 @@ export function UnifiedSidebar({ compact = false, onSelectItem }: UnifiedSidebar
     : "Search or ask anything...";
 
   return (
-    <div className="flex flex-col h-full">
+    <div ref={containerRef} className="flex flex-col h-full">
       {/* Input bar - always visible */}
-      <div className={cn("shrink-0 py-2 relative", compact ? "px-2" : "px-3")}>
+      <div className={cn("shrink-0 py-2", compact ? "px-2" : "px-3")}>
         {displayError && (
           <div className="flex items-center gap-1.5 px-2 py-1.5 mb-2 rounded-md bg-red-500/10 text-xs text-red-500">
             <span className="truncate">
@@ -287,105 +316,147 @@ export function UnifiedSidebar({ compact = false, onSelectItem }: UnifiedSidebar
           </div>
         )}
 
-        <Popover open={isInputExpanded} onOpenChange={setIsInputExpanded}>
-          <PopoverAnchor asChild>
-            <div
-              className="flex items-center gap-1.5 bg-background rounded-xl px-2 py-1.5 border border-border/40 cursor-text"
-              onClick={() => setIsInputExpanded(true)}
-            >
-              <ChatSettings>
-                <Button variant="ghost" size="icon" className={cn("h-7 w-7 shrink-0 rounded-lg", !isConnected && "text-red-400")} onClick={(e) => e.stopPropagation()}>
-                  <Hand className="h-4 w-4" />
-                </Button>
-              </ChatSettings>
+        {/* Input bar - inline when wide enough, popover when narrow */}
+        {needsPopover ? (
+          <Popover open={isInputExpanded} onOpenChange={setIsInputExpanded}>
+            <PopoverAnchor asChild>
+              <div
+                className="flex items-center gap-1.5 bg-background rounded-xl px-2 py-1.5 border border-border/40 cursor-text transition-all hover:border-border/60 hover:shadow-sm"
+                onClick={() => setIsInputExpanded(true)}
+              >
+                <ChatSettings>
+                  <Button variant="ghost" size="icon" className={cn("h-7 w-7 shrink-0 rounded-lg", !isConnected && "text-red-400")} onClick={(e) => e.stopPropagation()}>
+                    <Hand className="h-4 w-4" />
+                  </Button>
+                </ChatSettings>
 
-              <div className={cn(
-                "flex-1 min-w-0 py-0.5 text-sm overflow-hidden text-ellipsis whitespace-nowrap",
-                input ? "text-foreground" : "text-muted-foreground/50"
-              )}>
-                {input || placeholder}
+                <div className={cn(
+                  "flex-1 min-w-0 py-0.5 text-sm overflow-hidden text-ellipsis whitespace-nowrap",
+                  input ? "text-foreground" : "text-muted-foreground/50"
+                )}>
+                  {input || placeholder}
+                </div>
+
+                {isBusy ? (
+                  <Button variant="ghost" size="icon" className="h-6 w-6 shrink-0 rounded-full" onClick={(e) => { e.stopPropagation(); handleAbort(); }}>
+                    <Square className="h-3 w-3" />
+                  </Button>
+                ) : hasContent ? (
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-6 w-6 shrink-0 rounded-full bg-primary text-primary-foreground hover:bg-primary/90"
+                    disabled={!isConnected || sendMessage.isPending || createSession.isPending || isUploadingFile}
+                    onClick={(e) => { e.stopPropagation(); handleSubmit(); }}
+                  >
+                    {sendMessage.isPending || createSession.isPending || isUploadingFile ? (
+                      <Loader2 className="h-3 w-3 animate-spin" />
+                    ) : (
+                      <ArrowUp className="h-3 w-3" />
+                    )}
+                  </Button>
+                ) : null}
               </div>
+            </PopoverAnchor>
 
-              {isBusy ? (
-                <Button variant="ghost" size="icon" className="h-6 w-6 shrink-0 rounded-full" onClick={(e) => { e.stopPropagation(); handleAbort(); }}>
-                  <Square className="h-3 w-3" />
-                </Button>
-              ) : hasContent ? (
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="h-6 w-6 shrink-0 rounded-full bg-primary text-primary-foreground hover:bg-primary/90"
-                  disabled={!isConnected || sendMessage.isPending || createSession.isPending || isUploadingFile}
-                  onClick={(e) => { e.stopPropagation(); handleSubmit(); }}
-                >
-                  {sendMessage.isPending || createSession.isPending || isUploadingFile ? (
-                    <Loader2 className="h-3 w-3 animate-spin" />
-                  ) : (
-                    <ArrowUp className="h-3 w-3" />
-                  )}
-                </Button>
-              ) : null}
-            </div>
-          </PopoverAnchor>
+            <PopoverContent
+              align="start"
+              side="bottom"
+              sideOffset={-42}
+              className="w-[400px] p-0 border-border bg-background rounded-xl shadow-lg"
+              onOpenAutoFocus={(e) => {
+                e.preventDefault();
+                expandedInputRef.current?.focus();
+              }}
+            >
+              <div className="flex items-center gap-1.5 px-2 py-1.5">
+                <ChatSettings>
+                  <Button variant="ghost" size="icon" className={cn("h-7 w-7 shrink-0 rounded-lg", !isConnected && "text-red-400")}>
+                    <Hand className="h-4 w-4" />
+                  </Button>
+                </ChatSettings>
 
-          <PopoverContent
-            align="start"
-            side="bottom"
-            sideOffset={-42}
-            className="w-[400px] p-0 border-border bg-background rounded-xl shadow-lg"
-            onOpenAutoFocus={(e) => {
-              e.preventDefault();
-              expandedInputRef.current?.focus();
-            }}
-          >
-            <div className="flex items-center gap-1.5 px-2 py-1.5">
-              <ChatSettings>
-                <Button variant="ghost" size="icon" className={cn("h-7 w-7 shrink-0 rounded-lg", !isConnected && "text-red-400")}>
-                  <Hand className="h-4 w-4" />
-                </Button>
-              </ChatSettings>
-
-              <input
-                ref={expandedInputRef}
-                type="text"
-                value={input}
-                onChange={(e) => setInput(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === "Escape") {
-                    setIsInputExpanded(false);
-                  } else {
-                    handleKeyDown(e);
-                    if (e.key === "Enter" && !e.shiftKey) {
+                <input
+                  ref={expandedInputRef}
+                  type="text"
+                  value={input}
+                  onChange={(e) => setInput(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Escape") {
                       setIsInputExpanded(false);
+                    } else {
+                      handleKeyDown(e);
+                      if (e.key === "Enter" && !e.shiftKey) {
+                        setIsInputExpanded(false);
+                      }
                     }
-                  }
-                }}
-                placeholder={placeholder}
-                className="flex-1 min-w-0 bg-transparent text-sm placeholder:text-muted-foreground/50 focus:outline-none"
-              />
+                  }}
+                  placeholder={placeholder}
+                  className="flex-1 min-w-0 bg-transparent text-sm placeholder:text-muted-foreground/50 focus:outline-none"
+                />
 
-              {isBusy ? (
-                <Button variant="ghost" size="icon" className="h-6 w-6 shrink-0 rounded-full" onClick={handleAbort}>
-                  <Square className="h-3 w-3" />
-                </Button>
-              ) : hasContent ? (
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="h-6 w-6 shrink-0 rounded-full bg-primary text-primary-foreground hover:bg-primary/90"
-                  disabled={!isConnected || sendMessage.isPending || createSession.isPending || isUploadingFile}
-                  onClick={() => { handleSubmit(); setIsInputExpanded(false); }}
-                >
-                  {sendMessage.isPending || createSession.isPending || isUploadingFile ? (
-                    <Loader2 className="h-3 w-3 animate-spin" />
-                  ) : (
-                    <ArrowUp className="h-3 w-3" />
-                  )}
-                </Button>
-              ) : null}
-            </div>
-          </PopoverContent>
-        </Popover>
+                {isBusy ? (
+                  <Button variant="ghost" size="icon" className="h-6 w-6 shrink-0 rounded-full" onClick={handleAbort}>
+                    <Square className="h-3 w-3" />
+                  </Button>
+                ) : hasContent ? (
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-6 w-6 shrink-0 rounded-full bg-primary text-primary-foreground hover:bg-primary/90"
+                    disabled={!isConnected || sendMessage.isPending || createSession.isPending || isUploadingFile}
+                    onClick={() => { handleSubmit(); setIsInputExpanded(false); }}
+                  >
+                    {sendMessage.isPending || createSession.isPending || isUploadingFile ? (
+                      <Loader2 className="h-3 w-3 animate-spin" />
+                    ) : (
+                      <ArrowUp className="h-3 w-3" />
+                    )}
+                  </Button>
+                ) : null}
+              </div>
+            </PopoverContent>
+          </Popover>
+        ) : (
+          /* Wide mode - inline input, no popover */
+          <div className="flex items-center gap-1.5 bg-background rounded-xl px-2 py-1.5 border border-border/40">
+            <ChatSettings>
+              <Button variant="ghost" size="icon" className={cn("h-7 w-7 shrink-0 rounded-lg", !isConnected && "text-red-400")}>
+                <Hand className="h-4 w-4" />
+              </Button>
+            </ChatSettings>
+
+            <input
+              ref={inputRef}
+              type="text"
+              value={input}
+              onChange={(e) => setInput(e.target.value)}
+              onKeyDown={handleKeyDown}
+              placeholder={placeholder}
+              className="flex-1 min-w-0 bg-transparent text-sm placeholder:text-muted-foreground/50 focus:outline-none"
+            />
+
+            {isBusy ? (
+              <Button variant="ghost" size="icon" className="h-6 w-6 shrink-0 rounded-full" onClick={handleAbort}>
+                <Square className="h-3 w-3" />
+              </Button>
+            ) : hasContent ? (
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-6 w-6 shrink-0 rounded-full bg-primary text-primary-foreground hover:bg-primary/90"
+                disabled={!isConnected || sendMessage.isPending || createSession.isPending || isUploadingFile}
+                onClick={handleSubmit}
+              >
+                {sendMessage.isPending || createSession.isPending || isUploadingFile ? (
+                  <Loader2 className="h-3 w-3 animate-spin" />
+                ) : (
+                  <ArrowUp className="h-3 w-3" />
+                )}
+              </Button>
+            ) : null}
+          </div>
+        )}
       </div>
 
       {/* Session chips */}
@@ -463,21 +534,18 @@ export function UnifiedSidebar({ compact = false, onSelectItem }: UnifiedSidebar
       )}
 
       {/* Content: Chat messages OR Browse */}
-      <div className="flex-1 overflow-y-auto">
+      <div ref={messagesContainerRef} className="flex-1 overflow-y-auto">
         {showChat ? (
-          // Chat messages
-          <div className={cn("space-y-1", compact ? "p-2" : "p-3")}>
+          // Chat messages - reversed (newest on top), thinking state at bottom
+          <div className={cn("flex flex-col-reverse gap-1", compact ? "p-2" : "p-3")}>
             {messages.map((message, idx) => (
               <ChatMessage key={message.info.id || idx} message={message} compact />
             ))}
             {waitingForResponse && (
-              <motion.div initial={{ opacity: 0, y: 5 }} animate={{ opacity: 1, y: 0 }} className="flex justify-start">
-                <div className="px-2.5 py-1.5 rounded-lg rounded-tl-sm bg-muted">
-                  <ShimmerText text={activeForm || "Thinking..."} className="text-xs" />
-                </div>
+              <motion.div initial={{ opacity: 0, y: 5 }} animate={{ opacity: 1, y: 0 }}>
+                <ShimmerText text={activeForm || "Thinking..."} className="text-xs text-muted-foreground" />
               </motion.div>
             )}
-            <div ref={messagesEndRef} />
           </div>
         ) : (
           // Browse view - NotebookSidebar with filter query
