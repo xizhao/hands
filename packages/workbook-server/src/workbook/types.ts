@@ -59,6 +59,8 @@ export interface DiscoveredPage {
   path: string;
   /** File extension (.md, .mdx, .plate.json) */
   ext: string;
+  /** Parent directory (e.g., "blocks", "docs", or "") */
+  parentDir: string;
 }
 
 // ============================================================================

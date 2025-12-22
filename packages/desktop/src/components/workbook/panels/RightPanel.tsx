@@ -1,5 +1,5 @@
 /**
- * RightPanel - Overlay sliding panel for Sources, Blocks, and Settings
+ * RightPanel - Overlay sliding panel for Sources, Database, Settings, and Alerts
  * Darkens the app and slides over on top of everything including chat
  */
 
@@ -20,9 +20,9 @@ export function RightPanel() {
     ? {
         sources: "Sources",
         database: "Database",
-        blocks: "Blocks",
         settings: "Settings",
         alerts: "Alerts",
+        blocks: "Blocks",
       }[rightPanel]
     : "";
 
@@ -66,9 +66,9 @@ export function RightPanel() {
             <div className="flex-1 overflow-y-auto">
               {rightPanel === "sources" && <SourcesPanel />}
               {rightPanel === "database" && <DatabasePanel />}
-              {rightPanel === "blocks" && <BlocksPanel />}
               {rightPanel === "settings" && <SettingsPanel />}
               {rightPanel === "alerts" && <AlertsPanel />}
+              {rightPanel === "blocks" && <BlocksPanel />}
             </div>
           </motion.div>
         </>

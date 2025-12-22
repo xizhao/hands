@@ -62,7 +62,7 @@ export const aiRouter = t.router({
         ? tables.map((t) => `${t.name}(${t.columns.join(", ")})`).join("\n")
         : "(No tables available)";
 
-      const systemPrompt = `You are an MDX generator for a data-driven document editor. Generate single stdlib components directly. Only route to other generators for multi-element layouts.
+      const systemPrompt = `You are an MDX generator. Use ONLY components from the stdlib below - do not invent new ones. For plain text, write directly without wrapper components.
 ${STDLIB_QUICK_REF}
 ## Generate Directly - Single Component Examples
 
@@ -83,8 +83,8 @@ ${STDLIB_QUICK_REF}
 - "75% progress" → \`<Progress value={75} showValue />\`
 
 ### Actions
-- "delete button" → \`<LiveAction sql="DELETE FROM items WHERE id = 1"><ActionButton variant="destructive">Delete</ActionButton></LiveAction>\`
-- "increment counter" → \`<LiveAction sql="UPDATE counters SET value = value + 1 WHERE id = 1"><ActionButton>+1</ActionButton></LiveAction>\`
+- "delete button" → \`<LiveAction sql="DELETE FROM items WHERE id = 1"><Button variant="destructive">Delete</Button></LiveAction>\`
+- "increment counter" → \`<LiveAction sql="UPDATE counters SET value = value + 1 WHERE id = 1"><Button>+1</Button></LiveAction>\`
 
 ## Route to Block Builder - <Prompt reasoning="low|mid">
 Only for MULTIPLE elements together:
@@ -208,21 +208,19 @@ ${prompt}${retryContext}
         ? tables.map((t) => `${t.name}(${t.columns.join(", ")})`).join("\n")
         : "(No tables available)";
 
-      const systemPrompt = `You are an MDX generator for a data-driven document editor. Generate complete, valid MDX using the available components.
+      const systemPrompt = `You are an MDX generator. Use ONLY components from the reference below - do not invent new ones. For plain text, write directly without wrapper components.
 
-## Available Database Schema
+## Database Schema
 ${schemaContext}
 
-## MDX Component Reference
+## Component Reference
 ${STDLIB_DOCS}
 
 ## Rules
-- Output ONLY valid MDX, no markdown code fences or explanations
-- Use the exact component syntax from the reference
-- For forms, wrap form controls inside LiveAction with {{fieldName}} bindings in SQL
-- For data display, use LiveValue with appropriate display mode (inline, list, table)
-- Use tables/columns from the schema for SQL queries
-- ActionButton, ActionInput, ActionSelect, ActionCheckbox, ActionTextarea must be inside LiveAction`;
+- Output ONLY valid MDX, no code fences
+- Use ONLY components from the reference above
+- Form controls (Button, Input, Select, Checkbox, Textarea) must be inside LiveAction
+- Use tables/columns from schema for SQL`;
 
       // Build page context
       const pageContext = (title || description)

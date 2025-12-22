@@ -1,7 +1,7 @@
 'use client';
 
-import { KEYS } from 'platejs';
-import { useEditorRef, useSelectionFragmentProp } from 'platejs/react';
+import { KEYS, RangeApi } from 'platejs';
+import { useEditorRef, useEditorSelection, useSelectionFragmentProp } from 'platejs/react';
 import * as React from 'react';
 import { useCallback, useState } from 'react';
 
@@ -21,6 +21,10 @@ export function FontColorToolbarButton(
   props: React.ComponentProps<typeof DropdownMenu>
 ) {
   const editor = useEditorRef();
+  const selection = useEditorSelection();
+
+  // Disable when no selection or selection is collapsed
+  const isDisabled = !selection || RangeApi.isCollapsed(selection);
 
   const color = useSelectionFragmentProp({
     key: KEYS.color,
@@ -94,8 +98,8 @@ export function FontColorToolbarButton(
 
   return (
     <DropdownMenu modal={false} {...props} onOpenChange={onOpenChange}>
-      <DropdownMenuTrigger asChild>
-        <ToolbarButton isDropdown pressed={false} tooltip="Color">
+      <DropdownMenuTrigger asChild disabled={isDisabled}>
+        <ToolbarButton isDropdown pressed={false} tooltip="Color" disabled={isDisabled}>
           <div
             className="size-4 rounded-full"
             style={{

@@ -16,6 +16,33 @@ The stdlib provides three categories of components:
 
 Display-only components that render live data from SQL queries.
 
+### Input
+
+Text input with optional masking and automatic validation.
+
+**Example:**
+```tsx
+<Input name="email" label="Email" placeholder="you@example.com" />
+<Input name="phone" label="Phone" mask="phone" />
+<Input name="card" label="Card" mask="creditCard" />
+<Input name="amount" label="Amount" mask="currency" />
+```
+
+### Tabs
+
+Tabbed navigation for organizing content into switchable panels. Use for dashboards, settings pages, or any content that benefits from tab navigation.
+
+**Keywords:** tabs, navigation, panels, switch, organize, sections
+
+**Example:**
+```tsx
+<Tabs defaultValue="overview">
+  <Tab value="overview" label="Overview">Overview content here</Tab>
+  <Tab value="metrics" label="Metrics">Metrics and charts</Tab>
+  <Tab value="settings" label="Settings">Configuration options</Tab>
+</Tabs>
+```
+
 ### Loader
 
 Animated loading indicator with multiple visual styles. Supports spinner, dots, bars, pulse, ring, bounce, wave, and square variants.
@@ -130,6 +157,19 @@ Callout message box for displaying info, warnings, errors, or success messages. 
 <Alert variant="destructive" title="Error">Something went wrong.</Alert>
 ```
 
+### Block
+
+Embeds reusable MDX blocks inline, or creates new ones with AI assistance. Supports embedding from pages/blocks/, inline editing, and AI generation.
+
+**Keywords:** block, embed, include, component, reuse, template, ai
+
+**Example:**
+```tsx
+<Block src="blocks/header" />
+<Block src="blocks/user-card" params={{userId: 123}} />
+<Block editing prompt="create a metrics card" />
+```
+
 ### Badge
 
 Inline status indicator for labeling items with semantic colors. Use for status indicators, tags, or category labels.
@@ -160,12 +200,12 @@ Container that wraps form controls and executes SQL mutations on submit. Childre
 **Example:**
 ```tsx
 <LiveAction sql="UPDATE tasks SET status = {{status}} WHERE id = 1">
-  <ActionSelect name="status" options={[{value: "done", label: "Done"}]} />
-  <ActionButton>Update</ActionButton>
+  <Select name="status" options={[{value: "done", label: "Done"}]} />
+  <Button>Update</Button>
 </LiveAction>
 ```
 
-### ActionButton
+### Button
 
 Button that triggers the parent LiveAction's SQL execution on click. Must be used inside a LiveAction container.
 
@@ -174,11 +214,11 @@ Button that triggers the parent LiveAction's SQL execution on click. Must be use
 **Example:**
 ```tsx
 <LiveAction sql="UPDATE tasks SET done = true WHERE id = 1">
-  <ActionButton>Mark Complete</ActionButton>
+  <Button>Mark Complete</Button>
 </LiveAction>
 ```
 
-### ActionCheckbox
+### Checkbox
 
 Checkbox that registers its value with parent LiveAction for SQL binding. The `name` prop determines the {{name}} placeholder in SQL (returns true/false).
 
@@ -187,12 +227,12 @@ Checkbox that registers its value with parent LiveAction for SQL binding. The `n
 **Example:**
 ```tsx
 <LiveAction sql="UPDATE tasks SET done = {{done}} WHERE id = 1">
-  <ActionCheckbox name="done">Mark as complete</ActionCheckbox>
-  <ActionButton>Save</ActionButton>
+  <Checkbox name="done">Mark as complete</Checkbox>
+  <Button>Save</Button>
 </LiveAction>
 ```
 
-### ActionSelect
+### Select
 
 Dropdown select that registers its value with parent LiveAction for SQL binding. The `name` prop determines the {{name}} placeholder in SQL.
 
@@ -201,18 +241,18 @@ Dropdown select that registers its value with parent LiveAction for SQL binding.
 **Example:**
 ```tsx
 <LiveAction sql="UPDATE tasks SET status = {{status}} WHERE id = 1">
-  <ActionSelect
+  <Select
     name="status"
     options={[
       { value: "pending", label: "Pending" },
       { value: "done", label: "Done" }
     ]}
   />
-  <ActionButton>Update</ActionButton>
+  <Button>Update</Button>
 </LiveAction>
 ```
 
-### ActionTextarea
+### Textarea
 
 Multiline text input that registers its value with parent LiveAction for SQL binding. The `name` prop determines the {{name}} placeholder in SQL.
 
@@ -221,22 +261,8 @@ Multiline text input that registers its value with parent LiveAction for SQL bin
 **Example:**
 ```tsx
 <LiveAction sql="UPDATE posts SET content = {{content}} WHERE id = 1">
-  <ActionTextarea name="content" placeholder="Enter content..." rows={5} />
-  <ActionButton>Save</ActionButton>
-</LiveAction>
-```
-
-### ActionInput
-
-Text input that registers its value with parent LiveAction for SQL binding. The `name` prop determines the {{name}} placeholder in SQL.
-
-**Keywords:** input, text, form, field, binding
-
-**Example:**
-```tsx
-<LiveAction sql="UPDATE users SET name = {{name}} WHERE id = 1">
-  <ActionInput name="name" placeholder="Enter name" />
-  <ActionButton>Save</ActionButton>
+  <Textarea name="content" placeholder="Enter content..." rows={5} />
+  <Button>Save</Button>
 </LiveAction>
 ```
 

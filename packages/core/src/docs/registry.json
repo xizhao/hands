@@ -15,10 +15,10 @@
         "delete",
         "submit"
       ],
-      "example": "<LiveAction sql=\"UPDATE tasks SET status = {{status}} WHERE id = 1\">\n  <ActionSelect name=\"status\" options={[{value: \"done\", label: \"Done\"}]} />\n  <ActionButton>Update</ActionButton>\n</LiveAction>",
-      "file": "src/stdlib/action/live-action.tsx"
+      "example": "<LiveAction sql=\"UPDATE tasks SET status = {{status}} WHERE id = 1\">\n  <Select name=\"status\" options={[{value: \"done\", label: \"Done\"}]} />\n  <Button>Update</Button>\n</LiveAction>",
+      "file": "src/ui/action/live-action.tsx"
     },
-    "ActionButton": {
+    "Button": {
       "category": "action",
       "description": "Button that triggers the parent LiveAction's SQL execution on click. Must be used inside a LiveAction container.",
       "keywords": [
@@ -28,10 +28,10 @@
         "trigger",
         "form"
       ],
-      "example": "<LiveAction sql=\"UPDATE tasks SET done = true WHERE id = 1\">\n  <ActionButton>Mark Complete</ActionButton>\n</LiveAction>",
-      "file": "src/stdlib/action/button.tsx"
+      "example": "<LiveAction sql=\"UPDATE tasks SET done = true WHERE id = 1\">\n  <Button>Mark Complete</Button>\n</LiveAction>",
+      "file": "src/ui/action/button.tsx"
     },
-    "ActionCheckbox": {
+    "Checkbox": {
       "category": "action",
       "description": "Checkbox that registers its value with parent LiveAction for SQL binding. The `name` prop determines the {{name}} placeholder in SQL (returns true/false).",
       "keywords": [
@@ -42,10 +42,10 @@
         "field",
         "binding"
       ],
-      "example": "<LiveAction sql=\"UPDATE tasks SET done = {{done}} WHERE id = 1\">\n  <ActionCheckbox name=\"done\">Mark as complete</ActionCheckbox>\n  <ActionButton>Save</ActionButton>\n</LiveAction>",
-      "file": "src/stdlib/action/checkbox.tsx"
+      "example": "<LiveAction sql=\"UPDATE tasks SET done = {{done}} WHERE id = 1\">\n  <Checkbox name=\"done\">Mark as complete</Checkbox>\n  <Button>Save</Button>\n</LiveAction>",
+      "file": "src/ui/action/checkbox.tsx"
     },
-    "ActionSelect": {
+    "Select": {
       "category": "action",
       "description": "Dropdown select that registers its value with parent LiveAction for SQL binding. The `name` prop determines the {{name}} placeholder in SQL.",
       "keywords": [
@@ -56,10 +56,10 @@
         "binding",
         "options"
       ],
-      "example": "<LiveAction sql=\"UPDATE tasks SET status = {{status}} WHERE id = 1\">\n  <ActionSelect\n    name=\"status\"\n    options={[\n      { value: \"pending\", label: \"Pending\" },\n      { value: \"done\", label: \"Done\" }\n    ]}\n  />\n  <ActionButton>Update</ActionButton>\n</LiveAction>",
-      "file": "src/stdlib/action/select.tsx"
+      "example": "<LiveAction sql=\"UPDATE tasks SET status = {{status}} WHERE id = 1\">\n  <Select\n    name=\"status\"\n    options={[\n      { value: \"pending\", label: \"Pending\" },\n      { value: \"done\", label: \"Done\" }\n    ]}\n  />\n  <Button>Update</Button>\n</LiveAction>",
+      "file": "src/ui/action/select.tsx"
     },
-    "ActionTextarea": {
+    "Textarea": {
       "category": "action",
       "description": "Multiline text input that registers its value with parent LiveAction for SQL binding. The `name` prop determines the {{name}} placeholder in SQL.",
       "keywords": [
@@ -70,21 +70,29 @@
         "field",
         "binding"
       ],
-      "example": "<LiveAction sql=\"UPDATE posts SET content = {{content}} WHERE id = 1\">\n  <ActionTextarea name=\"content\" placeholder=\"Enter content...\" rows={5} />\n  <ActionButton>Save</ActionButton>\n</LiveAction>",
-      "file": "src/stdlib/action/textarea.tsx"
+      "example": "<LiveAction sql=\"UPDATE posts SET content = {{content}} WHERE id = 1\">\n  <Textarea name=\"content\" placeholder=\"Enter content...\" rows={5} />\n  <Button>Save</Button>\n</LiveAction>",
+      "file": "src/ui/action/textarea.tsx"
     },
-    "ActionInput": {
-      "category": "action",
-      "description": "Text input that registers its value with parent LiveAction for SQL binding. The `name` prop determines the {{name}} placeholder in SQL.",
+    "Input": {
+      "category": "view",
+      "description": "Text input with optional masking and automatic validation.",
+      "keywords": [],
+      "example": "<Input name=\"email\" label=\"Email\" placeholder=\"you@example.com\" />\n<Input name=\"phone\" label=\"Phone\" mask=\"phone\" />\n<Input name=\"card\" label=\"Card\" mask=\"creditCard\" />\n<Input name=\"amount\" label=\"Amount\" mask=\"currency\" />",
+      "file": "src/ui/action/input.tsx"
+    },
+    "Tabs": {
+      "category": "view",
+      "description": "Tabbed navigation for organizing content into switchable panels. Use for dashboards, settings pages, or any content that benefits from tab navigation.",
       "keywords": [
-        "input",
-        "text",
-        "form",
-        "field",
-        "binding"
+        "tabs",
+        "navigation",
+        "panels",
+        "switch",
+        "organize",
+        "sections"
       ],
-      "example": "<LiveAction sql=\"UPDATE users SET name = {{name}} WHERE id = 1\">\n  <ActionInput name=\"name\" placeholder=\"Enter name\" />\n  <ActionButton>Save</ActionButton>\n</LiveAction>",
-      "file": "src/stdlib/action/input.tsx"
+      "example": "<Tabs defaultValue=\"overview\">\n  <Tab value=\"overview\" label=\"Overview\">Overview content here</Tab>\n  <Tab value=\"metrics\" label=\"Metrics\">Metrics and charts</Tab>\n  <Tab value=\"settings\" label=\"Settings\">Configuration options</Tab>\n</Tabs>",
+      "file": "src/ui/view/tabs.tsx"
     },
     "Loader": {
       "category": "view",
@@ -99,7 +107,7 @@
         "wait"
       ],
       "example": "<Loader />\n<Loader variant=\"dots\" size=\"lg\" />\n<Loader variant=\"bars\" color=\"primary\" label=\"Loading...\" />",
-      "file": "src/stdlib/view/loader.tsx"
+      "file": "src/ui/view/loader.tsx"
     },
     "Progress": {
       "category": "view",
@@ -113,7 +121,7 @@
         "status"
       ],
       "example": "<Progress value={75} />\n<Progress value={45} label=\"Upload Progress\" showValue />\n<Progress indeterminate />",
-      "file": "src/stdlib/view/progress.tsx"
+      "file": "src/ui/view/progress.tsx"
     },
     "LiveValue": {
       "category": "view",
@@ -130,7 +138,7 @@
         "reactive"
       ],
       "example": "<LiveValue sql=\"SELECT count(*) FROM users\" />\n<LiveValue sql=\"SELECT name FROM users\" display=\"list\" />\n<LiveValue sql=\"SELECT * FROM tasks WHERE status = 'active'\" display=\"table\" />",
-      "file": "src/stdlib/view/live-value.tsx"
+      "file": "src/ui/view/live-value.tsx"
     },
     "AreaChart": {
       "category": "view",
@@ -144,7 +152,7 @@
         "visualization"
       ],
       "example": "<AreaChart data={data} xKey=\"date\" yKey=\"pageviews\" />\n<AreaChart data={data} xKey=\"month\" yKey={[\"revenue\", \"costs\"]} stacked />",
-      "file": "src/stdlib/view/charts/area-chart.tsx"
+      "file": "src/ui/view/charts/area-chart.tsx"
     },
     "BarChart": {
       "category": "view",
@@ -158,7 +166,7 @@
         "visualization"
       ],
       "example": "<BarChart data={data} xKey=\"category\" yKey=\"value\" />\n<BarChart data={data} xKey=\"month\" yKey={[\"sales\", \"costs\"]} stacked />",
-      "file": "src/stdlib/view/charts/bar-chart.tsx"
+      "file": "src/ui/view/charts/bar-chart.tsx"
     },
     "PieChart": {
       "category": "view",
@@ -172,7 +180,7 @@
         "visualization"
       ],
       "example": "<PieChart data={data} valueKey=\"count\" nameKey=\"category\" />\n<PieChart data={data} valueKey=\"amount\" nameKey=\"type\" innerRadius={60} />",
-      "file": "src/stdlib/view/charts/pie-chart.tsx"
+      "file": "src/ui/view/charts/pie-chart.tsx"
     },
     "LineChart": {
       "category": "view",
@@ -186,7 +194,7 @@
         "visualization"
       ],
       "example": "<LineChart data={data} xKey=\"date\" yKey=\"revenue\" />\n<LineChart data={data} xKey=\"month\" yKey={[\"sales\", \"expenses\"]} showLegend />",
-      "file": "src/stdlib/view/charts/line-chart.tsx"
+      "file": "src/ui/view/charts/line-chart.tsx"
     },
     "Metric": {
       "category": "view",
@@ -202,7 +210,7 @@
         "indicator"
       ],
       "example": "<Metric label=\"Total Users\" value={1234} />\n<Metric label=\"Revenue\" value={50000} prefix=\"$\" change={12.5} />\n<Metric label=\"Error Rate\" value={0.5} suffix=\"%\" change={-8} changeLabel=\"vs last week\" />",
-      "file": "src/stdlib/view/metric.tsx"
+      "file": "src/ui/view/metric.tsx"
     },
     "Alert": {
       "category": "view",
@@ -218,7 +226,22 @@
         "notification"
       ],
       "example": "<Alert>This is an informational message.</Alert>\n<Alert variant=\"success\" title=\"Success!\">Your changes have been saved.</Alert>\n<Alert variant=\"warning\">Please review before continuing.</Alert>\n<Alert variant=\"destructive\" title=\"Error\">Something went wrong.</Alert>",
-      "file": "src/stdlib/view/alert.tsx"
+      "file": "src/ui/view/alert.tsx"
+    },
+    "Block": {
+      "category": "view",
+      "description": "Embeds reusable MDX blocks inline, or creates new ones with AI assistance. Supports embedding from pages/blocks/, inline editing, and AI generation.",
+      "keywords": [
+        "block",
+        "embed",
+        "include",
+        "component",
+        "reuse",
+        "template",
+        "ai"
+      ],
+      "example": "<Block src=\"blocks/header\" />\n<Block src=\"blocks/user-card\" params={{userId: 123}} />\n<Block editing prompt=\"create a metrics card\" />",
+      "file": "src/ui/view/block.tsx"
     },
     "Badge": {
       "category": "view",
@@ -232,7 +255,7 @@
         "pill"
       ],
       "example": "<Badge>Active</Badge>\n<Badge variant=\"success\">Completed</Badge>\n<Badge variant=\"warning\">Pending</Badge>\n<Badge variant=\"destructive\">Failed</Badge>",
-      "file": "src/stdlib/view/badge.tsx"
+      "file": "src/ui/view/badge.tsx"
     },
     "Kanban": {
       "category": "data",
@@ -249,7 +272,7 @@
         "tasks"
       ],
       "example": "<Kanban\n  query=\"SELECT id, title, status FROM tasks\"\n  groupByColumn=\"status\"\n  cardTitleField=\"title\"\n  updateSql=\"UPDATE tasks SET status = {{status}} WHERE id = {{id}}\"\n/>",
-      "file": "src/stdlib/data/kanban/kanban.tsx"
+      "file": "src/ui/data/kanban/kanban.tsx"
     },
     "DataGrid": {
       "category": "data",
@@ -265,7 +288,7 @@
         "virtual"
       ],
       "example": "<DataGrid data={data} />\n<DataGrid data={data} height={400} readOnly />\n<DataGrid data={data} columns={[{key: \"name\", label: \"Name\"}, {key: \"email\", label: \"Email\"}]} />",
-      "file": "src/stdlib/data/data-grid/data-grid.tsx"
+      "file": "src/ui/data/data-grid/data-grid.tsx"
     }
   }
 }

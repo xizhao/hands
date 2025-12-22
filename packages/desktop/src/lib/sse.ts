@@ -336,8 +336,6 @@ function handlePartUpdated(part: SdkPart, queryClient: QueryClient, directory?: 
             if (parsed.routeType === "table") {
               queryClient.invalidateQueries({ queryKey: ["postgres", "tables"] });
               queryClient.invalidateQueries({ queryKey: ["postgres", "query"] });
-            } else if (parsed.routeType === "block") {
-              queryClient.invalidateQueries({ queryKey: ["blocks"] });
             } else if (parsed.routeType === "action") {
               queryClient.invalidateQueries({ queryKey: ["actions"] });
             }

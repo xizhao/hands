@@ -63,6 +63,7 @@ export interface WorkbookManifest {
     id: string;
     route: string;
     path: string;
+    parentDir: string;
     title: string;
   }>;
   tables?: Array<{

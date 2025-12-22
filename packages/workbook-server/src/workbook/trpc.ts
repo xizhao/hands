@@ -130,6 +130,7 @@ export const workbookTRPCRouter = t.router({
         id: p.route.replace(/^\//, "") || "index",
         route: p.route,
         path: p.path,
+        parentDir: p.parentDir,
         title: p.route === "/" ? "Home" : p.route.split("/").pop() || p.route,
       })),
       components: manifest.components.map((c) => ({

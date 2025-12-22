@@ -271,10 +271,10 @@ ${dataComponents.map((c) => `- **${c.name}**: ${c.description}`).join("\n")}
 
 async function generateDocs() {
   const coreRoot = path.resolve(__dirname, "..");
-  const stdlibDir = path.join(coreRoot, "src/stdlib");
+  const uiDir = path.join(coreRoot, "src/ui");
   const docsDir = path.join(coreRoot, "src/docs");
 
-  console.log("Scanning stdlib components in:", stdlibDir);
+  console.log("Scanning UI components in:", uiDir);
 
   // Ensure docs directory exists
   if (!fs.existsSync(docsDir)) {
@@ -282,7 +282,7 @@ async function generateDocs() {
   }
 
   // Find all component files
-  const files = findTsxFiles(stdlibDir);
+  const files = findTsxFiles(uiDir);
   console.log(`Found ${files.length} component files`);
 
   // Parse each file

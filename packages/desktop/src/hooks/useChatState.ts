@@ -11,7 +11,6 @@ import { useSyncExternalStore } from "react";
 export const ATTACHMENT_TYPE = {
   FILE: "file",
   FILEPATH: "filepath",
-  BLOCK: "block",
   SOURCE: "source",
 } as const;
 
@@ -30,13 +29,6 @@ export interface PendingFilePathAttachment {
   name: string;
 }
 
-export interface PendingBlockAttachment {
-  type: typeof ATTACHMENT_TYPE.BLOCK;
-  blockId: string;
-  name: string;
-  errorContext?: string;
-}
-
 export interface PendingSourceAttachment {
   type: typeof ATTACHMENT_TYPE.SOURCE;
   sourceId: string;
@@ -47,7 +39,6 @@ export interface PendingSourceAttachment {
 export type AnyPendingAttachment =
   | PendingAttachment
   | PendingFilePathAttachment
-  | PendingBlockAttachment
   | PendingSourceAttachment;
 
 // Session error type

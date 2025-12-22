@@ -10,7 +10,7 @@ import { ArrowRight } from "lucide-react";
 import { memo } from "react";
 import { cn } from "@/lib/utils";
 
-type RouteType = "block" | "table" | "action";
+type RouteType = "table" | "action";
 
 export interface NavigateOutput {
   type: "navigate";
@@ -23,7 +23,6 @@ export interface NavigateOutput {
 }
 
 const ROUTE_CONFIGS: Record<RouteType, { path: string; param: string }> = {
-  block: { path: "/blocks/$blockId", param: "blockId" },
   table: { path: "/tables/$tableId", param: "tableId" },
   action: { path: "/actions/$actionId", param: "actionId" },
 };
@@ -47,12 +46,7 @@ export function parseNavigateOutput(output: string): NavigateOutput | null {
  * Build route path from navigate output
  */
 export function buildRoutePath(output: NavigateOutput): string {
-  const prefix =
-    output.routeType === "block"
-      ? "/blocks"
-      : output.routeType === "table"
-        ? "/tables"
-        : "/actions";
+  const prefix = output.routeType === "table" ? "/tables" : "/actions";
   return `${prefix}/${output.id}`;
 }
 

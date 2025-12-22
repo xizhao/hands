@@ -39,7 +39,7 @@ export interface GenerateMdxInput {
 }
 
 export interface GenerateMdxBlockInput extends GenerateMdxInput {
-  reasoning: "low" | "mid" | "high";
+  reasoning: "low" | "mid";
 }
 
 export interface GenerateMdxOutput {

@@ -9,6 +9,7 @@ import { cn } from "@/lib/utils";
 import {
   Editor,
   type EditorHandle,
+  type EditorProps,
   type AdvancedCustomBlock,
   parseFrontmatter,
   serializeFrontmatter,
@@ -18,54 +19,17 @@ import {
 import { useCallback, useEffect, useRef, type ReactNode } from "react";
 
 import { usePageSource } from "./hooks/usePageSource";
-import { useBlockCreation } from "./hooks/useBlockCreation";
 import { DesktopEditorProvider } from "./DesktopEditorProvider";
-import { SandboxedBlockPlugin, sandboxedBlockMarkdownRule, SANDBOXED_BLOCK_KEY } from "./SandboxedBlock";
 import { PromptPlugin, PromptMarkdownRules } from "./plugins/prompt-kit";
 
 // ============================================================================
 // Custom Blocks for Desktop
 // ============================================================================
 
-/** Sandboxed Block - renders iframe with block content */
-const SandboxedBlock: AdvancedCustomBlock = {
-  name: "Block",
-  plugin: SandboxedBlockPlugin,
-  rules: {
-    // Deserialize <Block src="..." /> from MDX
-    Block: {
-      deserialize: (node: any) => {
-        const attrs = node.attributes || [];
-        const props: Record<string, any> = {};
-        for (const attr of attrs) {
-          if (attr.type === "mdxJsxAttribute") {
-            if (attr.value === null) props[attr.name] = true;
-            else if (typeof attr.value === "string") props[attr.name] = attr.value;
-            else if (attr.value?.type === "mdxJsxAttributeValueExpression") {
-              try { props[attr.name] = JSON.parse(attr.value.value); }
-              catch { props[attr.name] = attr.value.value; }
-            }
-          }
-        }
-        return {
-          type: SANDBOXED_BLOCK_KEY,
-          src: props.src,
-          editing: props.editing || undefined,
-          prompt: props.prompt,
-          height: typeof props.height === "number" ? props.height : undefined,
-          children: [{ text: "" }],
-        };
-      },
-    },
-    // Serialize sandboxed_block to <Block ... />
-    ...sandboxedBlockMarkdownRule,
-  },
-};
-
 /** Prompt Block - AI prompt element */
 const PromptBlock: AdvancedCustomBlock = {
   name: "Prompt",
-  plugin: PromptPlugin,
+  plugin: PromptPlugin as AdvancedCustomBlock["plugin"],
   rules: PromptMarkdownRules,
 };
 
@@ -117,18 +81,6 @@ export function PageEditor({
 
   // Extract content (body without frontmatter)
   const content = source ? source.slice(parseFrontmatter(source).contentStart) : "";
-
-  // Hook to handle AI block creation
-  useBlockCreation({
-    editor: editorRef.current?.editor,
-    pageId,
-    onBlockCreated: (elementId, blockId) => {
-      console.log("[PageEditor] Block created via AI:", blockId);
-    },
-    onBlockError: (elementId, err) => {
-      console.error("[PageEditor] Block creation error:", err);
-    },
-  });
 
   // Sync page context to PageContextPlugin
   useEffect(() => {
@@ -204,8 +156,8 @@ export function PageEditor({
       ref={editorRef}
       value={content}
       onChange={handleChange}
-      customBlocks={[SandboxedBlock, PromptBlock]}
-      plugins={[PageContextPlugin]}
+      customBlocks={[PromptBlock]}
+      plugins={[PageContextPlugin] as unknown as EditorProps["plugins"]}
       frontmatter={frontmatter}
       onFrontmatterChange={handleFrontmatterChange}
       isSaving={isSaving}

@@ -5,13 +5,21 @@
  *
  * ## Exports
  *
- * - `@hands/core/stdlib` - Component library (view + action + data)
- * - `@hands/core/stdlib/view` - Display-only components
- * - `@hands/core/stdlib/action` - Interactive action components
- * - `@hands/core/stdlib/data` - Data management components (DataGrid, Kanban)
+ * - `@hands/core/ui` - UI component library (view + action + data)
+ * - `@hands/core/ui/view` - Display-only components
+ * - `@hands/core/ui/action` - Interactive action components
+ * - `@hands/core/ui/data` - Data management components (DataGrid, Kanban)
+ * - `@hands/core/primitives` - Core primitives (block, serialization)
  * - `@hands/core/types` - TypeScript type definitions
  */
 
-// Re-export everything for convenience
+// Re-export types (source of truth for type definitions and keys)
 export * from "./types";
-export * from "./stdlib";
+
+// Re-export primitives (serialization, block factory, etc.)
+export * from "./primitives";
+
+// Re-export UI components
+// Note: DATA_GRID_KEY and KANBAN_KEY are also exported from ./types,
+// but TypeScript allows duplicate re-exports of the same value
+export * from "./ui";

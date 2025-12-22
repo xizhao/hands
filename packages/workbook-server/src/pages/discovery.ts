@@ -3,10 +3,17 @@
  *
  * Discovers pages in a workbook's pages directory.
  * Pages are markdown or plate documents that can contain blocks.
+ *
+ * Structure:
+ * - pages/*.mdx → Pages (routable documents, shown in nav)
+ * - pages/blocks/*.mdx → Blocks (embeddable fragments, shown in BlocksPanel)
  */
 
-import { existsSync, readdirSync, statSync } from "node:fs";
+import { existsSync, readdirSync, statSync, mkdirSync } from "node:fs";
 import { join } from "node:path";
+
+/** Subdirectory containing reusable blocks */
+export const BLOCKS_SUBDIR = "blocks";
 
 export interface DiscoveredPage {
   /** Route path (e.g., "/", "/about", "/docs/intro") */
@@ -15,6 +22,8 @@ export interface DiscoveredPage {
   path: string;
   /** File extension */
   ext: string;
+  /** Whether this is a block (in blocks/ subdirectory) */
+  isBlock: boolean;
 }
 
 export interface DiscoverPagesResult {
@@ -23,6 +32,24 @@ export interface DiscoverPagesResult {
 }
 
 const PAGE_EXTENSIONS = [".md", ".mdx", ".plate.json"];
+
+/**
+ * Ensure the blocks/ subdirectory exists
+ */
+export function ensureBlocksDir(pagesDir: string): void {
+  const blocksDir = join(pagesDir, BLOCKS_SUBDIR);
+  if (!existsSync(blocksDir)) {
+    mkdirSync(blocksDir, { recursive: true });
+  }
+}
+
+/**
+ * Check if a path is inside the blocks/ subdirectory
+ */
+function isBlockPath(relativePath: string): boolean {
+  const normalized = relativePath.replace(/\\/g, "/");
+  return normalized.startsWith(`${BLOCKS_SUBDIR}/`) || normalized === BLOCKS_SUBDIR;
+}
 
 /**
  * Discover pages in a directory
@@ -55,6 +82,7 @@ export async function discoverPages(pagesDir: string): Promise<DiscoverPagesResu
                 route,
                 path: relativePath,
                 ext,
+                isBlock: isBlockPath(relativePath),
               });
             }
           }
@@ -75,6 +103,28 @@ export async function discoverPages(pagesDir: string): Promise<DiscoverPagesResu
 
   scanDir(pagesDir);
   return { pages, errors };
+}
+
+/**
+ * Discover only pages (excluding blocks/)
+ */
+export async function discoverPagesOnly(pagesDir: string): Promise<DiscoverPagesResult> {
+  const result = await discoverPages(pagesDir);
+  return {
+    pages: result.pages.filter((p) => !p.isBlock),
+    errors: result.errors,
+  };
+}
+
+/**
+ * Discover only blocks (from blocks/ subdirectory)
+ */
+export async function discoverBlocks(pagesDir: string): Promise<DiscoverPagesResult> {
+  const result = await discoverPages(pagesDir);
+  return {
+    pages: result.pages.filter((p) => p.isBlock),
+    errors: result.errors,
+  };
 }
 
 /**

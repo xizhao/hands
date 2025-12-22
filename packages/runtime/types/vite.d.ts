@@ -13,11 +13,3 @@ interface ImportMeta {
     }
   ): Record<string, () => Promise<M>>;
 }
-
-declare module "react-server-dom-webpack/server" {
-  export function renderToReadableStream(
-    element: any,
-    clientManifest: any,
-    options?: any
-  ): ReadableStream;
-}

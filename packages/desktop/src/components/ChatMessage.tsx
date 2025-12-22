@@ -28,7 +28,6 @@ import { memo, useMemo, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
 import { oneDark } from "react-syntax-highlighter/dist/esm/styles/prism";
-import { BlockEditLink, parseBlockPath } from "@/components/BlockEditLink";
 import { NavigateCard, parseNavigateOutput } from "@/components/NavigateCard";
 import { parseSecretsOutput, SecretsForm } from "@/components/SecretsForm";
 import { SubagentSummary } from "@/components/SubagentSummary";
@@ -756,13 +755,6 @@ const ToolInvocation = memo(({ part, compact = false }: { part: ToolPart; compac
     );
   }
 
-  // Check if this is an edit/write tool that modified a block file
-  const isEditTool = toolName.toLowerCase() === "edit" || toolName.toLowerCase() === "write";
-  const blockInfo =
-    isEditTool && state.input
-      ? parseBlockPath((state.input as Record<string, unknown>).file_path as string)
-      : null;
-
   return (
     <div className="py-0.5">
       <button
@@ -795,11 +787,6 @@ const ToolInvocation = memo(({ part, compact = false }: { part: ToolPart; compac
             <ChevronRight className="h-2.5 w-2.5" />
           ))}
       </button>
-
-      {/* Show block edit link if this tool modified a block */}
-      {blockInfo && state.status === "completed" && (
-        <BlockEditLink blockId={blockInfo.blockId} filename={blockInfo.filename} />
-      )}
 
       <AnimatePresence>
         {expanded && hasDetails && (

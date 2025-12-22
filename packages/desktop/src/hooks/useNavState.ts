@@ -9,7 +9,7 @@ import { useNavigate, useSearch } from "@tanstack/react-router";
 import { useCallback, useSyncExternalStore } from "react";
 
 // Types
-export type RightPanelId = "sources" | "database" | "blocks" | "settings" | "alerts" | null;
+export type RightPanelId = "sources" | "database" | "settings" | "alerts" | "blocks" | null;
 export type TabId = "sources" | "data" | "insights" | "preview";
 
 // Search params schema (for route definition)

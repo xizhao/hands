@@ -56,9 +56,6 @@ function NotebookLayout() {
         case "pages":
           navigate({ to: "/pages/$pageId", params: { pageId: id } });
           break;
-        case "blocks":
-          navigate({ to: "/blocks/$blockId", params: { blockId: id } });
-          break;
         case "tables":
           navigate({ to: "/tables/$tableId", params: { tableId: id } });
           break;

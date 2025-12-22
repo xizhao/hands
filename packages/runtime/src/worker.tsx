@@ -1,10 +1,8 @@
 import { route, render, RouteMiddleware } from "rwsdk/router";
 import { defineApp } from "rwsdk/worker";
-import { handleBlockGet, loadBlock, getBlockBuildError } from "./blocks/render";
 import { Page } from "./pages/Page";
-import { BlockPreview, BlockErrorPreview } from "./blocks/BlockPreview";
 import { pages, pageRoutes } from "@hands/pages";
-import { runWithDbMode, Database } from "./db/dev";
+import { Database } from "./db/dev";
 import { dbRoutes } from "./db/routes";
 
 // Export Durable Object for wrangler
@@ -70,38 +68,6 @@ export default defineApp([
       headers: { "Content-Type": "application/json" },
     });
   }),
-  route("/_editor/blocks/*", {
-    get: (args) => {
-      // Blocks are read-only - wrap in block mode context
-      // This endpoint returns raw RSC Flight streams for the editor
-      return runWithDbMode("block", () => handleBlockGet(args));
-    },
-  }),
   // Pages use rwsdk's render() for proper RSC/SSR handling
   ...render(Page, pageRoutes),
-  // TODO: Add action routes with runWithDbMode("action", ...)
-  // route("/actions/*", {
-  //   post: (args) => runWithDbMode("action", () => handleAction(args)),
-  // }),
-
-  // Block preview with full HTML/SSR (for browser viewing)
-  ...render(BlockPreview, [
-    route("/preview/*", async ({ params }) => {
-      const blockId = params.$0;
-
-      // Check for build error first - show error component instead of crashing
-      const buildError = getBlockBuildError(blockId);
-      if (buildError) {
-        return <BlockErrorPreview error={buildError} blockId={blockId} isBuildError />;
-      }
-
-      try {
-        const Block = await loadBlock(blockId);
-        return runWithDbMode("block", () => <Block />);
-      } catch (err) {
-        const message = err instanceof Error ? err.message : String(err);
-        return <BlockErrorPreview error={message} blockId={blockId} />;
-      }
-    }),
-  ]),
 ]);

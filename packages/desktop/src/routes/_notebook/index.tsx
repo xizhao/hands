@@ -1,10 +1,9 @@
-import { useEffect } from "react";
-import { NotebookSidebar } from "@/components/sidebar/NotebookSidebar";
+import { useCallback } from "react";
+import { UnifiedSidebar } from "@/components/sidebar/UnifiedSidebar";
 import { EmptyWorkbookState } from "@/components/workbook/EmptyWorkbookState";
 import { useChatState } from "@/hooks/useChatState";
 import { useRuntimeState } from "@/hooks/useRuntimeState";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { getLastPageId } from "./pages.$pageId";
 
 export const Route = createFileRoute("/_notebook/")({
   component: IndexPage,
@@ -28,20 +27,6 @@ function IndexPage() {
   const pages = manifest?.pages ?? [];
   const pageCount = pages.length;
 
-  // Redirect to last visited page, or first page if pages exist
-  useEffect(() => {
-    if (pageCount > 0) {
-      const lastPageId = getLastPageId();
-      // Check if last page still exists in manifest
-      const lastPageExists = lastPageId && pages.some(p => p.id === lastPageId);
-      const targetPageId = lastPageExists ? lastPageId : pages[0]?.id;
-
-      if (targetPageId) {
-        navigate({ to: "/pages/$pageId", params: { pageId: targetPageId } });
-      }
-    }
-  }, [pageCount, pages, navigate]);
-
   // Still loading: no manifest yet OR db still booting (unless we have blocks to show)
   const isLoading = !manifest || isStarting || isDbBooting;
 
@@ -60,6 +45,27 @@ function IndexPage() {
   const handleImportFile = () => {
     // TODO: Trigger file input
   };
+
+  // Handle item selection from Browse tab - navigate to the selected item
+  const handleSelectItem = useCallback(
+    (type: "page" | "source" | "table" | "action", id: string) => {
+      switch (type) {
+        case "page":
+          navigate({ to: "/pages/$pageId", params: { pageId: id } });
+          break;
+        case "source":
+          navigate({ to: "/sources" });
+          break;
+        case "table":
+          navigate({ to: "/tables/$tableId", params: { tableId: id } });
+          break;
+        case "action":
+          navigate({ to: "/actions/$actionId", params: { actionId: id } });
+          break;
+      }
+    },
+    [navigate],
+  );
 
   // Case 1: Still loading and no content to show - full page loader
   if (isLoading && !hasContent) {
@@ -86,13 +92,10 @@ function IndexPage() {
     );
   }
 
-  // Case 3: Has content (or db still loading with content) - show sidebar
-  // The sidebar handles its own loading states for the DB section
+  // Case 3: Has content - show tabbed sidebar with Chat, Browse, Library
   return (
-    <div className="flex-1 flex items-start justify-center overflow-y-auto">
-      <div className="p-4 pt-8">
-        <NotebookSidebar collapsed={false} fullWidth />
-      </div>
+    <div className="flex-1 flex flex-col overflow-hidden">
+      <UnifiedSidebar onSelectItem={handleSelectItem} />
     </div>
   );
 }

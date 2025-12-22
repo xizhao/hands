@@ -358,54 +358,8 @@ export function useWorkbookDatabase(workbookId: string | null) {
 // Note: useSaveDatabase removed - SQLite in runtime handles persistence automatically
 
 // ============================================================================
-// Block Content Hooks
+// Page Content Hooks
 // ============================================================================
-
-// Get block source (TSX) by blockId
-export function useBlockContent(blockId: string | null) {
-  const query = trpc.workbook.blocks.getSource.useQuery(
-    { blockId: blockId! },
-    {
-      enabled: !!blockId,
-      staleTime: 0,
-      refetchInterval: 2000,
-    },
-  );
-
-  // Return source string for backward compatibility
-  return {
-    ...query,
-    data: query.data?.source,
-  };
-}
-
-// Save block source (TSX)
-export function useSaveBlockContent() {
-  const utils = trpc.useUtils();
-
-  return trpc.workbook.blocks.saveSource.useMutation({
-    onSuccess: (_, { blockId }) => {
-      utils.workbook.blocks.getSource.invalidate({ blockId });
-      utils.workbook.manifest.invalidate();
-    },
-  });
-}
-
-// Create a new block
-export interface CreateBlockResult {
-  blockId: string;
-  filePath: string;
-}
-
-export function useCreateBlock() {
-  const utils = trpc.useUtils();
-
-  return trpc.workbook.blocks.create.useMutation({
-    onSuccess: () => {
-      utils.workbook.manifest.invalidate();
-    },
-  });
-}
 
 // Create a new page
 export interface CreatePageResult {

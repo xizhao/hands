@@ -6,15 +6,19 @@
   "types": "./src/index.ts",
   "exports": {
     ".": "./src/index.ts",
-    "./stdlib": "./src/stdlib/index.ts",
-    "./stdlib/view": "./src/stdlib/view/index.ts",
-    "./stdlib/action": "./src/stdlib/action/index.ts",
-    "./stdlib/data": "./src/stdlib/data/index.ts",
-    "./stdlib/static": "./src/stdlib/view/index.ts",
-    "./stdlib/active": "./src/stdlib/action/index.ts",
+    "./ui": "./src/ui/index.ts",
+    "./ui/view": "./src/ui/view/index.ts",
+    "./ui/action": "./src/ui/action/index.ts",
+    "./ui/data": "./src/ui/data/index.ts",
+    "./ui/components": "./src/ui/components/index.ts",
+    "./primitives": "./src/primitives/index.ts",
     "./types": "./src/types/index.ts",
     "./docs": "./src/docs/stdlib.ts",
-    "./styles/theme.css": "./src/styles/theme.css"
+    "./styles/theme.css": "./src/styles/theme.css",
+    "./stdlib": "./src/ui/index.ts",
+    "./stdlib/view": "./src/ui/view/index.ts",
+    "./stdlib/action": "./src/ui/action/index.ts",
+    "./stdlib/data": "./src/ui/data/index.ts"
   },
   "scripts": {
     "generate:docs": "bun run scripts/generate-docs.ts",

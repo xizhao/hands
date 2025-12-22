@@ -8,7 +8,6 @@
  * - Floating chat overlay
  */
 
-import { ChatBar } from "@/components/ChatBar";
 import { FileDropOverlay } from "@/components/FileDropOverlay";
 import { SaveStatusIndicator } from "@/components/SaveStatusIndicator";
 import {
@@ -35,7 +34,6 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
-import { Thread } from "@/components/workbook/Thread";
 import { ATTACHMENT_TYPE, useChatState } from "@/hooks/useChatState";
 import { useDatabase } from "@/hooks/useDatabase";
 import { useNeedsTrafficLightOffset } from "@/hooks/useFullscreen";
@@ -76,7 +74,7 @@ import {
   useState,
   type ReactNode,
 } from "react";
-import { NotebookSidebar } from "../sidebar/NotebookSidebar";
+import { UnifiedSidebar } from "../sidebar/UnifiedSidebar";
 import { RightPanel } from "./panels/RightPanel";
 
 // ============================================================================
@@ -188,10 +186,6 @@ export function NotebookShell({ children }: NotebookShellProps) {
   // Get route info from current router state - use useRouterState for reactive updates
   const routerState = useRouterState();
   const currentPath = routerState.location.pathname;
-  // Check if we're on a block editor route and extract blockId
-  const blockMatch = currentPath.match(/^\/blocks\/(.+)$/);
-  const blockId = blockMatch?.[1];
-  const isOnBlock = !!blockId;
   // Check if we're on a source viewer route and extract sourceId
   const sourceMatch = currentPath.match(/^\/sources\/(.+)$/);
   const sourceId = sourceMatch?.[1];
@@ -209,8 +203,7 @@ export function NotebookShell({ children }: NotebookShellProps) {
   const actionId = actionMatch?.[1];
   const isOnAction = !!actionId;
   // Check if we're on any content route that needs the editor layout with sidebar
-  const isOnContentRoute =
-    isOnBlock || isOnSource || isOnTable || isOnPage || isOnAction;
+  const isOnContentRoute = isOnSource || isOnTable || isOnPage || isOnAction;
 
   // Consolidated runtime state - single source of truth
   const {
@@ -281,7 +274,6 @@ export function NotebookShell({ children }: NotebookShellProps) {
   const isConnecting = isManifestLoading;
   const runtimeConnected = isRuntimeReady;
   const isDbLoading = isStarting;
-  const _blockCount = manifest?.blocks?.length ?? 0;
 
   // Compute alert counts from eval result
   const alertErrors =
@@ -292,9 +284,6 @@ export function NotebookShell({ children }: NotebookShellProps) {
 
   // Current workbook
   const currentWorkbook = workbooks?.find((w) => w.id === activeWorkbookId);
-
-  // Current block (for breadcrumb)
-  const currentBlock = manifest?.blocks?.find((b) => b.id === blockId);
 
   // Current source (for breadcrumb) - from manifest
   const currentSource = manifest?.sources?.find((s) => s.id === sourceId);
@@ -309,7 +298,7 @@ export function NotebookShell({ children }: NotebookShellProps) {
 
   // Sidebar hover state (invisible until hover on left edge) - only used when on a page
   const [sidebarVisible, setSidebarVisible] = useState(false);
-  const [sidebarPinned, setSidebarPinned] = useState(false);
+  const [sidebarPinned, setSidebarPinned] = useState(true);
   const [sidebarMenuOpen, setSidebarMenuOpen] = useState(false);
   const sidebarTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
@@ -402,7 +391,10 @@ export function NotebookShell({ children }: NotebookShellProps) {
           openWorkbook.mutate(newWorkbook, {
             onSuccess: () => {
               // Navigate to welcome page after workbook opens
-              router.navigate({ to: "/pages/$pageId", params: { pageId: "welcome" } });
+              router.navigate({
+                to: "/pages/$pageId",
+                params: { pageId: "welcome" },
+              });
             },
           });
         },
@@ -452,7 +444,7 @@ export function NotebookShell({ children }: NotebookShellProps) {
     [chatState.setChatExpanded, chatState.setPendingAttachment]
   );
 
-  // Auto-attach current block/source context when route changes
+  // Auto-attach current source context when route changes
   // Note: We use a ref to check the current attachment type to avoid including
   // chatState.pendingAttachment in dependencies, which would cause infinite loops
   // (new object created each render → state change → re-render → repeat)
@@ -460,13 +452,7 @@ export function NotebookShell({ children }: NotebookShellProps) {
   pendingAttachmentRef.current = chatState.pendingAttachment;
 
   useEffect(() => {
-    if (isOnBlock && blockId && currentBlock) {
-      chatState.setPendingAttachment({
-        type: ATTACHMENT_TYPE.BLOCK,
-        blockId,
-        name: currentBlock.title || blockId,
-      });
-    } else if (isOnSource && sourceId && currentSource) {
+    if (isOnSource && sourceId && currentSource) {
       chatState.setPendingAttachment({
         type: ATTACHMENT_TYPE.SOURCE,
         sourceId,
@@ -474,24 +460,13 @@ export function NotebookShell({ children }: NotebookShellProps) {
       });
     } else {
       // Clear attachment when navigating to index or other routes
-      // Only clear if it's a block/source attachment (not a file)
+      // Only clear if it's a source attachment (not a file)
       const current = pendingAttachmentRef.current;
-      if (
-        current?.type === ATTACHMENT_TYPE.BLOCK ||
-        current?.type === ATTACHMENT_TYPE.SOURCE
-      ) {
+      if (current?.type === ATTACHMENT_TYPE.SOURCE) {
         chatState.setPendingAttachment(null);
       }
     }
-  }, [
-    isOnBlock,
-    isOnSource,
-    blockId,
-    sourceId,
-    currentBlock,
-    currentSource,
-    chatState.setPendingAttachment,
-  ]);
+  }, [isOnSource, sourceId, currentSource, chatState.setPendingAttachment]);
 
   // File drop handler - sets filepath attachment and auto-submits
   // Lightweight: no file loading, no copying - agent handles everything
@@ -526,7 +501,7 @@ export function NotebookShell({ children }: NotebookShellProps) {
 
   return (
     <TooltipProvider delayDuration={300}>
-      <div className="h-screen flex flex-col bg-background overflow-hidden relative">
+      <div className="h-screen flex flex-col bg-background overflow-hidden relative before:absolute before:inset-0 before:bg-black/[0.03] before:dark:bg-black/[0.15] before:pointer-events-none">
         {/* Subtle 1px inset border on overall window - matches macOS ~10px corner radius */}
         <div
           className="absolute inset-0 pointer-events-none z-50 border border-white/[0.08] dark:border-white/[0.06]"
@@ -537,7 +512,7 @@ export function NotebookShell({ children }: NotebookShellProps) {
         <header
           data-tauri-drag-region
           className={cn(
-            "h-11 flex items-center justify-between pr-4 border-b border-border/50 bg-background shrink-0",
+            "h-10 flex items-center justify-between pr-4 pt-0.5 shrink-0",
             needsTrafficLightOffset ? "pl-[80px]" : "pl-4"
           )}
         >
@@ -632,30 +607,7 @@ export function NotebookShell({ children }: NotebookShellProps) {
               </DropdownMenu>
             </div>
 
-            {/* Breadcrumb - show for block or source routes */}
-            {isOnBlock && (
-              <>
-                <span
-                  className={cn(
-                    "px-1 py-0.5 text-sm text-muted-foreground bg-transparent rounded-sm",
-                    "hover:bg-accent/50 hover:text-foreground"
-                  )}
-                >
-                  {currentBlock?.title || blockId}
-                </span>
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <button
-                      onClick={handleClosePage}
-                      className="ml-1 p-0.5 rounded-sm text-muted-foreground/70 hover:text-muted-foreground hover:bg-accent/50 transition-colors opacity-0 group-hover/titlebar:opacity-100"
-                    >
-                      <X weight="bold" className="h-3 w-3" />
-                    </button>
-                  </TooltipTrigger>
-                  <TooltipContent side="bottom">Close block</TooltipContent>
-                </Tooltip>
-              </>
-            )}
+            {/* Breadcrumb - show for source routes */}
             {isOnSource && (
               <>
                 <span
@@ -976,7 +928,7 @@ export function NotebookShell({ children }: NotebookShellProps) {
         {/* Main layout - routes handle their own content */}
         <div className="flex-1 flex overflow-hidden">
           {isOnContentRoute ? (
-            /* Content route (page/blocks): collapsible sidebar + content */
+            /* Content route (pages/tables/actions/sources): collapsible sidebar + content */
             <>
               {/* Sidebar zone - collapses to thin strip, expands on hover */}
               <div
@@ -986,11 +938,11 @@ export function NotebookShell({ children }: NotebookShellProps) {
                   width: sidebarShown || isResizing ? sidebarWidth : 24,
                 }}
                 className={cn(
-                  "shrink-0 relative transition-[width] duration-200 ease-out border-r border-border/50",
+                  "shrink-0 relative transition-[width] duration-200 ease-out",
                   isResizing && "transition-none"
                 )}
               >
-                {/* Spine indicators (when collapsed) - squares: blocks, triangles: sources */}
+                {/* Spine indicators (when collapsed) - triangles: sources, circles: tables */}
                 <div
                   className={cn(
                     "absolute inset-0 flex flex-col items-center pt-4",
@@ -1009,22 +961,6 @@ export function NotebookShell({ children }: NotebookShellProps) {
                           className={cn(
                             "w-2 h-0.5 transition-colors",
                             page.id === pageId || page.route === `/${pageId}`
-                              ? "bg-foreground/60"
-                              : "bg-foreground/15"
-                          )}
-                        />
-                      ))}
-                    </div>
-                  )}
-                  {/* Blocks - squares */}
-                  {manifest?.blocks && manifest.blocks.length > 0 && (
-                    <div className="flex flex-col items-center gap-1 mt-2">
-                      {manifest.blocks.slice(0, 3).map((block) => (
-                        <div
-                          key={`block-${block.id}`}
-                          className={cn(
-                            "w-1.5 h-1.5 transition-colors",
-                            block.id === blockId
                               ? "bg-foreground/60"
                               : "bg-foreground/15"
                           )}
@@ -1071,19 +1007,14 @@ export function NotebookShell({ children }: NotebookShellProps) {
                 {/* Sidebar content (when expanded) */}
                 <div
                   className={cn(
-                    "absolute inset-0 p-4 overflow-y-auto",
+                    "absolute inset-0 overflow-hidden",
                     "transition-opacity duration-200 ease-out",
                     sidebarShown
                       ? "opacity-100"
                       : "opacity-0 pointer-events-none"
                   )}
                 >
-                  <NotebookSidebar
-                    collapsed={false}
-                    pinned={sidebarPinned}
-                    onPinnedChange={setSidebarPinned}
-                    onMenuOpenChange={setSidebarMenuOpen}
-                  />
+                  <UnifiedSidebar compact />
                 </div>
 
                 {/* Resize handle - at the right edge */}
@@ -1100,14 +1031,16 @@ export function NotebookShell({ children }: NotebookShellProps) {
                 />
               </div>
 
-              {/* Main content - overflow-hidden to contain, children handle their own scrolling */}
-              <main className="flex-1 min-w-0 min-h-0 bg-background overflow-hidden">
-                {children}
+              {/* Main content - inset border style like Arc */}
+              <main className="flex-1 min-w-0 min-h-0 overflow-hidden pt-2 pr-2 pb-2 pl-1">
+                <div className="h-full rounded-lg border border-border/40 bg-background overflow-hidden shadow-sm relative z-10">
+                  {children}
+                </div>
               </main>
             </>
           ) : (
             /* Index route - let the route component handle its own layout */
-            <main className="flex-1 flex flex-col min-w-0 bg-background overflow-hidden">
+            <main className="flex-1 flex flex-col min-w-0 overflow-hidden">
               {children}
             </main>
           )}
@@ -1115,32 +1048,6 @@ export function NotebookShell({ children }: NotebookShellProps) {
 
         {/* Right panel overlay */}
         <RightPanel />
-
-        {/* Floating chat - bottom-up layout, shifts right when sidebar is open on content routes */}
-        {!chatState.chatBarHidden && (
-          <div
-            className="fixed bottom-4 right-4 z-50 max-w-2xl mx-auto flex flex-col transition-[left] duration-200"
-            style={{
-              left: isOnContentRoute && sidebarShown ? sidebarWidth + 16 : 16,
-            }}
-          >
-            <Thread
-              expanded={chatState.chatExpanded}
-              onCollapse={() => chatState.setChatExpanded(false)}
-              onExpand={() => chatState.setChatExpanded(true)}
-            />
-            <ChatBar
-              expanded={chatState.chatExpanded}
-              onExpandChange={chatState.setChatExpanded}
-              pendingAttachment={chatState.pendingAttachment}
-              onPendingAttachmentChange={chatState.setPendingAttachment}
-              autoSubmitPending={chatState.autoSubmitPending}
-              onAutoSubmitPendingChange={chatState.setAutoSubmitPending}
-              sessionError={chatState.sessionError}
-              onSessionErrorClear={chatState.clearSessionError}
-            />
-          </div>
-        )}
 
         {/* Hidden file input for import */}
         <input

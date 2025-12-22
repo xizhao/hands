@@ -16,7 +16,7 @@ import type { MdxJsxTextElement } from 'mdast-util-mdx-jsx';
 import type { Text as MdastText } from 'mdast';
 import type { TText } from 'platejs';
 
-import { serializationRules, toMarkdownPluginRules } from '@hands/core/stdlib';
+import { serializationRules, toMarkdownPluginRules } from '@hands/core/primitives';
 
 // ============================================================================
 // Types

@@ -87,6 +87,10 @@ export interface EditorMediaEmbedElement
   type: typeof KEYS.mediaEmbed;
 }
 
+/**
+ * @deprecated Use TBlockElement from @hands/core/types instead.
+ * This is kept for backward compatibility with existing code.
+ */
 export interface EditorSandboxedBlockElement extends EditorBlockElement {
   children: [EmptyText];
   type: 'sandboxed_block';
@@ -98,6 +102,27 @@ export interface EditorSandboxedBlockElement extends EditorBlockElement {
   prompt?: string;
   /** Height of the iframe */
   height?: number;
+}
+
+/**
+ * Block element - embeds MDX blocks inline or creates with AI.
+ * Uses TBlockElement from @hands/core/types for the actual implementation.
+ */
+export interface EditorEmbedBlockElement extends TElement {
+  children: [EmptyText];
+  type: 'block';
+  /** Path to block MDX (e.g., "blocks/header") */
+  src?: string;
+  /** Parameters to pass to the embedded block */
+  params?: Record<string, unknown>;
+  /** Whether in editing/creation mode */
+  editing?: boolean;
+  /** AI prompt for generation */
+  prompt?: string;
+  /** Container height */
+  height?: number;
+  /** CSS class */
+  className?: string;
 }
 
 export interface EditorLiveActionElement extends EditorBlockElement {
@@ -174,6 +199,7 @@ export type EditorValue = (
   | EditorMediaEmbedElement
   | EditorParagraphElement
   | EditorSandboxedBlockElement
+  | EditorEmbedBlockElement
   | EditorTableElement
   | EditorToggleElement
 )[];

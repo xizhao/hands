@@ -6,8 +6,9 @@
  * High-level editor component that wraps Plate with sensible defaults.
  * Includes optional frontmatter header, toolbar, and saving indicator.
  *
- * Custom blocks can be added via the `customBlocks` prop - each block
- * needs a component and optional serialization rules.
+ * Custom plugins can be added via the `editorPlugins` prop - each plugin
+ * extends the editor with new MDX element types. Plugins can be simple
+ * (just a component) or advanced (custom Plate plugin + serialization).
  */
 
 import { MarkdownPlugin } from "@platejs/markdown";
@@ -26,7 +27,7 @@ import {
   type KeyboardEvent,
 } from "react";
 
-import { createCustomBlock, type CustomBlockOptions } from "@hands/core/stdlib";
+import { createPlugin, type PluginOptions } from "@hands/core/primitives";
 import { EditorCorePlugins } from "./plugins/presets";
 import { createMarkdownKit, type MarkdownRule } from "./plugins/markdown-kit";
 import { createCopilotKit, type CopilotConfig } from "./plugins/copilot-kit";
@@ -50,27 +51,27 @@ export interface EditorHandle {
 }
 
 // ============================================================================
-// Custom Block Types
+// Editor Plugin Types (custom MDX extensions)
 // ============================================================================
 
 /**
- * Simple custom block - just provide a component, we generate the plugin/rules.
+ * Simple plugin - just provide a component, we generate the Plate plugin/rules.
  */
-export interface SimpleCustomBlock {
-  /** MDX tag name (e.g., "MyBlock") */
+export interface SimpleEditorPlugin {
+  /** MDX tag name (e.g., "CustomChart") */
   name: string;
   /** React component to render */
   component: ComponentType<{ element: TElement; children: ReactNode }>;
-  /** Block options */
-  options?: CustomBlockOptions;
+  /** Plugin options */
+  options?: PluginOptions;
 }
 
 /**
- * Advanced custom block - provide your own plugin and rules.
- * Use this for complex blocks with custom behavior.
+ * Advanced plugin - provide your own Plate plugin and rules.
+ * Use this for complex plugins with custom behavior.
  */
-export interface AdvancedCustomBlock {
-  /** MDX tag name (e.g., "Block") */
+export interface AdvancedEditorPlugin {
+  /** MDX tag name (e.g., "CustomChart") */
   name: string;
   /** Pre-built Plate plugin */
   plugin: PlatePlugin;
@@ -78,11 +79,19 @@ export interface AdvancedCustomBlock {
   rules: Record<string, unknown>;
 }
 
-export type CustomBlock = SimpleCustomBlock | AdvancedCustomBlock;
+export type EditorPlugin = SimpleEditorPlugin | AdvancedEditorPlugin;
 
-function isAdvancedBlock(block: CustomBlock): block is AdvancedCustomBlock {
-  return "plugin" in block && "rules" in block;
+function isAdvancedPlugin(plugin: EditorPlugin): plugin is AdvancedEditorPlugin {
+  return "plugin" in plugin && "rules" in plugin;
 }
+
+// Backward compatibility aliases
+/** @deprecated Use SimpleEditorPlugin instead */
+export type SimpleCustomBlock = SimpleEditorPlugin;
+/** @deprecated Use AdvancedEditorPlugin instead */
+export type AdvancedCustomBlock = AdvancedEditorPlugin;
+/** @deprecated Use EditorPlugin instead */
+export type CustomBlock = EditorPlugin;
 
 // ============================================================================
 // Types
@@ -93,9 +102,13 @@ export interface EditorProps {
   value?: string;
   /** Callback when content changes - receives serialized markdown */
   onChange?: (markdown: string) => void;
-  /** Custom MDX blocks (simple or advanced) */
-  customBlocks?: CustomBlock[];
-  /** Additional plugins (for app-specific functionality) */
+  /** Custom MDX plugins (simple or advanced) - extends editor with new element types */
+  editorPlugins?: EditorPlugin[];
+  /** @deprecated Use editorPlugins instead */
+  customBlocks?: EditorPlugin[];
+  /** Additional Plate plugins (for app-specific functionality) */
+  platePlugins?: PlatePlugin[];
+  /** @deprecated Use platePlugins instead */
   plugins?: PlatePlugin[];
   /** AI copilot configuration (enables ghost text completions) */
   copilot?: CopilotConfig;
@@ -172,8 +185,10 @@ export const Editor = forwardRef<EditorHandle, EditorProps>(function Editor(
   {
     value,
     onChange,
-    customBlocks = [],
-    plugins: extraPlugins = [],
+    editorPlugins = [],
+    customBlocks = [], // deprecated
+    platePlugins = [],
+    plugins: legacyPlugins = [], // deprecated
     copilot,
     // Frontmatter
     frontmatter,
@@ -204,22 +219,32 @@ export const Editor = forwardRef<EditorHandle, EditorProps>(function Editor(
   // Ref for keyboard navigation from editor to frontmatter
   const subtitleRef = useRef<HTMLDivElement>(null);
 
-  // Process custom blocks into plugins and markdown rules
-  const { blockPlugins, blockRules } = useMemo(() => {
+  // Merge deprecated + new props
+  const allEditorPlugins = useMemo(
+    () => [...editorPlugins, ...customBlocks],
+    [editorPlugins, customBlocks]
+  );
+  const allExtraPlugins = useMemo(
+    () => [...platePlugins, ...legacyPlugins],
+    [platePlugins, legacyPlugins]
+  );
+
+  // Process editor plugins into Plate plugins and markdown rules
+  const { generatedPlugins, generatedRules } = useMemo(() => {
     const plugins: PlatePlugin[] = [];
     const rules: Record<string, MarkdownRule> = {};
 
-    for (const block of customBlocks) {
-      if (isAdvancedBlock(block)) {
-        // Advanced block - use provided plugin and rules
-        plugins.push(block.plugin);
-        Object.assign(rules, block.rules);
+    for (const editorPlugin of allEditorPlugins) {
+      if (isAdvancedPlugin(editorPlugin)) {
+        // Advanced plugin - use provided plugin and rules
+        plugins.push(editorPlugin.plugin);
+        Object.assign(rules, editorPlugin.rules);
       } else {
-        // Simple block - generate plugin and rules
-        const { plugin, rule } = createCustomBlock(
-          block.name,
-          block.component,
-          block.options
+        // Simple plugin - generate plugin and rules
+        const { plugin, rule } = createPlugin(
+          editorPlugin.name,
+          editorPlugin.component,
+          editorPlugin.options
         );
         plugins.push(plugin);
         // Add both deserialize (by tag name) and serialize (by key) rules
@@ -228,8 +253,8 @@ export const Editor = forwardRef<EditorHandle, EditorProps>(function Editor(
       }
     }
 
-    return { blockPlugins: plugins, blockRules: rules };
-  }, [customBlocks]);
+    return { generatedPlugins: plugins, generatedRules: rules };
+  }, [allEditorPlugins]);
 
   // Get copilot config from prop or derive from context
   const trpc = useEditorTrpc();
@@ -258,11 +283,11 @@ export const Editor = forwardRef<EditorHandle, EditorProps>(function Editor(
   // Build complete plugin list
   const allPlugins = useMemo(() => [
     ...EditorCorePlugins,
-    ...blockPlugins,
-    ...extraPlugins,
-    ...createMarkdownKit(blockRules),
+    ...generatedPlugins,
+    ...allExtraPlugins,
+    ...createMarkdownKit(generatedRules),
     ...copilotPlugins,
-  ], [blockPlugins, extraPlugins, blockRules, copilotPlugins]);
+  ], [generatedPlugins, allExtraPlugins, generatedRules, copilotPlugins]);
 
   // Create editor
   const editor = usePlateEditor({

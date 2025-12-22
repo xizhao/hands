@@ -1,11 +1,12 @@
 /**
- * NotebookSidebar - Navigation sidebar with 2 columns: Blocks and Data
+ * NotebookSidebar - Navigation sidebar for Data, Pages, and Actions
  *
  * Features:
- * - Blocks section with custom components (grouped by directory)
  * - Data section containing:
  *   - Unassociated Tables folder (tables not linked to any source)
  *   - Sources (expandable to show their associated tables)
+ * - Pages section
+ * - Actions section
  * - Collapsible sections with headers
  * - Router-based navigation
  * - Unified responsive layout (single view, responsive styling)
@@ -63,7 +64,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/comp
 import { useRuntimePort, useRuntimeState } from "@/hooks/useRuntimeState";
 import { useSourceManagement } from "@/hooks/useSources";
 import { usePrefetchThumbnail, useThumbnail } from "@/hooks/useThumbnails";
-import { useCreateBlock, useCreatePage } from "@/hooks/useWorkbook";
+import { useCreatePage } from "@/hooks/useWorkbook";
 import { cn } from "@/lib/utils";
 import { ThumbnailPreview } from "./ThumbnailPreview";
 import { TablePreview } from "./TablePreview";
@@ -76,7 +77,7 @@ function ThumbnailHoverCard({
   children,
   onMouseEnter,
 }: {
-  type: "page" | "block";
+  type: "page";
   contentId: string;
   children: React.ReactNode;
   onMouseEnter?: () => void;
@@ -134,6 +135,13 @@ interface NotebookSidebarProps {
   onPinnedChange?: (pinned: boolean) => void;
   /** Callback when a dropdown menu opens/closes */
   onMenuOpenChange?: (open: boolean) => void;
+  /**
+   * When true, selecting items will not navigate. Used in fullscreen/browse mode
+   * where selection is handled differently (e.g., preview in main panel)
+   */
+  preventNavigation?: boolean;
+  /** Callback when an item is selected (for preview mode) */
+  onSelectItem?: (type: "page" | "source" | "table" | "action", id: string) => void;
 }
 
 // Map icon names to Phosphor icons for sources
@@ -154,20 +162,6 @@ const listItemIconStyles = "shrink-0 transition-colors";
 const emptyStateStyles = "flex items-center gap-2 px-2 py-1 text-sm text-muted-foreground/60";
 
 // Icon components with hover color
-function BlockIcon({ className, empty }: { className?: string; empty?: boolean }) {
-  return (
-    <span
-      className={cn(
-        listItemIconStyles,
-        empty ? "opacity-50" : "group-hover:text-blue-400",
-        className,
-      )}
-    >
-      {empty ? "\u25A1" : "\u25A0"}
-    </span>
-  );
-}
-
 function SourceItemIcon({ className, empty }: { className?: string; empty?: boolean }) {
   return (
     <span
@@ -402,6 +396,8 @@ export function NotebookSidebar({
   pinned = false,
   onPinnedChange,
   onMenuOpenChange,
+  preventNavigation = false,
+  onSelectItem,
 }: NotebookSidebarProps) {
   const navigate = useNavigate();
   const router = useRouter();
@@ -426,30 +422,14 @@ export function NotebookSidebar({
     useSourceManagement();
 
   // All data from manifest (filesystem source of truth)
-  const blocks = manifest?.blocks ?? [];
   const actions = manifest?.actions ?? [];
   const pages = manifest?.pages ?? [];
-  const blocksLoading = manifestLoading;
 
   const [pagesExpanded, setPagesExpanded] = useState(true);
-  const [blocksExpanded, setBlocksExpanded] = useState(true);
   const [dataExpanded, setDataExpanded] = useState(true);
   const [actionsExpanded, setActionsExpanded] = useState(true);
-  const [expandedDirs, setExpandedDirs] = useState<Set<string>>(new Set()); // Track expanded directories
   const [expandedSources, setExpandedSources] = useState<Set<string>>(new Set()); // Track expanded sources
-
-  // Toggle directory expansion
-  const toggleDir = useCallback((dir: string) => {
-    setExpandedDirs((prev) => {
-      const next = new Set(prev);
-      if (next.has(dir)) {
-        next.delete(dir);
-      } else {
-        next.add(dir);
-      }
-      return next;
-    });
-  }, []);
+  const [expandedFolders, setExpandedFolders] = useState<Set<string>>(new Set()); // Track expanded page folders
 
   // Toggle source expansion
   const toggleSource = useCallback((sourceId: string) => {
@@ -464,25 +444,37 @@ export function NotebookSidebar({
     });
   }, []);
 
-  // Build tree structure from blocks with parentDir
-  const blockTree = useMemo(() => {
-    const tree: Map<string, typeof blocks> = new Map();
-    const rootBlocks: typeof blocks = [];
-
-    for (const block of blocks) {
-      const parentDir = block.parentDir || "";
-      if (!parentDir) {
-        rootBlocks.push(block);
+  // Toggle folder expansion
+  const toggleFolder = useCallback((folderId: string) => {
+    setExpandedFolders((prev) => {
+      const next = new Set(prev);
+      if (next.has(folderId)) {
+        next.delete(folderId);
       } else {
-        if (!tree.has(parentDir)) {
-          tree.set(parentDir, []);
+        next.add(folderId);
+      }
+      return next;
+    });
+  }, []);
+
+  // Group pages by folder
+  const { rootPages, pageFolders } = useMemo(() => {
+    const root: typeof pages = [];
+    const folders = new Map<string, typeof pages>();
+
+    for (const page of pages) {
+      if (!page.parentDir) {
+        root.push(page);
+      } else {
+        if (!folders.has(page.parentDir)) {
+          folders.set(page.parentDir, []);
         }
-        tree.get(parentDir)?.push(block);
+        folders.get(page.parentDir)!.push(page);
       }
     }
 
-    return { rootBlocks, directories: tree };
-  }, [blocks]);
+    return { rootPages: root, pageFolders: folders };
+  }, [pages]);
 
   // Group tables by source - tables prefixed with source name belong to that source
   const { sourceTableMap, unassociatedTables } = useMemo(() => {
@@ -518,107 +510,16 @@ export function NotebookSidebar({
   }, [tables, sources]);
   const [searchQuery, setSearchQuery] = useState("");
   const [addSourceOpen, setAddSourceOpen] = useState(false);
-  const [isCreatingNewBlock, setIsCreatingNewBlock] = useState(false);
-  const [newBlockName, setNewBlockName] = useState("");
   const [isCreatingNewPage, setIsCreatingNewPage] = useState(false);
   const [newPageName, setNewPageName] = useState("");
   const [selectedSource, setSelectedSource] = useState<string | null>(null);
-  const isConfirmingRef = useRef(false); // Guard against double submission
   const isConfirmingPageRef = useRef(false); // Guard against double submission for pages
-  const newBlockInputRef = useCallback((node: HTMLInputElement | null) => {
-    if (node) node.focus();
-  }, []);
   const newPageInputRef = useCallback((node: HTMLInputElement | null) => {
     if (node) node.focus();
   }, []);
 
-  // Create block mutation
-  const { mutateAsync: createBlock, isPending: isCreatingBlock } = useCreateBlock();
-
   // Create page mutation
   const { mutateAsync: createPage, isPending: isCreatingPage } = useCreatePage();
-
-  const handleStartNewBlock = () => {
-    setIsCreatingNewBlock(true);
-    setNewBlockName("");
-  };
-
-  const handleCancelNewBlock = () => {
-    setIsCreatingNewBlock(false);
-    setNewBlockName("");
-  };
-
-  const handleConfirmNewBlock = async () => {
-    // Guard against double submission (Enter + blur race condition)
-    if (isConfirmingRef.current) return;
-
-    if (!newBlockName.trim()) {
-      handleCancelNewBlock();
-      return;
-    }
-
-    // Sanitize the name to create a valid block ID
-    const blockId = newBlockName
-      .trim()
-      .toLowerCase()
-      .replace(/[^a-z0-9]+/g, "-")
-      .replace(/^-|-$/g, "");
-
-    if (!blockId) {
-      handleCancelNewBlock();
-      return;
-    }
-
-    // Set guard before async work
-    isConfirmingRef.current = true;
-
-    // Check if block already exists
-    const existingBlock = blocks.find((b) => b.id === blockId);
-    if (existingBlock) {
-      // Just navigate to existing block
-      setIsCreatingNewBlock(false);
-      setNewBlockName("");
-      isConfirmingRef.current = false;
-      navigate({ to: "/blocks/$blockId", params: { blockId } });
-      return;
-    }
-
-    try {
-      // Create block with placeholder that marks it as uninitialized
-      // This is valid TypeScript but will be detected as "empty" by EmptyBlockView
-      const placeholderSource = `// @hands:uninitialized
-export default function Placeholder() {
-  return null;
-}`;
-      await createBlock({ blockId, source: placeholderSource });
-      setIsCreatingNewBlock(false);
-      setNewBlockName("");
-      // Navigate to the newly created block
-      navigate({ to: "/blocks/$blockId", params: { blockId } });
-    } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : "Failed to create block";
-      // If block already exists, just navigate to it
-      if (message.includes("already exists")) {
-        setIsCreatingNewBlock(false);
-        setNewBlockName("");
-        navigate({ to: "/blocks/$blockId", params: { blockId } });
-      } else {
-        console.error("[sidebar] failed to create block:", err);
-      }
-    } finally {
-      isConfirmingRef.current = false;
-    }
-  };
-
-  const handleNewBlockKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === "Enter") {
-      e.preventDefault();
-      handleConfirmNewBlock();
-    } else if (e.key === "Escape") {
-      e.preventDefault();
-      handleCancelNewBlock();
-    }
-  };
 
   // Page creation handlers
   const handleStartNewPage = () => {
@@ -715,46 +616,43 @@ export default function Placeholder() {
     return tables.filter((table) => table.name.toLowerCase().includes(query));
   }, [tables, searchQuery]);
 
-  const _filteredBlocks = useMemo(() => {
-    if (!searchQuery.trim()) return blocks;
-    const query = searchQuery.toLowerCase();
-    return blocks.filter((block) => block.title.toLowerCase().includes(query));
-  }, [blocks, searchQuery]);
-
-  // Handle page click - navigate to page editor
+  // Handle page click - navigate to page editor or call callback
   const handlePageClick = useCallback(
     (pageId: string) => {
+      if (preventNavigation) {
+        onSelectItem?.("page", pageId);
+        return;
+      }
       console.log("[sidebar] navigating to page:", pageId);
       navigate({ to: "/pages/$pageId", params: { pageId } });
     },
-    [navigate],
+    [navigate, preventNavigation, onSelectItem],
   );
 
-  // Handle block click - navigate to block editor
-  const handleBlockClick = useCallback(
-    (blockId: string) => {
-      console.log("[sidebar] navigating to block:", blockId);
-      navigate({ to: "/blocks/$blockId", params: { blockId } });
-    },
-    [navigate],
-  );
-
-  // Handle source click - navigate to source viewer
+  // Handle source click - navigate to sources list or call callback
   const handleSourceClick = useCallback(
     (sourceId: string) => {
-      console.log("[sidebar] navigating to source:", sourceId);
-      navigate({ to: "/sources/$sourceId", params: { sourceId } });
+      if (preventNavigation) {
+        onSelectItem?.("source", sourceId);
+        return;
+      }
+      console.log("[sidebar] navigating to sources");
+      navigate({ to: "/sources" });
     },
-    [navigate],
+    [navigate, preventNavigation, onSelectItem],
   );
 
-  // Handle table click - navigate to table viewer
+  // Handle table click - navigate to table viewer or call callback
   const handleTableClick = useCallback(
     (tableId: string) => {
+      if (preventNavigation) {
+        onSelectItem?.("table", tableId);
+        return;
+      }
       console.log("[sidebar] navigating to table:", tableId);
       navigate({ to: "/tables/$tableId", params: { tableId } });
     },
-    [navigate],
+    [navigate, preventNavigation, onSelectItem],
   );
 
   // Runtime port for API calls
@@ -764,43 +662,6 @@ export default function Placeholder() {
   const prefetchThumbnail = usePrefetchThumbnail();
 
   // CRUD action handlers
-  const handleCopyBlock = useCallback(
-    async (blockId: string) => {
-      if (!runtimePort) return;
-      try {
-        const res = await fetch(
-          `http://localhost:${runtimePort}/workbook/blocks/${blockId}/duplicate`,
-          {
-            method: "POST",
-          },
-        );
-        if (!res.ok) throw new Error("Failed to duplicate block");
-        console.log("[sidebar] duplicated block:", blockId);
-      } catch (err) {
-        console.error("[sidebar] failed to duplicate block:", err);
-      }
-    },
-    [runtimePort],
-  );
-
-  const handleDeleteBlock = useCallback(
-    async (blockId: string) => {
-      if (!runtimePort) return;
-      try {
-        const res = await fetch(`http://localhost:${runtimePort}/workbook/blocks/${blockId}`, {
-          method: "DELETE",
-        });
-        if (!res.ok) throw new Error("Failed to delete block");
-        console.log("[sidebar] deleted block:", blockId);
-        // Navigate away if we deleted the current block
-        navigate({ to: "/" });
-      } catch (err) {
-        console.error("[sidebar] failed to delete block:", err);
-      }
-    },
-    [runtimePort, navigate],
-  );
-
   const handleDuplicatePage = useCallback(
     async (pageId: string) => {
       if (!runtimePort) return;
@@ -905,10 +766,8 @@ export default function Placeholder() {
         if (!res.ok) throw new Error("Failed to convert table to source");
         const data = await res.json();
         console.log("[sidebar] converted table to source:", tableName, data);
-        // Navigate to the new source
-        if (data.id) {
-          navigate({ to: "/sources/$sourceId", params: { sourceId: data.id } });
-        }
+        // Navigate to the sources list
+        navigate({ to: "/sources" });
       } catch (err) {
         console.error("[sidebar] failed to convert table to source:", err);
       }
@@ -942,38 +801,6 @@ export default function Placeholder() {
             <div className="pt-2 border-t border-border/50">
               <div className="flex justify-center">
                 <span className="text-[8px] leading-none text-muted-foreground/30">&#x25AC;</span>
-              </div>
-            </div>
-          )}
-
-          {/* Blocks section - collapsed: show all as compact squares */}
-          {blocks.length > 0 ? (
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <div className="flex flex-wrap gap-0.5 justify-center pt-2 border-t border-border/50 cursor-default">
-                  {blocks.map((block) => (
-                    <span
-                      key={block.id}
-                      className={cn(
-                        "text-[8px] leading-none",
-                        block.uninitialized ? "text-muted-foreground/40" : "text-blue-400/70",
-                      )}
-                    >
-                      {block.uninitialized ? "\u25A1" : "\u25A0"}
-                    </span>
-                  ))}
-                </div>
-              </TooltipTrigger>
-              <TooltipContent side="right">
-                <p>
-                  {blocks.length} block{blocks.length !== 1 ? "s" : ""}
-                </p>
-              </TooltipContent>
-            </Tooltip>
-          ) : (
-            <div className="pt-2 border-t border-border/50">
-              <div className="flex justify-center">
-                <span className="text-[8px] leading-none text-muted-foreground/30">{"\u25A1"}</span>
               </div>
             </div>
           )}
@@ -1096,7 +923,7 @@ export default function Placeholder() {
           <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground/70" />
           <input
             type="text"
-            placeholder="Search blocks, sources..."
+            placeholder="Search pages, sources..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             className="w-full pl-8 pr-8 py-1.5 text-sm bg-muted/50 border border-border/70 rounded-md placeholder:text-muted-foreground/60 focus:outline-none focus:border-border focus:ring-1 focus:ring-ring/20"
@@ -1169,35 +996,112 @@ export default function Placeholder() {
                 {manifestLoading ? (
                   <div className={emptyStateStyles}>Loading...</div>
                 ) : pages.length > 0 || isCreatingNewPage ? (
-                  (searchQuery
-                    ? pages.filter((p) =>
-                        p.title?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                        p.id.toLowerCase().includes(searchQuery.toLowerCase()),
-                      )
-                    : pages
-                  ).map((page) => (
-                    <ThumbnailHoverCard
-                      key={page.id}
-                      type="page"
-                      contentId={page.id}
-                      onMouseEnter={() => prefetchThumbnail("page", page.id)}
-                    >
-                      <div className={cn(listItemStyles, "group")}>
-                        <PageIcon />
-                        <button
-                          onClick={() => handlePageClick(page.id)}
-                          className="flex-1 truncate text-left hover:underline"
-                        >
-                          {page.title}
-                        </button>
-                        <ItemActions
-                          onCopy={() => handleDuplicatePage(page.id)}
-                          onDelete={() => handleDeletePage(page.id)}
-                          onOpenChange={onMenuOpenChange}
-                        />
-                      </div>
-                    </ThumbnailHoverCard>
-                  ))
+                  <>
+                    {/* Root pages (no parentDir) */}
+                    {(searchQuery
+                      ? rootPages.filter((p) =>
+                          p.title?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+                          p.id.toLowerCase().includes(searchQuery.toLowerCase()),
+                        )
+                      : rootPages
+                    ).map((page) => (
+                      <ThumbnailHoverCard
+                        key={page.id}
+                        type="page"
+                        contentId={page.id}
+                        onMouseEnter={() => prefetchThumbnail("page", page.id)}
+                      >
+                        <div className={cn(listItemStyles, "group")}>
+                          <PageIcon />
+                          <button
+                            onClick={() => handlePageClick(page.id)}
+                            className="flex-1 truncate text-left hover:underline"
+                          >
+                            {page.title}
+                          </button>
+                          <ItemActions
+                            onCopy={() => handleDuplicatePage(page.id)}
+                            onDelete={() => handleDeletePage(page.id)}
+                            onOpenChange={onMenuOpenChange}
+                          />
+                        </div>
+                      </ThumbnailHoverCard>
+                    ))}
+
+                    {/* Page folders */}
+                    {Array.from(pageFolders.entries()).map(([folderName, folderPages]) => {
+                      const isFolderExpanded = expandedFolders.has(folderName);
+                      const filteredFolderPages = searchQuery
+                        ? folderPages.filter((p) =>
+                            p.title?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+                            p.id.toLowerCase().includes(searchQuery.toLowerCase()),
+                          )
+                        : folderPages;
+
+                      // Skip folder if search active and no matching pages
+                      if (searchQuery && filteredFolderPages.length === 0) return null;
+
+                      return (
+                        <div key={folderName}>
+                          <div className={cn(listItemStyles, "group")}>
+                            <button
+                              onClick={() => toggleFolder(folderName)}
+                              className="shrink-0"
+                            >
+                              {isFolderExpanded ? (
+                                <ChevronDown className="h-3 w-3" />
+                              ) : (
+                                <ChevronRight className="h-3 w-3" />
+                              )}
+                            </button>
+                            {isFolderExpanded ? (
+                              <FolderOpen weight="duotone" className="h-4 w-4 text-orange-400/70" />
+                            ) : (
+                              <Folder weight="duotone" className="h-4 w-4 text-orange-400/70" />
+                            )}
+                            <button
+                              onClick={() => toggleFolder(folderName)}
+                              className="flex-1 truncate text-left hover:underline"
+                            >
+                              {folderName}
+                            </button>
+                            <span className="text-xs text-muted-foreground/60">
+                              {folderPages.length}
+                            </span>
+                          </div>
+
+                          {/* Folder contents */}
+                          {(isFolderExpanded || searchQuery) && filteredFolderPages.length > 0 && (
+                            <div className="ml-4 border-l border-border/50 pl-1">
+                              {filteredFolderPages.map((page) => (
+                                <ThumbnailHoverCard
+                                  key={page.id}
+                                  type="page"
+                                  contentId={page.id}
+                                  onMouseEnter={() => prefetchThumbnail("page", page.id)}
+                                >
+                                  <div className={cn(listItemStyles, "group")}>
+                                    <PageIcon />
+                                    <button
+                                      onClick={() => handlePageClick(page.id)}
+                                      className="flex-1 truncate text-left hover:underline"
+                                    >
+                                      {page.title}
+                                    </button>
+                                    <ItemActions
+                                      onCopy={() => handleDuplicatePage(page.id)}
+                                      onDelete={() => handleDeletePage(page.id)}
+                                      onOpenChange={onMenuOpenChange}
+                                    />
+                                  </div>
+                                </ThumbnailHoverCard>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </>
                 ) : (
                   <div className={emptyStateStyles}>
                     <PageIcon empty />
@@ -1458,169 +1362,6 @@ export default function Placeholder() {
             )}
           </div>
 
-          {/* Blocks Section */}
-          <div className="space-y-1">
-            <div className="flex items-center justify-between">
-              <button
-                onClick={() => setBlocksExpanded(!blocksExpanded)}
-                className="flex items-center gap-1 text-[10px] font-medium text-muted-foreground/80 uppercase tracking-wider hover:text-muted-foreground transition-colors"
-              >
-                {blocksExpanded ? (
-                  <ChevronDown className="h-3 w-3" />
-                ) : (
-                  <ChevronRight className="h-3 w-3" />
-                )}
-                Blocks
-              </button>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <button
-                    onClick={handleStartNewBlock}
-                    className="p-0.5 text-muted-foreground/60 hover:text-muted-foreground transition-colors"
-                    title="New block"
-                  >
-                    <Plus className="h-3 w-3" />
-                  </button>
-                </TooltipTrigger>
-                <TooltipContent side="right">New block</TooltipContent>
-              </Tooltip>
-            </div>
-
-            {blocksExpanded && (
-              <div className="space-y-0">
-                {/* Inline new block input */}
-                {isCreatingNewBlock && (
-                  <div className={cn(listItemStyles, "pr-1")}>
-                    <BlockIcon />
-                    <input
-                      ref={newBlockInputRef}
-                      type="text"
-                      value={newBlockName}
-                      onChange={(e) => setNewBlockName(e.target.value)}
-                      onKeyDown={handleNewBlockKeyDown}
-                      onBlur={handleConfirmNewBlock}
-                      placeholder="block-name"
-                      disabled={isCreatingBlock}
-                      className="flex-1 bg-transparent border-none outline-none text-sm placeholder:text-muted-foreground/50"
-                    />
-                    {isCreatingBlock && (
-                      <CircleNotch
-                        weight="bold"
-                        className="h-3 w-3 animate-spin text-muted-foreground"
-                      />
-                    )}
-                  </div>
-                )}
-                {blocksLoading ? (
-                  <div className={emptyStateStyles}>Loading...</div>
-                ) : blocks.length > 0 || isCreatingNewBlock ? (
-                  <>
-                    {/* Directories */}
-                    {Array.from(blockTree.directories.keys())
-                      .sort()
-                      .map((dir) => {
-                        const isExpanded = expandedDirs.has(dir);
-                        const dirBlocks = blockTree.directories.get(dir) || [];
-                        const filteredDirBlocks = searchQuery
-                          ? dirBlocks.filter((b) =>
-                              b.title.toLowerCase().includes(searchQuery.toLowerCase()),
-                            )
-                          : dirBlocks;
-
-                        if (searchQuery && filteredDirBlocks.length === 0) return null;
-
-                        return (
-                          <div key={dir}>
-                            <button
-                              onClick={() => toggleDir(dir)}
-                              className={cn(listItemStyles, "group")}
-                            >
-                              {isExpanded ? (
-                                <FolderOpen
-                                  weight="duotone"
-                                  className="h-4 w-4 shrink-0 text-amber-500"
-                                />
-                              ) : (
-                                <Folder
-                                  weight="duotone"
-                                  className="h-4 w-4 shrink-0 text-amber-500"
-                                />
-                              )}
-                              <span className="flex-1 truncate text-left">{dir}</span>
-                              <span className="text-xs text-muted-foreground/60">
-                                {filteredDirBlocks.length}
-                              </span>
-                            </button>
-                            {(isExpanded || searchQuery) && (
-                              <div className="ml-4 border-l border-border/50 pl-2">
-                                {filteredDirBlocks.map((block) => (
-                                  <ThumbnailHoverCard
-                                    key={block.id}
-                                    type="block"
-                                    contentId={block.id}
-                                    onMouseEnter={() => prefetchThumbnail("block", block.id)}
-                                  >
-                                    <div className={listItemStyles}>
-                                      <BlockIcon empty={block.uninitialized} />
-                                      <button
-                                        onClick={() => handleBlockClick(block.id)}
-                                        className="flex-1 truncate text-left hover:underline"
-                                      >
-                                        {block.title || block.id}
-                                      </button>
-                                      <ItemActions
-                                        onCopy={() => handleCopyBlock(block.id)}
-                                        onDelete={() => handleDeleteBlock(block.id)}
-                                        onOpenChange={onMenuOpenChange}
-                                      />
-                                    </div>
-                                  </ThumbnailHoverCard>
-                                ))}
-                              </div>
-                            )}
-                          </div>
-                        );
-                      })}
-                    {/* Root blocks */}
-                    {(searchQuery
-                      ? blockTree.rootBlocks.filter((b) =>
-                          b.title.toLowerCase().includes(searchQuery.toLowerCase()),
-                        )
-                      : blockTree.rootBlocks
-                    ).map((block) => (
-                      <ThumbnailHoverCard
-                        key={block.id}
-                        type="block"
-                        contentId={block.id}
-                        onMouseEnter={() => prefetchThumbnail("block", block.id)}
-                      >
-                        <div className={listItemStyles}>
-                          <BlockIcon empty={block.uninitialized} />
-                          <button
-                            onClick={() => handleBlockClick(block.id)}
-                            className="flex-1 truncate text-left hover:underline"
-                          >
-                            {block.title || block.id}
-                          </button>
-                          <ItemActions
-                            onCopy={() => handleCopyBlock(block.id)}
-                            onDelete={() => handleDeleteBlock(block.id)}
-                            onOpenChange={onMenuOpenChange}
-                          />
-                        </div>
-                      </ThumbnailHoverCard>
-                    ))}
-                  </>
-                ) : (
-                  <div className={emptyStateStyles}>
-                    <BlockIcon empty />
-                    <span>No blocks</span>
-                  </div>
-                )}
-              </div>
-            )}
-          </div>
-
           {/* Actions Section */}
           <div className="space-y-1">
             <div className="flex items-center justify-between">
@@ -1655,9 +1396,13 @@ export default function Placeholder() {
                     <ActionListItem
                       key={action.id}
                       action={action}
-                      onSelect={() =>
-                        navigate({ to: "/actions/$actionId", params: { actionId: action.id } })
-                      }
+                      onSelect={() => {
+                        if (preventNavigation) {
+                          onSelectItem?.("action", action.id);
+                          return;
+                        }
+                        navigate({ to: "/actions/$actionId", params: { actionId: action.id } });
+                      }}
                       runtimePort={runtimePort}
                     />
                   ))}

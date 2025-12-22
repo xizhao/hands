@@ -1,5 +1,5 @@
 /**
- * ThumbnailPreview - Shows a thumbnail preview for pages/blocks
+ * ThumbnailPreview - Shows a thumbnail preview for pages
  *
  * Used in:
  * - HoverCard content for sidebar items
@@ -10,7 +10,7 @@ import { cn } from "@/lib/utils";
 import { useThumbnail } from "@/hooks/useThumbnails";
 
 interface ThumbnailPreviewProps {
-  type: "page" | "block";
+  type: "page";
   contentId: string;
   /** Additional CSS classes */
   className?: string;
@@ -28,7 +28,7 @@ export function ThumbnailPreview({ type, contentId, className }: ThumbnailPrevie
   return (
     <img
       src={thumbnail.thumbnail}
-      alt={`${type === "page" ? "Page" : "Block"} preview`}
+      alt="Page preview"
       className={cn(
         // Fixed size, crop from top-left to show meaningful content
         "w-48 h-32 object-cover object-top rounded",
@@ -41,7 +41,7 @@ export function ThumbnailPreview({ type, contentId, className }: ThumbnailPrevie
 /**
  * Check if thumbnail is available (for conditional delay logic)
  */
-export function useThumbnailAvailable(type: "page" | "block", contentId: string | undefined) {
+export function useThumbnailAvailable(type: "page", contentId: string | undefined) {
   const { data: thumbnail } = useThumbnail(type, contentId);
   return !!thumbnail?.thumbnail;
 }

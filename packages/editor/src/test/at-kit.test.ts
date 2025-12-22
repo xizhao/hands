@@ -171,13 +171,13 @@ describe("at-kit block insertion", () => {
     // Inline content from single paragraph - should get trailing space
     const inlineNodes = mdApi.markdown.deserialize("hello world");
     // If it's a single paragraph, we unwrap to get inline children
-    let finalNodes = inlineNodes;
+    let finalNodes: (typeof inlineNodes[0] | { text: string })[] = inlineNodes;
     if (
       inlineNodes.length === 1 &&
       inlineNodes[0].type === "p" &&
       inlineNodes[0].children
     ) {
-      finalNodes = inlineNodes[0].children;
+      finalNodes = inlineNodes[0].children as typeof finalNodes;
     }
     const isTextInline = finalNodes.length === 1 && !("type" in finalNodes[0]);
     expect(isTextInline).toBe(true);

@@ -233,7 +233,65 @@ The editor supports MDX components from `@hands/core/stdlib`:
 <Button onClick={handleClick}>Click me</Button>
 ```
 
-For desktop-specific components (like `<Block>` or `<Prompt>`), add custom serialization rules in your application.
+The `<Block>` component is included in the stdlib for embedding MDX fragments:
+
+```mdx
+<Block src="blocks/header" />
+<Block src="blocks/user-card" params={{userId: 123}} />
+```
+
+## Editor Component
+
+High-level wrapper with sensible defaults:
+
+```tsx
+import { Editor } from '@hands/editor';
+
+<Editor
+  value={mdxSource}
+  onChange={handleChange}
+  frontmatter={frontmatter}
+  onFrontmatterChange={handleFrontmatterChange}
+  editorPlugins={[/* custom MDX plugins */]}
+  platePlugins={[/* Plate plugins */]}
+  copilot={copilotConfig}
+  showToolbar
+/>
+```
+
+### EditorProps
+
+| Prop | Type | Description |
+|------|------|-------------|
+| `value` | `string` | Initial MDX content |
+| `onChange` | `(markdown: string) => void` | Content change callback |
+| `editorPlugins` | `EditorPlugin[]` | Custom MDX element types |
+| `platePlugins` | `PlatePlugin[]` | Additional Plate plugins |
+| `copilot` | `CopilotConfig` | AI completion config |
+| `frontmatter` | `Frontmatter` | Page metadata |
+| `onFrontmatterChange` | `function` | Frontmatter change callback |
+| `showToolbar` | `boolean` | Show formatting toolbar |
+| `readOnly` | `boolean` | Disable editing |
+
+### Custom Editor Plugins
+
+Extend the editor with custom MDX elements:
+
+```tsx
+import { Editor, type EditorPlugin } from '@hands/editor';
+
+const myPlugins: EditorPlugin[] = [
+  {
+    name: 'CustomChart',
+    component: MyChartComponent,
+    options: { isVoid: true },
+  },
+];
+
+<Editor editorPlugins={myPlugins} />
+```
+
+For advanced control, use `createPlugin` from `@hands/core/primitives` to generate Plate plugins and serialization rules.
 
 ## Exports
 

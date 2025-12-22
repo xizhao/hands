@@ -39,7 +39,22 @@ Display-only components that render live data from SQL queries.
 - **Progress** - Progress bar
 - **Alert** - Callout message box
 - **Loader** - Loading indicator
+- **Block** - Embed MDX blocks or create new components with AI
 - **LineChart**, **BarChart**, **AreaChart**, **PieChart** - Data visualization
+
+#### Block Component
+
+The `<Block>` component embeds MDX fragments from `pages/blocks/` or creates new components via AI.
+
+```mdx
+<!-- Embed an existing block -->
+<Block src="blocks/header" />
+
+<!-- Pass parameters to a block -->
+<Block src="blocks/user-card" params={{userId: 123}} />
+```
+
+Blocks are MDX files in the `pages/blocks/` subdirectory. They appear in the BlocksPanel and can be embedded into any page.
 
 ### Action Components
 
@@ -85,3 +100,69 @@ This produces:
 - `docs/components.md` - Human/agent-readable reference
 - `docs/registry.json` - Structured metadata for tooling
 - `docs/stdlib.ts` - TypeScript exports for agent system prompts
+
+## Plugins (Custom Editor Extensions)
+
+Create custom MDX components that extend the editor stdlib using `createPlugin`:
+
+```typescript
+import { createPlugin } from "@hands/core/primitives";
+
+// Define your custom component
+const CustomChart = ({ data, type }: { data: unknown[]; type?: string }) => (
+  <MyChartLibrary data={data} type={type} />
+);
+
+// Create plugin + serialization rule
+const { plugin, rule } = createPlugin("CustomChart", CustomChart, {
+  isVoid: true,  // No editable children (default: true)
+});
+
+// Use in editor
+const EditorKit = [...FullKit, plugin];
+```
+
+### Plugin Options
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `isVoid` | `boolean` | `true` | Element has no editable children |
+| `isInline` | `boolean` | `false` | Element renders inline |
+| `defaults` | `object` | `{}` | Default prop values (not serialized if unchanged) |
+| `exclude` | `string[]` | `[]` | Props to exclude from serialization |
+| `className` | `string` | `""` | Custom wrapper className |
+
+### Multiple Plugins
+
+Create multiple plugins at once:
+
+```typescript
+import { createPlugins } from "@hands/core/primitives";
+
+const { plugins, rules } = createPlugins([
+  { tagName: "CustomChart", component: ChartComponent },
+  { tagName: "DataTable", component: TableComponent, options: { isVoid: true } },
+]);
+```
+
+## Content Model
+
+### Terminology
+
+| Concept | Format | Location | Purpose |
+|---------|--------|----------|---------|
+| **Page** | MDX | `pages/*.mdx` | Routable documents with frontmatter |
+| **Block** | MDX | `pages/blocks/*.mdx` | Embeddable page fragments |
+| **Plugin** | TSX | Custom code | Editor extensions via `createPlugin` |
+
+### Directory Structure
+
+```
+workbook/
+  pages/
+    dashboard.mdx        # Page - routable, shown in nav
+    settings.mdx         # Page - routable, shown in nav
+    blocks/              # Blocks subdirectory (auto-created)
+      header.mdx         # Block - embeddable, shown in BlocksPanel
+      footer.mdx         # Block - embeddable, shown in BlocksPanel
+```

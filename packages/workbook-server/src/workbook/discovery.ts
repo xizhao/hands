@@ -123,7 +123,8 @@ export async function discoverPages(pagesDir: string): Promise<DiscoveryResult<D
 
     try {
       const route = pathToRoute(file, ext);
-      items.push({ route, path: file, ext });
+      const parentDir = dirname(file) === "." ? "" : dirname(file);
+      items.push({ route, path: file, ext, parentDir });
     } catch (err) {
       errors.push({
         file,

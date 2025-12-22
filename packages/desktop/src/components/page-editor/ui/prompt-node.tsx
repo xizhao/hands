@@ -156,7 +156,7 @@ ${schemaContext}
           {isPending ? (
             <>{promptText}</>
           ) : (
-            <span className="text-foreground">{statusText || '...'}</span>
+            <span className="text-foreground">{statusText || 'Thinking...'}</span>
           )}
         </span>
       </div>

@@ -1,5 +1,5 @@
 /**
- * useThumbnail - tRPC hook for fetching page/block thumbnails
+ * useThumbnail - tRPC hook for fetching page thumbnails
  *
  * Thumbnails are stored in the runtime's hands_admin.thumbnails table,
  * captured from iframe renders. Returns theme-appropriate thumbnail.
@@ -14,7 +14,7 @@ import { trpc } from "@/lib/trpc";
 
 export interface Thumbnail {
   id: string;
-  type: "page" | "block";
+  type: "page";
   contentId: string;
   theme: "light" | "dark";
   thumbnail: string; // base64 PNG (800x600)
@@ -64,12 +64,12 @@ function useCurrentTheme(): "light" | "dark" {
 // ============================================================================
 
 /**
- * Fetch thumbnail for a page or block
+ * Fetch thumbnail for a page
  *
  * Returns the theme-appropriate thumbnail (light or dark) based on current theme.
  * Uses staleTime: Infinity since we invalidate on save.
  */
-export function useThumbnail(type: "page" | "block", contentId: string | undefined) {
+export function useThumbnail(type: "page", contentId: string | undefined) {
   const theme = useCurrentTheme();
 
   const query = trpc.thumbnails.get.useQuery(
@@ -97,7 +97,7 @@ export function useThumbnail(type: "page" | "block", contentId: string | undefin
  *
  * Useful when you need to show both variants (e.g., in settings preview).
  */
-export function useThumbnails(type: "page" | "block", contentId: string | undefined) {
+export function useThumbnails(type: "page", contentId: string | undefined) {
   return trpc.thumbnails.get.useQuery(
     { type, contentId: contentId! },
     {
@@ -111,7 +111,7 @@ export function useThumbnails(type: "page" | "block", contentId: string | undefi
 /**
  * Hook to invalidate thumbnails after content save
  *
- * Call this after saving page/block content to trigger re-capture.
+ * Call this after saving page content to trigger re-capture.
  */
 export function useInvalidateThumbnails() {
   const utils = trpc.useUtils();
@@ -120,7 +120,7 @@ export function useInvalidateThumbnails() {
     /**
      * Invalidate thumbnails for a specific content item
      */
-    invalidate: (type: "page" | "block", contentId: string) => {
+    invalidate: (type: "page", contentId: string) => {
       utils.thumbnails.get.invalidate({ type, contentId });
     },
 
@@ -141,7 +141,7 @@ export function useInvalidateThumbnails() {
 export function usePrefetchThumbnail() {
   const utils = trpc.useUtils();
 
-  return (type: "page" | "block", contentId: string) => {
+  return (type: "page", contentId: string) => {
     if (!contentId) return;
 
     utils.thumbnails.get.prefetch(

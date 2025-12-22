@@ -32,6 +32,9 @@ export const DATA_GRID_KEY = "data_grid";
 export const KANBAN_KEY = "kanban";
 export const COLUMN_GROUP_KEY = "column_group";
 export const COLUMN_KEY = "column";
+export const BLOCK_KEY = "block";
+export const TABS_KEY = "tabs";
+export const TAB_KEY = "tab";
 
 // ============================================================================
 // Validation Constants (for MDX validation)
@@ -68,6 +71,9 @@ export const STDLIB_COMPONENT_NAMES = [
   "Kanban",
   "Columns",
   "Column",
+  "Block",
+  "Tabs",
+  "Tab",
 ] as const;
 
 // ============================================================================
@@ -630,5 +636,82 @@ export interface TColumnElement extends TElement {
   /** Column width as CSS value (e.g., "50%", "200px", "1fr") */
   width?: string;
   /** Children are the column content */
+  children: (TElement | TText)[];
+}
+
+// ============================================================================
+// Tabs Layout Types
+// ============================================================================
+
+/**
+ * Tabs element - container for tabbed navigation.
+ *
+ * @example
+ * ```tsx
+ * <Tabs defaultValue="overview">
+ *   <Tab value="overview" label="Overview">Overview content</Tab>
+ *   <Tab value="details" label="Details">Details content</Tab>
+ * </Tabs>
+ * ```
+ */
+export interface TTabsElement extends TElement {
+  type: typeof TABS_KEY;
+  /** Default active tab value */
+  defaultValue?: string;
+  /** Children are Tab elements */
+  children: TTabElement[];
+}
+
+/**
+ * Tab element - individual tab panel within Tabs.
+ */
+export interface TTabElement extends TElement {
+  type: typeof TAB_KEY;
+  /** Unique value for this tab */
+  value: string;
+  /** Display label for the tab trigger */
+  label: string;
+  /** Children are the tab content */
+  children: (TElement | TText)[];
+}
+
+// ============================================================================
+// Block Element Types
+// ============================================================================
+
+/**
+ * Block element - embeds reusable MDX blocks inline, or creates new ones with AI.
+ *
+ * Modes:
+ * 1. **Embed mode** (has src): Renders content from pages/blocks/{src}.mdx
+ * 2. **Edit mode** (editing=true): Inline creation/editing
+ * 3. **AI mode** (has prompt): AI-assisted block generation
+ *
+ * @example Embed existing block
+ * ```tsx
+ * <Block src="blocks/header" />
+ * <Block src="blocks/user-card" params={{userId: 123}} />
+ * ```
+ *
+ * @example AI generation
+ * ```tsx
+ * <Block prompt="create a metrics dashboard" />
+ * ```
+ */
+export interface TBlockElement extends TElement {
+  type: typeof BLOCK_KEY;
+  /** Path to the block MDX file relative to pages/ (e.g., "blocks/header") */
+  src?: string;
+  /** Optional parameters to pass to the embedded block */
+  params?: Record<string, unknown>;
+  /** Whether the block is in editing/creation mode */
+  editing?: boolean;
+  /** AI prompt for block generation */
+  prompt?: string;
+  /** Height of the block container (useful for loading states) */
+  height?: number;
+  /** CSS class for the container */
+  className?: string;
+  /** Children are unused (void element) */
   children: (TElement | TText)[];
 }

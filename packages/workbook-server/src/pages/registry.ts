@@ -6,7 +6,7 @@
 
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
-import { discoverPages, type DiscoveredPage } from "./discovery.js";
+import { discoverPages, ensureBlocksDir, type DiscoveredPage } from "./discovery.js";
 import { compilePage, type CompiledPage } from "./mdx.js";
 
 // ============================================================================
@@ -42,6 +42,9 @@ export class PageRegistry {
   constructor(options: PageRegistryOptions) {
     this.pagesDir = options.pagesDir;
     this.precompile = options.precompile ?? false;
+
+    // Ensure blocks/ subdirectory exists on registry creation
+    ensureBlocksDir(this.pagesDir);
   }
 
   /**

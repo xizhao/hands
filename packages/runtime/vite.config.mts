@@ -4,7 +4,6 @@ import react from "@vitejs/plugin-react";
 import path from "path";
 import { redwood } from "rwsdk/vite";
 import { defineConfig } from "vite";
-import { blocksPlugin } from "./src/vite-plugin-blocks";
 import { editorPlugin } from "./src/vite-plugin-editor";
 import { dbTypesPlugin } from "./src/vite-plugin-db-types";
 import { pagesPlugin } from "./src/vite-plugin-pages";
@@ -119,7 +118,6 @@ export default defineConfig({
     }),
     // staleDepRetryPlugin(), // TODO: fix - causing Script error
     tunnelPlugin({ enabled: isDev }),
-    blocksPlugin({ workbookPath }),
     dbTypesPlugin({ workbookPath }),
     pagesPlugin({ workbookPath }),
     cloudflare({

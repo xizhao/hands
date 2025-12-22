@@ -9,6 +9,7 @@ import { join } from "node:path";
 import { initTRPC, TRPCError } from "@trpc/server";
 import { z } from "zod";
 import type { PageRegistry, RegisteredPage } from "../../pages/index.js";
+import { ensureBlocksDir, BLOCKS_SUBDIR } from "../../pages/discovery.js";
 
 // ============================================================================
 // Context
@@ -68,8 +69,29 @@ const createPageInput = z.object({
 // ============================================================================
 
 export const pagesRouter = t.router({
-  /** List all pages */
+  /** List all pages (excluding blocks/) */
   list: registryReadyProcedure.query(({ ctx }) => {
+    const allPages = ctx.pageRegistry.list();
+    const pages = allPages.filter((p) => !p.isBlock);
+    return {
+      pages,
+      routes: pages.map((p) => p.route),
+      errors: ctx.pageRegistry.getErrors(),
+    };
+  }),
+
+  /** List all blocks (from blocks/ subdirectory) */
+  listBlocks: registryReadyProcedure.query(({ ctx }) => {
+    const allPages = ctx.pageRegistry.list();
+    const blocks = allPages.filter((p) => p.isBlock);
+    return {
+      blocks,
+      errors: ctx.pageRegistry.getErrors(),
+    };
+  }),
+
+  /** List everything (pages + blocks) */
+  listAll: registryReadyProcedure.query(({ ctx }) => {
     return {
       pages: ctx.pageRegistry.list(),
       routes: ctx.pageRegistry.routes(),
@@ -151,11 +173,18 @@ export const pagesRouter = t.router({
     if (input.pageId) {
       pageId = input.pageId;
       // Check if page already exists
-      if (existsSync(join(pagesDir, `${pageId}.mdx`))) {
+      const targetPath = join(pagesDir, `${pageId}.mdx`);
+      if (existsSync(targetPath)) {
         throw new TRPCError({
           code: "CONFLICT",
           message: `Page already exists: ${pageId}`,
         });
+      }
+      // Create parent directory if it doesn't exist (e.g., for blocks/untitled)
+      const parentDir = join(pagesDir, pageId.split("/").slice(0, -1).join("/"));
+      if (parentDir !== pagesDir && !existsSync(parentDir)) {
+        const { mkdirSync } = await import("node:fs");
+        mkdirSync(parentDir, { recursive: true });
       }
     } else {
       // Find next available "untitled" name
@@ -169,8 +198,9 @@ export const pagesRouter = t.router({
 
     const filePath = join(pagesDir, `${pageId}.mdx`);
 
-    // Convert slug to title case (e.g., "my-page" -> "My Page")
-    const title = pageId
+    // Convert slug to title case (e.g., "my-page" -> "My Page", "blocks/header" -> "Header")
+    const baseName = pageId.split("/").pop() || pageId;
+    const title = baseName
       .split("-")
       .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
       .join(" ");

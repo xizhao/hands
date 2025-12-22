@@ -14,7 +14,7 @@ import { SlateElement, type SlateElementProps } from "platejs/static";
 import remarkGfm from "remark-gfm";
 import type { TColumnElement } from "platejs";
 
-import { serializationRules, toMarkdownPluginRules } from "../stdlib/serialization";
+import { serializationRules, toMarkdownPluginRules } from "../primitives/serialization";
 import { MockDataProvider } from "./mock-data-provider";
 
 // Import all stdlib plugins for rendering
@@ -29,7 +29,7 @@ import {
   ProgressPlugin,
   AlertPlugin,
   LoaderPlugin,
-} from "../stdlib/view";
+} from "../ui/view";
 import {
   LiveActionPlugin,
   ButtonPlugin,
@@ -37,8 +37,8 @@ import {
   SelectPlugin,
   CheckboxPlugin,
   TextareaPlugin,
-} from "../stdlib/action";
-import { DataGridPlugin, KanbanPlugin } from "../stdlib/data";
+} from "../ui/action";
+import { DataGridPlugin, KanbanPlugin } from "../ui/data";
 
 // ============================================================================
 // Column Components (inline to avoid circular deps)

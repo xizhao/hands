@@ -3,6 +3,7 @@
 import {
   Code,
   CursorClick,
+  DotsThree,
   Lightbulb,
   Lightning,
   List,
@@ -30,6 +31,14 @@ import {
 import { cn } from "../lib/utils";
 import { getBlockType, setBlockType } from "../transforms";
 
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuGroup,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuTrigger,
+} from "./dropdown-menu";
 import { FontColorToolbarButton } from "./font-color-toolbar-button";
 import { LinkToolbarButton } from "./link-toolbar-button";
 import { MarkToolbarButton } from "./mark-toolbar-button";
@@ -151,6 +160,86 @@ function InsertLiveActionButton() {
 }
 
 // ============================================================================
+// More Dropdown (for collapsed toolbar items)
+// ============================================================================
+
+function MoreDropdown() {
+  const editor = useEditorRef();
+
+  const currentType = useSelectionFragmentProp({
+    defaultValue: KEYS.p,
+    getProp: (node) => getBlockType(node as any),
+  });
+
+  const handleSetBlockType = useCallback((type: string) => {
+    const isActive = currentType === type;
+    setBlockType(editor, isActive ? KEYS.p : type);
+    editor.tf.focus();
+  }, [editor, currentType]);
+
+  const handleInsertTable = useCallback(() => {
+    insertTable(editor, { rowCount: 3, colCount: 3 }, { select: true });
+    editor.tf.focus();
+  }, [editor]);
+
+  const handleInsertCallout = useCallback(() => {
+    insertCallout(editor, { select: true });
+    editor.tf.focus();
+  }, [editor]);
+
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <ToolbarButton tooltip="More options">
+          <DotsThree size={16} weight="bold" />
+        </ToolbarButton>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="start" portal>
+        <DropdownMenuGroup>
+          <DropdownMenuLabel>Lists</DropdownMenuLabel>
+          <DropdownMenuItem onSelect={() => handleSetBlockType(KEYS.ul)}>
+            <List size={16} />
+            <span>Bulleted List</span>
+          </DropdownMenuItem>
+          <DropdownMenuItem onSelect={() => handleSetBlockType(KEYS.ol)}>
+            <ListNumbers size={16} />
+            <span>Numbered List</span>
+          </DropdownMenuItem>
+          <DropdownMenuItem onSelect={() => handleSetBlockType(KEYS.listTodo)}>
+            <Square size={16} />
+            <span>To-do List</span>
+          </DropdownMenuItem>
+        </DropdownMenuGroup>
+
+        <DropdownMenuGroup>
+          <DropdownMenuLabel>Blocks</DropdownMenuLabel>
+          <DropdownMenuItem onSelect={() => handleSetBlockType(KEYS.blockquote)}>
+            <Quotes size={16} />
+            <span>Quote</span>
+          </DropdownMenuItem>
+          <DropdownMenuItem onSelect={() => handleSetBlockType(KEYS.codeBlock)}>
+            <Code size={16} weight="bold" />
+            <span>Code Block</span>
+          </DropdownMenuItem>
+        </DropdownMenuGroup>
+
+        <DropdownMenuGroup>
+          <DropdownMenuLabel>Insert</DropdownMenuLabel>
+          <DropdownMenuItem onSelect={handleInsertTable}>
+            <Table size={16} />
+            <span>Table</span>
+          </DropdownMenuItem>
+          <DropdownMenuItem onSelect={handleInsertCallout}>
+            <Lightbulb size={16} />
+            <span>Callout</span>
+          </DropdownMenuItem>
+        </DropdownMenuGroup>
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+}
+
+// ============================================================================
 // Fixed Toolbar Buttons
 // ============================================================================
 
@@ -163,12 +252,12 @@ export function FixedToolbarButtons() {
 
   return (
     <div className="flex items-center">
-      {/* Block Type Switcher */}
+      {/* Block Type Switcher - always visible */}
       <ToolbarGroup>
         <TurnIntoToolbarButton />
       </ToolbarGroup>
 
-      {/* Text Formatting */}
+      {/* Text Formatting - core items always visible */}
       <ToolbarGroup>
         <MarkToolbarButton nodeType={KEYS.bold} shortcut="⌘+B" tooltip="Bold">
           <TextB size={16} weight="bold" />
@@ -178,73 +267,91 @@ export function FixedToolbarButtons() {
           <TextItalic size={16} />
         </MarkToolbarButton>
 
-        <MarkToolbarButton nodeType={KEYS.underline} shortcut="⌘+U" tooltip="Underline">
-          <TextUnderline size={16} />
-        </MarkToolbarButton>
+        {/* Hidden on small screens */}
+        <div className="hidden sm:flex items-center gap-0.5">
+          <MarkToolbarButton nodeType={KEYS.underline} shortcut="⌘+U" tooltip="Underline">
+            <TextUnderline size={16} />
+          </MarkToolbarButton>
 
-        <MarkToolbarButton
-          nodeType={KEYS.strikethrough}
-          shortcut="⌘+Shift+X"
-          tooltip="Strikethrough"
-        >
-          <TextStrikethrough size={16} />
-        </MarkToolbarButton>
+          <MarkToolbarButton
+            nodeType={KEYS.strikethrough}
+            shortcut="⌘+Shift+X"
+            tooltip="Strikethrough"
+          >
+            <TextStrikethrough size={16} />
+          </MarkToolbarButton>
 
-        <MarkToolbarButton nodeType={KEYS.code} shortcut="⌘+E" tooltip="Inline Code">
-          <Code size={16} />
-        </MarkToolbarButton>
+          <MarkToolbarButton nodeType={KEYS.code} shortcut="⌘+E" tooltip="Inline Code">
+            <Code size={16} />
+          </MarkToolbarButton>
+        </div>
       </ToolbarGroup>
 
-      {/* Color & Link */}
-      <ToolbarGroup>
-        <FontColorToolbarButton />
-        <LinkToolbarButton />
-      </ToolbarGroup>
+      {/* Color & Link - hidden on small screens */}
+      <div className="hidden md:block">
+        <ToolbarGroup>
+          <FontColorToolbarButton />
+          <LinkToolbarButton />
+        </ToolbarGroup>
+      </div>
 
-      {/* Lists */}
-      <ToolbarGroup>
-        <BlockTypeButton
-          type={KEYS.ul}
-          icon={<List size={16} />}
-          tooltip="Bulleted List"
-        />
-        <BlockTypeButton
-          type={KEYS.ol}
-          icon={<ListNumbers size={16} />}
-          tooltip="Numbered List"
-        />
-        <BlockTypeButton
-          type={KEYS.listTodo}
-          icon={<Square size={16} />}
-          tooltip="To-do List"
-        />
-      </ToolbarGroup>
+      {/* Lists - hidden on medium and below */}
+      <div className="hidden lg:block">
+        <ToolbarGroup>
+          <BlockTypeButton
+            type={KEYS.ul}
+            icon={<List size={16} />}
+            tooltip="Bulleted List"
+          />
+          <BlockTypeButton
+            type={KEYS.ol}
+            icon={<ListNumbers size={16} />}
+            tooltip="Numbered List"
+          />
+          <BlockTypeButton
+            type={KEYS.listTodo}
+            icon={<Square size={16} />}
+            tooltip="To-do List"
+          />
+        </ToolbarGroup>
+      </div>
 
-      {/* Block Formatting */}
-      <ToolbarGroup>
-        <BlockTypeButton
-          type={KEYS.blockquote}
-          icon={<Quotes size={16} />}
-          tooltip="Quote"
-        />
-        <BlockTypeButton
-          type={KEYS.codeBlock}
-          icon={<Code size={16} weight="bold" />}
-          tooltip="Code Block"
-        />
-      </ToolbarGroup>
+      {/* Block Formatting - hidden on medium and below */}
+      <div className="hidden lg:block">
+        <ToolbarGroup>
+          <BlockTypeButton
+            type={KEYS.blockquote}
+            icon={<Quotes size={16} />}
+            tooltip="Quote"
+          />
+          <BlockTypeButton
+            type={KEYS.codeBlock}
+            icon={<Code size={16} weight="bold" />}
+            tooltip="Code Block"
+          />
+        </ToolbarGroup>
+      </div>
 
-      {/* Insert Elements */}
-      <ToolbarGroup>
-        <InsertTableButton />
-        <InsertCalloutButton />
-      </ToolbarGroup>
+      {/* Insert Elements - hidden on medium and below */}
+      <div className="hidden xl:block">
+        <ToolbarGroup>
+          <InsertTableButton />
+          <InsertCalloutButton />
+        </ToolbarGroup>
+      </div>
 
-      {/* Live Data */}
+      {/* Live Data - always visible (app-specific) */}
       <ToolbarGroup>
         <InsertLiveValueButton />
         <InsertLiveActionButton />
       </ToolbarGroup>
+
+      {/* More dropdown - visible on smaller screens */}
+      <div className="xl:hidden">
+        <ToolbarGroup>
+          <MoreDropdown />
+        </ToolbarGroup>
+      </div>
     </div>
   );
 }

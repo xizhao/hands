@@ -46,10 +46,10 @@ export function DesktopEditorProvider({ children }: DesktopEditorProviderProps) 
 
   const editorTrpc = useMemo<EditorTrpcClient>(() => ({
     ai: {
-      generateMdx: { mutate: (input) => generateMdx.mutateAsync(input) },
-      generateMdxBlock: { mutate: (input) => generateMdxBlock.mutateAsync(input) },
+      generateMdx: { mutate: (input) => generateMdx.mutateAsync({ ...input, tables: input.tables ?? tables }) },
+      generateMdxBlock: { mutate: (input) => generateMdxBlock.mutateAsync({ ...input, tables: input.tables ?? tables }) },
     },
-  }), [generateMdx.mutateAsync, generateMdxBlock.mutateAsync]);
+  }), [generateMdx.mutateAsync, generateMdxBlock.mutateAsync, tables]);
 
   // Query adapter for LiveQueryProvider (SQL queries)
   const useQueryAdapter = (
