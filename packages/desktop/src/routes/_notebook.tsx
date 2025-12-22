@@ -1,11 +1,4 @@
 import { queryClient } from "@/App";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
 import { NotebookShell } from "@/components/workbook/NotebookShell";
 import { useNeedsTrafficLightOffset } from "@/hooks/useFullscreen";
 import type { NavSearchParams } from "@/hooks/useNavState";
@@ -20,7 +13,6 @@ import {
 import { setNavigateCallback, startSSESync } from "@/lib/sse";
 import { cn } from "@/lib/utils";
 import type { Workbook } from "@/lib/workbook";
-import { CaretDown, Check, Plus } from "@phosphor-icons/react";
 import { createFileRoute, Outlet, useNavigate } from "@tanstack/react-router";
 import { useCallback, useEffect, useRef } from "react";
 
@@ -161,8 +153,8 @@ function NotebookLayout() {
     [clearNavigation, openWorkbook]
   );
 
-  // When no port, show minimal shell - just header with workbook switcher
-  // No ChatBar/Thread here - those need runtime to be useful
+  // When no port, show clean loading state - minimal header only
+  // Keep it simple to avoid jarring transitions
   if (!port) {
     return (
       <div className="h-screen flex flex-col bg-background">
@@ -174,41 +166,10 @@ function NotebookLayout() {
           )}
         >
           <div className="flex items-center gap-1.5">
-            <span className="w-2 h-2 rounded-full bg-muted-foreground/30" />
-            <span className="text-sm font-medium">
-              {currentWorkbook?.name ?? "Untitled"}
+            <span className="w-2 h-2 rounded-full bg-muted-foreground/30 animate-pulse" />
+            <span className="text-sm text-muted-foreground">
+              {currentWorkbook?.name ?? "Loading..."}
             </span>
-            <DropdownMenu>
-              <DropdownMenuTrigger className="flex items-center justify-center w-5 h-5 rounded-sm text-muted-foreground/70 hover:text-muted-foreground hover:bg-accent/50">
-                <CaretDown weight="bold" className="h-3 w-3" />
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="start" className="w-[200px]">
-                {workbooks?.map((wb) => (
-                  <DropdownMenuItem
-                    key={wb.id}
-                    onClick={() => handleSwitchWorkbook(wb)}
-                    className="flex items-center justify-between"
-                  >
-                    <span className="truncate text-[13px]">{wb.name}</span>
-                    {wb.id === workbookId && (
-                      <Check
-                        weight="bold"
-                        className="h-3.5 w-3.5 text-primary shrink-0"
-                      />
-                    )}
-                  </DropdownMenuItem>
-                ))}
-                <DropdownMenuSeparator />
-                <DropdownMenuItem
-                  onClick={() =>
-                    createWorkbook.mutate({ name: "New Notebook" })
-                  }
-                >
-                  <Plus weight="bold" className="h-3.5 w-3.5 mr-2" />
-                  <span className="text-[13px]">New Notebook</span>
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
           </div>
         </header>
         <div className="flex-1" />

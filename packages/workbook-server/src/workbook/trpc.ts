@@ -111,7 +111,7 @@ function generateDefaultBlockSource(blockName: string): string {
 // ============================================================================
 
 export const workbookTRPCRouter = t.router({
-  /** Get workbook manifest (blocks, pages, components) */
+  /** Get workbook manifest (blocks, pages, plugins, components) */
   manifest: publicProcedure.query(async ({ ctx }) => {
     const manifest = await discoverWorkbook({ rootPath: ctx.workbookDir });
     return {
@@ -131,7 +131,14 @@ export const workbookTRPCRouter = t.router({
         route: p.route,
         path: p.path,
         parentDir: p.parentDir,
+        isBlock: p.isBlock,
         title: p.route === "/" ? "Home" : p.route.split("/").pop() || p.route,
+      })),
+      plugins: manifest.plugins.map((p) => ({
+        id: p.id,
+        name: p.name,
+        path: p.path,
+        description: p.description,
       })),
       components: manifest.components.map((c) => ({
         name: c.name,

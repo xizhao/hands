@@ -1,0 +1,60 @@
+/**
+ * PluginsSection - Plugins section in sidebar
+ *
+ * Displays custom plugins (TSX components extending stdlib).
+ */
+
+import { cn } from "@/lib/utils";
+import { SidebarSection, SidebarEmptyState } from "../components/SidebarSection";
+import { listItemStyles } from "../components/SidebarItem";
+import { PluginIcon } from "../components/icons";
+import type { SidebarPlugin } from "../types";
+
+interface PluginsSectionProps {
+  /** Section expanded state */
+  expanded: boolean;
+  /** Toggle section */
+  onToggle: () => void;
+  /** Plugins list */
+  plugins: SidebarPlugin[];
+}
+
+export function PluginsSection({
+  expanded,
+  onToggle,
+  plugins,
+}: PluginsSectionProps) {
+  const handlePluginClick = (pluginId: string) => {
+    // TODO: Navigate to plugin source in editor
+    console.log("[sidebar] plugin clicked:", pluginId);
+  };
+
+  return (
+    <SidebarSection
+      title="Plugins"
+      expanded={expanded}
+      onToggle={onToggle}
+      onAdd={() => {
+        // TODO: Create new plugin
+        console.log("[sidebar] new plugin clicked");
+      }}
+      addTooltip="New plugin"
+    >
+      {plugins.length > 0 ? (
+        plugins.map((plugin) => (
+          <div key={plugin.id} className={cn(listItemStyles, "group")}>
+            <PluginIcon />
+            <button
+              onClick={() => handlePluginClick(plugin.id)}
+              className="flex-1 truncate text-left hover:underline"
+            >
+              {plugin.name}
+            </button>
+          </div>
+        ))
+      ) : (
+        <SidebarEmptyState icon={<PluginIcon empty />} label="No plugins" />
+      )}
+    </SidebarSection>
+  );
+}

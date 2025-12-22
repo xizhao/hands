@@ -285,7 +285,26 @@ export const THEMES: Record<string, Theme> = {
 };
 
 const STORAGE_KEY = "hands-theme";
+const COLORS_KEY = "hands-theme-colors";
 const DEFAULT_THEME = "system";
+
+/**
+ * Convert camelCase to kebab-case for CSS variable names
+ */
+function toKebabCase(key: string): string {
+  return key.replace(/([A-Z])/g, "-$1").toLowerCase();
+}
+
+/**
+ * Build CSS variable map from theme colors
+ */
+function buildCssVars(colors: ThemeColors): Record<string, string> {
+  const vars: Record<string, string> = {};
+  for (const [key, value] of Object.entries(colors)) {
+    vars[`--${toKebabCase(key)}`] = value;
+  }
+  return vars;
+}
 
 function applyTheme(theme: Theme) {
   const root = document.documentElement;
@@ -294,10 +313,12 @@ function applyTheme(theme: Theme) {
   } else {
     root.classList.remove("dark");
   }
-  Object.entries(theme.colors).forEach(([key, value]) => {
-    const cssVar = key.replace(/([A-Z])/g, "-$1").toLowerCase();
-    root.style.setProperty(`--${cssVar}`, value);
-  });
+  const cssVars = buildCssVars(theme.colors);
+  for (const [varName, value] of Object.entries(cssVars)) {
+    root.style.setProperty(varName, value);
+  }
+  // Persist resolved colors for instant sync on next load
+  localStorage.setItem(COLORS_KEY, JSON.stringify({ isDark: theme.isDark, vars: cssVars }));
 }
 
 /**

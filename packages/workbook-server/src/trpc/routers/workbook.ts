@@ -134,7 +134,15 @@ export const workbookRouter = t.router({
       route: p.route,
       path: p.path,
       parentDir: p.parentDir,
+      isBlock: p.isBlock,
       title: p.route === "/" ? "Home" : p.route.split("/").pop() || p.route,
+    }));
+
+    const plugins = discovery.plugins.map((p) => ({
+      id: p.id,
+      name: p.name,
+      path: p.path,
+      description: p.description,
     }));
 
     return {
@@ -142,6 +150,7 @@ export const workbookRouter = t.router({
       workbookDir: ctx.workbookDir,
       blocks,
       pages,
+      plugins,
       components: discovery.components.map((c) => ({
         name: c.name,
         path: c.path,

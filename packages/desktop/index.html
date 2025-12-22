@@ -1,17 +1,67 @@
 <!doctype html>
-<html lang="en" class="dark">
+<html lang="en">
   <head>
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/hands.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Hands</title>
     <style>
-      /* Match app dark theme background during load to prevent white flash */
+      /* Default theme variables - matches theme.ts THEMES.light and THEMES.dark */
+      :root {
+        --background: 0 0% 100%;
+        --foreground: 220 9% 12%;
+      }
+      .dark {
+        --background: 224 10% 10%;
+        --foreground: 210 20% 98%;
+      }
       html, body, #root {
-        background: #0a0a0a !important;
+        background: hsl(var(--background));
+        color: hsl(var(--foreground));
+        margin: 0;
+        padding: 0;
+        height: 100%;
       }
     </style>
-    <!-- RSC webpack shim is now in src/lib/rsc-webpack-shim.ts, imported before React -->
+    <!-- Initialize theme synchronously before React to prevent flash -->
+    <script>
+      (function() {
+        try {
+          // Try to read cached theme colors (set by theme.ts on every theme change)
+          var colors = localStorage.getItem('hands-theme-colors');
+          if (colors) {
+            var parsed = JSON.parse(colors);
+            // Apply dark class
+            if (parsed.isDark) {
+              document.documentElement.classList.add('dark');
+            }
+            // Apply all CSS variables
+            if (parsed.vars) {
+              var root = document.documentElement;
+              for (var varName in parsed.vars) {
+                root.style.setProperty(varName, parsed.vars[varName]);
+              }
+            }
+            return; // Done - full theme applied
+          }
+          // Fallback: no cached colors yet, just use dark/light based on theme name
+          var stored = localStorage.getItem('hands-theme');
+          var themeName = 'system';
+          if (stored) {
+            var themeData = JSON.parse(stored);
+            themeName = (themeData.state && themeData.state.currentTheme) || 'system';
+          }
+          var isDark = themeName === 'system'
+            ? window.matchMedia('(prefers-color-scheme: dark)').matches
+            : themeName !== 'light' && themeName !== 'light-mode' && themeName !== 'github-light';
+          if (isDark) {
+            document.documentElement.classList.add('dark');
+          }
+        } catch (e) {
+          document.documentElement.classList.add('dark');
+        }
+      })();
+    </script>
   </head>
   <body>
     <div id="root"></div>

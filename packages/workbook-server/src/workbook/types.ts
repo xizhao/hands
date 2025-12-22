@@ -11,6 +11,8 @@ export interface WorkbookConfig {
   blocksDir?: string;
   /** Path to pages directory (default: rootPath/pages) */
   pagesDir?: string;
+  /** Path to plugins directory (default: rootPath/plugins) */
+  pluginsDir?: string;
   /** Path to ui directory (default: rootPath/ui) */
   uiDir?: string;
   /** Output directory for generated files (default: rootPath/.hands) */
@@ -21,6 +23,7 @@ export interface ResolvedWorkbookConfig {
   rootPath: string;
   blocksDir: string;
   pagesDir: string;
+  pluginsDir: string;
   uiDir: string;
   outDir: string;
 }
@@ -52,6 +55,9 @@ export interface DiscoveredBlock {
 // Pages
 // ============================================================================
 
+/** Subdirectory containing reusable blocks */
+export const BLOCKS_SUBDIR = "blocks";
+
 export interface DiscoveredPage {
   /** Route path (e.g., "/", "/about", "/docs/intro") */
   route: string;
@@ -61,6 +67,23 @@ export interface DiscoveredPage {
   ext: string;
   /** Parent directory (e.g., "blocks", "docs", or "") */
   parentDir: string;
+  /** Whether this is a block (in blocks/ subdirectory) */
+  isBlock: boolean;
+}
+
+// ============================================================================
+// Plugins
+// ============================================================================
+
+export interface DiscoveredPlugin {
+  /** Plugin ID derived from filename (e.g., "custom-chart") */
+  id: string;
+  /** Relative path from plugins dir */
+  path: string;
+  /** Display name extracted from metadata or filename */
+  name: string;
+  /** Description from JSDoc or metadata */
+  description?: string;
 }
 
 // ============================================================================
@@ -106,6 +129,8 @@ export interface WorkbookManifest {
   blocks: DiscoveredBlock[];
   /** Discovered pages */
   pages: DiscoveredPage[];
+  /** Discovered plugins */
+  plugins: DiscoveredPlugin[];
   /** Discovered UI components */
   components: DiscoveredComponent[];
   /** Discovered database tables */

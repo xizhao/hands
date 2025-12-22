@@ -11,6 +11,7 @@ import type {
   DiscoveredBlock,
   DiscoveredComponent,
   DiscoveredPage,
+  DiscoveredPlugin,
   DiscoveredTable,
   DiscoveryError,
   DiscoveryResult,
@@ -18,6 +19,7 @@ import type {
   WorkbookConfig,
   WorkbookManifest,
 } from "./types.js";
+import { BLOCKS_SUBDIR } from "./types.js";
 
 // Re-export WorkbookConfig for convenience
 export type { WorkbookConfig } from "./types.js";
@@ -33,6 +35,7 @@ export function resolveConfig(config: WorkbookConfig): ResolvedWorkbookConfig {
     rootPath,
     blocksDir: config.blocksDir ?? join(rootPath, "blocks"),
     pagesDir: config.pagesDir ?? join(rootPath, "pages"),
+    pluginsDir: config.pluginsDir ?? join(rootPath, "plugins"),
     uiDir: config.uiDir ?? join(rootPath, "ui"),
     outDir: config.outDir ?? join(rootPath, ".hands"),
   };
@@ -103,6 +106,14 @@ export async function discoverBlocks(
 
 const PAGE_EXTENSIONS = [".md", ".mdx", ".plate.json"];
 
+/**
+ * Check if a path is inside the blocks/ subdirectory
+ */
+function isBlockPath(relativePath: string): boolean {
+  const normalized = relativePath.replace(/\\/g, "/");
+  return normalized.startsWith(`${BLOCKS_SUBDIR}/`) || normalized === BLOCKS_SUBDIR;
+}
+
 export async function discoverPages(pagesDir: string): Promise<DiscoveryResult<DiscoveredPage>> {
   const items: DiscoveredPage[] = [];
   const errors: DiscoveryError[] = [];
@@ -124,7 +135,8 @@ export async function discoverPages(pagesDir: string): Promise<DiscoveryResult<D
     try {
       const route = pathToRoute(file, ext);
       const parentDir = dirname(file) === "." ? "" : dirname(file);
-      items.push({ route, path: file, ext, parentDir });
+      const isBlock = isBlockPath(file);
+      items.push({ route, path: file, ext, parentDir, isBlock });
     } catch (err) {
       errors.push({
         file,
@@ -264,15 +276,78 @@ export function discoverTables(rootPath: string): DiscoveryResult<DiscoveredTabl
 }
 
 // ============================================================================
+// Plugin Discovery
+// ============================================================================
+
+/**
+ * Discover plugins in the plugins/ directory.
+ * Plugins are TSX components that extend the editor stdlib.
+ */
+export async function discoverPlugins(
+  pluginsDir: string
+): Promise<DiscoveryResult<DiscoveredPlugin>> {
+  const items: DiscoveredPlugin[] = [];
+  const errors: DiscoveryError[] = [];
+
+  if (!existsSync(pluginsDir)) {
+    return { items, errors };
+  }
+
+  const files = await findFiles(pluginsDir, "", {
+    extensions: [".tsx", ".ts"],
+    excludePatterns: [],
+    excludeSuffixes: [".types.tsx", ".types.ts", ".test.tsx", ".test.ts"],
+  });
+
+  for (const file of files) {
+    const filePath = join(pluginsDir, file);
+
+    try {
+      const content = await readFile(filePath, "utf-8");
+      const id = file.replace(/\.(tsx|ts)$/, "");
+      const filename = basename(file).replace(/\.(tsx|ts)$/, "");
+
+      // Extract name from JSDoc @plugin tag or use filename
+      const pluginMatch = content.match(/@plugin\s+(.+)/);
+      const name = pluginMatch?.[1]?.trim() || formatPluginName(filename);
+
+      // Extract description from JSDoc @description tag
+      const descMatch = content.match(/@description\s+(.+)/);
+      const description = descMatch?.[1]?.trim();
+
+      items.push({ id, path: file, name, description });
+    } catch (err) {
+      errors.push({
+        file,
+        error: err instanceof Error ? err.message : String(err),
+      });
+    }
+  }
+
+  return { items, errors };
+}
+
+/**
+ * Convert filename to display name (e.g., "custom-chart" -> "Custom Chart")
+ */
+function formatPluginName(filename: string): string {
+  return filename
+    .split("-")
+    .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+    .join(" ");
+}
+
+// ============================================================================
 // Full Workbook Discovery
 // ============================================================================
 
 export async function discoverWorkbook(config: WorkbookConfig): Promise<WorkbookManifest> {
   const resolved = resolveConfig(config);
 
-  const [blocksResult, pagesResult, componentsResult] = await Promise.all([
+  const [blocksResult, pagesResult, pluginsResult, componentsResult] = await Promise.all([
     discoverBlocks(resolved.blocksDir),
     discoverPages(resolved.pagesDir),
+    discoverPlugins(resolved.pluginsDir),
     discoverComponents(resolved.uiDir),
   ]);
 
@@ -282,11 +357,13 @@ export async function discoverWorkbook(config: WorkbookConfig): Promise<Workbook
   return {
     blocks: blocksResult.items,
     pages: pagesResult.items,
+    plugins: pluginsResult.items,
     components: componentsResult.items,
     tables: tablesResult.items,
     errors: [
       ...blocksResult.errors,
       ...pagesResult.errors,
+      ...pluginsResult.errors,
       ...componentsResult.errors,
       ...tablesResult.errors,
     ],

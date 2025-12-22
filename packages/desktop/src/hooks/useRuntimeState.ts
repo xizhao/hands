@@ -64,7 +64,14 @@ export interface WorkbookManifest {
     route: string;
     path: string;
     parentDir: string;
+    isBlock: boolean;
     title: string;
+  }>;
+  plugins?: Array<{
+    id: string;
+    name: string;
+    path: string;
+    description?: string;
   }>;
   tables?: Array<{
     name: string;
