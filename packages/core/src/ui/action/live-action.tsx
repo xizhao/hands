@@ -16,7 +16,7 @@
 import { createPlatePlugin, PlateElement, type PlateElementProps, useElement } from "platejs/react";
 import { createContext, memo, useCallback, useContext, useMemo, useRef, useState } from "react";
 
-import { LIVE_ACTION_KEY, type LiveActionContextValue, type TLiveActionElement } from "../../types";
+import { LIVE_ACTION_KEY, type LiveActionContextValue, type TLiveActionElement, type ComponentMeta } from "../../types";
 import { useLiveMutation } from "../query-provider";
 
 // ============================================================================
@@ -242,3 +242,18 @@ export function createLiveActionElement(
 }
 
 export { LIVE_ACTION_KEY };
+
+// ============================================================================
+// Component Metadata (for validation/linting)
+// ============================================================================
+
+export const LiveActionMeta: ComponentMeta = {
+  category: "action",
+  requiredProps: [],
+  propRules: {
+    sql: { type: "sql" },
+  },
+  constraints: {
+    requireChild: ["Button"],
+  },
+};

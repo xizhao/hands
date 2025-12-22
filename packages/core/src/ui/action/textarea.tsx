@@ -22,7 +22,7 @@ import {
 } from "platejs/react";
 import { memo, useContext, useEffect, useRef, useState } from "react";
 
-import { TEXTAREA_KEY, type TTextareaElement } from "../../types";
+import { TEXTAREA_KEY, type TTextareaElement, type ComponentMeta } from "../../types";
 import { LiveActionContext } from "./live-action";
 
 // ============================================================================
@@ -196,4 +196,16 @@ export function createTextareaElement(
 }
 
 export { TEXTAREA_KEY };
+
+// ============================================================================
+// Component Metadata (for validation/linting)
+// ============================================================================
+
+export const TextareaMeta: ComponentMeta = {
+  category: "action",
+  requiredProps: ["name"],
+  constraints: {
+    requireParent: ["LiveAction"],
+  },
+};
 

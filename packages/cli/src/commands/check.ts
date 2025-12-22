@@ -1,105 +1,35 @@
-import { spawn } from "child_process";
-import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from "fs";
-import path from "path";
+import { spawn } from "node:child_process";
+import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
+import path from "node:path";
 import pc from "picocolors";
-import {
-  hasUseClientDirective,
-  hasUseServerDirective,
-  validateBlock,
-  validateUIComponent,
-} from "../rsc-validate.js";
+import { formatValidationErrors, loadSchema, validateMdxPages } from "../mdx-validate.js";
 import { findWorkbookRoot } from "../utils.js";
-import {
-  validateMdxPages,
-  loadSchema,
-  formatValidationErrors,
-  type ValidationError,
-} from "../mdx-validate.js";
 
 interface CheckOptions {
   fix?: boolean;
 }
 
-// Architecture lint rules
-
+// Architecture lint rules - check for deprecated imports
 const ARCH_RULES = [
   {
-    id: "block-writes-data",
-    pattern: /\b(INSERT\s+INTO|UPDATE\s+\w+\s+SET|DELETE\s+FROM)\b/gi,
-    message: "Blocks should be read-only. Use Actions for writes.",
+    id: "deprecated-import-livepeer",
+    pattern: /from\s+["']@livepeer\/hands["']/,
+    message: "Use '@hands/core' instead of '@livepeer/hands'",
+    severity: "error" as const,
   },
   {
-    id: "deprecated-import",
-    pattern: /from\s+["']@hands\/runtime\/context["']/,
-    message: "Use `import { sql } from '@hands/db'` instead.",
+    id: "deprecated-import-hands-db",
+    pattern: /from\s+["']@hands\/db["']/,
+    message: "Use '@hands/core' instead of '@hands/db'",
+    severity: "warning" as const,
   },
   {
-    id: "deprecated-ctx-sql",
-    pattern: /\bctx\.sql\b/,
-    message: "ctx.sql is deprecated. Import sql from @hands/db.",
+    id: "deprecated-import-hands-runtime",
+    pattern: /from\s+["']@hands\/runtime["']/,
+    message: "Use '@hands/core' instead of '@hands/runtime'",
+    severity: "warning" as const,
   },
 ];
-
-/**
- * Fix shadcn config issues (@ui folder and aliases).
- * Returns true if any fixes were applied.
- */
-function fixShadcnConfig(workbookPath: string, fix: boolean): boolean {
-  let hasIssues = false;
-
-  // Check for @ui folder
-  const atUiPath = path.join(workbookPath, "@ui");
-  const uiPath = path.join(workbookPath, "ui");
-
-  if (existsSync(atUiPath)) {
-    if (fix) {
-      if (existsSync(uiPath)) {
-        console.log(pc.red("  ✗ Both @ui/ and ui/ folders exist - merge manually"));
-        return false;
-      }
-      const { renameSync } = require("fs");
-      renameSync(atUiPath, uiPath);
-      console.log(pc.green("  ✓ Fixed: Renamed @ui/ → ui/"));
-    } else {
-      console.log(pc.red("  ✗ Found @ui/ folder (should be ui/)"));
-      hasIssues = true;
-    }
-  }
-
-  // Check components.json aliases
-  const componentsPath = path.join(workbookPath, "components.json");
-  if (existsSync(componentsPath)) {
-    try {
-      const content = readFileSync(componentsPath, "utf-8");
-      const config = JSON.parse(content);
-
-      if (config.aliases) {
-        const badAliases = Object.entries(config.aliases).filter(
-          ([, value]) => typeof value === "string" && (value as string).startsWith("@ui"),
-        );
-
-        if (badAliases.length > 0) {
-          if (fix) {
-            for (const [key, value] of Object.entries(config.aliases)) {
-              if (typeof value === "string" && value.startsWith("@ui")) {
-                config.aliases[key] = value.replace(/^@ui/, "ui");
-              }
-            }
-            writeFileSync(componentsPath, JSON.stringify(config, null, 2) + "\n");
-            console.log(pc.green("  ✓ Fixed: Updated components.json aliases (@ui → ui)"));
-          } else {
-            console.log(pc.red("  ✗ components.json has @ui aliases (should be ui)"));
-            hasIssues = true;
-          }
-        }
-      }
-    } catch {
-      // Ignore parse errors
-    }
-  }
-
-  return !hasIssues;
-}
 
 /**
  * Run code quality checks: types and lints.
@@ -114,34 +44,23 @@ export async function checkCommand(options: CheckOptions = {}) {
   }
 
   const runtimeDir = path.resolve(import.meta.dirname, "../../../runtime");
+  const coreDir = path.resolve(import.meta.dirname, "../../../core");
   const fix = options.fix ?? false;
 
   console.log(
     pc.blue(`${fix ? "Fixing" : "Checking"} ${pc.bold(path.basename(workbookPath))}...\n`),
   );
 
-  // Check/fix shadcn config
-  console.log(pc.cyan("▶ Config"));
-  const configOk = fixShadcnConfig(workbookPath, fix);
-  if (configOk) {
-    console.log(pc.green("  ✓ shadcn config OK"));
-  }
-
-  // Fix RSC directives before linting (so linters see correct code)
-  if (fix) {
-    fixRSCDirectives(workbookPath);
-  }
-
   // Run types, lints, and MDX validation in parallel
   const [typesOk, lintsOk, mdxOk] = await Promise.all([
-    runTypes(workbookPath, runtimeDir),
-    runLints(workbookPath, runtimeDir, fix),
+    runTypes(workbookPath, runtimeDir, coreDir),
+    runLints(workbookPath, runtimeDir),
     runMdxValidation(workbookPath),
   ]);
 
   // Summary
   console.log("");
-  if (!typesOk || !lintsOk || !configOk || !mdxOk) {
+  if (!typesOk || !lintsOk || !mdxOk) {
     console.log(pc.red("✗ Check failed"));
     process.exit(1);
   } else {
@@ -151,7 +70,7 @@ export async function checkCommand(options: CheckOptions = {}) {
 }
 
 /**
- * Validate MDX pages: SQL queries, Block references, etc.
+ * Validate MDX pages: SQL queries, Page references, etc.
  */
 async function runMdxValidation(workbookPath: string): Promise<boolean> {
   console.log(pc.cyan("▶ Pages"));
@@ -192,34 +111,9 @@ async function runMdxValidation(workbookPath: string): Promise<boolean> {
 }
 
 /**
- * Fix RSC directives before running checks.
- * Adds "use server" to blocks and "use client" to UI components.
- */
-function fixRSCDirectives(workbookPath: string): void {
-  const blocksDir = path.join(workbookPath, "blocks");
-  const uiDir = path.join(workbookPath, "ui");
-
-  // Fix blocks
-  for (const file of findTsxFiles(blocksDir)) {
-    const content = readFileSync(file, "utf-8");
-    if (!hasUseServerDirective(content)) {
-      writeFileSync(file, `"use server";\n\n${content}`);
-    }
-  }
-
-  // Fix UI
-  for (const file of findTsxFiles(uiDir)) {
-    const content = readFileSync(file, "utf-8");
-    if (!hasUseClientDirective(content)) {
-      writeFileSync(file, `"use client";\n\n${content}`);
-    }
-  }
-}
-
-/**
  * Generate a tsconfig that extends runtime's tsconfig and checks workbook files.
  */
-function generateCheckTsConfig(workbookPath: string, runtimeDir: string): string {
+function generateCheckTsConfig(workbookPath: string, runtimeDir: string, coreDir: string): string {
   return JSON.stringify(
     {
       extends: path.join(runtimeDir, "tsconfig.json"),
@@ -229,13 +123,14 @@ function generateCheckTsConfig(workbookPath: string, runtimeDir: string): string
         typeRoots: [path.join(runtimeDir, "node_modules/@types")],
         types: ["node", "react", "react-dom"],
         paths: {
-          "@/*": [path.join(runtimeDir, "src/*")],
+          // Primary import path - @hands/core
+          "@hands/core": [path.join(coreDir, "src/index.ts")],
+          "@hands/core/*": [path.join(coreDir, "src/*")],
+          // Legacy paths for backward compat during migration
           "@hands/db": [path.join(runtimeDir, "types/hands-db.d.ts")],
           "@hands/db/types": [path.join(workbookPath, ".hands/db.d.ts")],
           "@hands/runtime": [path.join(runtimeDir, "types/hands-runtime.d.ts")],
-          "@hands/pages": [path.join(runtimeDir, "types/pages-placeholder.d.ts")],
-          "@ui/*": [path.join(workbookPath, "ui/*")],
-          "@/blocks/*": [path.join(workbookPath, "blocks/*")],
+          // React
           react: [path.join(runtimeDir, "node_modules/react")],
           "react/*": [path.join(runtimeDir, "node_modules/react/*")],
           "react-dom": [path.join(runtimeDir, "node_modules/react-dom")],
@@ -243,12 +138,11 @@ function generateCheckTsConfig(workbookPath: string, runtimeDir: string): string
         },
       },
       include: [
-        path.join(workbookPath, "blocks/**/*.ts"),
-        path.join(workbookPath, "blocks/**/*.tsx"),
+        // New folder structure
         path.join(workbookPath, "pages/**/*.ts"),
         path.join(workbookPath, "pages/**/*.tsx"),
-        path.join(workbookPath, "ui/**/*.ts"),
-        path.join(workbookPath, "ui/**/*.tsx"),
+        path.join(workbookPath, "plugins/**/*.ts"),
+        path.join(workbookPath, "plugins/**/*.tsx"),
         path.join(workbookPath, "lib/**/*.ts"),
         path.join(workbookPath, "lib/**/*.tsx"),
       ],
@@ -260,10 +154,41 @@ function generateCheckTsConfig(workbookPath: string, runtimeDir: string): string
 }
 
 /**
+ * Check if workbook has any TypeScript files to check.
+ */
+function hasTypescriptFiles(workbookPath: string): boolean {
+  const dirs = ["pages", "plugins", "lib"];
+  for (const dir of dirs) {
+    const dirPath = path.join(workbookPath, dir);
+    if (existsSync(dirPath)) {
+      try {
+        const files = readdirSync(dirPath, { recursive: true });
+        if (files.some((f) => String(f).endsWith(".ts") || String(f).endsWith(".tsx"))) {
+          return true;
+        }
+      } catch {
+        // Ignore read errors
+      }
+    }
+  }
+  return false;
+}
+
+/**
  * Run TypeScript type checking.
  */
-async function runTypes(workbookPath: string, runtimeDir: string): Promise<boolean> {
+async function runTypes(
+  workbookPath: string,
+  runtimeDir: string,
+  coreDir: string,
+): Promise<boolean> {
   console.log(pc.cyan("▶ Types"));
+
+  // Skip if no TypeScript files
+  if (!hasTypescriptFiles(workbookPath)) {
+    console.log(pc.dim("  (no TypeScript files)"));
+    return true;
+  }
 
   const handsDir = path.join(workbookPath, ".hands");
   if (!existsSync(handsDir)) {
@@ -271,7 +196,7 @@ async function runTypes(workbookPath: string, runtimeDir: string): Promise<boole
   }
 
   const tsconfigPath = path.join(handsDir, "tsconfig.check.json");
-  writeFileSync(tsconfigPath, generateCheckTsConfig(workbookPath, runtimeDir));
+  writeFileSync(tsconfigPath, generateCheckTsConfig(workbookPath, runtimeDir, coreDir));
 
   return new Promise((resolve) => {
     const child = spawn("npx", ["tsc", "--project", tsconfigPath, "--pretty"], {
@@ -296,25 +221,24 @@ async function runTypes(workbookPath: string, runtimeDir: string): Promise<boole
 }
 
 /**
- * Run all linting: Biome + RSC directives + architecture rules.
+ * Run all linting: Biome + architecture rules.
  */
-async function runLints(workbookPath: string, runtimeDir: string, fix: boolean): Promise<boolean> {
+async function runLints(workbookPath: string, runtimeDir: string): Promise<boolean> {
   console.log(pc.cyan("▶ Lints"));
 
   // Run all lint checks
-  const [biomeOk, rscOk, archOk] = await Promise.all([
-    runBiome(workbookPath, runtimeDir, fix),
-    runRSCLints(workbookPath),
+  const [biomeOk, archOk] = await Promise.all([
+    runBiome(workbookPath, runtimeDir),
     runArchLints(workbookPath),
   ]);
 
-  return biomeOk && rscOk && archOk;
+  return biomeOk && archOk;
 }
 
 /**
  * Run Biome linting and formatting.
  */
-async function runBiome(workbookPath: string, runtimeDir: string, fix: boolean): Promise<boolean> {
+async function runBiome(workbookPath: string, runtimeDir: string): Promise<boolean> {
   const biomePath = path.join(runtimeDir, "node_modules/.bin/biome");
 
   if (!existsSync(biomePath)) {
@@ -322,18 +246,20 @@ async function runBiome(workbookPath: string, runtimeDir: string, fix: boolean):
     return true;
   }
 
-  const dirs = ["blocks", "pages", "lib", "ui"].filter((d) =>
-    existsSync(path.join(workbookPath, d)),
-  );
+  // Skip if no TypeScript files to lint
+  if (!hasTypescriptFiles(workbookPath)) {
+    return true;
+  }
+
+  // New folder structure
+  const dirs = ["pages", "plugins", "lib"].filter((d) => existsSync(path.join(workbookPath, d)));
 
   if (dirs.length === 0) {
     return true;
   }
 
   const configPath = path.join(runtimeDir, "biome.json");
-  const args = fix
-    ? ["check", "--write", "--config-path", configPath, "--colors=force", ...dirs]
-    : ["check", "--config-path", configPath, "--colors=force", ...dirs];
+  const args = ["check", "--config-path", configPath, "--colors=force", ...dirs];
 
   return new Promise((resolve) => {
     const child = spawn(biomePath, args, {
@@ -350,53 +276,18 @@ async function runBiome(workbookPath: string, runtimeDir: string, fix: boolean):
 }
 
 /**
- * Check RSC directives: "use server" in blocks, "use client" in UI.
- */
-async function runRSCLints(workbookPath: string): Promise<boolean> {
-  const blocksDir = path.join(workbookPath, "blocks");
-  const uiDir = path.join(workbookPath, "ui");
-  let hasErrors = false;
-
-  // Check blocks have "use server"
-  for (const file of findTsxFiles(blocksDir)) {
-    const content = readFileSync(file, "utf-8");
-    const relativePath = path.relative(workbookPath, file);
-    const result = validateBlock(file, content);
-
-    for (const error of result.errors) {
-      console.log(pc.red(`  ${relativePath}: ${error.message}`));
-      hasErrors = true;
-    }
-    for (const warning of result.warnings) {
-      console.log(pc.yellow(`  ${relativePath}:${warning.line}: ${warning.message}`));
-    }
-  }
-
-  // Check UI has "use client"
-  for (const file of findTsxFiles(uiDir)) {
-    const content = readFileSync(file, "utf-8");
-    const relativePath = path.relative(workbookPath, file);
-    const result = validateUIComponent(file, content);
-
-    for (const error of result.errors) {
-      console.log(pc.red(`  ${relativePath}: ${error.message}`));
-      hasErrors = true;
-    }
-  }
-
-  return !hasErrors;
-}
-
-/**
- * Check architecture rules: read-only blocks, deprecated imports.
+ * Check architecture rules: deprecated imports.
  */
 async function runArchLints(workbookPath: string): Promise<boolean> {
-  const blocksDir = path.join(workbookPath, "blocks");
-  if (!existsSync(blocksDir)) return true;
-
+  const errors: string[] = [];
   const warnings: string[] = [];
 
+  // Scan all TS/TSX files in pages, plugins, and lib
+  const dirsToScan = ["pages", "plugins", "lib"];
+
   function scanDir(dir: string) {
+    if (!existsSync(dir)) return;
+
     for (const entry of readdirSync(dir, { withFileTypes: true })) {
       const fullPath = path.join(dir, entry.name);
 
@@ -410,7 +301,12 @@ async function runArchLints(workbookPath: string): Promise<boolean> {
         for (const rule of ARCH_RULES) {
           for (let i = 0; i < lines.length; i++) {
             if (rule.pattern.test(lines[i])) {
-              warnings.push(`  ${relPath}:${i + 1}: ${rule.message}`);
+              const msg = `  ${relPath}:${i + 1}: ${rule.message}`;
+              if (rule.severity === "error") {
+                errors.push(msg);
+              } else {
+                warnings.push(msg);
+              }
             }
             rule.pattern.lastIndex = 0;
           }
@@ -419,31 +315,18 @@ async function runArchLints(workbookPath: string): Promise<boolean> {
     }
   }
 
-  scanDir(blocksDir);
+  for (const dir of dirsToScan) {
+    scanDir(path.join(workbookPath, dir));
+  }
 
+  // Print errors first, then warnings
+  for (const error of errors) {
+    console.log(pc.red(error));
+  }
   for (const warning of warnings) {
     console.log(pc.yellow(warning));
   }
 
-  // Architecture warnings don't fail the check (advisory only)
-  return true;
-}
-
-/**
- * Find all .tsx files recursively in a directory.
- */
-function findTsxFiles(dir: string): string[] {
-  const files: string[] = [];
-  if (!existsSync(dir)) return files;
-
-  const entries = readdirSync(dir, { withFileTypes: true });
-  for (const entry of entries) {
-    const fullPath = path.join(dir, entry.name);
-    if (entry.isDirectory()) {
-      files.push(...findTsxFiles(fullPath));
-    } else if (entry.name.endsWith(".tsx") && !entry.name.endsWith(".test.tsx")) {
-      files.push(fullPath);
-    }
-  }
-  return files;
+  // Errors fail the check, warnings don't
+  return errors.length === 0;
 }

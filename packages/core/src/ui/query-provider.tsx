@@ -83,6 +83,8 @@ export interface LiveQueryContextValue {
   useQuery: UseQueryHook;
   /** Hook for executing mutations */
   useMutation: UseMutationHook;
+  /** Optional callback to navigate to a table view */
+  onNavigateToTable?: (tableName: string) => void;
 }
 
 // ============================================================================
@@ -100,6 +102,8 @@ export interface LiveQueryProviderProps {
   useQuery: UseQueryHook;
   /** Mutation hook implementation */
   useMutation: UseMutationHook;
+  /** Optional callback to navigate to a table view */
+  onNavigateToTable?: (tableName: string) => void;
   /** Children */
   children: ReactNode;
 }
@@ -113,10 +117,11 @@ export interface LiveQueryProviderProps {
 export function LiveQueryProvider({
   useQuery,
   useMutation,
+  onNavigateToTable,
   children,
 }: LiveQueryProviderProps) {
   return (
-    <LiveQueryContext.Provider value={{ useQuery, useMutation }}>
+    <LiveQueryContext.Provider value={{ useQuery, useMutation, onNavigateToTable }}>
       {children}
     </LiveQueryContext.Provider>
   );
@@ -202,4 +207,13 @@ export function useLiveMutation(): MutationResult {
   }
 
   return ctx.useMutation();
+}
+
+/**
+ * Get the navigation callback for navigating to table views.
+ * Returns undefined if no callback is configured.
+ */
+export function useNavigateToTable(): ((tableName: string) => void) | undefined {
+  const ctx = useContext(LiveQueryContext);
+  return ctx?.onNavigateToTable;
 }

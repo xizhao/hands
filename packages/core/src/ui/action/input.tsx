@@ -2,6 +2,7 @@
 
 /**
  * @component Input
+ * @category action
  * @description Text input with optional masking and automatic validation.
  *
  * @example
@@ -28,7 +29,7 @@ import {
   type MaskPattern,
 } from "../components/mask-input";
 import { Label } from "../components/label";
-import { INPUT_KEY, type TInputElement } from "../../types";
+import { INPUT_KEY, type TInputElement, type ComponentMeta } from "../../types";
 import { LiveActionContext } from "./live-action";
 
 /** Built-in mask pattern names */
@@ -307,3 +308,18 @@ export function createInputElement(
 }
 
 export { INPUT_KEY };
+
+// ============================================================================
+// Component Metadata (for validation/linting)
+// ============================================================================
+
+export const InputMeta: ComponentMeta = {
+  category: "action",
+  requiredProps: ["name"],
+  propRules: {
+    type: { enum: ["text", "email", "number", "password", "tel", "url"] },
+  },
+  constraints: {
+    requireParent: ["LiveAction"],
+  },
+};

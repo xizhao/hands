@@ -1,6 +1,6 @@
-import { spawn } from "child_process";
-import fs from "fs/promises";
-import path from "path";
+import { spawn } from "node:child_process";
+import fs from "node:fs/promises";
+import path from "node:path";
 import pc from "picocolors";
 import { preflight } from "../preflight.js";
 import { findWorkbookRoot } from "../utils.js";
@@ -21,7 +21,9 @@ export async function devCommand() {
 
   if (!workbookPath) {
     console.error(pc.red("Error: Not in a workbook directory"));
-    console.error("Run this command from a workbook root (contains package.json with hands config)");
+    console.error(
+      "Run this command from a workbook root (contains package.json with hands config)",
+    );
     process.exit(1);
   }
 
@@ -72,7 +74,9 @@ export async function devCommand() {
 
       child.on("exit", async (code: number | null) => {
         if (code !== 0 && isPreBundleError(output) && retriesLeft > 0) {
-          console.log(pc.yellow(`\n[hands] Pre-bundle invalidated, retrying... (${retriesLeft} left)`));
+          console.log(
+            pc.yellow(`\n[hands] Pre-bundle invalidated, retrying... (${retriesLeft} left)`),
+          );
           await clearViteCache();
           await sleep(RETRY_DELAY_MS);
           resolve(runWithRetry(retriesLeft - 1));

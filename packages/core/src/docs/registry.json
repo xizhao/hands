@@ -74,7 +74,7 @@
       "file": "src/ui/action/textarea.tsx"
     },
     "Input": {
-      "category": "view",
+      "category": "action",
       "description": "Text input with optional masking and automatic validation.",
       "keywords": [],
       "example": "<Input name=\"email\" label=\"Email\" placeholder=\"you@example.com\" />\n<Input name=\"phone\" label=\"Phone\" mask=\"phone\" />\n<Input name=\"card\" label=\"Card\" mask=\"creditCard\" />\n<Input name=\"amount\" label=\"Amount\" mask=\"currency\" />",

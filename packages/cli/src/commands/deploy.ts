@@ -1,5 +1,5 @@
-import { spawn } from "child_process";
-import path from "path";
+import { spawn } from "node:child_process";
+import path from "node:path";
 import pc from "picocolors";
 import { preflight } from "../preflight.js";
 import { findWorkbookRoot } from "../utils.js";
@@ -9,7 +9,9 @@ export async function deployCommand() {
 
   if (!workbookPath) {
     console.error(pc.red("Error: Not in a workbook directory"));
-    console.error("Run this command from a workbook root (contains package.json with hands config)");
+    console.error(
+      "Run this command from a workbook root (contains package.json with hands config)",
+    );
     process.exit(1);
   }
 

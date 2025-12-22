@@ -8,7 +8,8 @@
  * - LiveQueryProvider (SQL queries: LiveValue, LiveAction)
  */
 
-import { useMemo, type ReactNode } from "react";
+import { useCallback, useMemo, type ReactNode } from "react";
+import { useNavigate } from "@tanstack/react-router";
 import {
   EditorProvider,
   type EditorTrpcClient,
@@ -28,9 +29,18 @@ interface DesktopEditorProviderProps {
 }
 
 export function DesktopEditorProvider({ children }: DesktopEditorProviderProps) {
+  const navigate = useNavigate();
   const { data: runtime } = useActiveRuntime();
   const runtimePort = runtime?.runtime_port ?? null;
   const { data: manifest } = useManifest();
+
+  // Navigation callback for LiveValue "View in Tables" button
+  const handleNavigateToTable = useCallback((tableName: string) => {
+    navigate({
+      to: "/tables/$tableId",
+      params: { tableId: tableName },
+    } as any);
+  }, [navigate]);
 
   // Get tables for AI context
   const tables = useMemo(() => {
@@ -97,6 +107,7 @@ export function DesktopEditorProvider({ children }: DesktopEditorProviderProps) 
       <LiveQueryProvider
         useQuery={useQueryAdapter}
         useMutation={useMutationAdapter}
+        onNavigateToTable={handleNavigateToTable}
       >
         {children}
       </LiveQueryProvider>

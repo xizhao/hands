@@ -13,6 +13,7 @@
     "./ui/components": "./src/ui/components/index.ts",
     "./primitives": "./src/primitives/index.ts",
     "./types": "./src/types/index.ts",
+    "./validation": "./src/validation/index.ts",
     "./docs": "./src/docs/stdlib.ts",
     "./styles/theme.css": "./src/styles/theme.css",
     "./stdlib": "./src/ui/index.ts",

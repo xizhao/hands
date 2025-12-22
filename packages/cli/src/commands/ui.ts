@@ -1,6 +1,6 @@
-import { spawn } from "child_process";
-import { existsSync, readFileSync, renameSync, writeFileSync } from "fs";
-import path from "path";
+import { spawn } from "node:child_process";
+import { existsSync, readFileSync, renameSync, writeFileSync } from "node:fs";
+import path from "node:path";
 import pc from "picocolors";
 import { findWorkbookRoot } from "../utils.js";
 
@@ -49,12 +49,12 @@ function fixShadcnConfig(workbookPath: string): boolean {
 
         if (aliasesFixed) {
           config.aliases = fixedAliases;
-          writeFileSync(componentsPath, JSON.stringify(config, null, 2) + "\n");
+          writeFileSync(componentsPath, `${JSON.stringify(config, null, 2)}\n`);
           console.log(pc.yellow("  Fixed: Updated components.json aliases (@ui → ui)"));
           fixed = true;
         }
       }
-    } catch (err) {
+    } catch (_err) {
       // Ignore parse errors, shadcn will report them
     }
   }

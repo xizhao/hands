@@ -16,18 +16,6 @@ The stdlib provides three categories of components:
 
 Display-only components that render live data from SQL queries.
 
-### Input
-
-Text input with optional masking and automatic validation.
-
-**Example:**
-```tsx
-<Input name="email" label="Email" placeholder="you@example.com" />
-<Input name="phone" label="Phone" mask="phone" />
-<Input name="card" label="Card" mask="creditCard" />
-<Input name="amount" label="Amount" mask="currency" />
-```
-
 ### Tabs
 
 Tabbed navigation for organizing content into switchable panels. Use for dashboards, settings pages, or any content that benefits from tab navigation.
@@ -264,6 +252,18 @@ Multiline text input that registers its value with parent LiveAction for SQL bin
   <Textarea name="content" placeholder="Enter content..." rows={5} />
   <Button>Save</Button>
 </LiveAction>
+```
+
+### Input
+
+Text input with optional masking and automatic validation.
+
+**Example:**
+```tsx
+<Input name="email" label="Email" placeholder="you@example.com" />
+<Input name="phone" label="Phone" mask="phone" />
+<Input name="card" label="Card" mask="creditCard" />
+<Input name="amount" label="Amount" mask="currency" />
 ```
 
 

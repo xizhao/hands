@@ -1,6 +1,6 @@
-import { spawn } from "child_process";
-import { existsSync } from "fs";
-import path from "path";
+import { spawn } from "node:child_process";
+import { existsSync } from "node:fs";
+import path from "node:path";
 import pc from "picocolors";
 import { findWorkbookRoot } from "../utils.js";
 
@@ -13,7 +13,9 @@ export async function serveCommand(options: ServeOptions) {
 
   if (!workbookPath) {
     console.error(pc.red("Error: Not in a workbook directory"));
-    console.error("Run this command from a workbook root (contains package.json with hands config)");
+    console.error(
+      "Run this command from a workbook root (contains package.json with hands config)",
+    );
     process.exit(1);
   }
 

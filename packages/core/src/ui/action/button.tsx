@@ -16,7 +16,7 @@ import { createPlatePlugin, PlateElement, type PlateElementProps, useElement } f
 import { memo, useContext } from "react";
 
 import { Button as BaseButton, type ButtonProps as BaseButtonProps } from "../components/button";
-import { BUTTON_KEY, type TButtonElement } from "../../types";
+import { BUTTON_KEY, type TButtonElement, type ComponentMeta } from "../../types";
 import { Loader } from "../view/loader";
 import { LiveActionContext } from "./live-action";
 
@@ -119,3 +119,18 @@ export function createButtonElement(
 }
 
 export { BUTTON_KEY };
+
+// ============================================================================
+// Component Metadata (for validation/linting)
+// ============================================================================
+
+export const ButtonMeta: ComponentMeta = {
+  category: "action",
+  requiredProps: [],
+  propRules: {
+    variant: { enum: ["default", "outline", "ghost", "destructive"] },
+  },
+  constraints: {
+    requireParent: ["LiveAction"],
+  },
+};

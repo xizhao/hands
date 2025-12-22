@@ -1,29 +1,20 @@
 import { program } from "commander";
 import { buildCommand } from "./commands/build.js";
+import { checkCommand } from "./commands/check.js";
 import { deployCommand } from "./commands/deploy.js";
 import { devCommand } from "./commands/dev.js";
-import { initCommand } from "./commands/init.js";
-import { checkCommand } from "./commands/check.js";
 import { fmtCommand } from "./commands/fmt.js";
+import { initCommand } from "./commands/init.js";
 import { serveCommand } from "./commands/serve.js";
 import { uiCommand } from "./commands/ui.js";
 
 const DESCRIPTION = `Workbook development tool`;
 
-program
-  .name("hands")
-  .description(DESCRIPTION)
-  .version("1.0.0");
+program.name("hands").description(DESCRIPTION).version("1.0.0");
 
-program
-  .command("dev")
-  .description("Start development server")
-  .action(devCommand);
+program.command("dev").description("Start development server").action(devCommand);
 
-program
-  .command("build")
-  .description("Build workbook for production")
-  .action(buildCommand);
+program.command("build").description("Build workbook for production").action(buildCommand);
 
 program
   .command("serve")
@@ -31,10 +22,7 @@ program
   .option("-p, --port <port>", "Port to serve on", "8787")
   .action(serveCommand);
 
-program
-  .command("deploy")
-  .description("Deploy workbook to Cloudflare")
-  .action(deployCommand);
+program.command("deploy").description("Deploy workbook to Cloudflare").action(deployCommand);
 
 program
   .command("init")

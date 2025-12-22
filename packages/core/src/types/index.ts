@@ -6,6 +6,14 @@
 
 import type { TElement, TText } from "platejs";
 
+// Component metadata for validation
+export type {
+  ComponentMeta,
+  ComponentConstraints,
+  ComponentSchema,
+  PropRule,
+} from "./component-meta";
+
 // ============================================================================
 // Element Keys
 // ============================================================================
@@ -32,7 +40,9 @@ export const DATA_GRID_KEY = "data_grid";
 export const KANBAN_KEY = "kanban";
 export const COLUMN_GROUP_KEY = "column_group";
 export const COLUMN_KEY = "column";
-export const BLOCK_KEY = "block";
+export const PAGE_EMBED_KEY = "page_embed";
+/** @deprecated Use PAGE_EMBED_KEY instead */
+export const BLOCK_KEY = PAGE_EMBED_KEY;
 export const TABS_KEY = "tabs";
 export const TAB_KEY = "tab";
 
@@ -71,7 +81,6 @@ export const STDLIB_COMPONENT_NAMES = [
   "Kanban",
   "Columns",
   "Column",
-  "Block",
   "Tabs",
   "Tab",
 ] as const;
@@ -676,42 +685,45 @@ export interface TTabElement extends TElement {
 }
 
 // ============================================================================
-// Block Element Types
+// Page Embed Element Types
 // ============================================================================
 
 /**
- * Block element - embeds reusable MDX blocks inline, or creates new ones with AI.
+ * Page embed element - embeds reusable MDX pages/blocks inline.
  *
  * Modes:
  * 1. **Embed mode** (has src): Renders content from pages/blocks/{src}.mdx
  * 2. **Edit mode** (editing=true): Inline creation/editing
- * 3. **AI mode** (has prompt): AI-assisted block generation
+ * 3. **AI mode** (has prompt): AI-assisted content generation
  *
- * @example Embed existing block
+ * @example Embed existing page/block
  * ```tsx
- * <Block src="blocks/header" />
- * <Block src="blocks/user-card" params={{userId: 123}} />
+ * <Page src="blocks/header" />
+ * <Page src="blocks/user-card" params={{userId: 123}} />
  * ```
  *
  * @example AI generation
  * ```tsx
- * <Block prompt="create a metrics dashboard" />
+ * <Page prompt="create a metrics dashboard" />
  * ```
  */
-export interface TBlockElement extends TElement {
-  type: typeof BLOCK_KEY;
-  /** Path to the block MDX file relative to pages/ (e.g., "blocks/header") */
+export interface TPageEmbedElement extends TElement {
+  type: typeof PAGE_EMBED_KEY;
+  /** Path to the MDX file relative to pages/ (e.g., "blocks/header") */
   src?: string;
-  /** Optional parameters to pass to the embedded block */
+  /** Optional parameters to pass to the embedded page */
   params?: Record<string, unknown>;
-  /** Whether the block is in editing/creation mode */
+  /** Whether the page is in editing/creation mode */
   editing?: boolean;
-  /** AI prompt for block generation */
+  /** AI prompt for content generation */
   prompt?: string;
-  /** Height of the block container (useful for loading states) */
+  /** Height of the container (useful for loading states) */
   height?: number;
   /** CSS class for the container */
   className?: string;
   /** Children are unused (void element) */
   children: (TElement | TText)[];
 }
+
+/** @deprecated Use TPageEmbedElement instead */
+export type TBlockElement = TPageEmbedElement;

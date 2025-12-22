@@ -15,27 +15,29 @@ import blockTypesRaw from "../../runtime/src/types/block.js" with { type: "text"
 export const BLOCK_TYPES_SOURCE: string = blockTypesRaw;
 
 /**
- * Block API documentation with correct signatures
+ * Plugin API documentation with correct signatures
  */
 export const BLOCK_API_DOCS = `
-## Block Structure
+## Plugin Structure
 
-Every block follows this exact pattern:
+Plugins are custom TSX components for complex visualizations. They live in \`plugins/\`.
 
 \`\`\`typescript
-"use server";
-import type { BlockFn, BlockMeta } from "@hands/runtime";
-import { sql } from "@hands/db";
+// plugins/my-chart.tsx
+import { sql } from "@hands/core";
+import type { BlockMeta } from "@hands/core";
 
 export const meta: BlockMeta = {
-  title: "My Block",
-  description: "What this block shows",
+  title: "My Chart",
+  description: "What this plugin shows",
   refreshable: true,
 };
 
-// BlockFn receives props - db access is via import, not props
-const MyBlock: BlockFn<{ limit?: number }> = async ({ limit = 10 }) => {
-  // Use sql tagged template for queries
+interface Props {
+  limit?: number;
+}
+
+export default async function MyChart({ limit = 10 }: Props) {
   const data = await sql<{ name: string; value: number }>\`
     SELECT name, value FROM my_table
     LIMIT \${limit}
@@ -51,46 +53,33 @@ const MyBlock: BlockFn<{ limit?: number }> = async ({ limit = 10 }) => {
       </ul>
     </div>
   );
-};
-
-export default MyBlock;
+}
 \`\`\`
-
-**Required exports:**
-- \`meta: BlockMeta\` - Title, description, refreshable flag
-- \`default\` - The BlockFn component
 
 **Imports:**
-- Types from \`@hands/runtime\`: BlockFn, BlockMeta
-- Database from \`@hands/db\`: sql
+- All from \`@hands/core\`: sql, BlockMeta, etc.
 - UI components from \`@ui\`: Card, Button, etc. (install with ui tool)
 
-Blocks require the \`"use server"\` directive at the top.  All client interactivity should be factored into a separate client component in ui/ imported into the Block.
-
 **Design Guidelines:**
-- When creating blocks, make sure they feel like inline elements, not full pages.
-- Use a compact minimalist style when designing blocks.
+- Make plugins feel like inline elements, not full pages
+- Use a compact minimalist style
 
-## Auto-Generated Types with pgtyped
+## Auto-Generated Types
 
-Types are auto-generated from your SQL queries and available via \`@hands/db/types\`:
+Types are auto-generated from your SQL queries:
 
 \`\`\`typescript
-import { sql } from "@hands/db";
-import type { IGetMoviesResult } from "@hands/db/types";
+import { sql } from "@hands/core";
 
-const MyBlock: BlockFn = async () => {
-  // Result type is auto-generated from the SQL query
-  const movies = await sql<IGetMoviesResult>\`
+export default async function MovieList() {
+  // Result type is inferred from the SQL query
+  const movies = await sql<{ id: number; title: string; rating: number }>\`
     SELECT id, title, rating FROM movies WHERE active = true
   \`;
-  // movies is { id: number; title: string; rating: number }[]
 
   return <ul>{movies.map(m => <li key={m.id}>{m.title}</li>)}</ul>;
-};
+}
 \`\`\`
-
-Types are generated to \`.hands/types.ts\` when you save blocks containing SQL queries.
 `;
 
 /**
@@ -99,18 +88,17 @@ Types are generated to \`.hands/types.ts\` when you save blocks containing SQL q
 export const BLOCK_CONTEXT_DOCS = `
 ## Database API
 
-Import from @hands/db directly in your block:
+Import from @hands/core:
 
 \`\`\`typescript
-import type { BlockFn } from "@hands/runtime";
-import { sql } from "@hands/db";
+import { sql } from "@hands/core";
 
-const MyBlock: BlockFn = async () => {
+export default async function UserList() {
   // sql is the tagged template for safe SQL queries
   const users = await sql<User>\`SELECT * FROM users WHERE active = \${true}\`;
 
-  return <UserList users={users} />;
-};
+  return <ul>{users.map(u => <li key={u.id}>{u.name}</li>)}</ul>;
+}
 \`\`\`
 
 ### URL Parameters
@@ -118,20 +106,13 @@ const MyBlock: BlockFn = async () => {
 Access URL/form parameters via the params helper:
 
 \`\`\`typescript
-import type { BlockFn } from "@hands/runtime";
-import { sql, params } from "@hands/db";
+import { sql, params } from "@hands/core";
 
-const MyBlock: BlockFn = async () => {
+export default async function ItemList() {
   const { limit = 10 } = params<{ limit?: number }>();
   const items = await sql\`SELECT * FROM items LIMIT \${limit}\`;
   return <ItemList items={items} />;
-};
-\`\`\`
-
-### Type Definitions (from @hands/runtime)
-
-\`\`\`typescript
-${blockTypesRaw}
+}
 \`\`\`
 `;
 
@@ -141,48 +122,41 @@ ${blockTypesRaw}
 export const BLOCK_ANTI_PATTERNS = `
 ## Common Mistakes
 
-### WRONG: Using ctx prop (deprecated)
+### WRONG: Using deprecated imports
 \`\`\`typescript
-// DON'T DO THIS - ctx prop is deprecated
-const MyBlock: BlockFn = async ({ ctx }) => {
-  const data = await ctx.sql\`...\`;
-};
+// DON'T DO THIS - old import paths
+import { sql } from "@hands/db";
+import type { BlockFn } from "@hands/runtime";
 \`\`\`
 
-### CORRECT: Import sql from @hands/db
+### CORRECT: Import from @hands/core
 \`\`\`typescript
-// DO THIS - import sql directly
-import type { BlockFn } from "@hands/runtime";
-import { sql } from "@hands/db";
-
-const MyBlock: BlockFn = async () => {
-  const data = await sql\`SELECT ...\`;
-};
+// DO THIS - use @hands/core for everything
+import { sql } from "@hands/core";
 \`\`\`
 
 ### WRONG: Using sql at module load time
 \`\`\`typescript
 // DON'T DO THIS - sql only works during request handling
-import { sql } from "@hands/db";
+import { sql } from "@hands/core";
 
 // ERROR: Called at module load, not during request
 const allUsers = await sql\`SELECT * FROM users\`;
 
-const MyBlock: BlockFn = async () => {
-  return <UserList users={allUsers} />;
-};
+export default function UserList() {
+  return <ul>{allUsers.map(u => <li>{u.name}</li>)}</ul>;
+}
 \`\`\`
 
 ### CORRECT: Query inside the component function
 \`\`\`typescript
-import type { BlockFn } from "@hands/runtime";
-import { sql } from "@hands/db";
+import { sql } from "@hands/core";
 
-const MyBlock: BlockFn = async () => {
+export default async function UserList() {
   // Queries must be inside the component function
   const users = await sql\`SELECT * FROM users\`;
-  return <UserList users={users} />;
-};
+  return <ul>{users.map(u => <li key={u.id}>{u.name}</li>)}</ul>;
+}
 \`\`\`
 
 `;

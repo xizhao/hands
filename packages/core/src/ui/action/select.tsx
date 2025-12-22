@@ -28,7 +28,7 @@ import {
 } from "platejs/react";
 import { memo, useContext, useEffect, useRef, useState } from "react";
 
-import { SELECT_KEY, type TSelectElement } from "../../types";
+import { SELECT_KEY, type TSelectElement, type ComponentMeta } from "../../types";
 import { LiveActionContext } from "./live-action";
 
 // ============================================================================
@@ -224,4 +224,16 @@ export function createSelectElement(
 }
 
 export { SELECT_KEY };
+
+// ============================================================================
+// Component Metadata (for validation/linting)
+// ============================================================================
+
+export const SelectMeta: ComponentMeta = {
+  category: "action",
+  requiredProps: ["name", "options"],
+  constraints: {
+    requireParent: ["LiveAction"],
+  },
+};
 

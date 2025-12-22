@@ -24,7 +24,7 @@ import { memo, useContext, useEffect, useRef, useState } from "react";
 
 import { Checkbox as BaseCheckbox } from "../components/checkbox";
 import { Label } from "../components/label";
-import { CHECKBOX_KEY, type TCheckboxElement } from "../../types";
+import { CHECKBOX_KEY, type TCheckboxElement, type ComponentMeta } from "../../types";
 import { LiveActionContext } from "./live-action";
 
 // ============================================================================
@@ -178,4 +178,16 @@ export function createCheckboxElement(
 }
 
 export { CHECKBOX_KEY };
+
+// ============================================================================
+// Component Metadata (for validation/linting)
+// ============================================================================
+
+export const CheckboxMeta: ComponentMeta = {
+  category: "action",
+  requiredProps: ["name"],
+  constraints: {
+    requireParent: ["LiveAction"],
+  },
+};
 

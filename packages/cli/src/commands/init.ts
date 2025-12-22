@@ -1,5 +1,5 @@
-import fs from "fs";
-import path from "path";
+import fs from "node:fs";
+import path from "node:path";
 import pc from "picocolors";
 
 export async function initCommand(name?: string) {
@@ -26,39 +26,13 @@ export async function initCommand(name?: string) {
     console.log(pc.green("  Created package.json"));
   }
 
-  // Create components.json (shadcn config)
-  const componentsPath = path.join(workbookPath, "components.json");
-  if (!fs.existsSync(componentsPath)) {
-    const components = {
-      $schema: "https://ui.shadcn.com/schema.json",
-      style: "new-york",
-      rsc: true,
-      tsx: true,
-      tailwind: {
-        config: "",
-        baseColor: "neutral",
-        cssVariables: true,
-      },
-      iconLibrary: "lucide",
-      aliases: {
-        components: "ui",
-        ui: "ui",
-        utils: "ui/lib/utils",
-        lib: "ui/lib",
-        hooks: "ui/hooks",
-      },
-    };
-    fs.writeFileSync(componentsPath, JSON.stringify(components, null, 2));
-    console.log(pc.green("  Created components.json"));
-  }
-
-  // Create directories
+  // Create directories - new structure
   const dirs = [
-    "ui",           // shadcn components
-    "ui/hooks",     // custom hooks
-    "blocks",       // data blocks
-    "pages",        // markdown pages
-    ".hands",       // generated files
+    "pages", // MDX pages
+    "pages/blocks", // Embeddable MDX fragments
+    "plugins", // Custom TSX components
+    "lib", // Shared utilities
+    ".hands", // Generated files
   ];
   for (const dir of dirs) {
     const dirPath = path.join(workbookPath, dir);
@@ -66,6 +40,27 @@ export async function initCommand(name?: string) {
       fs.mkdirSync(dirPath, { recursive: true });
       console.log(pc.dim(`  Created ${dir}/`));
     }
+  }
+
+  // Create sample index.mdx
+  const indexMdxPath = path.join(workbookPath, "pages/index.mdx");
+  if (!fs.existsSync(indexMdxPath)) {
+    const indexMdx = `---
+title: Welcome
+---
+
+# Welcome to ${workbookName}
+
+This is your first page. Edit \`pages/index.mdx\` to get started.
+
+## Quick Start
+
+- Add more pages in \`pages/\`
+- Create embeddable blocks in \`pages/blocks/\`
+- Build custom components in \`plugins/\`
+`;
+    fs.writeFileSync(indexMdxPath, indexMdx);
+    console.log(pc.green("  Created pages/index.mdx"));
   }
 
   // Create .gitignore
@@ -80,7 +75,5 @@ export async function initCommand(name?: string) {
 
   console.log(pc.green(`\nWorkbook initialized! Next steps:`));
   console.log(pc.dim(`  cd ${name || "."}`));
-  console.log(pc.dim("  bun install"));
-  console.log(pc.dim("  hands ui add button  # add UI components"));
   console.log(pc.dim("  hands dev"));
 }

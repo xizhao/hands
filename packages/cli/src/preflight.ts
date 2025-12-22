@@ -154,7 +154,7 @@ const checks: PreflightCheck[] = [
           }
 
           if (fixed) {
-            fs.writeFileSync(componentsPath, JSON.stringify(config, null, 2) + "\n");
+            fs.writeFileSync(componentsPath, `${JSON.stringify(config, null, 2)}\n`);
             console.log(pc.dim("  Fixed components.json aliases (@ui → ui)"));
           }
         }

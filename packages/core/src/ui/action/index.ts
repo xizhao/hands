@@ -11,6 +11,7 @@ export {
   BUTTON_KEY,
   ButtonPlugin,
   createButtonElement,
+  ButtonMeta,
 } from "./button";
 
 export {
@@ -19,6 +20,7 @@ export {
   CHECKBOX_KEY,
   CheckboxPlugin,
   createCheckboxElement,
+  CheckboxMeta,
 } from "./checkbox";
 
 export {
@@ -27,6 +29,7 @@ export {
   INPUT_KEY,
   InputPlugin,
   createInputElement,
+  InputMeta,
 } from "./input";
 
 export {
@@ -36,6 +39,7 @@ export {
   type SelectOption,
   SelectPlugin,
   createSelectElement,
+  SelectMeta,
 } from "./select";
 
 export {
@@ -44,6 +48,7 @@ export {
   TEXTAREA_KEY,
   TextareaPlugin,
   createTextareaElement,
+  TextareaMeta,
 } from "./textarea";
 
 // LiveAction container
@@ -57,6 +62,7 @@ export {
   substituteFormBindings,
   useLiveAction,
   useLiveActionOptional,
+  LiveActionMeta,
 } from "./live-action";
 
 // Plugin kit for easy registration
