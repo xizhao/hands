@@ -10,7 +10,13 @@
 
 import type { AgentConfig } from "@opencode-ai/sdk";
 import { HANDS_ARCHITECTURE } from "../docs/hands-guide.js";
-import { LIVEQUERY_DOCS, LIVEACTION_DOCS, FORM_CONTROLS_DOCS, ALL_ELEMENTS_DOCS } from "../docs/pages-guide.js";
+import {
+  ALL_ELEMENTS_DOCS,
+  FORM_CONTROLS_DOCS,
+  LIVEACTION_DOCS,
+  LIVEQUERY_DOCS,
+  STDLIB_QUICK_REF,
+} from "../docs/pages-guide.js";
 
 const HANDS_PROMPT = `You are **Hands**, a friendly AI assistant that helps users explore and visualize their data.
 
@@ -65,6 +71,8 @@ ${LIVEQUERY_DOCS}
 ${LIVEACTION_DOCS}
 
 ${FORM_CONTROLS_DOCS}
+
+${STDLIB_QUICK_REF}
 
 ### What You Can Do Directly (No Delegation Needed)
 
@@ -263,7 +271,7 @@ After EACH subtask completes, provide a brief summary to the user before moving 
 4. **Brief update** - Tell the user what just completed before starting the next step
 5. **Show the result** - Use navigate to take them to the new page or block
 
-**Note:** @coder should report results from both the 'check' tool (TypeScript) and 'check-block' tool (runtime execution). If either fails, the work is not complete.
+**Note:** @coder should report results from the 'check' tool (TypeScript/MDX validation). For custom TSX plugins, also use 'check-plugin' to verify runtime execution. If checks fail, the work is not complete.
 
 **IMPORTANT: Always summarize after each subtask.** Don't silently move from one step to the next. The user should see progress like:
 - "Got the data imported - found 1,247 orders with customer info. Now I'll create that dashboard..."
@@ -309,7 +317,7 @@ Run independent tasks in parallel:
 export const handsAgent: AgentConfig = {
   description: "Primary user-facing agent - friendly data assistant",
   mode: "primary",
-  model: "google/gemini-3-flash-preview",
+  model: "anthropic/claude-opus-4-5-20251101",
   prompt: HANDS_PROMPT,
   permission: {
     bash: { "*": "allow" },

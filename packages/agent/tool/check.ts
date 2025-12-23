@@ -1,14 +1,21 @@
 import { spawn } from "node:child_process";
+import path from "node:path";
 import { tool } from "@opencode-ai/plugin";
 
+// Path to CLI binary (relative to this file in agent/tool/)
+const CLI_PATH = path.resolve(
+  import.meta.dirname ?? import.meta.dir ?? __dirname,
+  "../../cli/bin/hands.js"
+);
+
 /**
- * Execute a hands-runtime CLI command and return the output
+ * Execute a hands CLI command and return the output
  */
 function runHandsCommand(
   args: string[],
 ): Promise<{ stdout: string; stderr: string; code: number }> {
   return new Promise((resolve) => {
-    const proc = spawn("hands-runtime", args, {
+    const proc = spawn("node", [CLI_PATH, ...args], {
       cwd: process.cwd(),
       env: process.env,
     });

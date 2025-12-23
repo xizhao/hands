@@ -355,7 +355,7 @@ export function generateWorkbookTsConfig(workbookDir: string): string {
         "@ui/lib/utils": [`${relativeRuntimePath}/src/lib/utils.ts`],
       },
     },
-    include: ["blocks/**/*", "pages/**/*", "sources/**/*", "ui/**/*", "lib/**/*"],
+    include: ["plugins/**/*", "pages/**/*", "sources/**/*", "ui/**/*", "lib/**/*"],
     exclude: ["node_modules", ".hands"],
   };
 

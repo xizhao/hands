@@ -51,16 +51,17 @@ export async function checkCommand(options: CheckOptions = {}) {
     pc.blue(`${fix ? "Fixing" : "Checking"} ${pc.bold(path.basename(workbookPath))}...\n`),
   );
 
-  // Run types, lints, and MDX validation in parallel
-  const [typesOk, lintsOk, mdxOk] = await Promise.all([
+  // Run types, lints, MDX validation, and directory structure check in parallel
+  const [typesOk, lintsOk, mdxOk, structOk] = await Promise.all([
     runTypes(workbookPath, runtimeDir, coreDir),
     runLints(workbookPath, runtimeDir),
     runMdxValidation(workbookPath),
+    runDirectoryStructureCheck(workbookPath),
   ]);
 
   // Summary
   console.log("");
-  if (!typesOk || !lintsOk || !mdxOk) {
+  if (!typesOk || !lintsOk || !mdxOk || !structOk) {
     console.log(pc.red("✗ Check failed"));
     process.exit(1);
   } else {
@@ -329,4 +330,135 @@ async function runArchLints(workbookPath: string): Promise<boolean> {
 
   // Errors fail the check, warnings don't
   return errors.length === 0;
+}
+
+// Canonical directories for workbook structure
+const CANONICAL_DIRS = new Set(["pages", "plugins", "lib", "sources", "actions", ".hands", "public", "node_modules"]);
+
+// Deprecated directories that hint at old architecture
+const DEPRECATED_DIRS: Record<string, string> = {
+  blocks: "Use 'plugins/' for TSX components or 'pages/blocks/' for MDX fragments",
+  ui: "Use 'plugins/' for custom components or import from '@hands/core'",
+  components: "Use 'plugins/' for custom components",
+};
+
+/**
+ * Check directory structure matches canonical layout.
+ * Warns about stray directories and deprecated patterns.
+ */
+async function runDirectoryStructureCheck(workbookPath: string): Promise<boolean> {
+  console.log(pc.cyan("▶ Structure"));
+
+  const warnings: string[] = [];
+  const errors: string[] = [];
+
+  // Check for non-canonical top-level directories
+  for (const entry of readdirSync(workbookPath, { withFileTypes: true })) {
+    if (!entry.isDirectory()) continue;
+    if (entry.name.startsWith(".")) continue; // Skip hidden dirs except .hands
+
+    const dirName = entry.name;
+
+    if (DEPRECATED_DIRS[dirName]) {
+      errors.push(`  ${pc.red("✗")} Found '${dirName}/' - ${DEPRECATED_DIRS[dirName]}`);
+    } else if (!CANONICAL_DIRS.has(dirName)) {
+      // Only warn about dirs containing code files
+      const dirPath = path.join(workbookPath, dirName);
+      const hasCode = hasCodeFiles(dirPath);
+      if (hasCode) {
+        warnings.push(`  ${pc.yellow("⚠")} Unexpected directory '${dirName}/' - move code to pages/, plugins/, or lib/`);
+      }
+    }
+  }
+
+  // Check for MDX blocks in wrong location (should be pages/blocks/, not blocks/)
+  const blocksDir = path.join(workbookPath, "blocks");
+  if (existsSync(blocksDir)) {
+    const mdxFiles = findMdxFiles(blocksDir);
+    if (mdxFiles.length > 0) {
+      errors.push(`  ${pc.red("✗")} Found ${mdxFiles.length} MDX file(s) in 'blocks/' - move to 'pages/blocks/'`);
+    }
+    const tsxFiles = findTsxFiles(blocksDir);
+    if (tsxFiles.length > 0) {
+      errors.push(`  ${pc.red("✗")} Found ${tsxFiles.length} TSX file(s) in 'blocks/' - move to 'plugins/'`);
+    }
+  }
+
+  // Print results
+  for (const error of errors) {
+    console.log(error);
+  }
+  for (const warning of warnings) {
+    console.log(warning);
+  }
+
+  if (errors.length === 0 && warnings.length === 0) {
+    console.log(pc.green("  ✓ Directory structure OK"));
+    return true;
+  }
+
+  // Errors fail, warnings don't
+  return errors.length === 0;
+}
+
+/**
+ * Check if directory contains code files (ts/tsx/js/jsx/mdx).
+ */
+function hasCodeFiles(dir: string): boolean {
+  try {
+    for (const entry of readdirSync(dir, { withFileTypes: true })) {
+      if (entry.isFile()) {
+        if (/\.(ts|tsx|js|jsx|mdx?)$/.test(entry.name)) {
+          return true;
+        }
+      } else if (entry.isDirectory() && !entry.name.startsWith(".")) {
+        if (hasCodeFiles(path.join(dir, entry.name))) {
+          return true;
+        }
+      }
+    }
+  } catch {
+    // Ignore errors
+  }
+  return false;
+}
+
+/**
+ * Find MDX files in a directory recursively.
+ */
+function findMdxFiles(dir: string): string[] {
+  const files: string[] = [];
+  try {
+    for (const entry of readdirSync(dir, { withFileTypes: true })) {
+      const fullPath = path.join(dir, entry.name);
+      if (entry.isDirectory()) {
+        files.push(...findMdxFiles(fullPath));
+      } else if (/\.mdx?$/.test(entry.name)) {
+        files.push(fullPath);
+      }
+    }
+  } catch {
+    // Ignore errors
+  }
+  return files;
+}
+
+/**
+ * Find TSX/TS files in a directory recursively.
+ */
+function findTsxFiles(dir: string): string[] {
+  const files: string[] = [];
+  try {
+    for (const entry of readdirSync(dir, { withFileTypes: true })) {
+      const fullPath = path.join(dir, entry.name);
+      if (entry.isDirectory()) {
+        files.push(...findTsxFiles(fullPath));
+      } else if (/\.tsx?$/.test(entry.name)) {
+        files.push(fullPath);
+      }
+    }
+  } catch {
+    // Ignore errors
+  }
+  return files;
 }

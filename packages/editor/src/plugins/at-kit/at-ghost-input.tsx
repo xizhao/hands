@@ -667,7 +667,17 @@ export function AtGhostInputElement(props: PlateElementProps) {
 
       queryPromise
         .then((result) => {
-          console.log('[at-ghost] received mdx:', result.mdx);
+          console.log('[at-ghost] received mdx:', result.mdx, 'errors:', result.errors);
+
+          // If validation errors, retry automatically (up to 2 times)
+          if (result.errors?.length && retryCountRef.current < 2) {
+            retryCountRef.current++;
+            errorsRef.current = [...errorsRef.current, ...result.errors];
+            pendingMdxQueries.delete(promptText);
+            fetchMdx(promptText, false, errorsRef.current);
+            return;
+          }
+
           if (fetchIdRef.current === currentFetchId) {
             setPrefetchedMdx(result.mdx);
             setPrefetchedPrompt(promptText);

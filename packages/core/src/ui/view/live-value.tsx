@@ -16,11 +16,12 @@ import {
   createPlatePlugin,
   PlateElement,
   type PlateElementProps,
+  useEditorRef,
   useElement,
   useReadOnly,
   useSelected,
 } from "platejs/react";
-import { memo, useState } from "react";
+import { memo, useState, useCallback } from "react";
 import { Database, ExternalLink } from "lucide-react";
 
 import {
@@ -37,12 +38,6 @@ import { LiveValueProvider } from "./charts/context";
 import { DataGrid } from "../data/data-grid";
 import { useLiveQuery, useNavigateToTable } from "../query-provider";
 import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from "../components/tooltip";
-import {
   Dialog,
   DialogContent,
   DialogHeader,
@@ -50,6 +45,7 @@ import {
   DialogDescription,
 } from "../components/dialog";
 import { Button } from "../components/button";
+import { LiveControlsMenu, LiveQueryEditor, extractTableName } from "../livecontrol";
 
 // ============================================================================
 // Display Type Selection
@@ -117,15 +113,10 @@ export function formatCellValue(value: unknown): string {
 
 /**
  * Extract table name(s) from a SQL query.
- * Returns the first table found in FROM clause.
+ * @deprecated Use extractTableName from livecontrol instead
  */
 export function extractTableFromQuery(sql: string): string | null {
-  // Match FROM tablename or FROM "tablename" or FROM `tablename`
-  const fromMatch = sql.match(/\bFROM\s+["`]?(\w+)["`]?/i);
-  if (fromMatch) {
-    return fromMatch[1];
-  }
-  return null;
+  return extractTableName(sql, "query");
 }
 
 // ============================================================================
@@ -244,133 +235,6 @@ export function LiveValueDisplay({
 }
 
 // ============================================================================
-// Interactive Wrapper
-// ============================================================================
-
-interface LiveValueInteractiveProps {
-  /** The SQL query */
-  query: string;
-  /** The data from the query */
-  data: Record<string, unknown>[];
-  /** Loading state */
-  isLoading: boolean;
-  /** Error state */
-  error: Error | null;
-  /** Children to wrap */
-  children: React.ReactNode;
-  /** Whether the element is inline */
-  isInline?: boolean;
-}
-
-/**
- * Interactive wrapper that adds tooltip (on hover) and modal (on click) to LiveValue.
- * Shows query info on hover, opens data management modal on click.
- */
-function LiveValueInteractive({
-  query,
-  data,
-  isLoading,
-  error,
-  children,
-  isInline,
-}: LiveValueInteractiveProps) {
-  const [dialogOpen, setDialogOpen] = useState(false);
-  const navigateToTable = useNavigateToTable();
-  const tableName = extractTableFromQuery(query);
-
-  const handleClick = (e: React.MouseEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-    setDialogOpen(true);
-  };
-
-  const handleNavigateToTable = () => {
-    if (tableName && navigateToTable) {
-      navigateToTable(tableName);
-      setDialogOpen(false);
-    }
-  };
-
-  return (
-    <>
-      <TooltipProvider delayDuration={300}>
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <span
-              onClick={handleClick}
-              className="cursor-pointer hover:bg-accent/50 rounded transition-colors"
-              style={{ display: isInline ? "inline" : "block" }}
-            >
-              {children}
-            </span>
-          </TooltipTrigger>
-          <TooltipContent side="top" className="max-w-sm">
-            <div className="flex items-center gap-2 text-xs">
-              <Database className="h-3 w-3 text-muted-foreground" />
-              <span className="font-medium">{tableName ?? "Query"}</span>
-            </div>
-            <code className="mt-1 block text-[10px] text-muted-foreground font-mono truncate max-w-[280px]">
-              {query}
-            </code>
-          </TooltipContent>
-        </Tooltip>
-      </TooltipProvider>
-
-      <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-        <DialogContent className="max-w-4xl max-h-[80vh] flex flex-col">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <Database className="h-4 w-4" />
-              {tableName ? `Data from ${tableName}` : "Query Data"}
-            </DialogTitle>
-            <DialogDescription asChild>
-              <code className="text-xs font-mono bg-muted px-2 py-1 rounded block mt-1">
-                {query}
-              </code>
-            </DialogDescription>
-          </DialogHeader>
-
-          <div className="flex-1 min-h-0 overflow-auto">
-            {isLoading ? (
-              <div className="flex items-center justify-center h-32 text-muted-foreground">
-                Loading...
-              </div>
-            ) : error ? (
-              <div className="flex items-center justify-center h-32 text-destructive">
-                Error: {error.message}
-              </div>
-            ) : (
-              <DataGrid
-                data={data}
-                columns="auto"
-                height={Math.min(400, Math.max(150, 36 + data.length * 36))}
-                readOnly={false}
-                enableSearch={data.length > 5}
-                enablePaste={false}
-              />
-            )}
-          </div>
-
-          {tableName && navigateToTable && (
-            <div className="flex justify-end pt-4 border-t">
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={handleNavigateToTable}
-                className="gap-2"
-              >
-                <ExternalLink className="h-3 w-3" />
-                View in Tables
-              </Button>
-            </div>
-          )}
-        </DialogContent>
-      </Dialog>
-    </>
-  );
-}
-
-// ============================================================================
 // Plate Plugin
 // ============================================================================
 
@@ -398,13 +262,23 @@ function hasMeaningfulChildren(element: TLiveValueElement): boolean {
  * 2. **Auto-display mode** (no children): Picks display format based on data shape
  *    <LiveValue query="..." /> → inline (1×1), list (N×1), or table (N×M)
  *    <LiveValue query="..." display="table" /> → force table
+ *
+ * Interactive features:
+ * - Hover: Shows LiveControlsMenu with table name and actions
+ * - View Data: Opens modal with DataGrid
+ * - Edit: Opens LiveQueryEditor for SQL editing
  */
 function LiveValueElement(props: PlateElementProps) {
+  const editor = useEditorRef();
   const element = useElement<TLiveValueElement>();
   const selected = useSelected();
   const readOnly = useReadOnly();
+  const [dialogOpen, setDialogOpen] = useState(false);
+  const [editorOpen, setEditorOpen] = useState(false);
+  const navigateToTable = useNavigateToTable();
 
   const { query, display, columns, params } = element;
+  const tableName = extractTableName(query, "query");
 
   // Execute query via provider (tRPC, REST, etc.)
   const { data: queryData, isLoading, error } = useLiveQuery(query, params);
@@ -412,46 +286,126 @@ function LiveValueElement(props: PlateElementProps) {
 
   // Mode: provider (children handle display) vs auto-display (we handle display)
   const isProviderMode = hasMeaningfulChildren(element);
-
-  // Provider mode: idiomatic pass-through like LiveAction
-  if (isProviderMode) {
-    return (
-      <PlateElement {...props}>
-        <LiveValueProvider data={data} isLoading={isLoading} error={error}>
-          {props.children}
-        </LiveValueProvider>
-      </PlateElement>
-    );
-  }
-
-  // Auto-display mode: we pick the display format
   const displayType = resolveDisplayMode(display, data);
-  const isInline = displayType === "inline";
+  const isInline = !isProviderMode && displayType === "inline";
+
+  const handleViewData = () => {
+    setDialogOpen(true);
+  };
+
+  const handleEdit = () => {
+    setEditorOpen(true);
+  };
+
+  const handleApplyQuery = useCallback((newQuery: string) => {
+    try {
+      const path = editor.api.findPath(element);
+      if (path) {
+        editor.tf.setNodes({ query: newQuery } as Partial<TLiveValueElement>, { at: path });
+      }
+    } catch (e) {
+      console.error("Failed to update query:", e);
+    }
+  }, [editor, element]);
+
+  const handleNavigateToTable = () => {
+    if (tableName && navigateToTable) {
+      navigateToTable(tableName);
+      setDialogOpen(false);
+    }
+  };
+
+  // Content to display (either children for provider mode, or auto-display)
+  const content = isProviderMode ? (
+    props.children
+  ) : (
+    <LiveValueDisplay
+      data={data}
+      isLoading={isLoading}
+      error={error}
+      display={display}
+      columns={columns === "auto" ? undefined : columns}
+    />
+  );
 
   return (
     <PlateElement
       {...props}
       as={isInline ? "span" : "div"}
-      className={selected && !readOnly ? "ring-2 ring-ring ring-offset-1 rounded" : undefined}
     >
-      <LiveValueProvider data={data} isLoading={isLoading} error={error}>
-        <span contentEditable={false} style={{ userSelect: "none" }}>
-          <LiveValueInteractive
-            query={query}
-            data={data}
-            isLoading={isLoading}
-            error={error}
-            isInline={isInline}
-          >
-            <LiveValueDisplay
-              data={data}
-              isLoading={isLoading}
-              error={error}
-              display={display}
-              columns={columns === "auto" ? undefined : columns}
-            />
-          </LiveValueInteractive>
-        </span>
+      <LiveValueProvider data={data} isLoading={isLoading} error={error} tableName={tableName} query={query}>
+        <LiveControlsMenu
+          type="query"
+          sql={query}
+          tableName={tableName ?? undefined}
+          onViewData={handleViewData}
+          onEdit={handleEdit}
+          inline={isInline}
+          selected={selected}
+          readOnly={readOnly}
+        >
+          {content}
+        </LiveControlsMenu>
+
+        <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+          <DialogContent className="max-w-4xl max-h-[80vh] flex flex-col">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2">
+                <Database className="h-4 w-4" />
+                {tableName ? `Data from ${tableName}` : "Query Data"}
+              </DialogTitle>
+              <DialogDescription asChild>
+                <code className="text-xs font-mono bg-muted px-2 py-1 rounded block mt-1">
+                  {query}
+                </code>
+              </DialogDescription>
+            </DialogHeader>
+
+            <div className="flex-1 min-h-0 overflow-auto">
+              {isLoading ? (
+                <div className="flex items-center justify-center h-32 text-muted-foreground">
+                  Loading...
+                </div>
+              ) : error ? (
+                <div className="flex items-center justify-center h-32 text-destructive">
+                  Error: {error.message}
+                </div>
+              ) : (
+                <DataGrid
+                  data={data}
+                  columns="auto"
+                  height={Math.min(400, Math.max(150, 36 + data.length * 36))}
+                  readOnly={false}
+                  enableSearch={data.length > 5}
+                  enablePaste={false}
+                />
+              )}
+            </div>
+
+            {tableName && navigateToTable && (
+              <div className="flex justify-end pt-4 border-t">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleNavigateToTable}
+                  className="gap-2"
+                >
+                  <ExternalLink className="h-3 w-3" />
+                  View in Tables
+                </Button>
+              </div>
+            )}
+          </DialogContent>
+        </Dialog>
+
+        <LiveQueryEditor
+          initialQuery={query ?? ""}
+          type="query"
+          onApply={handleApplyQuery}
+          onCancel={() => {}}
+          open={editorOpen}
+          onOpenChange={setEditorOpen}
+        />
       </LiveValueProvider>
     </PlateElement>
   );

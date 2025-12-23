@@ -126,6 +126,9 @@ function detectDropTarget(
 
 const UNDRAGGABLE_KEYS = [KEYS.column, KEYS.tr, KEYS.td];
 
+// Elements whose direct children should not be draggable
+const NON_DRAGGABLE_CHILDREN_TYPES = ["live_value"];
+
 export const BlockDraggable: RenderNodeWrapper = (props) => {
   const { editor, element, path } = props;
 
@@ -137,9 +140,14 @@ export const BlockDraggable: RenderNodeWrapper = (props) => {
       return true;
     }
     // Enable dragging for children inside container elements (e.g., LiveAction)
+    // But NOT for children of LiveValue (dragging them out breaks the component)
     if (path.length === 2 && !isType(editor, element, UNDRAGGABLE_KEYS)) {
       const parentEntry = editor.api.parent(path);
       if (parentEntry) {
+        // Disable dragging for children of LiveValue and similar elements
+        if (NON_DRAGGABLE_CHILDREN_TYPES.includes(parentEntry[0].type as string)) {
+          return false;
+        }
         const parentPlugin = getPluginByType(editor, parentEntry[0].type as string);
         if (parentPlugin?.node.isContainer) {
           return true;

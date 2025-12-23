@@ -14,7 +14,13 @@
 import { MarkdownPlugin } from "@platejs/markdown";
 import { cn } from "@udecode/cn";
 import type { TElement } from "platejs";
-import { Plate, PlateContent, usePlateEditor, type PlateEditor, type PlatePlugin } from "platejs/react";
+import {
+  Plate,
+  PlateContent,
+  usePlateEditor,
+  type PlateEditor,
+  type PlatePlugin,
+} from "platejs/react";
 import {
   forwardRef,
   useCallback,
@@ -22,18 +28,22 @@ import {
   useImperativeHandle,
   useMemo,
   useRef,
+  useState,
   type ComponentType,
-  type ReactNode,
   type KeyboardEvent,
+  type ReactNode,
 } from "react";
 
 import { createPlugin, type PluginOptions } from "@hands/core/primitives";
-import { EditorCorePlugins } from "./plugins/presets";
-import { createMarkdownKit, type MarkdownRule } from "./plugins/markdown-kit";
-import { createCopilotKit, type CopilotConfig } from "./plugins/copilot-kit";
-import { useEditorTrpc, useEditorTables } from "./context";
+import { useEditorTables, useEditorTrpc } from "./context";
 import { FrontmatterHeader, type Frontmatter } from "./frontmatter";
-import { FixedToolbar, FixedToolbarButtons, TooltipProvider } from "./ui";
+import { createCopilotKit, type CopilotConfig } from "./plugins/copilot-kit";
+import { createMarkdownKit, type MarkdownRule } from "./plugins/markdown-kit";
+import { EditorCorePlugins } from "./plugins/presets";
+import { EditorStatusBar, FixedToolbar, FixedToolbarButtons, TooltipProvider } from "./ui";
+import { MarkdownCodeEditor, type Diagnostic } from "./ui/markdown-code-editor";
+import { ModeToggle, type EditorMode } from "./ui/mode-toggle";
+import { serializeFrontmatter, parseFrontmatter, stripFrontmatter } from "./frontmatter";
 
 // ============================================================================
 // Editor Handle (exposed via ref)
@@ -81,7 +91,9 @@ export interface AdvancedEditorPlugin {
 
 export type EditorPlugin = SimpleEditorPlugin | AdvancedEditorPlugin;
 
-function isAdvancedPlugin(plugin: EditorPlugin): plugin is AdvancedEditorPlugin {
+function isAdvancedPlugin(
+  plugin: EditorPlugin
+): plugin is AdvancedEditorPlugin {
   return "plugin" in plugin && "rules" in plugin;
 }
 
@@ -124,6 +136,16 @@ export interface EditorProps {
   showToolbar?: boolean;
   /** Custom toolbar content (replaces default) */
   toolbar?: ReactNode;
+
+  // ---- Editor Mode ----
+  /** Current editor mode (visual or markdown) - controlled */
+  mode?: EditorMode;
+  /** Callback when mode changes */
+  onModeChange?: (mode: EditorMode) => void;
+  /** Whether to show the mode toggle button (default: true) */
+  showModeToggle?: boolean;
+  /** External diagnostics to display in markdown mode (from tsc, eslint, etc.) */
+  diagnostics?: Diagnostic[];
 
   // ---- Status ----
   /** Whether the editor is currently saving */
@@ -196,6 +218,11 @@ export const Editor = forwardRef<EditorHandle, EditorProps>(function Editor(
     // Toolbar
     showToolbar = true,
     toolbar,
+    // Mode
+    mode: controlledMode,
+    onModeChange,
+    showModeToggle = true,
+    diagnostics,
     // Status
     isSaving = false,
     // Layout
@@ -218,6 +245,23 @@ export const Editor = forwardRef<EditorHandle, EditorProps>(function Editor(
 
   // Ref for keyboard navigation from editor to frontmatter
   const subtitleRef = useRef<HTMLDivElement>(null);
+
+  // Editor mode state (visual vs markdown)
+  const [internalMode, setInternalMode] = useState<EditorMode>("visual");
+  const mode = controlledMode ?? internalMode;
+  const handleModeChange = useCallback(
+    (newMode: EditorMode) => {
+      if (onModeChange) {
+        onModeChange(newMode);
+      } else {
+        setInternalMode(newMode);
+      }
+    },
+    [onModeChange]
+  );
+
+  // Track markdown content for code editor mode
+  const [markdownContent, setMarkdownContent] = useState<string>("");
 
   // Merge deprecated + new props
   const allEditorPlugins = useMemo(
@@ -281,13 +325,16 @@ export const Editor = forwardRef<EditorHandle, EditorProps>(function Editor(
   );
 
   // Build complete plugin list
-  const allPlugins = useMemo(() => [
-    ...EditorCorePlugins,
-    ...generatedPlugins,
-    ...allExtraPlugins,
-    ...createMarkdownKit(generatedRules),
-    ...copilotPlugins,
-  ], [generatedPlugins, allExtraPlugins, generatedRules, copilotPlugins]);
+  const allPlugins = useMemo(
+    () => [
+      ...EditorCorePlugins,
+      ...generatedPlugins,
+      ...allExtraPlugins,
+      ...createMarkdownKit(generatedRules),
+      ...copilotPlugins,
+    ],
+    [generatedPlugins, allExtraPlugins, generatedRules, copilotPlugins]
+  );
 
   // Create editor
   const editor = usePlateEditor({
@@ -333,17 +380,19 @@ export const Editor = forwardRef<EditorHandle, EditorProps>(function Editor(
 
   // Sync external value to editor
   useEffect(() => {
-    if (!value) return;
+    if (value == null) return; // Allow empty string to reset editor
     if (value === lastValueRef.current) return;
 
     try {
       isExternalUpdateRef.current = true;
       const api = editor.getApi(MarkdownPlugin);
       const nodes = api.markdown.deserialize(value);
-      if (nodes && nodes.length > 0) {
-        editor.tf.setValue(nodes);
-        lastValueRef.current = value;
-      }
+      // Reset to empty paragraph if content is empty, otherwise use deserialized nodes
+      const newValue = nodes && nodes.length > 0
+        ? nodes
+        : [{ type: "p", children: [{ text: "" }] }];
+      editor.tf.setValue(newValue);
+      lastValueRef.current = value;
     } catch (err) {
       console.error("[Editor] Failed to deserialize:", err);
     } finally {
@@ -408,59 +457,143 @@ export const Editor = forwardRef<EditorHandle, EditorProps>(function Editor(
     [editor, frontmatter, externalOnKeyDown]
   );
 
+  // Sync markdown content when switching to markdown mode
+  // Includes frontmatter if present to show the full raw file
+  useEffect(() => {
+    if (mode === "markdown") {
+      try {
+        const api = editor.getApi(MarkdownPlugin);
+        const bodyMarkdown = api.markdown.serialize();
+        // Prepend frontmatter if present
+        const rawContent = frontmatter
+          ? serializeFrontmatter(frontmatter) + "\n" + bodyMarkdown
+          : bodyMarkdown;
+        setMarkdownContent(rawContent);
+      } catch (err) {
+        console.error("[Editor] Failed to serialize for markdown mode:", err);
+      }
+    }
+  }, [mode, editor, frontmatter]);
+
+  // Handle markdown content changes in code editor mode
+  // Parses frontmatter from the raw content and updates both frontmatter and body
+  const handleMarkdownChange = useCallback(
+    (rawContent: string) => {
+      setMarkdownContent(rawContent);
+
+      // Parse frontmatter and extract body from raw content
+      const { frontmatter: parsedFrontmatter } = parseFrontmatter(rawContent);
+      const body = stripFrontmatter(rawContent);
+
+      // Update frontmatter if callback provided and frontmatter exists
+      if (onFrontmatterChange && Object.keys(parsedFrontmatter).length > 0) {
+        onFrontmatterChange(parsedFrontmatter);
+      }
+
+      // Sync body to visual editor
+      try {
+        isExternalUpdateRef.current = true;
+        const api = editor.getApi(MarkdownPlugin);
+        const nodes = api.markdown.deserialize(body);
+        if (nodes && nodes.length > 0) {
+          editor.tf.setValue(nodes);
+          lastValueRef.current = body;
+        }
+      } catch (err) {
+        // Ignore parse errors during typing
+      } finally {
+        setTimeout(() => {
+          isExternalUpdateRef.current = false;
+        }, 0);
+      }
+
+      // Also call onChange with body content
+      if (onChange && body !== lastValueRef.current) {
+        lastValueRef.current = body;
+        onChange(body);
+      }
+    },
+    [editor, onChange, onFrontmatterChange]
+  );
+
   // Determine which toolbar to render
-  const toolbarElement = toolbar ?? (showToolbar && !readOnly ? (
-    <FixedToolbar>
-      <FixedToolbarButtons />
-    </FixedToolbar>
-  ) : null);
+  const toolbarElement =
+    toolbar ??
+    (showToolbar && !readOnly ? (
+      <FixedToolbar>
+        <div className="flex items-center justify-between w-full">
+          {/* Left side - only show formatting buttons in visual mode */}
+          {mode === "visual" ? (
+            <FixedToolbarButtons />
+          ) : (
+            <div className="text-xs text-muted-foreground px-2">
+              Markdown Mode
+            </div>
+          )}
+          {/* Right side - mode toggle */}
+          {showModeToggle && (
+            <ModeToggle mode={mode} onModeChange={handleModeChange} />
+          )}
+        </div>
+      </FixedToolbar>
+    ) : null);
 
   const content = (
     <TooltipProvider>
-    <div className={cn("h-full flex flex-col", className)}>
-      <Plate editor={editor} onChange={handleChange}>
-        {/* Toolbar */}
-        {toolbarElement}
+      <div className={cn("h-full flex flex-col", className)}>
+        <Plate editor={editor} onChange={handleChange}>
+          {/* Toolbar */}
+          {toolbarElement}
 
-        {/* Scroll container - padding here (not PlateContent) so drag handle gutter isn't clipped */}
-        <div className="relative flex-1 min-h-0 cursor-text overflow-y-auto pl-16 pr-6">
-          {/* Frontmatter header (when enabled) */}
-          {frontmatter && onFrontmatterChange && (
-            <FrontmatterHeader
-              frontmatter={frontmatter}
-              onFrontmatterChange={onFrontmatterChange}
-              onFocusEditor={handleFocusEditor}
-              subtitleRef={subtitleRef}
-            />
-          )}
-
-          {/* Saving indicator */}
-          {isSaving && (
-            <div className="absolute top-2 right-2 text-xs text-muted-foreground">
-              Saving...
-            </div>
-          )}
-
-          {/* Custom header slot */}
-          {header}
-
-          {/* Editor content */}
-          <PlateContent
-            className={cn(
-              "pt-4 pb-32 min-h-[200px] outline-none",
-              DEFAULT_PROSE_CLASSES,
-              contentClassName
+          {/* Scroll container - padding here (not PlateContent) so drag handle gutter isn't clipped */}
+          <div className={cn(
+            "relative flex-1 min-h-0 cursor-text overflow-y-auto",
+            mode === "visual" ? "pl-8 pr-6" : "pl-0 pr-0"
+          )}>
+            {/* Frontmatter header (only in visual mode - code mode shows raw frontmatter) */}
+            {mode === "visual" && frontmatter && onFrontmatterChange && (
+              <FrontmatterHeader
+                frontmatter={frontmatter}
+                onFrontmatterChange={onFrontmatterChange}
+                onFocusEditor={handleFocusEditor}
+                subtitleRef={subtitleRef}
+              />
             )}
-            placeholder={placeholder}
-            readOnly={readOnly}
-            onKeyDown={handleEditorKeyDown}
-          />
 
-          {/* Footer slot */}
-          {footer}
-        </div>
-      </Plate>
-    </div>
+            {/* Custom header slot (only in visual mode) */}
+            {mode === "visual" && header}
+
+            {/* Editor content */}
+            {mode === "visual" ? (
+              <PlateContent
+                className={cn(
+                  "pt-4 pb-32 min-h-[200px] outline-none",
+                  DEFAULT_PROSE_CLASSES,
+                  contentClassName
+                )}
+                placeholder={placeholder}
+                readOnly={readOnly}
+                onKeyDown={handleEditorKeyDown}
+              />
+            ) : (
+              <MarkdownCodeEditor
+                value={markdownContent}
+                onChange={handleMarkdownChange}
+                diagnostics={diagnostics}
+                className="h-full"
+                placeholder={placeholder}
+                readOnly={readOnly}
+              />
+            )}
+
+            {/* Footer slot */}
+            {footer}
+          </div>
+
+          {/* Status bar - shows selection info and save status */}
+          {!readOnly && <EditorStatusBar isSaving={isSaving} />}
+        </Plate>
+      </div>
     </TooltipProvider>
   );
 

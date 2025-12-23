@@ -20,6 +20,10 @@ export interface LiveValueContextData {
   isLoading: boolean;
   /** Error from query execution */
   error: Error | null;
+  /** Table name extracted from query (for child components like Kanban) */
+  tableName?: string | null;
+  /** Original SQL query */
+  query?: string | null;
 }
 
 // ============================================================================
@@ -44,10 +48,12 @@ export function LiveValueProvider({
   data,
   isLoading,
   error,
+  tableName,
+  query,
   children,
 }: LiveValueProviderProps) {
   return (
-    <LiveValueContext.Provider value={{ data, isLoading, error }}>
+    <LiveValueContext.Provider value={{ data, isLoading, error, tableName, query }}>
       {children}
     </LiveValueContext.Provider>
   );

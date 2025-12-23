@@ -766,48 +766,61 @@ Callouts are highlighted boxes for tips, warnings, or important notes.
 `;
 
 // ============================================================================
-// Block Element - Sandboxed Components
+// Page Element - Embedded MDX Blocks
 // ============================================================================
 
-export const BLOCK_ELEMENT_DOCS = `
-## Block Element (Sandboxed Component)
+export const PAGE_ELEMENT_DOCS = `
+## Page Element (Embedded MDX Block)
 
-Renders TSX components from workbook/blocks/ in an isolated iframe.
+Embeds reusable MDX content from pages/blocks/ into the current page.
 
 ### MDX Syntax
 
 \`\`\`mdx
-<!-- Completed block -->
-<Block src="revenue-chart" />
+<!-- Embed a reusable block from pages/blocks/ -->
+<Page src="blocks/revenue-summary" />
 
-<!-- With height (persists user resizing) -->
-<Block src="top-customers" height={400} />
-
-<!-- Block being created (shows shimmer) -->
-<Block prompt="Create a revenue chart" editing />
+<!-- With parameters -->
+<Page src="blocks/customer-card" params={{userId: 123}} />
 \`\`\`
 
 ### Plate Element Type
 
 \`\`\`typescript
-interface TSandboxedBlockElement extends TElement {
-  type: "sandboxed_block";
-  src?: string;          // Block ID (maps to blocks/{src}.tsx)
-  editing?: boolean;     // Creating mode (shimmer)
-  prompt?: string;       // AI prompt for creation
-  height?: number;       // Iframe height (user-resizable)
-  linkedTables?: string[]; // Tables referenced by block
-  buildError?: string;   // Compilation error
+interface TPageEmbedElement extends TElement {
+  type: "page_embed";
+  src: string;           // Block path (e.g., "blocks/revenue-summary")
+  params?: Record<string, unknown>; // Parameters passed to the block
 }
 \`\`\`
 
 ### Features
 
-- Lazy loading (loads when scrolled into view)
-- Theme synchronization (light/dark mode)
-- Auto-retry on load failure
-- "Fix with AI" for render errors
-- Resizable height (persisted to element)
+- Embeds MDX content from pages/blocks/
+- Supports parameter passing
+- Live updates when source block changes
+- Inherits parent page styling
+
+### Directory Structure
+
+\`\`\`
+pages/
+  index.mdx           # Main page
+  dashboard.mdx       # Another page
+  blocks/             # Embeddable MDX fragments
+    revenue-summary.mdx
+    customer-card.mdx
+\`\`\`
+
+### Note: Custom TSX Components
+
+For custom visualizations requiring React code, create plugins in \`plugins/\`:
+
+\`\`\`mdx
+import RevenueChart from "../plugins/revenue-chart"
+
+<RevenueChart period="6 months" />
+\`\`\`
 `;
 
 // ============================================================================
@@ -947,7 +960,7 @@ ${FORM_CONTROLS_DOCS}
 
 ${CARD_DOCS}
 
-${BLOCK_ELEMENT_DOCS}
+${PAGE_ELEMENT_DOCS}
 
 ${MARKDOWN_KIT_DOCS}
 

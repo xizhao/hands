@@ -1,0 +1,62 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "hands-cloud",
+  "main": "src/index.ts",
+  "compatibility_date": "2025-12-01",
+  "compatibility_flags": ["nodejs_compat"],
+
+  // Hyperdrive for Postgres (Neon)
+  "hyperdrive": [
+    {
+      "binding": "DB",
+      "id": "placeholder-create-with-wrangler-hyperdrive-create"
+    }
+  ],
+
+  // KV namespaces
+  "kv_namespaces": [
+    {
+      "binding": "AUTH_STATE",
+      "id": "placeholder-create-with-wrangler-kv-namespace-create"
+    },
+    {
+      "binding": "RATE_LIMIT",
+      "id": "placeholder-create-with-wrangler-kv-namespace-create"
+    }
+  ],
+
+  // AI Gateway binding
+  "ai": {
+    "binding": "AI"
+  },
+
+  // Scheduled triggers for usage aggregation
+  "triggers": {
+    "crons": ["0 * * * *"]
+  },
+
+  // Observability
+  "observability": {
+    "enabled": true
+  },
+
+  // Environment variables
+  "vars": {
+    "APP_URL": "https://hands.app",
+    "API_URL": "https://api.hands.app",
+    "AI_GATEWAY_ACCOUNT_ID": "placeholder",
+    "AI_GATEWAY_ID": "placeholder",
+    "CF_ACCOUNT_ID": "placeholder",
+    "CF_API_TOKEN": "placeholder"
+  }
+
+  // Secrets to set via `wrangler secret put`:
+  // - GOOGLE_CLIENT_ID
+  // - GOOGLE_CLIENT_SECRET
+  // - AUTH_SECRET (for JWT signing)
+  // - ENCRYPTION_KEY (for OAuth token encryption)
+  // - STRIPE_SECRET_KEY
+  // - STRIPE_WEBHOOK_SECRET
+  // - DATABASE_URL (Neon connection string, used by Hyperdrive)
+  // - CF_API_TOKEN (if you prefer as secret instead of var)
+}

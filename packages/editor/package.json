@@ -4,6 +4,7 @@
   "type": "module",
   "exports": {
     ".": "./src/index.ts",
+    "./code-editor": "./src/code-editor/index.ts",
     "./plugins": "./src/plugins/index.ts",
     "./ui": "./src/ui/index.ts",
     "./hooks": "./src/hooks/index.ts",
@@ -19,6 +20,7 @@
   },
   "dependencies": {
     "@hands/core": "workspace:*",
+    "@monaco-editor/react": "^4.6.0",
     "@phosphor-icons/react": "^2.1.10",
     "@ariakit/core": "0.4.7",
     "@ariakit/react": "0.4.7",
@@ -92,6 +94,7 @@
     "yaml": "^2.8.2"
   },
   "devDependencies": {
+    "monaco-editor": "^0.52.0",
     "@testing-library/react": "^16.0.0",
     "@types/react": "^19.0.0",
     "@types/react-dom": "^19.0.0",

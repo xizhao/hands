@@ -222,8 +222,12 @@ async function generateManifest(
   }
 
   // Generate block imports
+  // Strip 'blocks/' prefix since @/blocks alias already points to the blocks directory
   const blockImports = Array.from(allBlockIds)
-    .map((id) => `import ${sanitizeId(id)}Block from "@/blocks/${id}";`)
+    .map((id) => {
+      const importPath = id.startsWith("blocks/") ? id.slice(7) : id;
+      return `import ${sanitizeId(id)}Block from "@/blocks/${importPath}";`;
+    })
     .join("\n");
 
   // Generate block map

@@ -260,20 +260,14 @@ describe("findMovedItem", () => {
 // ============================================================================
 
 describe("createKanbanElement", () => {
-  it("creates element with required fields", () => {
-    const element = createKanbanElement(
-      "SELECT id, title, status FROM tasks",
-      "status",
-      "title",
-      "UPDATE tasks SET status = {{status}} WHERE id = {{id}}"
-    );
+  it("creates element with required fields only", () => {
+    const element = createKanbanElement("status", "title");
 
     expect(element).toEqual({
       type: "kanban",
-      query: "SELECT id, title, status FROM tasks",
       groupByColumn: "status",
       cardTitleField: "title",
-      updateSql: "UPDATE tasks SET status = {{status}} WHERE id = {{id}}",
+      updateSql: undefined, // Auto-generated at runtime from parent LiveValue
       columnOrder: undefined,
       cardFields: undefined,
       idField: undefined,
@@ -281,99 +275,34 @@ describe("createKanbanElement", () => {
     });
   });
 
-  it("creates element with optional fields", () => {
-    const element = createKanbanElement(
-      "SELECT * FROM tasks",
-      "status",
-      "title",
-      "UPDATE tasks SET status = {{status}} WHERE id = {{id}}",
-      {
-        columnOrder: ["todo", "in_progress", "done"],
-        cardFields: ["priority", "assignee"],
-        idField: "task_id",
-      }
+  it("creates element with explicit updateSql", () => {
+    const element = createKanbanElement("status", "title", {
+      updateSql: "UPDATE tasks SET status = {{status}} WHERE id = {{id}}",
+    });
+
+    expect(element.updateSql).toBe(
+      "UPDATE tasks SET status = {{status}} WHERE id = {{id}}"
     );
+  });
+
+  it("creates element with all optional fields", () => {
+    const element = createKanbanElement("status", "title", {
+      columnOrder: ["todo", "in_progress", "done"],
+      cardFields: ["priority", "assignee"],
+      idField: "task_id",
+      updateSql: "UPDATE tasks SET status = {{status}} WHERE id = {{id}}",
+    });
 
     expect(element.columnOrder).toEqual(["todo", "in_progress", "done"]);
     expect(element.cardFields).toEqual(["priority", "assignee"]);
     expect(element.idField).toBe("task_id");
-  });
-
-  it("throws for non-SELECT query", () => {
-    expect(() =>
-      createKanbanElement(
-        "UPDATE tasks SET status = 'done'",
-        "status",
-        "title",
-        "UPDATE tasks SET status = {{status}} WHERE id = {{id}}"
-      )
-    ).toThrow("is not allowed");
-  });
-
-  it("throws for DELETE query", () => {
-    expect(() =>
-      createKanbanElement(
-        "DELETE FROM tasks WHERE id = 1",
-        "status",
-        "title",
-        "UPDATE tasks SET status = {{status}} WHERE id = {{id}}"
-      )
-    ).toThrow();
-  });
-
-  it("throws for INSERT query", () => {
-    expect(() =>
-      createKanbanElement(
-        "INSERT INTO tasks (title) VALUES ('test')",
-        "status",
-        "title",
-        "UPDATE tasks SET status = {{status}} WHERE id = {{id}}"
-      )
-    ).toThrow();
-  });
-
-  it("accepts SELECT with subquery", () => {
-    const element = createKanbanElement(
-      "SELECT * FROM tasks WHERE project_id IN (SELECT id FROM projects)",
-      "status",
-      "title",
+    expect(element.updateSql).toBe(
       "UPDATE tasks SET status = {{status}} WHERE id = {{id}}"
     );
-
-    expect(element.query).toBe(
-      "SELECT * FROM tasks WHERE project_id IN (SELECT id FROM projects)"
-    );
   });
 
-  it("accepts case-insensitive SELECT", () => {
-    const element = createKanbanElement(
-      "select id, title, status from tasks",
-      "status",
-      "title",
-      "UPDATE tasks SET status = {{status}} WHERE id = {{id}}"
-    );
-
-    expect(element.type).toBe("kanban");
-  });
-
-  it("accepts SELECT with leading whitespace", () => {
-    const element = createKanbanElement(
-      "   SELECT * FROM tasks",
-      "status",
-      "title",
-      "UPDATE tasks SET status = {{status}} WHERE id = {{id}}"
-    );
-
-    expect(element.type).toBe("kanban");
-  });
-
-  it("accepts WITH CTE queries", () => {
-    const element = createKanbanElement(
-      "WITH active_tasks AS (SELECT * FROM tasks WHERE active = true) SELECT * FROM active_tasks",
-      "status",
-      "title",
-      "UPDATE tasks SET status = {{status}} WHERE id = {{id}}"
-    );
+  it("creates valid kanban element type", () => {
+    const element = createKanbanElement("status", "title");
 
     expect(element.type).toBe("kanban");
   });

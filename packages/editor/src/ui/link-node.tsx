@@ -67,11 +67,16 @@ export function LinkElement(props: PlateElementProps) {
     void navigator.clipboard.writeText(urlToCopy);
   };
 
-  const suggestionData = props.editor
-    .getApi(SuggestionPlugin)
-    .suggestion.suggestionData(props.element) as
-    | TInlineSuggestionData
-    | undefined;
+  // Get suggestion data if plugin is available (optional feature)
+  let suggestionData: TInlineSuggestionData | undefined;
+  try {
+    const api = props.editor.getApi(SuggestionPlugin);
+    if (api?.suggestion?.suggestionData) {
+      suggestionData = api.suggestion.suggestionData(props.element) as TInlineSuggestionData | undefined;
+    }
+  } catch {
+    // SuggestionPlugin not loaded - that's fine
+  }
 
   return (
     <HoverCard

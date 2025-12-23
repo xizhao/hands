@@ -1,3 +1,4 @@
+import { PreviewEditor } from "@hands/editor";
 import { AnimatePresence, motion } from "framer-motion";
 import {
   AlertCircle,
@@ -835,7 +836,7 @@ const ToolInvocation = memo(({ part, compact = false }: { part: ToolPart; compac
 
 ToolInvocation.displayName = "ToolInvocation";
 
-// Text content with markdown
+// Text content with MDX preview (renders LiveValue, charts, etc.)
 const TextContent = memo(
   ({
     text,
@@ -849,9 +850,6 @@ const TextContent = memo(
     compact?: boolean;
   }) => {
     const fontSize = compact ? MSG_FONT.baseCompact : MSG_FONT.base;
-    const codeFontSize = compact ? MSG_FONT.codeCompact : MSG_FONT.code;
-    const codeBlockFontSize = compact ? MSG_FONT.codeBlockCompact : MSG_FONT.codeBlock;
-    const metaFontSize = compact ? MSG_FONT.metaCompact : MSG_FONT.meta;
 
     return (
       <div
@@ -861,38 +859,13 @@ const TextContent = memo(
           darkText ? "prose-neutral" : "dark:prose-invert",
         )}
       >
-        <ReactMarkdown
-          components={{
-            code({ className, children, ...props }) {
-              const match = /language-(\w+)/.exec(className || "");
-              const inline = !match;
-
-              if (inline) {
-                return (
-                  <code
-                    className={cn("bg-background/50 px-1 py-0.5 rounded font-mono", codeFontSize)}
-                    {...props}
-                  >
-                    {children}
-                  </code>
-                );
-              }
-
-              // Use collapsible code block for fenced code
-              const code = String(children).replace(/\n$/, "");
-              return (
-                <CollapsibleCodeBlock
-                  code={code}
-                  language={match[1]}
-                  codeBlockFontSize={codeBlockFontSize}
-                  metaFontSize={metaFontSize}
-                />
-              );
-            },
-          }}
-        >
-          {text}
-        </ReactMarkdown>
+        <PreviewEditor
+          value={text}
+          contentClassName={cn(
+            "!p-0 !min-h-0",
+            fontSize,
+          )}
+        />
         {isStreaming && (
           <motion.span
             className="inline-block w-0.5 h-4 bg-primary ml-0.5 align-middle"

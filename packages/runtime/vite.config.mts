@@ -150,7 +150,7 @@ export default defineConfig({
     alias: {
       // Workbook paths
       "@ui": path.resolve(workbookPath, "ui"),
-      "@/blocks": path.resolve(workbookPath, "blocks"),
+      "@/blocks": path.resolve(workbookPath, "pages/blocks"),
       // Runtime provides utils for shadcn components
       "@ui/lib/utils": path.resolve(__dirname, "src/lib/utils.ts"),
       // Hands runtime

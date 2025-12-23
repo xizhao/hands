@@ -14,6 +14,12 @@ export {
   type AdvancedCustomBlock,
 } from "./Editor";
 
+// Editor mode toggle
+export { type EditorMode } from "./ui/mode-toggle";
+
+// Diagnostics type (for code editor mode)
+export { type Diagnostic } from "./code-editor/types";
+
 // Preview Editor (read-only, for previewing content)
 export { PreviewEditor, type PreviewEditorProps } from "./PreviewEditor";
 

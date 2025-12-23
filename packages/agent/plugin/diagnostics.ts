@@ -20,7 +20,8 @@ function runCheck(
   cwd: string
 ): Promise<{ output: string; code: number }> {
   return new Promise((resolve) => {
-    const child = spawn(cliPath, ["check", "--fix"], {
+    // Run via node since cliPath is a .js file
+    const child = spawn("node", [cliPath, "check", "--fix"], {
       cwd,
       stdio: ["ignore", "pipe", "pipe"],
     });
@@ -73,7 +74,9 @@ function extractErrors(output: string): string[] {
 }
 
 const plugin: Plugin = async ({ directory }) => {
-  const cliPath = path.resolve(import.meta.dirname, "../../cli/bin/hands.js");
+  // Handle different runtime environments (Bun uses import.meta.dir, Node 20+ uses import.meta.dirname)
+  const currentDir = import.meta.dirname ?? import.meta.dir ?? path.dirname(new URL(import.meta.url).pathname);
+  const cliPath = path.resolve(currentDir, "../../cli/bin/hands.js");
 
   return {
     tool: {

@@ -88,6 +88,22 @@ export function AtLoaderElement(props: PlateElementProps) {
         const path = editor.api.findPath(element);
         if (!path) return;
 
+        // Check for server-side validation errors and retry
+        if (result.errors?.length && retryCountRef.current < MAX_RETRIES) {
+          retryCountRef.current++;
+          errorsRef.current = [...errorsRef.current, ...result.errors];
+          previousGenerationsRef.current = [
+            ...previousGenerationsRef.current,
+            result.mdx,
+          ];
+          pendingMdxQueries.delete(prompt);
+          await fetchAndSwap(
+            errorsRef.current,
+            previousGenerationsRef.current
+          );
+          return;
+        }
+
         try {
           const mdApi = editor.getApi(MarkdownPlugin);
           const deserialized = mdApi.markdown.deserialize(result.mdx);

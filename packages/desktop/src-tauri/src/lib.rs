@@ -7,6 +7,7 @@ use std::sync::Arc;
 use std::time::Duration;
 use tauri::menu::{MenuBuilder, MenuItemBuilder, SubmenuBuilder};
 use tauri::{Emitter, Manager};
+use tauri_plugin_dialog::DialogExt;
 use tauri_plugin_store::StoreExt;
 use tokio::io::{AsyncBufReadExt, BufReader};
 use tokio::process::{Child, Command};
@@ -1359,6 +1360,25 @@ async fn open_db_browser(
     Ok(())
 }
 
+/// Open a file picker dialog and return the selected file path
+#[tauri::command]
+async fn pick_file(app: tauri::AppHandle) -> Result<Option<String>, String> {
+    use tauri_plugin_dialog::FileDialogBuilder;
+
+    let (tx, rx) = std::sync::mpsc::channel();
+
+    FileDialogBuilder::new(app.dialog().clone())
+        .add_filter("All Files", &["*"])
+        .add_filter("Data Files", &["csv", "json", "parquet", "xlsx", "xls", "tsv", "txt"])
+        .pick_file(move |file_path| {
+            let _ = tx.send(file_path.map(|p| p.to_string()));
+        });
+
+    // Wait for the dialog result
+    rx.recv()
+        .map_err(|e| format!("Failed to receive file path: {}", e))
+}
+
 #[tauri::command]
 async fn open_docs(app: tauri::AppHandle) -> Result<(), String> {
     use tauri::WebviewWindowBuilder;
@@ -1417,6 +1437,7 @@ pub fn run() {
         .plugin(tauri_plugin_store::Builder::new().build())
         .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_clipboard::init())
+        .plugin(tauri_plugin_dialog::init())
         .invoke_handler(tauri::generate_handler![
             check_server_health,
             restart_server,
@@ -1436,7 +1457,8 @@ pub fn run() {
             open_webview,
             open_db_browser,
             open_docs,
-            set_active_workbook
+            set_active_workbook,
+            pick_file
         ])
         .setup(|app| {
             let state = Arc::new(Mutex::new(AppState {

@@ -39,7 +39,22 @@ function getRequiredProps(component: string): readonly string[] {
   return (schema.requiredProps as readonly string[]) ?? [];
 }
 
+// Hardcoded constraints for nested components not in generated schema
+const NESTED_COMPONENT_CONSTRAINTS: Record<string, {
+  requireParent?: readonly string[];
+  requireChild?: readonly string[];
+  forbidParent?: readonly string[];
+  forbidChild?: readonly string[];
+}> = {
+  Tab: { requireParent: ["Tabs"] },
+};
+
 function getConstraints(component: string) {
+  // Check hardcoded constraints first (for nested components)
+  if (NESTED_COMPONENT_CONSTRAINTS[component]) {
+    return NESTED_COMPONENT_CONSTRAINTS[component];
+  }
+
   const schema = COMPONENT_SCHEMA[component as keyof typeof COMPONENT_SCHEMA] as SchemaEntry | undefined;
   if (!schema || !("constraints" in schema)) return undefined;
   return schema.constraints as {
@@ -96,8 +111,8 @@ export interface SqlParseResult {
 // MDX Parsing
 // ============================================================================
 
-/** Components to validate - stdlib plus workbook-specific */
-const VALIDATABLE_COMPONENTS = [...STDLIB_COMPONENT_NAMES, "Page", "Prompt"] as const;
+/** Components to validate - stdlib plus workbook-specific plus nested components */
+const VALIDATABLE_COMPONENTS = [...STDLIB_COMPONENT_NAMES, "Page", "Prompt", "Tab"] as const;
 
 // Build regex from component names
 const COMPONENTS_REGEX = new RegExp(
@@ -424,6 +439,76 @@ export function validateSqlSchema(
 // Component Validation
 // ============================================================================
 
+// Components with additional required props not in schema (workbook-specific)
+const EXTRA_REQUIRED_PROPS: Record<string, readonly string[]> = {
+  Page: ["src"],
+  Tab: ["value", "label"],
+};
+
+/**
+ * Schema-driven validation for required props.
+ * Checks requiredProps from COMPONENT_SCHEMA for any component.
+ */
+function validateRequiredPropsFromSchema(
+  comp: MdxComponent,
+  filePath: string,
+): ValidationError[] {
+  const errors: ValidationError[] = [];
+
+  // Get required props from schema
+  const schemaRequired = getRequiredProps(comp.name);
+
+  // Get extra required props for workbook-specific components
+  const extraRequired = EXTRA_REQUIRED_PROPS[comp.name] ?? [];
+
+  // Combine both
+  const allRequired = [...schemaRequired, ...extraRequired];
+
+  for (const prop of allRequired) {
+    if (!comp.props[prop]) {
+      errors.push({
+        file: filePath,
+        line: comp.line,
+        component: comp.name,
+        prop,
+        message: `${comp.name} is missing required '${prop}' prop`,
+        severity: "error",
+      });
+    }
+  }
+
+  return errors;
+}
+
+/**
+ * Schema-driven validation for enum props.
+ * Checks propRules.enum from COMPONENT_SCHEMA.
+ */
+function validateEnumPropsFromSchema(
+  comp: MdxComponent,
+  filePath: string,
+): ValidationError[] {
+  const errors: ValidationError[] = [];
+
+  for (const [propName, propValue] of Object.entries(comp.props)) {
+    if (!propValue) continue;
+
+    const enumValues = getEnumValues(comp.name, propName);
+    if (enumValues && !enumValues.includes(propValue)) {
+      errors.push({
+        file: filePath,
+        line: comp.line,
+        component: comp.name,
+        prop: propName,
+        message: `Invalid ${propName} "${propValue}". Must be one of: ${enumValues.join(", ")}`,
+        severity: "error",
+      });
+    }
+  }
+
+  return errors;
+}
+
 /**
  * Validate a single MDX component.
  */
@@ -434,19 +519,24 @@ export function validateComponent(
 ): ValidationError[] {
   const errors: ValidationError[] = [];
 
-  // Validate <Page src="..." />
+  // ========================================================================
+  // Schema-driven validation (works for all components with ComponentMeta)
+  // ========================================================================
+
+  // Check required props from schema
+  errors.push(...validateRequiredPropsFromSchema(comp, filePath));
+
+  // Check enum props from schema
+  errors.push(...validateEnumPropsFromSchema(comp, filePath));
+
+  // ========================================================================
+  // Component-specific validation (SQL, page refs, etc.)
+  // ========================================================================
+
+  // Validate <Page src="..." /> - check page exists
   if (comp.name === "Page") {
     const src = comp.props.src;
-    if (!src) {
-      errors.push({
-        file: filePath,
-        line: comp.line,
-        component: "Page",
-        prop: "src",
-        message: "Page is missing required 'src' prop",
-        severity: "error",
-      });
-    } else if (!ctx.pageRefs.includes(src) && !ctx.pageRefs.includes(`${src}/`)) {
+    if (src && !ctx.pageRefs.includes(src) && !ctx.pageRefs.includes(`${src}/`)) {
       const available =
         ctx.pageRefs.slice(0, 5).join(", ") + (ctx.pageRefs.length > 5 ? "..." : "");
       errors.push({
@@ -460,19 +550,10 @@ export function validateComponent(
     }
   }
 
-  // Validate <LiveValue query="..." />
+  // Validate <LiveValue query="..." /> - validate SQL
   if (comp.name === "LiveValue") {
     const query = comp.props.query;
-    if (!query) {
-      errors.push({
-        file: filePath,
-        line: comp.line,
-        component: "LiveValue",
-        prop: "query",
-        message: "LiveValue is missing required 'query' prop",
-        severity: "error",
-      });
-    } else {
+    if (query) {
       const sqlErrors = validateSqlSchema(query, ctx.schema, { allowMutations: false });
       for (const err of sqlErrors) {
         errors.push({
@@ -484,6 +565,7 @@ export function validateComponent(
       }
     }
 
+    // Validate display mode (fallback for components without propRules in schema)
     const display = comp.props.display;
     if (display && !VALID_DISPLAY_MODES.includes(display as (typeof VALID_DISPLAY_MODES)[number])) {
       errors.push({
@@ -497,7 +579,7 @@ export function validateComponent(
     }
   }
 
-  // Validate <LiveAction sql="..." />
+  // Validate <LiveAction sql="..." /> - needs sql OR src
   if (comp.name === "LiveAction") {
     const sql = comp.props.sql;
     if (!sql && !comp.props.src) {
@@ -522,7 +604,7 @@ export function validateComponent(
     }
   }
 
-  // Validate <Button variant="..." />
+  // Validate <Button variant="..." /> - fallback enum check
   if (comp.name === "Button") {
     const variant = comp.props.variant;
     if (
@@ -540,18 +622,8 @@ export function validateComponent(
     }
   }
 
-  // Validate <Input name="..." />
+  // Validate <Input type="..." /> - fallback enum check
   if (comp.name === "Input") {
-    if (!comp.props.name) {
-      errors.push({
-        file: filePath,
-        line: comp.line,
-        component: "Input",
-        prop: "name",
-        message: "Input is missing required 'name' prop",
-        severity: "error",
-      });
-    }
     const inputType = comp.props.type;
     if (inputType && !VALID_INPUT_TYPES.includes(inputType as (typeof VALID_INPUT_TYPES)[number])) {
       errors.push({
@@ -560,58 +632,6 @@ export function validateComponent(
         component: "Input",
         prop: "type",
         message: `Invalid input type "${inputType}". Must be one of: ${VALID_INPUT_TYPES.join(", ")}`,
-        severity: "error",
-      });
-    }
-  }
-
-  // Validate <Select name="..." options={...} />
-  if (comp.name === "Select") {
-    if (!comp.props.name) {
-      errors.push({
-        file: filePath,
-        line: comp.line,
-        component: "Select",
-        prop: "name",
-        message: "Select is missing required 'name' prop",
-        severity: "error",
-      });
-    }
-    if (!comp.props.options) {
-      errors.push({
-        file: filePath,
-        line: comp.line,
-        component: "Select",
-        prop: "options",
-        message: "Select is missing required 'options' prop",
-        severity: "error",
-      });
-    }
-  }
-
-  // Validate <Checkbox name="..." />
-  if (comp.name === "Checkbox") {
-    if (!comp.props.name) {
-      errors.push({
-        file: filePath,
-        line: comp.line,
-        component: "Checkbox",
-        prop: "name",
-        message: "Checkbox is missing required 'name' prop",
-        severity: "error",
-      });
-    }
-  }
-
-  // Validate <Textarea name="..." />
-  if (comp.name === "Textarea") {
-    if (!comp.props.name) {
-      errors.push({
-        file: filePath,
-        line: comp.line,
-        component: "Textarea",
-        prop: "name",
-        message: "Textarea is missing required 'name' prop",
         severity: "error",
       });
     }

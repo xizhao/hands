@@ -17,6 +17,7 @@ import { viewRules } from "./rules/view";
 import { cardRules } from "./rules/card";
 import { columnRules } from "./rules/column";
 import { blockRules } from "./rules/block";
+import { tabsRules } from "./rules/tabs";
 
 // ============================================================================
 // All Rules Registry
@@ -56,6 +57,9 @@ export const serializationRules: MdxSerializationRule<any>[] = [
 
   // Block embedding
   ...blockRules,
+
+  // Tabs navigation
+  ...tabsRules,
 ];
 
 // ============================================================================
@@ -149,3 +153,4 @@ export { viewRules as staticRules } from "./rules/view";
 export { cardRules, cardRule, cardHeaderRule, cardContentRule, cardFooterRule, cardTitleRule, cardDescriptionRule } from "./rules/card";
 export { columnRules, columnsRule, columnRule } from "./rules/column";
 export { blockRules, blockRule } from "./rules/block";
+export { tabsRules, tabsRule, tabRule } from "./rules/tabs";

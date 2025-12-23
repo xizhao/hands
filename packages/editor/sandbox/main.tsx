@@ -3,7 +3,7 @@ import { useState, useRef } from 'react';
 import { createRoot } from 'react-dom/client';
 import { Editor, type EditorHandle, EditorProvider, PreviewEditor } from '@hands/editor';
 import { mockTrpc } from './mock-trpc';
-import { LiveQueryProvider, type QueryResult } from '@hands/core/stdlib';
+import { LiveQueryProvider, type QueryResult, type TableSchema } from '@hands/core/stdlib';
 
 // Mock data for different queries (matches QUERIES in mock-trpc.ts)
 const MOCK_DATA: Record<string, Record<string, unknown>[]> = {
@@ -49,6 +49,65 @@ const MOCK_DATA: Record<string, Record<string, unknown>[]> = {
   ],
 };
 
+// Mock schema for autocomplete
+const MOCK_SCHEMA: TableSchema[] = [
+  {
+    table_name: "users",
+    columns: [
+      { name: "id", type: "INTEGER", nullable: false },
+      { name: "name", type: "TEXT", nullable: false },
+      { name: "email", type: "TEXT", nullable: false },
+      { name: "status", type: "TEXT", nullable: true },
+      { name: "role", type: "TEXT", nullable: true },
+      { name: "created_at", type: "TIMESTAMP", nullable: false },
+    ],
+  },
+  {
+    table_name: "tasks",
+    columns: [
+      { name: "id", type: "INTEGER", nullable: false },
+      { name: "title", type: "TEXT", nullable: false },
+      { name: "description", type: "TEXT", nullable: true },
+      { name: "status", type: "TEXT", nullable: false },
+      { name: "priority", type: "INTEGER", nullable: true },
+      { name: "user_id", type: "INTEGER", nullable: true },
+      { name: "due_date", type: "DATE", nullable: true },
+    ],
+  },
+  {
+    table_name: "features",
+    columns: [
+      { name: "id", type: "INTEGER", nullable: false },
+      { name: "name", type: "TEXT", nullable: false },
+      { name: "status", type: "TEXT", nullable: false },
+      { name: "priority", type: "INTEGER", nullable: true },
+    ],
+  },
+  {
+    table_name: "monthly_sales",
+    columns: [
+      { name: "month", type: "TEXT", nullable: false },
+      { name: "sales", type: "INTEGER", nullable: false },
+      { name: "revenue", type: "REAL", nullable: false },
+      { name: "profit", type: "REAL", nullable: false },
+    ],
+  },
+  {
+    table_name: "categories",
+    columns: [
+      { name: "category", type: "TEXT", nullable: false },
+      { name: "value", type: "INTEGER", nullable: false },
+    ],
+  },
+  {
+    table_name: "device_breakdown",
+    columns: [
+      { name: "name", type: "TEXT", nullable: false },
+      { name: "value", type: "INTEGER", nullable: false },
+    ],
+  },
+];
+
 // Mock query hook for sandbox
 function useMockQuery(sql: string): QueryResult {
   const data = MOCK_DATA[sql] ?? [{ result: `Mock result for: ${sql.slice(0, 30)}...` }];
@@ -71,6 +130,20 @@ This is a standalone preview of the **@hands/editor** package.
 ## Inline Value
 
 I have this many apples: <LiveValue query="SELECT COUNT(*) FROM users" /> - pretty cool right?
+
+## Tabs Example
+
+<Tabs defaultValue="overview">
+  <Tab value="overview" label="Overview">
+    This is the overview tab content. It can contain any content including text, charts, or other components.
+  </Tab>
+  <Tab value="metrics" label="Metrics">
+    Here are some metrics and data visualizations.
+  </Tab>
+  <Tab value="settings" label="Settings">
+    Configuration options would go here.
+  </Tab>
+</Tabs>
 
 ## Chart Example
 
@@ -96,10 +169,16 @@ I have this many apples: <LiveValue query="SELECT COUNT(*) FROM users" /> - pret
 - Inline LiveValue components
 - Charts and data visualization
 - Interactive forms with LiveAction
+- Tabbed navigation with Tabs/Tab
 `;
 
 // Test content for PreviewEditor
 const PREVIEW_TEST_CONTENT = {
+  tabs: `<Tabs defaultValue="dashboard">
+  <Tab value="dashboard" label="Dashboard">Dashboard content with charts and metrics</Tab>
+  <Tab value="users" label="Users">User management section</Tab>
+  <Tab value="settings" label="Settings">Application settings</Tab>
+</Tabs>`,
   chart: `<LiveValue query="SELECT month, sales, revenue, profit FROM monthly_sales">
   <BarChart xKey="month" yKey={["sales", "revenue"]} />
 </LiveValue>`,
@@ -179,7 +258,7 @@ function App() {
             </div>
             <div style={{ flex: 1, border: '1px solid #ddd', borderRadius: 4, padding: 8, background: '#fff' }}>
               <div style={{ fontSize: 12, color: '#666', marginBottom: 4 }}>PreviewEditor Output:</div>
-              <LiveQueryProvider useQuery={useMockQuery} useMutation={useMockMutation}>
+              <LiveQueryProvider useQuery={useMockQuery} useMutation={useMockMutation} schema={MOCK_SCHEMA}>
                 <PreviewEditor value={PREVIEW_TEST_CONTENT[previewContent]} />
               </LiveQueryProvider>
             </div>
@@ -194,7 +273,7 @@ function App() {
             <span className="panel-hint">Type @ to trigger AI autocomplete</span>
           </div>
           <EditorProvider trpc={mockTrpc}>
-            <LiveQueryProvider useQuery={useMockQuery} useMutation={useMockMutation}>
+            <LiveQueryProvider useQuery={useMockQuery} useMutation={useMockMutation} schema={MOCK_SCHEMA}>
               <Editor
                 ref={editorRef}
                 value={markdown}

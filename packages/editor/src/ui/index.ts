@@ -30,6 +30,7 @@ export * from "./dialog";
 export * from "./dropdown-menu";
 export * from "./editor";
 export * from "./editor-static";
+export * from "./editor-status-bar";
 export * from "./emoji-node";
 export * from "./emoji-toolbar-button";
 export * from "./fixed-toolbar";

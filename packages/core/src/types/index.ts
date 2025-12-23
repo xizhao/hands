@@ -324,29 +324,43 @@ export interface TTextareaElement extends TElement {
 
 /**
  * Kanban element - drag-and-drop board for displaying and mutating grouped data.
+ * Must be wrapped in a LiveValue to receive data.
+ *
+ * The updateSql is auto-generated from the parent LiveValue's table name if not provided.
+ * For example, if the parent query is `SELECT * FROM tasks` and groupByColumn is "status",
+ * the generated SQL will be: `UPDATE tasks SET status = {{status}} WHERE id = {{id}}`
  *
  * @example
  * ```tsx
- * <Kanban
- *   query="SELECT id, title, status FROM tasks"
- *   groupByColumn="status"
- *   cardTitleField="title"
- *   updateSql="UPDATE tasks SET status = {{status}} WHERE id = {{id}}"
- * />
+ * // Minimal - updateSql auto-generated from parent LiveValue
+ * <LiveValue query="SELECT id, title, status FROM tasks">
+ *   <Kanban groupByColumn="status" cardTitleField="title" />
+ * </LiveValue>
+ *
+ * // Explicit updateSql (for custom logic or different table)
+ * <LiveValue query="SELECT id, title, status FROM tasks">
+ *   <Kanban
+ *     groupByColumn="status"
+ *     cardTitleField="title"
+ *     updateSql="UPDATE tasks SET status = {{status}}, updated_at = NOW() WHERE id = {{id}}"
+ *   />
+ * </LiveValue>
  * ```
  */
 export interface TKanbanElement extends TElement {
   type: typeof KANBAN_KEY;
-
-  // Data fetching (like LiveValue)
-  /** SQL SELECT query to fetch data */
-  query: string;
 
   // Board configuration
   /** Column field to group cards by (e.g., "status") */
   groupByColumn: string;
   /** Explicit column order, or auto-detect from data */
   columnOrder?: string[];
+  /**
+   * Fixed columns to always display in this exact order.
+   * Items not matching any fixed column are filtered out.
+   * Takes precedence over columnOrder if both provided.
+   */
+  fixedColumns?: string[];
 
   // Card display
   /** Field to use as card title (e.g., "title") */
@@ -355,8 +369,8 @@ export interface TKanbanElement extends TElement {
   cardFields?: string[];
 
   // Mutation (like LiveAction)
-  /** SQL UPDATE template with {{id}} and {{groupByColumn}} bindings */
-  updateSql: string;
+  /** SQL UPDATE template with {{id}} and {{groupByColumn}} bindings. Auto-generated if not provided. */
+  updateSql?: string;
   /** Primary key field name (default "id") */
   idField?: string;
 

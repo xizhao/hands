@@ -1,5 +1,5 @@
 import type { GlobalProvider } from "@ladle/react";
-import { TooltipProvider } from "../src/components/ui/tooltip";
+import { TooltipProvider } from "../src/ui/components/tooltip";
 import "./styles.css";
 
 export const Provider: GlobalProvider = ({ children, globalState }) => {

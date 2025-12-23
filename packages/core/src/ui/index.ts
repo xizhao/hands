@@ -56,6 +56,8 @@ import {
   MetricPlugin,
   PieChartPlugin,
   ProgressPlugin,
+  TabsPlugin,
+  TabPlugin,
 } from "./view";
 
 /**
@@ -80,6 +82,8 @@ export const ViewKit = [
   AlertPlugin,
   LoaderPlugin,
   BlockPlugin,
+  TabsPlugin,
+  TabPlugin,
   ...ChartKit,
 ] as const;
 

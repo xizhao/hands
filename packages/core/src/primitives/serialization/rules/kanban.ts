@@ -26,7 +26,7 @@ import { parseAttributes, serializeAttributes, createVoidElement } from "../help
  * <Kanban
  *   query="SELECT * FROM tickets"
  *   groupByColumn="stage"
- *   columnOrder={["backlog", "todo", "in_progress", "done"]}
+ *   fixedColumns={["backlog", "todo", "in_progress", "done"]}
  *   cardTitleField="title"
  *   cardFields={["assignee", "priority"]}
  *   updateSql="UPDATE tickets SET stage = {{stage}} WHERE ticket_id = {{ticket_id}}"
@@ -45,6 +45,7 @@ export const kanbanRule: MdxSerializationRule<TKanbanElement> = {
       query: props.query as string,
       groupByColumn: props.groupByColumn as string,
       columnOrder: props.columnOrder as string[] | undefined,
+      fixedColumns: props.fixedColumns as string[] | undefined,
       cardTitleField: props.cardTitleField as string,
       cardFields: props.cardFields as string[] | undefined,
       updateSql: props.updateSql as string,
@@ -58,6 +59,7 @@ export const kanbanRule: MdxSerializationRule<TKanbanElement> = {
         query: element.query,
         groupByColumn: element.groupByColumn,
         columnOrder: element.columnOrder,
+        fixedColumns: element.fixedColumns,
         cardTitleField: element.cardTitleField,
         cardFields: element.cardFields,
         updateSql: element.updateSql,
@@ -68,6 +70,7 @@ export const kanbanRule: MdxSerializationRule<TKanbanElement> = {
           "query",
           "groupByColumn",
           "columnOrder",
+          "fixedColumns",
           "cardTitleField",
           "cardFields",
           "updateSql",

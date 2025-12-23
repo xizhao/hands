@@ -10,6 +10,7 @@ import { useRuntimePort } from "@/hooks/useRuntimeState";
 import { useCreatePage } from "@/hooks/useWorkbook";
 import { usePrefetchThumbnail } from "@/hooks/useThumbnails";
 import { useSourceManagement } from "@/hooks/useSources";
+import { trpc } from "@/lib/trpc";
 import type { SidebarPage } from "../types";
 
 export interface SidebarActionsOptions {
@@ -23,6 +24,7 @@ export function useSidebarActions(options: SidebarActionsOptions = {}) {
   const { preventNavigation = false, onSelectItem } = options;
   const navigate = useNavigate();
   const runtimePort = useRuntimePort();
+  const utils = trpc.useUtils();
 
   // Source management
   const { addSource, isAdding, syncSource, isSyncing, syncingSourceId } = useSourceManagement();
@@ -35,6 +37,20 @@ export function useSidebarActions(options: SidebarActionsOptions = {}) {
   const [isCreatingNewPage, setIsCreatingNewPage] = useState(false);
   const [newPageName, setNewPageName] = useState("");
   const isConfirmingPageRef = useRef(false);
+
+  // Page delete mutation
+  const deletePageMutation = trpc.pages.delete.useMutation({
+    onSuccess: () => {
+      utils.pages.list.invalidate();
+    },
+  });
+
+  // Page duplicate mutation
+  const duplicatePageMutation = trpc.pages.duplicate.useMutation({
+    onSuccess: () => {
+      utils.pages.list.invalidate();
+    },
+  });
 
   // Navigation handlers
   const handlePageClick = useCallback(
@@ -147,37 +163,32 @@ export function useSidebarActions(options: SidebarActionsOptions = {}) {
   // CRUD handlers
   const handleDuplicatePage = useCallback(
     async (pageId: string) => {
-      if (!runtimePort) return;
       try {
-        const res = await fetch(
-          `http://localhost:${runtimePort}/workbook/pages/${pageId}/duplicate`,
-          { method: "POST" },
-        );
-        if (!res.ok) throw new Error("Failed to duplicate page");
-        const data = await res.json();
-        console.log("[sidebar] duplicated page:", pageId, "->", data.newRoute);
+        const result = await duplicatePageMutation.mutateAsync({ route: pageId });
+        console.log("[sidebar] duplicated page:", pageId, "->", result.newRoute);
+        // Navigate to the new page
+        if (result.newRoute) {
+          const newPageId = result.newRoute.replace(/^\//, "");
+          navigate({ to: "/pages/$pageId", params: { pageId: newPageId } });
+        }
       } catch (err) {
         console.error("[sidebar] failed to duplicate page:", err);
       }
     },
-    [runtimePort],
+    [duplicatePageMutation, navigate],
   );
 
   const handleDeletePage = useCallback(
     async (pageId: string) => {
-      if (!runtimePort) return;
       try {
-        const res = await fetch(`http://localhost:${runtimePort}/workbook/pages/${pageId}`, {
-          method: "DELETE",
-        });
-        if (!res.ok) throw new Error("Failed to delete page");
+        await deletePageMutation.mutateAsync({ route: pageId });
         console.log("[sidebar] deleted page:", pageId);
         navigate({ to: "/" });
       } catch (err) {
         console.error("[sidebar] failed to delete page:", err);
       }
     },
-    [runtimePort, navigate],
+    [deletePageMutation, navigate],
   );
 
   const handleCopySource = useCallback(

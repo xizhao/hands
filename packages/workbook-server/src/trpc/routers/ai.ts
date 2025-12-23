@@ -14,6 +14,7 @@ import { initTRPC, TRPCError } from "@trpc/server";
 import { generateText } from "ai";
 import { z } from "zod";
 import { STDLIB_DOCS, STDLIB_QUICK_REF } from "@hands/core/docs";
+import { validateMdxContent, type ValidationContext, type ValidationError } from "@hands/core/validation";
 
 // Schema is passed from client (from manifest/useRuntimeState)
 const tableSchema = z.object({
@@ -161,8 +162,24 @@ ${prompt}${retryContext}
           });
         }
 
+        // Validate the generated MDX
+        const validationCtx: ValidationContext = {
+          pageRefs: [],
+          schema: tables.map(t => ({ name: t.name, columns: t.columns })),
+        };
+        const validationErrors = validateMdxContent(mdx, validationCtx);
+        const errorMsgs = validationErrors
+          .filter(e => e.severity === "error")
+          .map(e => `${e.component}: ${e.message}`);
+
         console.log('[ai.generateMdx] Final MDX:', mdx);
-        return { mdx };
+        console.log('[ai.generateMdx] Validation errors:', errorMsgs);
+
+        // Return MDX with any validation errors (caller can retry)
+        return {
+          mdx,
+          errors: errorMsgs.length > 0 ? errorMsgs : undefined,
+        };
       } catch (err) {
         if (err instanceof TRPCError) throw err;
         throw new TRPCError({
@@ -269,8 +286,24 @@ ${prompt}
           });
         }
 
+        // Validate the generated MDX
+        const validationCtx: ValidationContext = {
+          pageRefs: [],
+          schema: tables.map(t => ({ name: t.name, columns: t.columns })),
+        };
+        const validationErrors = validateMdxContent(mdx, validationCtx);
+        const errorMsgs = validationErrors
+          .filter(e => e.severity === "error")
+          .map(e => `${e.component}: ${e.message}`);
+
         console.log('[ai.generateMdxBlock] Final MDX:', mdx.slice(0, 200) + (mdx.length > 200 ? '...' : ''));
-        return { mdx };
+        console.log('[ai.generateMdxBlock] Validation errors:', errorMsgs);
+
+        // Return MDX with any validation errors (caller can retry)
+        return {
+          mdx,
+          errors: errorMsgs.length > 0 ? errorMsgs : undefined,
+        };
       } catch (err) {
         if (err instanceof TRPCError) throw err;
         throw new TRPCError({

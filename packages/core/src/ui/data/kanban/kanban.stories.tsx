@@ -94,3 +94,38 @@ export const WithMoveHandler: Story = () => (
     }}
   />
 );
+
+// Data that includes some "unknown" statuses not in our fixed columns
+const tasksWithVariedStatuses = [
+  { id: 1, title: "Design mockups", status: "todo", priority: "high" },
+  { id: 2, title: "Write tests", status: "in_progress", priority: "medium" },
+  { id: 3, title: "Archived task", status: "archived", priority: "low" }, // Will be filtered out
+  { id: 4, title: "Deploy to staging", status: "done", priority: "low" },
+  { id: 5, title: "Draft task", status: "draft", priority: "medium" }, // Will be filtered out
+];
+
+export const FixedColumns: Story = () => (
+  <Kanban
+    data={tasksWithVariedStatuses}
+    groupByColumn="status"
+    fixedColumns={["todo", "in_progress", "done"]}
+    cardTitleField="title"
+    cardFields={["priority"]}
+  />
+);
+FixedColumns.meta = {
+  description:
+    "Fixed columns always show in order. Items with status='archived' or 'draft' are filtered out.",
+};
+
+export const FixedColumnsEmpty: Story = () => (
+  <Kanban
+    data={[]}
+    groupByColumn="status"
+    fixedColumns={["backlog", "todo", "in_progress", "review", "done"]}
+    cardTitleField="title"
+  />
+);
+FixedColumnsEmpty.meta = {
+  description: "Fixed columns show even when there's no data.",
+};

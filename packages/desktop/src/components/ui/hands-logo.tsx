@@ -3,8 +3,7 @@ interface HandsLogoProps {
 }
 
 /**
- * Hands Logo - Sparkle/stars icon representing AI capabilities
- * Used across the app for AI/Hands branding
+ * Hands Logo - it's a hand
  */
 export function HandsLogo({ className }: HandsLogoProps) {
   return (

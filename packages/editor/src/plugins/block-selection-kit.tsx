@@ -4,8 +4,6 @@ import { AIChatPlugin } from '@platejs/ai/react';
 import { BlockSelectionPlugin } from '@platejs/selection/react';
 import { getPluginTypes, isHotkey, KEYS } from 'platejs';
 
-import { BlockSelection } from '../ui/block-selection';
-
 export const BlockSelectionKit = [
   BlockSelectionPlugin.configure(({ editor }) => ({
     options: {
@@ -20,13 +18,7 @@ export const BlockSelectionKit = [
         }
       },
     },
-    render: {
-      belowRootNodes: (props) => {
-        if (!props.attributes.className?.includes('slate-selectable'))
-          return null;
-
-        return <BlockSelection {...(props as any)} />;
-      },
-    },
+    // Block selection overlay removed - too distracting.
+    // Selection functionality still works, just no visual highlight.
   })),
 ];

@@ -3,16 +3,12 @@
 /**
  * @component Kanban
  * @category data
- * @description Drag-and-drop Kanban board that displays SQL query results grouped by a column.
- * Cards can be dragged between columns to update the underlying data.
- * @keywords kanban, board, drag, drop, cards, columns, status, workflow, tasks
+ * @description Drag-and-drop Kanban board that displays data grouped by a column. Cards can be dragged between columns to update the underlying data. Must be wrapped in a LiveValue to receive data. REQUIRED: groupByColumn (column to group by), cardTitleField (field for card title). OPTIONAL: fixedColumns (always show these columns in order, filter data to match), columnOrder (explicit column order + extras from data), cardFields (additional fields on cards), idField (primary key, default 'id'), updateSql (auto-generated from parent query if not provided).
+ * @keywords kanban, board, drag, drop, cards, columns, status, workflow, tasks, fixed
  * @example
- * <Kanban
- *   query="SELECT id, title, status FROM tasks"
- *   groupByColumn="status"
- *   cardTitleField="title"
- *   updateSql="UPDATE tasks SET status = {{status}} WHERE id = {{id}}"
- * />
+ * <LiveValue query="SELECT id, title, status FROM tasks">
+ *   <Kanban groupByColumn="status" cardTitleField="title" fixedColumns={["todo", "in_progress", "done"]} />
+ * </LiveValue>
  */
 
 import { memo, useCallback, useMemo, useRef, useState } from "react";
@@ -25,14 +21,14 @@ import {
   useSelected,
 } from "platejs/react";
 
-import { KANBAN_KEY, type TKanbanElement } from "../../../types";
-import { assertReadOnlySQL } from "../../../primitives/sql-validation";
+import { KANBAN_KEY, type TKanbanElement, type ComponentMeta } from "../../../types";
 import { substituteFormBindings } from "../../action/live-action";
+import { useLiveValueData } from "../../view/charts/context";
+import { useLiveMutation } from "../../query-provider";
 import {
   KanbanBoard,
   findMovedItem,
   groupByColumn,
-  getColumnOrder,
   type KanbanBoardValue,
   type KanbanItem,
 } from "./kanban-board";
@@ -51,8 +47,14 @@ export interface KanbanProps {
   error?: Error | null;
   /** Column field to group cards by */
   groupByColumn: string;
-  /** Explicit column order */
+  /** Explicit column order (includes extras from data) */
   columnOrder?: string[];
+  /**
+   * Fixed columns to always display in this exact order.
+   * Items not matching any fixed column are filtered out.
+   * Takes precedence over columnOrder if both provided.
+   */
+  fixedColumns?: string[];
   /** Field to use as card title */
   cardTitleField: string;
   /** Additional fields to show on cards */
@@ -76,6 +78,7 @@ export function Kanban({
   error,
   groupByColumn: groupByColumnField,
   columnOrder: explicitColumnOrder,
+  fixedColumns,
   cardTitleField,
   cardFields = [],
   idField = "id",
@@ -86,29 +89,62 @@ export function Kanban({
   // Track previous value for diffing
   const prevValueRef = useRef<KanbanBoardValue>({});
 
-  // Group data by column
+  // Group data by column, optionally filtering to fixed columns
   const groupedData = useMemo(() => {
-    if (!data || data.length === 0) return {};
+    if (!data || data.length === 0) {
+      // If fixed columns, return empty arrays for each
+      if (fixedColumns && fixedColumns.length > 0) {
+        return Object.fromEntries(fixedColumns.map((col) => [col, []]));
+      }
+      return {};
+    }
+
     // Ensure each item has an id
-    const itemsWithId = data.map((item, index) => ({
+    let itemsWithId = data.map((item, index) => ({
       ...item,
       id: item[idField] ?? index,
     })) as KanbanItem[];
-    return groupByColumn(itemsWithId, groupByColumnField);
-  }, [data, groupByColumnField, idField]);
+
+    // If fixed columns, filter to only items matching those columns
+    if (fixedColumns && fixedColumns.length > 0) {
+      const fixedSet = new Set(fixedColumns);
+      itemsWithId = itemsWithId.filter((item) =>
+        fixedSet.has(String(item[groupByColumnField] ?? "")),
+      );
+    }
+
+    const grouped = groupByColumn(itemsWithId, groupByColumnField);
+
+    // If fixed columns, ensure all columns exist (even if empty)
+    if (fixedColumns && fixedColumns.length > 0) {
+      for (const col of fixedColumns) {
+        if (!grouped[col]) {
+          grouped[col] = [];
+        }
+      }
+    }
+
+    return grouped;
+  }, [data, groupByColumnField, idField, fixedColumns]);
 
   // Determine column order
   const columns = useMemo(() => {
+    // Fixed columns take precedence - exact order, no extras
+    if (fixedColumns && fixedColumns.length > 0) {
+      return fixedColumns;
+    }
+
+    // Otherwise use columnOrder + extras from data
     if (explicitColumnOrder && explicitColumnOrder.length > 0) {
-      // Include explicit columns + any additional from data
       const dataColumns = Object.keys(groupedData);
       const extraColumns = dataColumns.filter(
         (col) => !explicitColumnOrder.includes(col),
       );
       return [...explicitColumnOrder, ...extraColumns];
     }
+
     return Object.keys(groupedData);
-  }, [explicitColumnOrder, groupedData]);
+  }, [fixedColumns, explicitColumnOrder, groupedData]);
 
   // Local board state (for optimistic updates)
   const [boardValue, setBoardValue] = useState<KanbanBoardValue>(groupedData);
@@ -231,26 +267,37 @@ function KanbanElement(props: PlateElementProps) {
   const selected = useSelected();
 
   const {
-    query: _query,
     groupByColumn: groupByColumnField,
     columnOrder,
+    fixedColumns,
     cardTitleField,
     cardFields,
-    updateSql,
+    updateSql: explicitUpdateSql,
     idField = "id",
   } = element;
 
-  // TODO: Use context provider for data fetching (will use _query)
-  // For now, show placeholder in editor
-  const data: Record<string, unknown>[] = [];
-  const isLoading = false;
-  const error = null;
+  // Get data from parent LiveValue context
+  const liveValueCtx = useLiveValueData();
+  const data = liveValueCtx?.data ?? [];
+  const isLoading = liveValueCtx?.isLoading ?? false;
+  const error = liveValueCtx?.error ?? null;
+  const tableName = liveValueCtx?.tableName;
 
-  // TODO: Get onExecute from context provider
+  // Auto-generate updateSql if not provided
+  const updateSql = useMemo(() => {
+    if (explicitUpdateSql) return explicitUpdateSql;
+    if (!tableName) return null;
+    // Generate: UPDATE tableName SET groupByColumn = {{groupByColumn}} WHERE idField = {{idField}}
+    return `UPDATE ${tableName} SET ${groupByColumnField} = {{${groupByColumnField}}} WHERE ${idField} = {{${idField}}}`;
+  }, [explicitUpdateSql, tableName, groupByColumnField, idField]);
+
+  // Get mutation function from LiveQuery provider
+  const { mutate } = useLiveMutation();
+
   const handleMove = useCallback(
     async (itemId: string | number, newColumn: string) => {
       if (!updateSql) {
-        console.warn("[Kanban] No updateSql configured");
+        console.warn("[Kanban] No updateSql configured and could not auto-generate (missing table name)");
         return;
       }
 
@@ -259,10 +306,9 @@ function KanbanElement(props: PlateElementProps) {
         [groupByColumnField]: newColumn,
       });
 
-      // TODO: Execute via context provider
-      console.log("[Kanban] Would execute:", sql);
+      await mutate(sql);
     },
-    [updateSql, idField, groupByColumnField],
+    [updateSql, idField, groupByColumnField, mutate],
   );
 
   // Handle column reordering - update the element's columnOrder
@@ -279,6 +325,24 @@ function KanbanElement(props: PlateElementProps) {
     [editor, element],
   );
 
+  // Show warning if not inside LiveValue
+  if (!liveValueCtx) {
+    return (
+      <PlateElement
+        {...props}
+        className={cn(
+          "my-4",
+          selected && "ring-2 ring-ring ring-offset-2 rounded-lg",
+        )}
+      >
+        <div className="rounded-lg border border-amber-500/50 bg-amber-500/10 p-4 text-amber-700 text-sm">
+          Kanban must be wrapped in a LiveValue component to receive data.
+        </div>
+        <span className="hidden">{props.children}</span>
+      </PlateElement>
+    );
+  }
+
   return (
     <PlateElement
       {...props}
@@ -293,11 +357,12 @@ function KanbanElement(props: PlateElementProps) {
         error={error}
         groupByColumn={groupByColumnField}
         columnOrder={columnOrder}
+        fixedColumns={fixedColumns}
         cardTitleField={cardTitleField}
         cardFields={cardFields}
         idField={idField}
         onMove={handleMove}
-        onColumnsChange={handleColumnsChange}
+        onColumnsChange={fixedColumns ? undefined : handleColumnsChange}
       />
       {/* Hidden children for Plate */}
       <span className="hidden">{props.children}</span>
@@ -311,6 +376,7 @@ function KanbanElement(props: PlateElementProps) {
 
 /**
  * Kanban Plugin - drag-and-drop board for grouped data with mutations.
+ * Must be used inside a LiveValue element.
  */
 export const KanbanPlugin = createPlatePlugin({
   key: KANBAN_KEY,
@@ -326,35 +392,50 @@ export const KanbanPlugin = createPlatePlugin({
 // ============================================================================
 
 export interface CreateKanbanElementOptions {
-  /** Explicit column order */
+  /** Explicit column order (includes extras from data) */
   columnOrder?: string[];
+  /**
+   * Fixed columns to always display in this exact order.
+   * Items not matching any fixed column are filtered out.
+   * Takes precedence over columnOrder if both provided.
+   */
+  fixedColumns?: string[];
   /** Additional fields to show on cards */
   cardFields?: string[];
   /** Primary key field (default "id") */
   idField?: string;
+  /** Custom SQL update template. Auto-generated from parent LiveValue's table if not provided. */
+  updateSql?: string;
 }
 
 /**
  * Create a Kanban element for insertion into editor.
- * Validates that query is read-only.
+ * Must be placed inside a LiveValue element.
+ *
+ * The updateSql is auto-generated from the parent LiveValue's table name if not provided.
+ *
+ * @example
+ * // Minimal - updateSql auto-generated
+ * createKanbanElement("status", "title")
+ *
+ * // With fixed columns (always show these, filter to these values)
+ * createKanbanElement("status", "title", { fixedColumns: ["todo", "in_progress", "done"] })
+ *
+ * // With custom updateSql
+ * createKanbanElement("status", "title", { updateSql: "UPDATE tasks SET status = {{status}} WHERE id = {{id}}" })
  */
 export function createKanbanElement(
-  query: string,
   groupByColumn: string,
   cardTitleField: string,
-  updateSql: string,
   options?: CreateKanbanElementOptions,
 ): TKanbanElement {
-  // Validate query is read-only
-  assertReadOnlySQL(query);
-
   return {
     type: KANBAN_KEY,
-    query,
     groupByColumn,
     cardTitleField,
-    updateSql,
+    updateSql: options?.updateSql,
     columnOrder: options?.columnOrder,
+    fixedColumns: options?.fixedColumns,
     cardFields: options?.cardFields,
     idField: options?.idField,
     children: [{ text: "" }],
@@ -362,3 +443,15 @@ export function createKanbanElement(
 }
 
 export { KANBAN_KEY };
+
+// ============================================================================
+// Component Metadata (for validation/linting)
+// ============================================================================
+
+export const KanbanMeta: ComponentMeta = {
+  category: "data",
+  requiredProps: ["groupByColumn", "cardTitleField"],
+  constraints: {
+    requireParent: ["LiveValue"],
+  },
+};

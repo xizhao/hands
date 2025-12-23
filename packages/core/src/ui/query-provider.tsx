@@ -76,6 +76,18 @@ export type UseQueryHook = (
 export type UseMutationHook = () => MutationResult;
 
 /**
+ * Table schema for autocomplete and validation.
+ */
+export interface TableSchema {
+  table_name: string;
+  columns: Array<{
+    name: string;
+    type: string;
+    nullable: boolean;
+  }>;
+}
+
+/**
  * Context value for LiveQuery provider.
  */
 export interface LiveQueryContextValue {
@@ -85,6 +97,8 @@ export interface LiveQueryContextValue {
   useMutation: UseMutationHook;
   /** Optional callback to navigate to a table view */
   onNavigateToTable?: (tableName: string) => void;
+  /** Database schema for autocomplete */
+  schema?: TableSchema[];
 }
 
 // ============================================================================
@@ -104,6 +118,8 @@ export interface LiveQueryProviderProps {
   useMutation: UseMutationHook;
   /** Optional callback to navigate to a table view */
   onNavigateToTable?: (tableName: string) => void;
+  /** Database schema for autocomplete */
+  schema?: TableSchema[];
   /** Children */
   children: ReactNode;
 }
@@ -118,10 +134,11 @@ export function LiveQueryProvider({
   useQuery,
   useMutation,
   onNavigateToTable,
+  schema,
   children,
 }: LiveQueryProviderProps) {
   return (
-    <LiveQueryContext.Provider value={{ useQuery, useMutation, onNavigateToTable }}>
+    <LiveQueryContext.Provider value={{ useQuery, useMutation, onNavigateToTable, schema }}>
       {children}
     </LiveQueryContext.Provider>
   );
@@ -216,4 +233,13 @@ export function useLiveMutation(): MutationResult {
 export function useNavigateToTable(): ((tableName: string) => void) | undefined {
   const ctx = useContext(LiveQueryContext);
   return ctx?.onNavigateToTable;
+}
+
+/**
+ * Get the database schema for autocomplete.
+ * Returns empty array if no schema is configured.
+ */
+export function useSchema(): TableSchema[] {
+  const ctx = useContext(LiveQueryContext);
+  return ctx?.schema ?? [];
 }

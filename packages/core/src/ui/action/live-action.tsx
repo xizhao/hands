@@ -13,11 +13,12 @@
  * </LiveAction>
  */
 
-import { createPlatePlugin, PlateElement, type PlateElementProps, useElement } from "platejs/react";
+import { createPlatePlugin, PlateElement, type PlateElementProps, useEditorRef, useElement, useReadOnly, useSelected } from "platejs/react";
 import { createContext, memo, useCallback, useContext, useMemo, useRef, useState } from "react";
 
 import { LIVE_ACTION_KEY, type LiveActionContextValue, type TLiveActionElement, type ComponentMeta } from "../../types";
 import { useLiveMutation } from "../query-provider";
+import { LiveControlsMenu, LiveQueryEditor, extractTableName } from "../livecontrol";
 
 // ============================================================================
 // Context
@@ -153,12 +154,18 @@ export function LiveAction({ sql, onExecute, children, className }: LiveActionPr
 /**
  * LiveAction Plate element component.
  * Uses LiveQueryProvider for mutation execution.
+ * Shows LiveControlsMenu on hover with action info and controls.
  */
 function LiveActionElement(props: PlateElementProps) {
+  const editor = useEditorRef();
   const element = useElement<TLiveActionElement>();
+  const selected = useSelected();
+  const readOnly = useReadOnly();
+  const [editorOpen, setEditorOpen] = useState(false);
   const fieldsRef = useRef<Map<string, () => unknown>>(new Map());
 
   const { sql } = element;
+  const tableName = sql ? extractTableName(sql, "action") : null;
 
   // Get mutation function from provider
   const { mutate, isPending, error } = useLiveMutation();
@@ -195,11 +202,44 @@ function LiveActionElement(props: PlateElementProps) {
     [trigger, isPending, error, registerField, unregisterField],
   );
 
-  // Invisible container - no added styling/padding
+  const handleEdit = () => {
+    setEditorOpen(true);
+  };
+
+  const handleApplySql = useCallback((newSql: string) => {
+    try {
+      const path = editor.api.findPath(element);
+      if (path) {
+        editor.tf.setNodes({ sql: newSql } as Partial<TLiveActionElement>, { at: path });
+      }
+    } catch (e) {
+      console.error("Failed to update action SQL:", e);
+    }
+  }, [editor, element]);
+
   return (
     <PlateElement {...props}>
       <LiveActionContext.Provider value={contextValue}>
-        {props.children}
+        <LiveControlsMenu
+          type="action"
+          sql={sql}
+          tableName={tableName ?? undefined}
+          onEdit={handleEdit}
+          inline
+          selected={selected}
+          readOnly={readOnly}
+        >
+          {props.children}
+        </LiveControlsMenu>
+
+        <LiveQueryEditor
+          initialQuery={sql ?? ""}
+          type="action"
+          onApply={handleApplySql}
+          onCancel={() => {}}
+          open={editorOpen}
+          onOpenChange={setEditorOpen}
+        />
       </LiveActionContext.Provider>
     </PlateElement>
   );

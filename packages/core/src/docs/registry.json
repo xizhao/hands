@@ -259,7 +259,7 @@
     },
     "Kanban": {
       "category": "data",
-      "description": "Drag-and-drop Kanban board that displays SQL query results grouped by a column. Cards can be dragged between columns to update the underlying data.",
+      "description": "Drag-and-drop Kanban board that displays data grouped by a column. Cards can be dragged between columns to update the underlying data. Must be wrapped in a LiveValue to receive data. REQUIRED: groupByColumn (column to group by), cardTitleField (field for card title). OPTIONAL: fixedColumns (always show these columns in order, filter data to match), columnOrder (explicit column order + extras from data), cardFields (additional fields on cards), idField (primary key, default 'id'), updateSql (auto-generated from parent query if not provided).",
       "keywords": [
         "kanban",
         "board",
@@ -269,9 +269,10 @@
         "columns",
         "status",
         "workflow",
-        "tasks"
+        "tasks",
+        "fixed"
       ],
-      "example": "<Kanban\n  query=\"SELECT id, title, status FROM tasks\"\n  groupByColumn=\"status\"\n  cardTitleField=\"title\"\n  updateSql=\"UPDATE tasks SET status = {{status}} WHERE id = {{id}}\"\n/>",
+      "example": "<LiveValue query=\"SELECT id, title, status FROM tasks\">\n  <Kanban groupByColumn=\"status\" cardTitleField=\"title\" fixedColumns={[\"todo\", \"in_progress\", \"done\"]} />\n</LiveValue>",
       "file": "src/ui/data/kanban/kanban.tsx"
     },
     "DataGrid": {
