@@ -317,7 +317,7 @@ function TabsElement(props: PlateElementProps) {
       as="div"
       className={cn(
         "my-4",
-        selected && !readOnly && "ring-2 ring-ring ring-offset-2 rounded-lg"
+        selected && !readOnly && "ring-1 ring-primary/30 ring-offset-2 rounded-lg"
       )}
     >
       <ShadcnTabs value={effectiveActive} onValueChange={setActiveTab}>

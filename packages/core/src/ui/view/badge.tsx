@@ -77,7 +77,7 @@ function BadgeElement(props: PlateElementProps) {
     <PlateElement
       {...props}
       as="span"
-      className={`${selected ? "ring-2 ring-ring ring-offset-1 rounded-full" : ""}`}
+      className={`${selected ? "ring-1 ring-primary/30 ring-offset-1 rounded-full" : ""}`}
     >
       <Badge variant={variant}>{props.children}</Badge>
     </PlateElement>

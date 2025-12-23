@@ -112,7 +112,7 @@ function MetricElement(props: PlateElementProps) {
     <PlateElement
       {...props}
       as="div"
-      className={`inline-block my-2 rounded-md p-2 ${selected ? "ring-2 ring-ring ring-offset-1" : ""}`}
+      className={`inline-block my-2 rounded-md p-2 ${selected ? "ring-1 ring-primary/30 ring-offset-1" : ""}`}
     >
       <Metric
         value={value ?? "—"}

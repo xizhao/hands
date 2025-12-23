@@ -188,7 +188,7 @@ function BlockElement(props: PlateElementProps) {
   return (
     <PlateElement
       {...props}
-      className={selected && !readOnly ? "ring-2 ring-ring ring-offset-1 rounded" : undefined}
+      className={selected && !readOnly ? "ring-1 ring-primary/30 ring-offset-1 rounded" : undefined}
     >
       <div contentEditable={false} style={{ userSelect: "none" }}>
         <BlockDisplay

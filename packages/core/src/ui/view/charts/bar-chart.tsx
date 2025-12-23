@@ -31,6 +31,7 @@ import {
   ChartTooltipContent,
 } from "./chart";
 import { useLiveValueData } from "./context";
+import { useContainerSize } from "./use-container-size";
 
 // ============================================================================
 // Default Colors
@@ -208,7 +209,7 @@ function BarChartElement(props: PlateElementProps) {
     <PlateElement
       {...props}
       as="div"
-      className={`my-4 rounded-lg p-2 ${selected ? "ring-2 ring-ring ring-offset-2" : ""}`}
+      className={`my-4 rounded-lg p-2 ${selected ? "ring-1 ring-primary/30 ring-offset-2" : ""}`}
     >
       <BarChart
         xKey={element.xKey as string | undefined}

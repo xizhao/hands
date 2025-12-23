@@ -24,7 +24,7 @@ Design Decisions:
 
 ### Workbooks
 
-The central artifact, a block-based editor comprising a collection of `Blocks` and `Sources` connected to an isolated embedded Postgres instance (one per Workbook). Stored as a Git repository in `~/.hands/<workbookID>`, with full history and structure defined in a `hands.json`. Compiled and deployable anywhere serverless functions can run (local, private cloud, or serverless platform). Default is Cloudflare workers.
+The central artifact, a block-based editor comprising a collection of `Blocks` and `Sources` connected to an isolated embedded SQLite database (one per Workbook). Stored as a Git repository in `~/.hands/<workbookID>`, with full history and structure defined in a `hands.json`. Compiled and deployable anywhere serverless functions can run (local, private cloud, or serverless platform). Default is Cloudflare workers.
 
 #### Blocks
 
@@ -36,11 +36,11 @@ Define schemas, secret dependencies, transformation logic, and scheduling. Suppo
 
 #### Database
 
-Embedded Postgres per workbook (using PGlite). Imports handled by agents; direct data writing supported.
+Embedded SQLite per workbook. Imports handled by agents; direct data writing supported.
 
 **Packages:**
 
-- [`@hands/runtime`](./packages/runtime/) — Dev server, build pipeline, PGlite database management, RSC build system, source/job scheduling, Cloudflare Workers deployment
+- [`@hands/runtime`](./packages/runtime/) — Dev server, build pipeline, SQLite database management, RSC build system, source/job scheduling, Cloudflare Workers deployment
 - [`@hands/cli`](./packages/cli/) — User-facing CLI (`hands dev`, `hands build`, `hands new`, `hands add source`)
 - [`@hands/editor`](./packages/editor/) — WYSIWYG structural editor with Plate.js, AST manipulation, surgical code mutations, RSC sandbox rendering
 - [`@hands/stdlib`](./packages/stdlib/) — Pre-built block templates, source definitions, 50+ Radix UI-based components

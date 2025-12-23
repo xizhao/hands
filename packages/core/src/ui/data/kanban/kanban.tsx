@@ -332,7 +332,7 @@ function KanbanElement(props: PlateElementProps) {
         {...props}
         className={cn(
           "my-4",
-          selected && "ring-2 ring-ring ring-offset-2 rounded-lg",
+          selected && "ring-1 ring-primary/30 ring-offset-2 rounded-lg",
         )}
       >
         <div className="rounded-lg border border-amber-500/50 bg-amber-500/10 p-4 text-amber-700 text-sm">
@@ -348,7 +348,7 @@ function KanbanElement(props: PlateElementProps) {
       {...props}
       className={cn(
         "my-4",
-        selected && "ring-2 ring-ring ring-offset-2 rounded-lg",
+        selected && "ring-1 ring-primary/30 ring-offset-2 rounded-lg",
       )}
     >
       <Kanban

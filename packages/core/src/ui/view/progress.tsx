@@ -121,7 +121,7 @@ function ProgressElement(props: PlateElementProps) {
     <PlateElement
       {...props}
       as="div"
-      className={`my-2 rounded-md p-1 ${selected ? "ring-2 ring-ring ring-offset-1" : ""}`}
+      className={`my-2 rounded-md p-1 ${selected ? "ring-1 ring-primary/30 ring-offset-1" : ""}`}
     >
       <Progress
         value={value}

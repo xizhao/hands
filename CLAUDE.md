@@ -20,7 +20,7 @@ packages/
 - **Desktop**: Tauri 2.x (Rust backend)
 - **State**: TanStack Query (server state)
 - **AI Backend**: OpenCode server on port 4096
-- **Database**: Embedded PostgreSQL
+- **Database**: Embedded SQLite
 
 ## Key Rules
 

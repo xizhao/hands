@@ -134,7 +134,7 @@ function TextareaElement(props: PlateElementProps) {
     <PlateElement
       {...props}
       as="div"
-      className={`my-2 rounded-md p-0.5 ${selected ? "ring-2 ring-ring ring-offset-1" : ""}`}
+      className={`my-2 rounded-md p-0.5 ${selected ? "ring-1 ring-primary/30 ring-offset-1" : ""}`}
     >
       <div className="flex flex-col gap-1.5">
         {hasLabel && <label className="text-sm font-medium">{props.children}</label>}

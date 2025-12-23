@@ -31,6 +31,7 @@ import {
   ChartTooltipContent,
 } from "./chart";
 import { useLiveValueData } from "./context";
+import { useContainerSize } from "./use-container-size";
 
 // ============================================================================
 // Default Colors
@@ -78,6 +79,7 @@ export interface LineChartProps {
 /**
  * Standalone LineChart component.
  * Uses data from props or LiveValue context.
+ * Responsive: adjusts legend, grid, and tick density based on container size.
  */
 export function LineChart({
   data: propData,
@@ -95,6 +97,7 @@ export function LineChart({
 }: LineChartProps) {
   const ctx = useLiveValueData();
   const data = propData ?? ctx?.data ?? [];
+  const { containerRef, responsive } = useContainerSize();
 
   // Auto-detect keys if not provided
   const resolvedXKey = useMemo(() => {
@@ -128,9 +131,15 @@ export function LineChart({
 
   const curveType = curve === "linear" ? "linear" : curve === "step" ? "step" : "monotone";
 
+  // Responsive: combine user prefs with container size
+  const effectiveShowLegend = showLegend && responsive.showLegend;
+  const effectiveShowGrid = showGrid && responsive.showGrid;
+  const effectiveShowDots = showDots && !responsive.isCompact;
+
   if (ctx?.isLoading) {
     return (
       <div
+        ref={containerRef}
         className={`flex items-center justify-center bg-muted/30 rounded-lg animate-pulse ${className ?? ""}`}
         style={{ height }}
       >
@@ -142,6 +151,7 @@ export function LineChart({
   if (ctx?.error) {
     return (
       <div
+        ref={containerRef}
         className={`flex items-center justify-center bg-destructive/10 rounded-lg ${className ?? ""}`}
         style={{ height }}
       >
@@ -153,6 +163,7 @@ export function LineChart({
   if (data.length === 0) {
     return (
       <div
+        ref={containerRef}
         className={`flex items-center justify-center bg-muted/30 rounded-lg ${className ?? ""}`}
         style={{ height }}
       >
@@ -162,26 +173,46 @@ export function LineChart({
   }
 
   return (
-    <ChartContainer config={chartConfig} className={className} style={{ height }}>
-      <RechartsLineChart data={data as object[]} accessibilityLayer>
-        {showGrid && <CartesianGrid vertical={false} />}
-        <XAxis dataKey={resolvedXKey} tickLine={false} axisLine={false} tickMargin={8} />
-        <YAxis tickLine={false} axisLine={false} tickMargin={8} />
-        {showTooltip && <ChartTooltip content={<ChartTooltipContent />} />}
-        {showLegend && <ChartLegend content={<ChartLegendContent />} />}
-        {resolvedYKeys.map((key, i) => (
-          <Line
-            key={key}
-            type={curveType}
-            dataKey={key}
-            stroke={`var(--color-${key})`}
-            strokeWidth={2}
-            dot={showDots ? { fill: `var(--color-${key})` } : false}
-            activeDot={{ r: 6 }}
+    <div ref={containerRef}>
+      <ChartContainer config={chartConfig} className={className} style={{ height }}>
+        <RechartsLineChart
+          data={data as object[]}
+          accessibilityLayer
+          margin={responsive.margins}
+        >
+          {effectiveShowGrid && <CartesianGrid vertical={false} />}
+          <XAxis
+            dataKey={resolvedXKey}
+            tickLine={false}
+            axisLine={false}
+            tickMargin={8}
+            tick={responsive.showAxisLabels ? undefined : false}
+            interval="preserveStartEnd"
+            minTickGap={responsive.isSmall ? 30 : 20}
           />
-        ))}
-      </RechartsLineChart>
-    </ChartContainer>
+          <YAxis
+            tickLine={false}
+            axisLine={false}
+            tickMargin={8}
+            tick={responsive.showAxisLabels ? undefined : false}
+            width={responsive.isSmall ? 30 : 40}
+          />
+          {showTooltip && <ChartTooltip content={<ChartTooltipContent />} />}
+          {effectiveShowLegend && <ChartLegend content={<ChartLegendContent />} />}
+          {resolvedYKeys.map((key) => (
+            <Line
+              key={key}
+              type={curveType}
+              dataKey={key}
+              stroke={`var(--color-${key})`}
+              strokeWidth={responsive.isCompact ? 1.5 : 2}
+              dot={effectiveShowDots ? { fill: `var(--color-${key})`, r: responsive.isSmall ? 2 : 3 } : false}
+              activeDot={{ r: responsive.isSmall ? 4 : 6 }}
+            />
+          ))}
+        </RechartsLineChart>
+      </ChartContainer>
+    </div>
   );
 }
 
@@ -197,7 +228,7 @@ function LineChartElement(props: PlateElementProps) {
     <PlateElement
       {...props}
       as="div"
-      className={`my-4 rounded-lg p-2 ${selected ? "ring-2 ring-ring ring-offset-2" : ""}`}
+      className={`my-4 rounded-lg p-2 ${selected ? "ring-1 ring-primary/30 ring-offset-2" : ""}`}
     >
       <LineChart
         xKey={element.xKey as string | undefined}

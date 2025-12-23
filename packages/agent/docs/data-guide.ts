@@ -14,9 +14,9 @@ Data in Hands flows through three concepts: **Tables**, **Sources**, and **SQL**
                    sync        store      read
 \`\`\`
 
-### Tables (PostgreSQL)
+### Tables (SQLite)
 
-Tables are the storage layer. All data lives in PostgreSQL.
+Tables are the storage layer. All data lives in the workbook's embedded SQLite database.
 
 **Viewing tables:**
 - Use \`schema\` tool to see all tables and columns

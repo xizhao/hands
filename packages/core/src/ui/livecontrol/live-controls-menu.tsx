@@ -77,7 +77,7 @@ export function LiveControlsMenu({
           className={`
             cursor-pointer rounded transition-colors
             hover:bg-accent/50
-            ${selected ? "ring-2 ring-ring ring-offset-1" : ""}
+            ${selected ? "ring-1 ring-primary/30 ring-offset-1" : ""}
           `}
           style={{
             userSelect: "none",

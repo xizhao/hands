@@ -222,7 +222,7 @@ function DataGridElement(props: PlateElementProps) {
     <PlateElement
       {...props}
       as="div"
-      className={`my-2 ${selected ? "ring-2 ring-ring ring-offset-2 rounded" : ""}`}
+      className={`my-2 ${selected ? "ring-1 ring-primary/30 ring-offset-2 rounded" : ""}`}
     >
       <DataGrid
         columns={columns}
