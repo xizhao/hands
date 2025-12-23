@@ -458,8 +458,8 @@ function TabElement(props: PlateElementProps) {
   const element = useElement<TTabElement>();
 
   return (
-    <TabsContent value={element.value} forceMount asChild>
-      <PlateElement {...props} as="div" className="mt-2 data-[state=inactive]:hidden">
+    <TabsContent value={element.value} forceMount className="data-[state=inactive]:hidden">
+      <PlateElement {...props} as="div" className="mt-2">
         {props.children}
       </PlateElement>
     </TabsContent>

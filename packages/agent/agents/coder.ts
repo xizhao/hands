@@ -6,6 +6,7 @@
  */
 
 import type { AgentConfig } from "@opencode-ai/sdk";
+import { ACTION_API_DOCS, ACTION_CONTEXT_DOCS, ACTION_TRIGGERS_DOCS, ACTION_ANTI_PATTERNS } from "../docs/actions-guide.js";
 import { BLOCK_API_DOCS } from "../docs/blocks-guide.js";
 import { DATA_GUIDE } from "../docs/data-guide.js";
 import { HANDS_ARCHITECTURE } from "../docs/hands-guide.js";
@@ -139,6 +140,18 @@ ${ALL_ELEMENTS_DOCS}
 
 ${DATA_GUIDE}
 
+## Actions (Serverless Functions)
+
+Actions are serverless compute functions in the \`actions/\` directory. Use them for scheduled tasks, webhooks, and background processing.
+
+${ACTION_API_DOCS}
+
+${ACTION_CONTEXT_DOCS}
+
+${ACTION_TRIGGERS_DOCS}
+
+${ACTION_ANTI_PATTERNS}
+
 ## Workflow
 
 1. **Check schema** - Use schema tool to see available tables/columns
@@ -206,7 +219,7 @@ Keep improvements proportional to the task - don't spend more time refactoring t
 - Don't put complex business logic in plugins - keep queries simple
 - Don't hardcode data - always query from database
 - Don't create overly complex components - split into smaller pieces
-- Don't create files outside pages/, plugins/, lib/, and sources/ directories
+- Don't create files outside pages/, plugins/, lib/, sources/, and actions/ directories
 - Don't use deprecated imports (@hands/db, @hands/runtime, @livepeer/hands)
 
 **Rule of thumb:** If you're about to create a file in \`plugins/\`, pause and reconsider. Is there an MDX solution?
@@ -222,7 +235,7 @@ When you complete a task, report back with:
 Keep responses concise - the primary agent will communicate with the user.`;
 
 export const coderAgent: AgentConfig = {
-  description: "Technical specialist for creating plugins (TSX) and pages (MDX)",
+  description: "Technical specialist for creating plugins (TSX), pages (MDX), and actions",
   mode: "subagent",
   model: "google/gemini-3-flash-preview",
   prompt: CODER_PROMPT,

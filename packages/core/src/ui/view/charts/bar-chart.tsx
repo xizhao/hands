@@ -5,45 +5,19 @@
  * @category static
  * @description Bar chart for comparing categorical data.
  * Supports vertical/horizontal orientation and stacked bars.
+ * Works standalone or inside LiveValue for live SQL data.
  * @keywords chart, bar, column, comparison, category, visualization
  * @example
  * <BarChart data={data} xKey="category" yKey="value" />
  * <BarChart data={data} xKey="month" yKey={["sales", "costs"]} stacked />
  */
 
-import {
-  createPlatePlugin,
-  PlateElement,
-  type PlateElementProps,
-  useElement,
-  useSelected,
-} from "platejs/react";
-import { memo, useMemo } from "react";
-import { Bar, BarChart as RechartsBarChart, CartesianGrid, XAxis, YAxis } from "recharts";
+import { createPlatePlugin, PlateElement, type PlateElementProps, useElement } from "platejs/react";
+import { memo } from "react";
 
-import { BAR_CHART_KEY, type TBarChartElement } from "../../../types";
-import {
-  ChartContainer,
-  type ChartConfig,
-  ChartLegend,
-  ChartLegendContent,
-  ChartTooltip,
-  ChartTooltipContent,
-} from "./chart";
-import { useLiveValueData } from "./context";
-import { useContainerSize } from "./use-container-size";
-
-// ============================================================================
-// Default Colors
-// ============================================================================
-
-const DEFAULT_COLORS = [
-  "hsl(var(--chart-1, 220 70% 50%))",
-  "hsl(var(--chart-2, 160 60% 45%))",
-  "hsl(var(--chart-3, 30 80% 55%))",
-  "hsl(var(--chart-4, 280 65% 60%))",
-  "hsl(var(--chart-5, 340 75% 55%))",
-];
+import { BAR_CHART_KEY, type TBarChartElement, type VegaLiteSpec } from "../../../types";
+import { VegaChart } from "./vega-chart";
+import { barChartToVegaSpec } from "./vega-spec";
 
 // ============================================================================
 // Standalone Component
@@ -70,19 +44,22 @@ export interface BarChartProps {
   layout?: "vertical" | "horizontal";
   /** Custom colors */
   colors?: string[];
-  /** Chart config for labels/icons */
-  config?: ChartConfig;
   /** Additional CSS classes */
   className?: string;
+  /**
+   * Full Vega-Lite specification.
+   * If provided, overrides the simplified props above.
+   */
+  vegaSpec?: VegaLiteSpec;
 }
 
 /**
  * Standalone BarChart component.
- * Uses data from props or LiveValue context.
- * Responsive: adjusts legend, grid, and tick density based on container size.
+ * Uses Vega-Lite for rendering with canvas for performance.
+ * Supports data from props or LiveValue context.
  */
 export function BarChart({
-  data: propData,
+  data,
   xKey,
   yKey = "value",
   height = 300,
@@ -91,150 +68,26 @@ export function BarChart({
   showTooltip = true,
   stacked = false,
   layout = "vertical",
-  colors = DEFAULT_COLORS,
-  config: propConfig,
+  colors,
   className,
+  vegaSpec: propVegaSpec,
 }: BarChartProps) {
-  const ctx = useLiveValueData();
-  const data = propData ?? ctx?.data ?? [];
-  const { containerRef, responsive } = useContainerSize();
-
-  // Auto-detect keys if not provided
-  const resolvedXKey = useMemo(() => {
-    if (xKey) return xKey;
-    if (data.length === 0) return "x";
-    const keys = Object.keys(data[0]);
-    return keys[0] ?? "x";
-  }, [xKey, data]);
-
-  const resolvedYKeys = useMemo(() => {
-    const keys = Array.isArray(yKey) ? yKey : [yKey];
-    if (keys.length > 0 && keys[0] !== "value") return keys;
-    if (data.length === 0) return ["value"];
-    const allKeys = Object.keys(data[0]);
-    const yKeys = allKeys.filter((k) => k !== resolvedXKey);
-    return yKeys.length > 0 ? yKeys : ["value"];
-  }, [yKey, data, resolvedXKey]);
-
-  // Build chart config from keys and colors
-  const chartConfig = useMemo<ChartConfig>(() => {
-    if (propConfig) return propConfig;
-    const config: ChartConfig = {};
-    resolvedYKeys.forEach((key, i) => {
-      config[key] = {
-        label: key.charAt(0).toUpperCase() + key.slice(1).replace(/_/g, " "),
-        color: colors[i % colors.length],
-      };
-    });
-    return config;
-  }, [propConfig, resolvedYKeys, colors]);
-
-  // Responsive: combine user prefs with container size
-  const effectiveShowLegend = showLegend && responsive.showLegend;
-  const effectiveShowGrid = showGrid && responsive.showGrid;
-
-  if (ctx?.isLoading) {
-    return (
-      <div
-        ref={containerRef}
-        className={`w-full flex items-center justify-center bg-muted/30 rounded-lg animate-pulse ${className ?? ""}`}
-        style={{ height }}
-      >
-        <span className="text-muted-foreground text-sm">Loading chart...</span>
-      </div>
-    );
+  // If full vegaSpec provided, use it directly
+  if (propVegaSpec) {
+    return <VegaChart spec={propVegaSpec} height={height} data={data} className={className} />;
   }
 
-  if (ctx?.error) {
-    return (
-      <div
-        ref={containerRef}
-        className={`w-full flex items-center justify-center bg-destructive/10 rounded-lg ${className ?? ""}`}
-        style={{ height }}
-      >
-        <span className="text-destructive text-sm">Error loading data</span>
-      </div>
-    );
-  }
+  // Convert simplified props to Vega-Lite spec
+  const spec = barChartToVegaSpec({
+    xKey,
+    yKey,
+    showLegend,
+    showGrid,
+    stacked,
+    layout,
+  });
 
-  if (data.length === 0) {
-    return (
-      <div
-        ref={containerRef}
-        className={`w-full flex items-center justify-center bg-muted/30 rounded-lg ${className ?? ""}`}
-        style={{ height }}
-      >
-        <span className="text-muted-foreground text-sm">No data</span>
-      </div>
-    );
-  }
-
-  const isHorizontal = layout === "horizontal";
-
-  return (
-    <div ref={containerRef} className="w-full">
-      <ChartContainer config={chartConfig} className={className} style={{ height, width: "100%" }}>
-        <RechartsBarChart
-          data={data as object[]}
-          layout={isHorizontal ? "vertical" : "horizontal"}
-          accessibilityLayer
-          margin={responsive.margins}
-        >
-          {effectiveShowGrid && <CartesianGrid vertical={false} />}
-          {isHorizontal ? (
-            <>
-              <YAxis
-                dataKey={resolvedXKey}
-                type="category"
-                tickLine={false}
-                axisLine={false}
-                tickMargin={8}
-                tick={responsive.showAxisLabels ? undefined : false}
-                width={responsive.isSmall ? 60 : 80}
-              />
-              <XAxis
-                type="number"
-                tickLine={false}
-                axisLine={false}
-                tickMargin={8}
-                tick={responsive.showAxisLabels ? undefined : false}
-              />
-            </>
-          ) : (
-            <>
-              <XAxis
-                dataKey={resolvedXKey}
-                tickLine={false}
-                axisLine={false}
-                tickMargin={8}
-                tick={responsive.showAxisLabels ? undefined : false}
-                interval="preserveStartEnd"
-                minTickGap={responsive.isSmall ? 30 : 20}
-              />
-              <YAxis
-                tickLine={false}
-                axisLine={false}
-                tickMargin={8}
-                tick={responsive.showAxisLabels ? undefined : false}
-                width={responsive.isSmall ? 30 : 40}
-              />
-            </>
-          )}
-          {showTooltip && <ChartTooltip content={<ChartTooltipContent />} />}
-          {effectiveShowLegend && <ChartLegend content={<ChartLegendContent />} />}
-          {resolvedYKeys.map((key) => (
-            <Bar
-              key={key}
-              dataKey={key}
-              fill={`var(--color-${key})`}
-              stackId={stacked ? "stack" : undefined}
-              radius={responsive.isCompact ? [2, 2, 0, 0] : [4, 4, 0, 0]}
-            />
-          ))}
-        </RechartsBarChart>
-      </ChartContainer>
-    </div>
-  );
+  return <VegaChart spec={spec} height={height} data={data} className={className} />;
 }
 
 // ============================================================================
@@ -243,14 +96,9 @@ export function BarChart({
 
 function BarChartElement(props: PlateElementProps) {
   const element = useElement<TBarChartElement>();
-  const selected = useSelected();
 
   return (
-    <PlateElement
-      {...props}
-      as="div"
-      className="my-2"
-    >
+    <PlateElement {...props} as="div" className="my-2">
       <BarChart
         xKey={element.xKey as string | undefined}
         yKey={element.yKey as string | string[] | undefined}
@@ -261,6 +109,7 @@ function BarChartElement(props: PlateElementProps) {
         stacked={element.stacked as boolean | undefined}
         layout={element.layout as "vertical" | "horizontal" | undefined}
         colors={element.colors as string[] | undefined}
+        vegaSpec={element.vegaSpec as VegaLiteSpec | undefined}
       />
       <span className="hidden">{props.children}</span>
     </PlateElement>
@@ -294,6 +143,7 @@ export interface CreateBarChartOptions {
   stacked?: boolean;
   layout?: "vertical" | "horizontal";
   colors?: string[];
+  vegaSpec?: VegaLiteSpec;
 }
 
 /**
@@ -311,6 +161,7 @@ export function createBarChartElement(options?: CreateBarChartOptions): TBarChar
     stacked: options?.stacked ?? false,
     layout: options?.layout ?? "vertical",
     colors: options?.colors,
+    vegaSpec: options?.vegaSpec,
     children: [{ text: "" }],
   };
 }

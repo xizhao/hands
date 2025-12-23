@@ -70,7 +70,7 @@ export function LiveControlsMenu({
         <span
           contentEditable={false}
           className={`
-            cursor-pointer rounded transition-colors
+            relative cursor-pointer rounded transition-colors
             hover:bg-purple-500/10
             ${selected ? "ring-1 ring-purple-500/30" : ""}
           `}

@@ -4,6 +4,7 @@ import { Page } from "./pages/Page";
 import { pages, pageRoutes } from "@hands/pages";
 import { Database } from "./db/dev";
 import { dbRoutes } from "./db/routes";
+import { actionRoutes } from "./actions/routes";
 
 // Export Durable Object for wrangler
 export { Database };
@@ -55,6 +56,8 @@ export default defineApp([
   ),
   // Database routes (dev only - for AI agent access)
   ...(import.meta.env.VITE_IS_DEV_SERVER ? dbRoutes : []),
+  // Action routes (dev only - for action execution)
+  ...(import.meta.env.VITE_IS_DEV_SERVER ? actionRoutes : []),
   // Root route - redirect to first page or return health check if no pages
   route("/", () => {
     if (firstPageId) {

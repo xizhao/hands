@@ -8,7 +8,7 @@
  * - Log and notify
  */
 
-import type { z } from "zod";
+import type { ActionSchema } from "../schema/types.js";
 
 // =============================================================================
 // Trigger Types
@@ -110,6 +110,14 @@ export interface ActionContext {
 // Action Definition
 // =============================================================================
 
+/**
+ * Input validator interface (compatible with zod schemas)
+ */
+export interface InputValidator<T> {
+  parse(data: unknown): T;
+  description?: string;
+}
+
 export interface ActionDefinition<TInput = unknown, TOutput = unknown> {
   /** Unique action name (used in API routes, must be URL-safe) */
   name: string;
@@ -132,8 +140,15 @@ export interface ActionDefinition<TInput = unknown, TOutput = unknown> {
   /** Required secrets (validated at startup) */
   secrets?: string[];
 
-  /** Input validation schema */
-  input?: z.ZodType<TInput>;
+  /** Input validation schema (zod-compatible) */
+  input?: InputValidator<TInput>;
+
+  /**
+   * Schema requirements - tables/columns this action needs.
+   * Used for runtime validation and import-time checking.
+   * Compile-time validation is handled by Kysely types.
+   */
+  schema?: ActionSchema;
 
   /** The action function */
   run: (input: TInput, ctx: ActionContext) => Promise<TOutput>;
@@ -161,4 +176,38 @@ export interface DiscoveredAction {
 
   /** Missing secrets (if any) */
   missingSecrets?: string[];
+}
+
+// =============================================================================
+// Helper Function
+// =============================================================================
+
+/**
+ * Define an action (serverless compute function)
+ *
+ * @example
+ * ```typescript
+ * import { defineAction } from "@hands/core/primitives";
+ * import { z } from "zod";
+ *
+ * export default defineAction({
+ *   name: "sync-hackernews",
+ *   description: "Sync top stories from Hacker News",
+ *   schedule: "0 * * * *", // Every hour
+ *   triggers: ["manual", "webhook"],
+ *   secrets: ["HN_API_KEY"],
+ *   input: z.object({
+ *     limit: z.number().min(1).max(500).default(100),
+ *   }),
+ *   async run(input, ctx) {
+ *     ctx.log.info("Starting sync", { limit: input.limit });
+ *     // ...
+ *   },
+ * });
+ * ```
+ */
+export function defineAction<TInput, TOutput>(
+  config: ActionDefinition<TInput, TOutput>,
+): ActionDefinition<TInput, TOutput> {
+  return config;
 }

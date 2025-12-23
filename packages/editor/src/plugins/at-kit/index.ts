@@ -24,7 +24,7 @@ import { AtLoaderElement } from "./at-loader";
 // ============================================================================
 
 /** Cache of pending MDX generation promises, keyed by prompt */
-export const pendingMdxQueries = new Map<string, Promise<{ mdx: string }>>();
+export const pendingMdxQueries = new Map<string, Promise<{ mdx: string; errors?: string[] }>>();
 
 // ============================================================================
 // At Loader Element - inline loader while waiting for AI

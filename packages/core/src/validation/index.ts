@@ -69,7 +69,7 @@ function getConstraints(component: string) {
 // Types
 // ============================================================================
 
-export interface SchemaTable {
+export interface ValidationSchemaTable {
   name: string;
   columns: string[];
 }
@@ -95,7 +95,7 @@ export interface ValidationContext {
   /** Available page/block sources for <Page src="..." /> */
   pageRefs: string[];
   /** Database schema */
-  schema: SchemaTable[];
+  schema: ValidationSchemaTable[];
   /** Base path for relative file paths in errors */
   basePath?: string;
 }
@@ -390,7 +390,7 @@ export function isSqlMutation(sql: string): boolean {
  */
 export function validateSqlSchema(
   sql: string,
-  schema: SchemaTable[],
+  schema: ValidationSchemaTable[],
   opts?: { allowMutations?: boolean },
 ): ValidationError[] {
   const errors: ValidationError[] = [];

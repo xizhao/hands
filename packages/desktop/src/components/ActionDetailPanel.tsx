@@ -44,18 +44,39 @@ interface ActionStats {
   lastRunAt: string | null;
 }
 
+interface SchemaColumn {
+  name: string;
+  type: string;
+  optional?: boolean;
+}
+
+interface SchemaTable {
+  name: string;
+  columns: SchemaColumn[];
+  primaryKey?: string[];
+}
+
+interface ActionSchema {
+  tables: SchemaTable[];
+}
+
 interface DiscoveredAction {
   id: string;
   path: string;
-  definition: {
-    name: string;
-    description?: string;
-    schedule?: string;
-    triggers?: Array<"manual" | "webhook" | "pg_notify">;
-    secrets?: string[];
-  };
-  lastRun?: ActionRun;
+  name: string;
+  description?: string;
+  schedule?: string;
+  triggers: Array<"manual" | "webhook" | "pg_notify">;
+  hasWebhook: boolean;
+  webhookPath?: string;
+  pgNotifyChannel?: string;
+  secrets?: string[];
+  missingSecrets?: string[];
+  hasInput: boolean;
+  inputSchema?: { description?: string };
+  schema?: ActionSchema;
   nextRun?: string;
+  lastRun?: ActionRun;
 }
 
 export function ActionDetailPanel({ actionId }: ActionDetailPanelProps) {
@@ -169,7 +190,7 @@ export function ActionDetailPanel({ actionId }: ActionDetailPanelProps) {
     );
   }
 
-  const hasWebhookTrigger = action.definition.triggers?.includes("webhook");
+  const hasWebhookTrigger = action.hasWebhook;
   const webhookUrl = hasWebhookTrigger ? `http://localhost:${port}/webhook/${actionId}` : null;
 
   return (
@@ -179,10 +200,10 @@ export function ActionDetailPanel({ actionId }: ActionDetailPanelProps) {
         <div className="p-4 border-b border-border space-y-3">
           <div className="flex items-start justify-between gap-3">
             <div className="flex-1 min-w-0">
-              <h1 className="text-lg font-semibold truncate">{action.definition.name}</h1>
-              {action.definition.description && (
+              <h1 className="text-lg font-semibold truncate">{action.name}</h1>
+              {action.description && (
                 <p className="text-sm text-muted-foreground mt-0.5">
-                  {action.definition.description}
+                  {action.description}
                 </p>
               )}
             </div>
@@ -203,12 +224,12 @@ export function ActionDetailPanel({ actionId }: ActionDetailPanelProps) {
 
           {/* Triggers & Schedule */}
           <div className="flex flex-wrap items-center gap-2 text-xs">
-            {action.definition.schedule && (
+            {action.schedule && (
               <Tooltip>
                 <TooltipTrigger asChild>
                   <div className="flex items-center gap-1 px-2 py-1 rounded-md bg-muted text-muted-foreground">
                     <Clock weight="duotone" className="h-3.5 w-3.5" />
-                    <span>{action.definition.schedule}</span>
+                    <span>{action.schedule}</span>
                   </div>
                 </TooltipTrigger>
                 <TooltipContent>
@@ -265,6 +286,44 @@ export function ActionDetailPanel({ actionId }: ActionDetailPanelProps) {
               {stats.averageDurationMs !== null && (
                 <span>Avg: {Math.round(stats.averageDurationMs)}ms</span>
               )}
+            </div>
+          )}
+
+          {/* Schema Requirements */}
+          {action.schema && action.schema.tables.length > 0 && (
+            <div className="pt-2">
+              <p className="text-xs font-medium text-muted-foreground mb-2">
+                Schema Requirements
+              </p>
+              <div className="space-y-2">
+                {action.schema.tables.map((table) => (
+                  <div
+                    key={table.name}
+                    className="text-xs bg-muted/50 rounded-md p-2 border border-border"
+                  >
+                    <div className="font-medium font-mono">{table.name}</div>
+                    <div className="mt-1 text-muted-foreground space-x-1">
+                      {table.columns.slice(0, 5).map((col) => (
+                        <span
+                          key={col.name}
+                          className={cn(
+                            "inline-block px-1.5 py-0.5 rounded bg-muted",
+                            col.optional && "opacity-60",
+                          )}
+                        >
+                          {col.name}
+                          {col.optional && "?"}
+                        </span>
+                      ))}
+                      {table.columns.length > 5 && (
+                        <span className="text-muted-foreground/60">
+                          +{table.columns.length - 5} more
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
             </div>
           )}
         </div>

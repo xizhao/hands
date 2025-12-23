@@ -5,48 +5,19 @@
  * @category static
  * @description Pie/donut chart for showing proportional data.
  * Set innerRadius > 0 to create a donut chart.
+ * Works standalone or inside LiveValue for live SQL data.
  * @keywords chart, pie, donut, proportion, percentage, visualization
  * @example
  * <PieChart data={data} valueKey="count" nameKey="category" />
  * <PieChart data={data} valueKey="amount" nameKey="type" innerRadius={60} />
  */
 
-import {
-  createPlatePlugin,
-  PlateElement,
-  type PlateElementProps,
-  useElement,
-  useSelected,
-} from "platejs/react";
-import { memo, useMemo } from "react";
-import { Cell, Pie, PieChart as RechartsPieChart, Label } from "recharts";
+import { createPlatePlugin, PlateElement, type PlateElementProps, useElement } from "platejs/react";
+import { memo } from "react";
 
-import { PIE_CHART_KEY, type TPieChartElement } from "../../../types";
-import {
-  ChartContainer,
-  type ChartConfig,
-  ChartLegend,
-  ChartLegendContent,
-  ChartTooltip,
-  ChartTooltipContent,
-} from "./chart";
-import { useLiveValueData } from "./context";
-import { useContainerSize } from "./use-container-size";
-
-// ============================================================================
-// Default Colors
-// ============================================================================
-
-const DEFAULT_COLORS = [
-  "hsl(var(--chart-1, 220 70% 50%))",
-  "hsl(var(--chart-2, 160 60% 45%))",
-  "hsl(var(--chart-3, 30 80% 55%))",
-  "hsl(var(--chart-4, 280 65% 60%))",
-  "hsl(var(--chart-5, 340 75% 55%))",
-  "hsl(var(--chart-6, 200 65% 55%))",
-  "hsl(var(--chart-7, 120 55% 45%))",
-  "hsl(var(--chart-8, 45 85% 55%))",
-];
+import { PIE_CHART_KEY, type TPieChartElement, type VegaLiteSpec } from "../../../types";
+import { VegaChart } from "./vega-chart";
+import { pieChartToVegaSpec } from "./vega-spec";
 
 // ============================================================================
 // Standalone Component
@@ -69,177 +40,47 @@ export interface PieChartProps {
   showLabels?: boolean;
   /** Custom colors */
   colors?: string[];
-  /** Chart config for labels/icons */
-  config?: ChartConfig;
   /** Additional CSS classes */
   className?: string;
+  /**
+   * Full Vega-Lite specification.
+   * If provided, overrides the simplified props above.
+   */
+  vegaSpec?: VegaLiteSpec;
 }
 
 /**
  * Standalone PieChart component.
- * Uses data from props or LiveValue context.
- * Responsive: adjusts legend and label visibility based on container size.
+ * Uses Vega-Lite for rendering with canvas for performance.
+ * Supports data from props or LiveValue context.
  */
 export function PieChart({
-  data: propData,
-  valueKey,
-  nameKey,
+  data,
+  valueKey = "value",
+  nameKey = "name",
   height = 300,
   innerRadius = 0,
   showLegend = true,
   showLabels = false,
-  colors = DEFAULT_COLORS,
-  config: propConfig,
+  colors,
   className,
+  vegaSpec: propVegaSpec,
 }: PieChartProps) {
-  const ctx = useLiveValueData();
-  const data = propData ?? ctx?.data ?? [];
-  const { containerRef, responsive } = useContainerSize();
-
-  // Auto-detect keys if not provided
-  const resolvedKeys = useMemo(() => {
-    if (data.length === 0) {
-      return { valueKey: "value", nameKey: "name" };
-    }
-    const keys = Object.keys(data[0]);
-    // Try to find a numeric key for value
-    const numericKey = keys.find((k) => {
-      const sample = data[0][k];
-      return typeof sample === "number";
-    });
-    // Try to find a string key for name
-    const stringKey = keys.find((k) => {
-      const sample = data[0][k];
-      return typeof sample === "string";
-    });
-
-    return {
-      valueKey: valueKey ?? numericKey ?? keys[1] ?? "value",
-      nameKey: nameKey ?? stringKey ?? keys[0] ?? "name",
-    };
-  }, [valueKey, nameKey, data]);
-
-  // Build chart config from data
-  const chartConfig = useMemo<ChartConfig>(() => {
-    if (propConfig) return propConfig;
-    const config: ChartConfig = {};
-    data.forEach((item, i) => {
-      const name = String(item[resolvedKeys.nameKey] ?? `Item ${i}`);
-      config[name] = {
-        label: name,
-        color: colors[i % colors.length],
-      };
-    });
-    return config;
-  }, [propConfig, data, resolvedKeys.nameKey, colors]);
-
-  // Calculate total for center label
-  const total = useMemo(() => {
-    return data.reduce((sum, item) => {
-      const val = item[resolvedKeys.valueKey];
-      return sum + (typeof val === "number" ? val : 0);
-    }, 0);
-  }, [data, resolvedKeys.valueKey]);
-
-  // Responsive: combine user prefs with container size
-  const effectiveShowLegend = showLegend && responsive.showLegend;
-  const effectiveShowLabels = showLabels && !responsive.isSmall;
-
-  if (ctx?.isLoading) {
-    return (
-      <div
-        ref={containerRef}
-        className={`w-full flex items-center justify-center bg-muted/30 rounded-lg animate-pulse ${className ?? ""}`}
-        style={{ height }}
-      >
-        <span className="text-muted-foreground text-sm">Loading chart...</span>
-      </div>
-    );
+  // If full vegaSpec provided, use it directly
+  if (propVegaSpec) {
+    return <VegaChart spec={propVegaSpec} height={height} data={data} className={className} />;
   }
 
-  if (ctx?.error) {
-    return (
-      <div
-        ref={containerRef}
-        className={`w-full flex items-center justify-center bg-destructive/10 rounded-lg ${className ?? ""}`}
-        style={{ height }}
-      >
-        <span className="text-destructive text-sm">Error loading data</span>
-      </div>
-    );
-  }
+  // Convert simplified props to Vega-Lite spec
+  const spec = pieChartToVegaSpec({
+    valueKey,
+    nameKey,
+    showLegend,
+    showLabels,
+    innerRadius,
+  });
 
-  if (data.length === 0) {
-    return (
-      <div
-        ref={containerRef}
-        className={`w-full flex items-center justify-center bg-muted/30 rounded-lg ${className ?? ""}`}
-        style={{ height }}
-      >
-        <span className="text-muted-foreground text-sm">No data</span>
-      </div>
-    );
-  }
-
-  // Responsive radius - smaller on compact containers
-  const maxRadius = responsive.isCompact ? 60 : responsive.isSmall ? 80 : 120;
-  const outerRadius = Math.min(height / 2 - 40, maxRadius);
-
-  // Responsive text sizes for center label
-  const centerFontSize = responsive.isCompact ? "text-xl" : responsive.isSmall ? "text-2xl" : "text-3xl";
-
-  return (
-    <div ref={containerRef} className="w-full">
-      <ChartContainer config={chartConfig} className={`mx-auto ${className ?? ""}`} style={{ height, width: "100%" }}>
-        <RechartsPieChart accessibilityLayer>
-          <ChartTooltip content={<ChartTooltipContent hideLabel />} />
-          <Pie
-            data={data as Record<string, unknown>[]}
-            dataKey={resolvedKeys.valueKey}
-            nameKey={resolvedKeys.nameKey}
-            cx="50%"
-            cy="50%"
-            innerRadius={responsive.isCompact ? Math.min(innerRadius, 30) : innerRadius}
-            outerRadius={outerRadius}
-            paddingAngle={responsive.isCompact ? 1 : 2}
-            label={
-              effectiveShowLabels
-                ? ({ name, percent }: { name?: string; percent?: number }) =>
-                    `${name ?? ""} (${((percent ?? 0) * 100).toFixed(0)}%)`
-                : undefined
-            }
-            labelLine={effectiveShowLabels}
-          >
-            {data.map((entry, index) => {
-              const name = String(entry[resolvedKeys.nameKey] ?? `Item ${index}`);
-              return <Cell key={`cell-${index}`} fill={`var(--color-${name})`} />;
-            })}
-            {innerRadius > 0 && !responsive.isCompact && (
-              <Label
-                content={({ viewBox }) => {
-                  if (viewBox && "cx" in viewBox && "cy" in viewBox) {
-                    return (
-                      <text x={viewBox.cx} y={viewBox.cy} textAnchor="middle" dominantBaseline="middle">
-                        <tspan x={viewBox.cx} y={viewBox.cy} className={`fill-foreground ${centerFontSize} font-bold`}>
-                          {total.toLocaleString()}
-                        </tspan>
-                        {!responsive.isSmall && (
-                          <tspan x={viewBox.cx} y={(viewBox.cy || 0) + 24} className="fill-muted-foreground">
-                            Total
-                          </tspan>
-                        )}
-                      </text>
-                    );
-                  }
-                }}
-              />
-            )}
-          </Pie>
-          {effectiveShowLegend && <ChartLegend content={<ChartLegendContent nameKey={resolvedKeys.nameKey} />} />}
-        </RechartsPieChart>
-      </ChartContainer>
-    </div>
-  );
+  return <VegaChart spec={spec} height={height} data={data} className={className} />;
 }
 
 // ============================================================================
@@ -248,14 +89,9 @@ export function PieChart({
 
 function PieChartElement(props: PlateElementProps) {
   const element = useElement<TPieChartElement>();
-  const selected = useSelected();
 
   return (
-    <PlateElement
-      {...props}
-      as="div"
-      className="my-2"
-    >
+    <PlateElement {...props} as="div" className="my-2">
       <PieChart
         valueKey={element.valueKey as string | undefined}
         nameKey={element.nameKey as string | undefined}
@@ -264,6 +100,7 @@ function PieChartElement(props: PlateElementProps) {
         showLegend={element.showLegend as boolean | undefined}
         showLabels={element.showLabels as boolean | undefined}
         colors={element.colors as string[] | undefined}
+        vegaSpec={element.vegaSpec as VegaLiteSpec | undefined}
       />
       <span className="hidden">{props.children}</span>
     </PlateElement>
@@ -295,6 +132,7 @@ export interface CreatePieChartOptions {
   showLegend?: boolean;
   showLabels?: boolean;
   colors?: string[];
+  vegaSpec?: VegaLiteSpec;
 }
 
 /**
@@ -310,6 +148,7 @@ export function createPieChartElement(options?: CreatePieChartOptions): TPieChar
     showLegend: options?.showLegend ?? true,
     showLabels: options?.showLabels ?? false,
     colors: options?.colors,
+    vegaSpec: options?.vegaSpec,
     children: [{ text: "" }],
   };
 }

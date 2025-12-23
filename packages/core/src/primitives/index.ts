@@ -13,3 +13,9 @@ export * from "./serialization";
 
 // SQL validation primitives
 export * from "./sql-validation";
+
+// Schema primitives (action schema declarations, validation)
+export * from "./schema";
+
+// Action primitives (serverless compute functions)
+export * from "./actions";

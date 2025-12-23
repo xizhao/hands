@@ -5,7 +5,7 @@
  */
 
 import type { PGlite } from "@electric-sql/pglite";
-import type { ActionRun, ActionRunStatus } from "@hands/stdlib";
+import type { ActionRun, ActionRunStatus } from "@hands/core/primitives";
 
 const SCHEMA = "hands_admin";
 const RUNS_TABLE = `${SCHEMA}.action_runs`;

@@ -3,9 +3,13 @@
  *
  * Uses ResizeObserver to track container dimensions and provide
  * responsive breakpoint information for charts.
+ *
+ * Performance optimized:
+ * - Debounces resize updates to avoid excessive re-renders
+ * - Only triggers state updates when crossing breakpoint thresholds
  */
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 export interface ContainerSize {
   width: number;
@@ -38,6 +42,19 @@ const BREAKPOINTS = {
   small: 350,
   medium: 500,
 } as const;
+
+/** Debounce delay in ms - balances responsiveness vs performance */
+const DEBOUNCE_MS = 100;
+
+/**
+ * Get the breakpoint bucket for a width (used to avoid updates within same bucket)
+ */
+function getBreakpointBucket(width: number): number {
+  if (width < BREAKPOINTS.compact) return 0;
+  if (width < BREAKPOINTS.small) return 1;
+  if (width < BREAKPOINTS.medium) return 2;
+  return 3;
+}
 
 /**
  * Calculate responsive config based on container width
@@ -72,6 +89,11 @@ function getResponsiveConfig(width: number): ResponsiveConfig {
 /**
  * Hook to track container size and provide responsive configuration.
  *
+ * Performance optimizations:
+ * - Debounces resize events to reduce re-renders during drag
+ * - Only updates state when width crosses a breakpoint threshold
+ * - Uses RAF for smooth updates
+ *
  * @example
  * const { containerRef, size, responsive } = useContainerSize();
  * return (
@@ -83,35 +105,55 @@ function getResponsiveConfig(width: number): ResponsiveConfig {
 export function useContainerSize() {
   const containerRef = useRef<HTMLDivElement>(null);
   const [size, setSize] = useState<ContainerSize>({ width: 0, height: 0 });
-
-  const updateSize = useCallback(() => {
-    if (containerRef.current) {
-      const { width, height } = containerRef.current.getBoundingClientRect();
-      setSize((prev) => {
-        // Only update if changed to avoid unnecessary re-renders
-        if (prev.width !== width || prev.height !== height) {
-          return { width, height };
-        }
-        return prev;
-      });
-    }
-  }, []);
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const lastBucketRef = useRef<number>(-1);
+  const rafRef = useRef<number | null>(null);
 
   useEffect(() => {
     const element = containerRef.current;
     if (!element) return;
 
-    // Initial size
+    const updateSize = () => {
+      if (rafRef.current) {
+        cancelAnimationFrame(rafRef.current);
+      }
+
+      rafRef.current = requestAnimationFrame(() => {
+        if (!containerRef.current) return;
+        const { width, height } = containerRef.current.getBoundingClientRect();
+        const bucket = getBreakpointBucket(width);
+
+        // Always update on initial render or when crossing breakpoints
+        // Skip updates within the same breakpoint bucket during resize
+        if (lastBucketRef.current === -1 || bucket !== lastBucketRef.current) {
+          lastBucketRef.current = bucket;
+          setSize({ width, height });
+        }
+      });
+    };
+
+    const debouncedUpdate = () => {
+      if (debounceRef.current) {
+        clearTimeout(debounceRef.current);
+      }
+      debounceRef.current = setTimeout(updateSize, DEBOUNCE_MS);
+    };
+
+    // Initial size (immediate, no debounce)
     updateSize();
 
-    // Observe resize
-    const observer = new ResizeObserver(updateSize);
+    // Observe resize with debouncing
+    const observer = new ResizeObserver(debouncedUpdate);
     observer.observe(element);
 
-    return () => observer.disconnect();
-  }, [updateSize]);
+    return () => {
+      observer.disconnect();
+      if (debounceRef.current) clearTimeout(debounceRef.current);
+      if (rafRef.current) cancelAnimationFrame(rafRef.current);
+    };
+  }, []);
 
-  const responsive = getResponsiveConfig(size.width);
+  const responsive = useMemo(() => getResponsiveConfig(size.width), [size.width]);
 
   return {
     containerRef,

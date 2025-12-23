@@ -8,7 +8,7 @@
 import { initTRPC } from "@trpc/server";
 import { fetchRequestHandler } from "@trpc/server/adapters/fetch";
 import type { Hono } from "hono";
-import { actionsRouter } from "../actions/trpc.js";
+import { actionsRouter, type ActionsContext } from "../actions/trpc.js";
 import { gitRouter } from "../git/trpc.js";
 import type { PageRegistry } from "../pages/index.js";
 import { sourcesRouter, type TRPCContext } from "../sources/trpc.js";
@@ -74,7 +74,8 @@ interface CombinedContext
     WorkbookContext,
     PagesContext,
     ThumbnailsContext,
-    AIContext {}
+    AIContext,
+    ActionsContext {}
 
 // Create a merged router that includes all routes
 const t = initTRPC.context<CombinedContext>().create();

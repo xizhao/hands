@@ -10,7 +10,7 @@
 
 import { existsSync, readdirSync, statSync } from "node:fs";
 import { basename, join } from "node:path";
-import type { ActionDefinition, DiscoveredAction } from "@hands/stdlib";
+import type { ActionDefinition, DiscoveredAction } from "@hands/core/primitives";
 import { readEnvFile } from "../sources/secrets.js";
 
 /**

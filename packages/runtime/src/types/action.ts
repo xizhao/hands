@@ -9,6 +9,7 @@
  */
 
 import type { z } from "zod";
+import type { ActionSchema } from "@hands/core/primitives";
 
 // =============================================================================
 // Trigger Types
@@ -137,6 +138,13 @@ export interface ActionDefinition<TInput = unknown, TOutput = unknown> {
 
   /** Input validation schema */
   input?: z.ZodType<TInput>;
+
+  /**
+   * Schema requirements - tables/columns this action needs.
+   * Used for runtime validation and import-time checking.
+   * Compile-time validation is handled by Kysely types.
+   */
+  schema?: ActionSchema;
 
   /** The action function */
   run: (input: TInput, ctx: ActionContext) => Promise<TOutput>;

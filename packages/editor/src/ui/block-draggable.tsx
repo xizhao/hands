@@ -126,8 +126,24 @@ function detectDropTarget(
 
 const UNDRAGGABLE_KEYS = [KEYS.column, KEYS.tr, KEYS.td];
 
-// Elements whose direct children should not be draggable
-const NON_DRAGGABLE_CHILDREN_TYPES = ["live_value"];
+// Elements whose children (at any depth) should not be draggable
+const NON_DRAGGABLE_ANCESTOR_TYPES = ["live_value"];
+
+/**
+ * Check if any ancestor of the given path is a non-draggable type.
+ * This prevents dragging elements out of LiveValue, etc.
+ */
+function hasNonDraggableAncestor(editor: PlateEditor, path: Path): boolean {
+  let currentPath = path.slice(0, -1); // Start with parent
+  while (currentPath.length > 0) {
+    const ancestorEntry = editor.api.node(currentPath);
+    if (ancestorEntry && NON_DRAGGABLE_ANCESTOR_TYPES.includes(ancestorEntry[0].type as string)) {
+      return true;
+    }
+    currentPath = currentPath.slice(0, -1);
+  }
+  return false;
+}
 
 export const BlockDraggable: RenderNodeWrapper = (props) => {
   const { editor, element, path } = props;
@@ -136,18 +152,19 @@ export const BlockDraggable: RenderNodeWrapper = (props) => {
     // Guard for static rendering (PlateStatic doesn't provide path)
     if (!path) return false;
     if (editor.dom.readOnly) return false;
+
+    // Check if any ancestor is a non-draggable type (like LiveValue)
+    if (hasNonDraggableAncestor(editor, path)) {
+      return false;
+    }
+
     if (path.length === 1 && !isType(editor, element, UNDRAGGABLE_KEYS)) {
       return true;
     }
     // Enable dragging for children inside container elements (e.g., LiveAction)
-    // But NOT for children of LiveValue (dragging them out breaks the component)
     if (path.length === 2 && !isType(editor, element, UNDRAGGABLE_KEYS)) {
       const parentEntry = editor.api.parent(path);
       if (parentEntry) {
-        // Disable dragging for children of LiveValue and similar elements
-        if (NON_DRAGGABLE_CHILDREN_TYPES.includes(parentEntry[0].type as string)) {
-          return false;
-        }
         const parentPlugin = getPluginByType(editor, parentEntry[0].type as string);
         if (parentPlugin?.node.isContainer) {
           return true;

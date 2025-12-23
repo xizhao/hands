@@ -1,5 +1,6 @@
 {
   "dependencies": {
+    "@hands/core": "workspace:*",
     "@deck.gl/aggregation-layers": "^9.2.0",
     "@deck.gl/layers": "^9.2.0",
     "@deck.gl/react": "^9.2.0",

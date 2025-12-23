@@ -36,6 +36,7 @@ export const LINE_CHART_KEY = "line_chart";
 export const BAR_CHART_KEY = "bar_chart";
 export const AREA_CHART_KEY = "area_chart";
 export const PIE_CHART_KEY = "pie_chart";
+export const CHART_KEY = "chart"; // Generic Vega-Lite chart
 export const DATA_GRID_KEY = "data_grid";
 export const KANBAN_KEY = "kanban";
 export const COLUMN_GROUP_KEY = "column_group";
@@ -475,6 +476,13 @@ export interface TLoaderElement extends TElement {
 // Chart Element Types
 // ============================================================================
 
+/**
+ * Vega-Lite specification type.
+ * This is a simplified type - the full spec is complex.
+ * Use `import type { VisualizationSpec } from "react-vega"` for full typing.
+ */
+export type VegaLiteSpec = Record<string, unknown>;
+
 /** Base chart configuration shared across all chart types */
 export interface ChartBaseConfig {
   /** Data key for X axis */
@@ -491,6 +499,12 @@ export interface ChartBaseConfig {
   showTooltip?: boolean;
   /** Custom colors for series */
   colors?: string[];
+  /**
+   * Full Vega-Lite specification.
+   * If provided, overrides the simplified props above.
+   * Useful for AI-generated complex charts.
+   */
+  vegaSpec?: VegaLiteSpec;
 }
 
 /**
@@ -553,6 +567,25 @@ export interface TPieChartElement extends TElement {
   showLabels?: boolean;
   /** Custom colors for slices */
   colors?: string[];
+  /**
+   * Full Vega-Lite specification.
+   * If provided, overrides the simplified props above.
+   */
+  vegaSpec?: VegaLiteSpec;
+  /** Children are unused (void element) */
+  children: (TElement | TText)[];
+}
+
+/**
+ * Generic Chart element - for full Vega-Lite specifications.
+ * Used for advanced AI-generated charts that don't fit the simplified types.
+ */
+export interface TChartElement extends TElement {
+  type: typeof CHART_KEY;
+  /** Full Vega-Lite specification (required for this element type) */
+  vegaSpec: VegaLiteSpec;
+  /** Chart height in pixels */
+  height?: number;
   /** Children are unused (void element) */
   children: (TElement | TText)[];
 }

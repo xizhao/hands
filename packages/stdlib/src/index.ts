@@ -1,6 +1,6 @@
 // Core types
 
-// Action utilities
+// Action utilities - re-exported from @hands/core for user convenience
 export {
   type ActionContext,
   type ActionDefinition,
@@ -15,7 +15,7 @@ export {
   defineAction,
   type SelectOptions,
   type TableClient,
-} from "./actions/index.js";
+} from "@hands/core/primitives";
 
 // Component types
 export type { BarChartProps } from "./registry/components/charts/bar-chart.js";

@@ -1,6 +1,6 @@
 import type { Story } from "@ladle/react";
-import { LineChart } from "./line-chart";
 import { LiveValueProvider } from "./context";
+import { LineChart } from "./line-chart";
 
 export default {
   title: "Static/Charts/LineChart",

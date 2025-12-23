@@ -6,7 +6,7 @@
  */
 
 import type { PGlite } from "@electric-sql/pglite";
-import type { DiscoveredAction } from "@hands/stdlib";
+import type { DiscoveredAction } from "@hands/core/primitives";
 import type { DiscoveredSource } from "../sources/types.js";
 import { discoverActions } from "./discovery.js";
 import { executeAction } from "./executor.js";

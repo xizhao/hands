@@ -1,11 +1,10 @@
 /**
- * Action Context Builder
+ * Action Context Builder (Direct DB)
  *
- * Creates the ActionContext that is passed to action run functions.
- * Provides access to sources, raw SQL, logging, and notifications.
+ * Creates ActionContext with direct database access via Kysely.
+ * Used when runtime executes actions (not HTTP proxying).
  */
 
-import type { PGlite } from "@electric-sql/pglite";
 import type {
   ActionContext,
   ActionLogger,
@@ -14,32 +13,31 @@ import type {
   ActionTriggerType,
   SelectOptions,
   TableClient,
-} from "@hands/core/primitives";
-import type { DiscoveredSource } from "../sources/types.js";
+} from "../types/action";
+import { getDb, kyselySql, runWithDbMode } from "../db/dev";
 
 interface BuildContextOptions {
-  db: PGlite;
-  sources: DiscoveredSource[];
+  tables: Array<{ name: string; source?: string }>;
   secrets: Record<string, string>;
   runMeta: ActionRunMeta;
 }
 
 /**
- * Build an ActionContext for executing an action
+ * Build an ActionContext with direct DB access
  */
 export function buildActionContext(options: BuildContextOptions): ActionContext {
-  const { db, sources, secrets, runMeta } = options;
+  const { tables, secrets, runMeta } = options;
 
-  // Build source proxies
-  const sourcesProxy = buildSourcesProxy(db, sources);
+  // Build source proxies (group tables by source)
+  const sourcesProxy = buildSourcesProxy(tables);
 
   // Build SQL tagged template
-  const sql = buildSqlTemplate(db);
+  const sql = buildSqlTemplate();
 
   // Build logger
   const log = buildLogger(runMeta.id);
 
-  // Build notify (placeholder for now)
+  // Build notify
   const notify = buildNotify();
 
   return {
@@ -54,37 +52,36 @@ export function buildActionContext(options: BuildContextOptions): ActionContext 
 
 /**
  * Build the sources proxy object
- * Provides: ctx.sources.mySource.myTable.select()
+ * Groups tables by source name (default: "main")
  */
 function buildSourcesProxy(
-  db: PGlite,
-  sources: DiscoveredSource[],
+  tables: Array<{ name: string; source?: string }>
 ): Record<string, Record<string, TableClient>> {
   const proxy: Record<string, Record<string, TableClient>> = {};
 
-  for (const source of sources) {
-    proxy[source.id] = {};
-    for (const table of source.tables) {
-      proxy[source.id][table.name] = buildTableClient(db, table.name);
+  for (const table of tables) {
+    const sourceName = table.source ?? "main";
+    if (!proxy[sourceName]) {
+      proxy[sourceName] = {};
     }
+    proxy[sourceName][table.name] = buildTableClient(table.name);
   }
 
   return proxy;
 }
 
 /**
- * Build a TableClient for a specific table
+ * Build a TableClient with direct DB access
  */
 function buildTableClient<T = Record<string, unknown>>(
-  db: PGlite,
-  tableName: string,
+  tableName: string
 ): TableClient<T> {
+  const db = getDb();
   const escapedTable = escapeIdentifier(tableName);
 
   return {
     async select(opts?: SelectOptions): Promise<T[]> {
       let query = `SELECT * FROM ${escapedTable}`;
-      const params: unknown[] = [];
 
       if (opts?.where) {
         query += ` WHERE ${opts.where}`;
@@ -93,16 +90,16 @@ function buildTableClient<T = Record<string, unknown>>(
         query += ` ORDER BY ${opts.orderBy}`;
       }
       if (opts?.limit) {
-        query += ` LIMIT $${params.length + 1}`;
-        params.push(opts.limit);
+        query += ` LIMIT ${opts.limit}`;
       }
       if (opts?.offset) {
-        query += ` OFFSET $${params.length + 1}`;
-        params.push(opts.offset);
+        query += ` OFFSET ${opts.offset}`;
       }
 
-      const result = await db.query<T>(query, params);
-      return result.rows;
+      const result = await runWithDbMode("action", async () => {
+        return kyselySql.raw<T>(query).execute(db);
+      });
+      return result.rows as T[];
     },
 
     async selectOne(opts?: SelectOptions): Promise<T | null> {
@@ -118,37 +115,47 @@ function buildTableClient<T = Record<string, unknown>>(
       const columns = Object.keys(firstRow);
       const escapedColumns = columns.map(escapeIdentifier).join(", ");
 
-      const values: unknown[] = [];
       const valuePlaceholders: string[] = [];
 
       for (const row of rowsArray) {
-        const rowValues = columns.map((col) => (row as Record<string, unknown>)[col]);
-        const placeholders = rowValues.map((_, i) => `$${values.length + i + 1}`);
-        valuePlaceholders.push(`(${placeholders.join(", ")})`);
-        values.push(...rowValues);
+        const rowValues = columns.map((col) => {
+          const val = (row as Record<string, unknown>)[col];
+          return escapeValue(val);
+        });
+        valuePlaceholders.push(`(${rowValues.join(", ")})`);
       }
 
       const query = `INSERT INTO ${escapedTable} (${escapedColumns}) VALUES ${valuePlaceholders.join(", ")} RETURNING *`;
-      const result = await db.query<T>(query, values);
-      return result.rows;
+
+      const result = await runWithDbMode("action", async () => {
+        return kyselySql.raw<T>(query).execute(db);
+      });
+      return result.rows as T[];
     },
 
     async update(where: string, data: Partial<T>): Promise<T[]> {
       const entries = Object.entries(data as Record<string, unknown>);
       if (entries.length === 0) return [];
 
-      const setClauses = entries.map(([col], i) => `${escapeIdentifier(col)} = $${i + 1}`);
-      const values = entries.map(([, val]) => val);
+      const setClauses = entries.map(
+        ([col, val]) => `${escapeIdentifier(col)} = ${escapeValue(val)}`
+      );
 
       const query = `UPDATE ${escapedTable} SET ${setClauses.join(", ")} WHERE ${where} RETURNING *`;
-      const result = await db.query<T>(query, values);
-      return result.rows;
+
+      const result = await runWithDbMode("action", async () => {
+        return kyselySql.raw<T>(query).execute(db);
+      });
+      return result.rows as T[];
     },
 
     async delete(where: string): Promise<number> {
       const query = `DELETE FROM ${escapedTable} WHERE ${where}`;
-      const result = await db.query(query);
-      return result.affectedRows ?? 0;
+
+      const result = await runWithDbMode("action", async () => {
+        return kyselySql.raw(query).execute(db);
+      });
+      return Number((result as { numAffectedRows?: bigint }).numAffectedRows ?? 0);
     },
 
     async upsert(rows: T | T[], conflictKeys: string[]): Promise<T[]> {
@@ -160,20 +167,20 @@ function buildTableClient<T = Record<string, unknown>>(
       const escapedColumns = columns.map(escapeIdentifier).join(", ");
       const escapedConflictKeys = conflictKeys.map(escapeIdentifier).join(", ");
 
-      const values: unknown[] = [];
       const valuePlaceholders: string[] = [];
 
       for (const row of rowsArray) {
-        const rowValues = columns.map((col) => (row as Record<string, unknown>)[col]);
-        const placeholders = rowValues.map((_, i) => `$${values.length + i + 1}`);
-        valuePlaceholders.push(`(${placeholders.join(", ")})`);
-        values.push(...rowValues);
+        const rowValues = columns.map((col) => {
+          const val = (row as Record<string, unknown>)[col];
+          return escapeValue(val);
+        });
+        valuePlaceholders.push(`(${rowValues.join(", ")})`);
       }
 
       // Build the UPDATE SET clause excluding conflict keys
       const updateColumns = columns.filter((col) => !conflictKeys.includes(col));
       const updateClauses = updateColumns.map(
-        (col) => `${escapeIdentifier(col)} = EXCLUDED.${escapeIdentifier(col)}`,
+        (col) => `${escapeIdentifier(col)} = EXCLUDED.${escapeIdentifier(col)}`
       );
 
       const query = `
@@ -184,8 +191,10 @@ function buildTableClient<T = Record<string, unknown>>(
         RETURNING *
       `;
 
-      const result = await db.query<T>(query, values);
-      return result.rows;
+      const result = await runWithDbMode("action", async () => {
+        return kyselySql.raw<T>(query).execute(db);
+      });
+      return result.rows as T[];
     },
 
     async count(where?: string): Promise<number> {
@@ -193,28 +202,35 @@ function buildTableClient<T = Record<string, unknown>>(
       if (where) {
         query += ` WHERE ${where}`;
       }
-      const result = await db.query<{ count: string }>(query);
-      return parseInt(result.rows[0]?.count ?? "0", 10);
+
+      const result = await runWithDbMode("action", async () => {
+        return kyselySql.raw<{ count: number }>(query).execute(db);
+      });
+      return result.rows[0]?.count ?? 0;
     },
   };
 }
 
 /**
- * Build the SQL tagged template function
+ * Build the SQL tagged template function with direct DB access
  */
-function buildSqlTemplate(db: PGlite) {
+function buildSqlTemplate() {
   return async function sql<T = unknown>(
     strings: TemplateStringsArray,
     ...values: unknown[]
   ): Promise<T[]> {
-    // Build parameterized query
+    const db = getDb();
+
+    // Build query with escaped values
     let query = strings[0];
     for (let i = 0; i < values.length; i++) {
-      query += `$${i + 1}${strings[i + 1]}`;
+      query += escapeValue(values[i]) + strings[i + 1];
     }
 
-    const result = await db.query<T>(query, values);
-    return result.rows;
+    const result = await runWithDbMode("action", async () => {
+      return kyselySql.raw<T>(query).execute(db);
+    });
+    return result.rows as T[];
   };
 }
 
@@ -241,7 +257,7 @@ function buildLogger(runId: string): ActionLogger {
 }
 
 /**
- * Build the notify object (placeholder implementation)
+ * Build the notify object
  */
 function buildNotify(): ActionNotify {
   return {
@@ -266,8 +282,30 @@ function buildNotify(): ActionNotify {
  * Escape a SQL identifier (table/column name)
  */
 function escapeIdentifier(identifier: string): string {
-  // Simple escape: wrap in double quotes and escape any internal double quotes
   return `"${identifier.replace(/"/g, '""')}"`;
+}
+
+/**
+ * Escape a SQL value
+ */
+function escapeValue(value: unknown): string {
+  if (value === null || value === undefined) {
+    return "NULL";
+  }
+  if (typeof value === "number") {
+    return String(value);
+  }
+  if (typeof value === "boolean") {
+    return value ? "1" : "0";
+  }
+  if (value instanceof Date) {
+    return `'${value.toISOString()}'`;
+  }
+  if (typeof value === "object") {
+    return `'${JSON.stringify(value).replace(/'/g, "''")}'`;
+  }
+  // String - escape single quotes
+  return `'${String(value).replace(/'/g, "''")}'`;
 }
 
 /**
@@ -276,7 +314,7 @@ function escapeIdentifier(identifier: string): string {
 export function createRunMeta(
   runId: string,
   trigger: ActionTriggerType,
-  input: unknown,
+  input: unknown
 ): ActionRunMeta {
   return {
     id: runId,
