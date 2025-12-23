@@ -29,6 +29,7 @@ import {
  * <LiveValue query="SELECT COUNT(*) FROM users" />
  * <LiveValue query="SELECT name FROM users" display="list" />
  * <LiveValue query="SELECT * FROM tasks" display="table" columns="auto" />
+ * <LiveValue data={[{name: "Alice"}, {name: "Bob"}]} display="list" />
  * <LiveValue query="SELECT name, value FROM metrics">
  *   ## {{value}}
  *   {{name}}
@@ -44,13 +45,14 @@ function serializeLiveValue(element: TLiveValueElement, options: any) {
   const attrs = serializeAttributes(
     {
       query: element.query,
+      data: element.data,
       display: element.display,
       params: element.params,
       columns: element.columns,
       className: element.className,
     },
     {
-      include: ["query", "display", "params", "columns", "className"],
+      include: ["query", "data", "display", "params", "columns", "className"],
       defaults: { display: "auto" },
     }
   );
@@ -96,7 +98,8 @@ function deserializeLiveValue(node: Parameters<MdxSerializationRule<TLiveValueEl
 
   return {
     type: elementType,
-    query: (props.query as string) || "",
+    query: props.query as string | undefined,
+    data: props.data as Record<string, unknown>[] | undefined,
     display,
     params: props.params as Record<string, unknown> | undefined,
     columns: props.columns as ColumnConfig[] | "auto" | undefined,

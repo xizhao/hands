@@ -277,12 +277,20 @@ function LiveValueElement(props: PlateElementProps) {
   const [editorOpen, setEditorOpen] = useState(false);
   const navigateToTable = useNavigateToTable();
 
-  const { query, display, columns, params } = element;
-  const tableName = extractTableName(query, "query");
+  const { query, data: staticData, display, columns, params } = element;
+  const tableName = query ? extractTableName(query, "query") : null;
 
-  // Execute query via provider (tRPC, REST, etc.)
-  const { data: queryData, isLoading, error } = useLiveQuery(query, params);
-  const data: Record<string, unknown>[] = queryData ?? [];
+  // Use static data if provided, otherwise execute query
+  const shouldQuery = !staticData && !!query;
+  const { data: queryData, isLoading: queryLoading, error: queryError } = useLiveQuery(
+    shouldQuery ? query : "",
+    shouldQuery ? params : undefined
+  );
+
+  // Resolve data source: static data takes priority over query
+  const data: Record<string, unknown>[] = staticData ?? queryData ?? [];
+  const isLoading = shouldQuery ? queryLoading : false;
+  const error = shouldQuery ? queryError : null;
 
   // Mode: provider (children handle display) vs auto-display (we handle display)
   const isProviderMode = hasMeaningfulChildren(element);
@@ -446,25 +454,54 @@ export const LiveValueInlinePlugin = createPlatePlugin({
 
 /**
  * Create a LiveValue element for insertion into editor.
- * Throws if the query is not read-only (SELECT, WITH, EXPLAIN, etc.)
+ * Either query or data must be provided.
+ * If query is provided, throws if not read-only (SELECT, WITH, EXPLAIN, etc.)
  */
 export function createLiveValueElement(
-  query: string,
-  options?: {
+  queryOrOptions: string | {
+    query?: string;
+    data?: Record<string, unknown>[];
+    display?: DisplayMode;
+    params?: Record<string, unknown>;
+    columns?: ColumnConfig[] | "auto";
+  },
+  legacyOptions?: {
     display?: DisplayMode;
     params?: Record<string, unknown>;
     columns?: ColumnConfig[] | "auto";
   },
 ): TLiveValueElement {
-  // Validate that the query is read-only
-  assertReadOnlySQL(query);
+  // Handle legacy signature: createLiveValueElement(query, options)
+  if (typeof queryOrOptions === "string") {
+    assertReadOnlySQL(queryOrOptions);
+    return {
+      type: LIVE_VALUE_KEY,
+      query: queryOrOptions,
+      display: legacyOptions?.display,
+      params: legacyOptions?.params,
+      columns: legacyOptions?.columns,
+      children: [{ text: "" }],
+    };
+  }
+
+  // New signature: createLiveValueElement({ query?, data?, ... })
+  const options = queryOrOptions;
+
+  if (!options.query && !options.data) {
+    throw new Error("LiveValue requires either query or data");
+  }
+
+  if (options.query) {
+    assertReadOnlySQL(options.query);
+  }
 
   return {
     type: LIVE_VALUE_KEY,
-    query,
-    display: options?.display,
-    params: options?.params,
-    columns: options?.columns,
+    query: options.query,
+    data: options.data,
+    display: options.display,
+    params: options.params,
+    columns: options.columns,
     children: [{ text: "" }],
   };
 }
@@ -477,9 +514,10 @@ export { LIVE_VALUE_KEY };
 
 export const LiveValueMeta: ComponentMeta = {
   category: "view",
-  requiredProps: ["query"],
+  requiredProps: [], // Either query or data required, validated at runtime
   propRules: {
-    query: { type: "sql", required: true },
+    query: { type: "sql", required: false },
+    data: { type: "object", required: false },
     display: { enum: ["auto", "inline", "list", "table"] },
   },
   constraints: {

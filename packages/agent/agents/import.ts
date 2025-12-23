@@ -120,7 +120,33 @@ If direct INSERT fails, escalate:
 2. **Type relaxation** - Change column to TEXT, insert, fix later
 3. **Processing script** - Write Python/JS to /tmp/hands-ingest/ to transform data
 
-### Writing Processing Scripts
+### Using Polars for Complex Transforms
+
+The **polars** tool provides a powerful DataFrame API for complex data transformations:
+
+\`\`\`typescript
+// Load CSV and explore
+const df = pl.readCSV("/path/to/data.csv");
+return { rows: df.height, columns: df.columns, preview: df.head(5).toRecords() };
+
+// Clean and transform
+const cleaned = df
+  .filter(pl.col("amount").isNotNull())
+  .withColumn(pl.col("date").str.toDatetime().alias("parsed_date"))
+  .dropNulls();
+
+// Write to database
+await write_db(cleaned, "orders", { ifExists: "replace" });
+return \`Loaded \${cleaned.height} rows\`;
+\`\`\`
+
+Use Polars when:
+- Data needs complex transformations (joins, pivots, aggregations)
+- CSV has encoding or parsing issues
+- You need to clean/validate data before loading
+- Working with large files that need streaming
+
+### Writing Processing Scripts (alternative)
 
 If you need to write a script to process data:
 
@@ -244,5 +270,6 @@ export const importAgent: AgentConfig = {
     write: true,
     glob: true,
     navigate: true,
+    polars: true,
   },
 };

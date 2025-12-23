@@ -9,6 +9,7 @@
  */
 
 import type { AgentConfig } from "@opencode-ai/sdk";
+import { HANDS_CHARTS_QUICK_REF } from "../docs/charts-guide.js";
 import { HANDS_ARCHITECTURE } from "../docs/hands-guide.js";
 import {
   ALL_ELEMENTS_DOCS,
@@ -73,6 +74,8 @@ ${LIVEACTION_DOCS}
 ${FORM_CONTROLS_DOCS}
 
 ${STDLIB_QUICK_REF}
+
+${HANDS_CHARTS_QUICK_REF}
 
 ### What You Can Do Directly (No Delegation Needed)
 
@@ -330,6 +333,7 @@ export const handsAgent: AgentConfig = {
     sources: true,
     secrets: true,
     navigate: true,
+    polars: true,
 
     // Page editing (MDX files in pages/)
     read: true,

@@ -14,7 +14,8 @@
  * - `Progress` - Progress bar for completion status
  * - `Alert` - Callout message box
  * - `Loader` - Animated loading indicator
- * - Charts: `LineChart`, `BarChart`, `AreaChart`, `PieChart`
+ * - Charts: `LineChart`, `BarChart`, `AreaChart`, `PieChart`, `Chart` (generic Vega-Lite),
+ *   `ScatterChart`, `HistogramChart`, `HeatmapChart`, `BoxPlotChart`, `MapChart`
  *
  * ### Action Components
  * Interactive components that trigger discrete actions via LiveAction.
@@ -58,6 +59,12 @@ import {
   ProgressPlugin,
   TabsPlugin,
   TabPlugin,
+  ChartPlugin,
+  ScatterChartPlugin,
+  HistogramChartPlugin,
+  HeatmapChartPlugin,
+  BoxPlotChartPlugin,
+  MapChartPlugin,
 } from "./view";
 
 /**
@@ -68,6 +75,12 @@ export const ChartKit = [
   BarChartPlugin,
   AreaChartPlugin,
   PieChartPlugin,
+  ChartPlugin,
+  ScatterChartPlugin,
+  HistogramChartPlugin,
+  HeatmapChartPlugin,
+  BoxPlotChartPlugin,
+  MapChartPlugin,
 ] as const;
 
 /**

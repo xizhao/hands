@@ -108,30 +108,35 @@ export function createVegaConfig(): Config {
       category: colors,
     },
 
-    // Mark defaults
+    // Mark defaults - use first chart color for single-series
     mark: {
       tooltip: true,
+      color: colors[0] || "hsl(220 70% 50%)",
     },
 
     // Line mark defaults
     line: {
       strokeWidth: 2,
+      stroke: colors[0] || "hsl(220 70% 50%)",
     },
 
     // Point mark defaults
     point: {
       size: 60,
       filled: true,
+      fill: colors[0] || "hsl(220 70% 50%)",
     },
 
     // Bar mark defaults
     bar: {
       cornerRadiusEnd: 4,
+      fill: colors[0] || "hsl(220 70% 50%)",
     },
 
     // Area mark defaults
     area: {
       opacity: 0.4,
+      fill: colors[0] || "hsl(220 70% 50%)",
     },
 
     // Arc mark defaults (for pie/donut)

@@ -202,8 +202,8 @@ export function VegaChart({
   }
 
   return (
-    <div ref={containerRef} className={`w-full ${className ?? ""}`}>
-      {containerWidth > 0 && (
+    <div ref={containerRef} className={`w-full ${className ?? ""}`} style={{ minHeight: height }}>
+      {containerWidth > 0 ? (
         <VegaEmbed
           spec={finalSpec as VisualizationSpec}
           options={{
@@ -211,6 +211,8 @@ export function VegaChart({
             actions,
           }}
         />
+      ) : (
+        <ChartSkeleton height={height} className={className} />
       )}
     </div>
   );

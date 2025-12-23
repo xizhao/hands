@@ -59,22 +59,22 @@ function ChartElement(props: PlateElementProps) {
   // vegaSpec is required for this element type
   if (!element.vegaSpec) {
     return (
-      <PlateElement {...props} as="div" className="my-2">
+      <PlateElement {...props} as="div" className="my-2 relative">
         <div className="w-full h-[200px] flex items-center justify-center bg-muted/30 rounded-lg">
           <span className="text-muted-foreground text-sm">No Vega-Lite spec provided</span>
         </div>
-        <span className="hidden">{props.children}</span>
+        <span className="absolute top-0 left-0 opacity-0 pointer-events-none">{props.children}</span>
       </PlateElement>
     );
   }
 
   return (
-    <PlateElement {...props} as="div" className="my-2">
+    <PlateElement {...props} as="div" className="my-2 relative">
       <Chart
         vegaSpec={element.vegaSpec as VegaLiteSpec}
         height={(element.height as number | undefined) ?? 300}
       />
-      <span className="hidden">{props.children}</span>
+      <span className="absolute top-0 left-0 opacity-0 pointer-events-none">{props.children}</span>
     </PlateElement>
   );
 }

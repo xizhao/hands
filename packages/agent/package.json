@@ -17,7 +17,8 @@
     "@hands/workbook-server": "workspace:*",
     "@opencode-ai/sdk": "^1.0.152",
     "@opencode-ai/plugin": "^1.0.152",
-    "@trpc/client": "^11.8.0"
+    "@trpc/client": "^11.8.0",
+    "nodejs-polars": "^0.17.0"
   },
   "devDependencies": {
     "@oxc-parser/binding-wasm32-wasi": "0.102.0",

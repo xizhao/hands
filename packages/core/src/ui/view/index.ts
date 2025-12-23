@@ -59,16 +59,6 @@ export {
 
 // Charts
 export {
-  // Chart primitives (shadcn-style)
-  type ChartConfig,
-  ChartContainer,
-  ChartContext,
-  ChartLegend,
-  ChartLegendContent,
-  ChartStyle,
-  ChartTooltip,
-  ChartTooltipContent,
-  useChart,
   // Context and hooks
   type LiveValueContextData,
   LiveValueProvider,
@@ -103,6 +93,43 @@ export {
   PieChart,
   PieChartPlugin,
   type PieChartProps,
+  // Generic Chart (Vega-Lite spec)
+  CHART_KEY,
+  Chart,
+  ChartPlugin,
+  type ChartProps,
+  type CreateChartOptions,
+  createChartElement,
+  // ScatterChart
+  SCATTER_CHART_KEY,
+  ScatterChart,
+  ScatterChartPlugin,
+  type ScatterChartProps,
+  createScatterChartElement,
+  // HistogramChart
+  HISTOGRAM_CHART_KEY,
+  HistogramChart,
+  HistogramChartPlugin,
+  type HistogramChartProps,
+  createHistogramChartElement,
+  // HeatmapChart
+  HEATMAP_CHART_KEY,
+  HeatmapChart,
+  HeatmapChartPlugin,
+  type HeatmapChartProps,
+  createHeatmapChartElement,
+  // BoxPlotChart
+  BOXPLOT_CHART_KEY,
+  BoxPlotChart,
+  BoxPlotChartPlugin,
+  type BoxPlotChartProps,
+  createBoxPlotChartElement,
+  // MapChart
+  MAP_CHART_KEY,
+  MapChart,
+  MapChartPlugin,
+  type MapChartProps,
+  createMapChartElement,
 } from "./charts";
 
 // Block embedding

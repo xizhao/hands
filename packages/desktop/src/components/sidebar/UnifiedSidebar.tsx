@@ -96,9 +96,11 @@ export function UnifiedSidebar({
   const messagesContainerRef = useRef<HTMLDivElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
 
-  // Track container width to skip popover when wide enough
+  // Track container width for responsive layout
   const POPOVER_WIDTH = 400;
+  const TWO_COLUMN_WIDTH = 600; // Width threshold for 2-column layout
   const needsPopover = containerWidth < POPOVER_WIDTH;
+  const isTwoColumn = containerWidth >= TWO_COLUMN_WIDTH;
 
   useEffect(() => {
     const container = containerRef.current;
@@ -396,59 +398,61 @@ ${STDLIB_QUICK_REF}
     ? "Reply..."
     : "Search or ask anything...";
 
-  return (
-    <div ref={containerRef} className="flex flex-col h-full">
-      {/* Input bar - always visible */}
-      <div className={cn("shrink-0 py-2", compact ? "px-2" : "px-3")}>
-        {displayError && (
-          <div className="flex items-center gap-1.5 px-2 py-1.5 mb-2 rounded-md bg-red-500/10 text-xs text-red-500">
-            <span className="truncate">
-              {sendError instanceof Error
-                ? sendError.message
-                : chatState.sessionError?.message || "Failed to send"}
-            </span>
-            <button
-              onClick={() => {
-                sendMessage.reset();
-                createSession.reset();
-                chatState.clearSessionError();
-              }}
-              className="p-0.5 rounded hover:bg-red-500/20 shrink-0"
-            >
-              <X className="h-3 w-3" />
-            </button>
-          </div>
-        )}
+  // ============================================================================
+  // Render Helpers
+  // ============================================================================
 
-        {pendingAttachment && (
-          <div className="flex items-center gap-1 mb-2">
-            <div className="flex items-center gap-1.5 px-2 py-1 rounded-md bg-accent/50 text-xs">
-              {pendingAttachment.type === ATTACHMENT_TYPE.SOURCE ? (
-                <Database className="h-3 w-3 text-muted-foreground" />
-              ) : (
-                <Paperclip className="h-3 w-3 text-muted-foreground" />
-              )}
-              <span className="max-w-[150px] truncate">
-                {pendingAttachment.name}
-              </span>
-              <button
-                onClick={() => chatState.setPendingAttachment(null)}
-                className="p-0.5 rounded hover:bg-accent"
-              >
-                <X className="h-3 w-3 text-muted-foreground" />
-              </button>
-            </div>
-          </div>
-        )}
+  // Error display
+  const errorDisplay = displayError && (
+    <div className="flex items-center gap-1.5 px-2 py-1.5 mb-2 rounded-md bg-red-500/10 text-xs text-red-500">
+      <span className="truncate">
+        {sendError instanceof Error
+          ? sendError.message
+          : chatState.sessionError?.message || "Failed to send"}
+      </span>
+      <button
+        onClick={() => {
+          sendMessage.reset();
+          createSession.reset();
+          chatState.clearSessionError();
+        }}
+        className="p-0.5 rounded hover:bg-red-500/20 shrink-0"
+      >
+        <X className="h-3 w-3" />
+      </button>
+    </div>
+  );
 
-        {/* Input bar - inline when wide enough, popover when narrow */}
-        {needsPopover ? (
-          <Popover open={isInputExpanded} onOpenChange={setIsInputExpanded}>
-            <PopoverAnchor asChild>
-              <div
-                className="flex items-center gap-1.5 bg-background rounded-xl px-2 py-1.5 border border-border/40 cursor-text transition-all hover:border-border/60 hover:shadow-sm"
-                onClick={() => setIsInputExpanded(true)}
-              >
+  // Attachment preview
+  const attachmentPreview = pendingAttachment && (
+    <div className="flex items-center gap-1 mb-2">
+      <div className="flex items-center gap-1.5 px-2 py-1 rounded-md bg-accent/50 text-xs">
+        {pendingAttachment.type === ATTACHMENT_TYPE.SOURCE ? (
+          <Database className="h-3 w-3 text-muted-foreground" />
+        ) : (
+          <Paperclip className="h-3 w-3 text-muted-foreground" />
+        )}
+        <span className="max-w-[150px] truncate">
+          {pendingAttachment.name}
+        </span>
+        <button
+          onClick={() => chatState.setPendingAttachment(null)}
+          className="p-0.5 rounded hover:bg-accent"
+        >
+          <X className="h-3 w-3 text-muted-foreground" />
+        </button>
+      </div>
+    </div>
+  );
+
+  // Input bar - inline when wide enough, popover when narrow
+  const inputElement = needsPopover ? (
+    <Popover open={isInputExpanded} onOpenChange={setIsInputExpanded}>
+      <PopoverAnchor asChild>
+        <div
+          className="flex items-center gap-1.5 bg-background rounded-xl px-2 py-1.5 border border-border/40 cursor-text transition-all hover:border-border/60 hover:shadow-sm"
+          onClick={() => setIsInputExpanded(true)}
+        >
                 <ChatSettings>
                   <Button
                     variant="ghost"
@@ -669,147 +673,204 @@ ${STDLIB_QUICK_REF}
               </Button>
             ) : null}
           </div>
-        )}
+        )
+  ;
+
+  // Session chips
+  const sessionChips = hasChips && (
+    <div
+      className={cn(
+        "shrink-0 flex items-center gap-1 py-1.5 border-b border-border/50",
+        compact ? "px-2" : "px-3"
+      )}
+    >
+      <div className="flex flex-wrap gap-1 min-w-0 flex-1">
+        {allChips.map((chip) => (
+          <div key={chip.id} className="flex items-center">
+            <button
+              onClick={() => handleSwitchThread(chip.id)}
+              className={cn(
+                "flex items-center gap-1 px-1.5 py-0.5 text-[10px] rounded transition-colors",
+                chip.isCurrent
+                  ? "bg-muted text-foreground"
+                  : "text-muted-foreground hover:bg-muted/50"
+              )}
+            >
+              <StatusDot status={chip.status} />
+              <span
+                className={cn(
+                  "truncate",
+                  compact ? "max-w-[50px]" : "max-w-[80px]"
+                )}
+              >
+                {chip.title}
+              </span>
+            </button>
+            <button
+              onClick={(e) => handleDeleteThread(chip.id, e)}
+              className="p-0.5 rounded-full hover:bg-muted opacity-40 hover:opacity-100"
+            >
+              <X className="h-2 w-2" />
+            </button>
+          </div>
+        ))}
+      </div>
+
+      {backgroundCount > 0 && (
+        <div className="relative shrink-0">
+          <button
+            onClick={() =>
+              setShowBackgroundSessions(!showBackgroundSessions)
+            }
+            className={cn(
+              "flex items-center gap-1 px-1.5 py-0.5 text-[10px] rounded",
+              showBackgroundSessions
+                ? "bg-muted/80"
+                : "text-muted-foreground/50 hover:bg-muted/30"
+            )}
+          >
+            <span className="tabular-nums">{backgroundCount}</span>
+            {backgroundBusyCount > 0 ? (
+              <span className="relative flex h-2 w-2">
+                <span className="animate-ping absolute h-full w-full rounded-full bg-green-400 opacity-75" />
+                <span className="relative rounded-full h-2 w-2 bg-green-500" />
+              </span>
+            ) : (
+              <Layers className="h-3 w-3 opacity-60" />
+            )}
+          </button>
+          <AnimatePresence>
+            {showBackgroundSessions && (
+              <motion.div
+                initial={{ opacity: 0, y: -5 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -5 }}
+                className="absolute top-full right-0 mt-1 min-w-[160px] rounded-lg border bg-background/95 backdrop-blur-xl shadow-lg z-50"
+              >
+                <div className="p-1 max-h-[200px] overflow-y-auto">
+                  <div className="px-2 py-1 text-[9px] uppercase text-muted-foreground/50 font-medium">
+                    Background
+                  </div>
+                  {backgroundSessions.map((session) => (
+                    <button
+                      key={session.id}
+                      onClick={() => {
+                        handleSwitchThread(session.id);
+                        setShowBackgroundSessions(false);
+                      }}
+                      className="flex items-center gap-2 w-full px-2 py-1 text-[11px] rounded hover:bg-muted/50 text-left"
+                    >
+                      <StatusDot status={getSessionStatus(session.id)} />
+                      <span className="truncate">
+                        {session.title ||
+                          `Subtask ${session.id.slice(0, 6)}`}
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </div>
+      )}
+    </div>
+  );
+
+  // Chat messages content
+  const chatContent = (
+    <div
+      className={cn(
+        "flex flex-col-reverse gap-1",
+        compact ? "p-2" : "p-3"
+      )}
+    >
+      {messages.map((message, idx) => (
+        <ChatMessage
+          key={message.info.id || idx}
+          message={message}
+          compact
+        />
+      ))}
+      {waitingForResponse && (
+        <motion.div
+          initial={{ opacity: 0, y: 5 }}
+          animate={{ opacity: 1, y: 0 }}
+        >
+          <ShimmerText
+            text={activeForm || "Thinking..."}
+            className="text-xs text-muted-foreground"
+          />
+        </motion.div>
+      )}
+    </div>
+  );
+
+  // Browse content (NotebookSidebar)
+  const browseContent = (
+    <div className={cn(compact ? "p-2" : "p-3")}>
+      <NotebookSidebar
+        filterQuery={filterQuery}
+        onSelectItem={onSelectItem}
+      />
+    </div>
+  );
+
+  // ============================================================================
+  // Render
+  // ============================================================================
+
+  // Two-column layout: Chat on left, Browse on right
+  if (isTwoColumn) {
+    return (
+      <div ref={containerRef} className="flex flex-col h-full w-full">
+        <div className="flex flex-1 min-h-0">
+          {/* Left column: Chat */}
+          <div className="flex flex-col w-1/2 border-r border-border/50">
+            {/* Input bar */}
+            <div className={cn("shrink-0 py-2", compact ? "px-2" : "px-3")}>
+              {errorDisplay}
+              {attachmentPreview}
+              {inputElement}
+            </div>
+
+            {/* Session chips */}
+            {sessionChips}
+
+            {/* Chat messages or empty state */}
+            <div ref={messagesContainerRef} className="flex-1 overflow-y-auto">
+              {showChat ? chatContent : (
+                <div className="flex items-center justify-center h-full text-muted-foreground/50 text-sm">
+                  Start a conversation
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Right column: Browse */}
+          <div className="flex flex-col w-1/2 overflow-y-auto">
+            {browseContent}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // Single-column layout: Chat overlays browse when active
+  return (
+    <div ref={containerRef} className="flex flex-col h-full w-full">
+      {/* Input bar */}
+      <div className={cn("shrink-0 py-2", compact ? "px-2" : "px-3")}>
+        {errorDisplay}
+        {attachmentPreview}
+        {inputElement}
       </div>
 
       {/* Session chips */}
-      {hasChips && (
-        <div
-          className={cn(
-            "shrink-0 flex items-center gap-1 py-1.5 border-b border-border/50",
-            compact ? "px-2" : "px-3"
-          )}
-        >
-          <div className="flex flex-wrap gap-1 min-w-0 flex-1">
-            {allChips.map((chip) => (
-              <div key={chip.id} className="flex items-center">
-                <button
-                  onClick={() => handleSwitchThread(chip.id)}
-                  className={cn(
-                    "flex items-center gap-1 px-1.5 py-0.5 text-[10px] rounded transition-colors",
-                    chip.isCurrent
-                      ? "bg-muted text-foreground"
-                      : "text-muted-foreground hover:bg-muted/50"
-                  )}
-                >
-                  <StatusDot status={chip.status} />
-                  <span
-                    className={cn(
-                      "truncate",
-                      compact ? "max-w-[50px]" : "max-w-[80px]"
-                    )}
-                  >
-                    {chip.title}
-                  </span>
-                </button>
-                <button
-                  onClick={(e) => handleDeleteThread(chip.id, e)}
-                  className="p-0.5 rounded-full hover:bg-muted opacity-40 hover:opacity-100"
-                >
-                  <X className="h-2 w-2" />
-                </button>
-              </div>
-            ))}
-          </div>
-
-          {backgroundCount > 0 && (
-            <div className="relative shrink-0">
-              <button
-                onClick={() =>
-                  setShowBackgroundSessions(!showBackgroundSessions)
-                }
-                className={cn(
-                  "flex items-center gap-1 px-1.5 py-0.5 text-[10px] rounded",
-                  showBackgroundSessions
-                    ? "bg-muted/80"
-                    : "text-muted-foreground/50 hover:bg-muted/30"
-                )}
-              >
-                <span className="tabular-nums">{backgroundCount}</span>
-                {backgroundBusyCount > 0 ? (
-                  <span className="relative flex h-2 w-2">
-                    <span className="animate-ping absolute h-full w-full rounded-full bg-green-400 opacity-75" />
-                    <span className="relative rounded-full h-2 w-2 bg-green-500" />
-                  </span>
-                ) : (
-                  <Layers className="h-3 w-3 opacity-60" />
-                )}
-              </button>
-              <AnimatePresence>
-                {showBackgroundSessions && (
-                  <motion.div
-                    initial={{ opacity: 0, y: -5 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    exit={{ opacity: 0, y: -5 }}
-                    className="absolute top-full right-0 mt-1 min-w-[160px] rounded-lg border bg-background/95 backdrop-blur-xl shadow-lg z-50"
-                  >
-                    <div className="p-1 max-h-[200px] overflow-y-auto">
-                      <div className="px-2 py-1 text-[9px] uppercase text-muted-foreground/50 font-medium">
-                        Background
-                      </div>
-                      {backgroundSessions.map((session) => (
-                        <button
-                          key={session.id}
-                          onClick={() => {
-                            handleSwitchThread(session.id);
-                            setShowBackgroundSessions(false);
-                          }}
-                          className="flex items-center gap-2 w-full px-2 py-1 text-[11px] rounded hover:bg-muted/50 text-left"
-                        >
-                          <StatusDot status={getSessionStatus(session.id)} />
-                          <span className="truncate">
-                            {session.title ||
-                              `Subtask ${session.id.slice(0, 6)}`}
-                          </span>
-                        </button>
-                      ))}
-                    </div>
-                  </motion.div>
-                )}
-              </AnimatePresence>
-            </div>
-          )}
-        </div>
-      )}
+      {sessionChips}
 
       {/* Content: Chat messages OR Browse */}
       <div ref={messagesContainerRef} className="flex-1 overflow-y-auto">
-        {showChat ? (
-          // Chat messages - reversed (newest on top), thinking state at bottom
-          <div
-            className={cn(
-              "flex flex-col-reverse gap-1",
-              compact ? "p-2" : "p-3"
-            )}
-          >
-            {messages.map((message, idx) => (
-              <ChatMessage
-                key={message.info.id || idx}
-                message={message}
-                compact
-              />
-            ))}
-            {waitingForResponse && (
-              <motion.div
-                initial={{ opacity: 0, y: 5 }}
-                animate={{ opacity: 1, y: 0 }}
-              >
-                <ShimmerText
-                  text={activeForm || "Thinking..."}
-                  className="text-xs text-muted-foreground"
-                />
-              </motion.div>
-            )}
-          </div>
-        ) : (
-          // Browse view - NotebookSidebar with filter query
-          <div className={cn(compact ? "p-2" : "p-3")}>
-            <NotebookSidebar
-              filterQuery={filterQuery}
-              onSelectItem={onSelectItem}
-            />
-          </div>
-        )}
+        {showChat ? chatContent : browseContent}
       </div>
     </div>
   );

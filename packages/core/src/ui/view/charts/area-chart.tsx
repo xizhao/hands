@@ -102,7 +102,7 @@ function AreaChartElement(props: PlateElementProps) {
   const element = useElement<TAreaChartElement>();
 
   return (
-    <PlateElement {...props} as="div" className="my-2">
+    <PlateElement {...props} as="div" className="my-2 relative">
       <AreaChart
         xKey={element.xKey as string | undefined}
         yKey={element.yKey as string | string[] | undefined}
@@ -116,7 +116,7 @@ function AreaChartElement(props: PlateElementProps) {
         colors={element.colors as string[] | undefined}
         vegaSpec={element.vegaSpec as VegaLiteSpec | undefined}
       />
-      <span className="hidden">{props.children}</span>
+      <span className="absolute top-0 left-0 opacity-0 pointer-events-none">{props.children}</span>
     </PlateElement>
   );
 }

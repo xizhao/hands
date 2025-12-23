@@ -24,19 +24,6 @@ export {
   type CreateBarChartOptions,
   createBarChartElement,
 } from "./bar-chart";
-// Legacy chart primitives (for backward compatibility)
-export {
-  type ChartConfig,
-  ChartContainer,
-  ChartContext,
-  ChartLegend,
-  ChartLegendContent,
-  ChartStyle,
-  ChartTooltip,
-  ChartTooltipContent,
-  useChart,
-} from "./chart";
-
 // Context and hooks
 export {
   type LiveValueContextData,
@@ -73,6 +60,52 @@ export {
   PieChartPlugin,
   type PieChartProps,
 } from "./pie-chart";
+
+// ScatterChart
+export {
+  SCATTER_CHART_KEY,
+  ScatterChart,
+  ScatterChartPlugin,
+  type ScatterChartProps,
+  createScatterChartElement,
+} from "./scatter-chart";
+
+// HistogramChart
+export {
+  HISTOGRAM_CHART_KEY,
+  HistogramChart,
+  HistogramChartPlugin,
+  type HistogramChartProps,
+  createHistogramChartElement,
+} from "./histogram-chart";
+
+// HeatmapChart
+export {
+  HEATMAP_CHART_KEY,
+  HeatmapChart,
+  HeatmapChartPlugin,
+  type HeatmapChartProps,
+  createHeatmapChartElement,
+} from "./heatmap-chart";
+
+// BoxPlotChart
+export {
+  BOXPLOT_CHART_KEY,
+  BoxPlotChart,
+  BoxPlotChartPlugin,
+  type BoxPlotChartProps,
+  createBoxPlotChartElement,
+} from "./boxplot-chart";
+
+// MapChart
+export {
+  MAP_CHART_KEY,
+  MapChart,
+  MapChartPlugin,
+  type MapChartProps,
+  createMapChartElement,
+} from "./map-chart";
+
 // Vega-Lite core renderer
 export {
   ChartEmpty,

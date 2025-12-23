@@ -854,7 +854,7 @@ const TextContent = memo(
     return (
       <div
         className={cn(
-          "prose max-w-none prose-p:my-0.5 prose-pre:my-1 prose-p:leading-relaxed",
+          "prose max-w-none prose-p:my-0.5 prose-pre:my-1 prose-p:leading-relaxed relative group/preview",
           fontSize,
           darkText ? "prose-neutral" : "dark:prose-invert",
         )}
@@ -872,6 +872,12 @@ const TextContent = memo(
             animate={{ opacity: [1, 0] }}
             transition={{ duration: 0.5, repeat: Infinity, repeatType: "reverse" }}
           />
+        )}
+        {/* Copy markdown overlay */}
+        {!isStreaming && text.length > 0 && (
+          <div className="absolute top-0 right-0 opacity-0 group-hover/preview:opacity-100 transition-opacity">
+            <CopyButton text={text} className="opacity-100 h-5 w-5 text-muted-foreground hover:text-foreground hover:bg-muted/50" />
+          </div>
         )}
       </div>
     );

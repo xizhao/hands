@@ -106,12 +106,11 @@ export function lineChartToVegaSpec(props: LineChartSpecProps): VegaLiteSpec {
   const isMultiSeries = yKeys.length > 1;
   const interpolation = mapCurve(curve);
 
-  const baseSpec: VegaLiteSpec = {
-    $schema: "https://vega.github.io/schema/vega-lite/v5.json",
+  // Line chart with interactive crosshair tooltip
+  const lineLayer: VegaLiteSpec = {
     mark: {
       type: "line",
       interpolate: interpolation,
-      point: showDots ? { filled: true, size: 40 } : false,
     },
     encoding: {
       x: {
@@ -119,7 +118,9 @@ export function lineChartToVegaSpec(props: LineChartSpecProps): VegaLiteSpec {
         type: "ordinal",
         axis: {
           grid: false,
-          labelAngle: 0,
+          labelAngle: -45,
+          labelLimit: 100,
+          labelOverlap: "parity",
         },
       },
       y: {
@@ -127,19 +128,79 @@ export function lineChartToVegaSpec(props: LineChartSpecProps): VegaLiteSpec {
         type: "quantitative",
         axis: {
           grid: showGrid,
+          labelLimit: 80,
         },
       },
     },
   };
 
-  // Handle multi-series with fold transform
+  // Point layer for dots (if enabled)
+  const pointLayer: VegaLiteSpec | null = showDots
+    ? {
+        mark: {
+          type: "point",
+          filled: true,
+          size: 40,
+        },
+        encoding: {
+          x: { field: xKey, type: "ordinal" },
+          y: { field: isMultiSeries ? "value" : yKeys[0], type: "quantitative" },
+          opacity: {
+            condition: { param: "hover", empty: false, value: 1 },
+            value: 0.3,
+          },
+        },
+      }
+    : null;
+
+  // Vertical rule layer for crosshair
+  const ruleLayer: VegaLiteSpec = {
+    mark: { type: "rule", strokeDash: [4, 4], strokeWidth: 1 },
+    encoding: {
+      x: { field: xKey, type: "ordinal" },
+      opacity: {
+        condition: { param: "hover", empty: false, value: 0.5 },
+        value: 0,
+      },
+    },
+  };
+
+  // Build layers
+  const layers = [lineLayer, ruleLayer];
+  if (pointLayer) layers.push(pointLayer);
+
+  const baseSpec: VegaLiteSpec = {
+    $schema: "https://vega.github.io/schema/vega-lite/v5.json",
+    params: [
+      {
+        name: "hover",
+        select: {
+          type: "point",
+          fields: [xKey],
+          nearest: true,
+          on: "pointerover",
+          clear: "pointerout",
+        },
+      },
+    ],
+    layer: layers,
+  };
+
+  // Handle multi-series with fold transform and color encoding
   if (isMultiSeries) {
     baseSpec.transform = [createFoldTransform(yKeys)];
-    (baseSpec.encoding as Record<string, unknown>).color = {
+    // Add color encoding to line and point layers
+    (lineLayer.encoding as Record<string, unknown>).color = {
       field: "series",
       type: "nominal",
       legend: showLegend ? {} : null,
     };
+    if (pointLayer) {
+      (pointLayer.encoding as Record<string, unknown>).color = {
+        field: "series",
+        type: "nominal",
+      };
+    }
   }
 
   return baseSpec;
@@ -176,7 +237,9 @@ export function barChartToVegaSpec(props: BarChartSpecProps): VegaLiteSpec {
     type: "nominal" as const,
     axis: {
       grid: false,
-      labelAngle: 0,
+      labelAngle: isHorizontal ? 0 : -45,
+      labelLimit: 100,
+      labelOverlap: "parity",
     },
   };
 
@@ -185,6 +248,7 @@ export function barChartToVegaSpec(props: BarChartSpecProps): VegaLiteSpec {
     type: "quantitative" as const,
     axis: {
       grid: showGrid,
+      labelLimit: 80,
     },
     ...(stacked && isMultiSeries ? { stack: "zero" as const } : {}),
   };
@@ -265,7 +329,9 @@ export function areaChartToVegaSpec(props: AreaChartSpecProps): VegaLiteSpec {
         type: "ordinal",
         axis: {
           grid: false,
-          labelAngle: 0,
+          labelAngle: -45,
+          labelLimit: 100,
+          labelOverlap: "parity",
         },
       },
       y: {
@@ -273,6 +339,7 @@ export function areaChartToVegaSpec(props: AreaChartSpecProps): VegaLiteSpec {
         type: "quantitative",
         axis: {
           grid: showGrid,
+          labelLimit: 80,
         },
         ...(stacked && isMultiSeries ? { stack: "zero" as const } : {}),
       },
@@ -314,7 +381,7 @@ export function pieChartToVegaSpec(props: PieChartSpecProps): VegaLiteSpec {
     mark: {
       type: "arc",
       innerRadius: innerRadius,
-      stroke: "white",
+      stroke: "var(--background, #09090b)",
       strokeWidth: 2,
     },
     encoding: {

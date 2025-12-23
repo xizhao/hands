@@ -36,6 +36,11 @@ export const LINE_CHART_KEY = "line_chart";
 export const BAR_CHART_KEY = "bar_chart";
 export const AREA_CHART_KEY = "area_chart";
 export const PIE_CHART_KEY = "pie_chart";
+export const SCATTER_CHART_KEY = "scatter_chart";
+export const HISTOGRAM_CHART_KEY = "histogram_chart";
+export const HEATMAP_CHART_KEY = "heatmap_chart";
+export const BOXPLOT_CHART_KEY = "boxplot_chart";
+export const MAP_CHART_KEY = "map_chart";
 export const CHART_KEY = "chart"; // Generic Vega-Lite chart
 export const DATA_GRID_KEY = "data_grid";
 export const KANBAN_KEY = "kanban";
@@ -78,6 +83,12 @@ export const STDLIB_COMPONENT_NAMES = [
   "BarChart",
   "AreaChart",
   "PieChart",
+  "ScatterChart",
+  "HistogramChart",
+  "HeatmapChart",
+  "BoxPlotChart",
+  "MapChart",
+  "Chart",
   "DataGrid",
   "Kanban",
   "Columns",
@@ -120,19 +131,22 @@ export interface ColumnConfig {
 // ============================================================================
 
 /**
- * LiveValue element - displays SQL query results in various formats.
+ * LiveValue element - displays data in various formats.
+ * Data can come from a SQL query or be passed directly as static data.
  *
  * @example
  * ```tsx
- * <LiveValue sql="SELECT count(*) FROM users" />
- * <LiveValue sql="SELECT name FROM users" display="list" />
- * <LiveValue sql="SELECT * FROM tasks" display="table" />
+ * <LiveValue query="SELECT count(*) FROM users" />
+ * <LiveValue query="SELECT name FROM users" display="list" />
+ * <LiveValue data={[{name: "Alice"}, {name: "Bob"}]} display="table" />
  * ```
  */
 export interface TLiveValueElement extends TElement {
   type: typeof LIVE_VALUE_KEY;
-  /** SQL query string */
-  query: string;
+  /** SQL query string - optional if data is provided */
+  query?: string;
+  /** Static data to display directly (skips query execution) */
+  data?: Record<string, unknown>[];
   /** Display mode - auto-selects based on data shape if not specified */
   display?: DisplayMode;
   /** Named parameters for the query */
@@ -586,6 +600,128 @@ export interface TChartElement extends TElement {
   vegaSpec: VegaLiteSpec;
   /** Chart height in pixels */
   height?: number;
+  /** Children are unused (void element) */
+  children: (TElement | TText)[];
+}
+
+/**
+ * ScatterChart element - displays data as a scatter plot.
+ * Great for showing correlation between two variables.
+ */
+export interface TScatterChartElement extends TElement {
+  type: typeof SCATTER_CHART_KEY;
+  /** Data key for X axis */
+  xKey?: string;
+  /** Data key for Y axis */
+  yKey?: string;
+  /** Data key for color encoding (categorical grouping) */
+  colorKey?: string;
+  /** Data key for size encoding */
+  sizeKey?: string;
+  /** Chart height in pixels */
+  height?: number;
+  /** Show tooltip on hover */
+  showTooltip?: boolean;
+  /** Custom colors for groups */
+  colors?: string[];
+  /** Point opacity (0-1) */
+  opacity?: number;
+  /** Children are unused (void element) */
+  children: (TElement | TText)[];
+}
+
+/**
+ * HistogramChart element - displays distribution of a single variable.
+ * Automatically bins continuous data.
+ */
+export interface THistogramChartElement extends TElement {
+  type: typeof HISTOGRAM_CHART_KEY;
+  /** Data key for the values to bin */
+  valueKey?: string;
+  /** Number of bins (default: auto) */
+  binCount?: number;
+  /** Chart height in pixels */
+  height?: number;
+  /** Show tooltip on hover */
+  showTooltip?: boolean;
+  /** Bar color */
+  color?: string;
+  /** Children are unused (void element) */
+  children: (TElement | TText)[];
+}
+
+/**
+ * HeatmapChart element - displays data as a colored matrix.
+ * Great for showing patterns across two categorical dimensions.
+ */
+export interface THeatmapChartElement extends TElement {
+  type: typeof HEATMAP_CHART_KEY;
+  /** Data key for X axis (rows) */
+  xKey?: string;
+  /** Data key for Y axis (columns) */
+  yKey?: string;
+  /** Data key for color intensity */
+  valueKey?: string;
+  /** Chart height in pixels */
+  height?: number;
+  /** Color scheme (e.g., "blues", "reds", "viridis") */
+  colorScheme?: string;
+  /** Show tooltip on hover */
+  showTooltip?: boolean;
+  /** Children are unused (void element) */
+  children: (TElement | TText)[];
+}
+
+/**
+ * BoxPlotChart element - displays distribution statistics.
+ * Shows median, quartiles, and outliers.
+ */
+export interface TBoxPlotChartElement extends TElement {
+  type: typeof BOXPLOT_CHART_KEY;
+  /** Data key for category (X axis) */
+  categoryKey?: string;
+  /** Data key for values (Y axis) */
+  valueKey?: string;
+  /** Chart height in pixels */
+  height?: number;
+  /** Show tooltip on hover */
+  showTooltip?: boolean;
+  /** Box color */
+  color?: string;
+  /** Orientation */
+  orientation?: "vertical" | "horizontal";
+  /** Children are unused (void element) */
+  children: (TElement | TText)[];
+}
+
+/**
+ * MapChart element - displays geographic data on a map.
+ * Supports choropleth (filled regions) and point maps.
+ */
+export interface TMapChartElement extends TElement {
+  type: typeof MAP_CHART_KEY;
+  /** Map type */
+  mapType?: "choropleth" | "point";
+  /** Geographic feature key (e.g., "id" for GeoJSON features) */
+  geoKey?: string;
+  /** Data key for region/point identifier */
+  idKey?: string;
+  /** Data key for color value */
+  valueKey?: string;
+  /** For point maps: latitude key */
+  latKey?: string;
+  /** For point maps: longitude key */
+  lonKey?: string;
+  /** Chart height in pixels */
+  height?: number;
+  /** Geographic projection (e.g., "albersUsa", "mercator", "equalEarth") */
+  projection?: string;
+  /** TopoJSON URL or built-in dataset name */
+  topology?: string;
+  /** Color scheme for choropleth */
+  colorScheme?: string;
+  /** Show tooltip on hover */
+  showTooltip?: boolean;
   /** Children are unused (void element) */
   children: (TElement | TText)[];
 }
