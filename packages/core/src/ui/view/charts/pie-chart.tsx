@@ -31,6 +31,7 @@ import {
   ChartTooltipContent,
 } from "./chart";
 import { useLiveValueData } from "./context";
+import { useContainerSize } from "./use-container-size";
 
 // ============================================================================
 // Default Colors
@@ -77,6 +78,7 @@ export interface PieChartProps {
 /**
  * Standalone PieChart component.
  * Uses data from props or LiveValue context.
+ * Responsive: adjusts legend and label visibility based on container size.
  */
 export function PieChart({
   data: propData,
@@ -92,6 +94,7 @@ export function PieChart({
 }: PieChartProps) {
   const ctx = useLiveValueData();
   const data = propData ?? ctx?.data ?? [];
+  const { containerRef, responsive } = useContainerSize();
 
   // Auto-detect keys if not provided
   const resolvedKeys = useMemo(() => {
@@ -138,10 +141,15 @@ export function PieChart({
     }, 0);
   }, [data, resolvedKeys.valueKey]);
 
+  // Responsive: combine user prefs with container size
+  const effectiveShowLegend = showLegend && responsive.showLegend;
+  const effectiveShowLabels = showLabels && !responsive.isSmall;
+
   if (ctx?.isLoading) {
     return (
       <div
-        className={`flex items-center justify-center bg-muted/30 rounded-lg animate-pulse ${className ?? ""}`}
+        ref={containerRef}
+        className={`w-full flex items-center justify-center bg-muted/30 rounded-lg animate-pulse ${className ?? ""}`}
         style={{ height }}
       >
         <span className="text-muted-foreground text-sm">Loading chart...</span>
@@ -152,7 +160,8 @@ export function PieChart({
   if (ctx?.error) {
     return (
       <div
-        className={`flex items-center justify-center bg-destructive/10 rounded-lg ${className ?? ""}`}
+        ref={containerRef}
+        className={`w-full flex items-center justify-center bg-destructive/10 rounded-lg ${className ?? ""}`}
         style={{ height }}
       >
         <span className="text-destructive text-sm">Error loading data</span>
@@ -163,7 +172,8 @@ export function PieChart({
   if (data.length === 0) {
     return (
       <div
-        className={`flex items-center justify-center bg-muted/30 rounded-lg ${className ?? ""}`}
+        ref={containerRef}
+        className={`w-full flex items-center justify-center bg-muted/30 rounded-lg ${className ?? ""}`}
         style={{ height }}
       >
         <span className="text-muted-foreground text-sm">No data</span>
@@ -171,55 +181,64 @@ export function PieChart({
     );
   }
 
-  const outerRadius = Math.min(height / 2 - 40, 120);
+  // Responsive radius - smaller on compact containers
+  const maxRadius = responsive.isCompact ? 60 : responsive.isSmall ? 80 : 120;
+  const outerRadius = Math.min(height / 2 - 40, maxRadius);
+
+  // Responsive text sizes for center label
+  const centerFontSize = responsive.isCompact ? "text-xl" : responsive.isSmall ? "text-2xl" : "text-3xl";
 
   return (
-    <ChartContainer config={chartConfig} className={`mx-auto ${className ?? ""}`} style={{ height }}>
-      <RechartsPieChart accessibilityLayer>
-        <ChartTooltip content={<ChartTooltipContent hideLabel />} />
-        <Pie
-          data={data as Record<string, unknown>[]}
-          dataKey={resolvedKeys.valueKey}
-          nameKey={resolvedKeys.nameKey}
-          cx="50%"
-          cy="50%"
-          innerRadius={innerRadius}
-          outerRadius={outerRadius}
-          paddingAngle={2}
-          label={
-            showLabels
-              ? ({ name, percent }: { name?: string; percent?: number }) =>
-                  `${name ?? ""} (${((percent ?? 0) * 100).toFixed(0)}%)`
-              : undefined
-          }
-          labelLine={showLabels}
-        >
-          {data.map((entry, index) => {
-            const name = String(entry[resolvedKeys.nameKey] ?? `Item ${index}`);
-            return <Cell key={`cell-${index}`} fill={`var(--color-${name})`} />;
-          })}
-          {innerRadius > 0 && (
-            <Label
-              content={({ viewBox }) => {
-                if (viewBox && "cx" in viewBox && "cy" in viewBox) {
-                  return (
-                    <text x={viewBox.cx} y={viewBox.cy} textAnchor="middle" dominantBaseline="middle">
-                      <tspan x={viewBox.cx} y={viewBox.cy} className="fill-foreground text-3xl font-bold">
-                        {total.toLocaleString()}
-                      </tspan>
-                      <tspan x={viewBox.cx} y={(viewBox.cy || 0) + 24} className="fill-muted-foreground">
-                        Total
-                      </tspan>
-                    </text>
-                  );
-                }
-              }}
-            />
-          )}
-        </Pie>
-        {showLegend && <ChartLegend content={<ChartLegendContent nameKey={resolvedKeys.nameKey} />} />}
-      </RechartsPieChart>
-    </ChartContainer>
+    <div ref={containerRef} className="w-full">
+      <ChartContainer config={chartConfig} className={`mx-auto ${className ?? ""}`} style={{ height, width: "100%" }}>
+        <RechartsPieChart accessibilityLayer>
+          <ChartTooltip content={<ChartTooltipContent hideLabel />} />
+          <Pie
+            data={data as Record<string, unknown>[]}
+            dataKey={resolvedKeys.valueKey}
+            nameKey={resolvedKeys.nameKey}
+            cx="50%"
+            cy="50%"
+            innerRadius={responsive.isCompact ? Math.min(innerRadius, 30) : innerRadius}
+            outerRadius={outerRadius}
+            paddingAngle={responsive.isCompact ? 1 : 2}
+            label={
+              effectiveShowLabels
+                ? ({ name, percent }: { name?: string; percent?: number }) =>
+                    `${name ?? ""} (${((percent ?? 0) * 100).toFixed(0)}%)`
+                : undefined
+            }
+            labelLine={effectiveShowLabels}
+          >
+            {data.map((entry, index) => {
+              const name = String(entry[resolvedKeys.nameKey] ?? `Item ${index}`);
+              return <Cell key={`cell-${index}`} fill={`var(--color-${name})`} />;
+            })}
+            {innerRadius > 0 && !responsive.isCompact && (
+              <Label
+                content={({ viewBox }) => {
+                  if (viewBox && "cx" in viewBox && "cy" in viewBox) {
+                    return (
+                      <text x={viewBox.cx} y={viewBox.cy} textAnchor="middle" dominantBaseline="middle">
+                        <tspan x={viewBox.cx} y={viewBox.cy} className={`fill-foreground ${centerFontSize} font-bold`}>
+                          {total.toLocaleString()}
+                        </tspan>
+                        {!responsive.isSmall && (
+                          <tspan x={viewBox.cx} y={(viewBox.cy || 0) + 24} className="fill-muted-foreground">
+                            Total
+                          </tspan>
+                        )}
+                      </text>
+                    );
+                  }
+                }}
+              />
+            )}
+          </Pie>
+          {effectiveShowLegend && <ChartLegend content={<ChartLegendContent nameKey={resolvedKeys.nameKey} />} />}
+        </RechartsPieChart>
+      </ChartContainer>
+    </div>
   );
 }
 
@@ -235,7 +254,7 @@ function PieChartElement(props: PlateElementProps) {
     <PlateElement
       {...props}
       as="div"
-      className={`my-4 rounded-lg p-2 ${selected ? "ring-1 ring-primary/30 ring-offset-2" : ""}`}
+      className="my-2"
     >
       <PieChart
         valueKey={element.valueKey as string | undefined}

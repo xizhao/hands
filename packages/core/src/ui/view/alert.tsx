@@ -125,7 +125,7 @@ function AlertElement(props: PlateElementProps) {
     <PlateElement
       {...props}
       as="div"
-      className={`my-2 ${selected ? "ring-1 ring-primary/30 ring-offset-2 rounded-lg" : ""}`}
+      className="my-2"
     >
       <Alert title={title} variant={variant}>
         {props.children}

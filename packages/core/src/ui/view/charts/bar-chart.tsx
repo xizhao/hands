@@ -79,6 +79,7 @@ export interface BarChartProps {
 /**
  * Standalone BarChart component.
  * Uses data from props or LiveValue context.
+ * Responsive: adjusts legend, grid, and tick density based on container size.
  */
 export function BarChart({
   data: propData,
@@ -96,6 +97,7 @@ export function BarChart({
 }: BarChartProps) {
   const ctx = useLiveValueData();
   const data = propData ?? ctx?.data ?? [];
+  const { containerRef, responsive } = useContainerSize();
 
   // Auto-detect keys if not provided
   const resolvedXKey = useMemo(() => {
@@ -127,10 +129,15 @@ export function BarChart({
     return config;
   }, [propConfig, resolvedYKeys, colors]);
 
+  // Responsive: combine user prefs with container size
+  const effectiveShowLegend = showLegend && responsive.showLegend;
+  const effectiveShowGrid = showGrid && responsive.showGrid;
+
   if (ctx?.isLoading) {
     return (
       <div
-        className={`flex items-center justify-center bg-muted/30 rounded-lg animate-pulse ${className ?? ""}`}
+        ref={containerRef}
+        className={`w-full flex items-center justify-center bg-muted/30 rounded-lg animate-pulse ${className ?? ""}`}
         style={{ height }}
       >
         <span className="text-muted-foreground text-sm">Loading chart...</span>
@@ -141,7 +148,8 @@ export function BarChart({
   if (ctx?.error) {
     return (
       <div
-        className={`flex items-center justify-center bg-destructive/10 rounded-lg ${className ?? ""}`}
+        ref={containerRef}
+        className={`w-full flex items-center justify-center bg-destructive/10 rounded-lg ${className ?? ""}`}
         style={{ height }}
       >
         <span className="text-destructive text-sm">Error loading data</span>
@@ -152,7 +160,8 @@ export function BarChart({
   if (data.length === 0) {
     return (
       <div
-        className={`flex items-center justify-center bg-muted/30 rounded-lg ${className ?? ""}`}
+        ref={containerRef}
+        className={`w-full flex items-center justify-center bg-muted/30 rounded-lg ${className ?? ""}`}
         style={{ height }}
       >
         <span className="text-muted-foreground text-sm">No data</span>
@@ -163,37 +172,68 @@ export function BarChart({
   const isHorizontal = layout === "horizontal";
 
   return (
-    <ChartContainer config={chartConfig} className={className} style={{ height }}>
-      <RechartsBarChart
-        data={data as object[]}
-        layout={isHorizontal ? "vertical" : "horizontal"}
-        accessibilityLayer
-      >
-        {showGrid && <CartesianGrid vertical={false} />}
-        {isHorizontal ? (
-          <>
-            <YAxis dataKey={resolvedXKey} type="category" tickLine={false} axisLine={false} tickMargin={8} />
-            <XAxis type="number" tickLine={false} axisLine={false} tickMargin={8} />
-          </>
-        ) : (
-          <>
-            <XAxis dataKey={resolvedXKey} tickLine={false} axisLine={false} tickMargin={8} />
-            <YAxis tickLine={false} axisLine={false} tickMargin={8} />
-          </>
-        )}
-        {showTooltip && <ChartTooltip content={<ChartTooltipContent />} />}
-        {showLegend && <ChartLegend content={<ChartLegendContent />} />}
-        {resolvedYKeys.map((key) => (
-          <Bar
-            key={key}
-            dataKey={key}
-            fill={`var(--color-${key})`}
-            stackId={stacked ? "stack" : undefined}
-            radius={[4, 4, 0, 0]}
-          />
-        ))}
-      </RechartsBarChart>
-    </ChartContainer>
+    <div ref={containerRef} className="w-full">
+      <ChartContainer config={chartConfig} className={className} style={{ height, width: "100%" }}>
+        <RechartsBarChart
+          data={data as object[]}
+          layout={isHorizontal ? "vertical" : "horizontal"}
+          accessibilityLayer
+          margin={responsive.margins}
+        >
+          {effectiveShowGrid && <CartesianGrid vertical={false} />}
+          {isHorizontal ? (
+            <>
+              <YAxis
+                dataKey={resolvedXKey}
+                type="category"
+                tickLine={false}
+                axisLine={false}
+                tickMargin={8}
+                tick={responsive.showAxisLabels ? undefined : false}
+                width={responsive.isSmall ? 60 : 80}
+              />
+              <XAxis
+                type="number"
+                tickLine={false}
+                axisLine={false}
+                tickMargin={8}
+                tick={responsive.showAxisLabels ? undefined : false}
+              />
+            </>
+          ) : (
+            <>
+              <XAxis
+                dataKey={resolvedXKey}
+                tickLine={false}
+                axisLine={false}
+                tickMargin={8}
+                tick={responsive.showAxisLabels ? undefined : false}
+                interval="preserveStartEnd"
+                minTickGap={responsive.isSmall ? 30 : 20}
+              />
+              <YAxis
+                tickLine={false}
+                axisLine={false}
+                tickMargin={8}
+                tick={responsive.showAxisLabels ? undefined : false}
+                width={responsive.isSmall ? 30 : 40}
+              />
+            </>
+          )}
+          {showTooltip && <ChartTooltip content={<ChartTooltipContent />} />}
+          {effectiveShowLegend && <ChartLegend content={<ChartLegendContent />} />}
+          {resolvedYKeys.map((key) => (
+            <Bar
+              key={key}
+              dataKey={key}
+              fill={`var(--color-${key})`}
+              stackId={stacked ? "stack" : undefined}
+              radius={responsive.isCompact ? [2, 2, 0, 0] : [4, 4, 0, 0]}
+            />
+          ))}
+        </RechartsBarChart>
+      </ChartContainer>
+    </div>
   );
 }
 
@@ -209,7 +249,7 @@ function BarChartElement(props: PlateElementProps) {
     <PlateElement
       {...props}
       as="div"
-      className={`my-4 rounded-lg p-2 ${selected ? "ring-1 ring-primary/30 ring-offset-2" : ""}`}
+      className="my-2"
     >
       <BarChart
         xKey={element.xKey as string | undefined}

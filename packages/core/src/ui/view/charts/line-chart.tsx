@@ -140,7 +140,7 @@ export function LineChart({
     return (
       <div
         ref={containerRef}
-        className={`flex items-center justify-center bg-muted/30 rounded-lg animate-pulse ${className ?? ""}`}
+        className={`w-full flex items-center justify-center bg-muted/30 rounded-lg animate-pulse ${className ?? ""}`}
         style={{ height }}
       >
         <span className="text-muted-foreground text-sm">Loading chart...</span>
@@ -152,7 +152,7 @@ export function LineChart({
     return (
       <div
         ref={containerRef}
-        className={`flex items-center justify-center bg-destructive/10 rounded-lg ${className ?? ""}`}
+        className={`w-full flex items-center justify-center bg-destructive/10 rounded-lg ${className ?? ""}`}
         style={{ height }}
       >
         <span className="text-destructive text-sm">Error loading data</span>
@@ -164,7 +164,7 @@ export function LineChart({
     return (
       <div
         ref={containerRef}
-        className={`flex items-center justify-center bg-muted/30 rounded-lg ${className ?? ""}`}
+        className={`w-full flex items-center justify-center bg-muted/30 rounded-lg ${className ?? ""}`}
         style={{ height }}
       >
         <span className="text-muted-foreground text-sm">No data</span>
@@ -173,8 +173,8 @@ export function LineChart({
   }
 
   return (
-    <div ref={containerRef}>
-      <ChartContainer config={chartConfig} className={className} style={{ height }}>
+    <div ref={containerRef} className="w-full">
+      <ChartContainer config={chartConfig} className={className} style={{ height, width: "100%" }}>
         <RechartsLineChart
           data={data as object[]}
           accessibilityLayer
@@ -228,7 +228,7 @@ function LineChartElement(props: PlateElementProps) {
     <PlateElement
       {...props}
       as="div"
-      className={`my-4 rounded-lg p-2 ${selected ? "ring-1 ring-primary/30 ring-offset-2" : ""}`}
+      className="my-2"
     >
       <LineChart
         xKey={element.xKey as string | undefined}

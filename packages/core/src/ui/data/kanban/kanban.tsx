@@ -219,16 +219,16 @@ export function Kanban({
 
   if (isLoading) {
     return (
-      <div className="flex gap-4 p-4">
+      <div className="flex gap-3">
         {[1, 2, 3].map((i) => (
           <div
             key={i}
-            className="w-72 shrink-0 rounded-lg bg-muted/50 p-4 animate-pulse"
+            className="w-72 shrink-0 rounded-lg bg-muted/50 p-2 animate-pulse"
           >
-            <div className="h-4 w-20 rounded bg-muted mb-4" />
-            <div className="space-y-2">
-              <div className="h-16 rounded bg-muted" />
-              <div className="h-16 rounded bg-muted" />
+            <div className="h-4 w-20 rounded bg-muted mb-2" />
+            <div className="space-y-1.5">
+              <div className="h-10 rounded bg-muted" />
+              <div className="h-10 rounded bg-muted" />
             </div>
           </div>
         ))}
@@ -238,7 +238,7 @@ export function Kanban({
 
   if (!data || data.length === 0) {
     return (
-      <div className="rounded-lg border border-dashed p-8 text-center text-muted-foreground">
+      <div className="rounded-lg border border-dashed p-4 text-center text-muted-foreground text-sm">
         No items to display
       </div>
     );
@@ -330,10 +330,7 @@ function KanbanElement(props: PlateElementProps) {
     return (
       <PlateElement
         {...props}
-        className={cn(
-          "my-4",
-          selected && "ring-1 ring-primary/30 ring-offset-2 rounded-lg",
-        )}
+        className="my-4"
       >
         <div className="rounded-lg border border-amber-500/50 bg-amber-500/10 p-4 text-amber-700 text-sm">
           Kanban must be wrapped in a LiveValue component to receive data.

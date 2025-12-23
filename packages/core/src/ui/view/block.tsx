@@ -186,10 +186,7 @@ function BlockElement(props: PlateElementProps) {
   const { src, params, editing, prompt, height, className } = element;
 
   return (
-    <PlateElement
-      {...props}
-      className={selected && !readOnly ? "ring-1 ring-primary/30 ring-offset-1 rounded" : undefined}
-    >
+    <PlateElement {...props}>
       <div contentEditable={false} style={{ userSelect: "none" }}>
         <BlockDisplay
           src={src}

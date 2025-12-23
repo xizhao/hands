@@ -23,9 +23,27 @@ import {
   useEditorRef,
   useReadOnly,
 } from "platejs/react";
-import { memo, Children, isValidElement, useState, useRef, useEffect } from "react";
-import { Plus, X } from "lucide-react";
+import { memo, Children, isValidElement, useState, useRef, useEffect, useMemo } from "react";
+import { Plus, X, GripVertical } from "lucide-react";
 import type { Path } from "platejs";
+import {
+  DndContext,
+  DragOverlay,
+  KeyboardSensor,
+  PointerSensor,
+  closestCenter,
+  useSensor,
+  useSensors,
+  type DragEndEvent,
+  type DragStartEvent,
+} from "@dnd-kit/core";
+import {
+  SortableContext,
+  horizontalListSortingStrategy,
+  useSortable,
+  arrayMove,
+} from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
 
 import {
   Tabs as ShadcnTabs,
@@ -137,13 +155,14 @@ function createTabNode(label: string): TTabElement {
 // ============================================================================
 
 interface EditableTabTriggerProps {
-  tab: { value: string; label: string };
+  tab: { value: string; label: string; index: number };
   isActive: boolean;
   onSelect: () => void;
   onLabelChange: (newLabel: string) => void;
   onDelete: () => void;
   canDelete: boolean;
   readOnly: boolean;
+  isDragging?: boolean;
 }
 
 function EditableTabTrigger({
@@ -154,10 +173,25 @@ function EditableTabTrigger({
   onDelete,
   canDelete,
   readOnly,
+  isDragging,
 }: EditableTabTriggerProps) {
   const [isEditing, setIsEditing] = useState(false);
   const [editValue, setEditValue] = useState(tab.label);
   const inputRef = useRef<HTMLInputElement>(null);
+
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging: isSortableDragging,
+  } = useSortable({ id: tab.value, disabled: readOnly });
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+  };
 
   useEffect(() => {
     if (isEditing && inputRef.current) {
@@ -195,18 +229,30 @@ function EditableTabTrigger({
 
   return (
     <div
+      ref={setNodeRef}
+      style={style}
       className={cn(
         "group/tab relative inline-flex items-center gap-1",
-        "rounded-md px-3 py-1 text-sm font-medium transition-all",
-        "ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
+        "px-3 py-1.5 -mb-px text-sm font-medium rounded-md border-b-2 border-transparent transition-all",
+        "hover:bg-muted/50 hover:text-foreground",
         isActive
-          ? "bg-background text-foreground shadow"
-          : "text-muted-foreground hover:text-foreground hover:bg-muted/50",
-        !readOnly && "cursor-pointer"
+          ? "bg-muted text-foreground border-primary"
+          : "text-muted-foreground",
+        !readOnly && "cursor-pointer",
+        (isSortableDragging || isDragging) && "opacity-50"
       )}
       onClick={onSelect}
       onDoubleClick={handleDoubleClick}
     >
+      {!readOnly && (
+        <div
+          {...attributes}
+          {...listeners}
+          className="cursor-grab active:cursor-grabbing opacity-0 group-hover/tab:opacity-50 hover:!opacity-100 -ml-1 mr-0.5"
+        >
+          <GripVertical className="size-3" />
+        </div>
+      )}
       {isEditing ? (
         <input
           ref={inputRef}
@@ -250,6 +296,14 @@ function TabsElement(props: PlateElementProps) {
   const selected = useSelected();
   const readOnly = useReadOnly();
   const [activeTab, setActiveTab] = useState<string | null>(null);
+  const [draggingTab, setDraggingTab] = useState<{ value: string; label: string } | null>(null);
+
+  const sensors = useSensors(
+    useSensor(PointerSensor, {
+      activationConstraint: { distance: 5 },
+    }),
+    useSensor(KeyboardSensor),
+  );
 
   // Extract tab info from Plate element children (Slate nodes)
   const tabs: Array<{ value: string; label: string; index: number }> = [];
@@ -261,6 +315,8 @@ function TabsElement(props: PlateElementProps) {
       }
     }
   });
+
+  const tabIds = useMemo(() => tabs.map((t) => t.value), [tabs]);
 
   const effectiveActive = activeTab || element.defaultValue || tabs[0]?.value || "";
 
@@ -311,31 +367,72 @@ function TabsElement(props: PlateElementProps) {
     editor.tf.setNodes({ label: newLabel } as Partial<TTabElement>, { at: tabPath });
   };
 
+  const handleDragStart = (event: DragStartEvent) => {
+    const { active } = event;
+    const tab = tabs.find((t) => t.value === active.id);
+    if (tab) {
+      setDraggingTab({ value: tab.value, label: tab.label });
+    }
+  };
+
+  const handleDragEnd = (event: DragEndEvent) => {
+    const { active, over } = event;
+    setDraggingTab(null);
+
+    if (!over || active.id === over.id) return;
+
+    const oldIndex = tabs.findIndex((t) => t.value === active.id);
+    const newIndex = tabs.findIndex((t) => t.value === over.id);
+
+    if (oldIndex === -1 || newIndex === -1) return;
+
+    const path = getElementPath();
+    if (!path) return;
+
+    // Move the node in Slate
+    const fromPath = [...path, oldIndex];
+    const toPath = [...path, newIndex];
+    editor.tf.moveNodes({ at: fromPath, to: toPath });
+  };
+
   return (
     <PlateElement
       {...props}
       as="div"
-      className={cn(
-        "my-4",
-        selected && !readOnly && "ring-1 ring-primary/30 ring-offset-2 rounded-lg"
-      )}
+      className="my-4"
     >
       <ShadcnTabs value={effectiveActive} onValueChange={setActiveTab}>
         <div className="flex items-center gap-1">
-          <TabsList className="h-auto p-1">
-            {tabs.map((tab) => (
-              <EditableTabTrigger
-                key={tab.value}
-                tab={tab}
-                isActive={effectiveActive === tab.value}
-                onSelect={() => setActiveTab(tab.value)}
-                onLabelChange={(newLabel) => handleLabelChange(tab.index, newLabel)}
-                onDelete={() => handleDeleteTab(tab.index, tab.value)}
-                canDelete={tabs.length > 1}
-                readOnly={readOnly}
-              />
-            ))}
-          </TabsList>
+          <DndContext
+            sensors={sensors}
+            collisionDetection={closestCenter}
+            onDragStart={handleDragStart}
+            onDragEnd={handleDragEnd}
+          >
+            <SortableContext items={tabIds} strategy={horizontalListSortingStrategy}>
+              <TabsList className="h-auto">
+                {tabs.map((tab) => (
+                  <EditableTabTrigger
+                    key={tab.value}
+                    tab={tab}
+                    isActive={effectiveActive === tab.value}
+                    onSelect={() => setActiveTab(tab.value)}
+                    onLabelChange={(newLabel) => handleLabelChange(tab.index, newLabel)}
+                    onDelete={() => handleDeleteTab(tab.index, tab.value)}
+                    canDelete={tabs.length > 1}
+                    readOnly={readOnly}
+                  />
+                ))}
+              </TabsList>
+            </SortableContext>
+            <DragOverlay>
+              {draggingTab && (
+                <div className="px-3 py-1.5 text-sm font-medium rounded-md bg-muted text-foreground border border-primary shadow-lg">
+                  {draggingTab.label}
+                </div>
+              )}
+            </DragOverlay>
+          </DndContext>
           {!readOnly && (
             <button
               onClick={handleAddTab}
@@ -361,8 +458,8 @@ function TabElement(props: PlateElementProps) {
   const element = useElement<TTabElement>();
 
   return (
-    <TabsContent value={element.value} asChild>
-      <PlateElement {...props} as="div" className="mt-2">
+    <TabsContent value={element.value} forceMount asChild>
+      <PlateElement {...props} as="div" className="mt-2 data-[state=inactive]:hidden">
         {props.children}
       </PlateElement>
     </TabsContent>
@@ -378,6 +475,7 @@ export const TabsPlugin = createPlatePlugin({
     isElement: true,
     isInline: false,
     isVoid: false,
+    isContainer: true,
     component: memo(TabsElement),
   },
 });
@@ -391,6 +489,7 @@ export const TabPlugin = createPlatePlugin({
     isElement: true,
     isInline: false,
     isVoid: false,
+    isContainer: true,
     component: memo(TabElement),
   },
 });

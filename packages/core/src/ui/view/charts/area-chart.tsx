@@ -31,6 +31,7 @@ import {
   ChartTooltipContent,
 } from "./chart";
 import { useLiveValueData } from "./context";
+import { useContainerSize } from "./use-container-size";
 
 // ============================================================================
 // Default Colors
@@ -80,6 +81,7 @@ export interface AreaChartProps {
 /**
  * Standalone AreaChart component.
  * Uses data from props or LiveValue context.
+ * Responsive: adjusts legend, grid, and tick density based on container size.
  */
 export function AreaChart({
   data: propData,
@@ -98,6 +100,7 @@ export function AreaChart({
 }: AreaChartProps) {
   const ctx = useLiveValueData();
   const data = propData ?? ctx?.data ?? [];
+  const { containerRef, responsive } = useContainerSize();
 
   // Auto-detect keys if not provided
   const resolvedXKey = useMemo(() => {
@@ -131,10 +134,15 @@ export function AreaChart({
 
   const curveType = curve === "linear" ? "linear" : curve === "step" ? "step" : "monotone";
 
+  // Responsive: combine user prefs with container size
+  const effectiveShowLegend = showLegend && responsive.showLegend;
+  const effectiveShowGrid = showGrid && responsive.showGrid;
+
   if (ctx?.isLoading) {
     return (
       <div
-        className={`flex items-center justify-center bg-muted/30 rounded-lg animate-pulse ${className ?? ""}`}
+        ref={containerRef}
+        className={`w-full flex items-center justify-center bg-muted/30 rounded-lg animate-pulse ${className ?? ""}`}
         style={{ height }}
       >
         <span className="text-muted-foreground text-sm">Loading chart...</span>
@@ -145,7 +153,8 @@ export function AreaChart({
   if (ctx?.error) {
     return (
       <div
-        className={`flex items-center justify-center bg-destructive/10 rounded-lg ${className ?? ""}`}
+        ref={containerRef}
+        className={`w-full flex items-center justify-center bg-destructive/10 rounded-lg ${className ?? ""}`}
         style={{ height }}
       >
         <span className="text-destructive text-sm">Error loading data</span>
@@ -156,7 +165,8 @@ export function AreaChart({
   if (data.length === 0) {
     return (
       <div
-        className={`flex items-center justify-center bg-muted/30 rounded-lg ${className ?? ""}`}
+        ref={containerRef}
+        className={`w-full flex items-center justify-center bg-muted/30 rounded-lg ${className ?? ""}`}
         style={{ height }}
       >
         <span className="text-muted-foreground text-sm">No data</span>
@@ -165,26 +175,47 @@ export function AreaChart({
   }
 
   return (
-    <ChartContainer config={chartConfig} className={className} style={{ height }}>
-      <RechartsAreaChart data={data as object[]} accessibilityLayer>
-        {showGrid && <CartesianGrid vertical={false} />}
-        <XAxis dataKey={resolvedXKey} tickLine={false} axisLine={false} tickMargin={8} />
-        <YAxis tickLine={false} axisLine={false} tickMargin={8} />
-        {showTooltip && <ChartTooltip content={<ChartTooltipContent indicator="dot" />} />}
-        {showLegend && <ChartLegend content={<ChartLegendContent />} />}
-        {resolvedYKeys.map((key) => (
-          <Area
-            key={key}
-            type={curveType}
-            dataKey={key}
-            stroke={`var(--color-${key})`}
-            fill={`var(--color-${key})`}
-            fillOpacity={fillOpacity}
-            stackId={stacked ? "stack" : undefined}
+    <div ref={containerRef} className="w-full">
+      <ChartContainer config={chartConfig} className={className} style={{ height, width: "100%" }}>
+        <RechartsAreaChart
+          data={data as object[]}
+          accessibilityLayer
+          margin={responsive.margins}
+        >
+          {effectiveShowGrid && <CartesianGrid vertical={false} />}
+          <XAxis
+            dataKey={resolvedXKey}
+            tickLine={false}
+            axisLine={false}
+            tickMargin={8}
+            tick={responsive.showAxisLabels ? undefined : false}
+            interval="preserveStartEnd"
+            minTickGap={responsive.isSmall ? 30 : 20}
           />
-        ))}
-      </RechartsAreaChart>
-    </ChartContainer>
+          <YAxis
+            tickLine={false}
+            axisLine={false}
+            tickMargin={8}
+            tick={responsive.showAxisLabels ? undefined : false}
+            width={responsive.isSmall ? 30 : 40}
+          />
+          {showTooltip && <ChartTooltip content={<ChartTooltipContent indicator="dot" />} />}
+          {effectiveShowLegend && <ChartLegend content={<ChartLegendContent />} />}
+          {resolvedYKeys.map((key) => (
+            <Area
+              key={key}
+              type={curveType}
+              dataKey={key}
+              stroke={`var(--color-${key})`}
+              strokeWidth={responsive.isCompact ? 1.5 : 2}
+              fill={`var(--color-${key})`}
+              fillOpacity={fillOpacity}
+              stackId={stacked ? "stack" : undefined}
+            />
+          ))}
+        </RechartsAreaChart>
+      </ChartContainer>
+    </div>
   );
 }
 
@@ -200,7 +231,7 @@ function AreaChartElement(props: PlateElementProps) {
     <PlateElement
       {...props}
       as="div"
-      className={`my-4 rounded-lg p-2 ${selected ? "ring-1 ring-primary/30 ring-offset-2" : ""}`}
+      className="my-2"
     >
       <AreaChart
         xKey={element.xKey as string | undefined}

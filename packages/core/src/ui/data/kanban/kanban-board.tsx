@@ -289,7 +289,7 @@ export function KanbanBoard({
         onDragEnd={handleDragEnd}
       >
         <SortableContext items={columnIds} strategy={horizontalListSortingStrategy}>
-          <div className={cn("flex gap-4 overflow-x-auto p-4", className)}>
+          <div className={cn("flex gap-3 overflow-x-auto", className)}>
             {columns.map((columnId) => (
               <KanbanColumn
                 key={columnId}
@@ -305,16 +305,16 @@ export function KanbanBoard({
 
         <DragOverlay>
           {activeItem ? (
-            <div className="rounded-lg border bg-card p-3 shadow-lg opacity-90">
+            <div className="rounded-md border bg-card px-2 py-1.5 shadow-lg opacity-90">
               {renderCard(activeItem)}
             </div>
           ) : null}
           {draggingColumn ? (
             <div className="w-72 shrink-0 rounded-lg bg-muted/50 border-2 border-primary shadow-lg opacity-90">
-              <div className="p-3 font-medium">
+              <div className="px-2 py-1.5 font-medium">
                 {renderColumnHeader(draggingColumn, value[draggingColumn] || [])}
               </div>
-              <div className="min-h-[100px] p-2 text-muted-foreground text-sm text-center">
+              <div className="min-h-[60px] p-2 text-muted-foreground text-sm text-center">
                 {(value[draggingColumn] || []).length} items
               </div>
             </div>
@@ -375,7 +375,7 @@ function KanbanColumn({ columnId, items, renderHeader, renderCard, isDraggable }
         {/* Column Header - drag handle */}
         <div
           className={cn(
-            "p-3 font-medium",
+            "px-2 py-1.5 font-medium",
             isDraggable && "cursor-grab active:cursor-grabbing",
           )}
           {...(isDraggable ? { ...attributes, ...listeners } : {})}
@@ -385,7 +385,7 @@ function KanbanColumn({ columnId, items, renderHeader, renderCard, isDraggable }
 
         {/* Cards Container */}
         <SortableContext items={itemIds} strategy={verticalListSortingStrategy}>
-          <div className="flex min-h-[100px] flex-col gap-2 p-2">
+          <div className="flex min-h-[60px] flex-col gap-1.5 px-1.5 pb-1.5">
             {items.map((item) => (
               <KanbanCard key={item.id} item={item} renderCard={renderCard} />
             ))}
@@ -425,7 +425,7 @@ function KanbanCard({ item, renderCard }: KanbanCardProps) {
       ref={setNodeRef}
       style={style}
       className={cn(
-        "rounded-lg border bg-card p-3 shadow-sm cursor-grab active:cursor-grabbing",
+        "rounded-md border bg-card px-2 py-1.5 shadow-sm cursor-grab active:cursor-grabbing",
         "hover:border-primary/50 transition-colors",
         isDragging && "opacity-50",
       )}
