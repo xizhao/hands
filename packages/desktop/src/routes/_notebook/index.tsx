@@ -1,16 +1,23 @@
-import { useCallback } from "react";
-import { UnifiedSidebar } from "@/components/sidebar/UnifiedSidebar";
+/**
+ * Index route - Content area for the home/index page
+ *
+ * With the Arc-style layout, the UnifiedSidebar is always visible in the
+ * left sidebar. The content area shows:
+ * - Loading state while initializing
+ * - Empty workbook state (getting started) when no content exists
+ * - Empty state prompting user to select something from sidebar
+ */
+
 import { EmptyWorkbookState } from "@/components/workbook/EmptyWorkbookState";
 import { useChatState } from "@/hooks/useChatState";
 import { useRuntimeState } from "@/hooks/useRuntimeState";
-import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { createFileRoute } from "@tanstack/react-router";
 
 export const Route = createFileRoute("/_notebook/")({
   component: IndexPage,
 });
 
 function IndexPage() {
-  const navigate = useNavigate();
   const {
     manifest,
     schema: dbSchema,
@@ -30,7 +37,7 @@ function IndexPage() {
   // Still loading: no manifest yet OR db still booting (unless we have blocks to show)
   const isLoading = !manifest || isStarting || isDbBooting;
 
-  // Has content: blocks, sources, or pages exist (can show sidebar even if db loading)
+  // Has content: blocks, sources, or pages exist
   const hasContent = blockCount > 0 || sourceCount > 0 || pageCount > 0;
 
   // Show getting started ONLY when fully ready AND everything is empty
@@ -43,29 +50,8 @@ function IndexPage() {
     pageCount === 0;
 
   const handleImportFile = () => {
-    // TODO: Trigger file input
+    // File import is now handled via the sidebar chat
   };
-
-  // Handle item selection from Browse tab - navigate to the selected item
-  const handleSelectItem = useCallback(
-    (type: "page" | "source" | "table" | "action", id: string) => {
-      switch (type) {
-        case "page":
-          navigate({ to: "/pages/$pageId", params: { pageId: id } });
-          break;
-        case "source":
-          navigate({ to: "/sources" });
-          break;
-        case "table":
-          navigate({ to: "/tables/$tableId", params: { tableId: id } });
-          break;
-        case "action":
-          navigate({ to: "/actions/$actionId", params: { actionId: id } });
-          break;
-      }
-    },
-    [navigate],
-  );
 
   // Case 1: Still loading and no content to show - full page loader
   if (isLoading && !hasContent) {
@@ -92,10 +78,12 @@ function IndexPage() {
     );
   }
 
-  // Case 3: Has content - show tabbed sidebar with Chat, Browse, Library
+  // Case 3: Has content - content area shows prompt to select from sidebar
   return (
-    <div className="flex-1 flex flex-col overflow-hidden">
-      <UnifiedSidebar onSelectItem={handleSelectItem} />
+    <div className="flex-1 flex items-center justify-center">
+      <div className="text-center text-muted-foreground/60">
+        <p className="text-sm">Select a page, table, or source from the sidebar</p>
+      </div>
     </div>
   );
 }

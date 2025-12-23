@@ -18,29 +18,8 @@ import { discoverWorkbook } from "../../workbook/discovery.js";
 export interface WorkbookContext {
   workbookId: string;
   workbookDir: string;
-  /** Optional: external manifest provider (for sources, actions, config) */
-  getExternalManifest?: () => Promise<{
-    sources?: Array<{
-      id: string;
-      name: string;
-      title: string;
-      description: string;
-      schedule?: string;
-      secrets: string[];
-      missingSecrets: string[];
-      path: string;
-      spec?: string;
-    }>;
-    actions?: Array<{
-      id: string;
-      name: string;
-      description?: string;
-      schedule?: string;
-      triggers: string[];
-      path: string;
-    }>;
-    config?: Record<string, unknown>;
-  }>;
+  /** Optional: external config provider */
+  getExternalConfig?: () => Promise<Record<string, unknown>>;
   formatBlockSource: (filePath: string) => Promise<boolean>;
   generateDefaultBlockSource: (blockName: string) => string;
 }
@@ -113,13 +92,13 @@ function findBlockFile(blocksDir: string, blockId: string): string | null {
 // ============================================================================
 
 export const workbookRouter = t.router({
-  /** Get workbook manifest (blocks, pages, components, sources, actions, config) */
+  /** Get workbook manifest (blocks, pages, components, actions, config) */
   manifest: publicProcedure.query(async ({ ctx }) => {
-    // Use new unified discovery for blocks, pages, components
+    // Use unified discovery for blocks, pages, components, actions
     const discovery = await discoverWorkbook({ rootPath: ctx.workbookDir });
 
-    // Get external manifest data (sources, actions, config) if available
-    const external = ctx.getExternalManifest ? await ctx.getExternalManifest() : {};
+    // Get external config if available
+    const config = ctx.getExternalConfig ? await ctx.getExternalConfig() : {};
 
     const blocks = discovery.blocks.map((b) => ({
       id: b.id,
@@ -156,10 +135,9 @@ export const workbookRouter = t.router({
         path: c.path,
         isClient: c.isClientComponent,
       })),
-      sources: external.sources ?? [],
-      actions: external.actions ?? [],
+      actions: discovery.actions,
       tables: discovery.tables,
-      config: external.config ?? {},
+      config,
       isEmpty: blocks.length === 0 && pages.length === 0,
       errors: discovery.errors,
     };

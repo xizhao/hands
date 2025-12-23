@@ -1,7 +1,7 @@
 /**
  * Electric-SQL Sync Manager
  *
- * Manages Electric-SQL shape subscriptions for source tables.
+ * Manages Electric-SQL shape subscriptions for tables.
  * Handles starting/stopping sync, status tracking, and reconnection.
  *
  * Uses @electric-sql/pglite-sync extension to sync shapes into PGlite.
@@ -10,15 +10,27 @@
  * requires:
  * 1. Installing @electric-sql/pglite-sync
  * 2. Setting up Electric service
- * 3. Configuring sync shapes in source definitions
+ * 3. Configuring sync shapes
  */
 
 import type { PGlite } from "@electric-sql/pglite";
-import type {
-  DiscoveredSource,
-  SubscriptionStatus,
-  TableSubscription,
-} from "@hands/stdlib/sources";
+
+// Subscription configuration for a table
+export interface TableSubscription {
+  url: string;
+  table: string;
+  where?: string;
+  columns?: string[];
+}
+
+// Status of a subscription
+export interface SubscriptionStatus {
+  active: boolean;
+  shapeId?: string;
+  lastSyncAt?: string;
+  rowCount?: number;
+  error?: string;
+}
 
 // ============================================================================
 // Types
@@ -160,21 +172,6 @@ export class SyncManager {
     sub.status.active = false;
     sub.status.error = undefined;
     sub.shapeStream = undefined;
-  }
-
-  /**
-   * Initialize subscriptions from discovered sources
-   */
-  async initializeFromSources(sources: DiscoveredSource[]): Promise<void> {
-    for (const source of sources) {
-      if (!source.definition.tables) continue;
-
-      for (const [tableName, tableDef] of Object.entries(source.definition.tables)) {
-        if (tableDef?.subscription) {
-          await this.startSubscription(source.id, tableName, tableDef.subscription);
-        }
-      }
-    }
   }
 
   /**

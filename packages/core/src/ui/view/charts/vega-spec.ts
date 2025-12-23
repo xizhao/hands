@@ -105,12 +105,16 @@ export function lineChartToVegaSpec(props: LineChartSpecProps): VegaLiteSpec {
   const yKeys = Array.isArray(yKey) ? yKey : [yKey];
   const isMultiSeries = yKeys.length > 1;
   const interpolation = mapCurve(curve);
+  const yField = isMultiSeries ? "value" : yKeys[0];
 
-  // Line chart with interactive crosshair tooltip
-  const lineLayer: VegaLiteSpec = {
+  // Simple line chart without complex hover interactions (Vega-Lite v6 compatible)
+  const baseSpec: VegaLiteSpec = {
+    $schema: "https://vega.github.io/schema/vega-lite/v6.json",
     mark: {
       type: "line",
       interpolate: interpolation,
+      point: showDots, // Built-in point markers
+      tooltip: true,
     },
     encoding: {
       x: {
@@ -124,7 +128,7 @@ export function lineChartToVegaSpec(props: LineChartSpecProps): VegaLiteSpec {
         },
       },
       y: {
-        field: isMultiSeries ? "value" : yKeys[0],
+        field: yField,
         type: "quantitative",
         axis: {
           grid: showGrid,
@@ -134,73 +138,14 @@ export function lineChartToVegaSpec(props: LineChartSpecProps): VegaLiteSpec {
     },
   };
 
-  // Point layer for dots (if enabled)
-  const pointLayer: VegaLiteSpec | null = showDots
-    ? {
-        mark: {
-          type: "point",
-          filled: true,
-          size: 40,
-        },
-        encoding: {
-          x: { field: xKey, type: "ordinal" },
-          y: { field: isMultiSeries ? "value" : yKeys[0], type: "quantitative" },
-          opacity: {
-            condition: { param: "hover", empty: false, value: 1 },
-            value: 0.3,
-          },
-        },
-      }
-    : null;
-
-  // Vertical rule layer for crosshair
-  const ruleLayer: VegaLiteSpec = {
-    mark: { type: "rule", strokeDash: [4, 4], strokeWidth: 1 },
-    encoding: {
-      x: { field: xKey, type: "ordinal" },
-      opacity: {
-        condition: { param: "hover", empty: false, value: 0.5 },
-        value: 0,
-      },
-    },
-  };
-
-  // Build layers
-  const layers = [lineLayer, ruleLayer];
-  if (pointLayer) layers.push(pointLayer);
-
-  const baseSpec: VegaLiteSpec = {
-    $schema: "https://vega.github.io/schema/vega-lite/v5.json",
-    params: [
-      {
-        name: "hover",
-        select: {
-          type: "point",
-          fields: [xKey],
-          nearest: true,
-          on: "pointerover",
-          clear: "pointerout",
-        },
-      },
-    ],
-    layer: layers,
-  };
-
   // Handle multi-series with fold transform and color encoding
   if (isMultiSeries) {
     baseSpec.transform = [createFoldTransform(yKeys)];
-    // Add color encoding to line and point layers
-    (lineLayer.encoding as Record<string, unknown>).color = {
+    (baseSpec.encoding as Record<string, unknown>).color = {
       field: "series",
       type: "nominal",
       legend: showLegend ? {} : null,
     };
-    if (pointLayer) {
-      (pointLayer.encoding as Record<string, unknown>).color = {
-        field: "series",
-        type: "nominal",
-      };
-    }
   }
 
   return baseSpec;
@@ -254,10 +199,11 @@ export function barChartToVegaSpec(props: BarChartSpecProps): VegaLiteSpec {
   };
 
   const baseSpec: VegaLiteSpec = {
-    $schema: "https://vega.github.io/schema/vega-lite/v5.json",
+    $schema: "https://vega.github.io/schema/vega-lite/v6.json",
     mark: {
       type: "bar",
       cornerRadiusEnd: 4,
+      tooltip: true,
     },
     encoding: {
       x: isHorizontal ? valueEncoding : categoryEncoding,
@@ -316,12 +262,13 @@ export function areaChartToVegaSpec(props: AreaChartSpecProps): VegaLiteSpec {
   const interpolation = mapCurve(curve);
 
   const baseSpec: VegaLiteSpec = {
-    $schema: "https://vega.github.io/schema/vega-lite/v5.json",
+    $schema: "https://vega.github.io/schema/vega-lite/v6.json",
     mark: {
       type: "area",
       interpolate: interpolation,
       opacity: fillOpacity,
       line: true,
+      tooltip: true,
     },
     encoding: {
       x: {
@@ -377,12 +324,13 @@ export function pieChartToVegaSpec(props: PieChartSpecProps): VegaLiteSpec {
   } = props;
 
   const baseSpec: VegaLiteSpec = {
-    $schema: "https://vega.github.io/schema/vega-lite/v5.json",
+    $schema: "https://vega.github.io/schema/vega-lite/v6.json",
     mark: {
       type: "arc",
       innerRadius: innerRadius,
       stroke: "var(--background, #09090b)",
       strokeWidth: 2,
+      tooltip: true,
     },
     encoding: {
       theta: {
@@ -402,7 +350,7 @@ export function pieChartToVegaSpec(props: PieChartSpecProps): VegaLiteSpec {
   if (showLabels) {
     // Use a layer to add text labels
     return {
-      $schema: "https://vega.github.io/schema/vega-lite/v5.json",
+      $schema: "https://vega.github.io/schema/vega-lite/v6.json",
       layer: [
         baseSpec,
         {

@@ -1,13 +1,15 @@
 /**
  * Workbook Discovery
  *
- * Unified discovery for blocks, pages, UI components, and database tables.
+ * Unified discovery for blocks, pages, UI components, database tables, and actions.
  */
 
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
 import { readdir, readFile } from "node:fs/promises";
 import { basename, dirname, join } from "node:path";
+import type { ActionDefinition } from "@hands/core/primitives";
 import type {
+  DiscoveredAction,
   DiscoveredBlock,
   DiscoveredComponent,
   DiscoveredPage,
@@ -37,6 +39,7 @@ export function resolveConfig(config: WorkbookConfig): ResolvedWorkbookConfig {
     pagesDir: config.pagesDir ?? join(rootPath, "pages"),
     pluginsDir: config.pluginsDir ?? join(rootPath, "plugins"),
     uiDir: config.uiDir ?? join(rootPath, "ui"),
+    actionsDir: config.actionsDir ?? join(rootPath, "actions"),
     outDir: config.outDir ?? join(rootPath, ".hands"),
   };
 }
@@ -338,17 +341,168 @@ function formatPluginName(filename: string): string {
 }
 
 // ============================================================================
+// Action Discovery
+// ============================================================================
+
+/**
+ * Read secrets from .env.local file
+ */
+function readEnvFile(workbookDir: string): Map<string, string> {
+  const envPath = join(workbookDir, ".env.local");
+
+  if (!existsSync(envPath)) {
+    return new Map();
+  }
+
+  try {
+    const content = readFileSync(envPath, "utf-8");
+    const env = new Map<string, string>();
+
+    for (const line of content.split("\n")) {
+      const trimmed = line.trim();
+      if (!trimmed || trimmed.startsWith("#")) continue;
+
+      const eqIndex = trimmed.indexOf("=");
+      if (eqIndex === -1) continue;
+
+      const key = trimmed.slice(0, eqIndex).trim();
+      let value = trimmed.slice(eqIndex + 1).trim();
+
+      // Remove surrounding quotes
+      if (
+        (value.startsWith('"') && value.endsWith('"')) ||
+        (value.startsWith("'") && value.endsWith("'"))
+      ) {
+        value = value.slice(1, -1);
+      }
+
+      if (key) {
+        env.set(key, value);
+      }
+    }
+
+    return env;
+  } catch {
+    return new Map();
+  }
+}
+
+/**
+ * Discover a single action file
+ */
+async function discoverAction(
+  actionPath: string,
+  actionId: string,
+  secrets: Record<string, string>
+): Promise<DiscoveredAction | null> {
+  if (!existsSync(actionPath)) {
+    return null;
+  }
+
+  try {
+    const mod = await import(actionPath);
+    const definition = mod.default as ActionDefinition | undefined;
+
+    if (!definition?.name || !definition?.run) {
+      console.warn(`[actions] Invalid action ${actionId}: missing name or run function`);
+      return null;
+    }
+
+    // Check for missing secrets
+    const missingSecrets = definition.secrets?.filter((secret) => !secrets[secret]);
+
+    return {
+      id: actionId,
+      path: actionPath,
+      name: definition.name,
+      description: definition.description,
+      schedule: definition.schedule,
+      triggers: definition.triggers ?? ["manual"],
+      hasWebhook: definition.triggers?.includes("webhook") ?? false,
+      webhookPath: definition.webhookPath,
+      secrets: definition.secrets,
+      missingSecrets: missingSecrets?.length ? missingSecrets : undefined,
+      hasInput: !!definition.input,
+      hasSchema: !!definition.schema,
+      nextRun: undefined, // TODO: Calculate from cron schedule
+    };
+  } catch (err) {
+    console.error(`[actions] Failed to load action ${actionId}:`, err);
+    return null;
+  }
+}
+
+/**
+ * Discover all actions in the actions directory.
+ *
+ * Directory structure:
+ * - actions/<name>.ts (single file actions)
+ * - actions/<name>/action.ts (folder-based actions)
+ */
+export async function discoverActions(
+  actionsDir: string,
+  rootPath: string
+): Promise<DiscoveryResult<DiscoveredAction>> {
+  const items: DiscoveredAction[] = [];
+  const errors: DiscoveryError[] = [];
+
+  if (!existsSync(actionsDir)) {
+    return { items, errors };
+  }
+
+  const secretsMap = readEnvFile(rootPath);
+  const secrets = Object.fromEntries(secretsMap);
+  const entries = readdirSync(actionsDir);
+
+  for (const entry of entries) {
+    const entryPath = join(actionsDir, entry);
+
+    // Skip hidden files/folders
+    if (entry.startsWith(".") || entry.startsWith("_")) {
+      continue;
+    }
+
+    try {
+      const stat = statSync(entryPath);
+
+      if (stat.isDirectory()) {
+        // Folder-based action: actions/<name>/action.ts
+        const action = await discoverAction(join(entryPath, "action.ts"), entry, secrets);
+        if (action) {
+          items.push(action);
+        }
+      } else if (entry.endsWith(".ts") && !entry.endsWith(".d.ts")) {
+        // Single file action: actions/<name>.ts
+        const actionId = basename(entry, ".ts");
+        const action = await discoverAction(entryPath, actionId, secrets);
+        if (action) {
+          items.push(action);
+        }
+      }
+    } catch (err) {
+      errors.push({
+        file: entry,
+        error: err instanceof Error ? err.message : String(err),
+      });
+    }
+  }
+
+  return { items, errors };
+}
+
+// ============================================================================
 // Full Workbook Discovery
 // ============================================================================
 
 export async function discoverWorkbook(config: WorkbookConfig): Promise<WorkbookManifest> {
   const resolved = resolveConfig(config);
 
-  const [blocksResult, pagesResult, pluginsResult, componentsResult] = await Promise.all([
+  const [blocksResult, pagesResult, pluginsResult, componentsResult, actionsResult] = await Promise.all([
     discoverBlocks(resolved.blocksDir),
     discoverPages(resolved.pagesDir),
     discoverPlugins(resolved.pluginsDir),
     discoverComponents(resolved.uiDir),
+    discoverActions(resolved.actionsDir, resolved.rootPath),
   ]);
 
   // Table discovery is sync (bun:sqlite is sync)
@@ -360,12 +514,14 @@ export async function discoverWorkbook(config: WorkbookConfig): Promise<Workbook
     plugins: pluginsResult.items,
     components: componentsResult.items,
     tables: tablesResult.items,
+    actions: actionsResult.items,
     errors: [
       ...blocksResult.errors,
       ...pagesResult.errors,
       ...pluginsResult.errors,
       ...componentsResult.errors,
       ...tablesResult.errors,
+      ...actionsResult.errors,
     ],
     timestamp: Date.now(),
   };

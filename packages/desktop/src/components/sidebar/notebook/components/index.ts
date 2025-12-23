@@ -9,4 +9,3 @@ export * from "./SidebarSection";
 export * from "./SidebarItem";
 export * from "./ItemActions";
 export * from "./HoverCards";
-export * from "./CollapsedSidebar";

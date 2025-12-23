@@ -13,15 +13,13 @@
     "./db": "./src/db/index.ts",
     "./types": "./src/types.ts",
     "./trpc": "./src/trpc/index.ts",
-    "./sources": "./src/sources/index.ts",
     "./sync": "./src/sync/index.ts",
     "./rsc/node-id-injector": "./src/rsc/node-id-injector.tsx"
   },
   "bin": {
     "hands": "./src/cli/index.ts",
     "hands-runtime": "./src/index.ts",
-    "hands-config": "./src/config/cli.ts",
-    "hands-sources": "./src/sources/cli.ts"
+    "hands-config": "./src/config/cli.ts"
   },
   "scripts": {
     "dev": "bun run src/index.ts",

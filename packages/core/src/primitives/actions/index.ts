@@ -9,8 +9,6 @@ export type {
   ActionTrigger,
   ActionRunStatus,
   ActionRun,
-  SelectOptions,
-  TableClient,
   ActionLogger,
   ActionNotify,
   ActionRunMeta,

@@ -180,7 +180,6 @@ function generateCommitMessage(status: {
   // Check for specific file patterns
   const hasDbChanges = uniqueFiles.some((f) => f.endsWith("db.sqlite"));
   const hasBlockChanges = uniqueFiles.some((f) => f.startsWith("blocks/"));
-  const hasSourceChanges = uniqueFiles.some((f) => f.startsWith("sources/"));
   const hasActionChanges = uniqueFiles.some((f) => f.startsWith("actions/"));
   const hasConfigChanges = uniqueFiles.some((f) => f === "package.json");
 
@@ -194,15 +193,6 @@ function generateCommitMessage(status: {
       parts.push(`Update block: ${blockName}`);
     } else {
       parts.push(`Update ${blockFiles.length} blocks`);
-    }
-  }
-
-  if (hasSourceChanges) {
-    const sourceFiles = uniqueFiles.filter((f) => f.startsWith("sources/"));
-    if (sourceFiles.length <= 2) {
-      parts.push("Update sources");
-    } else {
-      parts.push(`Update ${sourceFiles.length} source files`);
     }
   }
 

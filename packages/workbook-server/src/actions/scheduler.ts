@@ -7,7 +7,6 @@
 
 import type { PGlite } from "@electric-sql/pglite";
 import type { DiscoveredAction } from "@hands/core/primitives";
-import type { DiscoveredSource } from "../sources/types.js";
 import { discoverActions } from "./discovery.js";
 import { executeAction } from "./executor.js";
 
@@ -150,7 +149,6 @@ const state: SchedulerState = {
 export interface SchedulerConfig {
   workbookDir: string;
   getDb: () => PGlite | null;
-  getSources: () => DiscoveredSource[];
   checkIntervalMs?: number; // Default: 60000 (1 minute)
 }
 
@@ -163,7 +161,7 @@ export function startScheduler(config: SchedulerConfig): void {
     return;
   }
 
-  const { workbookDir, getDb, getSources, checkIntervalMs = 60000 } = config;
+  const { workbookDir, getDb, checkIntervalMs = 60000 } = config;
 
   state.running = true;
   state.lastCheck = new Date();
@@ -171,10 +169,10 @@ export function startScheduler(config: SchedulerConfig): void {
   console.log("[scheduler] Starting action scheduler");
 
   // Check immediately, then on interval
-  checkScheduledActions(workbookDir, getDb, getSources);
+  checkScheduledActions(workbookDir, getDb);
 
   state.intervalId = setInterval(() => {
-    checkScheduledActions(workbookDir, getDb, getSources);
+    checkScheduledActions(workbookDir, getDb);
   }, checkIntervalMs);
 }
 
@@ -199,7 +197,6 @@ export function stopScheduler(): void {
 async function checkScheduledActions(
   workbookDir: string,
   getDb: () => PGlite | null,
-  getSources: () => DiscoveredSource[],
 ): Promise<void> {
   const now = new Date();
   state.lastCheck = now;
@@ -227,7 +224,7 @@ async function checkScheduledActions(
         console.log(`[scheduler] Running scheduled action: ${action.id}`);
 
         // Run async - don't await to avoid blocking other scheduled actions
-        runScheduledAction(action, db, getSources(), workbookDir).catch((err) => {
+        runScheduledAction(action, db, workbookDir).catch((err) => {
           console.error(`[scheduler] Failed to run action ${action.id}:`, err);
         });
       }
@@ -243,7 +240,6 @@ async function checkScheduledActions(
 async function runScheduledAction(
   action: DiscoveredAction,
   db: PGlite,
-  sources: DiscoveredSource[],
   workbookDir: string,
 ): Promise<void> {
   try {
@@ -252,7 +248,6 @@ async function runScheduledAction(
       trigger: "cron",
       input: undefined,
       db,
-      sources,
       workbookDir,
     });
   } catch (err) {

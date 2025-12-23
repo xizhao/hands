@@ -167,20 +167,6 @@ function getStdlibPath(): string {
   return getStdlibSymlinkPath();
 }
 
-// Source configuration
-export const SourceConfigSchema = z.object({
-  /** Whether this source is enabled */
-  enabled: z.boolean().default(true),
-  /** Cron schedule for automatic sync (e.g., "0 *\/6 * * *" for every 6 hours) */
-  schedule: z.string().optional(),
-  /** Whether to sync automatically on schedule */
-  autoSync: z.boolean().default(true),
-  /** Whether to sync when runtime starts */
-  syncOnStart: z.boolean().default(false),
-  /** Source-specific options */
-  options: z.record(z.unknown()).optional(),
-});
-
 // Secret requirement
 export const SecretSchema = z.object({
   required: z.boolean().default(true),
@@ -222,7 +208,6 @@ export const HandsConfigSchema = z.object({
   version: z.string().default("0.1.0"),
   pages: PagesConfigSchema.default({}),
   blocks: BlocksConfigSchema.default({}),
-  sources: z.record(z.string(), SourceConfigSchema).default({}),
   secrets: z.record(z.string(), SecretSchema).default({}),
   database: DatabaseConfigSchema.default({}),
   build: BuildConfigSchema.default({}),
@@ -231,7 +216,6 @@ export const HandsConfigSchema = z.object({
 
 // Export types
 export type HandsConfig = z.infer<typeof HandsConfigSchema>;
-export type SourceConfig = z.infer<typeof SourceConfigSchema>;
 export type SecretConfig = z.infer<typeof SecretSchema>;
 export type PagesConfig = z.infer<typeof PagesConfigSchema>;
 export type BlocksConfig = z.infer<typeof BlocksConfigSchema>;
@@ -290,7 +274,6 @@ export function createDefaultConfig(name: string): HandsConfig {
     version: "0.1.0",
     pages: { dir: "./pages" },
     blocks: { dir: "./blocks" },
-    sources: {},
     secrets: {},
     database: { migrations: "./migrations" },
     build: { outDir: ".hands" },
@@ -355,7 +338,7 @@ export function generateWorkbookTsConfig(workbookDir: string): string {
         "@ui/lib/utils": [`${relativeRuntimePath}/src/lib/utils.ts`],
       },
     },
-    include: ["plugins/**/*", "pages/**/*", "sources/**/*", "ui/**/*", "lib/**/*"],
+    include: ["plugins/**/*", "pages/**/*", "ui/**/*", "lib/**/*"],
     exclude: ["node_modules", ".hands"],
   };
 
@@ -379,7 +362,7 @@ This is your new workbook. Here's how to get started:
 
 ## Quick Tips
 
-- Use \`@\` to reference tables and data sources in your queries
+- Use \`@\` to reference tables in your queries
 - Pages auto-save as you edit
 - Each workbook has its own embedded database
 
@@ -400,7 +383,6 @@ export async function initWorkbook(options: InitWorkbookOptions): Promise<void> 
   // Create directory structure
   mkdirSync(join(directory, "migrations"), { recursive: true });
   mkdirSync(join(directory, "lib"), { recursive: true });
-  mkdirSync(join(directory, "sources"), { recursive: true });
   mkdirSync(join(directory, "ui"), { recursive: true });
   mkdirSync(join(directory, "pages"), { recursive: true });
 
@@ -418,7 +400,6 @@ export async function initWorkbook(options: InitWorkbookOptions): Promise<void> 
       version: "0.1.0",
       pages: { dir: "./pages" },
       blocks: { dir: "./blocks" },
-      sources: {},
       secrets: {},
       database: { migrations: "./migrations" },
       build: { outDir: ".hands" },

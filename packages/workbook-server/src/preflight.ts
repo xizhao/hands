@@ -105,7 +105,6 @@ export async function runPreflight(options: PreflightOptions): Promise<Preflight
   checks.push(await checkWorkbookDir(workbookDir));
   checks.push(await checkWorkbookConfig(workbookDir));
   checks.push(await checkBlocksDir(workbookDir, autoFix));
-  checks.push(await checkSourcesDir(workbookDir, autoFix));
 
   // 3. Global stdlib symlink (for development)
   checks.push(await checkStdlibSymlink(autoFix));
@@ -343,45 +342,6 @@ async function checkBlocksDir(workbookDir: string, autoFix: boolean): Promise<Pr
 
   return {
     name: "blocks/ directory",
-    ok: true,
-    message: "Present",
-    required: false,
-  };
-}
-
-async function checkSourcesDir(workbookDir: string, autoFix: boolean): Promise<PreflightCheck> {
-  const sourcesDir = join(workbookDir, "sources");
-
-  if (!existsSync(sourcesDir)) {
-    if (autoFix) {
-      try {
-        mkdirSync(sourcesDir, { recursive: true });
-        return {
-          name: "sources/ directory",
-          ok: true,
-          message: "Created",
-          required: false,
-          fixed: true,
-        };
-      } catch {
-        return {
-          name: "sources/ directory",
-          ok: false,
-          message: "Missing and could not create",
-          required: false,
-        };
-      }
-    }
-    return {
-      name: "sources/ directory",
-      ok: true,
-      message: "Not present (no sources)",
-      required: false,
-    };
-  }
-
-  return {
-    name: "sources/ directory",
     ok: true,
     message: "Present",
     required: false,

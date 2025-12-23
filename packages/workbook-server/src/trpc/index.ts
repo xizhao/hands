@@ -11,7 +11,6 @@ import type { Hono } from "hono";
 import { actionsRouter, type ActionsContext } from "../actions/trpc.js";
 import { gitRouter } from "../git/trpc.js";
 import type { PageRegistry } from "../pages/index.js";
-import { sourcesRouter, type TRPCContext } from "../sources/trpc.js";
 import { sqliteTRPCRouter, type SQLiteTRPCContext } from "../sqlite/trpc.js";
 import { aiRouter, type AIContext } from "./routers/ai.js";
 import { pagesRouter, type PagesContext } from "./routers/pages.js";
@@ -33,29 +32,8 @@ export interface TRPCConfig {
     rscError: string | null;
     buildErrors: string[];
   };
-  /** Optional: provides sources, actions, config (blocks/pages now come from discovery) */
-  getExternalManifest?: () => Promise<{
-    sources?: Array<{
-      id: string;
-      name: string;
-      title: string;
-      description: string;
-      schedule?: string;
-      secrets: string[];
-      missingSecrets: string[];
-      path: string;
-      spec?: string;
-    }>;
-    actions?: Array<{
-      id: string;
-      name: string;
-      description?: string;
-      schedule?: string;
-      triggers: string[];
-      path: string;
-    }>;
-    config?: Record<string, unknown>;
-  }>;
+  /** Optional: provides config from package.json */
+  getExternalConfig?: () => Promise<Record<string, unknown>>;
   formatBlockSource: (filePath: string) => Promise<boolean>;
   generateDefaultBlockSource: (blockName: string) => string;
   /** Called when schema changes (DDL executed) */
@@ -67,8 +45,7 @@ export interface TRPCConfig {
 
 // Combined context for all routers
 interface CombinedContext
-  extends TRPCContext,
-    StatusContext,
+  extends StatusContext,
     SQLiteTRPCContext,
     SecretsContext,
     WorkbookContext,
@@ -93,8 +70,6 @@ const appRouter = t.router({
   pages: pagesRouter,
   // Thumbnails routes
   thumbnails: thumbnailsRouter,
-  // Sources routes (tables, subscriptions, etc.)
-  sources: sourcesRouter,
   // Actions routes (list, run, history)
   actions: actionsRouter,
   // Git routes (status, commit, history, push, pull)
@@ -115,7 +90,7 @@ export function registerTRPCRoutes(app: Hono, config: TRPCConfig) {
     getRuntimeUrl,
     isDbReady,
     getState,
-    getExternalManifest,
+    getExternalConfig,
     formatBlockSource,
     generateDefaultBlockSource,
     onSchemaChange,
@@ -141,8 +116,8 @@ export function registerTRPCRoutes(app: Hono, config: TRPCConfig) {
       onSchemaChange,
       // Status context
       getState,
-      // Workbook context (now uses discovery module internally)
-      getExternalManifest,
+      // Workbook context
+      getExternalConfig,
       formatBlockSource,
       generateDefaultBlockSource,
       // Pages context
@@ -165,7 +140,6 @@ export function registerTRPCRoutes(app: Hono, config: TRPCConfig) {
 export type { ActionsRouter } from "../actions/trpc.js";
 export type { GitRouter } from "../git/trpc.js";
 // Re-export router types for client usage
-export type { SourcesRouter } from "../sources/trpc.js";
 export type { SQLiteTRPCRouter as DbRouter } from "../sqlite/trpc.js";
 export type { AIRouter } from "./routers/ai.js";
 export type { PagesRouter } from "./routers/pages.js";

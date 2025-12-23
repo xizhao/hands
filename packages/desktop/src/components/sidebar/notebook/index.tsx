@@ -16,15 +16,12 @@ import { cn } from "@/lib/utils";
 import { useSidebarState } from "./hooks/useSidebarState";
 import { useSidebarData } from "./hooks/useSidebarData";
 import { useSidebarActions } from "./hooks/useSidebarActions";
-import { CollapsedSidebar } from "./components/CollapsedSidebar";
 import { PagesSection } from "./sections/PagesSection";
 import { DataSection } from "./sections/DataSection";
 import { ActionsSection } from "./sections/ActionsSection";
 import { PluginsSection } from "./sections/PluginsSection";
 
 export interface NotebookSidebarProps {
-  /** Collapse to icon-only view */
-  collapsed?: boolean;
   /** Full-width grid layout */
   fullWidth?: boolean;
   /** Callback when a dropdown menu opens/closes */
@@ -38,7 +35,6 @@ export interface NotebookSidebarProps {
 }
 
 export function NotebookSidebar({
-  collapsed = false,
   fullWidth = false,
   onMenuOpenChange,
   preventNavigation = false,
@@ -56,18 +52,6 @@ export function NotebookSidebar({
   const actions = useSidebarActions({ preventNavigation, onSelectItem });
   const { availableSources } = useSourceManagement();
 
-  // Collapsed view
-  if (collapsed) {
-    return (
-      <CollapsedSidebar
-        pages={data.pages}
-        tables={data.tables}
-        actions={data.actions}
-      />
-    );
-  }
-
-  // Full view
   return (
     <TooltipProvider delayDuration={0}>
       <div className={cn("w-full", fullWidth && "max-w-4xl mx-auto")}>

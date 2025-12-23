@@ -5,12 +5,52 @@
  * Runtime has direct DB access for efficient execution.
  */
 
-import type {
-  ActionRun,
-  ActionTriggerType,
-  DiscoveredAction,
-} from "@hands/core/primitives";
-import { readEnvFile } from "../sources/secrets.js";
+import type { ActionRun, ActionTriggerType } from "@hands/core/primitives";
+import { existsSync, readFileSync } from "node:fs";
+import { join } from "node:path";
+import type { DiscoveredAction } from "../workbook/types.js";
+
+/**
+ * Read secrets from .env.local file
+ */
+function readEnvFile(workbookDir: string): Map<string, string> {
+  const envPath = join(workbookDir, ".env.local");
+
+  if (!existsSync(envPath)) {
+    return new Map();
+  }
+
+  try {
+    const content = readFileSync(envPath, "utf-8");
+    const env = new Map<string, string>();
+
+    for (const line of content.split("\n")) {
+      const trimmed = line.trim();
+      if (!trimmed || trimmed.startsWith("#")) continue;
+
+      const eqIndex = trimmed.indexOf("=");
+      if (eqIndex === -1) continue;
+
+      const key = trimmed.slice(0, eqIndex).trim();
+      let value = trimmed.slice(eqIndex + 1).trim();
+
+      if (
+        (value.startsWith('"') && value.endsWith('"')) ||
+        (value.startsWith("'") && value.endsWith("'"))
+      ) {
+        value = value.slice(1, -1);
+      }
+
+      if (key) {
+        env.set(key, value);
+      }
+    }
+
+    return env;
+  } catch {
+    return new Map();
+  }
+}
 
 /**
  * Generate a unique run ID (fallback for error cases)

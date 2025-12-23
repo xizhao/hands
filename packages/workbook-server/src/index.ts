@@ -15,7 +15,6 @@
  */
 
 import { gateway } from "@ai-sdk/gateway";
-import type { SourceDefinitionV2 } from "@hands/stdlib/sources";
 import { generateText } from "ai";
 import { Hono } from "hono";
 import { cors } from "hono/cors";
@@ -29,7 +28,7 @@ import {
   watch,
 } from "node:fs";
 import { join } from "node:path";
-import { discoverActions, stopScheduler } from "./actions/index.js";
+import { stopScheduler } from "./actions/index.js";
 import { getRuntimeSourcePath } from "./config/index.js";
 import {
   createPageRegistry,
@@ -38,9 +37,9 @@ import {
   renderPage,
 } from "./pages/index.js";
 import { PORTS, waitForPortFree } from "./ports.js";
-import { registerSourceRoutes } from "./sources/index.js";
 import { getDbSubscriptionManager } from "./sqlite/trpc.js";
 import { registerTRPCRoutes } from "./trpc/index.js";
+import { discoverWorkbook } from "./workbook/discovery.js";
 
 interface RuntimeConfig {
   workbookId: string;
@@ -166,152 +165,20 @@ function parseArgs(): RuntimeConfig {
   };
 }
 
-/** Source info for manifest */
-interface ManifestSource {
-  id: string;
-  name: string;
-  title: string;
-  description: string;
-  schedule?: string;
-  secrets: string[];
-  missingSecrets: string[];
-  path: string;
-  /** Markdown spec describing the source's intent and behavior */
-  spec?: string;
-}
-
 /**
- * Build manifest from filesystem (no DB needed - instant!)
- * Single file walk discovers blocks and sources.
+ * Read config from package.json
  */
-async function getManifest(workbookDir: string, workbookId: string) {
-  const blocks: Array<{
-    id: string;
-    title: string;
-    path: string;
-    parentDir: string;
-    uninitialized?: boolean;
-  }> = [];
-  const sources: ManifestSource[] = [];
-
-  // Read blocks from filesystem (recursive walk)
-  const blocksDir = join(workbookDir, "blocks");
-  if (existsSync(blocksDir)) {
-    walkDirectory(blocksDir, blocksDir, (filePath, relativePath) => {
-      const filename = filePath.split("/").pop() || "";
-      if (
-        (filename.endsWith(".tsx") || filename.endsWith(".ts")) &&
-        !filename.startsWith("_")
-      ) {
-        // ID is relative path without extension (e.g., "ui/email-events")
-        const id = relativePath.replace(/\.tsx?$/, "");
-        // parentDir is the directory portion (e.g., "ui" or "" for root)
-        const parentDir = relativePath.includes("/")
-          ? relativePath.substring(0, relativePath.lastIndexOf("/"))
-          : "";
-        // Extract title from meta export
-        const content = readFileSync(filePath, "utf-8");
-        const title = extractBlockTitle(content) || id.split("/").pop() || id;
-        // Check if block has the uninitialized marker (fast string check)
-        const uninitialized = content.includes("@hands:uninitialized");
-        blocks.push({
-          id,
-          title,
-          path: relativePath,
-          parentDir,
-          uninitialized: uninitialized || undefined,
-        });
-      }
-    });
-  }
-
-  // Read sources from filesystem - scan sources/ for directories with source.ts (v2)
-  const sourcesDir = join(workbookDir, "sources");
-  if (existsSync(sourcesDir)) {
-    const entries = readdirSync(sourcesDir, { withFileTypes: true });
-    for (const entry of entries) {
-      if (!entry.isDirectory()) continue;
-
-      // Look for source.ts (v2 format)
-      const sourceDir = join(sourcesDir, entry.name);
-      const sourcePath = join(sourceDir, "source.ts");
-
-      if (!existsSync(sourcePath)) continue;
-
-      try {
-        // Dynamic import - Bun will handle TypeScript
-        const mod = await import(sourcePath);
-        const definition = mod.default as SourceDefinitionV2 | undefined;
-
-        // Validate it's a proper v2 source definition
-        if (definition?.name) {
-          sources.push({
-            id: entry.name,
-            name: definition.name,
-            title: definition.name,
-            description: definition.description ?? "",
-            schedule: undefined,
-            secrets: [],
-            missingSecrets: [],
-            path: sourcePath,
-            spec: undefined,
-          });
-        }
-      } catch (err) {
-        console.error(`[manifest] Failed to load source ${entry.name}:`, err);
-      }
-    }
-  }
-
-  // Read config from package.json
-  let config: Record<string, any> = {};
+function getConfig(workbookDir: string): Record<string, unknown> {
   const pkgJsonPath = join(workbookDir, "package.json");
   if (existsSync(pkgJsonPath)) {
     try {
       const pkg = JSON.parse(readFileSync(pkgJsonPath, "utf-8"));
-      config = pkg.hands || {};
-    } catch {}
-  }
-
-  // Discover actions
-  const actionsDir = join(workbookDir, "actions");
-  const actions: Array<{
-    id: string;
-    name: string;
-    description?: string;
-    schedule?: string;
-    triggers: string[];
-    path: string;
-  }> = [];
-
-  if (existsSync(actionsDir)) {
-    try {
-      const discoveredActions = await discoverActions(workbookDir);
-      for (const action of discoveredActions) {
-        actions.push({
-          id: action.id,
-          name: action.definition.name,
-          description: action.definition.description,
-          schedule: action.definition.schedule,
-          triggers: action.definition.triggers ?? ["manual"],
-          path: action.path,
-        });
-      }
-    } catch (err) {
-      console.error("[manifest] Failed to discover actions:", err);
+      return pkg.hands || {};
+    } catch {
+      return {};
     }
   }
-
-  return {
-    workbookId,
-    workbookDir,
-    blocks,
-    sources,
-    actions,
-    config,
-    isEmpty:
-      blocks.length === 0 && sources.length === 0 && actions.length === 0,
-  };
+  return {};
 }
 
 /**
@@ -335,15 +202,6 @@ function walkDirectory(
       callback(fullPath, relativePath);
     }
   }
-}
-
-function extractBlockTitle(content: string): string | null {
-  // Look for: export const meta = { title: "..." }
-  const metaMatch = content.match(
-    /export\s+const\s+meta\s*=\s*{[\s\S]*?title\s*:\s*["']([^"']+)["']/
-  );
-  if (metaMatch) return metaMatch[1];
-  return null;
 }
 
 /**
@@ -887,26 +745,6 @@ ${(suffix || "").slice(0, 100)}
   });
 
   // ============================================
-  // Source Management Routes
-  // ============================================
-  registerSourceRoutes(app, {
-    workbookDir: config.workbookDir,
-    isDbReady: () => state.rscReady,
-    // Note: getDb not provided - sources use SQLite via runtime now
-  });
-
-  // ============================================
-  // Action Webhook Routes
-  // ============================================
-  // Note: Webhooks temporarily disabled - need to update to use SQLite via runtime
-  // registerWebhookRoutes(app, {
-  //   workbookDir: config.workbookDir,
-  //   isDbReady: () => state.rscReady,
-  //   getDb: () => null,
-  //   getSources: () => [],
-  // });
-
-  // ============================================
   // tRPC Routes (type-safe API)
   // ============================================
   registerTRPCRoutes(app, {
@@ -924,15 +762,8 @@ ${(suffix || "").slice(0, 100)}
       rscError: state.rscError,
       buildErrors: state.buildErrors,
     }),
-    // External manifest provides sources, actions, config (blocks/pages now come from discovery)
-    getExternalManifest: async () => {
-      const manifest = await getManifest(config.workbookDir, config.workbookId);
-      return {
-        sources: manifest.sources,
-        actions: manifest.actions,
-        config: manifest.config,
-      };
-    },
+    // Config from package.json
+    getExternalConfig: async () => getConfig(config.workbookDir),
     formatBlockSource: (filePath: string) =>
       formatBlockSource(filePath, config.workbookDir),
     generateDefaultBlockSource,

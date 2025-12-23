@@ -15,6 +15,8 @@ export interface WorkbookConfig {
   pluginsDir?: string;
   /** Path to ui directory (default: rootPath/ui) */
   uiDir?: string;
+  /** Path to actions directory (default: rootPath/actions) */
+  actionsDir?: string;
   /** Output directory for generated files (default: rootPath/.hands) */
   outDir?: string;
 }
@@ -25,6 +27,7 @@ export interface ResolvedWorkbookConfig {
   pagesDir: string;
   pluginsDir: string;
   uiDir: string;
+  actionsDir: string;
   outDir: string;
 }
 
@@ -111,6 +114,39 @@ export interface DiscoveredTable {
 }
 
 // ============================================================================
+// Actions
+// ============================================================================
+
+export interface DiscoveredAction {
+  /** Action ID (derived from filename) */
+  id: string;
+  /** Path to the action file */
+  path: string;
+  /** Action name from definition */
+  name: string;
+  /** Human-readable description */
+  description?: string;
+  /** Cron schedule expression */
+  schedule?: string;
+  /** Trigger types */
+  triggers: string[];
+  /** Whether action has webhook trigger */
+  hasWebhook: boolean;
+  /** Webhook path override */
+  webhookPath?: string;
+  /** Required secrets */
+  secrets?: string[];
+  /** Missing secrets (validation errors) */
+  missingSecrets?: string[];
+  /** Whether action has input schema */
+  hasInput: boolean;
+  /** Whether action has database schema requirements */
+  hasSchema: boolean;
+  /** Next scheduled run (ISO timestamp) */
+  nextRun?: string;
+}
+
+// ============================================================================
 // Discovery Results
 // ============================================================================
 
@@ -135,6 +171,8 @@ export interface WorkbookManifest {
   components: DiscoveredComponent[];
   /** Discovered database tables */
   tables: DiscoveredTable[];
+  /** Discovered actions */
+  actions: DiscoveredAction[];
   /** Discovery errors */
   errors: DiscoveryError[];
   /** Timestamp of discovery */

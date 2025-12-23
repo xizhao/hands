@@ -133,17 +133,33 @@ interface DisplayProps {
 
 function InlineDisplay({ data, isLoading, error }: DisplayProps) {
   if (error) {
-    return <span className="text-destructive text-xs">Error</span>;
+    return (
+      <span className="inline-flex items-center px-1.5 py-0.5 rounded bg-destructive/10 text-destructive text-xs">
+        Error
+      </span>
+    );
   }
   if (isLoading) {
-    return <span className="text-muted-foreground animate-pulse">...</span>;
+    return (
+      <span className="inline-flex items-center px-1.5 py-0.5 rounded bg-violet-500/10 text-violet-600 dark:text-violet-400 animate-pulse">
+        ...
+      </span>
+    );
   }
   if (!data || data.length === 0) {
-    return <span className="text-muted-foreground">—</span>;
+    return (
+      <span className="inline-flex items-center px-1.5 py-0.5 rounded bg-muted text-muted-foreground">
+        —
+      </span>
+    );
   }
 
   const value = Object.values(data[0])[0];
-  return <span className="font-medium tabular-nums">{formatCellValue(value)}</span>;
+  return (
+    <span className="inline-flex items-center px-1.5 py-0.5 rounded bg-violet-500/10 text-violet-600 dark:text-violet-400 font-medium tabular-nums">
+      {formatCellValue(value)}
+    </span>
+  );
 }
 
 function ListDisplay({ data, isLoading, error }: DisplayProps) {

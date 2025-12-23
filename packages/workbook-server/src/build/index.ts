@@ -34,19 +34,10 @@ export interface HandsConfig {
     exclude?: string[];
   };
 
-  /** Sources configuration */
-  sources?: Record<string, SourceConfig>;
-
   /** Build configuration */
   build?: {
     outDir?: string;
   };
-}
-
-export interface SourceConfig {
-  enabled?: boolean;
-  schedule?: string;
-  [key: string]: unknown;
 }
 
 /**

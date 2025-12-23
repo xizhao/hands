@@ -1,3 +1,4 @@
+import { LiveQueryProvider, type QueryResult, type MutationResult } from "@hands/core/stdlib";
 import { PreviewEditor } from "@hands/editor";
 import { AnimatePresence, motion } from "framer-motion";
 import {
@@ -24,7 +25,9 @@ import {
   Search,
   Terminal,
 } from "lucide-react";
-import { memo, useMemo, useState } from "react";
+import { memo, useMemo, useState, useCallback, type ReactNode } from "react";
+import { useLiveQuery as useDesktopLiveQuery } from "@/lib/live-query";
+import { useActiveRuntime } from "@/hooks/useWorkbook";
 import ReactMarkdown from "react-markdown";
 import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
 import { oneDark } from "react-syntax-highlighter/dist/esm/styles/prism";
@@ -836,6 +839,165 @@ const ToolInvocation = memo(({ part, compact = false }: { part: ToolPart; compac
 
 ToolInvocation.displayName = "ToolInvocation";
 
+/**
+ * Detect incomplete MDX blocks during streaming.
+ * Returns { complete: string, incomplete: string | null }
+ * where 'complete' is renderable content and 'incomplete' is the partial block.
+ */
+function splitIncompleteBlock(text: string): { complete: string; incomplete: string | null; blockType: string | null } {
+  // Check for unclosed code fence (```mdx or ``` without closing)
+  const codeFenceMatch = text.match(/```(\w*)\n?[^`]*$/);
+  if (codeFenceMatch) {
+    const fenceStart = text.lastIndexOf("```");
+    // Make sure it's not a closed fence
+    const afterFence = text.slice(fenceStart + 3);
+    if (!afterFence.includes("```")) {
+      return {
+        complete: text.slice(0, fenceStart).trimEnd(),
+        incomplete: text.slice(fenceStart),
+        blockType: codeFenceMatch[1] || "code",
+      };
+    }
+  }
+
+  // Case 1: Opening tag not yet closed (no > yet)
+  // e.g., <LiveValue query="SELECT
+  const unclosedTagMatch = text.match(/<([A-Z][a-zA-Z]*)[^>]*$/);
+  if (unclosedTagMatch) {
+    const tagStart = text.lastIndexOf("<" + unclosedTagMatch[1]);
+    return {
+      complete: text.slice(0, tagStart).trimEnd(),
+      incomplete: text.slice(tagStart),
+      blockType: unclosedTagMatch[1],
+    };
+  }
+
+  // Case 2: Opening tag closed but missing closing tag
+  // e.g., <LiveValue query="..."> without </LiveValue>
+  // Check common MDX components that need closing tags
+  const mdxComponents = [
+    'LiveValue', 'LiveAction', 'LiveQuery',
+    'BarChart', 'LineChart', 'PieChart', 'AreaChart', 'ScatterChart', 'HeatmapChart', 'HistogramChart', 'BoxPlotChart', 'Chart',
+    'Page', 'Card', 'Table',
+  ];
+
+  for (const name of mdxComponents) {
+    // Count non-self-closing opens vs closes
+    const openRegex = new RegExp(`<${name}(?:\\s[^>]*)?>`, 'g');
+    const selfCloseRegex = new RegExp(`<${name}[^>]*/>`, 'g');
+    const closeRegex = new RegExp(`</${name}>`, 'g');
+
+    const allOpens = text.match(openRegex) || [];
+    const selfCloses = text.match(selfCloseRegex) || [];
+    const closes = text.match(closeRegex) || [];
+
+    // Non-self-closing opens = all opens minus self-closes
+    const unclosedCount = allOpens.length - selfCloses.length - closes.length;
+
+    if (unclosedCount > 0) {
+      // Find the last unclosed opening tag
+      const lastOpenIdx = text.lastIndexOf(`<${name}`);
+      if (lastOpenIdx !== -1) {
+        // Make sure it's not self-closing
+        const tagEnd = text.indexOf('>', lastOpenIdx);
+        if (tagEnd !== -1 && text[tagEnd - 1] !== '/') {
+          return {
+            complete: text.slice(0, lastOpenIdx).trimEnd(),
+            incomplete: text.slice(lastOpenIdx),
+            blockType: name,
+          };
+        }
+      }
+    }
+  }
+
+  return { complete: text, incomplete: null, blockType: null };
+}
+
+// Shimmer loader for incomplete MDX blocks - matches LiveValue loading style
+const MdxShimmerBlock = memo(({ blockType, compact = false }: { blockType: string; compact?: boolean }) => {
+  const metaFont = compact ? MSG_FONT.metaCompact : MSG_FONT.meta;
+
+  return (
+    <motion.div
+      className={cn(
+        "relative inline-flex items-center gap-2 px-3 py-1.5 rounded-lg overflow-hidden",
+        "bg-purple-500/10 border border-purple-500/20",
+      )}
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+    >
+      {/* Shimmer overlay */}
+      <motion.div
+        className="absolute inset-0"
+        style={{
+          background: "linear-gradient(90deg, transparent, rgba(168, 85, 247, 0.15), transparent)",
+        }}
+        animate={{ x: ["-100%", "100%"] }}
+        transition={{ duration: 1.5, repeat: Infinity, ease: "linear" }}
+      />
+      <span className={cn("relative font-mono text-purple-400", metaFont)}>
+        {blockType}
+      </span>
+      <span className="relative flex gap-0.5">
+        {[0, 1, 2].map((i) => (
+          <motion.span
+            key={i}
+            className="w-1 h-1 rounded-full bg-purple-400"
+            animate={{ opacity: [0.3, 1, 0.3], scale: [0.8, 1.2, 0.8] }}
+            transition={{ duration: 0.8, repeat: Infinity, delay: i * 0.15 }}
+          />
+        ))}
+      </span>
+    </motion.div>
+  );
+});
+
+MdxShimmerBlock.displayName = "MdxShimmerBlock";
+
+// Wrapper that provides LiveQueryProvider for chat previews
+function ChatQueryWrapper({ children }: { children: ReactNode }) {
+  const { data: runtime } = useActiveRuntime();
+  const runtimePort = runtime?.runtime_port ?? null;
+
+  // Query adapter for LiveQueryProvider
+  const useQueryAdapter = useCallback(
+    (sql: string, params?: Record<string, unknown>): QueryResult => {
+      const paramsArray = params ? Object.values(params) : undefined;
+
+      const result = useDesktopLiveQuery({
+        sql,
+        params: paramsArray,
+        enabled: !!sql && sql.trim().length > 0,
+        runtimePort,
+      });
+
+      return {
+        data: result.data,
+        isLoading: result.isLoading,
+        error: result.error,
+        refetch: result.refetch,
+      };
+    },
+    [runtimePort]
+  );
+
+  // Mutation adapter (no-op for chat previews - read-only)
+  const useMutationAdapter = useCallback((): MutationResult => ({
+    mutate: async () => {
+      console.warn("[ChatPreview] Mutations not supported in chat preview");
+    },
+    isPending: false,
+    error: null,
+  }), []);
+
+  return (
+    <LiveQueryProvider useQuery={useQueryAdapter} useMutation={useMutationAdapter}>
+      {children}
+    </LiveQueryProvider>
+  );
+}
+
 // Text content with MDX preview (renders LiveValue, charts, etc.)
 const TextContent = memo(
   ({
@@ -851,6 +1013,12 @@ const TextContent = memo(
   }) => {
     const fontSize = compact ? MSG_FONT.baseCompact : MSG_FONT.base;
 
+    // During streaming, detect incomplete MDX blocks and show loader chip
+    const { complete, incomplete, blockType } = useMemo(
+      () => (isStreaming ? splitIncompleteBlock(text) : { complete: text, incomplete: null, blockType: null }),
+      [text, isStreaming]
+    );
+
     return (
       <div
         className={cn(
@@ -859,14 +1027,22 @@ const TextContent = memo(
           darkText ? "prose-neutral" : "dark:prose-invert",
         )}
       >
-        <PreviewEditor
-          value={text}
-          contentClassName={cn(
-            "!p-0 !min-h-0",
-            fontSize,
-          )}
-        />
-        {isStreaming && (
+        {complete && (
+          <PreviewEditor
+            value={complete}
+            wrapper={ChatQueryWrapper}
+            contentClassName={cn(
+              "!p-0 !min-h-0",
+              fontSize,
+            )}
+          />
+        )}
+        {isStreaming && incomplete && blockType && (
+          <div className="mt-1">
+            <MdxShimmerBlock blockType={blockType} compact={compact} />
+          </div>
+        )}
+        {isStreaming && !incomplete && (
           <motion.span
             className="inline-block w-0.5 h-4 bg-primary ml-0.5 align-middle"
             animate={{ opacity: [1, 0] }}

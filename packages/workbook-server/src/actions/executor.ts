@@ -12,10 +12,52 @@ import type {
   DiscoveredAction,
 } from "@hands/core/primitives";
 import { validateSchema } from "@hands/core/primitives";
-import { readEnvFile } from "../sources/secrets.js";
-import type { DiscoveredSource } from "../sources/types.js";
+import { existsSync, readFileSync } from "node:fs";
+import { join } from "node:path";
 import { buildActionContext, createRunMeta } from "./context.js";
 import { saveActionRun, updateActionRun } from "./history.js";
+
+/**
+ * Read secrets from .env.local file
+ */
+function readEnvFile(workbookDir: string): Map<string, string> {
+  const envPath = join(workbookDir, ".env.local");
+
+  if (!existsSync(envPath)) {
+    return new Map();
+  }
+
+  try {
+    const content = readFileSync(envPath, "utf-8");
+    const env = new Map<string, string>();
+
+    for (const line of content.split("\n")) {
+      const trimmed = line.trim();
+      if (!trimmed || trimmed.startsWith("#")) continue;
+
+      const eqIndex = trimmed.indexOf("=");
+      if (eqIndex === -1) continue;
+
+      const key = trimmed.slice(0, eqIndex).trim();
+      let value = trimmed.slice(eqIndex + 1).trim();
+
+      if (
+        (value.startsWith('"') && value.endsWith('"')) ||
+        (value.startsWith("'") && value.endsWith("'"))
+      ) {
+        value = value.slice(1, -1);
+      }
+
+      if (key) {
+        env.set(key, value);
+      }
+    }
+
+    return env;
+  } catch {
+    return new Map();
+  }
+}
 
 /**
  * Generate a unique run ID
@@ -105,7 +147,6 @@ export interface ExecuteActionOptions {
   trigger: ActionTriggerType;
   input: unknown;
   db: PGlite;
-  sources: DiscoveredSource[];
   workbookDir: string;
 }
 
@@ -113,7 +154,7 @@ export interface ExecuteActionOptions {
  * Execute an action
  */
 export async function executeAction(options: ExecuteActionOptions): Promise<ActionRun> {
-  const { action, trigger, input, db, sources, workbookDir } = options;
+  const { action, trigger, input, db, workbookDir } = options;
   const runId = generateRunId();
   const startTime = Date.now();
 
@@ -213,7 +254,6 @@ export async function executeAction(options: ExecuteActionOptions): Promise<Acti
   const runMeta = createRunMeta(runId, trigger, validatedInput);
   const ctx = buildActionContext({
     db,
-    sources,
     secrets,
     runMeta,
   });
@@ -266,7 +306,6 @@ export async function executeActionById(
   trigger: ActionTriggerType,
   input: unknown,
   db: PGlite,
-  sources: DiscoveredSource[],
   workbookDir: string,
 ): Promise<ActionRun> {
   const action = actions.find((a) => a.id === actionId);
@@ -290,7 +329,6 @@ export async function executeActionById(
     trigger,
     input,
     db,
-    sources,
     workbookDir,
   });
 }

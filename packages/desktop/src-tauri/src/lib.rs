@@ -1368,8 +1368,6 @@ async fn pick_file(app: tauri::AppHandle) -> Result<Option<String>, String> {
     let (tx, rx) = std::sync::mpsc::channel();
 
     FileDialogBuilder::new(app.dialog().clone())
-        .add_filter("All Files", &["*"])
-        .add_filter("Data Files", &["csv", "json", "parquet", "xlsx", "xls", "tsv", "txt"])
         .pick_file(move |file_path| {
             let _ = tx.send(file_path.map(|p| p.to_string()));
         });
@@ -1377,6 +1375,23 @@ async fn pick_file(app: tauri::AppHandle) -> Result<Option<String>, String> {
     // Wait for the dialog result
     rx.recv()
         .map_err(|e| format!("Failed to receive file path: {}", e))
+}
+
+/// Open a folder picker dialog and return the selected folder path
+#[tauri::command]
+async fn pick_folder(app: tauri::AppHandle) -> Result<Option<String>, String> {
+    use tauri_plugin_dialog::FileDialogBuilder;
+
+    let (tx, rx) = std::sync::mpsc::channel();
+
+    FileDialogBuilder::new(app.dialog().clone())
+        .pick_folder(move |folder_path| {
+            let _ = tx.send(folder_path.map(|p| p.to_string()));
+        });
+
+    // Wait for the dialog result
+    rx.recv()
+        .map_err(|e| format!("Failed to receive folder path: {}", e))
 }
 
 #[tauri::command]
@@ -1458,7 +1473,8 @@ pub fn run() {
             open_db_browser,
             open_docs,
             set_active_workbook,
-            pick_file
+            pick_file,
+            pick_folder
         ])
         .setup(|app| {
             let state = Arc::new(Mutex::new(AppState {

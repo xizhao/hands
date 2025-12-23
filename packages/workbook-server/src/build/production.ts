@@ -737,18 +737,5 @@ function generateProductionWrangler(config: HandsConfig, hasStaticAssets: boolea
   lines.push('ENVIRONMENT = "production"');
   lines.push("# Set DATABASE_URL in Cloudflare dashboard or via wrangler secret");
 
-  // Add source schedules as triggers
-  const sources = config.sources || {};
-  const enabledSources = Object.entries(sources).filter(
-    ([_, s]) => s.enabled !== false && s.schedule,
-  );
-
-  if (enabledSources.length > 0) {
-    lines.push("");
-    lines.push("[triggers]");
-    const crons = enabledSources.map(([_, s]) => `"${s.schedule}"`);
-    lines.push(`crons = [${crons.join(", ")}]`);
-  }
-
   return `${lines.join("\n")}\n`;
 }

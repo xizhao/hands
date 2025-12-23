@@ -1,16 +1,26 @@
 /**
- * UnifiedSidebar - Search + Chat input with filtered sidebar
+ * UnifiedSidebar - Arc-style sidebar with workbook header + chat + browse
  *
  * Features:
+ * - Workbook dropdown header with traffic light offset
  * - Single input that serves as both search and chat
  * - As you type, filters the NotebookSidebar content in place
  * - Enter sends as chat prompt
  * - Shows chat messages when thread is active
+ * - Responsive 2-column layout when wide enough
  */
 
 import { ChatMessage } from "@/components/ChatMessage";
 import { ChatSettings } from "@/components/ChatSettings";
+import { SaveStatusIndicator } from "@/components/SaveStatusIndicator";
 import { Button } from "@/components/ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import {
   Popover,
   PopoverAnchor,
@@ -18,7 +28,8 @@ import {
 } from "@/components/ui/popover";
 import { ShimmerText } from "@/components/ui/thinking-indicator";
 import { ATTACHMENT_TYPE, useChatState } from "@/hooks/useChatState";
-import { useActiveSession } from "@/hooks/useNavState";
+import { useNeedsTrafficLightOffset } from "@/hooks/useFullscreen";
+import { useActiveSession, useClearNavigation } from "@/hooks/useNavState";
 import { useRuntimeProcess } from "@/hooks/useRuntimeState";
 import { useServer } from "@/hooks/useServer";
 import {
@@ -30,20 +41,36 @@ import {
   useSessions,
   useSessionStatuses,
 } from "@/hooks/useSession";
-import { useWorkbook, useWorkbookDatabase } from "@/hooks/useWorkbook";
+import {
+  useCreateWorkbook,
+  useOpenWorkbook,
+  useUpdateWorkbook,
+  useWorkbook,
+  useWorkbookDatabase,
+  useWorkbooks,
+} from "@/hooks/useWorkbook";
 import type { Session } from "@/lib/api";
+import type { Workbook } from "@/lib/workbook";
 import { fillTemplate, PROMPTS } from "@/lib/prompts";
 import { cn } from "@/lib/utils";
 import { STDLIB_QUICK_REF } from "@hands/core/docs";
 import { invoke } from "@tauri-apps/api/core";
+import { useRouter } from "@tanstack/react-router";
 import { AnimatePresence, motion } from "framer-motion";
 import {
   ArrowUp,
+  Check,
+  ChevronDown,
   Database,
+  File,
+  Folder,
   Hand,
+  Home,
   Layers,
   Loader2,
+  MessageSquare,
   Paperclip,
+  Plus,
   Square,
   X,
 } from "lucide-react";
@@ -69,6 +96,7 @@ export function UnifiedSidebar({
   compact = false,
   onSelectItem,
 }: UnifiedSidebarProps) {
+  const router = useRouter();
   const chatState = useChatState();
   const { sessionId: activeSessionId, setSession: setActiveSession } =
     useActiveSession();
@@ -77,6 +105,18 @@ export function UnifiedSidebar({
   const { data: sessions = [] } = useSessions();
   const { data: messages = [], isLoading } = useMessages(activeSessionId);
   const { isConnected } = useServer();
+
+  // Workbook management
+  const { data: workbooks } = useWorkbooks();
+  const createWorkbook = useCreateWorkbook();
+  const openWorkbook = useOpenWorkbook();
+  const updateWorkbook = useUpdateWorkbook();
+  const clearNavigation = useClearNavigation();
+  const needsTrafficLightOffset = useNeedsTrafficLightOffset();
+
+  // Current workbook
+  const currentWorkbook = workbooks?.find((w) => w.id === activeWorkbookId);
+  const titleInputRef = useRef<HTMLSpanElement>(null);
 
   const sendMessage = useSendMessage();
   const createSession = useCreateSession();
@@ -88,7 +128,6 @@ export function UnifiedSidebar({
 
   const [input, setInput] = useState("");
   const [isUploadingFile, setIsUploadingFile] = useState(false);
-  const [showBackgroundSessions, setShowBackgroundSessions] = useState(false);
   const [isInputExpanded, setIsInputExpanded] = useState(false);
   const [containerWidth, setContainerWidth] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -315,6 +354,51 @@ ${STDLIB_QUICK_REF}
     }
   }, [chatState]);
 
+  // Folder picker - opens native dialog and sets folder path attachment
+  const handlePickFolder = useCallback(async () => {
+    try {
+      const folderPath = await invoke<string | null>("pick_folder");
+      if (folderPath) {
+        const folderName = folderPath.split("/").pop() || folderPath;
+        chatState.setPendingAttachment({
+          type: ATTACHMENT_TYPE.FILEPATH,
+          filePath: folderPath,
+          name: folderName,
+        });
+      }
+    } catch (err) {
+      console.error("[UnifiedSidebar] Failed to pick folder:", err);
+    }
+  }, [chatState]);
+
+  // Workbook handlers
+  const handleSwitchWorkbook = useCallback(
+    (workbook: { id: string; directory: string; name: string }) => {
+      clearNavigation();
+      openWorkbook.mutate(workbook as Workbook);
+    },
+    [clearNavigation, openWorkbook]
+  );
+
+  const handleCreateWorkbook = useCallback(() => {
+    createWorkbook.mutate(
+      { name: "Untitled Workbook" },
+      {
+        onSuccess: (newWorkbook) => {
+          clearNavigation();
+          openWorkbook.mutate(newWorkbook, {
+            onSuccess: () => {
+              router.navigate({
+                to: "/pages/$pageId",
+                params: { pageId: "welcome" },
+              });
+            },
+          });
+        },
+      }
+    );
+  }, [clearNavigation, createWorkbook, openWorkbook, router]);
+
   // Auto-submit for file drops
   useEffect(() => {
     const pending = chatState.pendingAttachment;
@@ -366,12 +450,6 @@ ${STDLIB_QUICK_REF}
   }));
 
   const backgroundCount = backgroundSessions.length;
-  const backgroundBusyCount = backgroundSessions.filter((s) => {
-    const st = sessionStatuses[s.id];
-    return st?.type === "busy" || st?.type === "running";
-  }).length;
-
-  const hasChips = allChips.length > 0 || backgroundCount > 0;
   const pendingAttachment = chatState.pendingAttachment;
   const hasContent = input.trim() || pendingAttachment;
   const sendError = sendMessage.error || createSession.error;
@@ -401,6 +479,81 @@ ${STDLIB_QUICK_REF}
   // ============================================================================
   // Render Helpers
   // ============================================================================
+
+  // Workbook header with traffic light offset (project dropdown right-aligned)
+  const workbookHeader = (
+    <div
+      data-tauri-drag-region
+      className={cn(
+        "shrink-0 flex items-center justify-end gap-1 h-10",
+        needsTrafficLightOffset ? "pl-[80px] pr-3" : "px-3"
+      )}
+    >
+      {/* Save status indicator */}
+      <SaveStatusIndicator />
+
+      {/* Editable workbook title */}
+      <span
+        ref={titleInputRef}
+        contentEditable
+        suppressContentEditableWarning
+        onBlur={(e) => {
+          const newName = e.currentTarget.textContent?.trim() || "";
+          if (currentWorkbook && newName && newName !== currentWorkbook.name) {
+            updateWorkbook.mutate({
+              ...currentWorkbook,
+              name: newName,
+              updated_at: Date.now(),
+            });
+          }
+        }}
+        onKeyDown={(e) => {
+          if (e.key === "Enter") {
+            e.preventDefault();
+            e.currentTarget.blur();
+          } else if (e.key === "Escape") {
+            e.currentTarget.textContent = currentWorkbook?.name ?? "Untitled";
+            e.currentTarget.blur();
+          }
+        }}
+        className={cn(
+          "px-1 py-0.5 text-sm font-medium bg-transparent rounded-sm cursor-text",
+          "outline-none truncate max-w-[140px]",
+          "hover:bg-accent/50",
+          "focus:bg-background focus:ring-1 focus:ring-ring/20"
+        )}
+        spellCheck={false}
+      >
+        {currentWorkbook?.name ?? "Untitled"}
+      </span>
+
+      {/* Workbook switcher dropdown */}
+      <DropdownMenu>
+        <DropdownMenuTrigger className="flex items-center justify-center w-5 h-5 rounded-sm text-muted-foreground/70 hover:text-muted-foreground hover:bg-accent/50">
+          <ChevronDown className="h-3 w-3" />
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end" className="w-[200px]">
+          {workbooks?.map((wb) => (
+            <DropdownMenuItem
+              key={wb.id}
+              onClick={() => handleSwitchWorkbook(wb)}
+              className="flex items-center justify-between"
+            >
+              <span className="truncate text-[13px]">{wb.name}</span>
+              {wb.id === activeWorkbookId && (
+                <Check className="h-3.5 w-3.5 text-primary shrink-0" />
+              )}
+            </DropdownMenuItem>
+          ))}
+          <DropdownMenuSeparator />
+          <DropdownMenuItem onClick={handleCreateWorkbook}>
+            <Plus className="h-3.5 w-3.5 mr-2" />
+            <span className="text-[13px]">New Notebook</span>
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
+    </div>
+  );
 
   // Error display
   const errorDisplay = displayError && (
@@ -476,16 +629,27 @@ ${STDLIB_QUICK_REF}
                   {input || placeholder}
                 </div>
 
-                <button
-                  className="p-1 shrink-0 text-muted-foreground/50 hover:text-muted-foreground"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    handlePickFile();
-                  }}
-                  title="Attach file"
-                >
-                  <Paperclip className="h-3.5 w-3.5" />
-                </button>
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <button
+                      className="p-1 shrink-0 text-muted-foreground/50 hover:text-muted-foreground"
+                      onClick={(e) => e.stopPropagation()}
+                      title="Attach file or folder"
+                    >
+                      <Paperclip className="h-3.5 w-3.5" />
+                    </button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="start" className="w-[140px]">
+                    <DropdownMenuItem onClick={handlePickFile}>
+                      <File className="h-3.5 w-3.5 mr-2" />
+                      <span className="text-[13px]">File</span>
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={handlePickFolder}>
+                      <Folder className="h-3.5 w-3.5 mr-2" />
+                      <span className="text-[13px]">Folder</span>
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
 
                 {isBusy ? (
                   <Button
@@ -633,13 +797,26 @@ ${STDLIB_QUICK_REF}
               className="flex-1 min-w-0 bg-transparent text-sm placeholder:text-muted-foreground/50 focus:outline-none"
             />
 
-            <button
-              className="p-1 shrink-0 text-muted-foreground/50 hover:text-muted-foreground"
-              onClick={handlePickFile}
-              title="Attach file"
-            >
-              <Paperclip className="h-3.5 w-3.5" />
-            </button>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <button
+                  className="p-1 shrink-0 text-muted-foreground/50 hover:text-muted-foreground"
+                  title="Attach file or folder"
+                >
+                  <Paperclip className="h-3.5 w-3.5" />
+                </button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="start" className="w-[140px]">
+                <DropdownMenuItem onClick={handlePickFile}>
+                  <File className="h-3.5 w-3.5 mr-2" />
+                  <span className="text-[13px]">File</span>
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={handlePickFolder}>
+                  <Folder className="h-3.5 w-3.5 mr-2" />
+                  <span className="text-[13px]">Folder</span>
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
 
             {isBusy ? (
               <Button
@@ -676,101 +853,184 @@ ${STDLIB_QUICK_REF}
         )
   ;
 
-  // Session chips
-  const sessionChips = hasChips && (
+  // Tab bar - Arc/Chrome style navigation
+  const allThreads = [...foregroundSessions, ...backgroundSessions];
+  const hasThreads = allThreads.length > 0;
+  const isHomeActive = !activeSessionId;
+
+  const tabBar = (
     <div
       className={cn(
-        "shrink-0 flex items-center gap-1 py-1.5 border-b border-border/50",
+        "shrink-0 flex items-center gap-0.5 h-9",
         compact ? "px-2" : "px-3"
       )}
     >
-      <div className="flex flex-wrap gap-1 min-w-0 flex-1">
-        {allChips.map((chip) => (
-          <div key={chip.id} className="flex items-center">
-            <button
-              onClick={() => handleSwitchThread(chip.id)}
-              className={cn(
-                "flex items-center gap-1 px-1.5 py-0.5 text-[10px] rounded transition-colors",
-                chip.isCurrent
-                  ? "bg-muted text-foreground"
-                  : "text-muted-foreground hover:bg-muted/50"
-              )}
-            >
-              <StatusDot status={chip.status} />
-              <span
-                className={cn(
-                  "truncate",
-                  compact ? "max-w-[50px]" : "max-w-[80px]"
-                )}
-              >
-                {chip.title}
-              </span>
-            </button>
-            <button
-              onClick={(e) => handleDeleteThread(chip.id, e)}
-              className="p-0.5 rounded-full hover:bg-muted opacity-40 hover:opacity-100"
-            >
-              <X className="h-2 w-2" />
-            </button>
-          </div>
-        ))}
-      </div>
+      {/* Home tab - only in single-column mode (two-column shows browse on right) */}
+      {!isTwoColumn && (
+        <button
+          onClick={() => setActiveSession(null)}
+          className={cn(
+            "flex items-center gap-1.5 px-2.5 h-7 text-xs font-medium rounded-md transition-all",
+            isHomeActive
+              ? "bg-background text-foreground shadow-sm border border-border/50"
+              : "text-muted-foreground hover:text-foreground hover:bg-muted/50"
+          )}
+        >
+          <Home className="h-3.5 w-3.5" />
+          {!needsPopover && <span>Home</span>}
+        </button>
+      )}
 
-      {backgroundCount > 0 && (
-        <div className="relative shrink-0">
-          <button
-            onClick={() =>
-              setShowBackgroundSessions(!showBackgroundSessions)
-            }
-            className={cn(
-              "flex items-center gap-1 px-1.5 py-0.5 text-[10px] rounded",
-              showBackgroundSessions
-                ? "bg-muted/80"
-                : "text-muted-foreground/50 hover:bg-muted/30"
-            )}
-          >
-            <span className="tabular-nums">{backgroundCount}</span>
-            {backgroundBusyCount > 0 ? (
-              <span className="relative flex h-2 w-2">
-                <span className="animate-ping absolute h-full w-full rounded-full bg-green-400 opacity-75" />
-                <span className="relative rounded-full h-2 w-2 bg-green-500" />
-              </span>
-            ) : (
-              <Layers className="h-3 w-3 opacity-60" />
-            )}
-          </button>
-          <AnimatePresence>
-            {showBackgroundSessions && (
-              <motion.div
-                initial={{ opacity: 0, y: -5 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -5 }}
-                className="absolute top-full right-0 mt-1 min-w-[160px] rounded-lg border bg-background/95 backdrop-blur-xl shadow-lg z-50"
+      {/* Compact mode: Current thread tab + overflow dropdown */}
+      {needsPopover && hasThreads && (
+        <>
+          {/* Show current thread if one is selected */}
+          {!isHomeActive && activeSessionId && (
+            <div
+              className="group flex items-center gap-1 px-2 h-7 text-xs font-medium rounded-md bg-background text-foreground shadow-sm border border-border/50 min-w-0 max-w-[120px]"
+            >
+              <button
+                onClick={() => handleSwitchThread(activeSessionId)}
+                className="flex items-center gap-1.5 min-w-0 flex-1"
               >
-                <div className="p-1 max-h-[200px] overflow-y-auto">
-                  <div className="px-2 py-1 text-[9px] uppercase text-muted-foreground/50 font-medium">
-                    Background
-                  </div>
-                  {backgroundSessions.map((session) => (
-                    <button
+                <StatusDot status={getSessionStatus(activeSessionId)} />
+                <span className="truncate">
+                  {allThreads.find((s) => s.id === activeSessionId)?.title ||
+                    `Thread`}
+                </span>
+              </button>
+              <button
+                onClick={(e) => handleDeleteThread(activeSessionId, e)}
+                className="p-0.5 rounded hover:bg-accent opacity-0 group-hover:opacity-60 hover:!opacity-100 transition-opacity shrink-0"
+              >
+                <X className="h-3 w-3" />
+              </button>
+            </div>
+          )}
+
+          {/* Threads dropdown for other threads */}
+          {allThreads.length > (isHomeActive ? 0 : 1) && (
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <button
+                  className={cn(
+                    "flex items-center gap-1 px-1.5 h-7 text-xs rounded-md transition-all",
+                    "text-muted-foreground hover:text-foreground hover:bg-muted/50"
+                  )}
+                >
+                  {allThreads.some((s) => {
+                    if (s.id === activeSessionId) return false;
+                    const st = sessionStatuses[s.id];
+                    return st?.type === "busy" || st?.type === "running";
+                  }) && (
+                    <span className="relative flex h-1.5 w-1.5">
+                      <span className="animate-ping absolute h-full w-full rounded-full bg-green-400 opacity-75" />
+                      <span className="relative rounded-full h-1.5 w-1.5 bg-green-500" />
+                    </span>
+                  )}
+                  <span className="tabular-nums">
+                    {isHomeActive ? allThreads.length : allThreads.length - 1}
+                  </span>
+                  <ChevronDown className="h-3 w-3 opacity-60" />
+                </button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="start" className="w-[200px]">
+                {allThreads
+                  .filter((s) => s.id !== activeSessionId)
+                  .map((session) => (
+                    <DropdownMenuItem
                       key={session.id}
-                      onClick={() => {
-                        handleSwitchThread(session.id);
-                        setShowBackgroundSessions(false);
-                      }}
-                      className="flex items-center gap-2 w-full px-2 py-1 text-[11px] rounded hover:bg-muted/50 text-left"
+                      onClick={() => setActiveSession(session.id)}
+                      className="flex items-center gap-2"
                     >
                       <StatusDot status={getSessionStatus(session.id)} />
-                      <span className="truncate">
-                        {session.title ||
-                          `Subtask ${session.id.slice(0, 6)}`}
+                      <span className="flex-1 truncate text-[13px]">
+                        {session.title || `Thread ${session.id.slice(0, 6)}`}
                       </span>
-                    </button>
+                    </DropdownMenuItem>
                   ))}
-                </div>
-              </motion.div>
-            )}
-          </AnimatePresence>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          )}
+        </>
+      )}
+
+      {/* Wide mode: Arc-style thread tabs */}
+      {!needsPopover && hasThreads && (
+        <div className="flex items-center gap-0.5 flex-1 min-w-0 overflow-x-auto">
+          {allChips.slice(0, 4).map((chip) => (
+            <div
+              key={chip.id}
+              className={cn(
+                "group flex items-center gap-1.5 px-2.5 h-7 text-xs font-medium rounded-md transition-all min-w-0",
+                chip.isCurrent
+                  ? "bg-background text-foreground shadow-sm border border-border/50"
+                  : "text-muted-foreground hover:text-foreground hover:bg-muted/50"
+              )}
+            >
+              <button
+                onClick={() => handleSwitchThread(chip.id)}
+                className="flex items-center gap-1.5 min-w-0"
+              >
+                <StatusDot status={chip.status} />
+                <span className="truncate max-w-[100px]">{chip.title}</span>
+              </button>
+              <button
+                onClick={(e) => handleDeleteThread(chip.id, e)}
+                className="p-0.5 rounded hover:bg-accent opacity-0 group-hover:opacity-60 hover:!opacity-100 transition-opacity"
+              >
+                <X className="h-3 w-3" />
+              </button>
+            </div>
+          ))}
+
+          {/* Overflow dropdown for additional threads */}
+          {(allChips.length > 4 || backgroundCount > 0) && (
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <button className="flex items-center gap-1 px-2 h-7 text-xs text-muted-foreground hover:text-foreground hover:bg-muted/50 rounded-md">
+                  <span className="tabular-nums">
+                    +{allChips.length - 4 + backgroundCount}
+                  </span>
+                  <ChevronDown className="h-3 w-3" />
+                </button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-[200px]">
+                {allChips.slice(4).map((chip) => (
+                  <DropdownMenuItem
+                    key={chip.id}
+                    onClick={() => setActiveSession(chip.id)}
+                    className="flex items-center gap-2"
+                  >
+                    <StatusDot status={chip.status} />
+                    <span className="flex-1 truncate text-[13px]">
+                      {chip.title}
+                    </span>
+                  </DropdownMenuItem>
+                ))}
+                {backgroundSessions.length > 0 && (
+                  <>
+                    <DropdownMenuSeparator />
+                    <div className="px-2 py-1 text-[10px] uppercase text-muted-foreground/50 font-medium">
+                      Background
+                    </div>
+                    {backgroundSessions.map((session) => (
+                      <DropdownMenuItem
+                        key={session.id}
+                        onClick={() => setActiveSession(session.id)}
+                        className="flex items-center gap-2"
+                      >
+                        <StatusDot status={getSessionStatus(session.id)} />
+                        <span className="flex-1 truncate text-[13px]">
+                          {session.title || `Subtask ${session.id.slice(0, 6)}`}
+                        </span>
+                      </DropdownMenuItem>
+                    ))}
+                  </>
+                )}
+              </DropdownMenuContent>
+            </DropdownMenu>
+          )}
         </div>
       )}
     </div>
@@ -823,6 +1083,9 @@ ${STDLIB_QUICK_REF}
   if (isTwoColumn) {
     return (
       <div ref={containerRef} className="flex flex-col h-full w-full">
+        {/* Workbook header with traffic light offset */}
+        {workbookHeader}
+
         <div className="flex flex-1 min-h-0">
           {/* Left column: Chat */}
           <div className="flex flex-col w-1/2 border-r border-border/50">
@@ -833,8 +1096,8 @@ ${STDLIB_QUICK_REF}
               {inputElement}
             </div>
 
-            {/* Session chips */}
-            {sessionChips}
+            {/* Tab bar */}
+            {tabBar}
 
             {/* Chat messages or empty state */}
             <div ref={messagesContainerRef} className="flex-1 overflow-y-auto">
@@ -858,6 +1121,9 @@ ${STDLIB_QUICK_REF}
   // Single-column layout: Chat overlays browse when active
   return (
     <div ref={containerRef} className="flex flex-col h-full w-full">
+      {/* Workbook header with traffic light offset */}
+      {workbookHeader}
+
       {/* Input bar */}
       <div className={cn("shrink-0 py-2", compact ? "px-2" : "px-3")}>
         {errorDisplay}
@@ -865,8 +1131,8 @@ ${STDLIB_QUICK_REF}
         {inputElement}
       </div>
 
-      {/* Session chips */}
-      {sessionChips}
+      {/* Tab bar */}
+      {tabBar}
 
       {/* Content: Chat messages OR Browse */}
       <div ref={messagesContainerRef} className="flex-1 overflow-y-auto">

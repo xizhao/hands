@@ -6,7 +6,6 @@
 
 import type { PGlite } from "@electric-sql/pglite";
 import type { Hono } from "hono";
-import type { DiscoveredSource } from "../sources/types.js";
 import { discoverActions } from "./discovery.js";
 import { executeAction } from "./executor.js";
 
@@ -14,14 +13,13 @@ export interface WebhookConfig {
   workbookDir: string;
   getDb: () => PGlite | null;
   isDbReady: () => boolean;
-  getSources: () => DiscoveredSource[];
 }
 
 /**
  * Register webhook routes on a Hono app
  */
 export function registerWebhookRoutes(app: Hono, config: WebhookConfig): void {
-  const { workbookDir, getDb, isDbReady, getSources } = config;
+  const { workbookDir, getDb, isDbReady } = config;
 
   // POST /webhook/:actionId - Execute action via webhook
   app.post("/webhook/:actionId", async (c) => {
@@ -89,13 +87,11 @@ export function registerWebhookRoutes(app: Hono, config: WebhookConfig): void {
     }
 
     // Execute the action
-    const sources = getSources();
     const run = await executeAction({
       action,
       trigger: "webhook",
       input,
       db,
-      sources,
       workbookDir,
     });
 
@@ -192,13 +188,11 @@ export function registerWebhookRoutes(app: Hono, config: WebhookConfig): void {
     };
 
     // Execute the action
-    const sources = getSources();
     const run = await executeAction({
       action,
       trigger: "webhook",
       input,
       db,
-      sources,
       workbookDir,
     });
 

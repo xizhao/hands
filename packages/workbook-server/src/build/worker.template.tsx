@@ -549,34 +549,14 @@ async function buildManifest(workbookDir: string, workbookId: string, db: any) {
     // DB not available yet (still booting)
   }
 
-  // Read sources from package.json hands config
-  const sources: any[] = [];
-  try {
-    const pkgJson = await readFile(join(workbookDir, "package.json"), "utf-8");
-    const pkg = JSON.parse(pkgJson);
-    const config = pkg.hands || {};
-    if (config.sources) {
-      for (const [name, sc] of Object.entries(config.sources)) {
-        sources.push({
-          name,
-          enabled: (sc as any).enabled !== false,
-          schedule: (sc as any).schedule,
-        });
-      }
-    }
-  } catch {
-    // No package.json or no hands config
-  }
-
   const isEmpty =
-    pages.length === 0 && blocks.length === 0 && sources.length === 0 && tables.length === 0;
+    pages.length === 0 && blocks.length === 0 && tables.length === 0;
 
   return {
     workbookId,
     workbookDir,
     pages,
     blocks,
-    sources,
     tables,
     isEmpty,
   };

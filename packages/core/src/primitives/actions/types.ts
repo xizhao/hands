@@ -2,8 +2,8 @@
  * Actions - Serverless Compute Primitives
  *
  * Actions are serverless functions that can:
- * - Read/write data via ctx.sources
  * - Execute on triggers (cron, webhook, manual, pg_notify)
+ * - Access database via ctx.sql
  * - Access secrets securely
  * - Log and notify
  */
@@ -42,27 +42,6 @@ export interface ActionRun {
 }
 
 // =============================================================================
-// Table Client (for ctx.sources)
-// =============================================================================
-
-export interface SelectOptions {
-  where?: string;
-  limit?: number;
-  offset?: number;
-  orderBy?: string;
-}
-
-export interface TableClient<T = Record<string, unknown>> {
-  select(opts?: SelectOptions): Promise<T[]>;
-  selectOne(opts?: SelectOptions): Promise<T | null>;
-  insert(rows: T | T[]): Promise<T[]>;
-  update(where: string, data: Partial<T>): Promise<T[]>;
-  delete(where: string): Promise<number>;
-  upsert(rows: T | T[], conflictKeys: string[]): Promise<T[]>;
-  count(where?: string): Promise<number>;
-}
-
-// =============================================================================
 // Action Context
 // =============================================================================
 
@@ -87,9 +66,6 @@ export interface ActionRunMeta {
 }
 
 export interface ActionContext {
-  /** Access to source tables: ctx.sources.mySource.myTable.select() */
-  sources: Record<string, Record<string, TableClient>>;
-
   /** Raw SQL tagged template: ctx.sql`SELECT * FROM users` */
   sql: <T = unknown>(strings: TemplateStringsArray, ...values: unknown[]) => Promise<T[]>;
 
