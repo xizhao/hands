@@ -1749,18 +1749,11 @@ pub fn run() {
             // Start SSE listener for job tracking
             start_sse_job_listener(state.clone(), app.handle().clone());
 
-            // Open last workbook on startup (async)
             let startup_app = app.handle().clone();
             let startup_state = state.clone();
             tauri::async_runtime::spawn(async move {
-                // Small delay to ensure app is fully initialized
                 tokio::time::sleep(std::time::Duration::from_millis(100)).await;
-
-                match window_manager::open_startup_workbook(&startup_app, &startup_state).await {
-                    Ok(Some(label)) => println!("[startup] Opened workbook window: {}", label),
-                    Ok(None) => println!("[startup] No workbooks to open"),
-                    Err(e) => eprintln!("[startup] Failed to open workbook: {}", e),
-                }
+                let _ = window_manager::open_startup_workbook(&startup_app, &startup_state).await;
             });
 
             // Build the application menu

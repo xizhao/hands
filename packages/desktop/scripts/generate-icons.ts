@@ -39,6 +39,12 @@ function createTraySvg(size: number): string {
 </svg>`;
 }
 
+// Theme colors from packages/app/src/lib/theme.ts (dark theme)
+// background: HSL(224, 10%, 10%) = #18191d
+// foreground: HSL(210, 20%, 98%) = #f9fafb
+const DARK_BG = "#18191d";
+const DARK_FG = "#f9fafb";
+
 function createAppSvg(size: number): string {
   const padding = size * 0.15;
   const inner = size - padding * 2;
@@ -47,16 +53,10 @@ function createAppSvg(size: number): string {
 
   return `<?xml version="1.0" encoding="UTF-8"?>
 <svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 ${size} ${size}">
-  <defs>
-    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" style="stop-color:#3B82F6"/>
-      <stop offset="100%" style="stop-color:#1D4ED8"/>
-    </linearGradient>
-  </defs>
-  <rect width="${size}" height="${size}" rx="${cornerRadius}" fill="url(#bg)"/>
+  <rect width="${size}" height="${size}" rx="${cornerRadius}" fill="${DARK_BG}"/>
   <g transform="translate(${padding}, ${padding}) scale(${scale})"
      fill="none"
-     stroke="#FFFFFF"
+     stroke="${DARK_FG}"
      stroke-width="2"
      stroke-linecap="round"
      stroke-linejoin="round">
