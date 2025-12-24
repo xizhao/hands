@@ -1,32 +1,43 @@
 import { invoke } from "@tauri-apps/api/core";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { convertFileSrc } from "@tauri-apps/api/core";
-import { GripVertical, Image, Send, X, Maximize2, Minimize2 } from "lucide-react";
+import { GripVertical, Image, Send, X, Maximize2, Minimize2, Square } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
+import { api, subscribeToEvents, type ServerEvent, type MessageWithParts } from "@/lib/api";
 
 interface Message {
   id: string;
   role: "user" | "assistant";
   content: string;
   timestamp: number;
+  messageId?: string; // OpenCode message ID for streaming updates
 }
 
 export function ChatWidget() {
   const [screenshotPath, setScreenshotPath] = useState<string | null>(null);
   const [screenshotUrl, setScreenshotUrl] = useState<string | null>(null);
   const [widgetId, setWidgetId] = useState<string>("");
+  const [sessionId, setSessionId] = useState<string | null>(null);
   const [input, setInput] = useState("");
   const [messages, setMessages] = useState<Message[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [isExpanded, setIsExpanded] = useState(false);
   const [showScreenshot, setShowScreenshot] = useState(true);
+  const [streamingContent, setStreamingContent] = useState<string>("");
   const inputRef = useRef<HTMLTextAreaElement>(null);
+  const messagesEndRef = useRef<HTMLDivElement>(null);
+
+  // Scroll to bottom when messages update
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [messages, streamingContent]);
 
   // Parse query params on mount
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const screenshot = params.get("screenshot");
     const id = params.get("widget-id");
+    const existingSession = params.get("session");
 
     if (screenshot) {
       const path = decodeURIComponent(screenshot);
@@ -39,11 +50,55 @@ export function ChatWidget() {
       setWidgetId(id);
     }
 
+    if (existingSession) {
+      setSessionId(existingSession);
+    }
+
     // Focus input on mount
     setTimeout(() => {
       inputRef.current?.focus();
     }, 100);
   }, []);
+
+  // Subscribe to SSE events for streaming updates
+  useEffect(() => {
+    if (!sessionId) return;
+
+    const unsubscribe = subscribeToEvents((event: ServerEvent) => {
+      if (event.type === "message.part.updated") {
+        const { sessionId: eventSessionId, part } = event.properties;
+        if (eventSessionId !== sessionId) return;
+
+        // Update streaming content for text parts
+        if (part.type === "text") {
+          setStreamingContent(part.text || "");
+        }
+      }
+
+      if (event.type === "session.status") {
+        const { sessionId: eventSessionId, status } = event.properties;
+        if (eventSessionId !== sessionId) return;
+
+        // When status goes to idle, finalize the message
+        if (status === "idle" && streamingContent) {
+          setMessages((prev) => {
+            // Find and update the streaming message
+            const lastAssistant = [...prev].reverse().find((m) => m.role === "assistant");
+            if (lastAssistant) {
+              return prev.map((m) =>
+                m.id === lastAssistant.id ? { ...m, content: streamingContent } : m
+              );
+            }
+            return prev;
+          });
+          setStreamingContent("");
+          setIsLoading(false);
+        }
+      }
+    });
+
+    return unsubscribe;
+  }, [sessionId, streamingContent]);
 
   // Handle escape to close
   useEffect(() => {
@@ -85,10 +140,11 @@ export function ChatWidget() {
   const handleSend = useCallback(async () => {
     if (!input.trim() || isLoading) return;
 
+    const userContent = input.trim();
     const userMessage: Message = {
       id: crypto.randomUUID(),
       role: "user",
-      content: input.trim(),
+      content: userContent,
       timestamp: Date.now(),
     };
 
@@ -97,24 +153,57 @@ export function ChatWidget() {
     setIsLoading(true);
 
     try {
-      // TODO: Connect to OpenCode API
-      // For now, just simulate a response
-      await new Promise((resolve) => setTimeout(resolve, 1000));
+      // Create session if we don't have one
+      let currentSessionId = sessionId;
+      if (!currentSessionId) {
+        const session = await api.sessions.create({ title: "Quick Capture" });
+        currentSessionId = session.id;
+        setSessionId(currentSessionId);
+      }
 
+      // Add placeholder for assistant response
       const assistantMessage: Message = {
         id: crypto.randomUUID(),
         role: "assistant",
-        content: `I see you've captured a screenshot. Let me analyze it...\n\n(Screenshot path: ${screenshotPath || "none"})`,
+        content: "",
         timestamp: Date.now(),
       };
-
       setMessages((prev) => [...prev, assistantMessage]);
+
+      // Send the message with screenshot if available
+      if (screenshotPath) {
+        await api.promptWithFiles(currentSessionId, userContent, [screenshotPath]);
+      } else {
+        await api.promptAsync(currentSessionId, userContent);
+      }
+
+      // Response will come via SSE streaming
     } catch (err) {
       console.error("Failed to send message:", err);
-    } finally {
+      setMessages((prev) => {
+        // Update last message with error
+        const updated = [...prev];
+        const last = updated[updated.length - 1];
+        if (last?.role === "assistant") {
+          last.content = "Sorry, I encountered an error. Please try again.";
+        }
+        return updated;
+      });
       setIsLoading(false);
     }
-  }, [input, isLoading, screenshotPath]);
+  }, [input, isLoading, screenshotPath, sessionId]);
+
+  const handleAbort = useCallback(async () => {
+    if (!sessionId || !isLoading) return;
+
+    try {
+      await api.abort(sessionId);
+      setIsLoading(false);
+      setStreamingContent("");
+    } catch (err) {
+      console.error("Failed to abort:", err);
+    }
+  }, [sessionId, isLoading]);
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === "Enter" && !e.shiftKey) {
@@ -189,7 +278,7 @@ export function ChatWidget() {
           </div>
         )}
 
-        {messages.map((msg) => (
+        {messages.map((msg, idx) => (
           <div
             key={msg.id}
             className={`text-sm rounded-lg px-3 py-2 ${
@@ -198,19 +287,20 @@ export function ChatWidget() {
                 : "bg-muted mr-4"
             }`}
           >
-            {msg.content}
+            {/* Show streaming content for the last assistant message */}
+            {msg.role === "assistant" && idx === messages.length - 1 && isLoading
+              ? streamingContent || (
+                  <div className="flex items-center gap-1.5">
+                    <div className="h-1.5 w-1.5 bg-foreground/50 rounded-full animate-bounce" />
+                    <div className="h-1.5 w-1.5 bg-foreground/50 rounded-full animate-bounce [animation-delay:0.2s]" />
+                    <div className="h-1.5 w-1.5 bg-foreground/50 rounded-full animate-bounce [animation-delay:0.4s]" />
+                  </div>
+                )
+              : msg.content}
           </div>
         ))}
 
-        {isLoading && (
-          <div className="bg-muted mr-4 rounded-lg px-3 py-2 text-sm">
-            <div className="flex items-center gap-1.5">
-              <div className="h-1.5 w-1.5 bg-foreground/50 rounded-full animate-bounce" />
-              <div className="h-1.5 w-1.5 bg-foreground/50 rounded-full animate-bounce [animation-delay:0.2s]" />
-              <div className="h-1.5 w-1.5 bg-foreground/50 rounded-full animate-bounce [animation-delay:0.4s]" />
-            </div>
-          </div>
-        )}
+        <div ref={messagesEndRef} />
       </div>
 
       {/* Input */}
@@ -226,13 +316,23 @@ export function ChatWidget() {
             rows={1}
             disabled={isLoading}
           />
-          <button
-            onClick={handleSend}
-            disabled={!input.trim() || isLoading}
-            className="p-2 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-          >
-            <Send className="h-4 w-4" />
-          </button>
+          {isLoading ? (
+            <button
+              onClick={handleAbort}
+              className="p-2 bg-destructive text-destructive-foreground rounded-lg hover:bg-destructive/90 transition-colors"
+              title="Stop generating"
+            >
+              <Square className="h-4 w-4" />
+            </button>
+          ) : (
+            <button
+              onClick={handleSend}
+              disabled={!input.trim()}
+              className="p-2 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+            >
+              <Send className="h-4 w-4" />
+            </button>
+          )}
         </div>
       </div>
     </div>

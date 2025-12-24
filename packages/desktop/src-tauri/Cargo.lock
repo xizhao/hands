@@ -1964,6 +1964,7 @@ version = "0.1.0"
 dependencies = [
  "base64 0.22.1",
  "dirs 5.0.1",
+ "futures-util",
  "image",
  "objc2 0.6.3",
  "objc2-app-kit",

@@ -18,8 +18,10 @@ pub mod tray;
 pub mod hotkeys;
 pub mod capture;
 pub mod runtime_manager;
+pub mod jobs;
 
 use runtime_manager::RuntimeManager;
+use jobs::{JobRegistry, SessionEvent};
 
 // Port configuration - matches packages/workbook-server/src/ports.ts
 // All ports use 5-digit scheme with configurable prefix (default 55xxx)
@@ -43,6 +45,7 @@ pub struct AppState {
     pub server: Option<Child>,
     pub workbook_servers: HashMap<String, WorkbookServerProcess>, // workbook_id -> server process (legacy)
     pub runtime_manager: RuntimeManager,           // new multi-runtime manager
+    pub job_registry: JobRegistry,                 // background job tracking
     pub active_workbook_id: Option<String>,        // currently active workbook
     pub should_quit: bool,                         // track if app should actually quit
 }
@@ -643,6 +646,135 @@ fn start_workbook_server_monitor(state: Arc<Mutex<AppState>>, app: tauri::AppHan
             }
         }
     });
+}
+
+/// Start SSE listener for job/session status tracking
+fn start_sse_job_listener(state: Arc<Mutex<AppState>>, app: tauri::AppHandle) {
+    tauri::async_runtime::spawn(async move {
+        // Wait for server to be ready
+        tokio::time::sleep(Duration::from_secs(5)).await;
+
+        loop {
+            // Connect to OpenCode SSE endpoint
+            let url = format!("http://localhost:{}/event", PORT_OPENCODE);
+
+            match reqwest::Client::new()
+                .get(&url)
+                .header("Accept", "text/event-stream")
+                .send()
+                .await
+            {
+                Ok(response) => {
+                    if response.status().is_success() {
+                        println!("[sse] Connected to OpenCode event stream");
+
+                        // Read SSE stream
+                        let mut stream = response.bytes_stream();
+                        use futures_util::StreamExt;
+
+                        let mut buffer = String::new();
+
+                        while let Some(chunk) = stream.next().await {
+                            match chunk {
+                                Ok(bytes) => {
+                                    buffer.push_str(&String::from_utf8_lossy(&bytes));
+
+                                    // Parse SSE events from buffer
+                                    while let Some(event_end) = buffer.find("\n\n") {
+                                        let event_str = buffer[..event_end].to_string();
+                                        buffer = buffer[event_end + 2..].to_string();
+
+                                        // Parse "data: {...}" line
+                                        if let Some(data_line) = event_str.lines().find(|l| l.starts_with("data: ")) {
+                                            let json_str = &data_line[6..];
+
+                                            if let Ok(event) = serde_json::from_str::<SessionEvent>(json_str) {
+                                                handle_session_event(&state, &app, event).await;
+                                            }
+                                        }
+                                    }
+                                }
+                                Err(e) => {
+                                    eprintln!("[sse] Stream error: {}", e);
+                                    break;
+                                }
+                            }
+                        }
+
+                        println!("[sse] Disconnected from event stream, reconnecting...");
+                    }
+                }
+                Err(e) => {
+                    // Connection failed, will retry
+                    eprintln!("[sse] Failed to connect: {}", e);
+                }
+            }
+
+            // Wait before reconnecting
+            tokio::time::sleep(Duration::from_secs(3)).await;
+        }
+    });
+}
+
+/// Handle incoming session events
+async fn handle_session_event(
+    state: &Arc<Mutex<AppState>>,
+    app: &tauri::AppHandle,
+    event: SessionEvent,
+) {
+    match event {
+        SessionEvent::SessionStatus { session_id, status } => {
+            let mut state_guard = state.lock().await;
+
+            if SessionEvent::is_running_status(&status) {
+                // Check if we already have a job for this session
+                if state_guard.job_registry.find_active_by_session(&session_id).is_none() {
+                    // Get active workbook ID
+                    let workbook_id = state_guard.active_workbook_id.clone().unwrap_or_default();
+
+                    // Register new job
+                    let job_id = state_guard.job_registry.register(
+                        &workbook_id,
+                        &session_id,
+                        "AI processing...",
+                    );
+                    println!("[jobs] Registered job {} for session {}", job_id, session_id);
+
+                    // Emit event to update tray
+                    let _ = app.emit("job:started", &job_id);
+                }
+            } else if SessionEvent::is_completed_status(&status) {
+                // Find and complete the job
+                if let Some(job) = state_guard.job_registry.find_by_session(&session_id) {
+                    let job_id = job.id.clone();
+                    state_guard.job_registry.complete(&job_id);
+                    println!("[jobs] Completed job {} for session {}", job_id, session_id);
+
+                    // Emit event to update tray
+                    let _ = app.emit("job:completed", &job_id);
+                }
+            } else if SessionEvent::is_failed_status(&status) {
+                // Find and fail the job
+                if let Some(job) = state_guard.job_registry.find_by_session(&session_id) {
+                    let job_id = job.id.clone();
+                    state_guard.job_registry.fail(&job_id);
+                    println!("[jobs] Failed job {} for session {}", job_id, session_id);
+
+                    // Emit event to update tray
+                    let _ = app.emit("job:failed", &job_id);
+                }
+            }
+        }
+        SessionEvent::SessionUpdated { session_id, status } => {
+            if let Some(status) = status {
+                // Re-dispatch as SessionStatus
+                let status_event = SessionEvent::SessionStatus { session_id, status };
+                // Use Box::pin to handle the recursive async call
+                Box::pin(handle_session_event(state, app, status_event)).await;
+            }
+        }
+        _ => {}
+    }
 }
 
 /// Start the hands-runtime for a workbook
@@ -1630,6 +1762,7 @@ pub fn run() {
                 server: None,
                 workbook_servers: HashMap::new(),
                 runtime_manager: RuntimeManager::new(),
+                job_registry: JobRegistry::new(),
                 active_workbook_id: None,
                 should_quit: false,
             }));
@@ -1647,6 +1780,9 @@ pub fn run() {
 
             // Start runtime monitor for auto-restart
             start_workbook_server_monitor(state.clone(), app.handle().clone());
+
+            // Start SSE listener for job tracking
+            start_sse_job_listener(state.clone(), app.handle().clone());
 
             // Build the application menu
             let app_handle = app.handle();
