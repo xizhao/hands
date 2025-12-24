@@ -27,6 +27,8 @@ export interface ActionEditorProps {
   className?: string;
   /** Called when a table node is clicked */
   onTableClick?: (table: string) => void;
+  /** Called when an action node is clicked (for chains/inline calls) */
+  onActionClick?: (actionId: string) => void;
 }
 
 /** Source types */
@@ -58,6 +60,31 @@ interface Sink {
   type: SinkType;
   label: string;
   detail?: string;
+}
+
+/** Cloud call */
+interface CloudCall {
+  id: string;
+  service: "email" | "slack" | "github" | "salesforce" | "fetch";
+  method: string;
+  args?: string;
+  assignedTo?: string;
+}
+
+/** Action call */
+interface ActionCall {
+  id: string;
+  actionId: string;
+  input?: string;
+  assignedTo?: string;
+}
+
+/** Chained action */
+interface ChainedAction {
+  actionId: string;
+  input?: string;
+  delay?: number;
+  condition?: "success" | "always";
 }
 
 type EditorMode = "visual" | "code";
@@ -106,16 +133,20 @@ export function ActionEditor({
   source,
   className,
   onTableClick,
+  onActionClick,
 }: ActionEditorProps) {
   const [mode, setMode] = useState<EditorMode>("visual");
 
   // Extract flow data from source using AST analysis
-  const { sources, sqlQueries, sinks } = useMemo<{
+  const { sources, sqlQueries, sinks, cloudCalls, actionCalls, chains } = useMemo<{
     sources: ExternalSource[];
     sqlQueries: ParsedQuery[];
     sinks: Sink[];
+    cloudCalls: CloudCall[];
+    actionCalls: ActionCall[];
+    chains: ChainedAction[];
   }>(() => {
-    if (!source) return { sources: [], sqlQueries: [], sinks: [] };
+    if (!source) return { sources: [], sqlQueries: [], sinks: [], cloudCalls: [], actionCalls: [], chains: [] };
 
     try {
       const actionFlow = extractActionFlow(source);
@@ -191,10 +222,63 @@ export function ActionEditor({
 
       processSteps(actionFlow.steps);
 
-      // Determine the final sink based on side effects
-      const hasSideEffects = hasWrites || hasHttpOut;
+      // Extract cloud calls from steps
+      const cloudCalls: CloudCall[] = [];
+      let cloudCallIdx = 0;
+      function extractCloudCalls(steps: typeof actionFlow.steps) {
+        for (const step of steps) {
+          if (step.cloudCall) {
+            cloudCalls.push({
+              id: `cloud-${cloudCallIdx++}`,
+              service: step.cloudCall.service,
+              method: step.cloudCall.method,
+              args: step.cloudCall.args,
+              assignedTo: step.cloudCall.assignedTo,
+            });
+          }
+          if (step.condition) {
+            extractCloudCalls(step.condition.thenBranch);
+            if (step.condition.elseBranch) extractCloudCalls(step.condition.elseBranch);
+          }
+          if (step.loop) extractCloudCalls(step.loop.body);
+        }
+      }
+      extractCloudCalls(actionFlow.steps);
 
-      if (!hasSideEffects) {
+      // Extract action calls from steps
+      const actionCallsList: ActionCall[] = [];
+      let actionCallIdx = 0;
+      function extractActionCalls(steps: typeof actionFlow.steps) {
+        for (const step of steps) {
+          if (step.actionCall) {
+            actionCallsList.push({
+              id: `action-${actionCallIdx++}`,
+              actionId: step.actionCall.actionId,
+              input: step.actionCall.input,
+              assignedTo: step.actionCall.assignedTo,
+            });
+          }
+          if (step.condition) {
+            extractActionCalls(step.condition.thenBranch);
+            if (step.condition.elseBranch) extractActionCalls(step.condition.elseBranch);
+          }
+          if (step.loop) extractActionCalls(step.loop.body);
+        }
+      }
+      extractActionCalls(actionFlow.steps);
+
+      // Get chained actions from the flow
+      const chains: ChainedAction[] = actionFlow.chains.map((c) => ({
+        actionId: c.actionId,
+        input: c.input,
+        delay: c.delay,
+        condition: c.condition,
+      }));
+
+      // Determine the final sink based on side effects
+      const hasSideEffects = hasWrites || hasHttpOut || cloudCalls.length > 0;
+
+      if (!hasSideEffects && chains.length === 0) {
         sinks.push({
           id: "no-op",
           type: "log",
@@ -203,10 +287,10 @@ export function ActionEditor({
       }
       // If has side effects, those are already added as sinks (DB writes shown as table nodes, HTTP as sink nodes)
 
-      return { sources, sqlQueries: queries, sinks };
+      return { sources, sqlQueries: queries, sinks, cloudCalls, actionCalls: actionCallsList, chains };
     } catch (err) {
       console.warn("Failed to extract action flow:", err);
-      return { sources: [], sqlQueries: [], sinks: [] };
+      return { sources: [], sqlQueries: [], sinks: [], cloudCalls: [], actionCalls: [], chains: [] };
     }
   }, [source]);
 
@@ -247,7 +331,11 @@ export function ActionEditor({
             sources={sources}
             sqlQueries={sqlQueries}
             sinks={sinks}
+            cloudCalls={cloudCalls}
+            actionCalls={actionCalls}
+            chains={chains}
             onTableClick={onTableClick}
+            onActionClick={onActionClick}
           />
         ) : (
           <ActionCodeView source={source} />

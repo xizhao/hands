@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { router, protectedProcedure } from "../index";
+import { router, protectedProcedure } from "../../trpc/base";
 import { usageDaily } from "../../schema/usage";
 import { subscriptions, PLANS } from "../../schema/subscriptions";
 import { eq, and, desc, sql, gte, lte } from "drizzle-orm";
@@ -59,11 +59,7 @@ export const usageRouter = router({
 
   // Get daily usage for a period
   daily: protectedProcedure
-    .input(
-      z.object({
-        days: z.number().min(1).max(90).default(30),
-      })
-    )
+    .input(z.object({ days: z.number().min(1).max(90).default(30) }))
     .query(async ({ ctx, input }) => {
       const endDate = new Date();
       const startDate = new Date();
@@ -95,13 +91,11 @@ export const usageRouter = router({
   history: protectedProcedure
     .input(z.object({ months: z.number().min(1).max(12).default(6) }))
     .query(async ({ ctx, input }) => {
-      // Calculate date range for all months in a single query
       const endDate = new Date();
       const startDate = new Date();
       startDate.setMonth(startDate.getMonth() - input.months + 1);
-      startDate.setDate(1); // First day of start month
+      startDate.setDate(1);
 
-      // Single query with GROUP BY month
       const monthlyUsage = await ctx.db
         .select({
           period: sql<string>`TO_CHAR(${usageDaily.date}::date, 'YYYY-MM')`,
@@ -120,12 +114,8 @@ export const usageRouter = router({
         .groupBy(sql`TO_CHAR(${usageDaily.date}::date, 'YYYY-MM')`)
         .orderBy(desc(sql`TO_CHAR(${usageDaily.date}::date, 'YYYY-MM')`));
 
-      // Create a map for quick lookup
-      const usageMap = new Map(
-        monthlyUsage.map((u) => [u.period, u])
-      );
+      const usageMap = new Map(monthlyUsage.map((u) => [u.period, u]));
 
-      // Generate results for all requested months (including zero-usage months)
       const results: Array<{
         period: string;
         tokens: number;

@@ -1,42 +1,40 @@
-import { initTRPC, TRPCError } from "@trpc/server";
-import type { Context } from "./context";
-import { authRouter } from "./routers/auth";
-import { usersRouter } from "./routers/users";
-import { billingRouter } from "./routers/billing";
-import { usageRouter } from "./routers/usage";
-import { workbooksRouter } from "./routers/workbooks";
-import { oauthRouter } from "./routers/oauth";
-import { servicesRouter } from "./routers/services";
+/**
+ * Main tRPC Router
+ *
+ * Merges all service routers into a single API.
+ *
+ * Client usage:
+ *   cloud.auth.startOAuth()
+ *   cloud.auth.me()
+ *   cloud.payments.checkout({ plan: "pro" })
+ *   cloud.payments.subscription()
+ *   cloud.email.send({ to, subject, html })
+ *   cloud.notifications.alert({ level, title, message })
+ *   cloud.integrations.connect({ provider: "google" })
+ *   cloud.usage.summary()
+ */
 
-const t = initTRPC.context<Context>().create();
+import { router } from "./base";
 
-export const router = t.router;
-export const publicProcedure = t.procedure;
+// Import service routers
+import { authRouter } from "../services/auth";
+import { paymentsRouter } from "../services/payments";
+import { emailRouter } from "../services/email";
+import { notificationsRouter } from "../services/notifications";
+import { integrationsRouter } from "../services/integrations";
+import { usageRouter } from "../services/usage";
 
-// Middleware to require authentication
-const isAuthed = t.middleware(({ ctx, next }) => {
-  if (!ctx.user) {
-    throw new TRPCError({ code: "UNAUTHORIZED" });
-  }
-  return next({
-    ctx: {
-      ...ctx,
-      user: ctx.user,
-    },
-  });
-});
+// Re-export base utilities
+export { router, publicProcedure, protectedProcedure } from "./base";
 
-export const protectedProcedure = t.procedure.use(isAuthed);
-
-// Combined router
+// Combined router with service namespaces
 export const appRouter = router({
   auth: authRouter,
-  users: usersRouter,
-  billing: billingRouter,
+  payments: paymentsRouter,
+  email: emailRouter,
+  notifications: notificationsRouter,
+  integrations: integrationsRouter,
   usage: usageRouter,
-  workbooks: workbooksRouter,
-  oauth: oauthRouter,
-  services: servicesRouter,
 });
 
 export type AppRouter = typeof appRouter;

@@ -1,35 +1,26 @@
 import { Hono } from "hono";
-import type { Env, User } from "../types";
-import { verifyToken } from "./auth";
-import { getDb } from "./db";
-import { users } from "../schema/users";
-import { subscriptions } from "../schema/subscriptions";
-import { usageDaily } from "../schema/usage";
+import type { Env, User } from "../../types";
+import { verifyToken } from "../auth/client";
+import { getDb } from "../../lib/db";
+import { users } from "../../schema/users";
+import { subscriptions } from "../../schema/subscriptions";
+import { usageDaily } from "../../schema/usage";
 import { eq, and, sql } from "drizzle-orm";
-import { aiRateLimit } from "./rate-limit";
+import { aiRateLimit } from "../../lib/rate-limit";
+import { proxyToGateway } from "./client";
 
 /**
- * AI Gateway proxy that forwards requests to Cloudflare AI Gateway
- * with user metadata for tracking.
+ * AI Gateway Hono app
  *
- * CF AI Gateway handles:
- * - Routing to providers (Anthropic, OpenAI, etc.)
- * - Caching
- * - Rate limiting
- * - Analytics with custom metadata
- *
- * We handle:
- * - JWT validation
- * - Quota checking (hard limit for free, soft limit with overage for paid)
- * - Adding cf-aig-metadata header with userId
- * - Rate limiting
+ * Mounted at /ai in the main app.
+ * Handles JWT validation, quota checking, and proxies to CF AI Gateway.
  */
 export const aiGateway = new Hono<{ Bindings: Env }>();
 
-// Rate limiting for AI requests
+// Rate limiting
 aiGateway.use("*", aiRateLimit);
 
-// Middleware: validate JWT and check quota
+// Auth + Quota middleware
 aiGateway.use("*", async (c, next) => {
   const authHeader = c.req.header("Authorization");
   if (!authHeader?.startsWith("Bearer ")) {
@@ -42,7 +33,6 @@ aiGateway.use("*", async (c, next) => {
     return c.json({ error: "Invalid token" }, 401);
   }
 
-  // Fetch user
   const db = getDb(c.env.DB);
   const user = await db
     .select()
@@ -55,7 +45,7 @@ aiGateway.use("*", async (c, next) => {
     return c.json({ error: "User not found" }, 404);
   }
 
-  // Get subscription and current usage
+  // Get subscription
   const subscription = await db
     .select()
     .from(subscriptions)
@@ -86,10 +76,9 @@ aiGateway.use("*", async (c, next) => {
   const includedTokens = subscription?.includedTokens ?? 50000;
   const plan = subscription?.plan ?? "free";
 
-  // Check quota based on plan
+  // Check quota
   if (currentTokens >= includedTokens) {
     if (plan === "free") {
-      // Free users: hard limit
       return c.json(
         {
           error: "Quota exceeded",
@@ -100,9 +89,9 @@ aiGateway.use("*", async (c, next) => {
         429
       );
     } else {
-      // Paid users: allow overage but add warning header
+      // Paid users: allow overage with warning headers
       const overageTokens = currentTokens - includedTokens;
-      const overageCost = Math.round(overageTokens / 1000); // $0.01 per 1K tokens
+      const overageCost = Math.round(overageTokens / 1000);
       c.header("X-Usage-Warning", "overage");
       c.header("X-Usage-Current", String(currentTokens));
       c.header("X-Usage-Included", String(includedTokens));
@@ -111,43 +100,18 @@ aiGateway.use("*", async (c, next) => {
     }
   }
 
-  // Store user in context for metadata
   c.set("user" as never, user);
   c.set("subscription" as never, subscription);
 
   await next();
 });
 
-// Proxy to CF AI Gateway
+// Proxy all requests to CF AI Gateway
 aiGateway.all("/*", async (c) => {
   const user = c.get("user" as never) as User;
-  const path = c.req.path.replace("/ai", ""); // Remove /ai prefix
 
-  // Build CF AI Gateway URL
-  // Format: https://gateway.ai.cloudflare.com/v1/{account_id}/{gateway_id}/{provider}/{endpoint}
-  const gatewayUrl = `https://gateway.ai.cloudflare.com/v1/${c.env.AI_GATEWAY_ACCOUNT_ID}/${c.env.AI_GATEWAY_ID}${path}`;
-
-  // Clone request with metadata header
-  const headers = new Headers(c.req.raw.headers);
-  headers.set(
-    "cf-aig-metadata",
-    JSON.stringify({
-      userId: user.id,
-      email: user.email,
-    })
-  );
-
-  // Forward to AI Gateway
-  const response = await fetch(gatewayUrl, {
-    method: c.req.method,
-    headers,
-    body: c.req.method !== "GET" ? c.req.raw.body : undefined,
-    duplex: "half",
-  });
-
-  // Return response (streaming is preserved)
-  return new Response(response.body, {
-    status: response.status,
-    headers: response.headers,
+  return proxyToGateway(c.env, c.req.raw, c.req.path, {
+    userId: user.id,
+    email: user.email,
   });
 });

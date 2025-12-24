@@ -28,6 +28,7 @@ import {
 } from "@/components/ui/popover";
 import { ShimmerText } from "@/components/ui/thinking-indicator";
 import { ATTACHMENT_TYPE, useChatState } from "@/hooks/useChatState";
+import { resetSidebarState } from "./notebook/hooks/useSidebarState";
 import { useNeedsTrafficLightOffset } from "@/hooks/useFullscreen";
 import { useActiveSession, useClearNavigation } from "@/hooks/useNavState";
 import { useRuntimeProcess } from "@/hooks/useRuntimeState";
@@ -377,6 +378,7 @@ ${STDLIB_QUICK_REF}
   const handleSwitchWorkbook = useCallback(
     (workbook: { id: string; directory: string; name: string }) => {
       clearNavigation();
+      resetSidebarState();
       openWorkbook.mutate(workbook as Workbook);
     },
     [clearNavigation, openWorkbook]
@@ -388,6 +390,7 @@ ${STDLIB_QUICK_REF}
       {
         onSuccess: (newWorkbook) => {
           clearNavigation();
+          resetSidebarState();
           openWorkbook.mutate(newWorkbook, {
             onSuccess: () => {
               router.navigate({
@@ -526,9 +529,6 @@ ${STDLIB_QUICK_REF}
         {currentWorkbook?.name ?? "Untitled"}
       </span>
 
-      {/* Save status indicator - next to title */}
-      <SaveStatusIndicator />
-
       {/* Workbook switcher dropdown */}
       <DropdownMenu>
         <DropdownMenuTrigger className="flex items-center justify-center w-5 h-5 rounded-sm text-muted-foreground/70 hover:text-muted-foreground hover:bg-accent/50">
@@ -555,8 +555,9 @@ ${STDLIB_QUICK_REF}
         </DropdownMenuContent>
       </DropdownMenu>
 
-      {/* Right side: navigation */}
-      <div className="ml-auto flex items-center">
+      {/* Right side: save status + navigation */}
+      <div className="ml-auto flex items-center gap-1">
+        <SaveStatusIndicator />
         <button
           onClick={() => router.history.back()}
           className="p-1 text-muted-foreground/60 hover:text-muted-foreground transition-colors"

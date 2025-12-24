@@ -1,13 +1,13 @@
 import { z } from "zod";
 import { TRPCError } from "@trpc/server";
-import { router, protectedProcedure } from "../index";
+import { router, protectedProcedure } from "../../trpc/base";
 import { users } from "../../schema/users";
 import { subscriptions, PLANS, type PlanType } from "../../schema/subscriptions";
 import { usageDaily } from "../../schema/usage";
 import { eq, and, sql, gte, lte } from "drizzle-orm";
-import Stripe from "stripe";
+import { createStripeClient, createCheckoutSession, createPortalSession, listActiveSubscriptions, cancelSubscription } from "./client";
 
-export const billingRouter = router({
+export const paymentsRouter = router({
   // Get current subscription
   subscription: protectedProcedure.query(async ({ ctx }) => {
     const subscription = await ctx.db
@@ -34,7 +34,7 @@ export const billingRouter = router({
     };
   }),
 
-  // Get current usage
+  // Get current usage for billing
   currentUsage: protectedProcedure.query(async ({ ctx }) => {
     const today = new Date();
     const monthStart = new Date(today.getFullYear(), today.getMonth(), 1);
@@ -79,8 +79,8 @@ export const billingRouter = router({
       requests: usage?.totalRequests ?? 0,
       cost: {
         included: plan === "free" ? 0 : PLANS[plan as PlanType]?.monthlyPrice ?? 0,
-        overage: overageTokens > 0 ? Math.round(overageTokens / 1000) : 0, // $0.01 per 1K
-        total: 0, // Calculate based on plan
+        overage: overageTokens > 0 ? Math.round(overageTokens / 1000) : 0,
+        total: 0,
       },
       billingPeriod: {
         start: monthStart,
@@ -90,10 +90,10 @@ export const billingRouter = router({
   }),
 
   // Create checkout session
-  createCheckoutSession: protectedProcedure
+  checkout: protectedProcedure
     .input(z.object({ plan: z.enum(["pro", "team"]) }))
     .mutation(async ({ ctx, input }) => {
-      const stripe = new Stripe(ctx.env.STRIPE_SECRET_KEY);
+      const stripe = createStripeClient(ctx.env);
       const planConfig = PLANS[input.plan];
 
       if (!planConfig.priceId) {
@@ -103,8 +103,9 @@ export const billingRouter = router({
         });
       }
 
-      let customerId = ctx.user.stripeCustomerId;
+      let customerId = ctx.user.stripeCustomerId ?? undefined;
 
+      // Create customer if needed
       if (!customerId) {
         const customer = await stripe.customers.create({
           email: ctx.user.email,
@@ -120,22 +121,21 @@ export const billingRouter = router({
           .where(eq(users.id, ctx.user.id));
       }
 
-      const session = await stripe.checkout.sessions.create({
-        customer: customerId,
-        mode: "subscription",
-        line_items: [{ price: planConfig.priceId, quantity: 1 }],
-        success_url: `${ctx.env.APP_URL}/billing/success?session_id={CHECKOUT_SESSION_ID}`,
-        cancel_url: `${ctx.env.APP_URL}/billing`,
-        subscription_data: {
-          metadata: { userId: ctx.user.id },
-        },
+      const session = await createCheckoutSession(stripe, {
+        plan: input.plan,
+        customerId,
+        userId: ctx.user.id,
+        userEmail: ctx.user.email,
+        userName: ctx.user.name ?? undefined,
+        priceId: planConfig.priceId,
+        appUrl: ctx.env.APP_URL,
       });
 
       return { url: session.url };
     }),
 
   // Get billing portal URL
-  billingPortalUrl: protectedProcedure.mutation(async ({ ctx }) => {
+  portal: protectedProcedure.mutation(async ({ ctx }) => {
     if (!ctx.user.stripeCustomerId) {
       throw new TRPCError({
         code: "BAD_REQUEST",
@@ -143,14 +143,38 @@ export const billingRouter = router({
       });
     }
 
-    const stripe = new Stripe(ctx.env.STRIPE_SECRET_KEY);
+    const stripe = createStripeClient(ctx.env);
 
-    const session = await stripe.billingPortal.sessions.create({
-      customer: ctx.user.stripeCustomerId,
-      return_url: `${ctx.env.APP_URL}/settings/billing`,
+    const session = await createPortalSession(stripe, {
+      customerId: ctx.user.stripeCustomerId,
+      returnUrl: `${ctx.env.APP_URL}/settings/billing`,
     });
 
     return { url: session.url };
+  }),
+
+  // Cancel subscription
+  cancel: protectedProcedure.mutation(async ({ ctx }) => {
+    if (!ctx.user.stripeCustomerId) {
+      throw new TRPCError({
+        code: "BAD_REQUEST",
+        message: "No billing account",
+      });
+    }
+
+    const stripe = createStripeClient(ctx.env);
+    const activeSubs = await listActiveSubscriptions(stripe, ctx.user.stripeCustomerId);
+
+    for (const sub of activeSubs) {
+      await cancelSubscription(stripe, sub.id);
+    }
+
+    await ctx.db
+      .update(subscriptions)
+      .set({ status: "canceled" })
+      .where(eq(subscriptions.userId, ctx.user.id));
+
+    return { success: true };
   }),
 
   // Get available plans

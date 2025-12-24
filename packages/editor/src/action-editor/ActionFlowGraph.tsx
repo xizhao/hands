@@ -37,6 +37,11 @@ import {
   PencilSimple,
   Plus,
   Trash,
+  ChatCircle,
+  GithubLogo,
+  Lightning,
+  Link,
+  Timer,
 } from "@phosphor-icons/react";
 import { useMemo, createContext, useContext, useState, useEffect, useRef } from "react";
 import { cn } from "../lib/utils";
@@ -162,6 +167,33 @@ interface SinkNodeData {
   detail?: string;
 }
 
+/** Cloud service node data - ctx.cloud.* calls */
+interface CloudNodeData {
+  service: "email" | "slack" | "github" | "salesforce" | "fetch";
+  method: string;
+  args?: string;
+  assignedTo?: string;
+}
+
+/** Action call node data - ctx.actions.run() */
+interface ActionCallNodeData {
+  actionId: string;
+  input?: string;
+  assignedTo?: string;
+  /** Called when the action link is clicked */
+  onActionClick?: (actionId: string) => void;
+}
+
+/** Chained action node data - return { data, chain } */
+interface ChainNodeData {
+  actionId: string;
+  input?: string;
+  delay?: number;
+  condition?: "success" | "always";
+  /** Called when the action link is clicked */
+  onActionClick?: (actionId: string) => void;
+}
+
 interface ActionFlowGraphProps {
   /** Parsed SQL queries with their flows */
   sqlQueries: Array<{
@@ -185,8 +217,32 @@ interface ActionFlowGraphProps {
     label: string;
     detail?: string;
   }>;
+  /** Cloud service calls (ctx.cloud.*) */
+  cloudCalls?: Array<{
+    id: string;
+    service: "email" | "slack" | "github" | "salesforce" | "fetch";
+    method: string;
+    args?: string;
+    assignedTo?: string;
+  }>;
+  /** Inline action calls (ctx.actions.run) */
+  actionCalls?: Array<{
+    id: string;
+    actionId: string;
+    input?: string;
+    assignedTo?: string;
+  }>;
+  /** Chained actions (from return statement) */
+  chains?: Array<{
+    actionId: string;
+    input?: string;
+    delay?: number;
+    condition?: "success" | "always";
+  }>;
   /** Called when a table node is clicked */
   onTableClick?: (table: string) => void;
+  /** Called when an action node is clicked */
+  onActionClick?: (actionId: string) => void;
   className?: string;
 }
 
@@ -532,12 +588,131 @@ function SinkNode({ data }: { data: SinkNodeData }) {
   );
 }
 
+// Icons for cloud services
+const cloudServiceIcons: Record<string, typeof Cloud> = {
+  email: Envelope,
+  slack: ChatCircle,
+  github: GithubLogo,
+  salesforce: Cloud,
+  fetch: CloudArrowUp,
+};
+
+/** Cloud service node - ctx.cloud.* calls */
+function CloudNode({ data }: { data: CloudNodeData }) {
+  const { source, target } = useHandlePositions();
+  const Icon = cloudServiceIcons[data.service] || Cloud;
+
+  return (
+    <div className="px-3 py-2 rounded-lg border border-blue-500/30 bg-blue-500/10 w-[150px] shadow-sm overflow-hidden">
+      <Handle type="target" position={target} className="!bg-blue-500" />
+      <Handle type="source" position={source} className="!bg-blue-500" />
+
+      <div className="flex items-center gap-2 mb-1">
+        <div className="p-1 rounded bg-blue-500/20 shrink-0">
+          <Icon weight="duotone" className="h-3.5 w-3.5 text-blue-600 dark:text-blue-400" />
+        </div>
+        <span className="text-[10px] font-medium uppercase text-blue-600 dark:text-blue-400">
+          {data.service}
+        </span>
+      </div>
+
+      <div className="text-[11px] font-medium truncate">
+        {data.method}()
+      </div>
+
+      {data.assignedTo && (
+        <div className="text-[9px] text-muted-foreground mt-1 truncate font-mono">
+          → {data.assignedTo}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/** Action call node - ctx.actions.run() */
+function ActionCallNode({ data }: { data: ActionCallNodeData }) {
+  const { source, target } = useHandlePositions();
+
+  return (
+    <div
+      onClick={() => data.onActionClick?.(data.actionId)}
+      className="px-3 py-2 rounded-lg border border-purple-500/30 bg-purple-500/10 w-[150px] shadow-sm overflow-hidden cursor-pointer hover:bg-purple-500/20 transition-colors"
+    >
+      <Handle type="target" position={target} className="!bg-purple-500" />
+      <Handle type="source" position={source} className="!bg-purple-500" />
+
+      <div className="flex items-center gap-2 mb-1">
+        <div className="p-1 rounded bg-purple-500/20 shrink-0">
+          <Lightning weight="duotone" className="h-3.5 w-3.5 text-purple-600 dark:text-purple-400" />
+        </div>
+        <span className="text-[10px] font-medium uppercase text-purple-600 dark:text-purple-400">
+          Action
+        </span>
+      </div>
+
+      <div className="text-[11px] font-medium truncate font-mono">
+        {data.actionId}
+      </div>
+
+      {data.assignedTo && (
+        <div className="text-[9px] text-muted-foreground mt-1 truncate font-mono">
+          → {data.assignedTo}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/** Chained action node - actions triggered after this action completes */
+function ChainNode({ data }: { data: ChainNodeData }) {
+  const { target } = useHandlePositions();
+
+  return (
+    <div
+      onClick={() => data.onActionClick?.(data.actionId)}
+      className="px-3 py-2 rounded-lg border border-dashed border-amber-500/50 bg-amber-500/10 w-[140px] shadow-sm overflow-hidden cursor-pointer hover:bg-amber-500/20 transition-colors"
+    >
+      <Handle type="target" position={target} className="!bg-amber-500" />
+
+      <div className="flex items-center gap-2 mb-1">
+        <div className="p-1 rounded bg-amber-500/20 shrink-0">
+          <Link weight="duotone" className="h-3.5 w-3.5 text-amber-600 dark:text-amber-400" />
+        </div>
+        <span className="text-[10px] font-medium uppercase text-amber-600 dark:text-amber-400">
+          Chain
+        </span>
+      </div>
+
+      <div className="text-[11px] font-medium truncate font-mono">
+        {data.actionId}
+      </div>
+
+      <div className="flex items-center gap-2 mt-1">
+        {data.delay && (
+          <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-[8px] bg-amber-500/20 text-amber-600 dark:text-amber-400">
+            <Timer weight="bold" className="h-2 w-2" />
+            {data.delay}ms
+          </span>
+        )}
+        {data.condition && data.condition !== "success" && (
+          <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-[8px] bg-amber-500/20 text-amber-600 dark:text-amber-400">
+            {data.condition}
+          </span>
+        )}
+      </div>
+    </div>
+  );
+}
+
 const nodeTypes = {
   source: SourceNode,
   sql: SqlNode,
   sqlGroup: SqlGroupNode,
   table: TableNode,
   sink: SinkNode,
+  cloud: CloudNode,
+  actionCall: ActionCallNode,
+  chain: ChainNode,
 };
 
 /**
@@ -547,7 +722,11 @@ function buildGraph(
   sources: ActionFlowGraphProps["sources"],
   sqlQueries: ActionFlowGraphProps["sqlQueries"],
   sinks: ActionFlowGraphProps["sinks"],
+  cloudCalls: ActionFlowGraphProps["cloudCalls"],
+  actionCalls: ActionFlowGraphProps["actionCalls"],
+  chains: ActionFlowGraphProps["chains"],
   onTableClick?: (table: string) => void,
+  onActionClick?: (actionId: string) => void,
   direction: LayoutDirection = "horizontal"
 ): { nodes: Node[]; edges: Edge[] } {
   const nodes: Node[] = [];
@@ -794,7 +973,104 @@ function buildGraph(
         });
       }
     }
+  }
 
+  // Track last node for chaining
+  let lastFlowNodeId = writeQueries.length > 0
+    ? "sql-writes"
+    : readQueries.length > 0
+      ? "sql-reads"
+      : null;
+
+  // Cloud calls - add after SQL operations
+  for (const cloud of cloudCalls || []) {
+    const nodeId = `cloud-${cloud.id}`;
+    nodes.push({
+      id: nodeId,
+      type: "cloud",
+      position: pos,
+      data: {
+        service: cloud.service,
+        method: cloud.method,
+        args: cloud.args,
+        assignedTo: cloud.assignedTo,
+      },
+    });
+
+    // Connect from previous flow
+    if (lastFlowNodeId) {
+      edges.push({
+        id: `edge-${lastFlowNodeId}-${nodeId}`,
+        source: lastFlowNodeId,
+        target: nodeId,
+        style: { stroke: "hsl(210 100% 50%)", strokeWidth: 2 },
+      });
+    }
+    lastFlowNodeId = nodeId;
+  }
+
+  // Action calls - inline ctx.actions.run()
+  for (const action of actionCalls || []) {
+    const nodeId = `action-${action.id}`;
+    nodes.push({
+      id: nodeId,
+      type: "actionCall",
+      position: pos,
+      data: {
+        actionId: action.actionId,
+        input: action.input,
+        assignedTo: action.assignedTo,
+        onActionClick,
+      },
+    });
+
+    // Connect from previous flow
+    if (lastFlowNodeId) {
+      edges.push({
+        id: `edge-${lastFlowNodeId}-${nodeId}`,
+        source: lastFlowNodeId,
+        target: nodeId,
+        style: { stroke: "hsl(270 100% 60%)", strokeWidth: 2 },
+      });
+    }
+    lastFlowNodeId = nodeId;
+  }
+
+  // Chained actions - from return { data, chain }
+  if (chains && chains.length > 0) {
+    // Find the last SQL or action node to connect from
+    const chainSource = lastFlowNodeId ||
+      (writeQueries.length > 0 ? "sql-writes" :
+       readQueries.length > 0 ? "sql-reads" : null);
+
+    for (let i = 0; i < chains.length; i++) {
+      const chain = chains[i];
+      const nodeId = `chain-${i}`;
+
+      nodes.push({
+        id: nodeId,
+        type: "chain",
+        position: pos,
+        data: {
+          actionId: chain.actionId,
+          input: chain.input,
+          delay: chain.delay,
+          condition: chain.condition,
+          onActionClick,
+        },
+      });
+
+      // Connect from source
+      if (chainSource) {
+        edges.push({
+          id: `edge-chain-${chainSource}-${nodeId}`,
+          source: chainSource,
+          target: nodeId,
+          animated: true,
+          style: { stroke: "hsl(38 100% 50%)", strokeWidth: 2, strokeDasharray: "5,5" },
+        });
+      }
+    }
   }
 
   // Apply dagre layout to position all nodes
@@ -824,7 +1100,11 @@ export function ActionFlowGraph({
   sqlQueries,
   sources,
   sinks,
+  cloudCalls,
+  actionCalls,
+  chains,
   onTableClick,
+  onActionClick,
   className,
 }: ActionFlowGraphProps) {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -849,8 +1129,8 @@ export function ActionFlowGraph({
   }, []);
 
   const { nodes, edges } = useMemo(
-    () => buildGraph(sources, sqlQueries, sinks, onTableClick, direction),
-    [sources, sqlQueries, sinks, onTableClick, direction]
+    () => buildGraph(sources, sqlQueries, sinks, cloudCalls, actionCalls, chains, onTableClick, onActionClick, direction),
+    [sources, sqlQueries, sinks, cloudCalls, actionCalls, chains, onTableClick, onActionClick, direction]
   );
 
   // Collect raw SQL for hint prefetching
@@ -862,14 +1142,20 @@ export function ActionFlowGraph({
   // Prefetch hints for all SQL operations
   const { getHint, isLoading } = usePrefetchHints(sqlContents);
 
-  // Empty state
-  if (sqlQueries.length === 0 && (!sources || sources.length === 0)) {
+  // Empty state - show if no operations detected
+  const hasFlow = sqlQueries.length > 0 ||
+    (sources && sources.length > 0) ||
+    (cloudCalls && cloudCalls.length > 0) ||
+    (actionCalls && actionCalls.length > 0) ||
+    (chains && chains.length > 0);
+
+  if (!hasFlow) {
     return (
       <div className="h-full flex flex-col items-center justify-center text-muted-foreground p-8">
         <Database weight="duotone" className="h-12 w-12 mb-4 opacity-50" />
         <p className="text-sm font-medium">No data flow detected</p>
         <p className="text-xs mt-1 text-center max-w-[300px]">
-          This action doesn't appear to have any SQL operations.
+          This action doesn't appear to have any operations.
           Switch to Code view to see the source.
         </p>
       </div>

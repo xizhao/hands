@@ -6,9 +6,13 @@
  */
 
 import { route } from "rwsdk/router";
+import { resolve, isAbsolute } from "node:path";
 import type { ActionDefinition, ActionRun, ActionTriggerType } from "../types/action";
 import { buildActionContext, createRunMeta } from "./context";
 import { getDb, kyselySql } from "../db/dev";
+
+/** Workbook path from environment */
+const workbookPath = process.env.HANDS_WORKBOOK_PATH ?? "";
 
 /**
  * Generate a unique run ID
@@ -72,47 +76,52 @@ export const actionRoutes = [
           );
         }
 
+        // Resolve action path to absolute path
+        // actionPath is relative to workbook, e.g., "actions/sync-users.ts"
+        const absolutePath = isAbsolute(actionPath)
+          ? actionPath
+          : resolve(workbookPath, actionPath);
+
         // Dynamic import the action module
-        // In dev mode, Vite handles this
         let actionModule: { default: ActionDefinition };
         try {
-          // The path should be relative to the workbook, e.g., "/actions/sync-users.ts"
-          // Vite will resolve this via the alias configured in vite.config
-          actionModule = await import(/* @vite-ignore */ actionPath);
+          actionModule = await import(/* @vite-ignore */ absolutePath);
         } catch (err) {
           const errorMessage = err instanceof Error ? err.message : String(err);
-          return new Response(
-            JSON.stringify({
-              id: runId,
-              actionId: actionPath,
-              trigger,
-              status: "failed",
-              input,
-              error: `Failed to load action: ${errorMessage}`,
-              startedAt: new Date(startTime).toISOString(),
-              finishedAt: new Date().toISOString(),
-              durationMs: Date.now() - startTime,
-            } satisfies ActionRun),
-            { status: 400, headers: { "Content-Type": "application/json" } }
-          );
+          const failedRun: ActionRun = {
+            id: runId,
+            actionId: actionPath,
+            trigger,
+            status: "failed",
+            input,
+            error: `Failed to load action: ${errorMessage}`,
+            startedAt: new Date(startTime).toISOString(),
+            finishedAt: new Date().toISOString(),
+            durationMs: Date.now() - startTime,
+          };
+          return new Response(JSON.stringify(failedRun), {
+            status: 500,
+            headers: { "Content-Type": "application/json" },
+          });
         }
 
         const action = actionModule.default;
         if (!action || typeof action.run !== "function") {
-          return new Response(
-            JSON.stringify({
-              id: runId,
-              actionId: actionPath,
-              trigger,
-              status: "failed",
-              input,
-              error: "Action must export a default defineAction() result",
-              startedAt: new Date(startTime).toISOString(),
-              finishedAt: new Date().toISOString(),
-              durationMs: Date.now() - startTime,
-            } satisfies ActionRun),
-            { status: 400, headers: { "Content-Type": "application/json" } }
-          );
+          const failedRun: ActionRun = {
+            id: runId,
+            actionId: actionPath,
+            trigger,
+            status: "failed",
+            input,
+            error: "Action must export a default defineAction() result",
+            startedAt: new Date(startTime).toISOString(),
+            finishedAt: new Date().toISOString(),
+            durationMs: Date.now() - startTime,
+          };
+          return new Response(JSON.stringify(failedRun), {
+            status: 500,
+            headers: { "Content-Type": "application/json" },
+          });
         }
 
         // Validate input if schema provided
@@ -122,20 +131,22 @@ export const actionRoutes = [
             validatedInput = action.input.parse(input);
           } catch (err) {
             const errorMessage = err instanceof Error ? err.message : String(err);
-            return new Response(
-              JSON.stringify({
-                id: runId,
-                actionId: action.name,
-                trigger,
-                status: "failed",
-                input,
-                error: `Input validation failed: ${errorMessage}`,
-                startedAt: new Date(startTime).toISOString(),
-                finishedAt: new Date().toISOString(),
-                durationMs: Date.now() - startTime,
-              } satisfies ActionRun),
-              { status: 400, headers: { "Content-Type": "application/json" } }
-            );
+            const failedRun: ActionRun = {
+              id: runId,
+              actionId: action.name,
+              trigger,
+              status: "failed",
+              input,
+              error: `Input validation failed: ${errorMessage}`,
+              startedAt: new Date(startTime).toISOString(),
+              finishedAt: new Date().toISOString(),
+              durationMs: Date.now() - startTime,
+            };
+            // 400 is correct for validation errors (bad input from client)
+            return new Response(JSON.stringify(failedRun), {
+              status: 400,
+              headers: { "Content-Type": "application/json" },
+            });
           }
         }
 

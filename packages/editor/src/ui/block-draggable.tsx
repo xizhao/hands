@@ -458,8 +458,6 @@ function Draggable(props: PlateElementProps) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isAboutToDrag]);
 
-  const [dragButtonTop, setDragButtonTop] = React.useState(0);
-
   return (
     <div
       ref={containerRef}
@@ -470,11 +468,6 @@ function Draggable(props: PlateElementProps) {
           ? 'group/container'
           : 'group'
       )}
-      onMouseEnter={() => {
-        if (isDragging) return;
-
-        setDragButtonTop(calcDragButtonTop(editor, element));
-      }}
       onDragOver={handleDragOver}
       onDragLeave={handleDragLeave}
     >
@@ -494,7 +487,6 @@ function Draggable(props: PlateElementProps) {
                 'pointer-events-auto mr-1 flex items-center gap-0.5',
                 isInColumn && 'mr-1.5'
               )}
-              style={{ marginTop: `${dragButtonTop + 3}px` }}
             >
               <Button
                 className="h-6 w-6 p-0"
@@ -877,11 +869,3 @@ const calculatePreviewTop = (
   return previewElementsTopDistance;
 };
 
-const calcDragButtonTop = (editor: PlateEditor, element: TElement): number => {
-  const child = editor.api.toDOMNode(element)!;
-
-  const currentMarginTopString = window.getComputedStyle(child).marginTop;
-  const currentMarginTop = Number(currentMarginTopString.replace('px', ''));
-
-  return currentMarginTop;
-};

@@ -4,10 +4,8 @@ import { logger } from "hono/logger";
 import { fetchRequestHandler } from "@trpc/server/adapters/fetch";
 import { appRouter } from "./trpc";
 import { createContext } from "./trpc/context";
-import { aiGateway } from "./lib/ai-gateway";
-import { stripeWebhook } from "./lib/stripe-webhook";
+import { aiGateway, paymentsWebhook, aggregateUsage } from "./services";
 import { apiRateLimit, authRateLimit } from "./lib/rate-limit";
-import { aggregateUsage } from "./lib/usage-aggregator";
 import type { Env } from "./types";
 
 const app = new Hono<{ Bindings: Env }>();
@@ -18,25 +16,19 @@ app.use(
   "*",
   cors({
     origin: (origin) => {
-      // No origin header = same-origin request or non-browser client
-      // Return null to skip CORS headers (request proceeds normally)
       if (!origin) return null;
-      // Allow desktop app (Tauri)
       if (origin.startsWith("tauri://")) return origin;
-      // Exact match for hands.app domains
       if (origin === "https://hands.app") return origin;
       if (origin === "https://www.hands.app") return origin;
       if (origin.endsWith(".hands.app") && origin.startsWith("https://")) return origin;
-      // Allow localhost for development
       if (origin.includes("localhost")) return origin;
-      // Reject unknown origins
       return null;
     },
     credentials: true,
   })
 );
 
-// Health check (no rate limiting)
+// Health check
 app.get("/health", (c) =>
   c.json({ status: "ok", timestamp: Date.now(), service: "hands-cloud" })
 );
@@ -53,13 +45,13 @@ app.all("/trpc/*", async (c) => {
   });
 });
 
-// AI Gateway proxy (has its own rate limiting)
+// AI Gateway proxy
 app.route("/ai", aiGateway);
 
-// Stripe webhooks (no rate limiting, verified by signature)
-app.post("/webhooks/stripe", stripeWebhook);
+// Stripe webhooks
+app.post("/webhooks/stripe", paymentsWebhook);
 
-// OAuth callback (redirects to desktop app via deep link)
+// OAuth callback (desktop app deep link)
 app.get("/auth/callback", async (c) => {
   const code = c.req.query("code");
   const state = c.req.query("state");
@@ -96,7 +88,7 @@ app.get("/oauth/:provider/callback", async (c) => {
 export default {
   fetch: app.fetch,
 
-  // Scheduled handler for usage aggregation (runs hourly)
+  // Scheduled handler for usage aggregation (hourly)
   async scheduled(
     _event: ScheduledEvent,
     env: Env,

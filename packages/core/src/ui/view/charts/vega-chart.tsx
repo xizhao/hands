@@ -164,11 +164,14 @@ export function VegaChart({
 
   // Build spec (without data - data is injected via View API)
   const baseSpec = useMemo((): VegaLiteSpec => {
+    // Don't build spec until we have container dimensions
+    if (containerWidth <= 0) return null as unknown as VegaLiteSpec;
+
     return {
       ...spec,
-      // Use container width if measured, otherwise let Vega autosize
-      width: containerWidth > 0 ? containerWidth - 20 : "container",
-      height,
+      // Use measured container width minus horizontal padding
+      width: containerWidth - 10,
+      height: height - 30,
       // Use named data source for dynamic updates
       data: { name: DATA_SOURCE_NAME },
       // Apply theme config
@@ -176,7 +179,9 @@ export function VegaChart({
         ...vegaTheme,
         ...((spec.config as Record<string, unknown>) ?? {}),
       },
-      // Autosize to fit container
+      // Padding for axis labels (bottom for angled x-axis labels)
+      padding: { top: 5, right: 5, bottom: 25, left: 5 },
+      // Autosize to fit within padding
       autosize: {
         type: "fit",
         contains: "padding",
@@ -194,7 +199,8 @@ export function VegaChart({
   // Embed chart (only when spec structure changes)
   useEffect(() => {
     const container = containerRef.current;
-    if (!container) return;
+    // Wait for both container and valid spec (which requires containerWidth > 0)
+    if (!container || !baseSpec) return;
 
     let cancelled = false;
 
@@ -271,7 +277,8 @@ export function VegaChart({
 
     const updateSize = async () => {
       try {
-        view.width(containerWidth - 20);
+        // Match the padding used in baseSpec
+        view.width(containerWidth - 10);
         await view.runAsync();
       } catch (err) {
         // Ignore resize errors
@@ -284,6 +291,19 @@ export function VegaChart({
   // Handle loading state
   if (ctx?.isLoading) {
     return <ChartSkeleton height={height} className={className} />;
+  }
+
+  // Show skeleton while measuring container (prevents invisible chart)
+  if (containerWidth <= 0) {
+    return (
+      <div
+        ref={containerRef}
+        className={`w-full ${className ?? ""}`}
+        style={{ minHeight: height }}
+      >
+        <ChartSkeleton height={height} />
+      </div>
+    );
   }
 
   // Handle error state

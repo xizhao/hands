@@ -23,9 +23,9 @@ export interface UseLiveQueryOptions {
   enabled?: boolean;
   /** Runtime port for SSE subscription */
   runtimePort?: number | null;
-  /** Max retry attempts on error (default: 3) */
+  /** Max retry attempts on error (default: 5) */
   maxRetries?: number;
-  /** Base retry delay in ms (default: 1000, uses exponential backoff) */
+  /** Base retry delay in ms (default: 500, uses exponential backoff) */
   retryDelay?: number;
 }
 
@@ -65,8 +65,8 @@ export function useLiveQuery<T = Record<string, unknown>>(
     pollInterval = 0,
     enabled = true,
     runtimePort,
-    maxRetries = 3,
-    retryDelay = 1000,
+    maxRetries = 5,
+    retryDelay = 500,
   } = options;
 
   const queryClient = useQueryClient();

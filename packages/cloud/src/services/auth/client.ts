@@ -1,13 +1,12 @@
-import { SignJWT, jwtVerify, type JWTPayload } from "jose";
+import { SignJWT, jwtVerify } from "jose";
+import type { TokenPayload, GoogleTokenResponse, GoogleUserInfo } from "./types";
 
 const ISSUER = "hands-cloud";
 const AUDIENCE = "hands-app";
 
-export interface TokenPayload extends JWTPayload {
-  sub: string; // User ID
-  email: string;
-  name?: string;
-}
+// ============================================
+// JWT Token Management
+// ============================================
 
 export async function signToken(
   payload: Omit<TokenPayload, "iat" | "exp" | "iss" | "aud">,
@@ -41,7 +40,10 @@ export async function verifyToken(
   }
 }
 
-// PKCE utilities for desktop OAuth flow
+// ============================================
+// PKCE Utilities
+// ============================================
+
 export function generateCodeVerifier(): string {
   const array = new Uint8Array(32);
   crypto.getRandomValues(array);
@@ -71,7 +73,10 @@ function base64UrlEncode(buffer: Uint8Array): string {
   return btoa(binary).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
 }
 
-// Google OAuth utilities
+// ============================================
+// Google OAuth
+// ============================================
+
 export function getGoogleAuthUrl(
   clientId: string,
   redirectUri: string,
@@ -94,14 +99,6 @@ export function getGoogleAuthUrl(
   }
 
   return `https://accounts.google.com/o/oauth2/v2/auth?${params}`;
-}
-
-export interface GoogleTokenResponse {
-  access_token: string;
-  refresh_token?: string;
-  expires_in: number;
-  token_type: string;
-  id_token: string;
 }
 
 export async function exchangeGoogleCode(
@@ -135,14 +132,6 @@ export async function exchangeGoogleCode(
   }
 
   return response.json();
-}
-
-export interface GoogleUserInfo {
-  sub: string;
-  email: string;
-  email_verified: boolean;
-  name: string;
-  picture: string;
 }
 
 export async function getGoogleUserInfo(

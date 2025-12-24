@@ -9,7 +9,9 @@
     "./ui": "./src/ui/index.ts",
     "./hooks": "./src/hooks/index.ts",
     "./lib": "./src/lib/index.ts",
-    "./test": "./src/test/index.ts"
+    "./test": "./src/test/index.ts",
+    "./sql": "./src/sql/index.ts",
+    "./table-editor": "./src/table-editor/index.ts"
   },
   "scripts": {
     "build": "tsc",
@@ -20,6 +22,7 @@
   },
   "dependencies": {
     "@ariakit/core": "0.4.7",
+    "@glideapps/glide-data-grid": "^6.0.3",
     "@ariakit/react": "0.4.7",
     "@emoji-mart/data": "^1.2.1",
     "@hands/core": "workspace:*",

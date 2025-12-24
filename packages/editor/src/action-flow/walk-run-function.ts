@@ -17,6 +17,7 @@ import {
   ArrowFunction,
   FunctionExpression,
   MethodDeclaration,
+  ObjectLiteralExpression,
 } from "ts-morph";
 import type {
   ActionFlow,
@@ -56,6 +57,14 @@ function getLocation(node: Node): SourceLocation {
   };
 }
 
+/** Context for collecting cloud services, action calls, and chains */
+interface WalkContext {
+  sources: ExternalSource[];
+  cloudCalls: Map<string, Set<string>>; // service -> methods
+  actionCalls: ActionCallSummary[];
+  chains: ChainedAction[];
+}
+
 /**
  * Extract action flow from source code
  */
@@ -72,25 +81,47 @@ export function extractActionFlow(source: string): ActionFlow {
   const runFunction = findRunFunction(sourceFile);
 
   const steps: FlowStep[] = [];
-  const sources: ExternalSource[] = [];
+  const ctx: WalkContext = {
+    sources: [],
+    cloudCalls: new Map(),
+    actionCalls: [],
+    chains: [],
+  };
 
   if (runFunction) {
     const body = runFunction.getBody();
     if (body && Node.isBlock(body)) {
       for (const statement of body.getStatements()) {
-        const extracted = walkStatement(statement, sources);
+        const extracted = walkStatement(statement, ctx);
         steps.push(...extracted);
       }
     }
   }
 
   // Also check for schedule/triggers in the action definition
-  extractTriggers(sourceFile, sources);
+  extractTriggers(sourceFile, ctx.sources);
 
   // Build table summary
   const tables = buildTableSummary(steps);
 
-  return { name, steps, tables, sources };
+  // Build cloud services summary
+  const cloudServices: CloudServiceUsage[] = [];
+  for (const [service, methods] of ctx.cloudCalls) {
+    cloudServices.push({
+      service: service as CloudServiceUsage["service"],
+      methods: Array.from(methods),
+    });
+  }
+
+  return {
+    name,
+    steps,
+    tables,
+    sources: ctx.sources,
+    cloudServices,
+    actionCalls: ctx.actionCalls,
+    chains: ctx.chains,
+  };
 }
 
 /**
@@ -197,7 +228,7 @@ function extractTriggers(sourceFile: SourceFile, sources: ExternalSource[]): voi
 /**
  * Walk a statement and extract flow steps
  */
-function walkStatement(statement: Node, sources: ExternalSource[]): FlowStep[] {
+function walkStatement(statement: Node, ctx: WalkContext): FlowStep[] {
   const steps: FlowStep[] = [];
 
   // Variable declaration (const x = ...)
@@ -205,7 +236,7 @@ function walkStatement(statement: Node, sources: ExternalSource[]): FlowStep[] {
     for (const decl of statement.getDeclarationList().getDeclarations()) {
       const init = decl.getInitializer();
       if (init) {
-        const extracted = walkExpression(init, decl.getName(), sources);
+        const extracted = walkExpression(init, decl.getName(), ctx);
         if (extracted) {
           extracted.location = getLocation(statement);
           steps.push(extracted);
@@ -218,7 +249,7 @@ function walkStatement(statement: Node, sources: ExternalSource[]): FlowStep[] {
   // Expression statement (await something, function call, etc.)
   if (Node.isExpressionStatement(statement)) {
     const expr = statement.getExpression();
-    const extracted = walkExpression(expr, undefined, sources);
+    const extracted = walkExpression(expr, undefined, ctx);
     if (extracted) {
       extracted.location = getLocation(statement);
       steps.push(extracted);
@@ -235,20 +266,20 @@ function walkStatement(statement: Node, sources: ExternalSource[]): FlowStep[] {
     const thenStmt = statement.getThenStatement();
     if (Node.isBlock(thenStmt)) {
       for (const s of thenStmt.getStatements()) {
-        thenBranch.push(...walkStatement(s, sources));
+        thenBranch.push(...walkStatement(s, ctx));
       }
     } else {
-      thenBranch.push(...walkStatement(thenStmt, sources));
+      thenBranch.push(...walkStatement(thenStmt, ctx));
     }
 
     const elseStmt = statement.getElseStatement();
     if (elseStmt) {
       if (Node.isBlock(elseStmt)) {
         for (const s of elseStmt.getStatements()) {
-          elseBranch.push(...walkStatement(s, sources));
+          elseBranch.push(...walkStatement(s, ctx));
         }
       } else {
-        elseBranch.push(...walkStatement(elseStmt, sources));
+        elseBranch.push(...walkStatement(elseStmt, ctx));
       }
     }
 
@@ -289,10 +320,10 @@ function walkStatement(statement: Node, sources: ExternalSource[]): FlowStep[] {
     const loopBody = statement.getStatement();
     if (Node.isBlock(loopBody)) {
       for (const s of loopBody.getStatements()) {
-        body.push(...walkStatement(s, sources));
+        body.push(...walkStatement(s, ctx));
       }
     } else {
-      body.push(...walkStatement(loopBody, sources));
+      body.push(...walkStatement(loopBody, ctx));
     }
 
     const loopStep: LoopStep = { loopType, iterates, body };
@@ -311,6 +342,14 @@ function walkStatement(statement: Node, sources: ExternalSource[]): FlowStep[] {
     const expression = expr?.getText() ?? "";
     const references = expr ? extractVariableReferences(expr) : [];
 
+    // Check if this is an ActionResult format: { data, chain }
+    if (expr && Node.isObjectLiteralExpression(expr)) {
+      const chains = extractChainedActions(expr);
+      if (chains.length > 0) {
+        ctx.chains.push(...chains);
+      }
+    }
+
     steps.push({
       id: generateStepId(),
       type: "return",
@@ -324,7 +363,7 @@ function walkStatement(statement: Node, sources: ExternalSource[]): FlowStep[] {
   if (Node.isTryStatement(statement)) {
     const tryBlock = statement.getTryBlock();
     for (const s of tryBlock.getStatements()) {
-      steps.push(...walkStatement(s, sources));
+      steps.push(...walkStatement(s, ctx));
     }
     return steps;
   }
@@ -338,11 +377,11 @@ function walkStatement(statement: Node, sources: ExternalSource[]): FlowStep[] {
 function walkExpression(
   expr: Node,
   assignedTo: string | undefined,
-  sources: ExternalSource[]
+  ctx: WalkContext
 ): FlowStep | null {
   // Await expression - unwrap
   if (Node.isAwaitExpression(expr)) {
-    return walkExpression(expr.getExpression(), assignedTo, sources);
+    return walkExpression(expr.getExpression(), assignedTo, ctx);
   }
 
   // Tagged template expression (ctx.sql`...`)
@@ -375,6 +414,89 @@ function walkExpression(
   if (Node.isCallExpression(expr)) {
     const callee = expr.getExpression().getText();
 
+    // ctx.cloud.* calls (email, slack, github, etc.)
+    const cloudMatch = callee.match(/^ctx\.cloud\.(\w+)\.(\w+)$/);
+    if (cloudMatch) {
+      const [, service, method] = cloudMatch;
+      const args = expr.getArguments();
+      const argsText = args.map((a) => a.getText()).join(", ");
+
+      // Track cloud service usage
+      if (!ctx.cloudCalls.has(service)) {
+        ctx.cloudCalls.set(service, new Set());
+      }
+      ctx.cloudCalls.get(service)!.add(method);
+
+      const cloudCall: CloudCallStep = {
+        service: service as CloudCallStep["service"],
+        method,
+        args: argsText || undefined,
+        assignedTo,
+      };
+
+      return {
+        id: generateStepId(),
+        type: "cloud_call",
+        location: getLocation(expr),
+        cloudCall,
+      };
+    }
+
+    // ctx.cloud.fetch() - generic fetch
+    if (callee === "ctx.cloud.fetch") {
+      const args = expr.getArguments();
+      const argsText = args.map((a) => a.getText()).join(", ");
+
+      if (!ctx.cloudCalls.has("fetch")) {
+        ctx.cloudCalls.set("fetch", new Set());
+      }
+      ctx.cloudCalls.get("fetch")!.add("request");
+
+      const cloudCall: CloudCallStep = {
+        service: "fetch",
+        method: "request",
+        args: argsText || undefined,
+        assignedTo,
+      };
+
+      return {
+        id: generateStepId(),
+        type: "cloud_call",
+        location: getLocation(expr),
+        cloudCall,
+      };
+    }
+
+    // ctx.actions.run() calls
+    if (callee === "ctx.actions.run" || callee === "ctx.actions?.run") {
+      const args = expr.getArguments();
+      let actionId = "unknown";
+      let input: string | undefined;
+
+      if (args.length > 0) {
+        actionId = extractStringValue(args[0]) ?? args[0].getText();
+      }
+      if (args.length > 1) {
+        input = args[1].getText();
+      }
+
+      const stepId = generateStepId();
+      ctx.actionCalls.push({ actionId, stepId });
+
+      const actionCall: ActionCallStep = {
+        actionId,
+        input,
+        assignedTo,
+      };
+
+      return {
+        id: stepId,
+        type: "action_call",
+        location: getLocation(expr),
+        actionCall,
+      };
+    }
+
     // fetch() calls
     if (callee === "fetch" || callee.endsWith(".fetch")) {
       const args = expr.getArguments();
@@ -399,8 +521,8 @@ function walkExpression(
 
       // Add to sources
       const apiSource = extractApiSource(url);
-      if (apiSource && !sources.some((s) => s.id === apiSource.id)) {
-        sources.push(apiSource);
+      if (apiSource && !ctx.sources.some((s) => s.id === apiSource.id)) {
+        ctx.sources.push(apiSource);
       }
 
       return {
@@ -432,8 +554,8 @@ function walkExpression(
     for (const { pattern, name } of apiPatterns) {
       if (pattern.test(callee)) {
         const id = `api-${name.toLowerCase()}`;
-        if (!sources.some((s) => s.id === id)) {
-          sources.push({ id, type: "api", name });
+        if (!ctx.sources.some((s) => s.id === id)) {
+          ctx.sources.push({ id, type: "api", name });
         }
         return {
           id: generateStepId(),
@@ -567,4 +689,76 @@ function buildTableSummary(steps: FlowStep[]): TableSummary[] {
 
   processSteps(steps);
   return Array.from(tableMap.values());
+}
+
+/**
+ * Extract chained actions from a return { data, chain } statement
+ *
+ * Looks for patterns like:
+ * return { data: ..., chain: [{ action: "...", input: {...} }] }
+ */
+function extractChainedActions(objLiteral: ObjectLiteralExpression): ChainedAction[] {
+  const chains: ChainedAction[] = [];
+
+  // Look for a "chain" property
+  const chainProp = objLiteral.getProperty("chain");
+  if (!chainProp || !Node.isPropertyAssignment(chainProp)) {
+    return chains;
+  }
+
+  const init = chainProp.getInitializer();
+  if (!init || !Node.isArrayLiteralExpression(init)) {
+    return chains;
+  }
+
+  // Parse each chain entry
+  for (const element of init.getElements()) {
+    if (!Node.isObjectLiteralExpression(element)) continue;
+
+    const chain: ChainedAction = { actionId: "unknown" };
+
+    // Extract "action" property
+    const actionProp = element.getProperty("action");
+    if (actionProp && Node.isPropertyAssignment(actionProp)) {
+      const actionInit = actionProp.getInitializer();
+      if (actionInit) {
+        const val = extractStringValue(actionInit);
+        if (val) chain.actionId = val;
+      }
+    }
+
+    // Extract "input" property
+    const inputProp = element.getProperty("input");
+    if (inputProp && Node.isPropertyAssignment(inputProp)) {
+      const inputInit = inputProp.getInitializer();
+      if (inputInit) {
+        chain.input = inputInit.getText();
+      }
+    }
+
+    // Extract "delay" property
+    const delayProp = element.getProperty("delay");
+    if (delayProp && Node.isPropertyAssignment(delayProp)) {
+      const delayInit = delayProp.getInitializer();
+      if (delayInit && Node.isNumericLiteral(delayInit)) {
+        chain.delay = parseInt(delayInit.getText(), 10);
+      }
+    }
+
+    // Extract "condition" property
+    const conditionProp = element.getProperty("condition");
+    if (conditionProp && Node.isPropertyAssignment(conditionProp)) {
+      const condInit = conditionProp.getInitializer();
+      if (condInit) {
+        const val = extractStringValue(condInit);
+        if (val === "success" || val === "always") {
+          chain.condition = val;
+        }
+      }
+    }
+
+    chains.push(chain);
+  }
+
+  return chains;
 }

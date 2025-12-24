@@ -1,25 +1,22 @@
 import { z } from "zod";
 import { TRPCError } from "@trpc/server";
-import { router, publicProcedure, protectedProcedure } from "../index";
+import { router, publicProcedure, protectedProcedure } from "../../trpc/base";
 import { users } from "../../schema/users";
 import { subscriptions, PLANS } from "../../schema/subscriptions";
 import { refreshTokens } from "../../schema/refresh-tokens";
+import { hash, generateToken } from "../../lib/crypto";
+import { eq, and, gt } from "drizzle-orm";
 import {
   signToken,
   getGoogleAuthUrl,
   exchangeGoogleCode,
   getGoogleUserInfo,
   verifyCodeChallenge,
-} from "../../lib/auth";
-import { hash, generateToken } from "../../lib/crypto";
-import { eq, and, gt } from "drizzle-orm";
-import type { AuthState } from "../../types";
+} from "./client";
+import type { AuthState } from "./types";
 
-// KV TTL for auth states (10 minutes)
-const AUTH_STATE_TTL = 10 * 60;
-
-// Refresh token expiry (30 days)
-const REFRESH_TOKEN_EXPIRY_MS = 30 * 24 * 60 * 60 * 1000;
+const AUTH_STATE_TTL = 10 * 60; // 10 minutes
+const REFRESH_TOKEN_EXPIRY_MS = 30 * 24 * 60 * 60 * 1000; // 30 days
 
 export const authRouter = router({
   // Start OAuth flow for desktop app
@@ -33,7 +30,6 @@ export const authRouter = router({
     .mutation(async ({ ctx, input }) => {
       const state = crypto.randomUUID();
 
-      // Store state in KV (not in-memory!)
       const authState: AuthState = {
         codeChallenge: input.codeChallenge,
         redirectUri: input.redirectUri,
@@ -67,7 +63,6 @@ export const authRouter = router({
       })
     )
     .mutation(async ({ ctx, input }) => {
-      // Retrieve state from KV
       const stateKey = `oauth:${input.state}`;
       const storedStateJson = await ctx.env.AUTH_STATE.get(stateKey);
 
@@ -80,7 +75,6 @@ export const authRouter = router({
 
       const storedState: AuthState = JSON.parse(storedStateJson);
 
-      // Verify PKCE
       const isValid = await verifyCodeChallenge(
         input.codeVerifier,
         storedState.codeChallenge
@@ -92,10 +86,8 @@ export const authRouter = router({
         });
       }
 
-      // Delete state from KV (one-time use)
       await ctx.env.AUTH_STATE.delete(stateKey);
 
-      // Exchange code with Google
       const callbackUri = `${ctx.env.API_URL}/auth/callback`;
       const tokens = await exchangeGoogleCode(
         input.code,
@@ -127,7 +119,6 @@ export const authRouter = router({
           })
           .where(eq(users.id, existingUser.id));
       } else {
-        // Create new user
         const newUser = await ctx.db
           .insert(users)
           .values({
@@ -140,7 +131,6 @@ export const authRouter = router({
 
         userId = newUser.id;
 
-        // Create free subscription
         const now = new Date();
         await ctx.db.insert(subscriptions).values({
           userId,
@@ -153,14 +143,12 @@ export const authRouter = router({
         });
       }
 
-      // Generate access token
       const accessToken = await signToken(
         { sub: userId, email: userInfo.email, name: userInfo.name },
         ctx.env.AUTH_SECRET,
         "7d"
       );
 
-      // Generate and store refresh token in DB
       const refreshTokenValue = generateToken(64);
       const refreshTokenHash = await hash(refreshTokenValue);
 
@@ -189,10 +177,8 @@ export const authRouter = router({
   refresh: publicProcedure
     .input(z.object({ refreshToken: z.string() }))
     .mutation(async ({ ctx, input }) => {
-      // Hash the provided refresh token
       const tokenHash = await hash(input.refreshToken);
 
-      // Look up refresh token in DB
       const storedToken = await ctx.db
         .select()
         .from(refreshTokens)
@@ -213,7 +199,6 @@ export const authRouter = router({
         });
       }
 
-      // Get user
       const user = await ctx.db
         .select()
         .from(users)
@@ -225,7 +210,6 @@ export const authRouter = router({
         throw new TRPCError({ code: "NOT_FOUND", message: "User not found" });
       }
 
-      // Generate new access token
       const accessToken = await signToken(
         { sub: user.id, email: user.email, name: user.name ?? undefined },
         ctx.env.AUTH_SECRET,
@@ -238,7 +222,7 @@ export const authRouter = router({
       };
     }),
 
-  // Revoke a refresh token (logout)
+  // Revoke a refresh token
   revokeToken: protectedProcedure
     .input(z.object({ refreshToken: z.string() }))
     .mutation(async ({ ctx, input }) => {
@@ -260,7 +244,7 @@ export const authRouter = router({
       return { success: true };
     }),
 
-  // Revoke all refresh tokens for user (logout everywhere)
+  // Revoke all refresh tokens (logout everywhere)
   revokeAllTokens: protectedProcedure.mutation(async ({ ctx }) => {
     await ctx.db
       .update(refreshTokens)
@@ -273,7 +257,7 @@ export const authRouter = router({
     return { success: true };
   }),
 
-  // List active sessions (refresh tokens)
+  // List active sessions
   sessions: protectedProcedure.query(async ({ ctx }) => {
     const tokens = await ctx.db
       .select({
@@ -305,13 +289,12 @@ export const authRouter = router({
     };
   }),
 
-  // Logout (revokes current refresh token)
+  // Logout
   logout: protectedProcedure
     .input(z.object({ refreshToken: z.string().optional() }))
     .mutation(async ({ ctx, input }) => {
       if (input.refreshToken) {
         const tokenHash = await hash(input.refreshToken);
-        // Only revoke if token belongs to current user
         await ctx.db
           .update(refreshTokens)
           .set({

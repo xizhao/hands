@@ -64,14 +64,14 @@ function AppShell({ children }: { children: React.ReactNode }) {
     <TooltipProvider>
       {children}
       <Toaster
-        position="top-right"
+        position="bottom-right"
         offset={16}
         gap={8}
         toastOptions={{
           unstyled: true,
           classNames: {
             toast:
-              "flex items-center gap-2 px-3 py-2 rounded-lg text-xs bg-popover border border-border text-popover-foreground shadow-lg max-w-xs mt-12",
+              "flex items-center gap-2 px-3 py-2 rounded-lg text-xs bg-popover border border-border text-popover-foreground shadow-lg max-w-xs",
             error: "text-red-400 [&>svg]:text-red-400",
             success: "text-green-400 [&>svg]:text-green-400",
             title: "font-medium",

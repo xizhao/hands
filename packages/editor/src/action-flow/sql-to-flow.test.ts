@@ -2,7 +2,7 @@
  * Tests for SQL to Flow Parser
  */
 
-import { describe, it, expect, beforeEach } from "bun:test";
+import { describe, it, expect, beforeEach } from "vitest";
 import { parseSqlToFlow, resetNodeIdCounter } from "./sql-to-flow";
 import {
   getNodesOfType,

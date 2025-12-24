@@ -1,13 +1,24 @@
 /**
  * Table Data Hook - Infinite Scroll Edition
  *
- * Uses manifest for schema, db.query for data operations.
+ * Uses PRAGMA table_info for schema, db.query for data operations.
  * Supports infinite scroll with sparse data cache and ID-based selections.
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useRuntimeState } from "@/hooks/useRuntimeState";
 import { trpc } from "@/lib/trpc";
+import {
+  generateInsertSql,
+  generateUpdateSql,
+  generateDeleteSql,
+  generateBulkDeleteSql,
+  generateSelectSql,
+  generateCountSql,
+  generateAddColumnSql,
+  generateDropColumnSql,
+  generateRenameColumnSql,
+  generateAlterColumnTypeSql,
+} from "@hands/editor/sql";
 
 export interface UseTableDataOptions {
   source?: string; // Kept for API compatibility (unused)
@@ -41,24 +52,49 @@ const CHUNK_SIZE = 100;
 export function useTableData(options: UseTableDataOptions) {
   const { table, pageSize = CHUNK_SIZE, sort, sortDirection } = options;
 
-  // Get schema from manifest
-  const { manifest } = useRuntimeState();
-  const tableSchema = manifest?.tables?.find((t) => t.name === table);
+  // Schema from PRAGMA table_info (actual column types and primary key)
+  const [schemaInfo, setSchemaInfo] = useState<{
+    columns: ColumnDefinition[];
+    primaryKeyColumn: string;
+  } | null>(null);
 
-  // Build column definitions with reasonable defaults
-  // First column is assumed to be primary key (common convention)
-  const columns: ColumnDefinition[] = tableSchema?.columns.map((c, i) => ({
-    name: c,
-    type: "text", // Default type since manifest doesn't have type info
-    nullable: i !== 0, // First column (PK) is not nullable
-    isPrimaryKey: i === 0,
-    defaultValue: undefined,
-  })) ?? [];
+  const dbQuery = trpc.db.query.useMutation();
 
-  const primaryKeyColumn = columns[0]?.name ?? "id";
+  // Fetch actual schema from SQLite
+  useEffect(() => {
+    if (!table) return;
 
-  // Build ORDER BY clause
-  const orderBy = sort ? `ORDER BY "${sort}" ${sortDirection === "desc" ? "DESC" : "ASC"}` : "";
+    dbQuery
+      .mutateAsync({ sql: `PRAGMA table_info("${table}")` })
+      .then((result) => {
+        const rows = result.rows as Array<{
+          cid: number;
+          name: string;
+          type: string;
+          notnull: number;
+          dflt_value: unknown;
+          pk: number;
+        }>;
+
+        const columns: ColumnDefinition[] = rows.map((row) => ({
+          name: row.name,
+          type: row.type || "TEXT",
+          nullable: row.notnull === 0,
+          isPrimaryKey: row.pk > 0,
+          defaultValue: row.dflt_value,
+        }));
+
+        // Find actual primary key column, fallback to first column or "id"
+        const pkColumn = rows.find((r) => r.pk > 0)?.name ?? columns[0]?.name ?? "id";
+
+        setSchemaInfo({ columns, primaryKeyColumn: pkColumn });
+      })
+      .catch(console.error);
+  }, [table]);
+
+  // Use schema info or empty defaults while loading
+  const columns = schemaInfo?.columns ?? [];
+  const primaryKeyColumn = schemaInfo?.primaryKeyColumn ?? "id";
 
   // Sparse data cache
   const [cache, setCache] = useState<DataCache>({
@@ -75,7 +111,7 @@ export function useTableData(options: UseTableDataOptions) {
     if (!table) return;
 
     dbQuery
-      .mutateAsync({ sql: `SELECT COUNT(*) as count FROM "${table}"` })
+      .mutateAsync({ sql: generateCountSql(table) })
       .then((result) => {
         const count = (result.rows[0] as { count: number })?.count ?? 0;
         setCache((prev) => ({ ...prev, totalRows: count }));
@@ -108,7 +144,13 @@ export function useTableData(options: UseTableDataOptions) {
 
         try {
           const result = await dbQuery.mutateAsync({
-            sql: `SELECT * FROM "${table}" ${orderBy} LIMIT ${pageSize} OFFSET ${offset}`,
+            sql: generateSelectSql({
+              table,
+              orderBy: sort,
+              orderDirection: sortDirection,
+              limit: pageSize,
+              offset,
+            }),
           });
 
           if (result.rows) {
@@ -134,7 +176,7 @@ export function useTableData(options: UseTableDataOptions) {
         }
       }
     },
-    [table, pageSize, cache.totalRows, cache.loadedRanges, orderBy, dbQuery],
+    [table, pageSize, cache.totalRows, cache.loadedRanges, sort, sortDirection, dbQuery],
   );
 
   const getRow = useCallback((index: number): TableRow | undefined => cache.rows.get(index), [cache.rows]);
@@ -151,17 +193,21 @@ export function useTableData(options: UseTableDataOptions) {
     [cache.rows, primaryKeyColumn],
   );
 
+  // Invalidate cache: clear rows but preserve totalRows so grid knows data exists
+  // This triggers the grid to refetch visible rows
   const invalidateCache = useCallback(() => {
-    setCache({ rows: new Map(), loadedRanges: [], totalRows: 0 });
+    setCache((prev) => ({
+      rows: new Map(),
+      loadedRanges: [],
+      totalRows: prev.totalRows  // Keep row count so grid doesn't show "no data"
+    }));
   }, []);
 
-  // CRUD via raw SQL
+  // CRUD via sql-builder
   const createRow = useCallback(
     async (data: Record<string, unknown>) => {
-      const cols = Object.keys(data);
-      const vals = Object.values(data).map((v) => (typeof v === "string" ? `'${v}'` : v));
       await dbQuery.mutateAsync({
-        sql: `INSERT INTO "${table}" (${cols.map((c) => `"${c}"`).join(", ")}) VALUES (${vals.join(", ")})`,
+        sql: generateInsertSql(table, data),
       });
       invalidateCache();
     },
@@ -170,11 +216,8 @@ export function useTableData(options: UseTableDataOptions) {
 
   const updateRow = useCallback(
     async (id: string, data: Record<string, unknown>) => {
-      const sets = Object.entries(data)
-        .map(([k, v]) => `"${k}" = ${typeof v === "string" ? `'${v}'` : v}`)
-        .join(", ");
       await dbQuery.mutateAsync({
-        sql: `UPDATE "${table}" SET ${sets} WHERE "${primaryKeyColumn}" = '${id}'`,
+        sql: generateUpdateSql(table, primaryKeyColumn, id, data),
       });
       invalidateCache();
     },
@@ -184,7 +227,7 @@ export function useTableData(options: UseTableDataOptions) {
   const deleteRow = useCallback(
     async (id: string) => {
       await dbQuery.mutateAsync({
-        sql: `DELETE FROM "${table}" WHERE "${primaryKeyColumn}" = '${id}'`,
+        sql: generateDeleteSql(table, primaryKeyColumn, id),
       });
       invalidateCache();
     },
@@ -193,9 +236,9 @@ export function useTableData(options: UseTableDataOptions) {
 
   const bulkDelete = useCallback(
     async (ids: string[]) => {
-      const idList = ids.map((id) => `'${id}'`).join(", ");
+      if (ids.length === 0) return;
       await dbQuery.mutateAsync({
-        sql: `DELETE FROM "${table}" WHERE "${primaryKeyColumn}" IN (${idList})`,
+        sql: generateBulkDeleteSql(table, primaryKeyColumn, ids),
       });
       invalidateCache();
     },
@@ -206,16 +249,58 @@ export function useTableData(options: UseTableDataOptions) {
     async (updates: Array<{ id: string; data: Record<string, unknown> }>) => {
       // Execute updates sequentially (SQLite doesn't support bulk UPDATE easily)
       for (const { id, data } of updates) {
-        const sets = Object.entries(data)
-          .map(([k, v]) => `"${k}" = ${typeof v === "string" ? `'${v.replace(/'/g, "''")}'` : v === null ? "NULL" : v}`)
-          .join(", ");
         await dbQuery.mutateAsync({
-          sql: `UPDATE "${table}" SET ${sets} WHERE "${primaryKeyColumn}" = '${id}'`,
+          sql: generateUpdateSql(table, primaryKeyColumn, id, data),
         });
       }
       invalidateCache();
     },
     [table, primaryKeyColumn, dbQuery, invalidateCache],
+  );
+
+  // Column operations (ALTER TABLE)
+  const renameColumn = useCallback(
+    async (oldName: string, newName: string) => {
+      await dbQuery.mutateAsync({
+        sql: generateRenameColumnSql(table, oldName, newName),
+      });
+      invalidateCache();
+    },
+    [table, dbQuery, invalidateCache],
+  );
+
+  const changeColumnType = useCallback(
+    async (columnName: string, newType: string) => {
+      await dbQuery.mutateAsync({
+        sql: generateAlterColumnTypeSql(table, columnName, newType),
+      });
+      invalidateCache();
+    },
+    [table, dbQuery, invalidateCache],
+  );
+
+  const addColumn = useCallback(
+    async (
+      columnName: string,
+      columnType: string,
+      options?: { nullable?: boolean; defaultValue?: unknown }
+    ) => {
+      await dbQuery.mutateAsync({
+        sql: generateAddColumnSql(table, columnName, columnType, options),
+      });
+      invalidateCache();
+    },
+    [table, dbQuery, invalidateCache],
+  );
+
+  const dropColumn = useCallback(
+    async (columnName: string) => {
+      await dbQuery.mutateAsync({
+        sql: generateDropColumnSql(table, columnName),
+      });
+      invalidateCache();
+    },
+    [table, dbQuery, invalidateCache],
   );
 
   return {
@@ -228,7 +313,7 @@ export function useTableData(options: UseTableDataOptions) {
     getRowIndexById,
     primaryKeyColumn,
     columns,
-    isLoading: !tableSchema,
+    isLoading: !schemaInfo,
     isFetching: dbQuery.isPending,
     isError: dbQuery.isError,
     error: dbQuery.error,
@@ -238,6 +323,11 @@ export function useTableData(options: UseTableDataOptions) {
     deleteRow,
     bulkDelete,
     bulkUpdate,
+    // Column operations
+    renameColumn,
+    changeColumnType,
+    addColumn,
+    dropColumn,
     invalidateCache,
     refetch: invalidateCache,
   };

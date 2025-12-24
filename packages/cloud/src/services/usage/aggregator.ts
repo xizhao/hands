@@ -1,25 +1,8 @@
-/**
- * Usage aggregation from CF AI Gateway Analytics API.
- * Runs hourly via scheduled trigger to populate usage_daily table.
- */
-
-import type { Env } from "../types";
-import { getDb } from "./db";
-import { usageDaily } from "../schema/usage";
+import type { Env } from "../../types";
+import { getDb } from "../../lib/db";
+import { usageDaily } from "../../schema/usage";
 import { sql } from "drizzle-orm";
-
-interface AIGatewayLogEntry {
-  metadata?: {
-    userId?: string;
-    workbookId?: string;
-  };
-  model?: string;
-  provider?: string;
-  request_tokens?: number;
-  response_tokens?: number;
-  timestamp?: string;
-  success?: boolean;
-}
+import type { AIGatewayLogEntry } from "./types";
 
 interface AIGatewayLogsResponse {
   result: AIGatewayLogEntry[];
@@ -48,12 +31,9 @@ function estimateCost(
   const costs = MODEL_COSTS[model ?? "default"] ?? MODEL_COSTS.default;
   const inputCost = (inputTokens / 1000) * costs.input;
   const outputCost = (outputTokens / 1000) * costs.output;
-  return Math.round(inputCost + outputCost); // cents
+  return Math.round(inputCost + outputCost);
 }
 
-/**
- * Fetch logs from CF AI Gateway Analytics API
- */
 async function fetchAIGatewayLogs(
   env: Env,
   startTime: Date,
@@ -100,14 +80,9 @@ async function fetchAIGatewayLogs(
 
     allLogs.push(...data.result);
 
-    // If less than page size, we've reached the end
-    if (data.result.length < 1000) {
-      break;
-    }
+    if (data.result.length < 1000) break;
 
     page++;
-
-    // Safety limit (1000 pages = 1M logs max)
     if (page > 1000) {
       console.warn("Reached page limit for AI Gateway logs");
       break;
@@ -117,29 +92,21 @@ async function fetchAIGatewayLogs(
   return allLogs;
 }
 
-/**
- * Aggregate logs by user and date
- */
-function aggregateLogs(logs: AIGatewayLogEntry[]): Map<string, {
+interface AggregatedUsage {
   userId: string;
   date: string;
   tokensInput: number;
   tokensOutput: number;
   requests: number;
   costCents: number;
-}> {
-  const aggregates = new Map<string, {
-    userId: string;
-    date: string;
-    tokensInput: number;
-    tokensOutput: number;
-    requests: number;
-    costCents: number;
-  }>();
+}
+
+function aggregateLogs(logs: AIGatewayLogEntry[]): Map<string, AggregatedUsage> {
+  const aggregates = new Map<string, AggregatedUsage>();
 
   for (const log of logs) {
     const userId = log.metadata?.userId;
-    if (!userId) continue; // Skip logs without userId
+    if (!userId) continue;
 
     const date = log.timestamp
       ? new Date(log.timestamp).toISOString().split("T")[0]
@@ -172,24 +139,13 @@ function aggregateLogs(logs: AIGatewayLogEntry[]): Map<string, {
   return aggregates;
 }
 
-/**
- * Upsert usage data into database
- */
 async function upsertUsageData(
   env: Env,
-  aggregates: Map<string, {
-    userId: string;
-    date: string;
-    tokensInput: number;
-    tokensOutput: number;
-    requests: number;
-    costCents: number;
-  }>
+  aggregates: Map<string, AggregatedUsage>
 ): Promise<void> {
   const db = getDb(env.DB);
 
   for (const data of aggregates.values()) {
-    // Upsert using ON CONFLICT
     await db
       .insert(usageDaily)
       .values({
@@ -218,7 +174,6 @@ async function upsertUsageData(
 export async function aggregateUsage(env: Env): Promise<void> {
   console.log("Starting usage aggregation...");
 
-  // Aggregate last hour plus some buffer
   const endTime = new Date();
   const startTime = new Date(endTime.getTime() - 70 * 60 * 1000); // 70 minutes ago
 

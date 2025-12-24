@@ -34,6 +34,31 @@ export interface Env {
   // CF Account ID (for API calls)
   CF_ACCOUNT_ID?: string;
   CF_API_TOKEN?: string;
+
+  // AWS SES (secrets)
+  AWS_SES_ACCESS_KEY: string;
+  AWS_SES_SECRET_KEY: string;
+  AWS_SES_REGION?: string; // defaults to us-east-1
+  EMAIL_FROM?: string; // defaults to hello@hands.app
+
+  // Slack notifications
+  SLACK_WEBHOOK_URL?: string;
+  SLACK_BOT_TOKEN?: string;
+
+  // Dev bypass (development only)
+  DEV_BYPASS_TOKEN?: string;
+
+  // Integration OAuth credentials
+  GITHUB_CLIENT_ID?: string;
+  GITHUB_CLIENT_SECRET?: string;
+  SLACK_CLIENT_ID?: string;
+  SLACK_CLIENT_SECRET?: string;
+  SALESFORCE_CLIENT_ID?: string;
+  SALESFORCE_CLIENT_SECRET?: string;
+  QUICKBOOKS_CLIENT_ID?: string;
+  QUICKBOOKS_CLIENT_SECRET?: string;
+  SHOPIFY_CLIENT_ID?: string;
+  SHOPIFY_CLIENT_SECRET?: string;
 }
 
 export interface User {

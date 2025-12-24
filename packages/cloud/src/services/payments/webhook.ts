@@ -1,14 +1,13 @@
 import type { Context } from "hono";
-import type { Env } from "../types";
-import { getDb } from "./db";
-import { users } from "../schema/users";
-import { subscriptions, PLANS, type PlanType } from "../schema/subscriptions";
+import type { Env } from "../../types";
+import { getDb } from "../../lib/db";
+import { users } from "../../schema/users";
+import { subscriptions, PLANS, type PlanType } from "../../schema/subscriptions";
 import { eq } from "drizzle-orm";
 
-// Stripe webhook tolerance window (5 minutes)
-const TIMESTAMP_TOLERANCE = 300;
+const TIMESTAMP_TOLERANCE = 300; // 5 minutes
 
-export async function stripeWebhook(c: Context<{ Bindings: Env }>) {
+export async function handleWebhook(c: Context<{ Bindings: Env }>) {
   const signature = c.req.header("stripe-signature");
   if (!signature) {
     return c.json({ error: "Missing signature" }, 400);
@@ -16,7 +15,6 @@ export async function stripeWebhook(c: Context<{ Bindings: Env }>) {
 
   const rawBody = await c.req.text();
 
-  // Verify webhook signature with constant-time comparison
   const verification = await verifyStripeSignature(
     rawBody,
     signature,
@@ -38,7 +36,6 @@ export async function stripeWebhook(c: Context<{ Bindings: Env }>) {
         const subscription = event.data.object;
         const customerId = subscription.customer;
 
-        // Find user by Stripe customer ID
         const user = await db
           .select()
           .from(users)
@@ -51,7 +48,6 @@ export async function stripeWebhook(c: Context<{ Bindings: Env }>) {
           return c.json({ received: true });
         }
 
-        // Determine plan from price
         const priceId = subscription.items.data[0]?.price?.id;
         const plan = getPlanFromPriceId(priceId);
         const planConfig = PLANS[plan];
@@ -86,31 +82,24 @@ export async function stripeWebhook(c: Context<{ Bindings: Env }>) {
 
         await db
           .update(subscriptions)
-          .set({
-            status: "canceled",
-          })
+          .set({ status: "canceled" })
           .where(eq(subscriptions.stripeSubscriptionId, subscription.id));
 
         break;
       }
 
       case "invoice.payment_succeeded": {
-        // Handle successful payment - could send confirmation email
         console.log(`Payment succeeded for invoice ${event.data.object.id}`);
         break;
       }
 
       case "invoice.payment_failed": {
-        // Handle failed payment - could notify user
         const invoice = event.data.object;
 
-        // Update subscription status
         if (invoice.subscription) {
           await db
             .update(subscriptions)
-            .set({
-              status: "past_due",
-            })
+            .set({ status: "past_due" })
             .where(eq(subscriptions.stripeSubscriptionId, invoice.subscription as string));
         }
 
@@ -148,7 +137,6 @@ async function verifyStripeSignature(
   signature: string,
   secret: string
 ): Promise<SignatureVerificationResult> {
-  // Parse signature header
   const parts: Record<string, string> = {};
   for (const part of signature.split(",")) {
     const [key, value] = part.split("=");
@@ -164,7 +152,6 @@ async function verifyStripeSignature(
     return { valid: false, error: "Missing timestamp or signature" };
   }
 
-  // Check timestamp (within tolerance window)
   const now = Math.floor(Date.now() / 1000);
   const timestampNum = parseInt(timestamp, 10);
 
@@ -176,7 +163,6 @@ async function verifyStripeSignature(
     return { valid: false, error: "Timestamp outside tolerance window" };
   }
 
-  // Compute expected signature
   const signedPayload = `${timestamp}.${payload}`;
   const key = await crypto.subtle.importKey(
     "raw",
@@ -196,7 +182,6 @@ async function verifyStripeSignature(
     .map((b) => b.toString(16).padStart(2, "0"))
     .join("");
 
-  // Constant-time comparison to prevent timing attacks
   if (!constantTimeEqual(computedHex, expectedSig)) {
     return { valid: false, error: "Signature mismatch" };
   }
@@ -204,9 +189,6 @@ async function verifyStripeSignature(
   return { valid: true };
 }
 
-/**
- * Constant-time string comparison to prevent timing attacks
- */
 function constantTimeEqual(a: string, b: string): boolean {
   if (a.length !== b.length) {
     return false;

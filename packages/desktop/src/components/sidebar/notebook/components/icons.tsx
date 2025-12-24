@@ -5,11 +5,12 @@
  */
 
 import {
+  ArrowSquareRight,
   Code,
   Database,
   Newspaper,
-  Play,
   PuzzlePiece,
+  Square,
   Table,
 } from "@phosphor-icons/react";
 import { cn } from "@/lib/utils";
@@ -49,14 +50,21 @@ export function PluginIcon({ className, empty }: IconProps) {
   );
 }
 
-export function ActionIcon({ className, empty }: IconProps) {
+export function ActionIcon({
+  className,
+  empty,
+  readonly,
+}: IconProps & { readonly?: boolean }) {
+  const Icon = readonly ? Square : ArrowSquareRight;
   return (
-    <Play
-      weight="fill"
+    <Icon
+      weight="duotone"
       className={cn(
         "h-4 w-4",
         iconStyles,
-        empty ? "opacity-50" : "text-green-500",
+        empty
+          ? "opacity-50"
+          : "text-muted-foreground group-hover:text-foreground",
         className,
       )}
     />
