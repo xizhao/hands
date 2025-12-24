@@ -120,7 +120,11 @@ pub async fn start_capture(app: &AppHandle) -> Result<(), String> {
     Ok(())
 }
 
-/// Capture a specific region using native screencapture with coordinates
+#[tauri::command]
+pub async fn start_capture_command(app: AppHandle) -> Result<(), String> {
+    start_capture(&app).await
+}
+
 #[tauri::command]
 pub async fn capture_region(
     app: AppHandle,

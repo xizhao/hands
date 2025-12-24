@@ -1717,6 +1717,7 @@ pub fn run() {
             list_workbook_windows,
             has_active_jobs,
             get_active_jobs,
+            capture::start_capture_command,
             capture::capture_region,
             capture::cancel_capture,
             capture::close_capture_panel,

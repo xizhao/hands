@@ -71,17 +71,23 @@ export function CaptureActionPanel() {
   const [selectedWorkbook, setSelectedWorkbook] = useState<string>("");
   const [showDropdown, setShowDropdown] = useState(false);
 
-  // Ref for content wrapper to detect background clicks
   const contentRef = useRef<HTMLDivElement>(null);
 
-  // Set up transparent overlay on mount
+  const setClickThrough = useCallback(async (ignore: boolean) => {
+    try {
+      await invoke("set_ignore_cursor_events", { ignore });
+    } catch (err) {
+      console.error("Failed to set cursor events:", err);
+    }
+  }, []);
+
   useEffect(() => {
-    // Make the window fully transparent and use dark theme
     document.documentElement.classList.add("transparent-overlay", "dark");
+    setClickThrough(true);
     return () => {
       document.documentElement.classList.remove("transparent-overlay", "dark");
     };
-  }, []);
+  }, [setClickThrough]);
 
   // Parse query params on mount
   useEffect(() => {
@@ -221,24 +227,13 @@ export function CaptureActionPanel() {
 
   const selectedWorkbookName = workbooks.find(w => w.id === selectedWorkbook)?.name || "Select workbook...";
 
-  // Handle click on transparent background to close
-  const handleBackgroundClick = useCallback((e: React.MouseEvent) => {
-    // Only close if clicking directly on the background, not on content
-    if (e.target === e.currentTarget) {
-      handleClose();
-    }
-  }, [handleClose]);
-
   return (
-    <div
-      className="h-screen w-screen flex flex-col bg-transparent cursor-default"
-      onClick={handleBackgroundClick}
-    >
-      {/* Content wrapper */}
+    <div className="h-screen w-screen flex flex-col bg-transparent">
       <div
         ref={contentRef}
         className="flex flex-col gap-2"
-        onClick={(e) => e.stopPropagation()}
+        onMouseEnter={() => setClickThrough(false)}
+        onMouseLeave={() => setClickThrough(true)}
       >
       {/* Screenshot with pulsing glow - padding creates space for glow effect */}
       {screenshotPath && imgWidth > 0 && imgHeight > 0 && (

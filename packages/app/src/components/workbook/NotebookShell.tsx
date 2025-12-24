@@ -138,9 +138,8 @@ export function NotebookShell({ children }: NotebookShellProps) {
   return (
     <TooltipProvider delayDuration={300}>
       <div className="h-screen flex bg-background overflow-hidden relative">
-        {/* Subtle 1px inset border on overall window - matches macOS ~10px corner radius */}
         <div
-          className="absolute inset-0 pointer-events-none z-50 border border-white/[0.08] dark:border-white/[0.06]"
+          className="absolute inset-0 pointer-events-none z-50 border border-black/[0.04] dark:border-white/[0.03]"
           style={{ borderRadius: "10px" }}
         />
 

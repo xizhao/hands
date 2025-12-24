@@ -22,15 +22,13 @@ const HANDS_LOGO_PATHS = `
 `;
 
 function createTraySvg(size: number): string {
-  const padding = size * 0.1;
-  const inner = size - padding * 2;
-  const scale = inner / 24;
+  const scale = size / 24;
 
   return `<?xml version="1.0" encoding="UTF-8"?>
 <svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 ${size} ${size}">
-  <g transform="translate(${padding}, ${padding}) scale(${scale})"
+  <g transform="scale(${scale})"
      fill="none"
-     stroke="#000000"
+     stroke="#FFFFFF"
      stroke-width="2"
      stroke-linecap="round"
      stroke-linejoin="round">

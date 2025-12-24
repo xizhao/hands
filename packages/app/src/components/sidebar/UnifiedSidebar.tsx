@@ -62,6 +62,7 @@ import { useRouter } from "@tanstack/react-router";
 import { AnimatePresence, motion } from "framer-motion";
 import {
   ArrowUp,
+  Camera,
   Check,
   ChevronDown,
   ChevronLeft,
@@ -596,7 +597,6 @@ ${STDLIB_QUICK_REF}
     if (activeSessionId) abortSession.mutate();
   };
 
-  // File picker - opens native dialog and sets filepath attachment
   const handlePickFile = useCallback(async () => {
     try {
       const filePath = await invoke<string | null>("pick_file");
@@ -613,7 +613,6 @@ ${STDLIB_QUICK_REF}
     }
   }, [chatState]);
 
-  // Folder picker - opens native dialog and sets folder path attachment
   const handlePickFolder = useCallback(async () => {
     try {
       const folderPath = await invoke<string | null>("pick_folder");
@@ -629,6 +628,14 @@ ${STDLIB_QUICK_REF}
       console.error("[UnifiedSidebar] Failed to pick folder:", err);
     }
   }, [chatState]);
+
+  const handleSnapshot = useCallback(async () => {
+    try {
+      await invoke("start_capture_command");
+    } catch (err) {
+      console.error("[UnifiedSidebar] Failed to start capture:", err);
+    }
+  }, []);
 
   // Workbook handlers
   const handleSwitchWorkbook = useCallback(
@@ -868,6 +875,10 @@ ${STDLIB_QUICK_REF}
                     </button>
                   </DropdownMenuTrigger>
                   <DropdownMenuContent align="start" className="w-[140px]">
+                    <DropdownMenuItem onClick={handleSnapshot}>
+                      <Camera className="h-3.5 w-3.5 mr-2" />
+                      <span className="text-[13px]">Snapshot</span>
+                    </DropdownMenuItem>
                     <DropdownMenuItem onClick={handlePickFile}>
                       <File className="h-3.5 w-3.5 mr-2" />
                       <span className="text-[13px]">File</span>
@@ -1039,6 +1050,10 @@ ${STDLIB_QUICK_REF}
                 </button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="start" className="w-[140px]">
+                <DropdownMenuItem onClick={handleSnapshot}>
+                  <Camera className="h-3.5 w-3.5 mr-2" />
+                  <span className="text-[13px]">Snapshot</span>
+                </DropdownMenuItem>
                 <DropdownMenuItem onClick={handlePickFile}>
                   <File className="h-3.5 w-3.5 mr-2" />
                   <span className="text-[13px]">File</span>
