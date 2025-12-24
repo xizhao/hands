@@ -10,7 +10,12 @@ export { buildActionContext, createRunMeta } from "./context.js";
 export { discoverActions, reloadAction } from "./discovery.js";
 
 // Executor
-export { type ExecuteActionOptions, executeAction, executeActionById } from "./executor.js";
+export {
+  type ExecuteActionOptions,
+  type ExecuteActionByIdOptions,
+  executeAction,
+  executeActionById,
+} from "./executor.js";
 
 // Scheduler
 export {

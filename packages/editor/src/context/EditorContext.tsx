@@ -46,6 +46,37 @@ export interface GenerateMdxOutput {
   mdx: string;
 }
 
+export interface GenerateHintInput {
+  content: string;
+  context?: {
+    tables?: string[];
+    operation?: string;
+  };
+}
+
+export interface GenerateHintOutput {
+  hint: string;
+  cached: boolean;
+}
+
+export interface GenerateHintsBatchInput {
+  items: Array<{
+    content: string;
+    context?: {
+      tables?: string[];
+      operation?: string;
+    };
+  }>;
+}
+
+export interface GenerateHintsBatchOutput {
+  hints: Array<{
+    content: string;
+    hint: string;
+    cached: boolean;
+  }>;
+}
+
 /**
  * tRPC client interface - what we need from desktop's tRPC
  */
@@ -56,6 +87,12 @@ export interface EditorTrpcClient {
     };
     generateMdxBlock: {
       mutate: (input: GenerateMdxBlockInput) => Promise<GenerateMdxOutput>;
+    };
+    generateHint: {
+      mutate: (input: GenerateHintInput) => Promise<GenerateHintOutput>;
+    };
+    generateHintsBatch: {
+      mutate: (input: GenerateHintsBatchInput) => Promise<GenerateHintsBatchOutput>;
     };
   };
 }

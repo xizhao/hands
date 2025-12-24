@@ -9,7 +9,15 @@
  * - Return statements
  */
 
-import { Project, SyntaxKind, Node, SourceFile } from "ts-morph";
+import {
+  Project,
+  SyntaxKind,
+  Node,
+  SourceFile,
+  ArrowFunction,
+  FunctionExpression,
+  MethodDeclaration,
+} from "ts-morph";
 import type {
   ActionFlow,
   FlowStep,
@@ -20,8 +28,16 @@ import type {
   TableSummary,
   ExternalSource,
   SourceLocation,
+  CloudCallStep,
+  ActionCallStep,
+  ChainedAction,
+  CloudServiceUsage,
+  ActionCallSummary,
 } from "./types";
 import { analyzeSql } from "./analyze-sql";
+
+/** Types that can represent a run function */
+type RunFunctionNode = ArrowFunction | FunctionExpression | MethodDeclaration;
 
 let stepIdCounter = 0;
 
@@ -108,7 +124,7 @@ function extractActionName(sourceFile: SourceFile): string {
 /**
  * Find the run function in the action definition
  */
-function findRunFunction(sourceFile: SourceFile): Node | null {
+function findRunFunction(sourceFile: SourceFile): RunFunctionNode | null {
   const callExpressions = sourceFile.getDescendantsOfKind(SyntaxKind.CallExpression);
 
   for (const call of callExpressions) {

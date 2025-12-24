@@ -1,7 +1,6 @@
-export { ActionEditor, type ActionEditorProps, type ActionLineage } from "./ActionEditor";
-export { DataLineageGraph } from "./DataLineageGraph";
+export { ActionEditor, type ActionEditorProps } from "./ActionEditor";
+export { ActionFlowGraph } from "./ActionFlowGraph";
 export { ActionCodeView } from "./ActionCodeView";
-export { extractLineage } from "./extract-lineage";
 export {
   TablePreview,
   TablePreviewModal,

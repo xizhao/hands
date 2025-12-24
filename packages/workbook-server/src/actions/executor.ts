@@ -1,13 +1,15 @@
 /**
  * Action Executor
  *
- * Executes actions with proper context, error handling, and run tracking.
+ * Executes actions with proper context, error handling, run tracking, and chaining.
  */
 
 import type { PGlite } from "@electric-sql/pglite";
 import type {
   ActionRun,
   ActionTriggerType,
+  ActionResult,
+  ActionChain,
   DbSchema,
   DiscoveredAction,
 } from "@hands/core/primitives";
@@ -147,13 +149,38 @@ export interface ExecuteActionOptions {
   input: unknown;
   db: PGlite;
   workbookDir: string;
+  /** Cloud API configuration (optional) */
+  cloudConfig?: {
+    baseUrl: string;
+    token: string;
+  };
+  /** All discovered actions (for chaining) */
+  allActions?: DiscoveredAction[];
+}
+
+/**
+ * Sleep helper for chain delays
+ */
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+/**
+ * Check if a value is an ActionResult (has data property)
+ */
+function isActionResult(value: unknown): value is ActionResult {
+  return (
+    typeof value === "object" &&
+    value !== null &&
+    "data" in value
+  );
 }
 
 /**
  * Execute an action
  */
 export async function executeAction(options: ExecuteActionOptions): Promise<ActionRun> {
-  const { action, trigger, input, db, workbookDir } = options;
+  const { action, trigger, input, db, workbookDir, cloudConfig, allActions } = options;
   const runId = generateRunId();
   const startTime = Date.now();
 
@@ -232,23 +259,97 @@ export async function executeAction(options: ExecuteActionOptions): Promise<Acti
 
   const startedAt = new Date().toISOString();
 
+  // Create action runner for ctx.actions.run()
+  const actionRunner = allActions
+    ? async (actionId: string, actionInput?: unknown): Promise<unknown> => {
+        const targetAction = allActions.find((a) => a.id === actionId);
+        if (!targetAction) {
+          throw new Error(`Action not found: ${actionId}`);
+        }
+        const result = await executeAction({
+          action: targetAction,
+          trigger: "manual", // Chained actions are triggered manually
+          input: actionInput,
+          db,
+          workbookDir,
+          cloudConfig,
+          allActions,
+        });
+        if (result.status === "failed") {
+          throw new Error(result.error || `Action ${actionId} failed`);
+        }
+        return result.output;
+      }
+    : undefined;
+
   // Build context
   const runMeta = createRunMeta(runId, trigger, validatedInput);
   const ctx = buildActionContext({
     db,
     secrets,
     runMeta,
+    cloudConfig,
+    actionRunner,
   });
 
   // Execute the action
   try {
     ctx.log.info(`Starting action: ${action.definition.name}`);
 
-    const output = await action.definition.run(validatedInput, ctx);
+    const rawOutput = await action.definition.run(validatedInput, ctx);
+
+    // Handle ActionResult format vs plain return
+    let output: unknown;
+    let chains: ActionChain[] | undefined;
+
+    if (isActionResult(rawOutput)) {
+      output = rawOutput.data;
+      chains = rawOutput.chain;
+    } else {
+      output = rawOutput;
+    }
 
     const endTime = Date.now();
     const durationMs = endTime - startTime;
     ctx.log.info(`Action completed successfully`, { durationMs });
+
+    // Process chain if present and we have actions available
+    if (chains?.length && allActions) {
+      ctx.log.info(`Processing ${chains.length} chained action(s)`);
+
+      for (const chain of chains) {
+        // Check condition (default is "success", which we've already met)
+        if (chain.condition === "always" || chain.condition === "success" || !chain.condition) {
+          if (chain.delay) {
+            ctx.log.info(`Waiting ${chain.delay}ms before running ${chain.action}`);
+            await sleep(chain.delay);
+          }
+
+          ctx.log.info(`Running chained action: ${chain.action}`);
+
+          try {
+            const chainedAction = allActions.find((a) => a.id === chain.action);
+            if (!chainedAction) {
+              ctx.log.warn(`Chained action not found: ${chain.action}`);
+              continue;
+            }
+
+            await executeAction({
+              action: chainedAction,
+              trigger: "manual",
+              input: chain.input,
+              db,
+              workbookDir,
+              cloudConfig,
+              allActions,
+            });
+          } catch (chainErr) {
+            ctx.log.error(`Chained action ${chain.action} failed: ${chainErr instanceof Error ? chainErr.message : String(chainErr)}`);
+            // Continue with other chains even if one fails
+          }
+        }
+      }
+    }
 
     return {
       id: runId,
@@ -282,17 +383,24 @@ export async function executeAction(options: ExecuteActionOptions): Promise<Acti
   }
 }
 
+export interface ExecuteActionByIdOptions {
+  actionId: string;
+  actions: DiscoveredAction[];
+  trigger: ActionTriggerType;
+  input: unknown;
+  db: PGlite;
+  workbookDir: string;
+  cloudConfig?: {
+    baseUrl: string;
+    token: string;
+  };
+}
+
 /**
  * Execute an action by ID (convenience wrapper)
  */
-export async function executeActionById(
-  actionId: string,
-  actions: DiscoveredAction[],
-  trigger: ActionTriggerType,
-  input: unknown,
-  db: PGlite,
-  workbookDir: string,
-): Promise<ActionRun> {
+export async function executeActionById(options: ExecuteActionByIdOptions): Promise<ActionRun> {
+  const { actionId, actions, trigger, input, db, workbookDir, cloudConfig } = options;
   const action = actions.find((a) => a.id === actionId);
 
   if (!action) {
@@ -315,5 +423,7 @@ export async function executeActionById(
     input,
     db,
     workbookDir,
+    cloudConfig,
+    allActions: actions,
   });
 }

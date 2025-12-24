@@ -2,15 +2,19 @@
  * ActionEditor - Visual and code editor for actions
  *
  * Two modes:
- * - Visual (default): React Flow diagram showing data lineage
+ * - Visual (default): Unified flow diagram showing data lineage with compact SQL flow
  * - Code: Syntax-highlighted TypeScript source
+ *
+ * Uses AST-based extraction to analyze action source code and
+ * display the complete data flow from sources through SQL operations to tables.
  */
 
 import { Code, GitBranch } from "@phosphor-icons/react";
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { cn } from "../lib/utils";
-import { DataLineageGraph } from "./DataLineageGraph";
+import { ActionFlowGraph } from "./ActionFlowGraph";
 import { ActionCodeView } from "./ActionCodeView";
+import { extractActionFlow, parseSqlToFlow, type SqlFlow } from "../action-flow";
 
 export interface ActionEditorProps {
   /** Action ID */
@@ -19,43 +23,192 @@ export interface ActionEditorProps {
   name: string;
   /** Action source code */
   source: string;
-  /** Extracted lineage data */
-  lineage?: ActionLineage;
   /** Additional CSS classes */
   className?: string;
   /** Called when a table node is clicked */
   onTableClick?: (table: string) => void;
 }
 
-export interface ActionLineage {
-  /** External data sources (APIs, files) */
-  sources: Array<{
-    id: string;
-    name: string;
-    type: "api" | "file" | "webhook" | "schedule";
-  }>;
-  /** Tables the action reads from */
-  reads: Array<{
-    table: string;
-  }>;
-  /** Tables the action writes to */
-  writes: Array<{
-    table: string;
-    operation: "insert" | "update" | "upsert" | "delete";
-  }>;
+/** Source types */
+type SourceType = "api" | "file" | "webhook" | "schedule";
+
+/** Parsed SQL query with flow */
+interface ParsedQuery {
+  description: string;
+  operation: "select" | "insert" | "update" | "delete" | "unknown";
+  tables: Array<{ table: string; usage: "read" | "write" | "both" }>;
+  flow?: SqlFlow;
+  /** Raw SQL for AI hint generation */
+  rawSql?: string;
+}
+
+/** External source */
+interface ExternalSource {
+  id: string;
+  name: string;
+  type: SourceType;
+}
+
+/** Sink types */
+type SinkType = "result" | "http_out" | "email" | "log";
+
+/** Output sink */
+interface Sink {
+  id: string;
+  type: SinkType;
+  label: string;
+  detail?: string;
 }
 
 type EditorMode = "visual" | "code";
+
+/**
+ * Generate a human-readable description for a SQL step
+ */
+function describeSqlStep(sql: {
+  operation: string;
+  tables: Array<{ table: string }>;
+  assignedTo?: string;
+}): string {
+  const varName = sql.assignedTo;
+  const table = sql.tables[0]?.table ?? "data";
+
+  // Try to infer from variable name
+  if (varName) {
+    const readable = varName
+      .replace(/([A-Z])/g, " $1")
+      .replace(/_/g, " ")
+      .toLowerCase()
+      .trim();
+    return readable.charAt(0).toUpperCase() + readable.slice(1);
+  }
+
+  // Fallback based on operation
+  switch (sql.operation) {
+    case "select":
+      return `Query ${table}`;
+    case "insert":
+      return `Insert into ${table}`;
+    case "update":
+      return `Update ${table}`;
+    case "upsert":
+      return `Upsert ${table}`;
+    case "delete":
+      return `Delete from ${table}`;
+    default:
+      return `Access ${table}`;
+  }
+}
 
 export function ActionEditor({
   actionId,
   name,
   source,
-  lineage,
   className,
   onTableClick,
 }: ActionEditorProps) {
   const [mode, setMode] = useState<EditorMode>("visual");
+
+  // Extract flow data from source using AST analysis
+  const { sources, sqlQueries, sinks } = useMemo<{
+    sources: ExternalSource[];
+    sqlQueries: ParsedQuery[];
+    sinks: Sink[];
+  }>(() => {
+    if (!source) return { sources: [], sqlQueries: [], sinks: [] };
+
+    try {
+      const actionFlow = extractActionFlow(source);
+      const queries: ParsedQuery[] = [];
+      const sinks: Sink[] = [];
+      let hasWrites = false;
+      let hasHttpOut = false;
+
+      // Convert external sources
+      const sources: ExternalSource[] = actionFlow.sources.map((s) => ({
+        id: s.id,
+        name: s.name,
+        type: s.type as SourceType,
+      }));
+
+      let returnFields: string[] = [];
+
+      // Walk through steps to collect SQL queries and sinks
+      function processSteps(steps: typeof actionFlow.steps) {
+        for (const step of steps) {
+          if (step.sql?.raw) {
+            const parsed = parseSqlToFlow(step.sql.raw, step.sql.assignedTo);
+            const tables = step.sql.tables.map((t) => ({
+              table: t.table,
+              usage: t.usage as "read" | "write" | "both",
+            }));
+
+            queries.push({
+              description: describeSqlStep(step.sql),
+              operation: step.sql.operation as ParsedQuery["operation"],
+              tables,
+              flow: parsed.success ? parsed.flow : undefined,
+              rawSql: step.sql.raw,
+            });
+
+            // Track if we have write operations
+            if (["insert", "update", "delete", "upsert"].includes(step.sql.operation)) {
+              hasWrites = true;
+            }
+          }
+
+          // Check for outbound HTTP calls (POST/PUT/DELETE)
+          if (step.fetch) {
+            const method = step.fetch.method.toUpperCase();
+            if (["POST", "PUT", "DELETE", "PATCH"].includes(method)) {
+              hasHttpOut = true;
+              sinks.push({
+                id: `http-${sinks.length}`,
+                type: "http_out",
+                label: `${method} request`,
+                detail: step.fetch.url,
+              });
+            }
+          }
+
+          // Capture return statement references
+          if (step.returnValue) {
+            returnFields = step.returnValue.references;
+          }
+
+          // Process nested steps
+          if (step.condition) {
+            processSteps(step.condition.thenBranch);
+            if (step.condition.elseBranch) {
+              processSteps(step.condition.elseBranch);
+            }
+          }
+          if (step.loop) {
+            processSteps(step.loop.body);
+          }
+        }
+      }
+
+      processSteps(actionFlow.steps);
+
+      // Determine the final sink based on side effects
+      const hasSideEffects = hasWrites || hasHttpOut;
+
+      if (!hasSideEffects) {
+        sinks.push({
+          id: "no-op",
+          type: "log",
+          label: "Do Nothing",
+        });
+      }
+      // If has side effects, those are already added as sinks (DB writes shown as table nodes, HTTP as sink nodes)
+
+      return { sources, sqlQueries: queries, sinks };
+    } catch (err) {
+      console.warn("Failed to extract action flow:", err);
+      return { sources: [], sqlQueries: [], sinks: [] };
+    }
+  }, [source]);
 
   return (
     <div className={cn("h-full flex flex-col", className)}>
@@ -90,10 +243,10 @@ export function ActionEditor({
       {/* Content */}
       <div className="flex-1 min-h-0">
         {mode === "visual" ? (
-          <DataLineageGraph
-            actionId={actionId}
-            actionName={name}
-            lineage={lineage}
+          <ActionFlowGraph
+            sources={sources}
+            sqlQueries={sqlQueries}
+            sinks={sinks}
             onTableClick={onTableClick}
           />
         ) : (

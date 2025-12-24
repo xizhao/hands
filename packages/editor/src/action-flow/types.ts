@@ -17,6 +17,28 @@ export interface ActionFlow {
   tables: TableSummary[];
   /** External data sources */
   sources: ExternalSource[];
+  /** Cloud services used (ctx.cloud.*) */
+  cloudServices: CloudServiceUsage[];
+  /** Inline action calls (ctx.actions.run) */
+  actionCalls: ActionCallSummary[];
+  /** Chained actions (from return statement) */
+  chains: ChainedAction[];
+}
+
+/**
+ * Summary of cloud service usage
+ */
+export interface CloudServiceUsage {
+  service: "email" | "slack" | "github" | "salesforce" | "fetch";
+  methods: string[];
+}
+
+/**
+ * Summary of inline action calls
+ */
+export interface ActionCallSummary {
+  actionId: string;
+  stepId: string;
 }
 
 /**
@@ -34,6 +56,10 @@ export interface FlowStep {
   loop?: LoopStep;
   assignment?: AssignmentStep;
   returnValue?: ReturnStep;
+  /** Cloud service call (ctx.cloud.*) */
+  cloudCall?: CloudCallStep;
+  /** Inline action call (ctx.actions.run) */
+  actionCall?: ActionCallStep;
 }
 
 export type FlowStepType =
@@ -44,6 +70,8 @@ export type FlowStepType =
   | "assignment"
   | "return"
   | "log"
+  | "cloud_call"
+  | "action_call"
   | "unknown";
 
 /**
@@ -193,4 +221,66 @@ export interface ExternalSource {
   name: string;
   /** URL or identifier */
   endpoint?: string;
+}
+
+// =============================================================================
+// Cloud Service Calls (ctx.cloud.*)
+// =============================================================================
+
+/**
+ * Cloud service call step (ctx.cloud.email.send, ctx.cloud.slack.send, etc.)
+ */
+export interface CloudCallStep {
+  /** Service name (email, slack, github, salesforce) */
+  service: "email" | "slack" | "github" | "salesforce" | "fetch";
+  /** Method called (send, channels, issues, etc.) */
+  method: string;
+  /** Arguments passed (simplified) */
+  args?: string;
+  /** Variable the result is assigned to */
+  assignedTo?: string;
+}
+
+// =============================================================================
+// Action Calls (ctx.actions.run)
+// =============================================================================
+
+/**
+ * Inline action call step (ctx.actions.run("action-id", {...}))
+ */
+export interface ActionCallStep {
+  /** Action ID being called */
+  actionId: string;
+  /** Input expression (simplified) */
+  input?: string;
+  /** Variable the result is assigned to */
+  assignedTo?: string;
+}
+
+// =============================================================================
+// Action Chains (return { data, chain })
+// =============================================================================
+
+/**
+ * A chained action defined in the return statement
+ */
+export interface ChainedAction {
+  /** Action ID to run after this action */
+  actionId: string;
+  /** Input expression */
+  input?: string;
+  /** Delay in ms */
+  delay?: number;
+  /** Condition (success, always) */
+  condition?: "success" | "always";
+}
+
+/**
+ * Extended return step that may include chains
+ */
+export interface ExtendedReturnStep extends ReturnStep {
+  /** Chained actions to run after */
+  chains?: ChainedAction[];
+  /** Whether this is an ActionResult format (has data property) */
+  isActionResult?: boolean;
 }

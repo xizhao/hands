@@ -11,8 +11,7 @@
 import { CircleNotch, Clock, Code, Globe, Play } from "@phosphor-icons/react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
-import { useMemo } from "react";
-import { ActionEditor, extractLineage, type ActionLineage } from "@hands/editor";
+import { ActionEditor } from "@hands/editor";
 import { Button } from "@/components/ui/button";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { useRuntimePort } from "@/hooks/useRuntimeState";
@@ -91,11 +90,6 @@ export function ActionDetailPanel({ actionId }: ActionDetailPanelProps) {
     enabled: !!port && !!actionId,
   });
 
-  // Extract lineage from source code
-  const lineage = useMemo<ActionLineage | undefined>(() => {
-    if (!sourceData?.source) return undefined;
-    return extractLineage(sourceData.source);
-  }, [sourceData?.source]);
 
   // Run action mutation
   const runMutation = useMutation({
@@ -268,9 +262,9 @@ export function ActionDetailPanel({ actionId }: ActionDetailPanelProps) {
               actionId={actionId}
               name={action.name}
               source={sourceData.source}
-              lineage={lineage}
               className="h-full"
               onTableClick={(table) => navigate({ to: "/tables/$tableId", params: { tableId: table } })}
+              runtimePort={port}
             />
           ) : (
             <div className="flex-1 flex items-center justify-center text-muted-foreground">

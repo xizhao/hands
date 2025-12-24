@@ -315,11 +315,9 @@ export function useTablePreview(
     setError(null);
 
     try {
-      // Fetch schema
+      // Fetch schema for all tables
       const schemaRes = await fetch(
-        `http://localhost:${runtimePort}/trpc/tables.schema?input=${encodeURIComponent(
-          JSON.stringify({ table })
-        )}`
+        `http://localhost:${runtimePort}/db/schema`
       );
 
       if (!schemaRes.ok) {
@@ -327,38 +325,51 @@ export function useTablePreview(
       }
 
       const schemaJson = await schemaRes.json();
-      const schema = schemaJson.result?.data;
+      const tableSchema = schemaJson.tables?.find(
+        (t: { name: string }) => t.name.toLowerCase() === table.toLowerCase()
+      );
 
       // Fetch sample rows
       const rowsRes = await fetch(
-        `http://localhost:${runtimePort}/trpc/tables.query?input=${encodeURIComponent(
-          JSON.stringify({ sql: `SELECT * FROM "${table}" LIMIT 5` })
-        )}`
+        `http://localhost:${runtimePort}/db/query`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ sql: `SELECT * FROM "${table}" LIMIT 5` }),
+        }
       );
 
       let rows: Record<string, unknown>[] = [];
       if (rowsRes.ok) {
         const rowsJson = await rowsRes.json();
-        rows = rowsJson.result?.data?.rows ?? [];
+        rows = rowsJson.rows ?? [];
       }
 
       // Fetch total count
       const countRes = await fetch(
-        `http://localhost:${runtimePort}/trpc/tables.query?input=${encodeURIComponent(
-          JSON.stringify({ sql: `SELECT COUNT(*) as count FROM "${table}"` })
-        )}`
+        `http://localhost:${runtimePort}/db/query`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ sql: `SELECT COUNT(*) as count FROM "${table}"` }),
+        }
       );
 
       let totalRows: number | undefined;
       if (countRes.ok) {
         const countJson = await countRes.json();
-        totalRows = countJson.result?.data?.rows?.[0]?.count;
+        totalRows = countJson.rows?.[0]?.count;
       }
 
       setData({
         schema: {
           name: table,
-          columns: schema?.columns ?? [],
+          columns: tableSchema?.columns?.map((c: { name: string; type: string; isPrimary?: boolean; nullable?: boolean }) => ({
+            name: c.name,
+            type: c.type,
+            primaryKey: c.isPrimary,
+            nullable: c.nullable,
+          })) ?? [],
         },
         rows,
         totalRows,

@@ -41,6 +41,8 @@ export interface FrontmatterHeaderProps {
   onFocusEditor: () => void;
   /** Ref for subtitle element (for keyboard navigation from editor) */
   subtitleRef?: React.RefObject<HTMLDivElement | null>;
+  /** Use compact styling (smaller text, less padding) */
+  compact?: boolean;
   /** CSS class name */
   className?: string;
 }
@@ -131,6 +133,7 @@ export function FrontmatterHeader({
   onFrontmatterChange,
   onFocusEditor,
   subtitleRef: externalSubtitleRef,
+  compact = false,
   className,
 }: FrontmatterHeaderProps) {
   const titleRef = useRef<HTMLDivElement>(null);
@@ -223,14 +226,15 @@ export function FrontmatterHeader({
   }, []);
 
   return (
-    <div className={cn("pt-8", className)}>
+    <div className={cn(compact ? "pt-4" : "pt-8", className)}>
       {/* Title */}
       <div
         ref={titleRef}
         contentEditable
         suppressContentEditableWarning
         className={cn(
-          "text-4xl font-bold outline-none",
+          "font-semibold outline-none",
+          compact ? "text-2xl" : "text-4xl font-bold",
           "empty:before:content-[attr(data-placeholder)] empty:before:text-muted-foreground/40",
         )}
         data-placeholder="Untitled"
@@ -245,7 +249,8 @@ export function FrontmatterHeader({
         contentEditable
         suppressContentEditableWarning
         className={cn(
-          "text-lg text-muted-foreground/70 outline-none mt-1",
+          "text-muted-foreground/70 outline-none",
+          compact ? "text-sm mt-0.5" : "text-lg mt-1",
           "empty:before:content-[attr(data-placeholder)] empty:before:text-muted-foreground/30",
         )}
         data-placeholder="Add a description..."

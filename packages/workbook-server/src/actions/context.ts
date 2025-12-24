@@ -2,7 +2,7 @@
  * Action Context Builder
  *
  * Creates the ActionContext that is passed to action run functions.
- * Provides access to raw SQL, logging, and notifications.
+ * Provides access to raw SQL, logging, notifications, and cloud services.
  */
 
 import type { PGlite } from "@electric-sql/pglite";
@@ -12,19 +12,29 @@ import type {
   ActionNotify,
   ActionRunMeta,
   ActionTriggerType,
+  ActionCloud,
+  ActionRunner,
 } from "@hands/core/primitives";
+import { createCloudClient } from "../services/cloud.js";
 
 interface BuildContextOptions {
   db: PGlite;
   secrets: Record<string, string>;
   runMeta: ActionRunMeta;
+  /** Cloud API configuration (if available) */
+  cloudConfig?: {
+    baseUrl: string;
+    token: string;
+  };
+  /** Action runner for chaining (injected by executor) */
+  actionRunner?: (actionId: string, input?: unknown) => Promise<unknown>;
 }
 
 /**
  * Build an ActionContext for executing an action
  */
 export function buildActionContext(options: BuildContextOptions): ActionContext {
-  const { db, secrets, runMeta } = options;
+  const { db, secrets, runMeta, cloudConfig, actionRunner } = options;
 
   // Build SQL tagged template
   const sql = buildSqlTemplate(db);
@@ -35,12 +45,24 @@ export function buildActionContext(options: BuildContextOptions): ActionContext 
   // Build notify (placeholder for now)
   const notify = buildNotify();
 
+  // Build cloud client if config is available
+  const cloud: ActionCloud | undefined = cloudConfig
+    ? createCloudClient(cloudConfig)
+    : undefined;
+
+  // Build action runner if available
+  const actions: ActionRunner | undefined = actionRunner
+    ? { run: actionRunner as <T>(actionId: string, input?: unknown) => Promise<T> }
+    : undefined;
+
   return {
     sql,
     log,
     notify,
     secrets,
     run: runMeta,
+    cloud,
+    actions,
   };
 }
 

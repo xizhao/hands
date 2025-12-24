@@ -91,69 +91,64 @@ export function TocSidebar({
   }
 
   return (
-    <div className={cn('sticky top-0 right-0 z-5', className)}>
-      <div className={cn('group absolute top-0 right-0 z-10 max-h-[400px]')}>
-        <div className="relative z-10 mr-2.5 flex flex-col justify-center pr-2 pb-3">
-          {/* Depth indicator bars */}
-          <div className={cn('flex flex-col gap-3 pb-3 pl-5')}>
-            {headingList.slice(0, maxShowCount).map((item) => (
-              <div key={item.id}>
-                <div
-                  className={cn(
-                    'h-0.5 rounded-xs bg-primary/20',
-                    activeId === item.id && 'bg-primary'
-                  )}
-                  style={{
-                    marginLeft: `${4 * (item.depth - 1)}px`,
-                    width: `${16 - 4 * (item.depth - 1)}px`,
-                  }}
-                />
-              </div>
-            ))}
-          </div>
-
-          {/* Expanded ToC on hover */}
-          <nav
-            aria-label="Table of contents"
+    <div className={cn('group z-50', className)}>
+      {/* Depth indicator bars - fit in gutter */}
+      <div className="flex flex-col gap-1.5 items-center pt-1">
+        {headingList.slice(0, maxShowCount).map((item) => (
+          <div
+            key={item.id}
             className={cn(
-              '-top-2.5 absolute right-0 px-2.5 transition-all duration-300',
-              'pointer-events-none translate-x-[10px] opacity-0',
-              'group-hover:pointer-events-auto group-hover:translate-x-0 group-hover:opacity-100',
-              'touch:pointer-events-auto touch:translate-x-0 touch:opacity-100',
+              'h-[3px] rounded-full transition-colors cursor-pointer',
+              activeId === item.id
+                ? 'bg-primary'
+                : 'bg-muted-foreground/20 hover:bg-muted-foreground/40'
             )}
-          >
-            <div
-              className={cn(
-                popoverVariants(),
-                '-mr-2.5 max-h-96 w-[242px] scroll-m-1 overflow-auto rounded-2xl p-3'
-              )}
-            >
-              <div className="relative z-10 p-1.5">
-                {headingList.slice(0, maxShowCount).map((item, index) => {
-                  const isActive = activeId ? activeId === item.id : index === 0;
-
-                  return (
-                    <Button
-                      aria-current={isActive}
-                      className={cn(
-                        tocSidebarButtonVariants({
-                          active: isActive,
-                          depth: item.depth as any,
-                        })
-                      )}
-                      key={item.id}
-                      onClick={(e) => handleClick(e, item)}
-                      variant="ghost"
-                    >
-                      <div className="p-1">{item.title}</div>
-                    </Button>
-                  );
-                })}
-              </div>
-            </div>
-          </nav>
-        </div>
+            style={{
+              width: `${14 - 4 * (item.depth - 1)}px`,
+            }}
+            onClick={(e) => handleClick(e, item)}
+          />
+        ))}
       </div>
+
+      {/* Expanded ToC on hover */}
+      <nav
+        aria-label="Table of contents"
+        className={cn(
+          'absolute top-0 left-0 z-50 transition-all duration-200',
+          'pointer-events-none opacity-0',
+          'group-hover:pointer-events-auto group-hover:opacity-100',
+        )}
+      >
+        <div
+          className={cn(
+            popoverVariants(),
+            'max-h-80 w-[200px] overflow-auto rounded-lg p-1.5 shadow-lg'
+          )}
+        >
+          {headingList.slice(0, maxShowCount).map((item, index) => {
+            const isActive = activeId ? activeId === item.id : index === 0;
+
+            return (
+              <Button
+                aria-current={isActive}
+                className={cn(
+                  tocSidebarButtonVariants({
+                    active: isActive,
+                    depth: item.depth as any,
+                  }),
+                  'text-xs'
+                )}
+                key={item.id}
+                onClick={(e) => handleClick(e, item)}
+                variant="ghost"
+              >
+                <div className="py-0.5 px-1 truncate">{item.title}</div>
+              </Button>
+            );
+          })}
+        </div>
+      </nav>
     </div>
   );
 }

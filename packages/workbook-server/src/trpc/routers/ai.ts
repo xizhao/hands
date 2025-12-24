@@ -312,6 +312,193 @@ ${prompt}
         });
       }
     }),
+  /**
+   * Generate plain English hint for technical content (SQL, operations)
+   * Uses content hashing for deduplication and caching
+   */
+  generateHint: t.procedure
+    .input(z.object({
+      content: z.string().min(1).max(2000),
+      context: z.object({
+        tables: z.array(z.string()).optional(),
+        operation: z.string().optional(),
+      }).optional(),
+    }))
+    .mutation(async ({ input }) => {
+      const { content, context } = input;
+
+      // Generate cache key from content hash
+      const cacheKey = await hashContent(content);
+
+      // Check cache first
+      const cached = hintCache.get(cacheKey);
+      if (cached) {
+        return { hint: cached, cached: true };
+      }
+
+      const apiKey = process.env.HANDS_AI_API_KEY;
+      if (!apiKey) {
+        // No API key - return raw content as fallback
+        return { hint: content, cached: false };
+      }
+      process.env.AI_GATEWAY_API_KEY = apiKey;
+
+      const contextStr = context?.tables?.length
+        ? `Tables involved: ${context.tables.join(", ")}. `
+        : "";
+
+      const systemPrompt = `Convert technical SQL/database operations into plain English summaries.
+- Be concise (one sentence, max 15 words)
+- Include table and column names when relevant
+- Use action verbs (filters, joins, groups, inserts, updates, deletes)
+- Don't start with "This"
+
+Examples:
+- "SELECT * FROM users WHERE status = 'active'" → "Gets all active users"
+- "INSERT INTO orders (user_id, total)" → "Adds a new order with user and total"
+- "UPDATE products SET price = price * 1.1" → "Increases all product prices by 10%"
+- "SELECT COUNT(*) FROM orders GROUP BY customer_id" → "Counts orders per customer"`;
+
+      try {
+        const result = await generateText({
+          model: gateway("google/gemini-2.5-flash-lite"),
+          system: systemPrompt,
+          prompt: `${contextStr}${content}`,
+          maxOutputTokens: 50,
+          temperature: 0,
+          abortSignal: AbortSignal.timeout(5000),
+        });
+
+        const hint = result.text?.trim() || content;
+
+        // Cache the result
+        hintCache.set(cacheKey, hint);
+
+        return { hint, cached: false };
+      } catch (err) {
+        console.error('[ai.generateHint] Error:', err);
+        // Return raw content on error
+        return { hint: content, cached: false };
+      }
+    }),
+
+  /**
+   * Batch generate hints for multiple content strings
+   * More efficient than multiple single calls
+   */
+  generateHintsBatch: t.procedure
+    .input(z.object({
+      items: z.array(z.object({
+        content: z.string().min(1).max(2000),
+        context: z.object({
+          tables: z.array(z.string()).optional(),
+          operation: z.string().optional(),
+        }).optional(),
+      })).max(20),
+    }))
+    .mutation(async ({ input }) => {
+      const { items } = input;
+
+      // Compute hashes and check cache
+      const results: Array<{ content: string; hint: string; cached: boolean }> = [];
+      const uncachedItems: Array<{ idx: number; content: string; context?: { tables?: string[]; operation?: string } }> = [];
+
+      for (let i = 0; i < items.length; i++) {
+        const item = items[i];
+        const cacheKey = await hashContent(item.content);
+        const cached = hintCache.get(cacheKey);
+
+        if (cached) {
+          results[i] = { content: item.content, hint: cached, cached: true };
+        } else {
+          uncachedItems.push({ idx: i, content: item.content, context: item.context });
+        }
+      }
+
+      // If all cached, return early
+      if (uncachedItems.length === 0) {
+        return { hints: results };
+      }
+
+      const apiKey = process.env.HANDS_AI_API_KEY;
+      if (!apiKey) {
+        // No API key - return raw content as fallback
+        for (const item of uncachedItems) {
+          results[item.idx] = { content: item.content, hint: item.content, cached: false };
+        }
+        return { hints: results };
+      }
+      process.env.AI_GATEWAY_API_KEY = apiKey;
+
+      // Build batch prompt
+      const batchPrompt = uncachedItems.map((item, i) =>
+        `[${i + 1}] ${item.content}`
+      ).join("\n");
+
+      const systemPrompt = `Convert each numbered SQL/database operation into a plain English summary.
+- One sentence per item, max 15 words each
+- Include table and column names when relevant
+- Use action verbs (filters, joins, groups, inserts, updates, deletes)
+- Format: [1] summary\\n[2] summary\\n...`;
+
+      try {
+        const result = await generateText({
+          model: gateway("google/gemini-2.5-flash-lite"),
+          system: systemPrompt,
+          prompt: batchPrompt,
+          maxOutputTokens: 50 * uncachedItems.length,
+          temperature: 0,
+          abortSignal: AbortSignal.timeout(10000),
+        });
+
+        // Parse batch response
+        const lines = (result.text || "").split("\n").filter(l => l.trim());
+        const hintMap = new Map<number, string>();
+
+        for (const line of lines) {
+          const match = line.match(/^\[(\d+)\]\s*(.+)$/);
+          if (match) {
+            hintMap.set(parseInt(match[1], 10), match[2].trim());
+          }
+        }
+
+        // Fill in results and cache
+        for (let i = 0; i < uncachedItems.length; i++) {
+          const item = uncachedItems[i];
+          const hint = hintMap.get(i + 1) || item.content;
+          const cacheKey = await hashContent(item.content);
+
+          hintCache.set(cacheKey, hint);
+          results[item.idx] = { content: item.content, hint, cached: false };
+        }
+
+        return { hints: results };
+      } catch (err) {
+        console.error('[ai.generateHintsBatch] Error:', err);
+        // Return raw content on error
+        for (const item of uncachedItems) {
+          results[item.idx] = { content: item.content, hint: item.content, cached: false };
+        }
+        return { hints: results };
+      }
+    }),
 });
+
+// ============================================================================
+// Hint Cache (in-memory, content-addressed)
+// ============================================================================
+
+const hintCache = new Map<string, string>();
+
+/**
+ * Hash content for cache key
+ */
+async function hashContent(content: string): Promise<string> {
+  const encoder = new TextEncoder();
+  const data = encoder.encode(content);
+  const hashBuffer = await crypto.subtle.digest('SHA-256', data);
+  const hashArray = Array.from(new Uint8Array(hashBuffer));
+  return hashArray.slice(0, 8).map(b => b.toString(16).padStart(2, '0')).join('');
+}
 
 export type AIRouter = typeof aiRouter;

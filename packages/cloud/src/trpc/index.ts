@@ -6,6 +6,7 @@ import { billingRouter } from "./routers/billing";
 import { usageRouter } from "./routers/usage";
 import { workbooksRouter } from "./routers/workbooks";
 import { oauthRouter } from "./routers/oauth";
+import { servicesRouter } from "./routers/services";
 
 const t = initTRPC.context<Context>().create();
 
@@ -35,6 +36,7 @@ export const appRouter = router({
   usage: usageRouter,
   workbooks: workbooksRouter,
   oauth: oauthRouter,
+  services: servicesRouter,
 });
 
 export type AppRouter = typeof appRouter;

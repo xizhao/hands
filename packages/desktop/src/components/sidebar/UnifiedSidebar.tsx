@@ -61,6 +61,8 @@ import {
   ArrowUp,
   Check,
   ChevronDown,
+  ChevronLeft,
+  ChevronRight,
   Database,
   File,
   Folder,
@@ -480,18 +482,15 @@ ${STDLIB_QUICK_REF}
   // Render Helpers
   // ============================================================================
 
-  // Workbook header with traffic light offset (project dropdown right-aligned)
+  // Workbook header with traffic light offset
   const workbookHeader = (
     <div
       data-tauri-drag-region
       className={cn(
-        "shrink-0 flex items-center justify-end gap-1 h-10",
+        "shrink-0 flex items-center gap-1 h-10",
         needsTrafficLightOffset ? "pl-[80px] pr-3" : "px-3"
       )}
     >
-      {/* Save status indicator */}
-      <SaveStatusIndicator />
-
       {/* Editable workbook title */}
       <span
         ref={titleInputRef}
@@ -527,6 +526,9 @@ ${STDLIB_QUICK_REF}
         {currentWorkbook?.name ?? "Untitled"}
       </span>
 
+      {/* Save status indicator - next to title */}
+      <SaveStatusIndicator />
+
       {/* Workbook switcher dropdown */}
       <DropdownMenu>
         <DropdownMenuTrigger className="flex items-center justify-center w-5 h-5 rounded-sm text-muted-foreground/70 hover:text-muted-foreground hover:bg-accent/50">
@@ -552,6 +554,24 @@ ${STDLIB_QUICK_REF}
           </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
+
+      {/* Right side: navigation */}
+      <div className="ml-auto flex items-center">
+        <button
+          onClick={() => router.history.back()}
+          className="p-1 text-muted-foreground/60 hover:text-muted-foreground transition-colors"
+          title="Go back"
+        >
+          <ChevronLeft className="h-4 w-4" />
+        </button>
+        <button
+          onClick={() => router.history.forward()}
+          className="p-1 text-muted-foreground/60 hover:text-muted-foreground transition-colors"
+          title="Go forward"
+        >
+          <ChevronRight className="h-4 w-4" />
+        </button>
+      </div>
     </div>
   );
 

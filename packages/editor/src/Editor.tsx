@@ -556,9 +556,9 @@ export const Editor = forwardRef<EditorHandle, EditorProps>(function Editor(
             "relative flex-1 min-h-0 cursor-text overflow-y-auto",
             mode === "visual" ? "pl-8 pr-6" : "pl-0 pr-0"
           )}>
-            {/* Table of contents sidebar - shows on right edge, expands on hover */}
+            {/* Table of contents - in left gutter where drag handles go */}
             {mode === "visual" && (frontmatter?.toc ?? tocProp) && (
-              <TocSidebar className="absolute top-4 right-0" />
+              <TocSidebar className="absolute top-4 left-0 w-8" />
             )}
 
             {/* Frontmatter header (only in visual mode - code mode shows raw frontmatter) */}
@@ -568,6 +568,7 @@ export const Editor = forwardRef<EditorHandle, EditorProps>(function Editor(
                 onFrontmatterChange={onFrontmatterChange}
                 onFocusEditor={handleFocusEditor}
                 subtitleRef={subtitleRef}
+                compact
               />
             )}
 
