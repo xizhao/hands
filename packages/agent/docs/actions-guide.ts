@@ -18,6 +18,112 @@ Actions are serverless functions in the \`actions/\` directory. They can:
 - Be triggered manually
 - Access secrets securely
 
+## Available Imports
+
+Actions can import from the Hands core library and use native fetch:
+
+\`\`\`typescript
+import { defineAction } from "@hands/core/primitives";  // Required - action definition
+import { createServices } from "@hands/core/services";  // Cloud services client
+import { z } from "zod";                                 // Input validation
+\`\`\`
+
+**Native APIs available:**
+- \`fetch()\` - For any HTTP requests
+- \`URL\`, \`URLSearchParams\` - URL manipulation
+- \`JSON\`, \`Date\`, \`Math\` - Standard JS globals
+- \`btoa\`, \`atob\` - Base64 encoding
+
+## Cloud Services (@hands/core/services)
+
+For external services like Email, Slack, GitHub, etc., use the cloud services client. This handles OAuth authentication automatically.
+
+\`\`\`typescript
+import { defineAction } from "@hands/core/primitives";
+import { createServices } from "@hands/core/services";
+
+export default defineAction({
+  name: "notify-team",
+  secrets: ["HANDS_CLOUD_TOKEN"],
+
+  async run(input, ctx) {
+    const services = createServices({
+      cloudUrl: "https://api.hands.app",
+      authToken: ctx.secrets.HANDS_CLOUD_TOKEN,
+    });
+
+    // Check what's connected
+    const status = await services.status();
+
+    // Send email via Gmail
+    if (status.google) {
+      await services.email.send({
+        to: "team@company.com",
+        subject: "Sync Complete",
+        body: "The data sync finished successfully.",
+      });
+    }
+
+    // Post to Slack
+    if (status.slack) {
+      await services.slack.send({
+        channel: "#alerts",
+        text: "Data sync complete!",
+      });
+    }
+  },
+});
+\`\`\`
+
+### Available Services
+
+| Service | Methods | Description |
+|---------|---------|-------------|
+| \`services.email\` | \`send({ to, subject, body })\` | Send email via Gmail |
+| \`services.slack\` | \`send({ channel, text })\`, \`channels()\` | Post messages, list channels |
+| \`services.github\` | \`issues()\`, \`repos()\`, \`createIssue()\`, \`fetch()\` | GitHub API access |
+| \`services.salesforce\` | \`query({ soql, instanceUrl })\` | Run SOQL queries |
+| \`services.fetch\` | \`({ provider, url, method, body })\` | Generic authenticated fetch for any provider |
+| \`services.status\` | \`()\` | Check which services are connected |
+
+### Generic Authenticated Fetch
+
+For any OAuth-connected service, use \`services.fetch\`:
+
+\`\`\`typescript
+// Call any API with the user's OAuth token
+const result = await services.fetch({
+  provider: "shopify",  // or "google", "github", "quickbooks", etc.
+  url: "https://mystore.myshopify.com/admin/api/2024-01/products.json",
+  method: "GET",
+});
+\`\`\`
+
+### Supported Providers
+\`google\`, \`slack\`, \`github\`, \`salesforce\`, \`quickbooks\`, \`shopify\`
+
+## Using Plain fetch()
+
+For public APIs or APIs with simple auth, use native \`fetch()\`:
+
+\`\`\`typescript
+async run(input, ctx) {
+  // Public API
+  const response = await fetch("https://api.example.com/data");
+  const data = await response.json();
+
+  // API with key auth
+  const authResponse = await fetch("https://api.stripe.com/v1/charges", {
+    method: "POST",
+    headers: {
+      "Authorization": \`Bearer \${ctx.secrets.STRIPE_KEY}\`,
+      "Content-Type": "application/x-www-form-urlencoded",
+    },
+    body: new URLSearchParams({ amount: "1000", currency: "usd" }),
+  });
+}
+\`\`\`
+
 ### Basic Action
 
 \`\`\`typescript
@@ -322,5 +428,44 @@ async run(input, ctx) {
   const apiKey = ctx.secrets.API_KEY;
   if (!apiKey) throw new Error("API_KEY not configured");
 }
+\`\`\`
+
+### WRONG: Importing external npm packages
+\`\`\`typescript
+// DON'T DO THIS - npm packages are not available in the action sandbox
+import { S3Client } from "@aws-sdk/client-s3";
+import axios from "axios";
+import Stripe from "stripe";
+\`\`\`
+
+### CORRECT: Use @hands/core/services or fetch()
+\`\`\`typescript
+import { defineAction } from "@hands/core/primitives";
+import { createServices } from "@hands/core/services";
+
+export default defineAction({
+  name: "sync-data",
+  secrets: ["HANDS_CLOUD_TOKEN", "STRIPE_KEY"],
+
+  async run(input, ctx) {
+    // For OAuth services (GitHub, Slack, etc.) - use createServices
+    const services = createServices({
+      cloudUrl: "https://api.hands.app",
+      authToken: ctx.secrets.HANDS_CLOUD_TOKEN,
+    });
+    await services.github.issues({ owner: "org", repo: "repo" });
+
+    // For APIs with simple auth - use fetch()
+    const stripeRes = await fetch("https://api.stripe.com/v1/charges", {
+      method: "POST",
+      headers: {
+        "Authorization": \`Bearer \${ctx.secrets.STRIPE_KEY}\`,
+        "Content-Type": "application/x-www-form-urlencoded",
+      },
+      body: new URLSearchParams({ amount: "1000", currency: "usd" }),
+    });
+    return await stripeRes.json();
+  },
+});
 \`\`\`
 `;

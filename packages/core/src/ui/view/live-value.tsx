@@ -23,6 +23,7 @@ import {
 } from "platejs/react";
 import { memo, useState, useCallback } from "react";
 import { Database, ExternalLink } from "lucide-react";
+import { useViewportVisibility } from "../lib/virtualization";
 
 import {
   type ColumnConfig,
@@ -269,6 +270,32 @@ function hasMeaningfulChildren(element: TLiveValueElement): boolean {
 }
 
 /**
+ * Placeholder for off-screen LiveValue elements.
+ * Shows a subtle outline with type indicator.
+ */
+function LiveValuePlaceholder({
+  viewportRef,
+  isProviderMode,
+  height = 200,
+}: {
+  viewportRef: React.RefObject<HTMLDivElement | null>;
+  isProviderMode: boolean;
+  height?: number;
+}) {
+  return (
+    <div
+      ref={viewportRef}
+      className="w-full flex items-center justify-center bg-muted/5 rounded-lg border border-dashed border-muted-foreground/20"
+      style={{ height: isProviderMode ? height : 36 }}
+    >
+      <span className="text-muted-foreground/40 text-xs font-medium">
+        {isProviderMode ? "Chart" : "Data"}
+      </span>
+    </div>
+  );
+}
+
+/**
  * LiveValue Plate element component.
  *
  * Two modes:
@@ -283,6 +310,10 @@ function hasMeaningfulChildren(element: TLiveValueElement): boolean {
  * - Hover: Shows LiveControlsMenu with table name and actions
  * - View Data: Opens modal with DataGrid
  * - Edit: Opens LiveQueryEditor for SQL editing
+ *
+ * Performance:
+ * - Viewport virtualization defers query execution and rendering until visible
+ * - Uses shared IntersectionObserver for efficiency with many LiveValues
  */
 function LiveValueElement(props: PlateElementProps) {
   const editor = useEditorRef();
@@ -293,10 +324,33 @@ function LiveValueElement(props: PlateElementProps) {
   const [editorOpen, setEditorOpen] = useState(false);
   const navigateToTable = useNavigateToTable();
 
+  // Check if this is a block element with children (charts) - these should be virtualized
+  const isProviderMode = hasMeaningfulChildren(element);
+
+  // Viewport virtualization - defer query execution until visible
+  // Only virtualize block-level elements with children (charts, tables)
+  // Inline elements are small enough to render immediately
+  const { ref: viewportRef, isVisible } = useViewportVisibility({
+    margin: "300px",
+    // Skip virtualization for inline elements by starting them visible
+    initialVisible: !isProviderMode,
+  });
+
+  // Show placeholder for off-screen block elements
+  if (!isVisible) {
+    return (
+      <PlateElement {...props} as="div">
+        <LiveValuePlaceholder viewportRef={viewportRef} isProviderMode={isProviderMode} />
+        <span className="hidden">{props.children}</span>
+      </PlateElement>
+    );
+  }
+
   const { query, data: staticData, display, columns, params } = element;
   const tableName = query ? extractTableName(query, "query") : null;
 
   // Use static data if provided, otherwise execute query
+  // Query is deferred until element is visible (above check)
   const shouldQuery = !staticData && !!query;
   const { data: queryData, isLoading: queryLoading, error: queryError } = useLiveQuery(
     shouldQuery ? query : "",
@@ -309,7 +363,6 @@ function LiveValueElement(props: PlateElementProps) {
   const error = shouldQuery ? queryError : null;
 
   // Mode: provider (children handle display) vs auto-display (we handle display)
-  const isProviderMode = hasMeaningfulChildren(element);
   const displayType = resolveDisplayMode(display, data);
   const isInline = !isProviderMode && displayType === "inline";
 

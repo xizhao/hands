@@ -24,47 +24,14 @@
  * ```
  */
 
-import { useEffect, useMemo, useRef, useState, useCallback } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import embed, { type EmbedOptions, type Result } from "vega-embed";
 import type { View } from "vega";
 
 import type { VegaLiteSpec } from "../../../types";
 import { useLiveValueData } from "./context";
 import { useVegaTheme } from "./vega-theme";
-
-// ============================================================================
-// Viewport Virtualization
-// ============================================================================
-
-/**
- * Hook that tracks whether an element is in or near the viewport.
- * Uses IntersectionObserver for efficient visibility detection.
- * Once visible, stays "activated" to avoid re-embedding on scroll.
- */
-function useInViewport(rootMargin = "200px"): [React.RefObject<HTMLDivElement | null>, boolean] {
-  const ref = useRef<HTMLDivElement>(null);
-  const [hasBeenVisible, setHasBeenVisible] = useState(false);
-
-  useEffect(() => {
-    const element = ref.current;
-    if (!element || hasBeenVisible) return;
-
-    const observer = new IntersectionObserver(
-      ([entry]) => {
-        if (entry.isIntersecting) {
-          setHasBeenVisible(true);
-          observer.disconnect(); // Once visible, stop observing
-        }
-      },
-      { rootMargin } // Pre-load when within this margin of viewport
-    );
-
-    observer.observe(element);
-    return () => observer.disconnect();
-  }, [rootMargin, hasBeenVisible]);
-
-  return [ref, hasBeenVisible];
-}
+import { useViewportVisibility } from "../../lib/virtualization";
 
 // ============================================================================
 // Types
@@ -140,24 +107,25 @@ function ChartEmpty({ height, className }: ChartEmptyProps) {
   );
 }
 
-interface ChartPlaceholderProps {
+/**
+ * Lightweight placeholder shown for charts outside viewport.
+ */
+function ChartPlaceholder({
+  height,
+  className,
+  viewportRef,
+}: {
   height: number;
   className?: string;
   viewportRef: React.RefObject<HTMLDivElement | null>;
-}
-
-/**
- * Lightweight placeholder shown for charts outside viewport.
- * Reserves space and displays minimal UI until chart scrolls into view.
- */
-function ChartPlaceholder({ height, className, viewportRef }: ChartPlaceholderProps) {
+}) {
   return (
     <div
       ref={viewportRef}
-      className={`w-full flex items-center justify-center bg-muted/10 rounded-lg border border-dashed border-muted-foreground/20 ${className ?? ""}`}
+      className={`w-full flex items-center justify-center bg-muted/5 rounded-lg border border-dashed border-muted-foreground/20 ${className ?? ""}`}
       style={{ height }}
     >
-      <span className="text-muted-foreground/50 text-xs">Chart</span>
+      <span className="text-muted-foreground/40 text-xs font-medium">Chart</span>
     </div>
   );
 }
@@ -189,7 +157,8 @@ export function VegaChart({
   actions = false,
 }: VegaChartProps) {
   // Viewport virtualization - only embed when in/near viewport
-  const [viewportRef, isInViewport] = useInViewport("300px");
+  // Uses shared observer for efficiency with many charts
+  const { ref: viewportRef, isVisible } = useViewportVisibility({ margin: "300px" });
 
   const ctx = useLiveValueData();
   const vegaTheme = useVegaTheme();
@@ -204,7 +173,7 @@ export function VegaChart({
 
   // Show placeholder until chart scrolls into viewport
   // This prevents expensive Vega embedding for off-screen charts
-  if (!isInViewport) {
+  if (!isVisible) {
     return <ChartPlaceholder height={height} className={className} viewportRef={viewportRef} />;
   }
 

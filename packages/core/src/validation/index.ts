@@ -407,17 +407,19 @@ export function validateSqlSchema(
     }));
   }
 
-  // Check tables exist
-  const schemaTableNames = new Set(schema.map((t) => t.name.toLowerCase()));
-  for (const table of syntaxResult.tables) {
-    if (!schemaTableNames.has(table)) {
-      errors.push({
-        file: "",
-        component: "",
-        prop: "query",
-        message: `Unknown table "${table}"`,
-        severity: "error",
-      });
+  // Check tables exist (only if we have schema to validate against)
+  if (schema.length > 0) {
+    const schemaTableNames = new Set(schema.map((t) => t.name.toLowerCase()));
+    for (const table of syntaxResult.tables) {
+      if (!schemaTableNames.has(table)) {
+        errors.push({
+          file: "",
+          component: "",
+          prop: "query",
+          message: `Unknown table "${table}"`,
+          severity: "error",
+        });
+      }
     }
   }
 

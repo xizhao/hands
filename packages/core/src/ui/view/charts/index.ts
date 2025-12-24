@@ -113,7 +113,6 @@ export {
   ChartSkeleton,
   VegaChart,
   type VegaChartProps,
-  type VisualizationSpec,
 } from "./vega-chart";
 // Spec converters (simplified props → Vega-Lite spec)
 export {

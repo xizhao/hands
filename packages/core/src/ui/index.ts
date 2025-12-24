@@ -40,6 +40,8 @@ export * from "./action";
 export * from "./data";
 // Re-export query provider (for apps to implement data fetching)
 export * from "./query-provider";
+// Re-export virtualization utilities (for performance optimization)
+export * from "./lib/virtualization";
 
 // Import kits
 import { ActionKit } from "./action";
