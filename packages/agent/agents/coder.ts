@@ -52,8 +52,8 @@ interface Props {
   period?: string;
 }
 
-export default async function RevenueChart({ period = "30 days" }: Props) {
-  const data = await sql\`SELECT date, revenue FROM sales WHERE date > now() - interval '\${period}'\`;
+export default async function RevenueChart({ period = "-30 days" }: Props) {
+  const data = await sql\`SELECT date, revenue FROM sales WHERE date > datetime('now', '\${period}')\`;
 
   return (
     <div className="p-4">
@@ -99,9 +99,51 @@ import { Card, CardHeader, CardContent } from "@ui/card";
 
 Pages are MDX files in \`pages/\`. They are the **primary output** - complete apps in markdown.
 
+### Frontmatter Rules (CRITICAL)
+
+**Every page MUST have YAML frontmatter at the top:**
+
 \`\`\`markdown
 ---
 title: Dashboard
+description: Overview of key metrics
+---
+\`\`\`
+
+**Frontmatter requirements:**
+- \`title\` - **Required.** The page title (shown in navigation/tabs)
+- \`description\` - Optional subtitle or summary
+
+**When editing existing pages:**
+1. **READ the file first** to see existing frontmatter
+2. **PRESERVE all existing frontmatter fields** - never remove or overwrite them
+3. Only add/modify content AFTER the closing \`---\`
+4. If adding title/description, put them in frontmatter, NOT as markdown headings
+
+**WRONG - Don't do this:**
+\`\`\`markdown
+# Dashboard
+*Overview of key metrics*
+
+Content here...
+\`\`\`
+
+**CORRECT - Do this:**
+\`\`\`markdown
+---
+title: Dashboard
+description: Overview of key metrics
+---
+
+Content here...
+\`\`\`
+
+### Example Page
+
+\`\`\`markdown
+---
+title: Dashboard
+description: Sales overview
 ---
 
 # Sales Dashboard
@@ -226,6 +268,11 @@ Keep improvements proportional to the task - don't spend more time refactoring t
 - ❌ Creating a plugin for a form → Use \`<LiveAction>\` with form controls
 - ❌ Creating a plugin for a list → Use \`<LiveValue display="list">\`
 - ❌ Creating a plugin for metrics → Use \`<LiveValue display="inline">\`
+
+**Frontmatter mistakes:**
+- ❌ Writing pages without frontmatter → Always include \`---\ntitle: ...\n---\`
+- ❌ Putting title as \`# Heading\` instead of frontmatter → Use \`title:\` in frontmatter
+- ❌ Overwriting existing frontmatter when editing → READ file first, PRESERVE frontmatter
 
 **Other anti-patterns:**
 - Don't reinvent @ui components - search for what's available first

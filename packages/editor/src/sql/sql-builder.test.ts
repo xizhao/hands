@@ -12,6 +12,7 @@ import {
   generateDropColumnSql,
   generateRenameColumnSql,
   generateAlterColumnTypeSql,
+  isValidSqlType,
 } from "./sql-builder";
 
 describe("escapeIdentifier", () => {
@@ -448,6 +449,72 @@ describe("ALTER TABLE operations", () => {
         'ALTER TABLE "users" ALTER COLUMN "age" TYPE BIGINT'
       );
     });
+  });
+});
+
+describe("isValidSqlType", () => {
+  it("accepts common SQL types", () => {
+    expect(isValidSqlType("TEXT")).toBe(true);
+    expect(isValidSqlType("INTEGER")).toBe(true);
+    expect(isValidSqlType("REAL")).toBe(true);
+    expect(isValidSqlType("BOOLEAN")).toBe(true);
+    expect(isValidSqlType("JSON")).toBe(true);
+    expect(isValidSqlType("TIMESTAMP")).toBe(true);
+    expect(isValidSqlType("UUID")).toBe(true);
+  });
+
+  it("accepts parameterized types", () => {
+    expect(isValidSqlType("VARCHAR(255)")).toBe(true);
+    expect(isValidSqlType("CHAR(10)")).toBe(true);
+    expect(isValidSqlType("DECIMAL(10, 2)")).toBe(true);
+    expect(isValidSqlType("NUMERIC(5,3)")).toBe(true);
+  });
+
+  it("is case-insensitive", () => {
+    expect(isValidSqlType("text")).toBe(true);
+    expect(isValidSqlType("Text")).toBe(true);
+    expect(isValidSqlType("varchar(100)")).toBe(true);
+  });
+
+  it("rejects SQL injection attempts", () => {
+    expect(isValidSqlType("TEXT; DROP TABLE users;")).toBe(false);
+    expect(isValidSqlType("INTEGER--comment")).toBe(false);
+    expect(isValidSqlType("VARCHAR(255); DELETE FROM users")).toBe(false);
+    expect(isValidSqlType("TEXT' OR '1'='1")).toBe(false);
+  });
+
+  it("rejects arbitrary strings", () => {
+    expect(isValidSqlType("FOOBAR")).toBe(false);
+    expect(isValidSqlType("SELECT * FROM users")).toBe(false);
+    expect(isValidSqlType("")).toBe(false);
+  });
+});
+
+describe("generateAddColumnSql type validation", () => {
+  it("throws on invalid SQL type", () => {
+    expect(() =>
+      generateAddColumnSql("users", "evil", "TEXT; DROP TABLE users;")
+    ).toThrow("Invalid SQL type");
+  });
+
+  it("accepts valid SQL types", () => {
+    expect(() =>
+      generateAddColumnSql("users", "count", "INTEGER")
+    ).not.toThrow();
+  });
+});
+
+describe("generateAlterColumnTypeSql type validation", () => {
+  it("throws on invalid SQL type", () => {
+    expect(() =>
+      generateAlterColumnTypeSql("users", "name", "TEXT; DROP TABLE users;")
+    ).toThrow("Invalid SQL type");
+  });
+
+  it("accepts valid SQL types", () => {
+    expect(() =>
+      generateAlterColumnTypeSql("users", "age", "BIGINT")
+    ).not.toThrow();
   });
 });
 

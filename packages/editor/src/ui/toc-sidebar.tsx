@@ -18,27 +18,43 @@ interface Heading {
   path: number[];
 }
 
-// Get headings from editor - same logic as @platejs/toc
+// Get headings from editor - optimized to only check heading nodes
 function getHeadingList(editor: any): Heading[] {
   const headings: Heading[] = [];
+  const children = editor.children;
+  const len = children.length;
 
-  for (let i = 0; i < editor.children.length; i++) {
-    const node = editor.children[i];
+  for (let i = 0; i < len; i++) {
+    const node = children[i];
     if (!node || typeof node !== 'object') continue;
 
     const type = node.type as string;
-    if (type === 'h1' || type === 'h2' || type === 'h3') {
-      const depth = type === 'h1' ? 1 : type === 'h2' ? 2 : 3;
-      const title = NodeApi.string(node);
-      const id = node.id as string || '';
+    // Early exit check - only process heading types
+    if (type !== 'h1' && type !== 'h2' && type !== 'h3') continue;
 
-      if (title && id) {
-        headings.push({ id, depth, title, path: [i] });
-      }
+    const id = node.id as string;
+    if (!id) continue;
+
+    const depth = type === 'h1' ? 1 : type === 'h2' ? 2 : 3;
+    const title = NodeApi.string(node);
+
+    if (title) {
+      headings.push({ id, depth, title, path: [i] });
     }
   }
 
   return headings;
+}
+
+// Deep equality check for heading arrays to prevent unnecessary re-renders
+function headingsEqual(a: Heading[], b: Heading[]): boolean {
+  if (a.length !== b.length) return false;
+  for (let i = 0; i < a.length; i++) {
+    if (a[i].id !== b[i].id || a[i].depth !== b[i].depth || a[i].title !== b[i].title) {
+      return false;
+    }
+  }
+  return true;
 }
 
 const tocSidebarButtonVariants = cva(
@@ -68,7 +84,8 @@ export function TocSidebar({
   maxShowCount = 20,
 }: TocSidebarProps) {
   const editor = useEditorRef();
-  const headingList = useEditorSelector(getHeadingList, []);
+  // Use equality function to prevent re-renders when headings haven't changed
+  const headingList = useEditorSelector(getHeadingList, [], { equalityFn: headingsEqual });
   const [activeId, setActiveId] = React.useState<string>('');
 
   // Handle click - scroll to heading using scrollIntoView

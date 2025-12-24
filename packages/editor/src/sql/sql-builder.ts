@@ -191,6 +191,49 @@ export function generateCountSql(table: string): string {
 }
 
 /**
+ * Whitelist of valid SQL types to prevent injection.
+ * Includes common SQLite, PostgreSQL, and MySQL types.
+ */
+const VALID_SQL_TYPE_PATTERNS = [
+  // Exact matches (case-insensitive)
+  /^TEXT$/i,
+  /^INTEGER$/i,
+  /^INT$/i,
+  /^BIGINT$/i,
+  /^SMALLINT$/i,
+  /^TINYINT$/i,
+  /^REAL$/i,
+  /^FLOAT$/i,
+  /^DOUBLE$/i,
+  /^DOUBLE PRECISION$/i,
+  /^BOOLEAN$/i,
+  /^BOOL$/i,
+  /^BLOB$/i,
+  /^JSON$/i,
+  /^JSONB$/i,
+  /^UUID$/i,
+  /^DATE$/i,
+  /^TIME$/i,
+  /^DATETIME$/i,
+  /^TIMESTAMP$/i,
+  /^TIMESTAMPTZ$/i,
+  /^NUMERIC$/i,
+  // Parameterized types
+  /^VARCHAR\(\d+\)$/i,
+  /^CHAR\(\d+\)$/i,
+  /^DECIMAL\(\d+,\s*\d+\)$/i,
+  /^NUMERIC\(\d+,\s*\d+\)$/i,
+];
+
+/**
+ * Validate that a SQL type is safe (not SQL injection).
+ */
+export function isValidSqlType(type: string): boolean {
+  const trimmed = type.trim();
+  return VALID_SQL_TYPE_PATTERNS.some((pattern) => pattern.test(trimmed));
+}
+
+/**
  * Generate an ALTER TABLE statement for adding a column.
  */
 export function generateAddColumnSql(
@@ -199,6 +242,10 @@ export function generateAddColumnSql(
   columnType: string,
   options?: { nullable?: boolean; defaultValue?: unknown }
 ): string {
+  if (!isValidSqlType(columnType)) {
+    throw new Error(`Invalid SQL type: ${columnType}`);
+  }
+
   let sql = `ALTER TABLE ${escapeIdentifier(table)} ADD COLUMN ${escapeIdentifier(columnName)} ${columnType}`;
 
   if (options?.nullable === false) {
@@ -242,5 +289,8 @@ export function generateAlterColumnTypeSql(
   columnName: string,
   newType: string
 ): string {
+  if (!isValidSqlType(newType)) {
+    throw new Error(`Invalid SQL type: ${newType}`);
+  }
   return `ALTER TABLE ${escapeIdentifier(table)} ALTER COLUMN ${escapeIdentifier(columnName)} TYPE ${newType}`;
 }

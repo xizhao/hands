@@ -14,6 +14,9 @@ import { getDb, kyselySql } from "../db/dev";
 /** Workbook path from environment */
 const workbookPath = process.env.HANDS_WORKBOOK_PATH ?? "";
 
+/** Cloud API URL from environment */
+const cloudUrl = process.env.HANDS_CLOUD_URL ?? "https://api.hands.app";
+
 /**
  * Generate a unique run ID
  */
@@ -55,9 +58,10 @@ export const actionRoutes = [
           trigger?: ActionTriggerType;
           input?: unknown;
           secrets?: Record<string, string>;
+          authToken?: string;
         };
 
-        const { actionPath, trigger = "manual", input, secrets = {} } = body;
+        const { actionPath, trigger = "manual", input, secrets = {}, authToken } = body;
 
         if (!actionPath) {
           return new Response(
@@ -159,6 +163,7 @@ export const actionRoutes = [
           tables,
           secrets,
           runMeta,
+          cloud: authToken ? { cloudUrl, authToken } : undefined,
         });
 
         // Execute the action

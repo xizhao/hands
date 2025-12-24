@@ -26,6 +26,7 @@ import {
   Terminal,
 } from "lucide-react";
 import { memo, useMemo, useState, useCallback, type ReactNode } from "react";
+import { useInView } from "react-intersection-observer";
 import { useLiveQuery as useDesktopLiveQuery } from "@/lib/live-query";
 import { useActiveRuntime } from "@/hooks/useWorkbook";
 import ReactMarkdown from "react-markdown";
@@ -998,6 +999,21 @@ function ChatQueryWrapper({ children }: { children: ReactNode }) {
   );
 }
 
+// Lightweight placeholder for off-screen text content
+const TextPlaceholder = memo(({ text, compact = false }: { text: string; compact?: boolean }) => {
+  const fontSize = compact ? MSG_FONT.baseCompact : MSG_FONT.base;
+  // Show first 100 chars as plain text placeholder
+  const preview = text.slice(0, 100) + (text.length > 100 ? "..." : "");
+
+  return (
+    <div className={cn("text-muted-foreground/50 min-h-[1.5em]", fontSize)}>
+      {preview}
+    </div>
+  );
+});
+
+TextPlaceholder.displayName = "TextPlaceholder";
+
 // Text content with MDX preview (renders LiveValue, charts, etc.)
 const TextContent = memo(
   ({
@@ -1013,21 +1029,32 @@ const TextContent = memo(
   }) => {
     const fontSize = compact ? MSG_FONT.baseCompact : MSG_FONT.base;
 
+    // Lazy-load MDX rendering - only compile when visible
+    // Always render when streaming to show live updates
+    const { ref, inView } = useInView({
+      triggerOnce: true, // Once visible, keep rendered
+      rootMargin: "200px", // Pre-load 200px before entering viewport
+      skip: isStreaming, // Always render during streaming
+    });
+
     // During streaming, detect incomplete MDX blocks and show loader chip
     const { complete, incomplete, blockType } = useMemo(
       () => (isStreaming ? splitIncompleteBlock(text) : { complete: text, incomplete: null, blockType: null }),
       [text, isStreaming]
     );
 
+    const shouldRenderMdx = isStreaming || inView;
+
     return (
       <div
+        ref={ref}
         className={cn(
           "prose max-w-none prose-p:my-0.5 prose-pre:my-1 prose-p:leading-relaxed relative group/preview",
           fontSize,
           darkText ? "prose-neutral" : "dark:prose-invert",
         )}
       >
-        {complete && (
+        {complete && shouldRenderMdx ? (
           <PreviewEditor
             value={complete}
             wrapper={ChatQueryWrapper}
@@ -1036,7 +1063,9 @@ const TextContent = memo(
               fontSize,
             )}
           />
-        )}
+        ) : complete && !shouldRenderMdx ? (
+          <TextPlaceholder text={complete} compact={compact} />
+        ) : null}
         {isStreaming && incomplete && blockType && (
           <div className="mt-1">
             <MdxShimmerBlock blockType={blockType} compact={compact} />
@@ -1373,11 +1402,14 @@ export const ChatMessage = memo(
       return null;
     }
 
+    // Skip animation for older messages (created more than 2s ago) to speed up initial render
+    const isRecent = Date.now() - (info.time?.created || 0) < 2000;
+
     return (
       <motion.div
-        initial={{ opacity: 0, y: -10 }}
+        initial={isRecent ? { opacity: 0, y: -10 } : false}
         animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.2, ease: "easeOut" }}
+        transition={{ duration: 0.15, ease: "easeOut" }}
         className={cn("flex w-full", isUser ? "justify-end" : "justify-start")}
       >
         {/* User message - on right, corner points up (toward newer messages) */}

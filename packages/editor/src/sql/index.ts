@@ -14,5 +14,6 @@ export {
   generateDropColumnSql,
   generateRenameColumnSql,
   generateAlterColumnTypeSql,
+  isValidSqlType,
   type SelectOptions,
 } from "./sql-builder";

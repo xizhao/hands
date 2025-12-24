@@ -59,7 +59,7 @@ export default defineAction({
     const sales = await ctx.sql\`
       SELECT SUM(amount) as total
       FROM orders
-      WHERE created_at > NOW() - INTERVAL '1 hour'
+      WHERE created_at > datetime('now', '-1 hour')
     \`;
 
     await ctx.notify.slack?.("#sales", \`Hourly sales: $\${sales[0].total}\`);
@@ -205,7 +205,7 @@ await ctx.notify.webhook?.(url, payload);
 Current run metadata:
 \`\`\`typescript
 ctx.run.id        // Unique run ID
-ctx.run.trigger   // "manual" | "cron" | "webhook" | "pg_notify"
+ctx.run.trigger   // "manual" | "cron" | "webhook"
 ctx.run.startedAt // Date object
 ctx.run.input     // Input data
 \`\`\`
@@ -241,13 +241,12 @@ Call via: \`POST http://localhost:PORT/webhook/action-name\`
 ### Secrets
 Declare required secrets:
 \`\`\`typescript
-secrets: ["API_KEY", "DATABASE_URL"],
+secrets: ["API_KEY"],
 \`\`\`
 
 Create \`.env.local\` in workbook root:
 \`\`\`
 API_KEY=your-api-key
-DATABASE_URL=postgres://...
 \`\`\`
 `;
 

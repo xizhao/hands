@@ -127,10 +127,11 @@ export function useMessages(sessionId: string | null) {
       }
     },
     enabled: !!sessionId,
-    staleTime: 0, // Always fetch fresh
+    // Keep data fresh for 5s to avoid unnecessary refetches on re-mount
+    staleTime: 5000,
     refetchOnMount: true,
-    // Poll while session is busy (fallback for SSE)
-    refetchInterval: isBusy ? 1000 : false,
+    // Poll while session is busy (fallback for SSE), but less frequently
+    refetchInterval: isBusy ? 2000 : false,
     // Retry on transient errors (like mid-stream fetches)
     retry: (failureCount, error) => {
       const errorMsg = error instanceof Error ? error.message : String(error);
@@ -242,17 +243,29 @@ export function useSessionStatuses() {
   return useQuery({
     queryKey: ["session-statuses", directory],
     queryFn: () => api.status.all(directory),
-    staleTime: 0,
+    // SSE updates the cache, so we can cache longer
+    staleTime: 10000,
     refetchOnMount: true,
+    refetchOnWindowFocus: false,
   });
 }
 
 /**
  * Get status for a specific session
+ * Uses select to only re-render when this specific session's status changes
  */
 export function useSessionStatus(sessionId: string | null) {
-  const { data: statuses } = useSessionStatuses();
-  return sessionId ? statuses?.[sessionId] : undefined;
+  const directory = useActiveWorkbookDirectory();
+
+  return useQuery({
+    queryKey: ["session-statuses", directory],
+    queryFn: () => api.status.all(directory),
+    staleTime: 10000,
+    refetchOnMount: true,
+    refetchOnWindowFocus: false,
+    select: (data) => (sessionId ? data?.[sessionId] : undefined),
+    enabled: !!sessionId,
+  });
 }
 
 /**

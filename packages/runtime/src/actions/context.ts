@@ -15,18 +15,25 @@ import type {
   TableClient,
 } from "../types/action";
 import { getDb, kyselySql, runWithDbMode } from "../db/dev";
+import { createServices, type Services } from "@hands/core/services";
+
+interface CloudConfig {
+  cloudUrl: string;
+  authToken: string;
+}
 
 interface BuildContextOptions {
   tables: Array<{ name: string; source?: string }>;
   secrets: Record<string, string>;
   runMeta: ActionRunMeta;
+  cloud?: CloudConfig;
 }
 
 /**
  * Build an ActionContext with direct DB access
  */
 export function buildActionContext(options: BuildContextOptions): ActionContext {
-  const { tables, secrets, runMeta } = options;
+  const { tables, secrets, runMeta, cloud } = options;
 
   // Build source proxies (group tables by source)
   const sourcesProxy = buildSourcesProxy(tables);
@@ -40,6 +47,11 @@ export function buildActionContext(options: BuildContextOptions): ActionContext 
   // Build notify
   const notify = buildNotify();
 
+  // Build services client if cloud config is provided
+  const services = cloud
+    ? createServices({ cloudUrl: cloud.cloudUrl, authToken: cloud.authToken })
+    : undefined;
+
   return {
     sources: sourcesProxy,
     sql,
@@ -47,6 +59,7 @@ export function buildActionContext(options: BuildContextOptions): ActionContext 
     notify,
     secrets,
     run: runMeta,
+    services,
   };
 }
 

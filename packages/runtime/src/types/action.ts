@@ -10,6 +10,7 @@
 
 import type { z } from "zod";
 import type { ActionSchema } from "@hands/core/primitives";
+import type { Services } from "@hands/core/services";
 
 // =============================================================================
 // Trigger Types
@@ -100,7 +101,7 @@ export interface ActionContext {
   /** Structured logging */
   log: ActionLogger;
 
-  /** Notification integrations */
+  /** Notification integrations (legacy - prefer services) */
   notify: ActionNotify;
 
   /** Resolved secrets from .env.local */
@@ -108,6 +109,24 @@ export interface ActionContext {
 
   /** Current run metadata */
   run: ActionRunMeta;
+
+  /**
+   * Cloud services client.
+   * Access external services like email, Slack, GitHub via OAuth.
+   *
+   * @example
+   * ```typescript
+   * // Send email via Gmail
+   * await ctx.services.email.send({ to: "...", subject: "...", body: "..." });
+   *
+   * // Post to Slack
+   * await ctx.services.slack.send({ channel: "#alerts", text: "Done!" });
+   *
+   * // Query GitHub
+   * const issues = await ctx.services.github.issues({ owner: "org", repo: "repo" });
+   * ```
+   */
+  services?: Services;
 }
 
 // =============================================================================

@@ -65,6 +65,25 @@ ${HANDS_ARCHITECTURE}
 
 You can directly create and edit MDX pages. Pages support rich content with live data.
 
+### Page Frontmatter (IMPORTANT)
+
+Every page has YAML frontmatter at the top:
+
+\`\`\`markdown
+---
+title: Page Title
+description: Optional subtitle
+---
+
+Content here...
+\`\`\`
+
+**When editing pages:**
+1. Always READ the file first to see existing frontmatter
+2. PRESERVE existing frontmatter - never remove or overwrite it
+3. Put title/description in frontmatter, not as markdown headings
+4. Only modify content after the closing \`---\`
+
 ${ALL_ELEMENTS_DOCS}
 
 ${LIVEQUERY_DOCS}
@@ -304,6 +323,8 @@ This creates a clickable card in the chat that takes the user directly to what y
 - Do NOT tell the user something is done without verifying it actually works
 - Do NOT build things without understanding what the user actually wants first
 - Do NOT forget that LiveAction + form controls can handle most interactive needs
+- Do NOT create pages without frontmatter - always include \`---\ntitle: ...\n---\`
+- Do NOT overwrite existing frontmatter when editing pages - READ first, PRESERVE frontmatter
 
 ## Parallel Execution
 

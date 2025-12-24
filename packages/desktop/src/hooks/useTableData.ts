@@ -52,21 +52,57 @@ const CHUNK_SIZE = 100;
 export function useTableData(options: UseTableDataOptions) {
   const { table, pageSize = CHUNK_SIZE, sort, sortDirection } = options;
 
+  // Track mounted state to prevent state updates after unmount
+  const mountedRef = useRef(true);
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => { mountedRef.current = false; };
+  }, []);
+
   // Schema from PRAGMA table_info (actual column types and primary key)
   const [schemaInfo, setSchemaInfo] = useState<{
     columns: ColumnDefinition[];
     primaryKeyColumn: string;
   } | null>(null);
 
+  // Sparse data cache
+  const [cache, setCache] = useState<DataCache>({
+    rows: new Map(),
+    loadedRanges: [],
+    totalRows: 0,
+  });
+
+  const pendingRequests = useRef<Set<string>>(new Set());
   const dbQuery = trpc.db.query.useMutation();
 
-  // Fetch actual schema from SQLite
+  // Clear cache and schema when TABLE changes (not sort)
+  useEffect(() => {
+    setSchemaInfo(null);
+    setCache({ rows: new Map(), loadedRanges: [], totalRows: 0 });
+    pendingRequests.current.clear();
+  }, [table]);
+
+  // Clear only row data when SORT changes (preserve totalRows and schema)
+  useEffect(() => {
+    setCache((prev) => ({
+      rows: new Map(),
+      loadedRanges: [],
+      totalRows: prev.totalRows, // Keep the count - it doesn't change with sort
+    }));
+    pendingRequests.current.clear();
+  }, [sort, sortDirection]);
+
+  // Fetch schema from SQLite
   useEffect(() => {
     if (!table) return;
+
+    let cancelled = false;
 
     dbQuery
       .mutateAsync({ sql: `PRAGMA table_info("${table}")` })
       .then((result) => {
+        if (cancelled || !mountedRef.current) return;
+
         const rows = result.rows as Array<{
           cid: number;
           name: string;
@@ -84,45 +120,37 @@ export function useTableData(options: UseTableDataOptions) {
           defaultValue: row.dflt_value,
         }));
 
-        // Find actual primary key column, fallback to first column or "id"
         const pkColumn = rows.find((r) => r.pk > 0)?.name ?? columns[0]?.name ?? "id";
-
         setSchemaInfo({ columns, primaryKeyColumn: pkColumn });
       })
       .catch(console.error);
+
+    return () => { cancelled = true; };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [table]);
+
+  // Fetch row count
+  useEffect(() => {
+    if (!table) return;
+
+    let cancelled = false;
+
+    dbQuery
+      .mutateAsync({ sql: generateCountSql(table) })
+      .then((result) => {
+        if (cancelled || !mountedRef.current) return;
+        const count = (result.rows[0] as { count: number })?.count ?? 0;
+        setCache((prev) => ({ ...prev, totalRows: count }));
+      })
+      .catch(console.error);
+
+    return () => { cancelled = true; };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [table]);
 
   // Use schema info or empty defaults while loading
   const columns = schemaInfo?.columns ?? [];
   const primaryKeyColumn = schemaInfo?.primaryKeyColumn ?? "id";
-
-  // Sparse data cache
-  const [cache, setCache] = useState<DataCache>({
-    rows: new Map(),
-    loadedRanges: [],
-    totalRows: 0,
-  });
-
-  const pendingRequests = useRef<Set<string>>(new Set());
-  const dbQuery = trpc.db.query.useMutation();
-
-  // Get initial count
-  useEffect(() => {
-    if (!table) return;
-
-    dbQuery
-      .mutateAsync({ sql: generateCountSql(table) })
-      .then((result) => {
-        const count = (result.rows[0] as { count: number })?.count ?? 0;
-        setCache((prev) => ({ ...prev, totalRows: count }));
-      })
-      .catch(console.error);
-  }, [table]);
-
-  // Clear cache when sort changes
-  useEffect(() => {
-    setCache({ rows: new Map(), loadedRanges: [], totalRows: 0 });
-  }, [sort, sortDirection]);
 
   // Load a range of rows
   const loadRange = useCallback(
@@ -153,7 +181,7 @@ export function useTableData(options: UseTableDataOptions) {
             }),
           });
 
-          if (result.rows) {
+          if (result.rows && mountedRef.current) {
             setCache((prev) => {
               const newRows = new Map(prev.rows);
               const rows = result.rows as TableRow[];

@@ -17,6 +17,7 @@
     "./types": "./src/types/index.ts",
     "./validation": "./src/validation/index.ts",
     "./docs": "./src/docs/stdlib.ts",
+    "./services": "./src/services/index.ts",
     "./styles/theme.css": "./src/styles/theme.css",
     "./stdlib": "./src/ui/index.ts",
     "./stdlib/view": "./src/ui/view/index.ts",

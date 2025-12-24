@@ -40,6 +40,7 @@ import {
   useMessages,
   useSendMessage,
   useSessions,
+  useSessionStatus,
   useSessionStatuses,
 } from "@/hooks/useSession";
 import {
@@ -77,8 +78,225 @@ import {
   Square,
   X,
 } from "lucide-react";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { memo, useCallback, useEffect, useRef, useState } from "react";
 import { NotebookSidebar } from "./NotebookSidebar";
+
+// Memoized tab bar to prevent re-renders when dropdown opens
+interface ThreadTabBarProps {
+  sessions: Session[];
+  sessionStatuses: Record<string, { type: string; activeForm?: string }>;
+  activeSessionId: string | null;
+  onSwitchThread: (id: string) => void;
+  onDeleteThread: (id: string, e: React.MouseEvent) => void;
+  compact?: boolean;
+  isTwoColumn: boolean;
+  needsPopover: boolean;
+}
+
+const ThreadTabBar = memo(function ThreadTabBar({
+  sessions,
+  sessionStatuses,
+  activeSessionId,
+  onSwitchThread,
+  onDeleteThread,
+  compact = false,
+  isTwoColumn,
+  needsPopover,
+}: ThreadTabBarProps) {
+  const foregroundSessions = sessions.filter((s) => {
+    const sp = s as Session & { parentID?: string };
+    return s.title && !sp.parentID;
+  });
+  const backgroundSessions = sessions.filter(
+    (s) => (s as Session & { parentID?: string }).parentID
+  );
+
+  const allThreads = [...foregroundSessions, ...backgroundSessions];
+  const hasThreads = allThreads.length > 0;
+  const isHomeActive = !activeSessionId;
+  const backgroundCount = backgroundSessions.length;
+
+  const getSessionStatus = (sessionId: string): "busy" | "error" | null => {
+    const st = sessionStatuses[sessionId];
+    if (st?.type === "busy" || st?.type === "running") return "busy";
+    return null;
+  };
+
+  const allChips = foregroundSessions.slice(0, 5).map((s) => ({
+    id: s.id,
+    title: s.title || "",
+    status: getSessionStatus(s.id),
+    isCurrent: s.id === activeSessionId,
+  }));
+
+  return (
+    <div
+      className={cn(
+        "shrink-0 flex items-center gap-0.5 h-9",
+        compact ? "px-2" : "px-3"
+      )}
+    >
+      {/* Home tab - only in single-column mode */}
+      {!isTwoColumn && (
+        <button
+          onClick={() => onSwitchThread("")}
+          className={cn(
+            "flex items-center gap-1.5 px-2.5 h-7 text-xs font-medium rounded-md transition-all",
+            isHomeActive
+              ? "bg-background text-foreground shadow-sm border border-border/50"
+              : "text-muted-foreground hover:text-foreground hover:bg-muted/50"
+          )}
+        >
+          <Home className="h-3.5 w-3.5" />
+          {!needsPopover && <span>Home</span>}
+        </button>
+      )}
+
+      {/* Compact mode: Current thread tab + overflow dropdown */}
+      {needsPopover && hasThreads && (
+        <>
+          {!isHomeActive && activeSessionId && (
+            <div className="group flex items-center gap-1 px-2 h-7 text-xs font-medium rounded-md bg-background text-foreground shadow-sm border border-border/50 min-w-0 max-w-[120px]">
+              <button
+                onClick={() => onSwitchThread(activeSessionId)}
+                className="flex items-center gap-1.5 min-w-0 flex-1"
+              >
+                <StatusDot status={getSessionStatus(activeSessionId)} />
+                <span className="truncate">
+                  {allThreads.find((s) => s.id === activeSessionId)?.title || "Thread"}
+                </span>
+              </button>
+              <button
+                onClick={(e) => onDeleteThread(activeSessionId, e)}
+                className="p-0.5 rounded hover:bg-accent opacity-0 group-hover:opacity-60 hover:!opacity-100 transition-opacity shrink-0"
+              >
+                <X className="h-3 w-3" />
+              </button>
+            </div>
+          )}
+
+          {allThreads.length > (isHomeActive ? 0 : 1) && (
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <button
+                  className={cn(
+                    "flex items-center gap-1 px-1.5 h-7 text-xs rounded-md transition-all",
+                    "text-muted-foreground hover:text-foreground hover:bg-muted/50"
+                  )}
+                >
+                  {allThreads.some((s) => {
+                    if (s.id === activeSessionId) return false;
+                    const st = sessionStatuses[s.id];
+                    return st?.type === "busy" || st?.type === "running";
+                  }) && (
+                    <span className="relative flex h-1.5 w-1.5">
+                      <span className="animate-ping absolute h-full w-full rounded-full bg-green-400 opacity-75" />
+                      <span className="relative rounded-full h-1.5 w-1.5 bg-green-500" />
+                    </span>
+                  )}
+                  <span className="tabular-nums">
+                    {isHomeActive ? allThreads.length : allThreads.length - 1}
+                  </span>
+                  <ChevronDown className="h-3 w-3 opacity-60" />
+                </button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="start" className="w-[200px]">
+                {allThreads
+                  .filter((s) => s.id !== activeSessionId)
+                  .map((session) => (
+                    <DropdownMenuItem
+                      key={session.id}
+                      onClick={() => onSwitchThread(session.id)}
+                      className="flex items-center gap-2"
+                    >
+                      <StatusDot status={getSessionStatus(session.id)} />
+                      <span className="flex-1 truncate text-[13px]">
+                        {session.title || `Thread ${session.id.slice(0, 6)}`}
+                      </span>
+                    </DropdownMenuItem>
+                  ))}
+              </DropdownMenuContent>
+            </DropdownMenu>
+          )}
+        </>
+      )}
+
+      {/* Wide mode: Arc-style thread tabs */}
+      {!needsPopover && hasThreads && (
+        <div className="flex items-center gap-0.5 flex-1 min-w-0 overflow-x-auto">
+          {allChips.slice(0, 4).map((chip) => (
+            <div
+              key={chip.id}
+              className={cn(
+                "group flex items-center gap-1.5 px-2.5 h-7 text-xs font-medium rounded-md transition-all min-w-0",
+                chip.isCurrent
+                  ? "bg-background text-foreground shadow-sm border border-border/50"
+                  : "text-muted-foreground hover:text-foreground hover:bg-muted/50"
+              )}
+            >
+              <button
+                onClick={() => onSwitchThread(chip.id)}
+                className="flex items-center gap-1.5 min-w-0"
+              >
+                <StatusDot status={chip.status} />
+                <span className="truncate max-w-[100px]">{chip.title}</span>
+              </button>
+              <button
+                onClick={(e) => onDeleteThread(chip.id, e)}
+                className="p-0.5 rounded hover:bg-accent opacity-0 group-hover:opacity-60 hover:!opacity-100 transition-opacity"
+              >
+                <X className="h-3 w-3" />
+              </button>
+            </div>
+          ))}
+
+          {(allChips.length > 4 || backgroundCount > 0) && (
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <button className="flex items-center gap-1 px-2 h-7 text-xs text-muted-foreground hover:text-foreground hover:bg-muted/50 rounded-md">
+                  <span className="tabular-nums">+{allChips.length - 4 + backgroundCount}</span>
+                  <ChevronDown className="h-3 w-3" />
+                </button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-[200px]">
+                {allChips.slice(4).map((chip) => (
+                  <DropdownMenuItem
+                    key={chip.id}
+                    onClick={() => onSwitchThread(chip.id)}
+                    className="flex items-center gap-2"
+                  >
+                    <StatusDot status={chip.status} />
+                    <span className="flex-1 truncate text-[13px]">{chip.title}</span>
+                  </DropdownMenuItem>
+                ))}
+                {backgroundSessions.length > 0 && (
+                  <>
+                    <DropdownMenuSeparator />
+                    <div className="px-2 py-1 text-[10px] uppercase text-muted-foreground/50 font-medium">
+                      Background
+                    </div>
+                    {backgroundSessions.map((session) => (
+                      <DropdownMenuItem
+                        key={session.id}
+                        onClick={() => onSwitchThread(session.id)}
+                        className="flex items-center gap-2"
+                      >
+                        <StatusDot status={getSessionStatus(session.id)} />
+                        <span className="flex-1 truncate text-[13px]">
+                          {session.title || `Subtask ${session.id.slice(0, 6)}`}
+                        </span>
+                      </DropdownMenuItem>
+                    ))}
+                  </>
+                )}
+              </DropdownMenuContent>
+            </DropdownMenu>
+          )}
+        </div>
+      )}
+    </div>
+  );
+});
 
 interface CopyFilesResult {
   copied_files: string[];
@@ -104,6 +322,9 @@ export function UnifiedSidebar({
   const { sessionId: activeSessionId, setSession: setActiveSession } =
     useActiveSession();
   const { workbookId: activeWorkbookId } = useRuntimeProcess();
+  // Use targeted selector for active session status to avoid re-renders from other sessions
+  const { data: activeStatus } = useSessionStatus(activeSessionId);
+  // Keep full statuses for tab bar chips
   const { data: sessionStatuses = {} } = useSessionStatuses();
   const { data: sessions = [] } = useSessions();
   const { data: messages = [], isLoading } = useMessages(activeSessionId);
@@ -157,9 +378,8 @@ export function UnifiedSidebar({
     return () => observer.disconnect();
   }, []);
 
-  const status = activeSessionId ? sessionStatuses[activeSessionId] : null;
-  const isBusy = status?.type === "busy" || status?.type === "running";
-  const activeForm = status?.type === "busy" ? status.activeForm : undefined;
+  const isBusy = activeStatus?.type === "busy" || activeStatus?.type === "running";
+  const activeForm = activeStatus?.type === "busy" ? activeStatus.activeForm : undefined;
 
   // Check if waiting for response
   const lastMessage = messages[messages.length - 1];
@@ -418,61 +638,12 @@ ${STDLIB_QUICK_REF}
     }
   }, [chatState, isConnected, isBusy, handleSubmit]);
 
-  // Auto-scroll to top (newest messages are at top with flex-col-reverse)
-  // Triggers both when messages change and when switching threads
-  useEffect(() => {
-    if (messagesContainerRef.current) {
-      messagesContainerRef.current.scrollTo({ top: 0, behavior: "smooth" });
-    }
-  }, [messages.length, activeSessionId]);
 
-  // Session management
-  const foregroundSessions = sessions.filter((s) => {
-    const sp = s as SessionWithParent;
-    return s.title && !sp.parentID;
-  });
-  const backgroundSessions = sessions.filter(
-    (s) => (s as SessionWithParent).parentID
-  );
-
-  const lastAssistantHasError = Boolean(
-    lastAssistantMessage?.info?.role === "assistant" &&
-      (lastAssistantMessage.info as { error?: unknown }).error
-  );
-
-  const getSessionStatus = (sessionId: string): "busy" | "error" | null => {
-    const st = sessionStatuses[sessionId];
-    if (st?.type === "busy" || st?.type === "running") return "busy";
-    if (sessionId === activeSessionId && lastAssistantHasError) return "error";
-    return null;
-  };
-
-  const allChips = foregroundSessions.slice(0, 5).map((s) => ({
-    id: s.id,
-    title: s.title || "",
-    status: getSessionStatus(s.id),
-    isCurrent: s.id === activeSessionId,
-  }));
-
-  const backgroundCount = backgroundSessions.length;
+  // UI state
   const pendingAttachment = chatState.pendingAttachment;
   const hasContent = input.trim() || pendingAttachment;
   const sendError = sendMessage.error || createSession.error;
   const displayError = sendError || chatState.sessionError;
-
-  const handleSwitchThread = (sessionId: string) => {
-    // Toggle off if clicking the active session to go back to browse view
-    if (sessionId === activeSessionId) {
-      setActiveSession(null);
-    } else {
-      setActiveSession(sessionId);
-    }
-  };
-  const handleDeleteThread = (sessionId: string, e: React.MouseEvent) => {
-    e.stopPropagation();
-    deleteSession.mutate(sessionId);
-    if (sessionId === activeSessionId) setActiveSession(null);
-  };
 
   // Determine placeholder text
   const placeholder = pendingAttachment
@@ -878,188 +1049,43 @@ ${STDLIB_QUICK_REF}
         )
   ;
 
-  // Tab bar - Arc/Chrome style navigation
-  const allThreads = [...foregroundSessions, ...backgroundSessions];
-  const hasThreads = allThreads.length > 0;
-  const isHomeActive = !activeSessionId;
+  // Stable callbacks for ThreadTabBar
+  const handleSwitchThreadStable = useCallback((id: string) => {
+    if (id === "") {
+      setActiveSession(null);
+    } else if (id === activeSessionId) {
+      setActiveSession(null);
+    } else {
+      setActiveSession(id);
+    }
+  }, [activeSessionId, setActiveSession]);
 
+  const handleDeleteThreadStable = useCallback((id: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    deleteSession.mutate(id);
+    if (id === activeSessionId) setActiveSession(null);
+  }, [activeSessionId, deleteSession, setActiveSession]);
+
+  // Memoized tab bar component
   const tabBar = (
-    <div
-      className={cn(
-        "shrink-0 flex items-center gap-0.5 h-9",
-        compact ? "px-2" : "px-3"
-      )}
-    >
-      {/* Home tab - only in single-column mode (two-column shows browse on right) */}
-      {!isTwoColumn && (
-        <button
-          onClick={() => setActiveSession(null)}
-          className={cn(
-            "flex items-center gap-1.5 px-2.5 h-7 text-xs font-medium rounded-md transition-all",
-            isHomeActive
-              ? "bg-background text-foreground shadow-sm border border-border/50"
-              : "text-muted-foreground hover:text-foreground hover:bg-muted/50"
-          )}
-        >
-          <Home className="h-3.5 w-3.5" />
-          {!needsPopover && <span>Home</span>}
-        </button>
-      )}
-
-      {/* Compact mode: Current thread tab + overflow dropdown */}
-      {needsPopover && hasThreads && (
-        <>
-          {/* Show current thread if one is selected */}
-          {!isHomeActive && activeSessionId && (
-            <div
-              className="group flex items-center gap-1 px-2 h-7 text-xs font-medium rounded-md bg-background text-foreground shadow-sm border border-border/50 min-w-0 max-w-[120px]"
-            >
-              <button
-                onClick={() => handleSwitchThread(activeSessionId)}
-                className="flex items-center gap-1.5 min-w-0 flex-1"
-              >
-                <StatusDot status={getSessionStatus(activeSessionId)} />
-                <span className="truncate">
-                  {allThreads.find((s) => s.id === activeSessionId)?.title ||
-                    `Thread`}
-                </span>
-              </button>
-              <button
-                onClick={(e) => handleDeleteThread(activeSessionId, e)}
-                className="p-0.5 rounded hover:bg-accent opacity-0 group-hover:opacity-60 hover:!opacity-100 transition-opacity shrink-0"
-              >
-                <X className="h-3 w-3" />
-              </button>
-            </div>
-          )}
-
-          {/* Threads dropdown for other threads */}
-          {allThreads.length > (isHomeActive ? 0 : 1) && (
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <button
-                  className={cn(
-                    "flex items-center gap-1 px-1.5 h-7 text-xs rounded-md transition-all",
-                    "text-muted-foreground hover:text-foreground hover:bg-muted/50"
-                  )}
-                >
-                  {allThreads.some((s) => {
-                    if (s.id === activeSessionId) return false;
-                    const st = sessionStatuses[s.id];
-                    return st?.type === "busy" || st?.type === "running";
-                  }) && (
-                    <span className="relative flex h-1.5 w-1.5">
-                      <span className="animate-ping absolute h-full w-full rounded-full bg-green-400 opacity-75" />
-                      <span className="relative rounded-full h-1.5 w-1.5 bg-green-500" />
-                    </span>
-                  )}
-                  <span className="tabular-nums">
-                    {isHomeActive ? allThreads.length : allThreads.length - 1}
-                  </span>
-                  <ChevronDown className="h-3 w-3 opacity-60" />
-                </button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="start" className="w-[200px]">
-                {allThreads
-                  .filter((s) => s.id !== activeSessionId)
-                  .map((session) => (
-                    <DropdownMenuItem
-                      key={session.id}
-                      onClick={() => setActiveSession(session.id)}
-                      className="flex items-center gap-2"
-                    >
-                      <StatusDot status={getSessionStatus(session.id)} />
-                      <span className="flex-1 truncate text-[13px]">
-                        {session.title || `Thread ${session.id.slice(0, 6)}`}
-                      </span>
-                    </DropdownMenuItem>
-                  ))}
-              </DropdownMenuContent>
-            </DropdownMenu>
-          )}
-        </>
-      )}
-
-      {/* Wide mode: Arc-style thread tabs */}
-      {!needsPopover && hasThreads && (
-        <div className="flex items-center gap-0.5 flex-1 min-w-0 overflow-x-auto">
-          {allChips.slice(0, 4).map((chip) => (
-            <div
-              key={chip.id}
-              className={cn(
-                "group flex items-center gap-1.5 px-2.5 h-7 text-xs font-medium rounded-md transition-all min-w-0",
-                chip.isCurrent
-                  ? "bg-background text-foreground shadow-sm border border-border/50"
-                  : "text-muted-foreground hover:text-foreground hover:bg-muted/50"
-              )}
-            >
-              <button
-                onClick={() => handleSwitchThread(chip.id)}
-                className="flex items-center gap-1.5 min-w-0"
-              >
-                <StatusDot status={chip.status} />
-                <span className="truncate max-w-[100px]">{chip.title}</span>
-              </button>
-              <button
-                onClick={(e) => handleDeleteThread(chip.id, e)}
-                className="p-0.5 rounded hover:bg-accent opacity-0 group-hover:opacity-60 hover:!opacity-100 transition-opacity"
-              >
-                <X className="h-3 w-3" />
-              </button>
-            </div>
-          ))}
-
-          {/* Overflow dropdown for additional threads */}
-          {(allChips.length > 4 || backgroundCount > 0) && (
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <button className="flex items-center gap-1 px-2 h-7 text-xs text-muted-foreground hover:text-foreground hover:bg-muted/50 rounded-md">
-                  <span className="tabular-nums">
-                    +{allChips.length - 4 + backgroundCount}
-                  </span>
-                  <ChevronDown className="h-3 w-3" />
-                </button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="w-[200px]">
-                {allChips.slice(4).map((chip) => (
-                  <DropdownMenuItem
-                    key={chip.id}
-                    onClick={() => setActiveSession(chip.id)}
-                    className="flex items-center gap-2"
-                  >
-                    <StatusDot status={chip.status} />
-                    <span className="flex-1 truncate text-[13px]">
-                      {chip.title}
-                    </span>
-                  </DropdownMenuItem>
-                ))}
-                {backgroundSessions.length > 0 && (
-                  <>
-                    <DropdownMenuSeparator />
-                    <div className="px-2 py-1 text-[10px] uppercase text-muted-foreground/50 font-medium">
-                      Background
-                    </div>
-                    {backgroundSessions.map((session) => (
-                      <DropdownMenuItem
-                        key={session.id}
-                        onClick={() => setActiveSession(session.id)}
-                        className="flex items-center gap-2"
-                      >
-                        <StatusDot status={getSessionStatus(session.id)} />
-                        <span className="flex-1 truncate text-[13px]">
-                          {session.title || `Subtask ${session.id.slice(0, 6)}`}
-                        </span>
-                      </DropdownMenuItem>
-                    ))}
-                  </>
-                )}
-              </DropdownMenuContent>
-            </DropdownMenu>
-          )}
-        </div>
-      )}
-    </div>
+    <ThreadTabBar
+      sessions={sessions}
+      sessionStatuses={sessionStatuses}
+      activeSessionId={activeSessionId}
+      onSwitchThread={handleSwitchThreadStable}
+      onDeleteThread={handleDeleteThreadStable}
+      compact={compact}
+      isTwoColumn={isTwoColumn}
+      needsPopover={needsPopover}
+    />
   );
+
+  // Auto-scroll to top (newest messages are at top with flex-col-reverse)
+  useEffect(() => {
+    if (messagesContainerRef.current) {
+      messagesContainerRef.current.scrollTo({ top: 0, behavior: "smooth" });
+    }
+  }, [messages.length, activeSessionId]);
 
   // Chat messages content
   const chatContent = (

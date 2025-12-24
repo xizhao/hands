@@ -5,11 +5,12 @@
   "compatibility_date": "2025-12-01",
   "compatibility_flags": ["nodejs_compat"],
 
-  // Hyperdrive for Postgres (Neon)
+  // Hyperdrive for Postgres (Neon in prod, local in dev)
   "hyperdrive": [
     {
       "binding": "DB",
-      "id": "placeholder-create-with-wrangler-hyperdrive-create"
+      "id": "placeholder-create-with-wrangler-hyperdrive-create",
+      "localConnectionString": "postgresql://postgres:postgres@localhost:5432/hands"
     }
   ],
 

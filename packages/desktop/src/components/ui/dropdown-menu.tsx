@@ -45,7 +45,8 @@ const dropdownMenuLabelVariants = cva(
 export type DropdownMenuProps = DropdownMenuPrimitive.DropdownMenuProps;
 
 export function DropdownMenu(props: DropdownMenuProps) {
-  return <DropdownMenuPrimitive.Root {...props} />;
+  // modal={false} disables focus trapping for faster open
+  return <DropdownMenuPrimitive.Root modal={false} {...props} />;
 }
 
 export function DropdownMenuTrigger(props: DropdownMenuPrimitive.DropdownMenuTriggerProps) {
@@ -119,7 +120,8 @@ export function DropdownMenuContent({
     <DropdownMenuPrimitive.Content
       className={cn(
         "no-focus-ring z-50 min-w-32 max-w-[100vw] overflow-hidden rounded-lg bg-popover p-0 text-popover-foreground text-sm shadow-floating border border-border",
-        "data-[state=closed]:hidden data-[side=bottom]:origin-top data-[side=left]:origin-right data-[side=right]:origin-left data-[side=top]:origin-bottom data-[state=open]:animate-zoom",
+        // Removed animate-zoom for faster opening
+        "data-[state=closed]:hidden",
         className,
       )}
       sideOffset={4}

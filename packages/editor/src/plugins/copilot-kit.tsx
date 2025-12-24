@@ -120,24 +120,24 @@ export function createCopilotKit(config: CopilotConfig) {
           const context = getPageContext?.(editor as PlateEditor) ?? {};
           const { title, description } = context;
 
-          const fullDoc = serializeMd(editor, {
-            value: editor.children as TElement[],
-          });
-
           const contextEntry = editor.api.block({ highest: true });
           if (!contextEntry) return "";
 
-          const currentBlock = serializeMd(editor, {
-            value: [contextEntry[0] as TElement],
-          });
+          const [currentNode, currentPath] = contextEntry;
+          const currentIndex = currentPath[0] ?? 0;
+          const children = editor.children as TElement[];
 
-          const blockIndex = fullDoc.indexOf(currentBlock);
-          const prefix = blockIndex >= 0
-            ? fullDoc.slice(0, blockIndex) + currentBlock
-            : currentBlock;
-          const suffix = blockIndex >= 0
-            ? fullDoc.slice(blockIndex + currentBlock.length)
-            : "";
+          // Only serialize a window of context (10 blocks before, 5 after) instead of entire doc
+          const CONTEXT_BEFORE = 10;
+          const CONTEXT_AFTER = 5;
+          const startIdx = Math.max(0, currentIndex - CONTEXT_BEFORE);
+          const endIdx = Math.min(children.length, currentIndex + CONTEXT_AFTER + 1);
+
+          const prefixBlocks = children.slice(startIdx, currentIndex + 1);
+          const suffixBlocks = children.slice(currentIndex + 1, endIdx);
+
+          const prefix = serializeMd(editor, { value: prefixBlocks });
+          const suffix = serializeMd(editor, { value: suffixBlocks });
 
           return JSON.stringify({ prefix, suffix, title, description });
         },
