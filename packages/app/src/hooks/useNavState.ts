@@ -1,18 +1,21 @@
 /**
- * Navigation state - URL search params + localStorage
+ * Navigation state - Module-level state + localStorage
  *
- * URL params: panel, tab, session (shareable/bookmarkable)
+ * Module state: panel, tab, session (persists across navigation)
  * localStorage: chatExpanded (ephemeral preference)
+ *
+ * This approach keeps UI state independent of URL routing,
+ * so navigating between pages doesn't lose sidebar state.
  */
 
-import { useNavigate, useSearch } from "@tanstack/react-router";
+import { useNavigate } from "@tanstack/react-router";
 import { useCallback, useSyncExternalStore } from "react";
 
 // Types
 export type RightPanelId = "sources" | "database" | "settings" | "alerts" | "blocks" | null;
 export type TabId = "sources" | "data" | "insights" | "preview";
 
-// Search params schema (for route definition)
+// Search params schema (kept for backwards compat, but not used for state)
 export interface NavSearchParams {
   panel?: RightPanelId;
   tab?: TabId;
@@ -23,86 +26,129 @@ export interface NavSearchParams {
 const CHAT_EXPANDED_KEY = "hands-chat-expanded";
 
 // ============================================
-// URL-based state (via TanStack Router)
+// Module-level state (persists across navigation)
+// ============================================
+
+let rightPanel: RightPanelId = null;
+let activeTab: TabId = "preview";
+let activeSession: string | null = null;
+let sidebarWidth = 280;
+
+interface NavStateSnapshot {
+  rightPanel: RightPanelId;
+  activeTab: TabId;
+  activeSession: string | null;
+  sidebarWidth: number;
+}
+
+let snapshot: NavStateSnapshot = {
+  rightPanel,
+  activeTab,
+  activeSession,
+  sidebarWidth,
+};
+
+let listeners: Array<() => void> = [];
+
+function subscribe(listener: () => void) {
+  listeners.push(listener);
+  return () => {
+    listeners = listeners.filter((l) => l !== listener);
+  };
+}
+
+function getSnapshot() {
+  return snapshot;
+}
+
+function emitChange() {
+  snapshot = {
+    rightPanel,
+    activeTab,
+    activeSession,
+    sidebarWidth,
+  };
+  for (const listener of listeners) {
+    listener();
+  }
+}
+
+// Setters
+export function setRightPanelState(panel: RightPanelId) {
+  rightPanel = panel;
+  emitChange();
+}
+
+export function setActiveTabState(tab: TabId) {
+  activeTab = tab;
+  emitChange();
+}
+
+export function setActiveSessionState(sessionId: string | null) {
+  activeSession = sessionId;
+  emitChange();
+}
+
+export function setSidebarWidthState(width: number) {
+  sidebarWidth = width;
+  emitChange();
+}
+
+/** Reset navigation state (e.g., when switching workbooks) */
+export function resetNavState() {
+  rightPanel = null;
+  activeTab = "preview";
+  activeSession = null;
+  // Note: sidebarWidth preserved across workbook switches
+  emitChange();
+}
+
+// ============================================
+// Hooks (use module-level state)
 // ============================================
 
 export function useRightPanel() {
-  const search = useSearch({ strict: false }) as NavSearchParams;
-  const navigate = useNavigate();
+  const state = useSyncExternalStore(subscribe, getSnapshot, getSnapshot);
 
-  const panel = (search.panel ?? null) as RightPanelId;
+  const setPanel = useCallback((newPanel: RightPanelId) => {
+    setRightPanelState(newPanel);
+  }, []);
 
-  const setPanel = useCallback(
-    (newPanel: RightPanelId) => {
-      navigate({
-        search: ((prev: NavSearchParams) => ({
-          ...prev,
-          panel: newPanel ?? undefined,
-        })) as never,
-        replace: true,
-      });
-    },
-    [navigate],
-  );
+  const togglePanel = useCallback((targetPanel: Exclude<RightPanelId, null>) => {
+    setRightPanelState(rightPanel === targetPanel ? null : targetPanel);
+  }, []);
 
-  const togglePanel = useCallback(
-    (targetPanel: Exclude<RightPanelId, null>) => {
-      navigate({
-        search: ((prev: NavSearchParams) => ({
-          ...prev,
-          panel: prev.panel === targetPanel ? undefined : targetPanel,
-        })) as never,
-        replace: true,
-      });
-    },
-    [navigate],
-  );
-
-  return { panel, setPanel, togglePanel };
+  return { panel: state.rightPanel, setPanel, togglePanel };
 }
 
 export function useActiveTab() {
-  const search = useSearch({ strict: false }) as NavSearchParams;
-  const navigate = useNavigate();
+  const state = useSyncExternalStore(subscribe, getSnapshot, getSnapshot);
 
-  const tab = (search.tab ?? "preview") as TabId;
+  const setTab = useCallback((newTab: TabId) => {
+    setActiveTabState(newTab);
+  }, []);
 
-  const setTab = useCallback(
-    (newTab: TabId) => {
-      navigate({
-        search: ((prev: NavSearchParams) => ({
-          ...prev,
-          tab: newTab === "preview" ? undefined : newTab,
-        })) as never,
-        replace: true,
-      });
-    },
-    [navigate],
-  );
-
-  return { tab, setTab };
+  return { tab: state.activeTab, setTab };
 }
 
 export function useActiveSession() {
-  const search = useSearch({ strict: false }) as NavSearchParams;
-  const navigate = useNavigate();
+  const state = useSyncExternalStore(subscribe, getSnapshot, getSnapshot);
 
-  const sessionId = search.session ?? null;
+  const setSession = useCallback((newSessionId: string | null) => {
+    setActiveSessionState(newSessionId);
+  }, []);
 
-  const setSession = useCallback(
-    (newSessionId: string | null) => {
-      navigate({
-        search: ((prev: NavSearchParams) => ({
-          ...prev,
-          session: newSessionId ?? undefined,
-        })) as never,
-        replace: true,
-      });
-    },
-    [navigate],
-  );
+  return { sessionId: state.activeSession, setSession };
+}
 
-  return { sessionId, setSession };
+export function useSidebarWidth() {
+  const state = useSyncExternalStore(subscribe, getSnapshot, getSnapshot);
+
+  const setWidth = useCallback((width: number) => {
+    setSidebarWidthState(width);
+  }, []);
+
+  return { width: state.sidebarWidth, setWidth };
 }
 
 // ============================================
@@ -146,16 +192,16 @@ export function useChatExpanded() {
 // ============================================
 
 /**
- * Clears all URL-based navigation state and navigates to root.
+ * Clears navigation state and navigates to root.
  * Used when switching workbooks to ensure clean state.
  */
 export function useClearNavigation() {
   const navigate = useNavigate();
 
   return useCallback(() => {
+    resetNavState();
     navigate({
       to: "/",
-      search: {},
       replace: true,
     });
   }, [navigate]);

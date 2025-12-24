@@ -42,7 +42,11 @@
       }
     ],
     "security": {
-      "csp": null
+      "csp": null,
+      "assetProtocol": {
+        "enable": true,
+        "scope": ["$TEMP/hands-captures/**", "/var/folders/**"]
+      }
     }
   },
   "bundle": {

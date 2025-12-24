@@ -1732,6 +1732,7 @@ pub fn run() {
         .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_clipboard::init())
         .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_fs::init())
         .plugin(tauri_plugin_global_shortcut::Builder::new().build())
         .invoke_handler(tauri::generate_handler![
             check_server_health,
@@ -1763,7 +1764,8 @@ pub fn run() {
             get_active_jobs,
             capture::capture_region,
             capture::cancel_capture,
-            capture::close_chat_widget
+            capture::close_capture_panel,
+            capture::set_ignore_cursor_events
         ])
         .setup(|app| {
             let state = Arc::new(Mutex::new(AppState {

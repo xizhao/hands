@@ -11,7 +11,7 @@
 
 import { gateway } from "@ai-sdk/gateway";
 import { initTRPC, TRPCError } from "@trpc/server";
-import { generateText } from "ai";
+import { generateObject, generateText } from "ai";
 import { z } from "zod";
 import { STDLIB_DOCS, STDLIB_QUICK_REF } from "@hands/core/docs";
 import { validateMdxContent, type ValidationContext, type ValidationError } from "@hands/core/validation";
@@ -480,6 +480,105 @@ Examples:
           results[item.idx] = { content: item.content, hint: item.content, cached: false };
         }
         return { hints: results };
+      }
+    }),
+  /**
+   * Analyze a screenshot and suggest actions
+   * Uses Gemini 3 Flash for vision capabilities
+   *
+   * Returns structured action suggestions:
+   * - get_data: When there's a visible data source (URL, API, spreadsheet, etc.)
+   * - set_up_sync: When something could be synced periodically
+   *
+   * If nothing actionable, returns empty actions with a brief/playful comment.
+   */
+  analyzeScreenshot: t.procedure
+    .input(z.object({
+      imagePath: z.string().min(1),
+    }))
+    .mutation(async ({ input }) => {
+      const { imagePath } = input;
+
+      console.log('[ai.analyzeScreenshot] Analyzing:', imagePath);
+
+      const apiKey = process.env.HANDS_AI_API_KEY;
+      if (!apiKey) {
+        throw new TRPCError({
+          code: "INTERNAL_SERVER_ERROR",
+          message: "HANDS_AI_API_KEY not set",
+        });
+      }
+      process.env.AI_GATEWAY_API_KEY = apiKey;
+
+      // Define schema for structured output
+      const screenshotAnalysisSchema = z.object({
+        response: z.string().describe("Respond in first person (use 'I can...' or 'I found...'). Describe the data opportunity briefly. Don't reference 'the image' or 'screenshot'. If nothing actionable, respond playfully. 1-2 sentences max."),
+        suggestedActions: z.array(z.union([
+          z.object({
+            type: z.literal("get_data"),
+            label: z.string().describe("2-4 word action trigger, e.g. 'Import S3 Data'"),
+            prompt: z.string().describe("Full prompt with all context needed to execute: data source details, credentials, URLs, table names, etc."),
+          }),
+          z.object({
+            type: z.literal("set_up_sync"),
+            label: z.string().describe("2-4 word action trigger, e.g. 'Sync Daily Metrics'"),
+            prompt: z.string().describe("Full prompt with all context needed: what to sync, source details, frequency, any credentials or endpoints visible."),
+          }),
+          z.object({
+            type: z.literal("custom"),
+            label: z.string().describe("2-4 word action trigger"),
+            prompt: z.string().describe("Full prompt with all context needed to execute the action."),
+          }),
+        ])).max(3).describe("Data actions based on screenshot. Empty array if nothing actionable."),
+      });
+
+      try {
+        // Read image file and convert to base64
+        const fs = await import("node:fs/promises");
+        const imageBuffer = await fs.readFile(imagePath);
+        const base64Image = imageBuffer.toString("base64");
+        const mimeType = imagePath.endsWith(".png") ? "image/png" : "image/jpeg";
+
+        const result = await generateObject({
+          model: gateway("google/gemini-3-flash-preview"),
+          schema: screenshotAnalysisSchema,
+          messages: [
+            {
+              role: "user",
+              content: [
+                {
+                  type: "image",
+                  image: `data:${mimeType};base64,${base64Image}`,
+                },
+                {
+                  type: "text",
+                  text: `You're a data assistant. Respond in first person. If there's data that could be imported or synced (tables, APIs, credentials, dashboards, etc.), describe what you can do with it and suggest up to 3 actions. If nothing data-related, respond playfully. Never reference "the image/screenshot" directly.`,
+                },
+              ],
+            },
+          ],
+          maxOutputTokens: 4000,
+          temperature: 0.3,
+          abortSignal: AbortSignal.timeout(20000),
+        });
+
+        console.log('[ai.analyzeScreenshot] Raw result:', JSON.stringify(result.object, null, 2));
+
+        const response = {
+          summary: result.object.response || "What would you like me to do with this?",
+          actions: result.object.suggestedActions || [],
+        };
+
+        console.log('[ai.analyzeScreenshot] Returning:', JSON.stringify(response, null, 2));
+        return response;
+      } catch (err) {
+        console.error('[ai.analyzeScreenshot] Error:', err);
+        console.error('[ai.analyzeScreenshot] Error details:', JSON.stringify(err, Object.getOwnPropertyNames(err), 2));
+        if (err instanceof TRPCError) throw err;
+        throw new TRPCError({
+          code: "INTERNAL_SERVER_ERROR",
+          message: err instanceof Error ? err.message : "Screenshot analysis failed",
+        });
       }
     }),
 });

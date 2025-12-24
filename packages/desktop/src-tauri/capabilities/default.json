@@ -2,8 +2,10 @@
   "$schema": "https://schema.tauri.app/config/2/capability",
   "identifier": "default",
   "description": "Default capabilities for the app",
-  "windows": ["main", "webview_*", "preview_*", "workbook_*", "chat_widget_*", "capture_overlay_*"],
+  "windows": ["main", "webview_*", "preview_*", "workbook_*", "capture_action_*", "capture_overlay_*"],
   "permissions": [
+    "core:tray:default",
+    "core:menu:default",
     "global-shortcut:allow-register",
     "global-shortcut:allow-unregister",
     "global-shortcut:allow-is-registered",
@@ -42,6 +44,13 @@
           "args": true
         }
       ]
-    }
+    },
+    {
+      "identifier": "fs:allow-read-file",
+      "allow": [
+        { "path": "$TEMP/hands-captures/**" }
+      ]
+    },
+    "fs:default"
   ]
 }

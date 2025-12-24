@@ -1,22 +1,26 @@
 interface HandsLogoProps {
   className?: string;
+  size?: number | string;
+  strokeWidth?: number;
 }
 
 /**
  * Hands Logo - it's a hand
+ * Used across all branding surfaces: app icon, tray, loaders, etc.
  */
-export function HandsLogo({ className }: HandsLogoProps) {
+export function HandsLogo({ className, size = 24, strokeWidth = 2 }: HandsLogoProps) {
   return (
     <svg
       xmlns="http://www.w3.org/2000/svg"
-      width="24"
-      height="24"
+      width={size}
+      height={size}
       viewBox="0 0 24 24"
       fill="none"
       stroke="currentColor"
-      stroke-width="2"
-      stroke-linecap="round"
-      stroke-linejoin="round"
+      strokeWidth={strokeWidth}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className={className}
     >
       <path d="M18 11V6a2 2 0 0 0-2-2a2 2 0 0 0-2 2" />
       <path d="M14 10V4a2 2 0 0 0-2-2a2 2 0 0 0-2 2v2" />

@@ -57,6 +57,7 @@ import { fillTemplate, PROMPTS } from "@/lib/prompts";
 import { cn } from "@/lib/utils";
 import { STDLIB_QUICK_REF } from "@hands/core/docs";
 import { invoke } from "@tauri-apps/api/core";
+import { listen } from "@tauri-apps/api/event";
 import { useRouter } from "@tanstack/react-router";
 import { AnimatePresence, motion } from "framer-motion";
 import {
@@ -377,6 +378,41 @@ export function UnifiedSidebar({
     observer.observe(container);
     return () => observer.disconnect();
   }, []);
+
+  // Listen for capture action prompts from the capture panel
+  useEffect(() => {
+    const unlisten = listen<{
+      workbookId: string;
+      prompt: string;
+      actionType: string;
+      label: string;
+    }>("capture-action-prompt", (event) => {
+      const { workbookId, prompt } = event.payload;
+
+      // Only handle if this is the target workbook
+      if (workbookId !== activeWorkbookId) return;
+
+      console.log("[UnifiedSidebar] Received capture action:", event.payload);
+
+      // Create a new session and send the prompt
+      createSession.mutate(
+        {},
+        {
+          onSuccess: (newSession) => {
+            setActiveSession(newSession.id);
+            sendMessage.mutate({
+              sessionId: newSession.id,
+              content: prompt,
+            });
+          },
+        }
+      );
+    });
+
+    return () => {
+      unlisten.then((fn) => fn());
+    };
+  }, [activeWorkbookId, createSession, setActiveSession, sendMessage]);
 
   const isBusy = activeStatus?.type === "busy" || activeStatus?.type === "running";
   const activeForm = activeStatus?.type === "busy" ? activeStatus.activeForm : undefined;

@@ -10,6 +10,7 @@
 import { FileDropOverlay } from "@/components/FileDropOverlay";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { ATTACHMENT_TYPE, useChatState } from "@/hooks/useChatState";
+import { useSidebarWidth } from "@/hooks/useNavState";
 import { usePrefetchOnDbReady, useRuntimeState } from "@/hooks/useRuntimeState";
 import { cn } from "@/lib/utils";
 import { useRouterState } from "@tanstack/react-router";
@@ -50,8 +51,8 @@ export function NotebookShell({ children }: NotebookShellProps) {
   // Chat state for file drop handling
   const chatState = useChatState();
 
-  // Sidebar width state (resizable)
-  const [sidebarWidth, setSidebarWidth] = useState(280);
+  // Sidebar width state (resizable, persisted across navigation)
+  const { width: sidebarWidth, setWidth: setSidebarWidth } = useSidebarWidth();
   const [isResizing, setIsResizing] = useState(false);
   const resizeStartX = useRef(0);
   const resizeStartWidth = useRef(0);

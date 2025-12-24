@@ -15,9 +15,13 @@ pub fn create_tray(app: &AppHandle) -> Result<(), Box<dyn std::error::Error>> {
     // Get the tray icon that was created from config (icon loaded from tauri.conf.json trayIcon.iconPath)
     let tray = app.tray_by_id("main").ok_or("Tray icon 'main' not found - check tauri.conf.json")?;
 
+    println!("[tray] Found tray with id 'main'");
+
     // Build and set the menu
     let menu = build_tray_menu(app, &[])?;
     tray.set_menu(Some(menu))?;
+    println!("[tray] Menu set");
+
     tray.set_show_menu_on_left_click(true)?;
     tray.set_tooltip(Some("Hands"))?;
 
