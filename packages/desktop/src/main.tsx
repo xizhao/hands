@@ -3,14 +3,37 @@ import ReactDOM from "react-dom/client";
 import App from "./App";
 import "./index.css";
 import PreviewWindow from "./preview";
+import { CaptureOverlay } from "./windows/CaptureOverlay";
+import { ChatWidget } from "./windows/ChatWidget";
 
-// Route based on URL path
-const isPreviewWindow =
-  window.location.pathname === "/preview" || window.location.search.includes("preview=true");
+// Determine window type from URL params
+function getWindowType(): "main" | "preview" | "capture-overlay" | "chat-widget" | "workbook" {
+  const params = new URLSearchParams(window.location.search);
+
+  if (params.has("capture-overlay")) return "capture-overlay";
+  if (params.has("chat-widget")) return "chat-widget";
+  if (params.has("preview") || window.location.pathname === "/preview") return "preview";
+  if (params.has("workbook")) return "workbook";
+
+  return "main";
+}
 
 function getComponent() {
-  if (isPreviewWindow) return <PreviewWindow />;
-  return <App />;
+  const windowType = getWindowType();
+
+  switch (windowType) {
+    case "preview":
+      return <PreviewWindow />;
+    case "capture-overlay":
+      return <CaptureOverlay />;
+    case "chat-widget":
+      return <ChatWidget />;
+    case "workbook":
+      // Workbook windows use the main App but with a specific workbook context
+      return <App />;
+    default:
+      return <App />;
+  }
 }
 
 // biome-ignore lint/style/noNonNullAssertion: root element is guaranteed to exist in index.html

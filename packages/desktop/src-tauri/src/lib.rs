@@ -6,12 +6,20 @@ use std::process::Stdio;
 use std::sync::Arc;
 use std::time::Duration;
 use tauri::menu::{MenuBuilder, MenuItemBuilder, SubmenuBuilder};
-use tauri::{Emitter, Manager};
+use tauri::{Emitter, Manager, WebviewUrl, WebviewWindowBuilder};
 use tauri_plugin_dialog::DialogExt;
 use tauri_plugin_store::StoreExt;
 use tokio::io::{AsyncBufReadExt, BufReader};
 use tokio::process::{Child, Command};
 use tokio::sync::Mutex;
+
+// Modules
+pub mod tray;
+pub mod hotkeys;
+pub mod capture;
+pub mod runtime_manager;
+
+use runtime_manager::RuntimeManager;
 
 // Port configuration - matches packages/workbook-server/src/ports.ts
 // All ports use 5-digit scheme with configurable prefix (default 55xxx)
@@ -30,11 +38,13 @@ pub struct WorkbookServerProcess {
     pub restart_count: u32,
 }
 
-// App state - now just tracks runtime processes and opencode server
+// App state - tracks runtime processes, opencode server, and multi-window state
 pub struct AppState {
     pub server: Option<Child>,
-    pub workbook_servers: HashMap<String, WorkbookServerProcess>, // workbook_id -> server process
+    pub workbook_servers: HashMap<String, WorkbookServerProcess>, // workbook_id -> server process (legacy)
+    pub runtime_manager: RuntimeManager,           // new multi-runtime manager
     pub active_workbook_id: Option<String>,        // currently active workbook
+    pub should_quit: bool,                         // track if app should actually quit
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -1394,6 +1404,135 @@ async fn pick_folder(app: tauri::AppHandle) -> Result<Option<String>, String> {
         .map_err(|e| format!("Failed to receive folder path: {}", e))
 }
 
+/// Open a workbook in its own window
+#[tauri::command]
+async fn open_workbook_window(
+    app: tauri::AppHandle,
+    state: tauri::State<'_, Arc<Mutex<AppState>>>,
+    workbook_id: String,
+) -> Result<(), String> {
+    let window_label = format!("workbook_{}", workbook_id);
+
+    // Check if window already exists - focus it
+    if let Some(window) = app.get_webview_window(&window_label) {
+        window.show().map_err(|e| e.to_string())?;
+        window.set_focus().map_err(|e| e.to_string())?;
+        return Ok(());
+    }
+
+    // Get workbook info
+    let workbook = get_workbook(workbook_id.clone()).await?;
+
+    // Create new window for this workbook
+    let url = format!("index.html?workbook={}", workbook_id);
+
+    let mut builder = WebviewWindowBuilder::new(
+        &app,
+        &window_label,
+        WebviewUrl::App(url.into()),
+    )
+    .title(&workbook.name)
+    .inner_size(900.0, 700.0)
+    .min_inner_size(600.0, 400.0)
+    .decorations(true)
+    .transparent(false)
+    .resizable(true)
+    .center();
+
+    #[cfg(target_os = "macos")]
+    {
+        builder = builder
+            .title_bar_style(tauri::TitleBarStyle::Overlay)
+            .hidden_title(true);
+    }
+
+    builder
+        .build()
+        .map_err(|e| format!("Failed to create workbook window: {}", e))?;
+
+    // Register window with runtime manager
+    {
+        let mut state_guard = state.lock().await;
+        state_guard.runtime_manager.register_window(&workbook_id, window_label);
+    }
+
+    // Emit event to update workbook's last_opened_at
+    let _ = app.emit("workbook-opened", &workbook_id);
+
+    Ok(())
+}
+
+/// Close a workbook window
+#[tauri::command]
+async fn close_workbook_window(
+    app: tauri::AppHandle,
+    state: tauri::State<'_, Arc<Mutex<AppState>>>,
+    workbook_id: String,
+    force: bool,
+) -> Result<bool, String> {
+    let window_label = format!("workbook_{}", workbook_id);
+
+    // Check for active jobs if not forcing
+    if !force {
+        let state_guard = state.lock().await;
+        if let Some(runtime) = state_guard.runtime_manager.get(&workbook_id) {
+            if runtime.has_active_jobs() {
+                return Ok(false); // Can't close - has active jobs
+            }
+        }
+    }
+
+    // Close the window
+    if let Some(window) = app.get_webview_window(&window_label) {
+        window.close().map_err(|e| e.to_string())?;
+    }
+
+    // Unregister window and check if runtime should be stopped
+    {
+        let mut state_guard = state.lock().await;
+        let no_windows_left = state_guard.runtime_manager.unregister_window(&workbook_id, &window_label);
+
+        if no_windows_left && !state_guard.runtime_manager.get(&workbook_id).map(|r| r.has_active_jobs()).unwrap_or(false) {
+            // No windows and no active jobs - stop the runtime
+            if let Some(mut runtime) = state_guard.runtime_manager.remove(&workbook_id) {
+                let _ = runtime.process.kill().await;
+            }
+        }
+    }
+
+    Ok(true)
+}
+
+/// Get list of all open workbook windows
+#[tauri::command]
+async fn list_workbook_windows(
+    state: tauri::State<'_, Arc<Mutex<AppState>>>,
+) -> Result<Vec<String>, String> {
+    let state_guard = state.lock().await;
+    Ok(state_guard.runtime_manager.workbook_ids())
+}
+
+/// Check if a workbook has active jobs
+#[tauri::command]
+async fn has_active_jobs(
+    state: tauri::State<'_, Arc<Mutex<AppState>>>,
+    workbook_id: String,
+) -> Result<bool, String> {
+    let state_guard = state.lock().await;
+    Ok(state_guard.runtime_manager.get(&workbook_id)
+        .map(|r| r.has_active_jobs())
+        .unwrap_or(false))
+}
+
+/// Get all workbooks with active jobs
+#[tauri::command]
+async fn get_active_jobs(
+    state: tauri::State<'_, Arc<Mutex<AppState>>>,
+) -> Result<Vec<String>, String> {
+    let state_guard = state.lock().await;
+    Ok(state_guard.runtime_manager.workbooks_with_active_jobs())
+}
+
 #[tauri::command]
 async fn open_docs(app: tauri::AppHandle) -> Result<(), String> {
     use tauri::WebviewWindowBuilder;
@@ -1453,6 +1592,7 @@ pub fn run() {
         .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_clipboard::init())
         .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_global_shortcut::Builder::new().build())
         .invoke_handler(tauri::generate_handler![
             check_server_health,
             restart_server,
@@ -1474,15 +1614,36 @@ pub fn run() {
             open_docs,
             set_active_workbook,
             pick_file,
-            pick_folder
+            pick_folder,
+            // New commands for taskbar service
+            open_workbook_window,
+            close_workbook_window,
+            list_workbook_windows,
+            has_active_jobs,
+            get_active_jobs,
+            capture::capture_region,
+            capture::cancel_capture,
+            capture::close_chat_widget
         ])
         .setup(|app| {
             let state = Arc::new(Mutex::new(AppState {
                 server: None,
                 workbook_servers: HashMap::new(),
+                runtime_manager: RuntimeManager::new(),
                 active_workbook_id: None,
+                should_quit: false,
             }));
             app.manage(state.clone());
+
+            // Set up system tray
+            if let Err(e) = tray::create_tray(app.handle()) {
+                eprintln!("[tray] Failed to create system tray: {}", e);
+            }
+
+            // Register global shortcuts
+            if let Err(e) = hotkeys::register_global_shortcuts(app.handle()) {
+                eprintln!("[hotkeys] Failed to register global shortcuts: {}", e);
+            }
 
             // Start runtime monitor for auto-restart
             start_workbook_server_monitor(state.clone(), app.handle().clone());
@@ -1609,21 +1770,41 @@ pub fn run() {
             Ok(())
         })
         .on_window_event(|window, event| {
-            if let tauri::WindowEvent::Destroyed = event {
-                // Only cleanup when main window is destroyed
-                if window.label() == "main" {
-                    println!("[shutdown] Main window destroyed, cleaning up...");
+            match event {
+                tauri::WindowEvent::CloseRequested { api, .. } => {
+                    let label = window.label();
 
-                    // Force cleanup runtime lockfile and kill any orphaned processes
-                    tauri::async_runtime::block_on(async {
-                        force_cleanup_workbook_server().await;
-                    });
+                    // For main window and workbook windows: hide instead of close
+                    if label == "main" || label.starts_with("workbook_") {
+                        // Prevent the default close behavior
+                        api.prevent_close();
 
-                    // Kill OpenCode server port
-                    kill_processes_on_port(PORT_OPENCODE);
-
-                    println!("[shutdown] Cleanup complete");
+                        // Hide the window instead
+                        if let Err(e) = window.hide() {
+                            eprintln!("[window] Failed to hide {}: {}", label, e);
+                        } else {
+                            println!("[window] Hidden {} (app still running in tray)", label);
+                        }
+                    }
+                    // Other windows (preview, docs, chat widgets, capture overlay) can close normally
                 }
+                tauri::WindowEvent::Destroyed => {
+                    // Only cleanup when main window is actually destroyed (from quit)
+                    if window.label() == "main" {
+                        println!("[shutdown] Main window destroyed, cleaning up...");
+
+                        // Force cleanup runtime lockfile and kill any orphaned processes
+                        tauri::async_runtime::block_on(async {
+                            force_cleanup_workbook_server().await;
+                        });
+
+                        // Kill OpenCode server port
+                        kill_processes_on_port(PORT_OPENCODE);
+
+                        println!("[shutdown] Cleanup complete");
+                    }
+                }
+                _ => {}
             }
         })
         .run(tauri::generate_context!())
