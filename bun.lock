@@ -30,8 +30,8 @@
       "dependencies": {
         "@hands/core": "workspace:*",
         "@hands/workbook-server": "workspace:*",
-        "@opencode-ai/plugin": "^1.0.152",
-        "@opencode-ai/sdk": "^1.0.152",
+        "@opencode-ai/plugin": "^1.0.198",
+        "@opencode-ai/sdk": "^1.0.198",
         "@trpc/client": "^11.8.0",
         "nodejs-polars": "^0.17.0",
       },
@@ -49,7 +49,7 @@
         "@hands/core": "workspace:*",
         "@hands/editor": "workspace:*",
         "@hands/workbook-server": "workspace:*",
-        "@opencode-ai/sdk": "^1.0.152",
+        "@opencode-ai/sdk": "^1.0.198",
         "@phosphor-icons/react": "^2.1.10",
         "@tanstack/react-query": "^5.90.12",
         "@tanstack/react-router": "^1.140.5",
@@ -209,7 +209,7 @@
         "@hands/editor": "workspace:*",
         "@hands/stdlib": "workspace:*",
         "@hands/workbook-server": "workspace:*",
-        "@opencode-ai/sdk": "^1.0.152",
+        "@opencode-ai/sdk": "^1.0.198",
         "@phosphor-icons/react": "^2.1.10",
         "@platejs/basic-nodes": "^52.0.11",
         "@platejs/list": "^52.0.11",
@@ -4353,9 +4353,15 @@
 
     "@glideapps/glide-data-grid/react-dom": ["react-dom@19.2.1", "", { "dependencies": { "scheduler": "^0.27.0" }, "peerDependencies": { "react": "^19.2.1" } }, "sha512-ibrK8llX2a4eOskq1mXKu/TGZj9qzomO+sNfO98M6d9zIPOEhlBkMkBUBLd1vgS0gQsLDBzA+8jJBVXDnfHmJg=="],
 
+    "@hands/agent/@opencode-ai/plugin": ["@opencode-ai/plugin@1.0.198", "", { "dependencies": { "@opencode-ai/sdk": "1.0.198", "zod": "4.1.8" } }, "sha512-Nl0W2SSiVCp230jri8lkyfke1IB6/pYnABYlmxPZp8Q1k+zb0vkDGWcbkLDSFC0VFbeEzl4d1HnfsuqCY63uTg=="],
+
+    "@hands/agent/@opencode-ai/sdk": ["@opencode-ai/sdk@1.0.198", "", {}, "sha512-S+dy6rizdCnbmYiMPYn6AMhUen104B6cUm6772b8JZt2iul/yL3AyJJbxLzM8PBQIs19yPxO48HG9aXaXYzH8Q=="],
+
     "@hands/agent/@types/bun": ["@types/bun@1.3.5", "", { "dependencies": { "bun-types": "1.3.5" } }, "sha512-RnygCqNrd3srIPEWBd5LFeUYG7plCoH2Yw9WaZGyNmdTEei+gWaHqydbaIRkIkcbXwhBT94q78QljxN0Sk838w=="],
 
     "@hands/agent/typescript": ["typescript@5.8.3", "", { "bin": { "tsc": "bin/tsc", "tsserver": "bin/tsserver" } }, "sha512-p1diW6TqL9L07nNxvRMM7hMMw4c5XOo/1ibL4aAIGmSAt9slTE1Xgw5KWuof2uTOvCg9BY7ZRi+GaF+7sfgPeQ=="],
+
+    "@hands/app/@opencode-ai/sdk": ["@opencode-ai/sdk@1.0.198", "", {}, "sha512-S+dy6rizdCnbmYiMPYn6AMhUen104B6cUm6772b8JZt2iul/yL3AyJJbxLzM8PBQIs19yPxO48HG9aXaXYzH8Q=="],
 
     "@hands/app/typescript": ["typescript@5.8.3", "", { "bin": { "tsc": "bin/tsc", "tsserver": "bin/tsserver" } }, "sha512-p1diW6TqL9L07nNxvRMM7hMMw4c5XOo/1ibL4aAIGmSAt9slTE1Xgw5KWuof2uTOvCg9BY7ZRi+GaF+7sfgPeQ=="],
 
@@ -4368,6 +4374,8 @@
     "@hands/core/lucide-react": ["lucide-react@0.562.0", "", { "peerDependencies": { "react": "^16.5.1 || ^17.0.0 || ^18.0.0 || ^19.0.0" } }, "sha512-82hOAu7y0dbVuFfmO4bYF1XEwYk/mEbM5E+b1jgci/udUBEE/R7LF5Ip0CCEmXe8AybRM8L+04eP+LGZeDvkiw=="],
 
     "@hands/core/typescript": ["typescript@5.8.3", "", { "bin": { "tsc": "bin/tsc", "tsserver": "bin/tsserver" } }, "sha512-p1diW6TqL9L07nNxvRMM7hMMw4c5XOo/1ibL4aAIGmSAt9slTE1Xgw5KWuof2uTOvCg9BY7ZRi+GaF+7sfgPeQ=="],
+
+    "@hands/desktop/@opencode-ai/sdk": ["@opencode-ai/sdk@1.0.198", "", {}, "sha512-S+dy6rizdCnbmYiMPYn6AMhUen104B6cUm6772b8JZt2iul/yL3AyJJbxLzM8PBQIs19yPxO48HG9aXaXYzH8Q=="],
 
     "@hands/desktop/typescript": ["typescript@5.8.3", "", { "bin": { "tsc": "bin/tsc", "tsserver": "bin/tsserver" } }, "sha512-p1diW6TqL9L07nNxvRMM7hMMw4c5XOo/1ibL4aAIGmSAt9slTE1Xgw5KWuof2uTOvCg9BY7ZRi+GaF+7sfgPeQ=="],
 
@@ -4898,6 +4906,8 @@
     "@esbuild-kit/core-utils/esbuild/@esbuild/win32-ia32": ["@esbuild/win32-ia32@0.18.20", "", { "os": "win32", "cpu": "ia32" }, "sha512-Wv7QBi3ID/rROT08SABTS7eV4hX26sVduqDOTe1MvGMjNd3EjOz4b7zeexIR62GTIEKrfJXKL9LFxTYgkyeu7g=="],
 
     "@esbuild-kit/core-utils/esbuild/@esbuild/win32-x64": ["@esbuild/win32-x64@0.18.20", "", { "os": "win32", "cpu": "x64" }, "sha512-kTdfRcSiDfQca/y9QIkng02avJ+NCaQvrMejlsB3RRv5sE9rRoeBPISaZpKxHELzRxZyLvNts1P27W3wV+8geQ=="],
+
+    "@hands/agent/@opencode-ai/plugin/zod": ["zod@4.1.8", "", {}, "sha512-5R1P+WwQqmmMIEACyzSvo4JXHY5WiAFHRMg+zBZKgKS+Q1viRa0C1hmUKtHltoIFKtIdki3pRxkmpP74jnNYHQ=="],
 
     "@hands/agent/@types/bun/bun-types": ["bun-types@1.3.5", "", { "dependencies": { "@types/node": "*" } }, "sha512-inmAYe2PFLs0SUbFOWSVD24sg1jFlMPxOjOSSCYqUgn4Hsc3rDc7dFvfVYjFPNHtov6kgUeulV4SxbuIV/stPw=="],
 
