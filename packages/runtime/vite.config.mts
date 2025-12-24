@@ -153,6 +153,9 @@ export default defineConfig({
       "@/blocks": path.resolve(workbookPath, "pages/blocks"),
       // Runtime provides utils for shadcn components
       "@ui/lib/utils": path.resolve(__dirname, "src/lib/utils.ts"),
+      // Hands core (primitives, types, actions)
+      "@hands/core/primitives": path.resolve(__dirname, "../core/src/primitives/index.ts"),
+      "@hands/core": path.resolve(__dirname, "../core/src/index.ts"),
       // Hands runtime
       "@hands/db": path.resolve(__dirname, "src/db/dev.ts"),
       "@hands/db/types": path.join(workbookPath, ".hands/db.d.ts"),

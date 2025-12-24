@@ -12,9 +12,11 @@
  */
 
 import { createPlatePlugin, PlateElement, type PlateElementProps, useElement } from "platejs/react";
-import { memo } from "react";
+import { memo, useMemo } from "react";
 
 import { LINE_CHART_KEY, type TLineChartElement, type VegaLiteSpec } from "../../../types";
+import { detectFormat } from "../../lib/format";
+import { useLiveValueData } from "./context";
 import { VegaChart } from "./vega-chart";
 import { lineChartToVegaSpec } from "./vega-spec";
 
@@ -46,6 +48,16 @@ export interface LineChartProps {
   /** Additional CSS classes */
   className?: string;
   /**
+   * X-axis format (d3-format string).
+   * Auto-detected from column name if not provided.
+   */
+  xFormat?: string;
+  /**
+   * Y-axis format (d3-format string).
+   * Auto-detected from column name if not provided.
+   */
+  yFormat?: string;
+  /**
    * Full Vega-Lite specification.
    * If provided, overrides the simplified props above.
    */
@@ -58,7 +70,7 @@ export interface LineChartProps {
  * Supports data from props or LiveValue context.
  */
 export function LineChart({
-  data,
+  data: propData,
   xKey,
   yKey = "value",
   height = 300,
@@ -69,11 +81,31 @@ export function LineChart({
   showDots = true,
   colors,
   className,
+  xFormat,
+  yFormat,
   vegaSpec: propVegaSpec,
 }: LineChartProps) {
+  // Get data from LiveValue context if not provided via props
+  const ctx = useLiveValueData();
+  const data = propData ?? ctx?.data;
+
+  // Auto-detect formats if not provided
+  const resolvedFormats = useMemo(() => {
+    if (!data || data.length === 0) return { xFormat, yFormat };
+
+    // Get first yKey for detection (multi-series uses first)
+    const firstYKey = Array.isArray(yKey) ? yKey[0] : yKey;
+    const yValues = data.map((d) => d[firstYKey]);
+
+    return {
+      xFormat: xFormat ?? (xKey ? detectFormat(xKey, data.map((d) => d[xKey])) : null),
+      yFormat: yFormat ?? detectFormat(firstYKey, yValues),
+    };
+  }, [data, xKey, yKey, xFormat, yFormat]);
+
   // If full vegaSpec provided, use it directly
   if (propVegaSpec) {
-    return <VegaChart spec={propVegaSpec} height={height} data={data} className={className} />;
+    return <VegaChart spec={propVegaSpec} height={height} data={propData} className={className} />;
   }
 
   // Convert simplified props to Vega-Lite spec
@@ -84,9 +116,11 @@ export function LineChart({
     showGrid,
     curve,
     showDots,
+    xFormat: resolvedFormats.xFormat ?? undefined,
+    yFormat: resolvedFormats.yFormat ?? undefined,
   });
 
-  return <VegaChart spec={spec} height={height} data={data} className={className} />;
+  return <VegaChart spec={spec} height={height} data={propData} className={className} />;
 }
 
 // ============================================================================
@@ -108,6 +142,8 @@ function LineChartElement(props: PlateElementProps) {
         curve={element.curve as "linear" | "monotone" | "step" | undefined}
         showDots={element.showDots as boolean | undefined}
         colors={element.colors as string[] | undefined}
+        xFormat={element.xFormat as string | undefined}
+        yFormat={element.yFormat as string | undefined}
         vegaSpec={element.vegaSpec as VegaLiteSpec | undefined}
       />
       <span className="absolute top-0 left-0 opacity-0 pointer-events-none">{props.children}</span>
@@ -142,6 +178,8 @@ export interface CreateLineChartOptions {
   curve?: "linear" | "monotone" | "step";
   showDots?: boolean;
   colors?: string[];
+  xFormat?: string;
+  yFormat?: string;
   vegaSpec?: VegaLiteSpec;
 }
 
@@ -160,6 +198,8 @@ export function createLineChartElement(options?: CreateLineChartOptions): TLineC
     curve: options?.curve ?? "monotone",
     showDots: options?.showDots ?? true,
     colors: options?.colors,
+    xFormat: options?.xFormat,
+    yFormat: options?.yFormat,
     vegaSpec: options?.vegaSpec,
     children: [{ text: "" }],
   };

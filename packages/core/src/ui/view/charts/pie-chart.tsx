@@ -13,9 +13,11 @@
  */
 
 import { createPlatePlugin, PlateElement, type PlateElementProps, useElement } from "platejs/react";
-import { memo } from "react";
+import { memo, useMemo } from "react";
 
 import { PIE_CHART_KEY, type TPieChartElement, type VegaLiteSpec } from "../../../types";
+import { detectFormat } from "../../lib/format";
+import { useLiveValueData } from "./context";
 import { VegaChart } from "./vega-chart";
 import { pieChartToVegaSpec } from "./vega-spec";
 
@@ -43,6 +45,11 @@ export interface PieChartProps {
   /** Additional CSS classes */
   className?: string;
   /**
+   * Value format (d3-format string) for tooltips.
+   * Auto-detected from column name if not provided.
+   */
+  valueFormat?: string;
+  /**
    * Full Vega-Lite specification.
    * If provided, overrides the simplified props above.
    */
@@ -55,7 +62,7 @@ export interface PieChartProps {
  * Supports data from props or LiveValue context.
  */
 export function PieChart({
-  data,
+  data: propData,
   valueKey = "value",
   nameKey = "name",
   height = 300,
@@ -64,11 +71,25 @@ export function PieChart({
   showLabels = false,
   colors,
   className,
+  valueFormat,
   vegaSpec: propVegaSpec,
 }: PieChartProps) {
+  // Get data from LiveValue context if not provided via props
+  const ctx = useLiveValueData();
+  const data = propData ?? ctx?.data;
+
+  // Auto-detect format if not provided
+  const resolvedValueFormat = useMemo(() => {
+    if (valueFormat) return valueFormat;
+    if (!data || data.length === 0) return null;
+
+    const values = data.map((d) => d[valueKey]);
+    return detectFormat(valueKey, values);
+  }, [data, valueKey, valueFormat]);
+
   // If full vegaSpec provided, use it directly
   if (propVegaSpec) {
-    return <VegaChart spec={propVegaSpec} height={height} data={data} className={className} />;
+    return <VegaChart spec={propVegaSpec} height={height} data={propData} className={className} />;
   }
 
   // Convert simplified props to Vega-Lite spec
@@ -78,9 +99,10 @@ export function PieChart({
     showLegend,
     showLabels,
     innerRadius,
+    valueFormat: resolvedValueFormat ?? undefined,
   });
 
-  return <VegaChart spec={spec} height={height} data={data} className={className} />;
+  return <VegaChart spec={spec} height={height} data={propData} className={className} />;
 }
 
 // ============================================================================
@@ -100,6 +122,7 @@ function PieChartElement(props: PlateElementProps) {
         showLegend={element.showLegend as boolean | undefined}
         showLabels={element.showLabels as boolean | undefined}
         colors={element.colors as string[] | undefined}
+        valueFormat={element.valueFormat as string | undefined}
         vegaSpec={element.vegaSpec as VegaLiteSpec | undefined}
       />
       <span className="absolute top-0 left-0 opacity-0 pointer-events-none">{props.children}</span>
@@ -132,6 +155,7 @@ export interface CreatePieChartOptions {
   showLegend?: boolean;
   showLabels?: boolean;
   colors?: string[];
+  valueFormat?: string;
   vegaSpec?: VegaLiteSpec;
 }
 
@@ -148,6 +172,7 @@ export function createPieChartElement(options?: CreatePieChartOptions): TPieChar
     showLegend: options?.showLegend ?? true,
     showLabels: options?.showLabels ?? false,
     colors: options?.colors,
+    valueFormat: options?.valueFormat,
     vegaSpec: options?.vegaSpec,
     children: [{ text: "" }],
   };

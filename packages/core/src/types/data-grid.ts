@@ -23,6 +23,8 @@ export type CellOpts =
       min?: number;
       max?: number;
       step?: number;
+      /** d3-format string for display formatting */
+      format?: string;
     }
   | {
       variant: "select";

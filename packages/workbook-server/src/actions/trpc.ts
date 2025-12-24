@@ -7,6 +7,7 @@
 
 import { initTRPC, TRPCError } from "@trpc/server";
 import { z } from "zod";
+import { readFile } from "node:fs/promises";
 import { discoverActions } from "../workbook/discovery.js";
 import type { DiscoveredAction } from "../workbook/types.js";
 import { executeActionHttp } from "./executor-http.js";
@@ -56,6 +57,7 @@ const getActionInput = z.object({
   id: z.string(),
 });
 
+
 // ============================================================================
 // Router
 // ============================================================================
@@ -88,6 +90,31 @@ export const actionsRouter = t.router({
     }
 
     return action;
+  }),
+
+  /** Get action source code */
+  source: publicProcedure.input(getActionInput).query(async ({ ctx, input }) => {
+    const actionsDir = join(ctx.workbookDir, "actions");
+    const result = await discoverActions(actionsDir, ctx.workbookDir);
+    const action = result.items.find((a) => a.id === input.id);
+
+    if (!action) {
+      throw new TRPCError({
+        code: "NOT_FOUND",
+        message: `Action not found: ${input.id}`,
+      });
+    }
+
+    try {
+      const fullPath = join(ctx.workbookDir, action.path);
+      const source = await readFile(fullPath, "utf-8");
+      return { source, path: action.path };
+    } catch (err) {
+      throw new TRPCError({
+        code: "INTERNAL_SERVER_ERROR",
+        message: `Failed to read action source: ${err instanceof Error ? err.message : String(err)}`,
+      });
+    }
   }),
 
   // ==================

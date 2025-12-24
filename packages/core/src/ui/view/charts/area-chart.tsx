@@ -13,9 +13,11 @@
  */
 
 import { createPlatePlugin, PlateElement, type PlateElementProps, useElement } from "platejs/react";
-import { memo } from "react";
+import { memo, useMemo } from "react";
 
 import { AREA_CHART_KEY, type TAreaChartElement, type VegaLiteSpec } from "../../../types";
+import { detectFormat } from "../../lib/format";
+import { useLiveValueData } from "./context";
 import { VegaChart } from "./vega-chart";
 import { areaChartToVegaSpec } from "./vega-spec";
 
@@ -49,6 +51,16 @@ export interface AreaChartProps {
   /** Additional CSS classes */
   className?: string;
   /**
+   * X-axis format (d3-format string).
+   * Auto-detected from column name if not provided.
+   */
+  xFormat?: string;
+  /**
+   * Y-axis format (d3-format string).
+   * Auto-detected from column name if not provided.
+   */
+  yFormat?: string;
+  /**
    * Full Vega-Lite specification.
    * If provided, overrides the simplified props above.
    */
@@ -61,7 +73,7 @@ export interface AreaChartProps {
  * Supports data from props or LiveValue context.
  */
 export function AreaChart({
-  data,
+  data: propData,
   xKey,
   yKey = "value",
   height = 300,
@@ -73,11 +85,31 @@ export function AreaChart({
   fillOpacity = 0.4,
   colors,
   className,
+  xFormat,
+  yFormat,
   vegaSpec: propVegaSpec,
 }: AreaChartProps) {
+  // Get data from LiveValue context if not provided via props
+  const ctx = useLiveValueData();
+  const data = propData ?? ctx?.data;
+
+  // Auto-detect formats if not provided
+  const resolvedFormats = useMemo(() => {
+    if (!data || data.length === 0) return { xFormat, yFormat };
+
+    // Get first yKey for detection (multi-series uses first)
+    const firstYKey = Array.isArray(yKey) ? yKey[0] : yKey;
+    const yValues = data.map((d) => d[firstYKey]);
+
+    return {
+      xFormat: xFormat ?? (xKey ? detectFormat(xKey, data.map((d) => d[xKey])) : null),
+      yFormat: yFormat ?? detectFormat(firstYKey, yValues),
+    };
+  }, [data, xKey, yKey, xFormat, yFormat]);
+
   // If full vegaSpec provided, use it directly
   if (propVegaSpec) {
-    return <VegaChart spec={propVegaSpec} height={height} data={data} className={className} />;
+    return <VegaChart spec={propVegaSpec} height={height} data={propData} className={className} />;
   }
 
   // Convert simplified props to Vega-Lite spec
@@ -89,9 +121,11 @@ export function AreaChart({
     curve,
     stacked,
     fillOpacity,
+    xFormat: resolvedFormats.xFormat ?? undefined,
+    yFormat: resolvedFormats.yFormat ?? undefined,
   });
 
-  return <VegaChart spec={spec} height={height} data={data} className={className} />;
+  return <VegaChart spec={spec} height={height} data={propData} className={className} />;
 }
 
 // ============================================================================
@@ -114,6 +148,8 @@ function AreaChartElement(props: PlateElementProps) {
         stacked={element.stacked as boolean | undefined}
         fillOpacity={(element.fillOpacity as number | undefined) ?? 0.4}
         colors={element.colors as string[] | undefined}
+        xFormat={element.xFormat as string | undefined}
+        yFormat={element.yFormat as string | undefined}
         vegaSpec={element.vegaSpec as VegaLiteSpec | undefined}
       />
       <span className="absolute top-0 left-0 opacity-0 pointer-events-none">{props.children}</span>
@@ -149,6 +185,8 @@ export interface CreateAreaChartOptions {
   stacked?: boolean;
   fillOpacity?: number;
   colors?: string[];
+  xFormat?: string;
+  yFormat?: string;
   vegaSpec?: VegaLiteSpec;
 }
 
@@ -168,6 +206,8 @@ export function createAreaChartElement(options?: CreateAreaChartOptions): TAreaC
     stacked: options?.stacked ?? false,
     fillOpacity: options?.fillOpacity ?? 0.4,
     colors: options?.colors,
+    xFormat: options?.xFormat,
+    yFormat: options?.yFormat,
     vegaSpec: options?.vegaSpec,
     children: [{ text: "" }],
   };

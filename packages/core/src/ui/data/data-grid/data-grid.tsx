@@ -30,6 +30,7 @@ import {
   type DataGridColumnConfig,
   type TDataGridElement,
 } from "../../../types";
+import { detectFormat } from "../../lib/format";
 import { useLiveValueData } from "../../view/charts/context";
 
 // ============================================================================
@@ -63,34 +64,63 @@ function inferCellVariant(value: unknown): CellOpts {
   return { variant: "short-text" };
 }
 
+/** Detect format for a column based on key and sample values */
+function inferColumnFormat(key: string, data: Record<string, unknown>[]): string | undefined {
+  const values = data.map((d) => d[key]);
+  const format = detectFormat(key, values);
+  return format ?? undefined;
+}
+
 function autoDetectColumns<TData extends Record<string, unknown>>(
   data: TData[],
 ): ColumnDef<TData>[] {
   if (data.length === 0) return [];
 
   const firstRow = data[0];
-  return Object.keys(firstRow).map((key) => ({
-    id: key,
-    accessorKey: key,
-    header: key.charAt(0).toUpperCase() + key.slice(1).replace(/_/g, " "),
-    meta: {
-      label: key.charAt(0).toUpperCase() + key.slice(1).replace(/_/g, " "),
-      cell: inferCellVariant(firstRow[key]),
-    },
-    minSize: 100,
-    size: 180,
-  }));
+  return Object.keys(firstRow).map((key) => {
+    const cellOpts = inferCellVariant(firstRow[key]);
+    // Auto-detect format for number cells
+    if (cellOpts.variant === "number") {
+      const format = inferColumnFormat(key, data);
+      if (format) {
+        (cellOpts as CellOpts & { format?: string }).format = format;
+      }
+    }
+
+    return {
+      id: key,
+      accessorKey: key,
+      header: key.charAt(0).toUpperCase() + key.slice(1).replace(/_/g, " "),
+      meta: {
+        label: key.charAt(0).toUpperCase() + key.slice(1).replace(/_/g, " "),
+        cell: cellOpts,
+      },
+      minSize: 100,
+      size: 180,
+    };
+  });
 }
 
 function configToColumnDefs<TData extends Record<string, unknown>>(
   config: DataGridColumnConfig[],
+  data?: TData[],
 ): ColumnDef<TData>[] {
   return config.map((col) => {
-    const cellOpts: CellOpts = col.type
+    const cellOpts: CellOpts & { format?: string } = col.type
       ? col.type === "select" || col.type === "multi-select"
         ? { variant: col.type, options: col.options ?? [] }
         : { variant: col.type }
       : { variant: "short-text" };
+
+    // Add format - from config or auto-detect for number columns
+    if (col.format) {
+      cellOpts.format = col.format;
+    } else if (cellOpts.variant === "number" && data && data.length > 0) {
+      const format = inferColumnFormat(col.key, data);
+      if (format) {
+        cellOpts.format = format;
+      }
+    }
 
     return {
       id: col.key,
@@ -152,7 +182,7 @@ export function DataGrid<TData extends Record<string, unknown> = Record<string, 
   // Generate columns
   const columns = useMemo<ColumnDef<TData>[]>(() => {
     if (columnConfig && columnConfig !== "auto") {
-      return configToColumnDefs<TData>(columnConfig);
+      return configToColumnDefs<TData>(columnConfig, data);
     }
     return autoDetectColumns<TData>(data);
   }, [columnConfig, data]);

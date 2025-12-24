@@ -191,7 +191,7 @@ export const STDLIB_COMPONENTS = {
   },
   "Metric": {
     "category": "view",
-    "description": "KPI display for showing a single metric value with optional label and change indicator. Perfect for dashboards showing counts, percentages, or any key performance indicator.",
+    "description": "KPI display for showing a single metric value with optional label and change indicator. Perfect for dashboards. Can consume data from parent LiveValue context or use direct value prop.",
     "keywords": [
       "metric",
       "kpi",
@@ -202,7 +202,7 @@ export const STDLIB_COMPONENTS = {
       "value",
       "indicator"
     ],
-    "example": "<Metric label=\"Total Users\" value={1234} />\n<Metric label=\"Revenue\" value={50000} prefix=\"$\" change={12.5} />\n<Metric label=\"Error Rate\" value={0.5} suffix=\"%\" change={-8} changeLabel=\"vs last week\" />"
+    "example": "<Metric label=\"Total Users\" value={1234} />\n<Metric label=\"Revenue\" value={50000} prefix=\"$\" change={12.5} />\n\n// With LiveValue data context:\n<LiveValue query=\"SELECT SUM(amount) as value FROM orders\">\n  <Metric label=\"Total Revenue\" prefix=\"$\" />\n</LiveValue>"
   },
   "Alert": {
     "category": "view",

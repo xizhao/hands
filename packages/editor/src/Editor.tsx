@@ -34,13 +34,13 @@ import {
   type ReactNode,
 } from "react";
 
-import { createPlugin, type PluginOptions } from "@hands/core/primitives";
+import { createPlugin, type PluginOptions } from "@hands/core/plugin";
 import { useEditorTables, useEditorTrpc } from "./context";
 import { FrontmatterHeader, type Frontmatter } from "./frontmatter";
 import { createCopilotKit, type CopilotConfig } from "./plugins/copilot-kit";
 import { createMarkdownKit, type MarkdownRule } from "./plugins/markdown-kit";
 import { EditorCorePlugins } from "./plugins/presets";
-import { EditorStatusBar, FixedToolbar, FixedToolbarButtons, TooltipProvider } from "./ui";
+import { EditorStatusBar, FixedToolbar, FixedToolbarButtons, TooltipProvider, TocSidebar } from "./ui";
 import { MarkdownCodeEditor, type Diagnostic } from "./ui/markdown-code-editor";
 import { ModeToggle, type EditorMode } from "./ui/mode-toggle";
 import { serializeFrontmatter, parseFrontmatter, stripFrontmatter } from "./frontmatter";
@@ -157,6 +157,10 @@ export interface EditorProps {
   /** Custom footer content (below editor content) */
   footer?: ReactNode;
 
+  // ---- Table of Contents ----
+  /** Show table of contents sidebar (default: true, can be overridden by frontmatter.toc) */
+  toc?: boolean;
+
   // ---- Editor settings ----
   /** Whether the editor is read-only */
   readOnly?: boolean;
@@ -228,6 +232,8 @@ export const Editor = forwardRef<EditorHandle, EditorProps>(function Editor(
     // Layout
     header,
     footer,
+    // Table of Contents
+    toc: tocProp = true,
     // Settings
     readOnly = false,
     placeholder = "Start typing...",
@@ -550,6 +556,11 @@ export const Editor = forwardRef<EditorHandle, EditorProps>(function Editor(
             "relative flex-1 min-h-0 cursor-text overflow-y-auto",
             mode === "visual" ? "pl-8 pr-6" : "pl-0 pr-0"
           )}>
+            {/* Table of contents sidebar - shows on right edge, expands on hover */}
+            {mode === "visual" && (frontmatter?.toc ?? tocProp) && (
+              <TocSidebar className="absolute top-4 right-0" />
+            )}
+
             {/* Frontmatter header (only in visual mode - code mode shows raw frontmatter) */}
             {mode === "visual" && frontmatter && onFrontmatterChange && (
               <FrontmatterHeader

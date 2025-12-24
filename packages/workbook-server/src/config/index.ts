@@ -310,15 +310,17 @@ export interface InitWorkbookOptions {
  */
 export function generateWorkbookTsConfig(workbookDir: string): string {
   const runtimePath = getRuntimeSourcePath();
-  const { relative } = require("node:path");
+  const { relative, join } = require("node:path");
 
   // Compute relative path from workbook to runtime
   const relativeRuntimePath = relative(workbookDir, runtimePath);
+  // Core is sibling to runtime
+  const relativeCorePath = relative(workbookDir, join(runtimePath, "../core"));
 
   const tsconfig = {
     compilerOptions: {
       target: "ES2022",
-      lib: ["ES2022"],
+      lib: ["ES2022", "DOM", "DOM.Iterable"],
       module: "ESNext",
       moduleResolution: "bundler",
       strict: true,
@@ -328,6 +330,9 @@ export function generateWorkbookTsConfig(workbookDir: string): string {
       jsxImportSource: "react",
       baseUrl: ".",
       paths: {
+        // Core primitives (for actions)
+        "@hands/core/primitives": [`${relativeCorePath}/src/primitives/index.ts`],
+        "@hands/core": [`${relativeCorePath}/src/index.ts`],
         // Database access
         "@hands/db": [`${relativeRuntimePath}/src/db/dev.ts`],
         "@hands/db/types": [".hands/db.d.ts"],
@@ -338,7 +343,7 @@ export function generateWorkbookTsConfig(workbookDir: string): string {
         "@ui/lib/utils": [`${relativeRuntimePath}/src/lib/utils.ts`],
       },
     },
-    include: ["plugins/**/*", "pages/**/*", "ui/**/*", "lib/**/*"],
+    include: ["plugins/**/*", "pages/**/*", "sources/**/*", "actions/**/*", "ui/**/*", "lib/**/*"],
     exclude: ["node_modules", ".hands"],
   };
 

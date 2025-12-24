@@ -145,6 +145,8 @@ export const workbookTRPCRouter = t.router({
         path: c.path,
         isClient: c.isClientComponent,
       })),
+      actions: manifest.actions,
+      tables: manifest.tables,
       errors: manifest.errors,
       timestamp: manifest.timestamp,
     };

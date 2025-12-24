@@ -15,7 +15,6 @@ import { validateSchema } from "@hands/core/primitives";
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { buildActionContext, createRunMeta } from "./context.js";
-import { saveActionRun, updateActionRun } from "./history.js";
 
 /**
  * Read secrets from .env.local file
@@ -164,7 +163,7 @@ export async function executeAction(options: ExecuteActionOptions): Promise<Acti
 
   // Check for missing secrets
   if (action.missingSecrets?.length) {
-    const run: ActionRun = {
+    return {
       id: runId,
       actionId: action.id,
       trigger,
@@ -175,8 +174,6 @@ export async function executeAction(options: ExecuteActionOptions): Promise<Acti
       finishedAt: new Date().toISOString(),
       durationMs: 0,
     };
-    await saveActionRun(db, run);
-    return run;
   }
 
   // Validate input if schema provided
@@ -185,7 +182,7 @@ export async function executeAction(options: ExecuteActionOptions): Promise<Acti
     try {
       validatedInput = action.definition.input.parse(input);
     } catch (err) {
-      const run: ActionRun = {
+      return {
         id: runId,
         actionId: action.id,
         trigger,
@@ -196,8 +193,6 @@ export async function executeAction(options: ExecuteActionOptions): Promise<Acti
         finishedAt: new Date().toISOString(),
         durationMs: 0,
       };
-      await saveActionRun(db, run);
-      return run;
     }
   }
 
@@ -208,7 +203,7 @@ export async function executeAction(options: ExecuteActionOptions): Promise<Acti
       const schemaResult = validateSchema(action.definition.schema, dbSchema);
 
       if (!schemaResult.valid) {
-        const run: ActionRun = {
+        return {
           id: runId,
           actionId: action.id,
           trigger,
@@ -219,11 +214,9 @@ export async function executeAction(options: ExecuteActionOptions): Promise<Acti
           finishedAt: new Date().toISOString(),
           durationMs: 0,
         };
-        await saveActionRun(db, run);
-        return run;
       }
     } catch (err) {
-      const run: ActionRun = {
+      return {
         id: runId,
         actionId: action.id,
         trigger,
@@ -234,21 +227,10 @@ export async function executeAction(options: ExecuteActionOptions): Promise<Acti
         finishedAt: new Date().toISOString(),
         durationMs: 0,
       };
-      await saveActionRun(db, run);
-      return run;
     }
   }
 
-  // Create initial run record
-  const run: ActionRun = {
-    id: runId,
-    actionId: action.id,
-    trigger,
-    status: "running",
-    input: validatedInput,
-    startedAt: new Date().toISOString(),
-  };
-  await saveActionRun(db, run);
+  const startedAt = new Date().toISOString();
 
   // Build context
   const runMeta = createRunMeta(runId, trigger, validatedInput);
@@ -265,35 +247,38 @@ export async function executeAction(options: ExecuteActionOptions): Promise<Acti
     const output = await action.definition.run(validatedInput, ctx);
 
     const endTime = Date.now();
-    const completedRun: ActionRun = {
-      ...run,
-      status: "success",
+    const durationMs = endTime - startTime;
+    ctx.log.info(`Action completed successfully`, { durationMs });
+
+    return {
+      id: runId,
+      actionId: action.id,
+      trigger,
+      status: "success" as const,
+      input: validatedInput,
       output,
+      startedAt,
       finishedAt: new Date().toISOString(),
-      durationMs: endTime - startTime,
+      durationMs,
     };
-
-    await updateActionRun(db, completedRun);
-    ctx.log.info(`Action completed successfully`, { durationMs: completedRun.durationMs });
-
-    return completedRun;
   } catch (err) {
     const endTime = Date.now();
     const errorMessage = err instanceof Error ? err.message : String(err);
     const errorStack = err instanceof Error ? err.stack : undefined;
 
-    const failedRun: ActionRun = {
-      ...run,
-      status: "failed",
+    ctx.log.error(`Action failed: ${errorMessage}`);
+
+    return {
+      id: runId,
+      actionId: action.id,
+      trigger,
+      status: "failed" as const,
+      input: validatedInput,
       error: errorStack || errorMessage,
+      startedAt,
       finishedAt: new Date().toISOString(),
       durationMs: endTime - startTime,
     };
-
-    await updateActionRun(db, failedRun);
-    ctx.log.error(`Action failed: ${errorMessage}`);
-
-    return failedRun;
   }
 }
 

@@ -52,3 +52,9 @@ export * from "./plugins";
 
 // Editor context (for backend integration)
 export * from "./context";
+
+// Action Editor (visual data lineage + code view)
+export * from "./action-editor";
+
+// Action Flow Analysis (AST-based extraction)
+export * from "./action-flow";

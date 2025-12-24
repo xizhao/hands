@@ -12,7 +12,15 @@ import type { VegaLiteSpec } from "../../../types";
 // Types for Simplified Props
 // ============================================================================
 
-export interface LineChartSpecProps {
+/** Shared format props for charts with X/Y axes */
+export interface ChartFormatProps {
+  /** X-axis format (d3-format string) */
+  xFormat?: string;
+  /** Y-axis format (d3-format string) */
+  yFormat?: string;
+}
+
+export interface LineChartSpecProps extends ChartFormatProps {
   xKey?: string;
   yKey?: string | string[];
   showLegend?: boolean;
@@ -21,7 +29,7 @@ export interface LineChartSpecProps {
   showDots?: boolean;
 }
 
-export interface BarChartSpecProps {
+export interface BarChartSpecProps extends ChartFormatProps {
   xKey?: string;
   yKey?: string | string[];
   showLegend?: boolean;
@@ -30,7 +38,7 @@ export interface BarChartSpecProps {
   layout?: "vertical" | "horizontal";
 }
 
-export interface AreaChartSpecProps {
+export interface AreaChartSpecProps extends ChartFormatProps {
   xKey?: string;
   yKey?: string | string[];
   showLegend?: boolean;
@@ -46,6 +54,8 @@ export interface PieChartSpecProps {
   showLegend?: boolean;
   showLabels?: boolean;
   innerRadius?: number;
+  /** Value format for tooltips (d3-format string) */
+  valueFormat?: string;
 }
 
 // ============================================================================
@@ -100,6 +110,8 @@ export function lineChartToVegaSpec(props: LineChartSpecProps): VegaLiteSpec {
     showGrid = true,
     curve = "monotone",
     showDots = true,
+    xFormat,
+    yFormat,
   } = props;
 
   const yKeys = Array.isArray(yKey) ? yKey : [yKey];
@@ -125,6 +137,7 @@ export function lineChartToVegaSpec(props: LineChartSpecProps): VegaLiteSpec {
           labelAngle: -45,
           labelLimit: 100,
           labelOverlap: "parity",
+          ...(xFormat ? { format: xFormat } : {}),
         },
       },
       y: {
@@ -133,6 +146,7 @@ export function lineChartToVegaSpec(props: LineChartSpecProps): VegaLiteSpec {
         axis: {
           grid: showGrid,
           labelLimit: 80,
+          ...(yFormat ? { format: yFormat } : {}),
         },
       },
     },
@@ -167,6 +181,8 @@ export function barChartToVegaSpec(props: BarChartSpecProps): VegaLiteSpec {
     showGrid = true,
     stacked = false,
     layout = "vertical",
+    xFormat,
+    yFormat,
   } = props;
 
   const yKeys = Array.isArray(yKey) ? yKey : [yKey];
@@ -177,6 +193,11 @@ export function barChartToVegaSpec(props: BarChartSpecProps): VegaLiteSpec {
   const categoryField = xKey;
   const valueField = isMultiSeries ? "value" : yKeys[0];
 
+  // Format for category axis (usually X unless horizontal)
+  const categoryFormat = isHorizontal ? yFormat : xFormat;
+  // Format for value axis (usually Y unless horizontal)
+  const valueFormat = isHorizontal ? xFormat : yFormat;
+
   const categoryEncoding = {
     field: categoryField,
     type: "nominal" as const,
@@ -185,6 +206,7 @@ export function barChartToVegaSpec(props: BarChartSpecProps): VegaLiteSpec {
       labelAngle: isHorizontal ? 0 : -45,
       labelLimit: 100,
       labelOverlap: "parity",
+      ...(categoryFormat ? { format: categoryFormat } : {}),
     },
   };
 
@@ -194,6 +216,7 @@ export function barChartToVegaSpec(props: BarChartSpecProps): VegaLiteSpec {
     axis: {
       grid: showGrid,
       labelLimit: 80,
+      ...(valueFormat ? { format: valueFormat } : {}),
     },
     ...(stacked && isMultiSeries ? { stack: "zero" as const } : {}),
   };
@@ -255,6 +278,8 @@ export function areaChartToVegaSpec(props: AreaChartSpecProps): VegaLiteSpec {
     curve = "monotone",
     stacked = false,
     fillOpacity = 0.4,
+    xFormat,
+    yFormat,
   } = props;
 
   const yKeys = Array.isArray(yKey) ? yKey : [yKey];
@@ -279,6 +304,7 @@ export function areaChartToVegaSpec(props: AreaChartSpecProps): VegaLiteSpec {
           labelAngle: -45,
           labelLimit: 100,
           labelOverlap: "parity",
+          ...(xFormat ? { format: xFormat } : {}),
         },
       },
       y: {
@@ -287,6 +313,7 @@ export function areaChartToVegaSpec(props: AreaChartSpecProps): VegaLiteSpec {
         axis: {
           grid: showGrid,
           labelLimit: 80,
+          ...(yFormat ? { format: yFormat } : {}),
         },
         ...(stacked && isMultiSeries ? { stack: "zero" as const } : {}),
       },
@@ -321,6 +348,7 @@ export function pieChartToVegaSpec(props: PieChartSpecProps): VegaLiteSpec {
     showLegend = true,
     showLabels = false,
     innerRadius = 0,
+    valueFormat,
   } = props;
 
   const baseSpec: VegaLiteSpec = {
@@ -337,6 +365,7 @@ export function pieChartToVegaSpec(props: PieChartSpecProps): VegaLiteSpec {
         field: valueKey,
         type: "quantitative",
         stack: true,
+        ...(valueFormat ? { format: valueFormat } : {}),
       },
       color: {
         field: nameKey,

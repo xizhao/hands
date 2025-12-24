@@ -12,20 +12,6 @@ export { discoverActions, reloadAction } from "./discovery.js";
 // Executor
 export { type ExecuteActionOptions, executeAction, executeActionById } from "./executor.js";
 
-// History
-export {
-  type ActionRunStats,
-  cleanupOldRuns,
-  getActionRun,
-  getActionRunStats,
-  getLastActionRun,
-  initActionRunsTable,
-  type QueryRunsOptions,
-  queryActionRuns,
-  saveActionRun,
-  updateActionRun,
-} from "./history.js";
-
 // Scheduler
 export {
   getNextRunTime,

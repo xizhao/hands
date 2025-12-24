@@ -16,6 +16,7 @@ import {
 import * as React from "react";
 import { toast } from "sonner";
 import { DataGridCellWrapper } from "./data-grid-cell-wrapper";
+import { formatValue } from "../../lib/format";
 import { Badge } from "../badge";
 import { Button } from "../button";
 import { Calendar } from "../calendar";
@@ -388,6 +389,7 @@ export function NumberCell<TData>({
   const min = numberCellOpts?.min;
   const max = numberCellOpts?.max;
   const step = numberCellOpts?.step;
+  const format = numberCellOpts?.format;
 
   const prevIsEditingRef = React.useRef(isEditing);
 
@@ -488,7 +490,9 @@ export function NumberCell<TData>({
           onChange={onChange}
         />
       ) : (
-        <span data-slot="grid-cell-content">{value}</span>
+        <span data-slot="grid-cell-content">
+          {format && initialValue != null ? formatValue(initialValue, format) : value}
+        </span>
       )}
     </DataGridCellWrapper>
   );

@@ -7,7 +7,7 @@
  * - Automatic theme integration (CSS variables → Vega config)
  * - LiveValue context integration (data from SQL queries)
  * - Responsive container sizing
- * - Canvas rendering for performance
+ * - Efficient data updates via Vega View API (no full re-embed)
  *
  * @example
  * ```tsx
@@ -25,8 +25,8 @@
  */
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { VegaEmbed } from "react-vega";
-import type { VisualizationSpec } from "vega-embed";
+import embed, { type EmbedOptions, type Result } from "vega-embed";
+import type { View } from "vega";
 
 import type { VegaLiteSpec } from "../../../types";
 import { useLiveValueData } from "./context";
@@ -110,6 +110,9 @@ function ChartEmpty({ height, className }: ChartEmptyProps) {
 // Main Component
 // ============================================================================
 
+/** Data source name used in Vega spec */
+const DATA_SOURCE_NAME = "source";
+
 /**
  * VegaChart renders a Vega-Lite specification.
  *
@@ -118,6 +121,7 @@ function ChartEmpty({ height, className }: ChartEmptyProps) {
  * - Data from LiveValue context or props
  * - Canvas rendering for performance
  * - Responsive width (fills container)
+ * - Efficient data updates via View API (no full re-embed)
  */
 export function VegaChart({
   spec,
@@ -131,7 +135,10 @@ export function VegaChart({
   const ctx = useLiveValueData();
   const vegaTheme = useVegaTheme();
   const containerRef = useRef<HTMLDivElement>(null);
+  const viewRef = useRef<View | null>(null);
+  const embedResultRef = useRef<Result | null>(null);
   const [containerWidth, setContainerWidth] = useState(0);
+  const [isEmbedded, setIsEmbedded] = useState(false);
 
   // Determine data source: props > context > spec
   const data = propData ?? (useContextData && ctx?.data) ?? undefined;
@@ -155,15 +162,15 @@ export function VegaChart({
     return () => observer.disconnect();
   }, []);
 
-  // Build final spec with data, theme, and sizing
-  const finalSpec = useMemo((): VegaLiteSpec => {
+  // Build spec (without data - data is injected via View API)
+  const baseSpec = useMemo((): VegaLiteSpec => {
     return {
       ...spec,
-      // Responsive width
-      width: containerWidth > 0 ? containerWidth - 20 : undefined,
+      // Use container width if measured, otherwise let Vega autosize
+      width: containerWidth > 0 ? containerWidth - 20 : "container",
       height,
-      // Inject data if provided
-      ...(data ? { data: { values: data } } : {}),
+      // Use named data source for dynamic updates
+      data: { name: DATA_SOURCE_NAME },
       // Apply theme config
       config: {
         ...vegaTheme,
@@ -175,7 +182,104 @@ export function VegaChart({
         contains: "padding",
       },
     };
-  }, [spec, height, data, vegaTheme, containerWidth]);
+  }, [spec, height, vegaTheme, containerWidth]);
+
+  // Stable spec key for re-embedding only when spec structure changes
+  const specKey = useMemo(() => {
+    // Hash based on spec structure (excluding data)
+    const { data: _, ...specWithoutData } = spec;
+    return JSON.stringify(specWithoutData);
+  }, [spec]);
+
+  // Embed chart (only when spec structure changes)
+  useEffect(() => {
+    const container = containerRef.current;
+    if (!container) return;
+
+    let cancelled = false;
+
+    const doEmbed = async () => {
+      // Clean up previous embed
+      if (embedResultRef.current) {
+        embedResultRef.current.finalize();
+        embedResultRef.current = null;
+        viewRef.current = null;
+      }
+
+      const options: EmbedOptions = {
+        renderer,
+        actions,
+        // Don't download data - we inject it via View API
+        loader: { target: "_blank" },
+      };
+
+      try {
+        const result = await embed(container, baseSpec as any, options);
+        if (cancelled) {
+          result.finalize();
+          return;
+        }
+
+        embedResultRef.current = result;
+        viewRef.current = result.view;
+
+        // Inject initial data if available
+        if (data && data.length > 0) {
+          result.view.data(DATA_SOURCE_NAME, data);
+          await result.view.runAsync();
+        }
+
+        setIsEmbedded(true);
+      } catch (err) {
+        console.error("[VegaChart] Embed failed:", err);
+      }
+    };
+
+    doEmbed();
+
+    return () => {
+      cancelled = true;
+      if (embedResultRef.current) {
+        embedResultRef.current.finalize();
+        embedResultRef.current = null;
+        viewRef.current = null;
+      }
+    };
+  }, [specKey, baseSpec, renderer, actions]); // Note: data not in deps - handled separately
+
+  // Update data efficiently via View API (no re-embed)
+  useEffect(() => {
+    const view = viewRef.current;
+    if (!view || !isEmbedded) return;
+
+    const updateData = async () => {
+      try {
+        view.data(DATA_SOURCE_NAME, data ?? []);
+        await view.runAsync();
+      } catch (err) {
+        console.error("[VegaChart] Data update failed:", err);
+      }
+    };
+
+    updateData();
+  }, [data, isEmbedded]);
+
+  // Update dimensions when container resizes
+  useEffect(() => {
+    const view = viewRef.current;
+    if (!view || !isEmbedded || containerWidth <= 0) return;
+
+    const updateSize = async () => {
+      try {
+        view.width(containerWidth - 20);
+        await view.runAsync();
+      } catch (err) {
+        // Ignore resize errors
+      }
+    };
+
+    updateSize();
+  }, [containerWidth, isEmbedded]);
 
   // Handle loading state
   if (ctx?.isLoading) {
@@ -188,13 +292,11 @@ export function VegaChart({
   }
 
   // Handle empty data
-  // Only show "No data" if we're NOT inside a LiveValue context waiting for data
-  // If inside context, prefer showing loading skeleton while waiting
   const hasData = data && data.length > 0;
   const specHasData = spec.data !== undefined;
   const insideContext = ctx !== null;
   if (!hasData && !specHasData) {
-    // If inside a LiveValue context but no data yet, show loading (might be initial render)
+    // If inside a LiveValue context but no data yet, show loading
     if (insideContext && !ctx.data) {
       return <ChartSkeleton height={height} className={className} />;
     }
@@ -202,19 +304,11 @@ export function VegaChart({
   }
 
   return (
-    <div ref={containerRef} className={`w-full ${className ?? ""}`} style={{ minHeight: height }}>
-      {containerWidth > 0 ? (
-        <VegaEmbed
-          spec={finalSpec as VisualizationSpec}
-          options={{
-            renderer,
-            actions,
-          }}
-        />
-      ) : (
-        <ChartSkeleton height={height} className={className} />
-      )}
-    </div>
+    <div
+      ref={containerRef}
+      className={`w-full ${className ?? ""}`}
+      style={{ minHeight: height }}
+    />
   );
 }
 
@@ -223,5 +317,3 @@ export function VegaChart({
 // ============================================================================
 
 export { ChartSkeleton, ChartError, ChartEmpty };
-// Re-export VisualizationSpec for advanced use cases
-export type { VisualizationSpec };

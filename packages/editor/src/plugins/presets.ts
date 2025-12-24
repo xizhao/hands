@@ -28,6 +28,7 @@ import { MarkdownKit } from "./markdown-kit";
 import { MediaKit } from "./media-kit";
 import { AtKit } from "./at-kit";
 import { TableKit } from "./table-kit";
+import { NodeIdKit } from "./node-id-kit";
 import { TocKit } from "./toc-kit";
 import { ToggleKit } from "./toggle-kit";
 
@@ -38,6 +39,7 @@ import { ToggleKit } from "./toggle-kit";
  * For external use, prefer FullKit which includes MarkdownKit.
  */
 export const EditorCorePlugins = [
+  ...NodeIdKit, // Must be early - generates IDs needed by ToC and other plugins
   ...BasicBlocksKit,
   ...BasicMarksKit,
   ...AutoformatKit,
@@ -69,6 +71,7 @@ export const EditorCorePlugins = [
  * Includes: paragraphs, headings, bold/italic/etc., autoformat, stdlib, markdown
  */
 export const BaseKit = [
+  ...NodeIdKit,
   ...BasicBlocksKit,
   ...BasicMarksKit,
   ...AutoformatKit,

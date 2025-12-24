@@ -120,15 +120,21 @@ Line chart for visualizing trends over time or continuous data. Works standalone
 
 ### Metric
 
-KPI display for showing a single metric value with optional label and change indicator. Perfect for dashboards showing counts, percentages, or any key performance indicator.
+KPI display for showing a single metric value with optional label and change indicator. Perfect for dashboards showing counts, percentages, or any key performance indicator. Can consume data from parent LiveValue context or use direct value prop.
 
 **Keywords:** metric, kpi, number, stat, dashboard, counter, value, indicator
 
 **Example:**
 ```tsx
+// Standalone with direct value
 <Metric label="Total Users" value={1234} />
 <Metric label="Revenue" value={50000} prefix="$" change={12.5} />
 <Metric label="Error Rate" value={0.5} suffix="%" change={-8} changeLabel="vs last week" />
+
+// With LiveValue data context (value comes from query)
+<LiveValue query="SELECT SUM(amount) as value FROM orders">
+  <Metric label="Total Revenue" prefix="$" />
+</LiveValue>
 ```
 
 ### Alert

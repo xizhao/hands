@@ -21,6 +21,8 @@ import { cn } from "./lib/utils";
 export interface Frontmatter {
   title?: string;
   description?: string;
+  /** Enable table of contents sidebar (default: true) */
+  toc?: boolean;
   [key: string]: unknown;
 }
 

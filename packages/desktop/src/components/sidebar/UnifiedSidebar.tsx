@@ -131,7 +131,7 @@ export function UnifiedSidebar({
   const [isInputExpanded, setIsInputExpanded] = useState(false);
   const [containerWidth, setContainerWidth] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
-  const expandedInputRef = useRef<HTMLInputElement>(null);
+  const expandedInputRef = useRef<HTMLTextAreaElement>(null);
   const messagesContainerRef = useRef<HTMLDivElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
 
@@ -701,7 +701,7 @@ ${STDLIB_QUICK_REF}
                 expandedInputRef.current?.focus();
               }}
             >
-              <div className="flex items-center gap-1.5 px-2 py-1.5">
+              <div className="flex items-start gap-1.5 px-2 py-1.5">
                 <ChatSettings>
                   <Button
                     variant="ghost"
@@ -715,23 +715,27 @@ ${STDLIB_QUICK_REF}
                   </Button>
                 </ChatSettings>
 
-                <input
+                <textarea
                   ref={expandedInputRef}
-                  type="text"
                   value={input}
-                  onChange={(e) => setInput(e.target.value)}
+                  onChange={(e) => {
+                    setInput(e.target.value);
+                    // Auto-resize
+                    e.target.style.height = "auto";
+                    e.target.style.height = `${Math.min(e.target.scrollHeight, 120)}px`;
+                  }}
                   onKeyDown={(e) => {
                     if (e.key === "Escape") {
                       setIsInputExpanded(false);
-                    } else {
-                      handleKeyDown(e);
-                      if (e.key === "Enter" && !e.shiftKey) {
-                        setIsInputExpanded(false);
-                      }
+                    } else if (e.key === "Enter" && !e.shiftKey) {
+                      e.preventDefault();
+                      handleSubmit();
+                      setIsInputExpanded(false);
                     }
                   }}
                   placeholder={placeholder}
-                  className="flex-1 min-w-0 bg-transparent text-sm placeholder:text-muted-foreground/50 focus:outline-none"
+                  rows={1}
+                  className="flex-1 min-w-0 bg-transparent text-sm placeholder:text-muted-foreground/50 focus:outline-none resize-none py-1"
                 />
 
                 {isBusy ? (

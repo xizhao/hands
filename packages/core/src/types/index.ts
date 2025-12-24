@@ -416,6 +416,11 @@ export interface TMetricElement extends TElement {
   changeLabel?: string;
   /** Size variant */
   size?: "sm" | "md" | "lg";
+  /**
+   * Format string (d3-format).
+   * Auto-detected from context column name if not provided.
+   */
+  format?: string;
   /** Children are unused (void element) */
   children: (TElement | TText)[];
 }
@@ -514,6 +519,18 @@ export interface ChartBaseConfig {
   /** Custom colors for series */
   colors?: string[];
   /**
+   * X-axis number format (d3-format string).
+   * Examples: ",.0f" (commas), "$,.2s" (currency compact), ".1%" (percent)
+   * If not provided, auto-detected from column name and values.
+   */
+  xFormat?: string;
+  /**
+   * Y-axis number format (d3-format string).
+   * Examples: ",.0f" (commas), "$,.2s" (currency compact), ".1%" (percent)
+   * If not provided, auto-detected from column name and values.
+   */
+  yFormat?: string;
+  /**
    * Full Vega-Lite specification.
    * If provided, overrides the simplified props above.
    * Useful for AI-generated complex charts.
@@ -581,6 +598,12 @@ export interface TPieChartElement extends TElement {
   showLabels?: boolean;
   /** Custom colors for slices */
   colors?: string[];
+  /**
+   * Value format (d3-format string).
+   * Examples: ",.0f" (commas), "$,.2s" (currency compact), ".1%" (percent)
+   * If not provided, auto-detected from column name and values.
+   */
+  valueFormat?: string;
   /**
    * Full Vega-Lite specification.
    * If provided, overrides the simplified props above.
@@ -753,6 +776,11 @@ export interface DataGridColumnConfig {
   type?: DataGridCellVariant;
   /** Options for select/multi-select variants */
   options?: Array<{ value: string; label: string }>;
+  /**
+   * Format for numeric values (d3-format string).
+   * Auto-detected from column name if not provided.
+   */
+  format?: string;
 }
 
 /**

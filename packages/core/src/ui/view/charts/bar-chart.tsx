@@ -13,9 +13,11 @@
  */
 
 import { createPlatePlugin, PlateElement, type PlateElementProps, useElement } from "platejs/react";
-import { memo } from "react";
+import { memo, useMemo } from "react";
 
 import { BAR_CHART_KEY, type TBarChartElement, type VegaLiteSpec } from "../../../types";
+import { detectFormat } from "../../lib/format";
+import { useLiveValueData } from "./context";
 import { VegaChart } from "./vega-chart";
 import { barChartToVegaSpec } from "./vega-spec";
 
@@ -47,6 +49,16 @@ export interface BarChartProps {
   /** Additional CSS classes */
   className?: string;
   /**
+   * X-axis format (d3-format string).
+   * Auto-detected from column name if not provided.
+   */
+  xFormat?: string;
+  /**
+   * Y-axis format (d3-format string).
+   * Auto-detected from column name if not provided.
+   */
+  yFormat?: string;
+  /**
    * Full Vega-Lite specification.
    * If provided, overrides the simplified props above.
    */
@@ -59,7 +71,7 @@ export interface BarChartProps {
  * Supports data from props or LiveValue context.
  */
 export function BarChart({
-  data,
+  data: propData,
   xKey,
   yKey = "value",
   height = 300,
@@ -70,11 +82,31 @@ export function BarChart({
   layout = "vertical",
   colors,
   className,
+  xFormat,
+  yFormat,
   vegaSpec: propVegaSpec,
 }: BarChartProps) {
+  // Get data from LiveValue context if not provided via props
+  const ctx = useLiveValueData();
+  const data = propData ?? ctx?.data;
+
+  // Auto-detect formats if not provided
+  const resolvedFormats = useMemo(() => {
+    if (!data || data.length === 0) return { xFormat, yFormat };
+
+    // Get first yKey for detection (multi-series uses first)
+    const firstYKey = Array.isArray(yKey) ? yKey[0] : yKey;
+    const yValues = data.map((d) => d[firstYKey]);
+
+    return {
+      xFormat: xFormat ?? (xKey ? detectFormat(xKey, data.map((d) => d[xKey])) : null),
+      yFormat: yFormat ?? detectFormat(firstYKey, yValues),
+    };
+  }, [data, xKey, yKey, xFormat, yFormat]);
+
   // If full vegaSpec provided, use it directly
   if (propVegaSpec) {
-    return <VegaChart spec={propVegaSpec} height={height} data={data} className={className} />;
+    return <VegaChart spec={propVegaSpec} height={height} data={propData} className={className} />;
   }
 
   // Convert simplified props to Vega-Lite spec
@@ -85,9 +117,11 @@ export function BarChart({
     showGrid,
     stacked,
     layout,
+    xFormat: resolvedFormats.xFormat ?? undefined,
+    yFormat: resolvedFormats.yFormat ?? undefined,
   });
 
-  return <VegaChart spec={spec} height={height} data={data} className={className} />;
+  return <VegaChart spec={spec} height={height} data={propData} className={className} />;
 }
 
 // ============================================================================
@@ -109,6 +143,8 @@ function BarChartElement(props: PlateElementProps) {
         stacked={element.stacked as boolean | undefined}
         layout={element.layout as "vertical" | "horizontal" | undefined}
         colors={element.colors as string[] | undefined}
+        xFormat={element.xFormat as string | undefined}
+        yFormat={element.yFormat as string | undefined}
         vegaSpec={element.vegaSpec as VegaLiteSpec | undefined}
       />
       <span className="absolute top-0 left-0 opacity-0 pointer-events-none">{props.children}</span>
@@ -143,6 +179,8 @@ export interface CreateBarChartOptions {
   stacked?: boolean;
   layout?: "vertical" | "horizontal";
   colors?: string[];
+  xFormat?: string;
+  yFormat?: string;
   vegaSpec?: VegaLiteSpec;
 }
 
@@ -161,6 +199,8 @@ export function createBarChartElement(options?: CreateBarChartOptions): TBarChar
     stacked: options?.stacked ?? false,
     layout: options?.layout ?? "vertical",
     colors: options?.colors,
+    xFormat: options?.xFormat,
+    yFormat: options?.yFormat,
     vegaSpec: options?.vegaSpec,
     children: [{ text: "" }],
   };

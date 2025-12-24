@@ -6,7 +6,7 @@
 
 import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
 import { readdir, readFile } from "node:fs/promises";
-import { basename, dirname, join } from "node:path";
+import { basename, dirname, join, relative } from "node:path";
 import type { ActionDefinition } from "@hands/core/primitives";
 import type {
   DiscoveredAction,
@@ -393,7 +393,8 @@ function readEnvFile(workbookDir: string): Map<string, string> {
 async function discoverAction(
   actionPath: string,
   actionId: string,
-  secrets: Record<string, string>
+  secrets: Record<string, string>,
+  rootPath: string
 ): Promise<DiscoveredAction | null> {
   if (!existsSync(actionPath)) {
     return null;
@@ -413,7 +414,7 @@ async function discoverAction(
 
     return {
       id: actionId,
-      path: actionPath,
+      path: relative(rootPath, actionPath),
       name: definition.name,
       description: definition.description,
       schedule: definition.schedule,
@@ -452,6 +453,7 @@ export async function discoverActions(
 
   const secretsMap = readEnvFile(rootPath);
   const secrets = Object.fromEntries(secretsMap);
+
   const entries = readdirSync(actionsDir);
 
   for (const entry of entries) {
@@ -467,14 +469,14 @@ export async function discoverActions(
 
       if (stat.isDirectory()) {
         // Folder-based action: actions/<name>/action.ts
-        const action = await discoverAction(join(entryPath, "action.ts"), entry, secrets);
+        const action = await discoverAction(join(entryPath, "action.ts"), entry, secrets, rootPath);
         if (action) {
           items.push(action);
         }
       } else if (entry.endsWith(".ts") && !entry.endsWith(".d.ts")) {
         // Single file action: actions/<name>.ts
         const actionId = basename(entry, ".ts");
-        const action = await discoverAction(entryPath, actionId, secrets);
+        const action = await discoverAction(entryPath, actionId, secrets, rootPath);
         if (action) {
           items.push(action);
         }

@@ -37,6 +37,11 @@ import { parseAttributes, serializeAttributes, createVoidElement, serializeChild
  * <Metric value={1234} label="Total Users" prefix="$" />
  * <Metric value={87} suffix="%" change={5.2} changeLabel="vs last month" />
  * <Metric value="42.5K" label="Revenue" size="lg" />
+ *
+ * // With LiveValue data context:
+ * <LiveValue query="SELECT SUM(amount) as value FROM orders">
+ *   <Metric label="Total Revenue" />
+ * </LiveValue>
  * ```
  */
 export const metricRule: MdxSerializationRule<TMetricElement> = {
