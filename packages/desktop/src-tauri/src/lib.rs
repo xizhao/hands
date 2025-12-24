@@ -1150,8 +1150,11 @@ fn get_model_from_store(app: &tauri::AppHandle) -> Option<String> {
     None
 }
 
-/// Kill any existing process listening on the given port
+/// Kill any existing process listening on the given port (except ourselves)
 async fn kill_process_on_port(port: u16) -> Result<(), String> {
+    // Get our own process ID to avoid killing ourselves
+    let our_pid = std::process::id();
+
     // Use lsof to find processes on the port and kill them
     let output = std::process::Command::new("lsof")
         .args(["-ti", &format!(":{}", port)])
@@ -1161,7 +1164,12 @@ async fn kill_process_on_port(port: u16) -> Result<(), String> {
         if output.status.success() {
             let pids = String::from_utf8_lossy(&output.stdout);
             for pid in pids.lines() {
-                if let Ok(pid_num) = pid.trim().parse::<i32>() {
+                if let Ok(pid_num) = pid.trim().parse::<u32>() {
+                    // Don't kill ourselves!
+                    if pid_num == our_pid {
+                        println!("Skipping kill of our own process {} on port {}", pid_num, port);
+                        continue;
+                    }
                     println!("Killing existing process {} on port {}", pid_num, port);
                     let _ = std::process::Command::new("kill")
                         .args(["-9", &pid_num.to_string()])

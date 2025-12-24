@@ -3,49 +3,37 @@
 //! Provides always-on taskbar presence with workbook quick access.
 
 use tauri::{
-    tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent},
+    tray::{TrayIconEvent},
     menu::{Menu, MenuBuilder, MenuItemBuilder, SubmenuBuilder, PredefinedMenuItem},
     AppHandle, Manager, Wry, Emitter,
 };
 
 use crate::{Workbook, list_workbooks};
 
-/// Create and configure the system tray
+/// Configure the system tray (created from tauri.conf.json)
 pub fn create_tray(app: &AppHandle) -> Result<(), Box<dyn std::error::Error>> {
+    // Get the tray icon that was created from config (icon loaded from tauri.conf.json trayIcon.iconPath)
+    let tray = app.tray_by_id("main").ok_or("Tray icon 'main' not found - check tauri.conf.json")?;
+
+    // Build and set the menu
     let menu = build_tray_menu(app, &[])?;
+    tray.set_menu(Some(menu))?;
+    tray.set_show_menu_on_left_click(true)?;
+    tray.set_tooltip(Some("Hands"))?;
 
-    let _tray = TrayIconBuilder::new()
-        .menu(&menu)
-        .show_menu_on_left_click(false)
-        .icon(app.default_window_icon().unwrap().clone())
-        .icon_as_template(true)
-        .tooltip("Hands")
-        .on_tray_icon_event(|tray, event| {
-            match event {
-                TrayIconEvent::Click {
-                    button: MouseButton::Left,
-                    button_state: MouseButtonState::Up,
-                    ..
-                } => {
-                    // Left click: show/focus main window
-                    let app = tray.app_handle();
-                    if let Some(window) = app.get_webview_window("main") {
-                        if window.is_visible().unwrap_or(false) {
-                            let _ = window.set_focus();
-                        } else {
-                            let _ = window.show();
-                            let _ = window.set_focus();
-                        }
-                    }
-                }
-                _ => {}
-            }
-        })
-        .on_menu_event(|app, event| {
-            handle_menu_event(app, event.id.as_ref());
-        })
-        .build(app)?;
+    // Set up event handlers
+    tray.on_tray_icon_event(|_tray, event| {
+        if let TrayIconEvent::Click { .. } = event {
+            // Menu will show automatically due to set_show_menu_on_left_click
+        }
+    });
 
+    let app_handle = app.clone();
+    tray.on_menu_event(move |_app, event| {
+        handle_menu_event(&app_handle, event.id.as_ref());
+    });
+
+    println!("[tray] System tray configured with hands logo icon");
     Ok(())
 }
 
