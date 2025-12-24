@@ -90,12 +90,6 @@ class AppStateManager {
       })
     );
 
-    // Listen for open workbook requests from tray
-    this.unlisteners.push(
-      await listen<string>("open-workbook", (event) => {
-        this.notifyListeners("open-workbook", event.payload);
-      })
-    );
   }
 
   private notifyListeners(key: string, value: unknown) {
@@ -151,12 +145,6 @@ class AppStateManager {
     return this.subscribe("open-settings", callback);
   }
 
-  /**
-   * Subscribe to open workbook requests (from tray)
-   */
-  onOpenWorkbook(callback: StateChangeCallback<string>): () => void {
-    return this.subscribe("open-workbook", callback as StateChangeCallback<unknown>);
-  }
 
   private subscribe(key: string, callback: StateChangeCallback<unknown>): () => void {
     let callbacks = this.listeners.get(key);

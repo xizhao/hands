@@ -17,30 +17,7 @@
       "iconAsTemplate": false,
       "id": "main"
     },
-    "windows": [
-      {
-        "title": "Hands",
-        "width": 900,
-        "height": 700,
-        "minWidth": 600,
-        "minHeight": 400,
-                "resizable": true,
-        "fullscreen": false,
-        "decorations": true,
-        "transparent": false,
-        "alwaysOnTop": false,
-        "center": true,
-        "visible": true,
-        "shadow": true,
-        "dragDropEnabled": false,
-        "titleBarStyle": "Overlay",
-        "hiddenTitle": true,
-        "trafficLightPosition": {
-          "x": 16,
-          "y": 18
-        }
-      }
-    ],
+    "windows": [],
     "security": {
       "csp": null,
       "assetProtocol": {

@@ -6,7 +6,7 @@ use std::process::Stdio;
 use std::sync::Arc;
 use std::time::Duration;
 use tauri::menu::{MenuBuilder, MenuItemBuilder, SubmenuBuilder};
-use tauri::{Emitter, Manager, WebviewUrl, WebviewWindowBuilder};
+use tauri::{Emitter, Manager};
 use tauri_plugin_dialog::DialogExt;
 use tauri_plugin_store::StoreExt;
 use tokio::io::{AsyncBufReadExt, BufReader};
@@ -19,6 +19,7 @@ pub mod hotkeys;
 pub mod capture;
 pub mod runtime_manager;
 pub mod jobs;
+pub mod window_manager;
 
 use runtime_manager::RuntimeManager;
 use jobs::{JobRegistry, SessionEvent};
@@ -1545,61 +1546,15 @@ async fn pick_folder(app: tauri::AppHandle) -> Result<Option<String>, String> {
 }
 
 /// Open a workbook in its own window
+/// Delegates to centralized window_manager for consistent behavior
 #[tauri::command]
 async fn open_workbook_window(
     app: tauri::AppHandle,
     state: tauri::State<'_, Arc<Mutex<AppState>>>,
     workbook_id: String,
-) -> Result<(), String> {
-    let window_label = format!("workbook_{}", workbook_id);
-
-    // Check if window already exists - focus it
-    if let Some(window) = app.get_webview_window(&window_label) {
-        window.show().map_err(|e| e.to_string())?;
-        window.set_focus().map_err(|e| e.to_string())?;
-        return Ok(());
-    }
-
-    // Get workbook info
-    let workbook = get_workbook(workbook_id.clone()).await?;
-
-    // Create new window for this workbook
-    let url = format!("index.html?workbook={}", workbook_id);
-
-    let mut builder = WebviewWindowBuilder::new(
-        &app,
-        &window_label,
-        WebviewUrl::App(url.into()),
-    )
-    .title(&workbook.name)
-    .inner_size(900.0, 700.0)
-    .min_inner_size(600.0, 400.0)
-    .decorations(true)
-    .transparent(false)
-    .resizable(true)
-    .center();
-
-    #[cfg(target_os = "macos")]
-    {
-        builder = builder
-            .title_bar_style(tauri::TitleBarStyle::Overlay)
-            .hidden_title(true);
-    }
-
-    builder
-        .build()
-        .map_err(|e| format!("Failed to create workbook window: {}", e))?;
-
-    // Register window with runtime manager
-    {
-        let mut state_guard = state.lock().await;
-        state_guard.runtime_manager.register_window(&workbook_id, window_label);
-    }
-
-    // Emit event to update workbook's last_opened_at
-    let _ = app.emit("workbook-opened", &workbook_id);
-
-    Ok(())
+) -> Result<String, String> {
+    let state_arc = state.inner().clone();
+    window_manager::open_workbook(&app, &state_arc, &workbook_id).await
 }
 
 /// Close a workbook window
@@ -1793,6 +1748,20 @@ pub fn run() {
 
             // Start SSE listener for job tracking
             start_sse_job_listener(state.clone(), app.handle().clone());
+
+            // Open last workbook on startup (async)
+            let startup_app = app.handle().clone();
+            let startup_state = state.clone();
+            tauri::async_runtime::spawn(async move {
+                // Small delay to ensure app is fully initialized
+                tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+
+                match window_manager::open_startup_workbook(&startup_app, &startup_state).await {
+                    Ok(Some(label)) => println!("[startup] Opened workbook window: {}", label),
+                    Ok(None) => println!("[startup] No workbooks to open"),
+                    Err(e) => eprintln!("[startup] Failed to open workbook: {}", e),
+                }
+            });
 
             // Build the application menu
             let app_handle = app.handle();

@@ -9,7 +9,7 @@
 
 import { invoke } from "@tauri-apps/api/core";
 import { emit } from "@tauri-apps/api/event";
-import { getCurrentWindow, WebviewWindow } from "@tauri-apps/api/window";
+import { getCurrentWindow } from "@tauri-apps/api/window";
 import { convertFileSrc } from "@tauri-apps/api/core";
 import { ChevronDown, Database, Hand, RefreshCw, Wand2, X } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
@@ -192,18 +192,14 @@ export function CaptureActionPanel() {
   };
 
   const handleAction = useCallback(async (action: ActionType) => {
-    console.log("Action selected:", action);
+    console.log("[CapturePanel] Action selected:", action);
 
     if (!selectedWorkbook) {
-      console.error("No workbook selected");
+      console.error("[CapturePanel] No workbook selected");
       return;
     }
 
     try {
-      // Check if workbook window already exists
-      const windowLabel = `workbook_${selectedWorkbook}`;
-      const existingWindow = await WebviewWindow.getByLabel(windowLabel);
-
       // Emit event with the action prompt for the workbook window to pick up
       await emit("capture-action-prompt", {
         workbookId: selectedWorkbook,
@@ -212,18 +208,14 @@ export function CaptureActionPanel() {
         label: action.label,
       });
 
-      if (existingWindow) {
-        // Focus the existing window
-        await existingWindow.setFocus();
-      } else {
-        // Open a new workbook window
-        await invoke("open_workbook_window", { workbookId: selectedWorkbook });
-      }
+      // Open workbook window - Rust handles focus vs create
+      console.log("[CapturePanel] Opening workbook window:", selectedWorkbook);
+      await invoke("open_workbook_window", { workbookId: selectedWorkbook });
 
       // Close the capture panel
       await handleClose();
     } catch (err) {
-      console.error("Failed to execute action:", err);
+      console.error("[CapturePanel] Failed to execute action:", err);
     }
   }, [selectedWorkbook, handleClose]);
 

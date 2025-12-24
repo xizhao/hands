@@ -7,8 +7,10 @@ use tauri::{
     menu::{Menu, MenuBuilder, MenuItemBuilder, SubmenuBuilder, PredefinedMenuItem},
     AppHandle, Manager, Wry, Emitter,
 };
+use std::sync::Arc;
+use tokio::sync::Mutex;
 
-use crate::{Workbook, list_workbooks};
+use crate::{Workbook, list_workbooks, AppState, window_manager};
 
 /// Configure the system tray (created from tauri.conf.json)
 pub fn create_tray(app: &AppHandle) -> Result<(), Box<dyn std::error::Error>> {
@@ -114,26 +116,16 @@ fn handle_menu_event(app: &AppHandle, menu_id: &str) {
             start_capture_flow(app);
         }
         "show_window" => {
-            if let Some(window) = app.get_webview_window("main") {
-                let _ = window.show();
-                let _ = window.set_focus();
-            }
+            // Open/focus last workbook
+            show_or_open_workbook(app, None);
         }
         "settings" => {
-            // Show main window and emit settings event
-            if let Some(window) = app.get_webview_window("main") {
-                let _ = window.show();
-                let _ = window.set_focus();
-                let _ = window.emit("open-settings", ());
-            }
+            // Open workbook and emit settings event
+            show_or_open_workbook(app, Some("open-settings"));
         }
         "new_workbook" => {
-            // Show main window - frontend handles workbook creation
-            if let Some(window) = app.get_webview_window("main") {
-                let _ = window.show();
-                let _ = window.set_focus();
-                let _ = window.emit("new-workbook", ());
-            }
+            // Open workbook and emit new-workbook event
+            show_or_open_workbook(app, Some("new-workbook"));
         }
         id if id.starts_with("workbook:") => {
             let workbook_id = id.strip_prefix("workbook:").unwrap();
@@ -143,17 +135,55 @@ fn handle_menu_event(app: &AppHandle, menu_id: &str) {
     }
 }
 
+/// Show an existing workbook window or open last workbook
+/// Optionally emit an event to the window after opening
+fn show_or_open_workbook(app: &AppHandle, event: Option<&'static str>) {
+    let app = app.clone();
+
+    tauri::async_runtime::spawn(async move {
+        // Get app state
+        let Some(state) = app.try_state::<Arc<Mutex<AppState>>>() else {
+            eprintln!("[tray] Failed to get app state");
+            return;
+        };
+
+        // Try to open/focus last workbook
+        match window_manager::open_startup_workbook(&app, &state).await {
+            Ok(Some(label)) => {
+                println!("[tray] Opened workbook window: {}", label);
+                // Emit event if requested
+                if let Some(event_name) = event {
+                    if let Some(window) = app.get_webview_window(&label) {
+                        let _ = window.emit(event_name, ());
+                    }
+                }
+            }
+            Ok(None) => {
+                println!("[tray] No workbooks available");
+                // TODO: Could show a "create workbook" dialog here
+            }
+            Err(e) => {
+                eprintln!("[tray] Failed to open workbook: {}", e);
+            }
+        }
+    });
+}
+
 /// Open a workbook in a new window (triggered from tray)
+/// Uses centralized window_manager for consistent behavior
 fn open_workbook_window_from_tray(app: &AppHandle, workbook_id: &str) {
     let app = app.clone();
     let workbook_id = workbook_id.to_string();
 
     tauri::async_runtime::spawn(async move {
-        // Emit event to frontend to handle workbook opening
-        if let Some(window) = app.get_webview_window("main") {
-            let _ = window.show();
-            let _ = window.set_focus();
-            let _ = window.emit("open-workbook", workbook_id);
+        // Get app state
+        if let Some(state) = app.try_state::<Arc<Mutex<AppState>>>() {
+            match window_manager::open_workbook(&app, &state, &workbook_id).await {
+                Ok(label) => println!("[tray] Opened workbook window: {}", label),
+                Err(e) => eprintln!("[tray] Failed to open workbook window: {}", e),
+            }
+        } else {
+            eprintln!("[tray] Failed to get app state");
         }
     });
 }
