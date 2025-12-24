@@ -1,0 +1,27 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "lib": ["ES2023", "DOM", "DOM.Iterable"],
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "esModuleInterop": true,
+    "strict": false,
+    "noImplicitAny": false,
+    "skipLibCheck": true,
+    "resolveJsonModule": true,
+    "isolatedModules": true,
+    "noEmit": true,
+    "jsx": "react-jsx",
+    "paths": {
+      "@/*": ["./src/*"],
+      "@hands/app": ["../app/src"],
+      "@hands/app/*": ["../app/src/*"],
+      "@hands/core": ["../core/src"],
+      "@hands/core/*": ["../core/src/*"],
+      "@hands/cloud": ["../cloud/src"],
+      "@hands/cloud/*": ["../cloud/src/*"]
+    },
+    "baseUrl": "."
+  },
+  "include": ["src/**/*"]
+}

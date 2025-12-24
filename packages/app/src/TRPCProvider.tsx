@@ -9,7 +9,7 @@ import type { QueryClient } from "@tanstack/react-query";
 import { httpBatchLink } from "@trpc/client";
 import type { ReactNode } from "react";
 import { useMemo } from "react";
-import { trpc } from "@/lib/trpc";
+import { trpc } from "./lib/trpc";
 
 // ============================================================================
 // Provider

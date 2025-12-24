@@ -19,6 +19,7 @@
     "tauri:build": "bun run build:docs && tauri build"
   },
   "dependencies": {
+    "@hands/app": "workspace:*",
     "@ai-sdk/anthropic": "^2.0.56",
     "@ariakit/react": "0.4.7",
     "@craftjs/core": "^0.2.12",
@@ -42,6 +43,7 @@
     "@tanstack/react-virtual": "^3.13.13",
     "@tanstack/router-plugin": "^1.140.5",
     "@tauri-apps/api": "^2.2.0",
+    "@tauri-apps/plugin-dialog": "^2.2.0",
     "@tauri-apps/plugin-shell": "^2.3.3",
     "@tauri-apps/plugin-store": "^2.4.1",
     "@trpc/client": "^11.0.0",

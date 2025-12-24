@@ -1,10 +1,24 @@
+/**
+ * App Entry Component
+ *
+ * Main React application component that provides:
+ * - React Query client and provider
+ * - tRPC provider (gated on runtime connection)
+ * - Toast notifications
+ * - Tooltip provider
+ * - Router
+ *
+ * Note: PlatformProvider must be added by the platform-specific entry points
+ * (desktop/main.tsx or web/main.tsx) that wrap this App component.
+ */
+
 import { MutationCache, QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { RouterProvider } from "@tanstack/react-router";
 import { Toaster, toast } from "sonner";
-import { TRPCProvider } from "@/TRPCProvider";
-import { TooltipProvider } from "@/components/ui/tooltip";
-import { useActiveRuntime } from "@/hooks/useWorkbook";
-import { router } from "@/router";
+import { TRPCProvider } from "./TRPCProvider";
+import { TooltipProvider } from "./components/ui/tooltip";
+import { useActiveRuntime } from "./hooks/useWorkbook";
+import { router } from "./router";
 
 // Map mutation keys to user-friendly action names
 const mutationLabels: Record<string, string> = {
@@ -110,7 +124,7 @@ function AppContent() {
   }
 
   // No runtime yet - render without tRPC
-  // Workbook picker and initialization work via Tauri IPC
+  // Workbook picker and initialization work via platform adapter
   return (
     <AppShell>
       <RouterProvider router={router} />
@@ -118,6 +132,11 @@ function AppContent() {
   );
 }
 
+/**
+ * Main App Component
+ *
+ * Must be wrapped with PlatformProvider by the entry point.
+ */
 export default function App() {
   return (
     <QueryClientProvider client={queryClient}>

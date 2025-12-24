@@ -4,6 +4,7 @@ export default {
   content: [
     "./index.html",
     "./src/**/*.{js,ts,jsx,tsx}",
+    "../app/src/**/*.{js,ts,jsx,tsx}",
     "../editor/src/**/*.{js,ts,jsx,tsx}",
     "../core/src/**/*.{js,ts,jsx,tsx}",
   ],

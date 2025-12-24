@@ -11,22 +11,10 @@
  */
 
 import { useQuery } from "@tanstack/react-query";
-import { invoke } from "@tauri-apps/api/core";
 import { useEffect, useMemo, useRef } from "react";
+import { usePlatform } from "../platform";
 import { trpc } from "@/lib/trpc";
-
-// ============================================================================
-// Types
-// ============================================================================
-
-/** Tauri command response type (matches Rust backend) */
-interface TauriRuntimeStatus {
-  running: boolean;
-  workbook_id: string;
-  directory: string;
-  runtime_port: number;
-  message: string;
-}
+import type { RuntimeStatus } from "../platform/types";
 
 /** Workbook manifest from runtime */
 export interface WorkbookManifest {
@@ -161,17 +149,19 @@ export interface RuntimeState {
  * - Single state machine with clear phase transitions
  */
 export function useRuntimeState(): RuntimeState {
-  // 1. Tauri process state - source of truth for "is runtime running"
-  const tauriQuery = useQuery({
+  const platform = usePlatform();
+
+  // 1. Platform runtime state - source of truth for "is runtime running"
+  const runtimeQuery = useQuery({
     queryKey: ["active-runtime"],
-    queryFn: () => invoke<TauriRuntimeStatus | null>("get_active_runtime"),
+    queryFn: () => platform.runtime.getStatus(),
     staleTime: Infinity, // Only updates via mutations
     refetchOnWindowFocus: false,
   });
 
-  const port = tauriQuery.data?.runtime_port ?? null;
-  const workbookId = tauriQuery.data?.workbook_id ?? null;
-  const workbookDirectory = tauriQuery.data?.directory ?? null;
+  const port = runtimeQuery.data?.runtime_port ?? null;
+  const workbookId = runtimeQuery.data?.workbook_id ?? null;
+  const workbookDirectory = runtimeQuery.data?.directory ?? null;
 
   // 2. Runtime status - polls for service readiness (tRPC)
   const statusQuery = trpc.status.get.useQuery(undefined, {
@@ -207,11 +197,11 @@ export function useRuntimeState(): RuntimeState {
   // Use isPending (not isFetching) to avoid flicker during background polls
   const currentPhase = useMemo((): RuntimePhase => {
     // No runtime configured
-    if (!tauriQuery.data) {
+    if (!runtimeQuery.data) {
       return { phase: "not-started" };
     }
 
-    const { workbook_id, runtime_port } = tauriQuery.data;
+    const { workbook_id, runtime_port } = runtimeQuery.data;
 
     // Runtime process starting/crashed
     if (!runtime_port || runtime_port <= 0) {
@@ -258,7 +248,7 @@ export function useRuntimeState(): RuntimeState {
       schema: schemaQuery.data,
     };
   }, [
-    tauriQuery.data,
+    runtimeQuery.data,
     statusQuery.data,
     manifestQuery.data,
     schemaQuery.data,
@@ -325,27 +315,29 @@ export function usePrefetchOnDbReady() {
 }
 
 // ============================================================================
-// Minimal Tauri-only Hook (works outside TRPCProvider)
+// Minimal Platform Hook (works outside TRPCProvider)
 // ============================================================================
 
 /**
- * Minimal runtime process info from Tauri IPC only.
+ * Minimal runtime process info from platform adapter only.
  * Use this when you only need port/workbookId and are outside TRPCProvider.
  * Does NOT fetch status/manifest/schema (those require tRPC).
  */
 export function useRuntimeProcess() {
-  const tauriQuery = useQuery({
+  const platform = usePlatform();
+
+  const runtimeQuery = useQuery({
     queryKey: ["active-runtime"],
-    queryFn: () => invoke<TauriRuntimeStatus | null>("get_active_runtime"),
+    queryFn: () => platform.runtime.getStatus(),
     staleTime: Infinity,
     refetchOnWindowFocus: false,
   });
 
   return {
-    port: tauriQuery.data?.runtime_port ?? null,
-    workbookId: tauriQuery.data?.workbook_id ?? null,
-    workbookDirectory: tauriQuery.data?.directory ?? null,
-    isLoading: tauriQuery.isPending,
+    port: runtimeQuery.data?.runtime_port ?? null,
+    workbookId: runtimeQuery.data?.workbook_id ?? null,
+    workbookDirectory: runtimeQuery.data?.directory ?? null,
+    isLoading: runtimeQuery.isPending,
   };
 }
 

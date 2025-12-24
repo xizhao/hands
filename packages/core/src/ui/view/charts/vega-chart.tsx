@@ -31,7 +31,6 @@ import type { View } from "vega";
 import type { VegaLiteSpec } from "../../../types";
 import { useLiveValueData } from "./context";
 import { useVegaTheme } from "./vega-theme";
-import { useViewportVisibility } from "../../lib/virtualization";
 
 // ============================================================================
 // Types
@@ -107,29 +106,6 @@ function ChartEmpty({ height, className }: ChartEmptyProps) {
   );
 }
 
-/**
- * Lightweight placeholder shown for charts outside viewport.
- */
-function ChartPlaceholder({
-  height,
-  className,
-  viewportRef,
-}: {
-  height: number;
-  className?: string;
-  viewportRef: React.RefObject<HTMLDivElement | null>;
-}) {
-  return (
-    <div
-      ref={viewportRef}
-      className={`w-full flex items-center justify-center bg-muted/5 rounded-lg border border-dashed border-muted-foreground/20 ${className ?? ""}`}
-      style={{ height }}
-    >
-      <span className="text-muted-foreground/40 text-xs font-medium">Chart</span>
-    </div>
-  );
-}
-
 // ============================================================================
 // Main Component
 // ============================================================================
@@ -145,7 +121,11 @@ const DATA_SOURCE_NAME = "source";
  * - Data from LiveValue context or props
  * - Canvas rendering for performance
  * - Responsive width (fills container)
- * - Efficient data updates via View API (no full re-embed)
+ * - Efficient data updates via Vega View API (no full re-embed)
+ * - Uses CSS content-visibility for native browser virtualization
+ *
+ * Note: Virtualization is handled by the parent LiveValue component.
+ * VegaChart assumes it's only rendered when actually visible.
  */
 export function VegaChart({
   spec,
@@ -156,10 +136,6 @@ export function VegaChart({
   renderer = "canvas",
   actions = false,
 }: VegaChartProps) {
-  // Viewport virtualization - only embed when in/near viewport
-  // Uses shared observer for efficiency with many charts
-  const { ref: viewportRef, isVisible } = useViewportVisibility({ margin: "300px" });
-
   const ctx = useLiveValueData();
   const vegaTheme = useVegaTheme();
   const containerRef = useRef<HTMLDivElement>(null);
@@ -170,12 +146,6 @@ export function VegaChart({
 
   // Determine data source: props > context > spec
   const data = propData ?? (useContextData && ctx?.data) ?? undefined;
-
-  // Show placeholder until chart scrolls into viewport
-  // This prevents expensive Vega embedding for off-screen charts
-  if (!isVisible) {
-    return <ChartPlaceholder height={height} className={className} viewportRef={viewportRef} />;
-  }
 
   // Track container width for responsive charts
   useEffect(() => {
@@ -197,9 +167,9 @@ export function VegaChart({
   }, []);
 
   // Build spec (without data - data is injected via View API)
-  const baseSpec = useMemo((): VegaLiteSpec => {
+  const baseSpec = useMemo((): VegaLiteSpec | null => {
     // Don't build spec until we have container dimensions
-    if (containerWidth <= 0) return null as unknown as VegaLiteSpec;
+    if (containerWidth <= 0) return null;
 
     return {
       ...spec,
@@ -327,19 +297,6 @@ export function VegaChart({
     return <ChartSkeleton height={height} className={className} />;
   }
 
-  // Show skeleton while measuring container (prevents invisible chart)
-  if (containerWidth <= 0) {
-    return (
-      <div
-        ref={containerRef}
-        className={`w-full ${className ?? ""}`}
-        style={{ minHeight: height }}
-      >
-        <ChartSkeleton height={height} />
-      </div>
-    );
-  }
-
   // Handle error state
   if (ctx?.error) {
     return <ChartError error={ctx.error} height={height} className={className} />;
@@ -357,11 +314,24 @@ export function VegaChart({
     return <ChartEmpty height={height} className={className} />;
   }
 
+  // Show skeleton while measuring container (prevents invisible chart)
+  if (containerWidth <= 0) {
+    return (
+      <div
+        ref={containerRef}
+        className={`w-full ${className ?? ""}`}
+        style={{ minHeight: height }}
+      >
+        <ChartSkeleton height={height} />
+      </div>
+    );
+  }
+
   return (
     <div
       ref={containerRef}
       className={`w-full ${className ?? ""}`}
-      style={{ minHeight: height }}
+      style={{ minHeight: height, contentVisibility: "auto", containIntrinsicSize: `auto ${height}px` }}
     />
   );
 }

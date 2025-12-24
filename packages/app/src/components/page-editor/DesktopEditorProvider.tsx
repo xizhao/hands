@@ -53,21 +53,27 @@ export function DesktopEditorProvider({ children }: DesktopEditorProviderProps) 
   // Create tRPC adapter for EditorProvider (AI features)
   const generateMdx = trpc.ai.generateMdx.useMutation();
   const generateMdxBlock = trpc.ai.generateMdxBlock.useMutation();
+  const generateHint = trpc.ai.generateHint.useMutation();
+  const generateHintsBatch = trpc.ai.generateHintsBatch.useMutation();
 
   const editorTrpc = useMemo<EditorTrpcClient>(() => ({
     ai: {
       generateMdx: { mutate: (input) => generateMdx.mutateAsync({ ...input, tables: input.tables ?? tables }) },
       generateMdxBlock: { mutate: (input) => generateMdxBlock.mutateAsync({ ...input, tables: input.tables ?? tables }) },
+      generateHint: { mutate: (input) => generateHint.mutateAsync(input) },
+      generateHintsBatch: { mutate: (input) => generateHintsBatch.mutateAsync(input) },
     },
-  }), [generateMdx.mutateAsync, generateMdxBlock.mutateAsync, tables]);
+  }), [generateMdx.mutateAsync, generateMdxBlock.mutateAsync, generateHint.mutateAsync, generateHintsBatch.mutateAsync, tables]);
 
   // Query adapter for LiveQueryProvider (SQL queries)
+  // This is a hook that wraps useDesktopLiveQuery
   const useQueryAdapter = (
     sql: string,
     params?: Record<string, unknown>,
   ): QueryResult => {
     const paramsArray = params ? Object.values(params) : undefined;
 
+    // eslint-disable-next-line react-hooks/rules-of-hooks
     const result = useDesktopLiveQuery({
       sql,
       params: paramsArray,

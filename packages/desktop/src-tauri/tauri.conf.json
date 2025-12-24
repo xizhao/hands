@@ -12,6 +12,11 @@
   "app": {
     "withGlobalTauri": true,
     "macOSPrivateApi": true,
+    "trayIcon": {
+      "iconPath": "icons/tray-icon.png",
+      "iconAsTemplate": false,
+      "id": "main"
+    },
     "windows": [
       {
         "title": "Hands",

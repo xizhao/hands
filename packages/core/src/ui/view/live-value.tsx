@@ -336,26 +336,41 @@ function LiveValueElement(props: PlateElementProps) {
     initialVisible: !isProviderMode,
   });
 
-  // Show placeholder for off-screen block elements
-  if (!isVisible) {
-    return (
-      <PlateElement {...props} as="div">
-        <LiveValuePlaceholder viewportRef={viewportRef} isProviderMode={isProviderMode} />
-        <span className="hidden">{props.children}</span>
-      </PlateElement>
-    );
-  }
-
+  // Extract element properties (needed for hooks below)
   const { query, data: staticData, display, columns, params } = element;
   const tableName = query ? extractTableName(query, "query") : null;
 
-  // Use static data if provided, otherwise execute query
-  // Query is deferred until element is visible (above check)
-  const shouldQuery = !staticData && !!query;
+  // IMPORTANT: All hooks must be called before any early return to satisfy Rules of Hooks.
+  // Query is only executed when visible (via empty query when not visible).
+  const shouldQuery = isVisible && !staticData && !!query;
   const { data: queryData, isLoading: queryLoading, error: queryError } = useLiveQuery(
     shouldQuery ? query : "",
     shouldQuery ? params : undefined
   );
+
+  // Callback for applying query changes (must be called before early return)
+  const handleApplyQuery = useCallback((newQuery: string) => {
+    try {
+      const path = editor.api.findPath(element);
+      if (path) {
+        editor.tf.setNodes({ query: newQuery } as Partial<TLiveValueElement>, { at: path });
+      }
+    } catch (e) {
+      console.error("Failed to update query:", e);
+    }
+  }, [editor, element]);
+
+  // Show placeholder for off-screen block elements
+  // This early return is now AFTER all hooks have been called
+  // Note: We don't render children here - they'll mount when visible.
+  // Plate.js serialization works from element data, not rendered DOM.
+  if (!isVisible) {
+    return (
+      <PlateElement {...props} as="div">
+        <LiveValuePlaceholder viewportRef={viewportRef} isProviderMode={isProviderMode} />
+      </PlateElement>
+    );
+  }
 
   // Resolve data source: static data takes priority over query
   const data: Record<string, unknown>[] = staticData ?? queryData ?? [];
@@ -373,17 +388,6 @@ function LiveValueElement(props: PlateElementProps) {
   const handleEdit = () => {
     setEditorOpen(true);
   };
-
-  const handleApplyQuery = useCallback((newQuery: string) => {
-    try {
-      const path = editor.api.findPath(element);
-      if (path) {
-        editor.tf.setNodes({ query: newQuery } as Partial<TLiveValueElement>, { at: path });
-      }
-    } catch (e) {
-      console.error("Failed to update query:", e);
-    }
-  }, [editor, element]);
 
   const handleNavigateToTable = () => {
     if (tableName && navigateToTable) {

@@ -179,13 +179,15 @@ export function useLiveQuery(
 ): QueryResult {
   const ctx = useContext(LiveQueryContext);
 
+  // Context MUST be present. The LiveQueryProvider must wrap all components that use useLiveQuery.
+  // This is enforced because ctx.useQuery calls multiple hooks internally, and we need consistent
+  // hook counts between renders. Throwing synchronously ensures we catch the issue immediately.
   if (!ctx) {
-    // No provider - return empty state (for SSR or tests without provider)
-    return {
-      data: undefined,
-      isLoading: false,
-      error: null,
-    };
+    throw new Error(
+      `[useLiveQuery] No LiveQueryProvider found. ` +
+      `Components using useLiveQuery must be wrapped in LiveQueryProvider. ` +
+      `SQL: ${sql?.slice(0, 50) ?? "(none)"}`
+    );
   }
 
   return ctx.useQuery(sql, params);
@@ -212,15 +214,14 @@ export function useLiveQuery(
 export function useLiveMutation(): MutationResult {
   const ctx = useContext(LiveQueryContext);
 
+  // Context MUST be present. The LiveQueryProvider must wrap all components that use useLiveMutation.
+  // This is enforced because ctx.useMutation calls multiple hooks internally, and we need consistent
+  // hook counts between renders. Throwing synchronously ensures we catch the issue immediately.
   if (!ctx) {
-    // No provider - return no-op mutation
-    return {
-      mutate: async () => {
-        console.warn("[LiveMutation] No LiveQueryProvider configured");
-      },
-      isPending: false,
-      error: null,
-    };
+    throw new Error(
+      `[useLiveMutation] No LiveQueryProvider found. ` +
+      `Components using useLiveMutation must be wrapped in LiveQueryProvider.`
+    );
   }
 
   return ctx.useMutation();

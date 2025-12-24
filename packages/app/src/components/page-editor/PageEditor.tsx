@@ -33,6 +33,27 @@ const PromptBlock: AdvancedCustomBlock = {
   rules: PromptMarkdownRules,
 };
 
+// ============================================================================
+// Editor with Provider Wrapper
+// ============================================================================
+
+/**
+ * Wrapper component that provides all required contexts.
+ * Must wrap Editor to ensure LiveQueryProvider is mounted BEFORE
+ * any LiveValue components render and call useLiveQuery hooks.
+ */
+function EditorWithProviders({
+  children,
+}: {
+  children: ReactNode;
+}) {
+  return (
+    <DesktopEditorProvider>
+      {children}
+    </DesktopEditorProvider>
+  );
+}
+
 
 // ============================================================================
 // Types
@@ -58,14 +79,6 @@ export function PageEditor({
 }: PageEditorProps) {
   const editorRef = useRef<EditorHandle>(null);
   const lastSourceRef = useRef<string | null>(null);
-
-  // Wrapper that provides all context
-  const EditorWrapper = useCallback(
-    ({ children }: { children: ReactNode }) => (
-      <DesktopEditorProvider>{children}</DesktopEditorProvider>
-    ),
-    []
-  );
 
   // Fetch page source with debounced saves
   const {
@@ -152,18 +165,19 @@ export function PageEditor({
   }
 
   return (
-    <Editor
-      ref={editorRef}
-      value={content}
-      onChange={handleChange}
-      customBlocks={[PromptBlock]}
-      plugins={[PageContextPlugin] as unknown as EditorProps["plugins"]}
-      frontmatter={frontmatter}
-      onFrontmatterChange={handleFrontmatterChange}
-      isSaving={isSaving}
-      readOnly={readOnly}
-      className={className}
-      wrapper={EditorWrapper}
-    />
+    <EditorWithProviders>
+      <Editor
+        ref={editorRef}
+        value={content}
+        onChange={handleChange}
+        customBlocks={[PromptBlock]}
+        plugins={[PageContextPlugin] as unknown as EditorProps["plugins"]}
+        frontmatter={frontmatter}
+        onFrontmatterChange={handleFrontmatterChange}
+        isSaving={isSaving}
+        readOnly={readOnly}
+        className={className}
+      />
+    </EditorWithProviders>
   );
 }

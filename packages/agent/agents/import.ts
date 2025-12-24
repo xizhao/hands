@@ -255,7 +255,7 @@ Always report:
 export const importAgent: AgentConfig = {
   description: "Data ingestion specialist - gets files into the database",
   mode: "subagent",
-  model: "anthropic/claude-haiku-4-5",
+  model: "google/gemini-3-flash-preview",
   temperature: 0.1,
   prompt: IMPORT_PROMPT,
   permission: {

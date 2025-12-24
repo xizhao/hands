@@ -1,7 +1,13 @@
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { ExternalLink, Maximize2, Minimize2, Minus, RotateCw, X } from "lucide-react";
 import { useEffect, useState } from "react";
-import { cn } from "@/lib/utils";
+import { clsx, type ClassValue } from "clsx";
+import { twMerge } from "tailwind-merge";
+
+// Local cn helper (preview is a standalone component)
+function cn(...inputs: ClassValue[]) {
+  return twMerge(clsx(inputs));
+}
 
 // Preview window - wraps external URLs with custom window controls
 export function PreviewWindow() {

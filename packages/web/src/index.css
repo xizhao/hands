@@ -1,0 +1,44 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Import shared styles from app package */
+@import "@hands/app/styles.css";
+
+/* Web-specific overrides */
+:root {
+  --app-shell-padding: 0;
+}
+
+/* Remove traffic light offset on web (no native window controls) */
+.traffic-light-offset {
+  padding-top: 0 !important;
+}
+
+/* Ensure full viewport on web */
+html, body, #root {
+  height: 100%;
+  width: 100%;
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+}
+
+/* Web-specific scrollbar styling */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: hsl(var(--muted-foreground) / 0.3);
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: hsl(var(--muted-foreground) / 0.5);
+}

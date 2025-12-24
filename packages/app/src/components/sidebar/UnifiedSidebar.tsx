@@ -596,10 +596,10 @@ ${STDLIB_QUICK_REF}
 
   // Workbook handlers
   const handleSwitchWorkbook = useCallback(
-    (workbook: { id: string; directory: string; name: string }) => {
+    (workbook: Workbook) => {
       clearNavigation();
       resetSidebarState();
-      openWorkbook.mutate(workbook as Workbook);
+      openWorkbook.mutate(workbook);
     },
     [clearNavigation, openWorkbook]
   );

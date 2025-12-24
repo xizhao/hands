@@ -1,11 +1,14 @@
 // Workbook - a discrete project/environment with its own code repo and sessions
+// Re-export from platform types for consistency
+export type { Workbook } from "../platform/types";
 
-export interface Workbook {
+// Extended workbook with editor state
+export interface WorkbookWithEditorState {
   id: string;
   name: string;
   description?: string;
-  // Path to the git repo: ~/.hands/<id>/
-  directory: string;
+  // Path to the git repo: ~/.hands/<id>/ (optional on web)
+  directory?: string;
   // Timestamps (from Rust: created_at, updated_at, last_opened_at)
   created_at: number;
   updated_at: number;

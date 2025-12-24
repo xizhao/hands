@@ -1,5 +1,12 @@
-import { load, type Store } from "@tauri-apps/plugin-store";
+/**
+ * Settings Hook
+ *
+ * Manages user settings and API keys.
+ * Uses the platform adapter for cross-platform storage.
+ */
+
 import { useCallback, useEffect, useState } from "react";
+import { usePlatform } from "../platform";
 import { api } from "@/lib/api";
 import { PORTS } from "@/lib/ports";
 
@@ -86,16 +93,8 @@ export const providerOptions: { value: Settings["provider"]; label: string }[] =
   { value: "openrouter", label: "OpenRouter" },
 ];
 
-let store: Store | null = null;
-
-async function getStore(): Promise<Store> {
-  if (!store) {
-    store = await load("settings.json", { autoSave: true, defaults: {} });
-  }
-  return store;
-}
-
 export function useSettings() {
+  const platform = usePlatform();
   const [settings, setSettings] = useState<Settings>(defaultSettings);
   const [apiKeys, setApiKeys] = useState<ApiKeys>(defaultApiKeys);
   const [loading, setLoading] = useState(true);
@@ -103,9 +102,14 @@ export function useSettings() {
   // Load settings on mount
   useEffect(() => {
     async function loadSettings() {
+      if (!platform.storage) {
+        // On web, use defaults (could also use localStorage via platform.storage)
+        setLoading(false);
+        return;
+      }
+
       try {
-        const s = await getStore();
-        const saved = await s.get<Settings>("settings");
+        const saved = await platform.storage.get<Settings>("settings");
         if (saved) {
           setSettings({ ...defaultSettings, ...saved });
         }
@@ -113,7 +117,7 @@ export function useSettings() {
         // Load API keys individually (stored at root level for Rust to read)
         const keys: ApiKeys = { ...defaultApiKeys };
         for (const key of Object.keys(defaultApiKeys) as (keyof ApiKeys)[]) {
-          const value = await s.get<string>(key);
+          const value = await platform.storage.get<string>(key);
           if (value) {
             keys[key] = value;
           }
@@ -126,7 +130,7 @@ export function useSettings() {
       }
     }
     loadSettings();
-  }, []);
+  }, [platform.storage]);
 
   // Sync model config with OpenCode server
   const syncModelWithOpenCode = useCallback(async (provider: string, model: string) => {
@@ -159,8 +163,9 @@ export function useSettings() {
       setSettings(newSettings);
 
       try {
-        const s = await getStore();
-        await s.set("settings", newSettings);
+        if (platform.storage) {
+          await platform.storage.set("settings", newSettings);
+        }
 
         // Sync with OpenCode when provider or model changes
         if (key === "provider" || key === "model") {
@@ -170,7 +175,7 @@ export function useSettings() {
         console.error("Failed to save setting:", error);
       }
     },
-    [settings, syncModelWithOpenCode],
+    [settings, syncModelWithOpenCode, platform.storage],
   );
 
   // Update an API key
@@ -178,35 +183,38 @@ export function useSettings() {
     setApiKeys((prev) => ({ ...prev, [key]: value }));
 
     try {
-      const s = await getStore();
-      // Store at root level so Rust can easily read it
-      await s.set(key, value);
+      if (platform.storage) {
+        // Store at root level so Rust can easily read it
+        await platform.storage.set(key, value);
+      }
     } catch (error) {
       console.error("Failed to save API key:", error);
     }
-  }, []);
+  }, [platform.storage]);
 
   // Save all settings at once
   const saveSettings = useCallback(async (newSettings: Settings) => {
     setSettings(newSettings);
     try {
-      const s = await getStore();
-      await s.set("settings", newSettings);
+      if (platform.storage) {
+        await platform.storage.set("settings", newSettings);
+      }
     } catch (error) {
       console.error("Failed to save settings:", error);
     }
-  }, []);
+  }, [platform.storage]);
 
   // Reset to defaults
   const resetSettings = useCallback(async () => {
     setSettings(defaultSettings);
     try {
-      const s = await getStore();
-      await s.set("settings", defaultSettings);
+      if (platform.storage) {
+        await platform.storage.set("settings", defaultSettings);
+      }
     } catch (error) {
       console.error("Failed to reset settings:", error);
     }
-  }, []);
+  }, [platform.storage]);
 
   // Check if any API key is set
   const hasApiKey = Boolean(

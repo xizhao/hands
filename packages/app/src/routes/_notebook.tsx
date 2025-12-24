@@ -83,6 +83,17 @@ function NotebookLayout() {
   // On startup: if no workbook selected, open most recent workbook or create one
   // This should only run once on app start, not during workbook switching
   useEffect(() => {
+    console.log("[notebook] Auto-open effect:", {
+      initialized: initialized.current,
+      initializing: initializingRef.current,
+      workbooksLoading,
+      workbooksCount: workbooks?.length,
+      workbookId,
+      port,
+      createPending: createWorkbook.isPending,
+      openPending: openWorkbook.isPending,
+    });
+
     if (initialized.current || initializingRef.current) return;
     if (workbooksLoading || workbooks === undefined) return;
     if (createWorkbook.isPending || openWorkbook.isPending) return;
@@ -101,6 +112,12 @@ function NotebookLayout() {
       const mostRecent = workbooks[0];
       console.log("[notebook] Opening most recent workbook:", mostRecent.id);
       openWorkbook.mutate(mostRecent, {
+        onSuccess: () => {
+          console.log("[notebook] Successfully opened workbook");
+        },
+        onError: (error) => {
+          console.error("[notebook] Failed to open workbook:", error);
+        },
         onSettled: () => {
           initialized.current = true;
           initializingRef.current = false;

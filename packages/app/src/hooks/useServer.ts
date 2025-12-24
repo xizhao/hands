@@ -1,13 +1,16 @@
+/**
+ * Server Hook
+ *
+ * Provides server health status and restart functionality.
+ * Uses the platform adapter for cross-platform compatibility.
+ */
+
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { invoke } from "@tauri-apps/api/core";
+import { usePlatform } from "../platform";
 import { api } from "@/lib/api";
 
-interface HealthCheck {
-  healthy: boolean;
-  message: string;
-}
-
-export function useServer() {
+export function useServerHealth() {
+  const platform = usePlatform();
   const queryClient = useQueryClient();
 
   // Health check query - polls the server
@@ -20,10 +23,13 @@ export function useServer() {
     staleTime: 5000,
   });
 
-  // Restart mutation for better state tracking
+  // Restart mutation - only available on desktop
   const restartMutation = useMutation({
     mutationFn: async () => {
-      const result = await invoke<HealthCheck>("restart_server");
+      if (!platform.server?.restart) {
+        throw new Error("Server restart not available on this platform");
+      }
+      const result = await platform.server.restart();
       console.log("Restart server result:", result);
       return result;
     },
@@ -46,5 +52,11 @@ export function useServer() {
     isRestarting: restartMutation.isPending,
     error: health.error,
     restartServer,
+    canRestart: !!platform.server?.restart,
   };
 }
+
+/**
+ * Alias for backward compatibility
+ */
+export const useServer = useServerHealth;
