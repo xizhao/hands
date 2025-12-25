@@ -137,19 +137,15 @@ export function NotebookShell({ children }: NotebookShellProps) {
 
   return (
     <TooltipProvider delayDuration={300}>
-      <div className="h-screen flex bg-background overflow-hidden relative">
+      <div className="h-screen flex bg-surface overflow-hidden relative">
         <div
           className="absolute inset-0 pointer-events-none z-50 border border-black/[0.04] dark:border-white/[0.03]"
           style={{ borderRadius: "10px" }}
         />
 
-        {/* Left: Sidebar (full width when empty, otherwise resizable) */}
         <div
           style={{ width: isFullscreenSidebar ? "100%" : sidebarWidth }}
-          className={cn(
-            "shrink-0 flex flex-col h-full relative",
-            isResizing && "transition-none"
-          )}
+          className="shrink-0 flex flex-col h-full relative"
         >
           <UnifiedSidebar />
 
@@ -166,28 +162,21 @@ export function NotebookShell({ children }: NotebookShellProps) {
           )}
         </div>
 
-        {/* Right: Content area - hidden when empty workbook */}
-        {!isFullscreenSidebar && (
-          <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
-            {/* Content header with breadcrumb and actions */}
-            <ContentHeader />
-
-            {/* Main content - routed */}
-            <main className="flex-1 min-h-0 overflow-hidden">
-              {isOnIndex ? (
-                // Index route - full content area
-                <div className="h-full">{children}</div>
-              ) : (
-                // Content routes - inset border style
-                <div className="h-full p-2 pl-1">
-                  <div className="h-full rounded-lg border border-border/40 bg-background overflow-hidden shadow-sm">
-                    {children}
-                  </div>
-                </div>
-              )}
-            </main>
-          </div>
-        )}
+        <div
+          className={cn(
+            "flex-1 flex flex-col min-w-0 overflow-hidden",
+            isFullscreenSidebar && "hidden"
+          )}
+        >
+          <ContentHeader />
+          <main className="flex-1 min-h-0 overflow-hidden">
+            <div className="h-full p-2 pl-1">
+              <div className="h-full rounded-lg border border-border/40 bg-background overflow-hidden shadow-sm">
+                {children}
+              </div>
+            </div>
+          </main>
+        </div>
 
         {/* Right panel overlay */}
         <RightPanel />

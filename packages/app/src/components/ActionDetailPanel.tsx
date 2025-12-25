@@ -44,19 +44,21 @@ interface ActionSchema {
 interface DiscoveredAction {
   id: string;
   path: string;
-  name: string;
+  name?: string;
   description?: string;
   schedule?: string;
-  triggers: Array<"manual" | "webhook" | "pg_notify">;
-  hasWebhook: boolean;
+  triggers?: Array<"manual" | "webhook" | "pg_notify">;
+  hasWebhook?: boolean;
   webhookPath?: string;
   pgNotifyChannel?: string;
   secrets?: string[];
   missingSecrets?: string[];
-  hasInput: boolean;
+  hasInput?: boolean;
   inputSchema?: { description?: string };
   schema?: ActionSchema;
   nextRun?: string;
+  valid: boolean;
+  error?: string;
 }
 
 /** Secrets form - used in overlay and inline editing */
@@ -295,16 +297,23 @@ export function ActionDetailPanel({ actionId }: ActionDetailPanelProps) {
         <div className="p-4 border-b border-border space-y-3">
           <div className="flex items-start justify-between gap-3">
             <div className="flex-1 min-w-0">
-              <h1 className="text-lg font-semibold truncate">{action.name}</h1>
+              <h1 className={cn("text-lg font-semibold truncate", !action.valid && "text-destructive")}>
+                {action.name || action.id}
+              </h1>
               {action.description && (
                 <p className="text-sm text-muted-foreground mt-0.5">
                   {action.description}
                 </p>
               )}
+              {!action.valid && action.error && (
+                <p className="text-sm text-destructive mt-1">
+                  Error: {action.error}
+                </p>
+              )}
             </div>
             <Button
               onClick={() => runMutation.mutate()}
-              disabled={runMutation.isPending || hasMissingSecrets}
+              disabled={runMutation.isPending || hasMissingSecrets || !action.valid}
               size="xs"
               className="gap-1.5"
             >
@@ -465,7 +474,7 @@ export function ActionDetailPanel({ actionId }: ActionDetailPanelProps) {
           {sourceData?.source ? (
             <ActionEditor
               actionId={actionId}
-              name={action.name}
+              name={action.name || action.id}
               source={sourceData.source}
               className="h-full"
               onTableClick={(table) => navigate({ to: "/tables/$tableId", params: { tableId: table } })}

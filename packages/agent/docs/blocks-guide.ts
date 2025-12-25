@@ -24,8 +24,8 @@ Plugins are custom TSX components for complex visualizations. They live in \`plu
 
 \`\`\`typescript
 // plugins/my-chart.tsx
-import { sql } from "@hands/core";
-import type { BlockMeta } from "@hands/core";
+import { sql } from "@hands/db";
+import type { BlockMeta } from "@hands/runtime";
 
 export const meta: BlockMeta = {
   title: "My Chart",
@@ -57,7 +57,8 @@ export default async function MyChart({ limit = 10 }: Props) {
 \`\`\`
 
 **Imports:**
-- All from \`@hands/core\`: sql, BlockMeta, etc.
+- Database: \`import { sql } from "@hands/db"\`
+- Types: \`import type { BlockMeta } from "@hands/runtime"\`
 - UI components from \`@ui\`: Card, Button, etc. (install with ui tool)
 
 **Design Guidelines:**
@@ -69,7 +70,7 @@ export default async function MyChart({ limit = 10 }: Props) {
 Types are auto-generated from your SQL queries:
 
 \`\`\`typescript
-import { sql } from "@hands/core";
+import { sql } from "@hands/db";
 
 export default async function MovieList() {
   // Result type is inferred from the SQL query
@@ -88,10 +89,10 @@ export default async function MovieList() {
 export const BLOCK_CONTEXT_DOCS = `
 ## Database API
 
-Import from @hands/core:
+Import from @hands/db:
 
 \`\`\`typescript
-import { sql } from "@hands/core";
+import { sql } from "@hands/db";
 
 export default async function UserList() {
   // sql is the tagged template for safe SQL queries
@@ -106,7 +107,7 @@ export default async function UserList() {
 Access URL/form parameters via the params helper:
 
 \`\`\`typescript
-import { sql, params } from "@hands/core";
+import { sql, params } from "@hands/db";
 
 export default async function ItemList() {
   const { limit = 10 } = params<{ limit?: number }>();
@@ -122,23 +123,23 @@ export default async function ItemList() {
 export const BLOCK_ANTI_PATTERNS = `
 ## Common Mistakes
 
-### WRONG: Using deprecated imports
+### WRONG: Using incorrect import paths
 \`\`\`typescript
-// DON'T DO THIS - old import paths
-import { sql } from "@hands/db";
-import type { BlockFn } from "@hands/runtime";
+// DON'T DO THIS - @hands/core doesn't export sql
+import { sql } from "@hands/core";
 \`\`\`
 
-### CORRECT: Import from @hands/core
+### CORRECT: Use the proper module for each import
 \`\`\`typescript
-// DO THIS - use @hands/core for everything
-import { sql } from "@hands/core";
+// DO THIS - sql comes from @hands/db, types from @hands/runtime
+import { sql } from "@hands/db";
+import type { BlockMeta, BlockFn } from "@hands/runtime";
 \`\`\`
 
 ### WRONG: Using sql at module load time
 \`\`\`typescript
 // DON'T DO THIS - sql only works during request handling
-import { sql } from "@hands/core";
+import { sql } from "@hands/db";
 
 // ERROR: Called at module load, not during request
 const allUsers = await sql\`SELECT * FROM users\`;
@@ -150,7 +151,7 @@ export default function UserList() {
 
 ### CORRECT: Query inside the component function
 \`\`\`typescript
-import { sql } from "@hands/core";
+import { sql } from "@hands/db";
 
 export default async function UserList() {
   // Queries must be inside the component function

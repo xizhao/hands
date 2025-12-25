@@ -1,18 +1,16 @@
 /**
- * Action Routes (Dev Mode)
+ * Action Routes
  *
- * HTTP endpoints for action execution during development.
- * Actions are loaded via dynamic import and executed with direct DB access.
+ * HTTP endpoints for action execution in CF Workers.
+ * Actions are statically bundled via vite-plugin-workbook.
+ * Uses same @hands/db as blocks (Durable Objects SQLite).
  */
 
 import { route } from "rwsdk/router";
-import { resolve, isAbsolute } from "node:path";
 import type { ActionDefinition, ActionRun, ActionTriggerType } from "../types/action";
 import { buildActionContext, createRunMeta } from "./context";
 import { getDb, kyselySql } from "../db/dev";
-
-/** Workbook path from environment */
-const workbookPath = process.env.HANDS_WORKBOOK_PATH ?? "";
+import { actions, listActions } from "@hands/actions";
 
 /** Cloud API URL from environment */
 const cloudUrl = process.env.HANDS_CLOUD_URL ?? "https://api.hands.app";
@@ -41,177 +39,231 @@ async function getTables(): Promise<Array<{ name: string }>> {
   return result.rows;
 }
 
+/**
+ * Execute an action by ID
+ */
+async function executeAction(
+  actionId: string,
+  action: ActionDefinition,
+  trigger: ActionTriggerType,
+  input: unknown,
+  secrets: Record<string, string>,
+  authToken?: string
+): Promise<ActionRun> {
+  const runId = generateRunId();
+  const startTime = Date.now();
+
+  try {
+    // Validate input if schema provided
+    let validatedInput = input;
+    if (action.input) {
+      try {
+        validatedInput = action.input.parse(input);
+      } catch (err) {
+        const errorMessage = err instanceof Error ? err.message : String(err);
+        return {
+          id: runId,
+          actionId,
+          trigger,
+          status: "failed",
+          input,
+          error: `Input validation failed: ${errorMessage}`,
+          startedAt: new Date(startTime).toISOString(),
+          finishedAt: new Date().toISOString(),
+          durationMs: Date.now() - startTime,
+        };
+      }
+    }
+
+    // Get all tables for building context
+    const tables = await getTables();
+
+    // Build context with direct DB access
+    const runMeta = createRunMeta(runId, trigger, validatedInput);
+    const ctx = buildActionContext({
+      tables,
+      secrets,
+      runMeta,
+      cloud: authToken ? { cloudUrl, authToken } : undefined,
+    });
+
+    // Execute the action
+    ctx.log.info(`Starting action: ${action.name}`);
+    const output = await action.run(validatedInput, ctx);
+    const endTime = Date.now();
+
+    ctx.log.info(`Action completed successfully`, { durationMs: endTime - startTime });
+
+    return {
+      id: runId,
+      actionId,
+      trigger,
+      status: "success",
+      input: validatedInput,
+      output,
+      startedAt: new Date(startTime).toISOString(),
+      finishedAt: new Date(endTime).toISOString(),
+      durationMs: endTime - startTime,
+    };
+  } catch (err) {
+    const endTime = Date.now();
+    const errorMessage = err instanceof Error ? err.message : String(err);
+    const errorStack = err instanceof Error ? err.stack : undefined;
+
+    console.error(`[action:${runId}] Action failed:`, errorMessage);
+
+    return {
+      id: runId,
+      actionId,
+      trigger,
+      status: "failed",
+      input,
+      error: errorStack || errorMessage,
+      startedAt: new Date(startTime).toISOString(),
+      finishedAt: new Date(endTime).toISOString(),
+      durationMs: endTime - startTime,
+    };
+  }
+}
+
 export const actionRoutes = [
   /**
-   * Execute an action by path
-   * POST /actions/run
-   * Body: { actionPath: string, trigger: string, input?: unknown, secrets?: Record<string, string> }
+   * List all actions
+   * GET /actions
    */
-  route("/actions/run", {
-    post: async ({ request }) => {
-      const runId = generateRunId();
-      const startTime = Date.now();
+  route("/actions", {
+    get: async () => {
+      const actionList = listActions().map(({ id, definition }) => ({
+        id,
+        name: definition.name,
+        description: definition.description,
+        triggers: definition.triggers ?? ["manual"],
+        schedule: definition.schedule,
+        secrets: definition.secrets,
+      }));
 
-      try {
-        const body = (await request.json()) as {
-          actionPath: string;
-          trigger?: ActionTriggerType;
-          input?: unknown;
-          secrets?: Record<string, string>;
-          authToken?: string;
-        };
+      return new Response(JSON.stringify(actionList), {
+        headers: { "Content-Type": "application/json" },
+      });
+    },
+  }),
 
-        const { actionPath, trigger = "manual", input, secrets = {}, authToken } = body;
+  /**
+   * Execute an action by ID
+   * POST /actions/:actionId/run
+   * Body: { trigger?: string, input?: unknown, secrets?: Record<string, string>, authToken?: string }
+   */
+  route("/actions/:actionId/run", {
+    post: async ({ request, params }) => {
+      const actionId = params.actionId;
+      const action = actions[actionId];
 
-        if (!actionPath) {
-          return new Response(
-            JSON.stringify({
-              id: runId,
-              actionId: "unknown",
-              trigger,
-              status: "failed",
-              input,
-              error: "actionPath is required",
-              startedAt: new Date().toISOString(),
-              finishedAt: new Date().toISOString(),
-              durationMs: 0,
-            } satisfies ActionRun),
-            { status: 400, headers: { "Content-Type": "application/json" } }
-          );
-        }
-
-        // Resolve action path to absolute path
-        // actionPath is relative to workbook, e.g., "actions/sync-users.ts"
-        const absolutePath = isAbsolute(actionPath)
-          ? actionPath
-          : resolve(workbookPath, actionPath);
-
-        // Dynamic import the action module
-        let actionModule: { default: ActionDefinition };
-        try {
-          actionModule = await import(/* @vite-ignore */ absolutePath);
-        } catch (err) {
-          const errorMessage = err instanceof Error ? err.message : String(err);
-          const failedRun: ActionRun = {
-            id: runId,
-            actionId: actionPath,
-            trigger,
-            status: "failed",
-            input,
-            error: `Failed to load action: ${errorMessage}`,
-            startedAt: new Date(startTime).toISOString(),
-            finishedAt: new Date().toISOString(),
-            durationMs: Date.now() - startTime,
-          };
-          return new Response(JSON.stringify(failedRun), {
-            status: 500,
-            headers: { "Content-Type": "application/json" },
-          });
-        }
-
-        const action = actionModule.default;
-        if (!action || typeof action.run !== "function") {
-          const failedRun: ActionRun = {
-            id: runId,
-            actionId: actionPath,
-            trigger,
-            status: "failed",
-            input,
-            error: "Action must export a default defineAction() result",
-            startedAt: new Date(startTime).toISOString(),
-            finishedAt: new Date().toISOString(),
-            durationMs: Date.now() - startTime,
-          };
-          return new Response(JSON.stringify(failedRun), {
-            status: 500,
-            headers: { "Content-Type": "application/json" },
-          });
-        }
-
-        // Validate input if schema provided
-        let validatedInput = input;
-        if (action.input) {
-          try {
-            validatedInput = action.input.parse(input);
-          } catch (err) {
-            const errorMessage = err instanceof Error ? err.message : String(err);
-            const failedRun: ActionRun = {
-              id: runId,
-              actionId: action.name,
-              trigger,
-              status: "failed",
-              input,
-              error: `Input validation failed: ${errorMessage}`,
-              startedAt: new Date(startTime).toISOString(),
-              finishedAt: new Date().toISOString(),
-              durationMs: Date.now() - startTime,
-            };
-            // 400 is correct for validation errors (bad input from client)
-            return new Response(JSON.stringify(failedRun), {
-              status: 400,
-              headers: { "Content-Type": "application/json" },
-            });
-          }
-        }
-
-        // Get all tables for building context
-        const tables = await getTables();
-
-        // Build context with direct DB access
-        const runMeta = createRunMeta(runId, trigger, validatedInput);
-        const ctx = buildActionContext({
-          tables,
-          secrets,
-          runMeta,
-          cloud: authToken ? { cloudUrl, authToken } : undefined,
-        });
-
-        // Execute the action
-        ctx.log.info(`Starting action: ${action.name}`);
-        const output = await action.run(validatedInput, ctx);
-        const endTime = Date.now();
-
-        const completedRun: ActionRun = {
-          id: runId,
-          actionId: action.name,
-          trigger,
-          status: "success",
-          input: validatedInput,
-          output,
-          startedAt: new Date(startTime).toISOString(),
-          finishedAt: new Date(endTime).toISOString(),
-          durationMs: endTime - startTime,
-        };
-
-        ctx.log.info(`Action completed successfully`, { durationMs: completedRun.durationMs });
-
-        return new Response(JSON.stringify(completedRun), {
-          headers: { "Content-Type": "application/json" },
-        });
-      } catch (err) {
-        const endTime = Date.now();
-        const errorMessage = err instanceof Error ? err.message : String(err);
-        const errorStack = err instanceof Error ? err.stack : undefined;
-
+      if (!action) {
         const failedRun: ActionRun = {
-          id: runId,
-          actionId: "unknown",
+          id: generateRunId(),
+          actionId,
           trigger: "manual",
           status: "failed",
           input: undefined,
-          error: errorStack || errorMessage,
-          startedAt: new Date(startTime).toISOString(),
-          finishedAt: new Date(endTime).toISOString(),
-          durationMs: endTime - startTime,
+          error: `Action not found: ${actionId}`,
+          startedAt: new Date().toISOString(),
+          finishedAt: new Date().toISOString(),
+          durationMs: 0,
         };
-
-        console.error(`[action:${runId}] Action failed:`, errorMessage);
-
         return new Response(JSON.stringify(failedRun), {
-          status: 500,
+          status: 404,
           headers: { "Content-Type": "application/json" },
         });
       }
+
+      const body = (await request.json()) as {
+        trigger?: ActionTriggerType;
+        input?: unknown;
+        secrets?: Record<string, string>;
+        authToken?: string;
+      };
+
+      const { trigger = "manual", input, secrets = {}, authToken } = body;
+
+      const result = await executeAction(actionId, action, trigger, input, secrets, authToken);
+      const status = result.status === "success" ? 200 : 500;
+
+      return new Response(JSON.stringify(result), {
+        status,
+        headers: { "Content-Type": "application/json" },
+      });
+    },
+  }),
+
+  /**
+   * Legacy endpoint for backwards compatibility
+   * POST /actions/run
+   * Body: { actionId: string, trigger?: string, input?: unknown, secrets?: Record<string, string> }
+   */
+  route("/actions/run", {
+    post: async ({ request }) => {
+      const body = (await request.json()) as {
+        actionId?: string;
+        actionPath?: string; // Legacy field
+        trigger?: ActionTriggerType;
+        input?: unknown;
+        secrets?: Record<string, string>;
+        authToken?: string;
+      };
+
+      // Support both actionId and legacy actionPath
+      let actionId = body.actionId;
+      if (!actionId && body.actionPath) {
+        // Extract action ID from path like "actions/my-action.ts"
+        const match = body.actionPath.match(/actions\/(.+)\.ts$/);
+        actionId = match?.[1];
+      }
+
+      if (!actionId) {
+        const failedRun: ActionRun = {
+          id: generateRunId(),
+          actionId: "unknown",
+          trigger: body.trigger ?? "manual",
+          status: "failed",
+          input: body.input,
+          error: "actionId is required",
+          startedAt: new Date().toISOString(),
+          finishedAt: new Date().toISOString(),
+          durationMs: 0,
+        };
+        return new Response(JSON.stringify(failedRun), {
+          status: 400,
+          headers: { "Content-Type": "application/json" },
+        });
+      }
+
+      const action = actions[actionId];
+      if (!action) {
+        const failedRun: ActionRun = {
+          id: generateRunId(),
+          actionId,
+          trigger: body.trigger ?? "manual",
+          status: "failed",
+          input: body.input,
+          error: `Action not found: ${actionId}`,
+          startedAt: new Date().toISOString(),
+          finishedAt: new Date().toISOString(),
+          durationMs: 0,
+        };
+        return new Response(JSON.stringify(failedRun), {
+          status: 404,
+          headers: { "Content-Type": "application/json" },
+        });
+      }
+
+      const { trigger = "manual", input, secrets = {}, authToken } = body;
+      const result = await executeAction(actionId, action, trigger, input, secrets, authToken);
+      const status = result.status === "success" ? 200 : 500;
+
+      return new Response(JSON.stringify(result), {
+        status,
+        headers: { "Content-Type": "application/json" },
+      });
     },
   }),
 ];

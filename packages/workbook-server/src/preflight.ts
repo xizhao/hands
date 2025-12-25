@@ -561,7 +561,6 @@ const REQUIRED_WORKBOOK_DEPS_BASE = {
     // Runtime deps for Vite worker
     "rwsdk": "1.0.0-beta.39",
     "hono": "^4.7.0",
-    "@electric-sql/pglite": "^0.2.17",
     "@trpc/client": "^11.0.0",
   },
   devDependencies: {

@@ -62,31 +62,64 @@ const mockTrpcClient: EditorTrpcClient = {
 
 /**
  * Demo database schema for AI context
+ * Includes RevOps, Forms, Alerts, and Onboarding data
  */
 const demoTables = [
+  // RevOps / Sales
   {
-    name: "users",
-    columns: ["id", "name", "email", "created_at"],
+    name: "deals",
+    columns: ["id", "company", "owner", "stage", "amount", "probability", "status", "close_date", "sales_cycle_days"],
   },
   {
-    name: "products",
-    columns: ["id", "name", "price", "category", "in_stock"],
+    name: "revenue_monthly",
+    columns: ["id", "month", "revenue", "target", "new_arr", "churn"],
   },
   {
-    name: "orders",
-    columns: [
-      "id",
-      "user_id",
-      "product_id",
-      "quantity",
-      "amount",
-      "status",
-      "created_at",
-    ],
+    name: "sales_metrics",
+    columns: ["id", "month", "win_rate", "avg_deal_size", "meetings_booked", "demos_completed"],
   },
   {
-    name: "tasks",
-    columns: ["id", "title", "status", "priority", "assigned_to", "created_at"],
+    name: "rep_performance",
+    columns: ["id", "rep_name", "closed_revenue", "quota", "deals_won", "pipeline_value"],
+  },
+  // Team Survey / Forms
+  {
+    name: "survey_responses",
+    columns: ["id", "submitted_at", "mood", "workload", "blockers", "wins", "suggestions"],
+  },
+  // Operations Alerts
+  {
+    name: "alerts",
+    columns: ["id", "severity", "system", "message", "status", "triggered_at", "acknowledged_by", "resolved_at"],
+  },
+  {
+    name: "system_health",
+    columns: ["id", "timestamp", "system", "uptime_pct", "error_rate", "latency_p50", "latency_p95"],
+  },
+  {
+    name: "api_metrics",
+    columns: ["id", "timestamp", "system", "latency_p95", "requests_per_sec", "error_count"],
+  },
+  {
+    name: "incident_notes",
+    columns: ["id", "alert_id", "note", "created_by", "created_at"],
+  },
+  // Customer Onboarding
+  {
+    name: "customers",
+    columns: ["id", "name", "csm_name", "target_go_live", "plan", "arr", "signed_at"],
+  },
+  {
+    name: "onboarding_progress",
+    columns: ["id", "customer_id", "completed", "total", "days_elapsed"],
+  },
+  {
+    name: "onboarding_tasks",
+    columns: ["id", "customer_id", "phase", "task", "owner", "status", "due_date", "completed_at"],
+  },
+  {
+    name: "customer_notes",
+    columns: ["id", "customer_id", "note", "created_by", "created_at"],
   },
 ];
 

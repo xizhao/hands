@@ -24,7 +24,8 @@
     "paths": {
       "@/*": ["./src/*"],
       "@hands/db/types": ["./types/db-placeholder.d.ts"],
-      "@hands/pages": ["./types/pages-placeholder.d.ts"]
+      "@hands/pages": ["./types/pages-placeholder.d.ts"],
+      "@hands/actions": ["./types/hands-actions.d.ts"]
     },
     /* Enable importing .json files */
     "resolveJsonModule": true,

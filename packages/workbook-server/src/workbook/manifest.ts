@@ -133,7 +133,7 @@ export async function watchWorkbook(
   }
 
   const watcher = chokidar.watch(
-    [resolved.blocksDir, resolved.pagesDir, resolved.uiDir].filter(existsSync),
+    [resolved.pagesDir, resolved.uiDir, resolved.pluginsDir, resolved.actionsDir].filter(existsSync),
     {
       ignoreInitial: true,
       ignored: /(^|[\/\\])\../, // ignore dotfiles

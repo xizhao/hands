@@ -9,9 +9,8 @@
  *
  * Architecture:
  *   1. Immediately starts HTTP server (manifest available instantly)
- *   2. Boots PGlite in background (data in workbook-dir/db/)
- *   3. Builds and starts Vite in background
- *   4. Progressive readiness - manifest first, then DB, then RSC
+ *   2. Boots Vite worker in background (SQLite via Durable Objects)
+ *   3. Progressive readiness - manifest first, then RSC runtime
  */
 
 import { gateway } from "@ai-sdk/gateway";

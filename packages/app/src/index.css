@@ -53,6 +53,7 @@ svg [opacity="0.2"] {
     --brand-90: 211 77% 51% / 0.90;
     --highlight: oklch(0.852 0.199 91.936);
     --subtle-foreground: 240 5% 34%;
+    --surface: 0 0% 97%;
   }
 
   .dark {
@@ -98,6 +99,7 @@ svg [opacity="0.2"] {
     --brand-90: 211 77% 51% / 0.90;
     --highlight: oklch(0.852 0.199 91.936);
     --subtle-foreground: 240 5% 34%;
+    --surface: 0 0% 7%;
   }
 }
 
@@ -107,6 +109,11 @@ svg [opacity="0.2"] {
   }
   html, body, #root {
     background: hsl(var(--background));
+  }
+  html.transparent-overlay,
+  html.transparent-overlay body,
+  html.transparent-overlay #root {
+    background: transparent !important;
   }
   body {
     @apply text-foreground antialiased;
@@ -170,6 +177,25 @@ svg [opacity="0.2"] {
   50% { opacity: 0.5; }
 }
 
+@keyframes glow-pulse {
+  0%, 100% { opacity: 0.4; }
+  50% { opacity: 0.8; }
+}
+
+.animate-glow-pulse {
+  animation: glow-pulse 2s ease-in-out infinite;
+}
+
+@keyframes text-shimmer {
+  0% { opacity: 0.4; }
+  50% { opacity: 1; }
+  100% { opacity: 0.4; }
+}
+
+.animate-text-shimmer {
+  animation: text-shimmer 1.2s ease-in-out infinite;
+}
+
 /* Code blocks */
 .prose pre {
   @apply rounded-md overflow-x-auto border border-border;
@@ -187,13 +213,4 @@ svg [opacity="0.2"] {
 /* Selection */
 ::selection {
   background: hsl(var(--primary) / 0.15);
-}
-
-@layer base {
-  * {
-    @apply border-border;
-  }
-  body {
-    @apply bg-background text-foreground;
-  }
 }

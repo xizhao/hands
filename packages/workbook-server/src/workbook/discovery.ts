@@ -35,7 +35,6 @@ export function resolveConfig(config: WorkbookConfig): ResolvedWorkbookConfig {
   const { rootPath } = config;
   return {
     rootPath,
-    blocksDir: config.blocksDir ?? join(rootPath, "blocks"),
     pagesDir: config.pagesDir ?? join(rootPath, "pages"),
     pluginsDir: config.pluginsDir ?? join(rootPath, "plugins"),
     uiDir: config.uiDir ?? join(rootPath, "ui"),
@@ -45,7 +44,7 @@ export function resolveConfig(config: WorkbookConfig): ResolvedWorkbookConfig {
 }
 
 // ============================================================================
-// Block Discovery
+// Block Discovery (TSX components in pages/blocks/)
 // ============================================================================
 
 export interface DiscoverBlocksOptions {
@@ -53,12 +52,19 @@ export interface DiscoverBlocksOptions {
   exclude?: string[];
 }
 
+/**
+ * Discover TSX blocks in the pages/blocks/ subdirectory.
+ * Blocks are server components that can be embedded in MDX pages.
+ */
 export async function discoverBlocks(
-  blocksDir: string,
+  pagesDir: string,
   options: DiscoverBlocksOptions = {}
 ): Promise<DiscoveryResult<DiscoveredBlock>> {
   const items: DiscoveredBlock[] = [];
   const errors: DiscoveryError[] = [];
+
+  // Blocks are in pages/blocks/ subdirectory
+  const blocksDir = join(pagesDir, BLOCKS_SUBDIR);
 
   if (!existsSync(blocksDir)) {
     return { items, errors };
@@ -388,7 +394,8 @@ function readEnvFile(workbookDir: string): Map<string, string> {
 }
 
 /**
- * Discover a single action file
+ * Discover a single action file.
+ * Always returns an action if the file exists - errors are tracked as state.
  */
 async function discoverAction(
   actionPath: string,
@@ -400,13 +407,19 @@ async function discoverAction(
     return null;
   }
 
+  const basePath = relative(rootPath, actionPath);
+
   try {
     const mod = await import(actionPath);
     const definition = mod.default as ActionDefinition | undefined;
 
     if (!definition?.name || !definition?.run) {
-      console.warn(`[actions] Invalid action ${actionId}: missing name or run function`);
-      return null;
+      return {
+        id: actionId,
+        path: basePath,
+        valid: false,
+        error: "Invalid action: missing 'name' or 'run' export",
+      };
     }
 
     // Check for missing secrets
@@ -414,7 +427,8 @@ async function discoverAction(
 
     return {
       id: actionId,
-      path: relative(rootPath, actionPath),
+      path: basePath,
+      valid: true,
       name: definition.name,
       description: definition.description,
       schedule: definition.schedule,
@@ -428,8 +442,15 @@ async function discoverAction(
       nextRun: undefined, // TODO: Calculate from cron schedule
     };
   } catch (err) {
-    console.error(`[actions] Failed to load action ${actionId}:`, err);
-    return null;
+    const errorMessage = err instanceof Error ? err.message : String(err);
+    console.warn(`[actions] Failed to load action ${actionId}: ${errorMessage}`);
+
+    return {
+      id: actionId,
+      path: basePath,
+      valid: false,
+      error: errorMessage,
+    };
   }
 }
 
@@ -470,20 +491,20 @@ export async function discoverActions(
       if (stat.isDirectory()) {
         // Folder-based action: actions/<name>/action.ts
         const action = await discoverAction(join(entryPath, "action.ts"), entry, secrets, rootPath);
-        if (action) {
-          items.push(action);
-        }
+        if (action) items.push(action);
       } else if (entry.endsWith(".ts") && !entry.endsWith(".d.ts")) {
         // Single file action: actions/<name>.ts
         const actionId = basename(entry, ".ts");
         const action = await discoverAction(entryPath, actionId, secrets, rootPath);
-        if (action) {
-          items.push(action);
-        }
+        if (action) items.push(action);
       }
     } catch (err) {
-      errors.push({
-        file: entry,
+      // File system error - still create an action entry with error state
+      const actionId = entry.endsWith(".ts") ? basename(entry, ".ts") : entry;
+      items.push({
+        id: actionId,
+        path: join("actions", entry),
+        valid: false,
         error: err instanceof Error ? err.message : String(err),
       });
     }
@@ -500,7 +521,7 @@ export async function discoverWorkbook(config: WorkbookConfig): Promise<Workbook
   const resolved = resolveConfig(config);
 
   const [blocksResult, pagesResult, pluginsResult, componentsResult, actionsResult] = await Promise.all([
-    discoverBlocks(resolved.blocksDir),
+    discoverBlocks(resolved.pagesDir), // Blocks are in pages/blocks/
     discoverPages(resolved.pagesDir),
     discoverPlugins(resolved.pluginsDir),
     discoverComponents(resolved.uiDir),

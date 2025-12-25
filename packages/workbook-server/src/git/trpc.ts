@@ -5,7 +5,6 @@
  * Provides endpoints for status, commits, history, and remote operations.
  */
 
-import type { PGlite } from "@electric-sql/pglite";
 import { initTRPC, TRPCError } from "@trpc/server";
 import { z } from "zod";
 import {
@@ -31,9 +30,6 @@ import {
 
 export interface GitContext {
   workbookDir: string;
-  db: PGlite | null;
-  isDbReady: boolean;
-  saveDb: () => Promise<void>;
 }
 
 // ============================================================================
@@ -138,7 +134,7 @@ export const gitRouter = t.router({
       }
     }),
 
-  /** Save database and commit all changes (main save operation) */
+  /** Commit all changes (main save operation) */
   save: publicProcedure
     .input(commitInput)
     .mutation(async ({ ctx, input }): Promise<{ hash: string; message: string } | null> => {
@@ -148,8 +144,9 @@ export const gitRouter = t.router({
         await initRepo(ctx.workbookDir);
       }
 
-      // Save db and commit
-      const result = await saveAndCommit(ctx.workbookDir, ctx.saveDb);
+      // Database is in CF Workers (Durable Objects SQLite) - no local save needed
+      const noOpSave = async () => {};
+      const result = await saveAndCommit(ctx.workbookDir, noOpSave);
 
       // If custom message provided but saveAndCommit returned null (no changes),
       // or if we want to use custom message, handle appropriately
@@ -202,7 +199,9 @@ export const gitRouter = t.router({
     .input(revertInput)
     .mutation(async ({ ctx, input }): Promise<{ hash: string; message: string }> => {
       try {
-        return await revertToCommit(ctx.workbookDir, input.hash, ctx.saveDb);
+        // Database is in CF Workers (Durable Objects SQLite) - no local save needed
+        const noOpSave = async () => {};
+        return await revertToCommit(ctx.workbookDir, input.hash, noOpSave);
       } catch (err) {
         if (err instanceof Error) {
           throw new TRPCError({

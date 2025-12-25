@@ -6,7 +6,7 @@ import { redwood } from "rwsdk/vite";
 import { defineConfig } from "vite";
 import { editorPlugin } from "./src/vite-plugin-editor";
 import { dbTypesPlugin } from "./src/vite-plugin-db-types";
-import { pagesPlugin } from "./src/vite-plugin-pages";
+import { workbookPlugin } from "./src/vite-plugin-workbook";
 import { staleDepRetryPlugin } from "./src/vite-plugin-stale-dep-retry";
 import { tailwindSourcePlugin } from "./src/vite-plugin-tailwind-source";
 import { tunnelPlugin } from "./src/vite-plugin-tunnel";
@@ -119,7 +119,7 @@ export default defineConfig({
     // staleDepRetryPlugin(), // TODO: fix - causing Script error
     tunnelPlugin({ enabled: isDev }),
     dbTypesPlugin({ workbookPath }),
-    pagesPlugin({ workbookPath }),
+    workbookPlugin({ workbookPath }),
     cloudflare({
       viteEnvironment: { name: "worker" },
       // Persist Durable Object SQLite to .hands/db in workbook
@@ -160,9 +160,11 @@ export default defineConfig({
       // Hands runtime
       "@hands/db": path.resolve(__dirname, "src/db/dev.ts"),
       "@hands/db/types": path.join(workbookPath, ".hands/db.d.ts"),
+      "@hands/services": path.resolve(__dirname, "src/services/index.ts"),
       "@hands/runtime/components/PageStatic": path.resolve(__dirname, "src/components/PageStatic.tsx"),
       "@hands/runtime": path.resolve(__dirname, "src/types/index.ts"),
       "@hands/pages": path.join(workbookPath, ".hands/pages/index.tsx"),
+      "@hands/actions": path.join(workbookPath, ".hands/actions/index.ts"),
       // Shared deps from runtime (workbook imports these but doesn't install them)
       "platejs/static": path.resolve(__dirname, "node_modules/platejs/dist/static/index.js"),
       "platejs/react": path.resolve(__dirname, "node_modules/platejs/dist/react/index.js"),

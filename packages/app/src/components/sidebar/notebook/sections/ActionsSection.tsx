@@ -75,7 +75,7 @@ function ActionListItem({ action, onSelect, onRun, runtimePort }: ActionListItem
   const handleRun = useCallback(
     async (e: React.MouseEvent) => {
       e.stopPropagation();
-      if (!runtimePort || isRunning) return;
+      if (!runtimePort || isRunning || !action.valid) return;
 
       setIsRunning(true);
       try {
@@ -84,14 +84,16 @@ function ActionListItem({ action, onSelect, onRun, runtimePort }: ActionListItem
         setIsRunning(false);
       }
     },
-    [runtimePort, isRunning, onRun],
+    [runtimePort, isRunning, onRun, action.valid],
   );
 
   return (
     <div className={listItemStyles}>
       <ActionIcon />
       <button onClick={onSelect} className="flex-1 truncate text-left hover:underline">
-        {action.name}
+        <span className={!action.valid ? "text-destructive" : undefined}>
+          {action.name || action.id}
+        </span>
       </button>
 
       {/* Trigger indicators */}
@@ -106,7 +108,7 @@ function ActionListItem({ action, onSelect, onRun, runtimePort }: ActionListItem
             <TooltipContent side="top">Schedule: {action.schedule}</TooltipContent>
           </Tooltip>
         )}
-        {action.triggers.includes("webhook") && (
+        {action.triggers?.includes("webhook") && (
           <Tooltip>
             <TooltipTrigger asChild>
               <span className="text-muted-foreground/60">
@@ -123,10 +125,10 @@ function ActionListItem({ action, onSelect, onRun, runtimePort }: ActionListItem
         <TooltipTrigger asChild>
           <button
             onClick={handleRun}
-            disabled={isRunning || !runtimePort}
+            disabled={isRunning || !runtimePort || !action.valid}
             className={cn(
               "p-0.5 rounded opacity-0 group-hover:opacity-100 hover:bg-accent transition-all",
-              (isRunning || !runtimePort) && "opacity-50 cursor-not-allowed",
+              (isRunning || !runtimePort || !action.valid) && "opacity-50 cursor-not-allowed",
             )}
           >
             {isRunning ? (
@@ -136,7 +138,9 @@ function ActionListItem({ action, onSelect, onRun, runtimePort }: ActionListItem
             )}
           </button>
         </TooltipTrigger>
-        <TooltipContent side="top">Run now</TooltipContent>
+        <TooltipContent side="top">
+          {!action.valid ? `Error: ${action.error || "Invalid action"}` : "Run now"}
+        </TooltipContent>
       </Tooltip>
     </div>
   );

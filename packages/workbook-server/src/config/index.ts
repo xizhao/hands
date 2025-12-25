@@ -336,6 +336,8 @@ export function generateWorkbookTsConfig(workbookDir: string): string {
         // Database access
         "@hands/db": [`${relativeRuntimePath}/src/db/dev.ts`],
         "@hands/db/types": [".hands/db.d.ts"],
+        // Cloud services (for actions)
+        "@hands/services": [`${relativeRuntimePath}/src/services/index.ts`],
         // Runtime types (BlockFn, BlockMeta, etc.)
         "@hands/runtime": [`${relativeRuntimePath}/src/types/index.ts`],
         // UI components

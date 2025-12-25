@@ -20,11 +20,11 @@ Actions are serverless functions in the \`actions/\` directory. They can:
 
 ## Available Imports
 
-Actions can import from the Hands core library and use native fetch:
+Actions can import from the Hands runtime and use native fetch:
 
 \`\`\`typescript
 import { defineAction } from "@hands/core/primitives";  // Required - action definition
-import { createServices } from "@hands/core/services";  // Cloud services client
+import { createServices } from "@hands/services";       // Cloud services client
 import { z } from "zod";                                 // Input validation
 \`\`\`
 
@@ -34,13 +34,13 @@ import { z } from "zod";                                 // Input validation
 - \`JSON\`, \`Date\`, \`Math\` - Standard JS globals
 - \`btoa\`, \`atob\` - Base64 encoding
 
-## Cloud Services (@hands/core/services)
+## Cloud Services (@hands/services)
 
 For external services like Email, Slack, GitHub, etc., use the cloud services client. This handles OAuth authentication automatically.
 
 \`\`\`typescript
 import { defineAction } from "@hands/core/primitives";
-import { createServices } from "@hands/core/services";
+import { createServices } from "@hands/services";
 
 export default defineAction({
   name: "notify-team",
@@ -155,11 +155,13 @@ export default defineAction({
 \`\`\`typescript
 // actions/hourly-report.ts
 import { defineAction } from "@hands/core/primitives";
+import { createServices } from "@hands/services";
 
 export default defineAction({
   name: "hourly-report",
   description: "Generate hourly sales report",
   schedule: "0 * * * *", // Every hour
+  secrets: ["HANDS_CLOUD_TOKEN"],
 
   async run(input, ctx) {
     const sales = await ctx.sql\`
@@ -168,7 +170,16 @@ export default defineAction({
       WHERE created_at > datetime('now', '-1 hour')
     \`;
 
-    await ctx.notify.slack?.("#sales", \`Hourly sales: $\${sales[0].total}\`);
+    // Use cloud services for Slack notifications
+    const services = createServices({
+      cloudUrl: "https://api.hands.app",
+      authToken: ctx.secrets.HANDS_CLOUD_TOKEN,
+    });
+    await services.slack.send({
+      channel: "#sales",
+      text: \`Hourly sales: $\${sales[0].total}\`,
+    });
+
     return { total: sales[0].total };
   },
 });
@@ -299,11 +310,15 @@ const apiKey = ctx.secrets.API_KEY;
 const dbUrl = ctx.secrets.DATABASE_URL;
 \`\`\`
 
-### ctx.notify
-Send notifications:
+### ctx.notify (Legacy)
+Basic notification stubs - use \`createServices()\` instead for full OAuth integration:
 \`\`\`typescript
-await ctx.notify.slack?.("#channel", "Message");
-await ctx.notify.email?.("user@example.com", "Subject", "Body");
+// Preferred: Use @hands/services for Slack/email
+import { createServices } from "@hands/services";
+const services = createServices({ cloudUrl, authToken: ctx.secrets.HANDS_CLOUD_TOKEN });
+await services.slack.send({ channel: "#channel", text: "Message" });
+
+// Legacy: ctx.notify (webhook only)
 await ctx.notify.webhook?.(url, payload);
 \`\`\`
 
@@ -438,10 +453,10 @@ import axios from "axios";
 import Stripe from "stripe";
 \`\`\`
 
-### CORRECT: Use @hands/core/services or fetch()
+### CORRECT: Use @hands/services or fetch()
 \`\`\`typescript
 import { defineAction } from "@hands/core/primitives";
-import { createServices } from "@hands/core/services";
+import { createServices } from "@hands/services";
 
 export default defineAction({
   name: "sync-data",

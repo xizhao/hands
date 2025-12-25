@@ -119,7 +119,7 @@ export function useSidebarData(options: SidebarDataOptions = {}) {
   );
 
   const filteredActions = useMemo(
-    () => actions.filter((a) => matchesSearch(a.name) || matchesSearch(a.id)),
+    () => actions.filter((a) => matchesSearch(a.name ?? a.id) || matchesSearch(a.id)),
     [actions, searchQuery],
   );
 

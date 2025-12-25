@@ -478,7 +478,7 @@ export interface TAlertElement extends TElement {
 export interface TLoaderElement extends TElement {
   type: typeof LOADER_KEY;
   /** Loading animation style */
-  variant?: "spinner" | "dots" | "bars" | "pulse" | "ring" | "bounce" | "wave" | "square";
+  variant?: "spinner" | "dots" | "bars" | "pulse" | "ring" | "bounce" | "wave" | "square" | "hands";
   /** Size of the loader */
   size?: "xs" | "sm" | "md" | "lg" | "xl";
   /** Color variant */

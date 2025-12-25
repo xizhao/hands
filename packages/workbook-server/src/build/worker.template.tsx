@@ -460,7 +460,7 @@ function getTRPC(runtimePort: number): any {
   return trpcClient;
 }
 
-// DB proxy that forwards queries to the runtime's PGlite instance via tRPC
+// DB proxy that forwards queries to the runtime's SQLite instance via tRPC
 function createDbProxy(runtimePort: number) {
   const trpc = getTRPC(runtimePort);
 

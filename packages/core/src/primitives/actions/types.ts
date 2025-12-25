@@ -300,15 +300,13 @@ export interface ActionDefinition<TInput = unknown, TOutput = unknown> {
 // Discovered Action (Runtime)
 // =============================================================================
 
-export interface DiscoveredAction {
+/** Base properties shared by all discovered actions */
+interface DiscoveredActionBase {
   /** Action ID (usually same as name) */
   id: string;
 
   /** Path to the action file */
   path: string;
-
-  /** The action definition */
-  definition: ActionDefinition;
 
   /** Most recent run (if any) */
   lastRun?: ActionRun;
@@ -319,6 +317,23 @@ export interface DiscoveredAction {
   /** Missing secrets (if any) */
   missingSecrets?: string[];
 }
+
+/** A valid action that loaded successfully */
+export interface ValidAction extends DiscoveredActionBase {
+  valid: true;
+  definition: ActionDefinition;
+  error?: undefined;
+}
+
+/** An invalid action that failed to load */
+export interface InvalidAction extends DiscoveredActionBase {
+  valid: false;
+  error: string;
+  definition?: undefined;
+}
+
+/** Discriminated union - TypeScript narrows based on `valid` */
+export type DiscoveredAction = ValidAction | InvalidAction;
 
 // =============================================================================
 // Helper Function

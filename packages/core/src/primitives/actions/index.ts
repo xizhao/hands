@@ -25,6 +25,8 @@ export type {
   InputValidator,
   ActionDefinition,
   DiscoveredAction,
+  ValidAction,
+  InvalidAction,
 } from "./types.js";
 
 export { defineAction } from "./types.js";

@@ -157,7 +157,7 @@ export function MonacoEditor({
         options={{
           readOnly,
           minimap: { enabled: false },
-          fontSize: 14,
+          fontSize: 12,
           fontFamily:
             "ui-monospace, SFMono-Regular, SF Mono, Menlo, Consolas, Liberation Mono, monospace",
           lineNumbers: "on",

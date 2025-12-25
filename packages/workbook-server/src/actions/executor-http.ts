@@ -107,12 +107,11 @@ export async function executeActionHttp(
   const secrets = Object.fromEntries(secretsMap);
 
   try {
-    // Delegate to runtime's /actions/run endpoint
-    const response = await fetch(`${runtimeUrl}/actions/run`, {
+    // Delegate to runtime's /actions/:actionId/run endpoint
+    const response = await fetch(`${runtimeUrl}/actions/${action.id}/run`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        actionPath: action.path,
         trigger,
         input,
         secrets,

@@ -22,15 +22,17 @@ export const Route = createFileRoute("/_notebook/actions/")({
 
 interface ActionListItem {
   id: string;
-  name: string;
+  name?: string;
   description?: string;
   schedule?: string;
-  triggers: Array<"manual" | "webhook" | "pg_notify">;
-  hasWebhook: boolean;
-  hasInput: boolean;
-  hasSchema: boolean;
+  triggers?: Array<"manual" | "webhook" | "pg_notify">;
+  hasWebhook?: boolean;
+  hasInput?: boolean;
+  hasSchema?: boolean;
   missingSecrets?: string[];
   nextRun?: string;
+  valid: boolean;
+  error?: string;
   lastRun?: {
     id: string;
     status: "running" | "success" | "failed";
@@ -128,8 +130,20 @@ function ActionsIndexPage() {
                       className="flex-1 min-w-0"
                     >
                       <div className="flex items-center gap-2">
-                        <span className="font-medium truncate">{action.name}</span>
-                        {hasMissingSecrets && (
+                        <span className={cn("font-medium truncate", !action.valid && "text-destructive")}>
+                          {action.name || action.id}
+                        </span>
+                        {!action.valid && (
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <Warning weight="fill" className="h-4 w-4 text-destructive shrink-0" />
+                            </TooltipTrigger>
+                            <TooltipContent>
+                              Error: {action.error || "Invalid action"}
+                            </TooltipContent>
+                          </Tooltip>
+                        )}
+                        {action.valid && hasMissingSecrets && (
                           <Tooltip>
                             <TooltipTrigger asChild>
                               <Warning weight="fill" className="h-4 w-4 text-amber-500 shrink-0" />

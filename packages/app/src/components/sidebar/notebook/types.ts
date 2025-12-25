@@ -20,11 +20,15 @@ export interface SidebarPlugin {
 
 export interface SidebarAction {
   id: string;
-  name: string;
+  name?: string;
   description?: string;
   schedule?: string;
-  triggers: string[];
+  triggers?: string[];
   path: string;
+  /** Whether the action loaded successfully */
+  valid: boolean;
+  /** Error message if action failed to load */
+  error?: string;
 }
 
 export interface SidebarSource {

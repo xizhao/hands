@@ -2,13 +2,18 @@
  * Action Scheduler
  *
  * Handles cron-based scheduling for actions.
- * Uses a simple interval-based approach that checks every minute.
+ * Delegates execution to runtime via HTTP.
  */
 
-import type { PGlite } from "@electric-sql/pglite";
-import type { DiscoveredAction } from "@hands/core/primitives";
-import { discoverActions } from "./discovery.js";
-import { executeAction } from "./executor.js";
+import { join } from "node:path";
+import type { DiscoveredAction } from "../workbook/types.js";
+import { discoverActions } from "../workbook/discovery.js";
+import { executeActionHttp } from "./executor-http.js";
+
+/** Type guard: valid action with a schedule */
+function isScheduledAction(action: DiscoveredAction): action is DiscoveredAction & { schedule: string } {
+  return action.valid && !!action.schedule;
+}
 
 /**
  * Parse a cron expression into its parts
@@ -148,7 +153,8 @@ const state: SchedulerState = {
 
 export interface SchedulerConfig {
   workbookDir: string;
-  getDb: () => PGlite | null;
+  /** Runtime URL for action execution (e.g., http://localhost:55200) */
+  getRuntimeUrl: () => string | null;
   checkIntervalMs?: number; // Default: 60000 (1 minute)
 }
 
@@ -161,7 +167,7 @@ export function startScheduler(config: SchedulerConfig): void {
     return;
   }
 
-  const { workbookDir, getDb, checkIntervalMs = 60000 } = config;
+  const { workbookDir, getRuntimeUrl, checkIntervalMs = 60000 } = config;
 
   state.running = true;
   state.lastCheck = new Date();
@@ -169,10 +175,10 @@ export function startScheduler(config: SchedulerConfig): void {
   console.log("[scheduler] Starting action scheduler");
 
   // Check immediately, then on interval
-  checkScheduledActions(workbookDir, getDb);
+  checkScheduledActions(workbookDir, getRuntimeUrl);
 
   state.intervalId = setInterval(() => {
-    checkScheduledActions(workbookDir, getDb);
+    checkScheduledActions(workbookDir, getRuntimeUrl);
   }, checkIntervalMs);
 }
 
@@ -196,22 +202,24 @@ export function stopScheduler(): void {
  */
 async function checkScheduledActions(
   workbookDir: string,
-  getDb: () => PGlite | null,
+  getRuntimeUrl: () => string | null,
 ): Promise<void> {
   const now = new Date();
   state.lastCheck = now;
 
-  const db = getDb();
-  if (!db) {
-    return; // DB not ready yet
+  const runtimeUrl = getRuntimeUrl();
+  if (!runtimeUrl) {
+    return; // Runtime not ready yet
   }
 
   try {
-    const actions = await discoverActions(workbookDir);
-    const scheduledActions = actions.filter((a) => a.definition.schedule);
+    const actionsDir = join(workbookDir, "actions");
+    const result = await discoverActions(actionsDir, workbookDir);
+    // Filter to only valid actions with schedules (type guard narrows the type)
+    const scheduledActions = result.items.filter(isScheduledAction);
 
     for (const action of scheduledActions) {
-      const cron = parseCron(action.definition.schedule!);
+      const cron = parseCron(action.schedule);
       if (!cron) continue;
 
       // Check if this minute matches the schedule
@@ -224,7 +232,7 @@ async function checkScheduledActions(
         console.log(`[scheduler] Running scheduled action: ${action.id}`);
 
         // Run async - don't await to avoid blocking other scheduled actions
-        runScheduledAction(action, db, workbookDir).catch((err) => {
+        runScheduledAction(action, runtimeUrl, workbookDir).catch((err) => {
           console.error(`[scheduler] Failed to run action ${action.id}:`, err);
         });
       }
@@ -235,21 +243,27 @@ async function checkScheduledActions(
 }
 
 /**
- * Run a scheduled action
+ * Run a scheduled action via HTTP to runtime
  */
 async function runScheduledAction(
   action: DiscoveredAction,
-  db: PGlite,
+  runtimeUrl: string,
   workbookDir: string,
 ): Promise<void> {
   try {
-    await executeAction({
+    const result = await executeActionHttp({
       action,
       trigger: "cron",
       input: undefined,
-      db,
+      runtimeUrl,
       workbookDir,
     });
+
+    if (result.status === "failed") {
+      console.error(`[scheduler] Action ${action.id} failed:`, result.error);
+    } else {
+      console.log(`[scheduler] Action ${action.id} completed in ${result.durationMs}ms`);
+    }
   } catch (err) {
     console.error(`[scheduler] Action ${action.id} failed:`, err);
   }

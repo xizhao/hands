@@ -168,7 +168,7 @@ export const workbookTRPCRouter = t.router({
 
     /** Get block source code */
     getSource: publicProcedure.input(blockIdInput).query(async ({ ctx, input }) => {
-      const blocksDir = join(ctx.workbookDir, "blocks");
+      const blocksDir = join(ctx.workbookDir, "pages/blocks");
       const filePath = findBlockFile(blocksDir, input.blockId);
 
       if (!filePath) {
@@ -185,7 +185,7 @@ export const workbookTRPCRouter = t.router({
 
     /** Save block source code */
     saveSource: publicProcedure.input(saveBlockSourceInput).mutation(async ({ ctx, input }) => {
-      const blocksDir = join(ctx.workbookDir, "blocks");
+      const blocksDir = join(ctx.workbookDir, "pages/blocks");
 
       let filePath = findBlockFile(blocksDir, input.blockId);
       if (!filePath) {
@@ -232,7 +232,7 @@ export const workbookTRPCRouter = t.router({
     create: publicProcedure.input(createBlockInput).mutation(async ({ ctx, input }) => {
       validateBlockId(input.blockId);
 
-      const blocksDir = join(ctx.workbookDir, "blocks");
+      const blocksDir = join(ctx.workbookDir, "pages/blocks");
       const filePath = join(blocksDir, `${input.blockId}.tsx`);
 
       if (existsSync(filePath)) {
@@ -265,7 +265,7 @@ export const workbookTRPCRouter = t.router({
 
     /** Delete a block */
     delete: publicProcedure.input(blockIdInput).mutation(async ({ ctx, input }) => {
-      const blocksDir = join(ctx.workbookDir, "blocks");
+      const blocksDir = join(ctx.workbookDir, "pages/blocks");
       const filePath = findBlockFile(blocksDir, input.blockId);
 
       if (!filePath) {
@@ -280,7 +280,7 @@ export const workbookTRPCRouter = t.router({
 
     /** Duplicate a block */
     duplicate: publicProcedure.input(duplicateBlockInput).mutation(async ({ ctx, input }) => {
-      const blocksDir = join(ctx.workbookDir, "blocks");
+      const blocksDir = join(ctx.workbookDir, "pages/blocks");
       const sourceFile = findBlockFile(blocksDir, input.blockId);
 
       if (!sourceFile) {
@@ -315,7 +315,7 @@ export const workbookTRPCRouter = t.router({
 
     /** Move/rename a block with import updates */
     move: publicProcedure.input(moveBlockInput).mutation(async ({ ctx, input }) => {
-      const blocksDir = join(ctx.workbookDir, "blocks");
+      const blocksDir = join(ctx.workbookDir, "pages/blocks");
 
       let sourceExt: string | null = null;
       for (const ext of [".tsx", ".ts"]) {
@@ -381,7 +381,7 @@ export const workbookTRPCRouter = t.router({
 
     /** Format block source */
     format: publicProcedure.input(blockIdInput).mutation(async ({ ctx, input }) => {
-      const blocksDir = join(ctx.workbookDir, "blocks");
+      const blocksDir = join(ctx.workbookDir, "pages/blocks");
       const filePath = findBlockFile(blocksDir, input.blockId);
 
       if (!filePath) {

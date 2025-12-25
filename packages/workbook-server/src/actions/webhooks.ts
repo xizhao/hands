@@ -2,49 +2,63 @@
  * Action Webhooks
  *
  * HTTP webhook handlers for actions that support webhook triggers.
+ * Delegates execution to runtime via HTTP.
  */
 
-import type { PGlite } from "@electric-sql/pglite";
 import type { Hono } from "hono";
-import { discoverActions } from "./discovery.js";
-import { executeAction } from "./executor.js";
+import { join } from "node:path";
+import { discoverActions } from "../workbook/discovery.js";
+import { executeActionHttp } from "./executor-http.js";
 
 export interface WebhookConfig {
   workbookDir: string;
-  getDb: () => PGlite | null;
-  isDbReady: () => boolean;
+  /** Runtime URL for action execution (e.g., http://localhost:55200) */
+  getRuntimeUrl: () => string | null;
+  isRuntimeReady: () => boolean;
 }
 
 /**
  * Register webhook routes on a Hono app
  */
 export function registerWebhookRoutes(app: Hono, config: WebhookConfig): void {
-  const { workbookDir, getDb, isDbReady } = config;
+  const { workbookDir, getRuntimeUrl, isRuntimeReady } = config;
 
   // POST /webhook/:actionId - Execute action via webhook
   app.post("/webhook/:actionId", async (c) => {
     const actionId = c.req.param("actionId");
 
-    // Check DB is ready
-    if (!isDbReady()) {
-      return c.json({ error: "Database not ready", code: "DB_NOT_READY" }, 503);
+    // Check runtime is ready
+    if (!isRuntimeReady()) {
+      return c.json({ error: "Runtime not ready", code: "RUNTIME_NOT_READY" }, 503);
     }
 
-    const db = getDb();
-    if (!db) {
-      return c.json({ error: "Database not available", code: "DB_NOT_AVAILABLE" }, 503);
+    const runtimeUrl = getRuntimeUrl();
+    if (!runtimeUrl) {
+      return c.json({ error: "Runtime not available", code: "RUNTIME_NOT_AVAILABLE" }, 503);
     }
 
     // Discover actions and find the one we want
-    const actions = await discoverActions(workbookDir);
-    const action = actions.find((a) => a.id === actionId);
+    const actionsDir = join(workbookDir, "actions");
+    const result = await discoverActions(actionsDir, workbookDir);
+    const action = result.items.find((a) => a.id === actionId);
 
     if (!action) {
       return c.json({ error: `Action not found: ${actionId}`, code: "ACTION_NOT_FOUND" }, 404);
     }
 
+    // Check if action is valid
+    if (!action.valid) {
+      return c.json(
+        {
+          error: `Action ${actionId} is invalid: ${action.error || "Unknown error"}`,
+          code: "ACTION_INVALID",
+        },
+        400,
+      );
+    }
+
     // Check if action supports webhook trigger
-    const triggers = action.definition.triggers ?? ["manual"];
+    const triggers = action.triggers ?? ["manual"];
     if (!triggers.includes("webhook")) {
       return c.json(
         {
@@ -86,12 +100,12 @@ export function registerWebhookRoutes(app: Hono, config: WebhookConfig): void {
       input = undefined;
     }
 
-    // Execute the action
-    const run = await executeAction({
+    // Execute the action via HTTP to runtime
+    const run = await executeActionHttp({
       action,
       trigger: "webhook",
       input,
-      db,
+      runtimeUrl,
       workbookDir,
     });
 
@@ -111,31 +125,36 @@ export function registerWebhookRoutes(app: Hono, config: WebhookConfig): void {
     const actionId = c.req.param("actionId");
     const customPath = c.req.path.replace(`/webhook/${actionId}/`, "");
 
-    // Check DB is ready
-    if (!isDbReady()) {
-      return c.json({ error: "Database not ready", code: "DB_NOT_READY" }, 503);
+    // Check runtime is ready
+    if (!isRuntimeReady()) {
+      return c.json({ error: "Runtime not ready", code: "RUNTIME_NOT_READY" }, 503);
     }
 
-    const db = getDb();
-    if (!db) {
-      return c.json({ error: "Database not available", code: "DB_NOT_AVAILABLE" }, 503);
+    const runtimeUrl = getRuntimeUrl();
+    if (!runtimeUrl) {
+      return c.json({ error: "Runtime not available", code: "RUNTIME_NOT_AVAILABLE" }, 503);
     }
 
     // Discover actions and find matching one
-    const actions = await discoverActions(workbookDir);
+    const actionsDir = join(workbookDir, "actions");
+    const result = await discoverActions(actionsDir, workbookDir);
 
-    // First try exact action ID match with custom path
-    let action = actions.find(
+    // First try exact action ID match with custom path (only valid actions)
+    let action = result.items.find(
       (a) =>
         a.id === actionId &&
-        a.definition.webhookPath === customPath &&
-        (a.definition.triggers ?? ["manual"]).includes("webhook"),
+        a.valid &&
+        a.webhookPath === customPath &&
+        (a.triggers ?? ["manual"]).includes("webhook"),
     );
 
-    // Fall back to just action ID
+    // Fall back to just action ID (only valid actions)
     if (!action) {
-      action = actions.find(
-        (a) => a.id === actionId && (a.definition.triggers ?? ["manual"]).includes("webhook"),
+      action = result.items.find(
+        (a) =>
+          a.id === actionId &&
+          a.valid &&
+          (a.triggers ?? ["manual"]).includes("webhook"),
       );
     }
 
@@ -187,12 +206,12 @@ export function registerWebhookRoutes(app: Hono, config: WebhookConfig): void {
       headers: Object.fromEntries(c.req.raw.headers.entries()),
     };
 
-    // Execute the action
-    const run = await executeAction({
+    // Execute the action via HTTP to runtime
+    const run = await executeActionHttp({
       action,
       trigger: "webhook",
       input,
-      db,
+      runtimeUrl,
       workbookDir,
     });
 

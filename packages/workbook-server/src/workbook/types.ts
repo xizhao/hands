@@ -7,9 +7,7 @@
 export interface WorkbookConfig {
   /** Root path to the workbook */
   rootPath: string;
-  /** Path to blocks directory (default: rootPath/blocks) */
-  blocksDir?: string;
-  /** Path to pages directory (default: rootPath/pages) */
+  /** Path to pages directory (default: rootPath/pages) - blocks are in pages/blocks/ */
   pagesDir?: string;
   /** Path to plugins directory (default: rootPath/plugins) */
   pluginsDir?: string;
@@ -23,7 +21,6 @@ export interface WorkbookConfig {
 
 export interface ResolvedWorkbookConfig {
   rootPath: string;
-  blocksDir: string;
   pagesDir: string;
   pluginsDir: string;
   uiDir: string;
@@ -120,18 +117,22 @@ export interface DiscoveredTable {
 export interface DiscoveredAction {
   /** Action ID (derived from filename) */
   id: string;
-  /** Path to the action file */
+  /** Path to the action file (relative to workbook root) */
   path: string;
+  /** Whether action loaded successfully */
+  valid: boolean;
+  /** Error message if action failed to load */
+  error?: string;
   /** Action name from definition */
-  name: string;
+  name?: string;
   /** Human-readable description */
   description?: string;
   /** Cron schedule expression */
   schedule?: string;
   /** Trigger types */
-  triggers: string[];
+  triggers?: string[];
   /** Whether action has webhook trigger */
-  hasWebhook: boolean;
+  hasWebhook?: boolean;
   /** Webhook path override */
   webhookPath?: string;
   /** Required secrets */
@@ -139,9 +140,9 @@ export interface DiscoveredAction {
   /** Missing secrets (validation errors) */
   missingSecrets?: string[];
   /** Whether action has input schema */
-  hasInput: boolean;
+  hasInput?: boolean;
   /** Whether action has database schema requirements */
-  hasSchema: boolean;
+  hasSchema?: boolean;
   /** Next scheduled run (ISO timestamp) */
   nextRun?: string;
 }

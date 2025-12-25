@@ -44,8 +44,10 @@ export interface WorkbookManifest {
     name: string;
     description?: string;
     schedule?: string;
-    triggers: string[];
+    triggers?: string[];
     path: string;
+    valid: boolean;
+    error?: string;
   }>;
   pages?: Array<{
     id: string;
