@@ -77,6 +77,7 @@ export * from "./progress";
 export * from "./resize-handle";
 export * from "./separator";
 export * from "./slash-node";
+export * from "./slides-view";
 export * from "./spinner";
 export * from "./suggestion-node-static";
 export * from "./suggestion-toolbar-button";

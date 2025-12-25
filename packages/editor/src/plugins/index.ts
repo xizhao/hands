@@ -47,3 +47,6 @@ export * from "./page-context-kit";
 
 // Presets
 export * from "./presets";
+
+// Editor config
+export * from "./editor-config";

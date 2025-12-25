@@ -40,7 +40,7 @@ import { FrontmatterHeader, type Frontmatter } from "./frontmatter";
 import { createCopilotKit, type CopilotConfig } from "./plugins/copilot-kit";
 import { createMarkdownKit, type MarkdownRule } from "./plugins/markdown-kit";
 import { EditorCorePlugins } from "./plugins/presets";
-import { EditorStatusBar, FixedToolbar, FixedToolbarButtons, TooltipProvider, TocSidebar } from "./ui";
+import { EditorStatusBar, FixedToolbar, FixedToolbarButtons, TooltipProvider, TocSidebar, SlidesView } from "./ui";
 import { MarkdownCodeEditor, type Diagnostic } from "./ui/markdown-code-editor";
 import { ModeToggle, type EditorMode } from "./ui/mode-toggle";
 import { serializeFrontmatter, parseFrontmatter, stripFrontmatter } from "./frontmatter";
@@ -529,11 +529,15 @@ export const Editor = forwardRef<EditorHandle, EditorProps>(function Editor(
       <FixedToolbar>
         <div className="flex items-center justify-between w-full">
           {/* Left side - only show formatting buttons in visual mode */}
-          {mode === "visual" ? (
-            <FixedToolbarButtons />
-          ) : (
+          {mode === "visual" && <FixedToolbarButtons />}
+          {mode === "markdown" && (
             <div className="text-xs text-muted-foreground px-2">
               Markdown Mode
+            </div>
+          )}
+          {mode === "slides" && (
+            <div className="text-xs text-muted-foreground px-2">
+              Slides
             </div>
           )}
           {/* Right side - mode toggle */}
@@ -551,32 +555,29 @@ export const Editor = forwardRef<EditorHandle, EditorProps>(function Editor(
           {/* Toolbar */}
           {toolbarElement}
 
-          {/* Scroll container - padding here (not PlateContent) so drag handle gutter isn't clipped */}
-          <div className={cn(
-            "relative flex-1 min-h-0 cursor-text overflow-y-auto",
-            mode === "visual" ? "pl-8 pr-6" : "pl-0 pr-0"
-          )}>
-            {/* Table of contents - in left gutter where drag handles go */}
-            {mode === "visual" && (frontmatter?.toc ?? tocProp) && (
-              <TocSidebar className="absolute top-4 left-0 w-8" />
-            )}
+          {/* View content - each mode has its own container */}
+          {mode === "visual" && (
+            <div className="relative flex-1 min-h-0 overflow-y-auto pl-8 pr-6 cursor-text flex flex-col">
+              {/* Table of contents - in left gutter */}
+              {(frontmatter?.toc ?? tocProp) && (
+                <TocSidebar className="absolute top-4 left-0 w-8" />
+              )}
 
-            {/* Frontmatter header (only in visual mode - code mode shows raw frontmatter) */}
-            {mode === "visual" && frontmatter && onFrontmatterChange && (
-              <FrontmatterHeader
-                frontmatter={frontmatter}
-                onFrontmatterChange={onFrontmatterChange}
-                onFocusEditor={handleFocusEditor}
-                subtitleRef={subtitleRef}
-                compact
-              />
-            )}
+              {/* Frontmatter header */}
+              {frontmatter && onFrontmatterChange && (
+                <FrontmatterHeader
+                  frontmatter={frontmatter}
+                  onFrontmatterChange={onFrontmatterChange}
+                  onFocusEditor={handleFocusEditor}
+                  subtitleRef={subtitleRef}
+                  compact
+                />
+              )}
 
-            {/* Custom header slot (only in visual mode) */}
-            {mode === "visual" && header}
+              {/* Custom header slot */}
+              {header}
 
-            {/* Editor content */}
-            {mode === "visual" ? (
+              {/* Editor content */}
               <PlateContent
                 className={cn(
                   "pt-4 pb-32 min-h-[200px] outline-none",
@@ -587,7 +588,13 @@ export const Editor = forwardRef<EditorHandle, EditorProps>(function Editor(
                 readOnly={readOnly}
                 onKeyDown={handleEditorKeyDown}
               />
-            ) : (
+
+              {footer}
+            </div>
+          )}
+
+          {mode === "markdown" && (
+            <div className="flex-1 min-h-0 overflow-y-auto flex flex-col">
               <MarkdownCodeEditor
                 value={markdownContent}
                 onChange={handleMarkdownChange}
@@ -596,14 +603,16 @@ export const Editor = forwardRef<EditorHandle, EditorProps>(function Editor(
                 placeholder={placeholder}
                 readOnly={readOnly}
               />
-            )}
+              {footer}
+            </div>
+          )}
 
-            {/* Footer slot */}
-            {footer}
-          </div>
+          {mode === "slides" && (
+            <SlidesView className="flex-1 min-h-0" />
+          )}
 
-          {/* Status bar - shows selection info and save status */}
-          {!readOnly && <EditorStatusBar isSaving={isSaving} />}
+          {/* Status bar - doc mode only */}
+          {!readOnly && mode === "visual" && <EditorStatusBar isSaving={isSaving} />}
         </Plate>
       </div>
     </TooltipProvider>
