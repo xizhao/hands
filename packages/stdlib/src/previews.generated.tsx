@@ -21,7 +21,6 @@ import { InputGroup, InputGroupInput, InputGroupText } from "./registry/componen
 import { Popover, PopoverContent, PopoverTrigger } from "./registry/components/ui/popover.js";
 import { Progress } from "./registry/components/ui/progress.js";
 import { InputOTP, InputOTPGroup, InputOTPSlot } from "./registry/components/ui/input-otp.js";
-import { ChartContainer } from "./registry/components/ui/chart.js";
 import { HoverCard, HoverCardContent, HoverCardTrigger } from "./registry/components/ui/hover-card.js";
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle, SheetTrigger } from "./registry/components/ui/sheet.js";
 import { Field, FieldDescription, FieldLabel } from "./registry/components/ui/field.js";
@@ -62,8 +61,6 @@ import { Skeleton } from "./registry/components/ui/skeleton.js";
 import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuTrigger } from "./registry/components/ui/context-menu.js";
 import { FormControl, FormItem, FormLabel, FormMessage } from "./registry/components/ui/form.js";
 import { Carousel, CarouselContent, CarouselItem, CarouselNext, CarouselPrevious } from "./registry/components/ui/carousel.js";
-import { BarChart } from "./registry/components/charts/bar-chart.js";
-import { LineChart } from "./registry/components/charts/line-chart.js";
 import { DataTable } from "./registry/components/data/data-table.js";
 import { MetricCard } from "./registry/components/data/metric-card.js";
 
@@ -207,13 +204,6 @@ export const previews: Record<string, () => React.ReactNode> = {
         <InputOTPSlot index={2} />
       </InputOTPGroup>
     </InputOTP>
-  ),
-  "chart": () => (
-    <ChartContainer config={{}} className="h-[200px]">
-      <div className="flex items-center justify-center h-full text-muted-foreground">
-        Chart visualization area
-      </div>
-    </ChartContainer>
   ),
   "hover-card": () => (
     <HoverCard>
@@ -534,30 +524,6 @@ export const previews: Record<string, () => React.ReactNode> = {
       <CarouselPrevious />
       <CarouselNext />
     </Carousel>
-  ),
-  "bar-chart": () => (
-    <BarChart
-      data={[
-        { month: "Jan", sales: 4200 },
-        { month: "Feb", sales: 3800 },
-        { month: "Mar", sales: 5100 },
-      ]}
-      x="month"
-      y="sales"
-      height={300}
-    />
-  ),
-  "line-chart": () => (
-    <LineChart
-      data={[
-        { month: "Jan", revenue: 4200 },
-        { month: "Feb", revenue: 3800 },
-        { month: "Mar", revenue: 5100 },
-      ]}
-      x="month"
-      y="revenue"
-      height={300}
-    />
   ),
   "data-table": () => (
     <DataTable

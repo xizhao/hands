@@ -17,12 +17,15 @@ interface PluginsSectionProps {
   onToggle: () => void;
   /** Plugins list */
   plugins: SidebarPlugin[];
+  /** Size variant */
+  size?: "default" | "lg";
 }
 
 export function PluginsSection({
   expanded,
   onToggle,
   plugins,
+  size,
 }: PluginsSectionProps) {
   const handlePluginClick = (pluginId: string) => {
     // TODO: Navigate to plugin source in editor
@@ -32,6 +35,8 @@ export function PluginsSection({
   return (
     <SidebarSection
       title="Plugins"
+      type="plugins"
+      count={plugins.length}
       expanded={expanded}
       onToggle={onToggle}
       onAdd={() => {
@@ -39,6 +44,7 @@ export function PluginsSection({
         console.log("[sidebar] new plugin clicked");
       }}
       addTooltip="New plugin"
+      size={size}
     >
       {plugins.length > 0 ? (
         plugins.map((plugin) => (
@@ -53,7 +59,7 @@ export function PluginsSection({
           </div>
         ))
       ) : (
-        <SidebarEmptyState icon={<PluginIcon empty />} label="No plugins" />
+        <SidebarEmptyState label="No plugins" />
       )}
     </SidebarSection>
   );

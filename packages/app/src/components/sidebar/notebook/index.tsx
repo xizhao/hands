@@ -80,7 +80,7 @@ export function NotebookSidebar({
         {/* Sections */}
         <div className={cn(fullWidth ? "grid grid-cols-1 md:grid-cols-2 gap-6" : "space-y-3")}>
           <PagesSection
-            expanded={state.sections.pages.expanded}
+            expanded={state.sections.pages.expanded || (!!searchQuery && (data.rootPages.length > 0 || data.pageFolders.size > 0))}
             onToggle={state.sections.pages.toggle}
             rootPages={data.rootPages}
             pageFolders={data.pageFolders}
@@ -91,10 +91,11 @@ export function NotebookSidebar({
             isLoading={data.isLoading}
             actions={actions}
             onMenuOpenChange={onMenuOpenChange}
+            size={fullWidth ? "lg" : "default"}
           />
 
           <DataSection
-            expanded={state.sections.data.expanded}
+            expanded={state.sections.data.expanded || (!!searchQuery && (data.sources.length > 0 || data.unassociatedTables.length > 0))}
             onToggle={state.sections.data.toggle}
             sources={data.sources}
             availableSources={availableSources}
@@ -106,19 +107,22 @@ export function NotebookSidebar({
             isDbLoading={data.isDbLoading}
             actions={actions}
             onMenuOpenChange={onMenuOpenChange}
+            size={fullWidth ? "lg" : "default"}
           />
 
           <ActionsSection
-            expanded={state.sections.actions.expanded}
+            expanded={state.sections.actions.expanded || (!!searchQuery && data.filteredActions.length > 0)}
             onToggle={state.sections.actions.toggle}
             actions={data.filteredActions}
             handlers={actions}
+            size={fullWidth ? "lg" : "default"}
           />
 
           <PluginsSection
-            expanded={state.sections.plugins.expanded}
+            expanded={state.sections.plugins.expanded || (!!searchQuery && data.filteredPlugins.length > 0)}
             onToggle={state.sections.plugins.toggle}
             plugins={data.filteredPlugins}
+            size={fullWidth ? "lg" : "default"}
           />
         </div>
       </div>

@@ -6,9 +6,9 @@
 
 import { cn } from "@/lib/utils";
 
-/** Shared list item styles */
+/** Shared list item styles - minimalist */
 export const listItemStyles =
-  "w-full flex items-center gap-2 px-2 py-1 text-sm text-muted-foreground hover:text-foreground hover:bg-accent/50 rounded-md transition-colors group";
+  "w-full flex items-center gap-2.5 px-2 py-1 text-xs text-muted-foreground hover:text-foreground rounded transition-colors group";
 
 interface SidebarItemProps {
   /** Icon element */

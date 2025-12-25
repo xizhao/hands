@@ -9,7 +9,7 @@
  * - Missing secrets overlay with configuration form
  */
 
-import { CircleNotch, Clock, Code, Eye, EyeSlash, Globe, Key, Lock, Play } from "@phosphor-icons/react";
+import { CaretDown, CaretRight, CheckCircle, CircleNotch, Clock, Code, Eye, EyeSlash, Globe, Key, Lock, Play, XCircle } from "@phosphor-icons/react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
 import { useState } from "react";
@@ -19,6 +19,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { useRuntimePort } from "@/hooks/useRuntimeState";
+import { trpc, type ActionRunRecord, type ActionRunLog } from "@/lib/trpc";
 import { cn } from "@/lib/utils";
 
 interface ActionDetailPanelProps {
@@ -173,11 +174,151 @@ function MissingSecretsOverlay({
   );
 }
 
+/** Run history panel showing past action executions */
+function RunHistoryPanel({ actionId }: { actionId: string }) {
+  const [expandedRunId, setExpandedRunId] = useState<string | null>(null);
+
+  // Fetch run history from editor state database
+  const { data: runs, isLoading } = trpc.actionRuns.list.useQuery(
+    { actionId, limit: 20 },
+    { refetchOnWindowFocus: false }
+  );
+
+  // Fetch logs for expanded run
+  const { data: logs } = trpc.actionRuns.getLogs.useQuery(
+    { runId: expandedRunId! },
+    { enabled: !!expandedRunId }
+  );
+
+  if (isLoading) {
+    return (
+      <div className="p-4 flex items-center justify-center text-muted-foreground">
+        <CircleNotch weight="bold" className="h-4 w-4 animate-spin mr-2" />
+        <span className="text-xs">Loading history...</span>
+      </div>
+    );
+  }
+
+  if (!runs || runs.length === 0) {
+    return (
+      <div className="p-4 text-xs text-muted-foreground text-center">
+        No run history yet
+      </div>
+    );
+  }
+
+  return (
+    <div className="divide-y divide-border">
+      {runs.map((run) => {
+        const isExpanded = expandedRunId === run.id;
+        const isSuccess = run.status === "success";
+        const isFailed = run.status === "failed" || run.status === "error";
+        const isRunning = run.status === "running" || run.status === "pending";
+
+        return (
+          <div key={run.id} className="text-xs">
+            <button
+              onClick={() => setExpandedRunId(isExpanded ? null : run.id)}
+              className="w-full px-3 py-2 flex items-center gap-2 hover:bg-muted/50 transition-colors"
+            >
+              {isExpanded ? (
+                <CaretDown weight="bold" className="h-3 w-3 text-muted-foreground" />
+              ) : (
+                <CaretRight weight="bold" className="h-3 w-3 text-muted-foreground" />
+              )}
+
+              {isSuccess && <CheckCircle weight="fill" className="h-3.5 w-3.5 text-green-500" />}
+              {isFailed && <XCircle weight="fill" className="h-3.5 w-3.5 text-red-500" />}
+              {isRunning && <CircleNotch weight="bold" className="h-3.5 w-3.5 text-blue-500 animate-spin" />}
+
+              <span className="flex-1 text-left truncate">
+                {run.trigger === "manual" ? "Manual run" : run.trigger === "schedule" ? "Scheduled" : run.trigger}
+              </span>
+
+              <span className="text-muted-foreground">
+                {formatRelativeTime(run.startedAt)}
+              </span>
+
+              {run.durationMs !== null && (
+                <span className="text-muted-foreground tabular-nums">
+                  {run.durationMs}ms
+                </span>
+              )}
+            </button>
+
+            {isExpanded && (
+              <div className="px-3 pb-3 space-y-2">
+                {/* Error message */}
+                {run.error ? (
+                  <div className="p-2 rounded bg-red-500/10 border border-red-500/20 text-red-600 dark:text-red-400 font-mono text-xs whitespace-pre-wrap">
+                    {run.error}
+                  </div>
+                ) : null}
+
+                {/* Output */}
+                {run.output ? (
+                  <div className="p-2 rounded bg-muted font-mono text-xs">
+                    <div className="text-muted-foreground mb-1">Output:</div>
+                    <pre className="whitespace-pre-wrap overflow-x-auto">
+                      {typeof run.output === "string" ? run.output : JSON.stringify(run.output, null, 2)}
+                    </pre>
+                  </div>
+                ) : null}
+
+                {/* Logs */}
+                {logs && logs.length > 0 ? (
+                  <div className="p-2 rounded bg-zinc-900 text-zinc-100 font-mono text-xs max-h-48 overflow-y-auto">
+                    {logs.map((log) => (
+                      <div
+                        key={log.id}
+                        className={cn(
+                          "whitespace-pre-wrap",
+                          log.stream === "stderr" && "text-red-400"
+                        )}
+                      >
+                        {log.content}
+                      </div>
+                    ))}
+                  </div>
+                ) : null}
+
+                {/* Run ID for debugging */}
+                <div className="text-[10px] text-muted-foreground font-mono">
+                  ID: {run.id}
+                </div>
+              </div>
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+/** Format a date as relative time (e.g., "2m ago", "1h ago") */
+function formatRelativeTime(dateStr: string): string {
+  const date = new Date(dateStr);
+  const now = new Date();
+  const diffMs = now.getTime() - date.getTime();
+  const diffSec = Math.floor(diffMs / 1000);
+  const diffMin = Math.floor(diffSec / 60);
+  const diffHour = Math.floor(diffMin / 60);
+  const diffDay = Math.floor(diffHour / 24);
+
+  if (diffSec < 60) return "just now";
+  if (diffMin < 60) return `${diffMin}m ago`;
+  if (diffHour < 24) return `${diffHour}h ago`;
+  if (diffDay < 7) return `${diffDay}d ago`;
+
+  return date.toLocaleDateString();
+}
+
 export function ActionDetailPanel({ actionId }: ActionDetailPanelProps) {
   const port = useRuntimePort();
   const queryClient = useQueryClient();
   const navigate = useNavigate();
   const [showSecretsEditor, setShowSecretsEditor] = useState(false);
+  const [showRunHistory, setShowRunHistory] = useState(false);
 
   // Fetch action details
   const { data: action, isLoading: actionLoading } = useQuery({
@@ -210,6 +351,9 @@ export function ActionDetailPanel({ actionId }: ActionDetailPanelProps) {
   });
 
 
+  // tRPC utils for invalidating queries
+  const trpcUtils = trpc.useUtils();
+
   // Run action mutation
   const runMutation = useMutation({
     mutationFn: async () => {
@@ -228,6 +372,8 @@ export function ActionDetailPanel({ actionId }: ActionDetailPanelProps) {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["action", actionId] });
+      // Invalidate run history to show the new run
+      trpcUtils.actionRuns.list.invalidate({ actionId });
     },
   });
 
@@ -311,19 +457,30 @@ export function ActionDetailPanel({ actionId }: ActionDetailPanelProps) {
                 </p>
               )}
             </div>
-            <Button
-              onClick={() => runMutation.mutate()}
-              disabled={runMutation.isPending || hasMissingSecrets || !action.valid}
-              size="xs"
-              className="gap-1.5"
-            >
-              {runMutation.isPending ? (
-                <CircleNotch weight="bold" className="h-4 w-4 animate-spin" />
-              ) : (
-                <Play weight="fill" className="h-4 w-4" />
-              )}
-              Run Now
-            </Button>
+            <div className="flex items-center gap-2">
+              <Button
+                variant="ghost"
+                size="xs"
+                onClick={() => setShowRunHistory(!showRunHistory)}
+                className={cn("gap-1.5", showRunHistory && "bg-muted")}
+              >
+                <Clock weight="bold" className="h-4 w-4" />
+                History
+              </Button>
+              <Button
+                onClick={() => runMutation.mutate()}
+                disabled={runMutation.isPending || hasMissingSecrets || !action.valid}
+                size="xs"
+                className="gap-1.5"
+              >
+                {runMutation.isPending ? (
+                  <CircleNotch weight="bold" className="h-4 w-4 animate-spin" />
+                ) : (
+                  <Play weight="fill" className="h-4 w-4" />
+                )}
+                Run Now
+              </Button>
+            </div>
           </div>
 
           {/* Triggers & Schedule */}
@@ -468,6 +625,16 @@ export function ActionDetailPanel({ actionId }: ActionDetailPanelProps) {
             </div>
           )}
         </div>
+
+        {/* Run History Panel */}
+        {showRunHistory && (
+          <div className="border-b border-border max-h-64 overflow-y-auto">
+            <div className="px-4 py-2 bg-muted/30 border-b border-border">
+              <span className="text-xs font-medium text-muted-foreground">Run History</span>
+            </div>
+            <RunHistoryPanel actionId={actionId} />
+          </div>
+        )}
 
         {/* Editor */}
         <div className="flex-1 flex flex-col min-h-0">

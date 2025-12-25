@@ -9,9 +9,10 @@
 
 import { FileDropOverlay } from "@/components/FileDropOverlay";
 import { TooltipProvider } from "@/components/ui/tooltip";
-import { ATTACHMENT_TYPE, useChatState } from "@/hooks/useChatState";
-import { useSidebarWidth } from "@/hooks/useNavState";
+import { ATTACHMENT_TYPE, useChatState, useChatStateSync } from "@/hooks/useChatState";
+import { useEditorStateSync, useSidebarWidth } from "@/hooks/useNavState";
 import { usePrefetchOnDbReady, useRuntimeState } from "@/hooks/useRuntimeState";
+import { useSidebarStateSync } from "@/components/sidebar/notebook/hooks/useSidebarState";
 import { cn } from "@/lib/utils";
 import { useRouterState } from "@tanstack/react-router";
 import {
@@ -34,6 +35,11 @@ interface NotebookShellProps {
 }
 
 export function NotebookShell({ children }: NotebookShellProps) {
+  // Initialize state from server (called once per workbook mount)
+  useEditorStateSync();
+  useSidebarStateSync();
+  useChatStateSync();
+
   // Get route info
   const routerState = useRouterState();
   const currentPath = routerState.location.pathname;

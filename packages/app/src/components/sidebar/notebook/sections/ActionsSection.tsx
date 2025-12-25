@@ -23,6 +23,8 @@ interface ActionsSectionProps {
   actions: SidebarAction[];
   /** Actions handlers */
   handlers: SidebarActions;
+  /** Size variant */
+  size?: "default" | "lg";
 }
 
 export function ActionsSection({
@@ -30,12 +32,15 @@ export function ActionsSection({
   onToggle,
   actions,
   handlers,
+  size,
 }: ActionsSectionProps) {
   const { handleActionClick, handleRunAction, runtimePort } = handlers;
 
   return (
     <SidebarSection
       title="Actions"
+      type="actions"
+      count={actions.length}
       expanded={expanded}
       onToggle={onToggle}
       onAdd={() => {
@@ -43,6 +48,7 @@ export function ActionsSection({
         console.log("[sidebar] new action clicked");
       }}
       addTooltip="New action"
+      size={size}
     >
       {actions.length > 0 ? (
         actions.map((action) => (
@@ -55,7 +61,7 @@ export function ActionsSection({
           />
         ))
       ) : (
-        <SidebarEmptyState icon={<ActionIcon empty />} label="No actions" />
+        <SidebarEmptyState label="No actions" />
       )}
     </SidebarSection>
   );

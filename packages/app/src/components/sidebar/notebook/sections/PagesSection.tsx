@@ -41,6 +41,8 @@ interface PagesSectionProps {
   actions: SidebarActions;
   /** Callback when menu opens/closes */
   onMenuOpenChange?: (open: boolean) => void;
+  /** Size variant */
+  size?: "default" | "lg";
 }
 
 export function PagesSection({
@@ -55,6 +57,7 @@ export function PagesSection({
   isLoading,
   actions,
   onMenuOpenChange,
+  size,
 }: PagesSectionProps) {
   const {
     isCreatingNewPage,
@@ -86,13 +89,18 @@ export function PagesSection({
 
   const hasPages = rootPages.length > 0 || pageFolders.size > 0 || isCreatingNewPage;
 
+  const totalPages = rootPages.length + Array.from(pageFolders.values()).flat().length;
+
   return (
     <SidebarSection
-      title="Pages"
+      title="Docs"
+      type="docs"
+      count={totalPages}
       expanded={expanded}
       onToggle={onToggle}
       onAdd={handleStartNewPage}
-      addTooltip="New page"
+      addTooltip="New doc"
+      size={size}
     >
       {/* Inline new page input */}
       {isCreatingNewPage && (
@@ -116,7 +124,7 @@ export function PagesSection({
       )}
 
       {isLoading ? (
-        <SidebarEmptyState icon={<PageIcon empty />} label="Loading..." />
+        <SidebarEmptyState label="Loading..." />
       ) : hasPages ? (
         <>
           {/* Root pages */}
@@ -206,7 +214,7 @@ export function PagesSection({
           })}
         </>
       ) : (
-        <SidebarEmptyState icon={<PageIcon empty />} label="No pages" />
+        <SidebarEmptyState label="No docs" />
       )}
     </SidebarSection>
   );

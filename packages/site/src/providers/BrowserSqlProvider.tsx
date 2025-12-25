@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo, type ReactNode } from "react";
+import { useState, useEffect, useCallback, useRef, type ReactNode } from "react";
 import {
   LiveQueryProvider,
   type QueryResult,
@@ -45,93 +45,120 @@ function useVersion() {
 }
 
 // ============================================================================
+// Global Database State
+// ============================================================================
+
+// Use a ref-like pattern with global state so hooks can access latest value
+let isDbReady = false;
+const dbReadyListeners = new Set<() => void>();
+
+function setDbReady(ready: boolean) {
+  isDbReady = ready;
+  dbReadyListeners.forEach((listener) => listener());
+}
+
+function useDbReady() {
+  const [ready, setReady] = useState(isDbReady);
+
+  useEffect(() => {
+    const listener = () => setReady(isDbReady);
+    dbReadyListeners.add(listener);
+    // Sync on mount in case it changed
+    setReady(isDbReady);
+    return () => {
+      dbReadyListeners.delete(listener);
+    };
+  }, []);
+
+  return ready;
+}
+
+// ============================================================================
 // Hook Implementations
 // ============================================================================
 
 /**
- * Creates a useQuery hook for sql.js.
+ * Query hook for sql.js - checks isDbReady on each execution
  */
-function createUseQuery(isReady: boolean) {
-  return function useQuery(
-    sql: string,
-    params?: Record<string, unknown>
-  ): QueryResult {
-    const [data, setData] = useState<Record<string, unknown>[] | undefined>(
-      undefined
-    );
-    const [error, setError] = useState<Error | null>(null);
-    const [isLoading, setIsLoading] = useState(!isReady);
+function useQuery(
+  sql: string,
+  params?: Record<string, unknown>
+): QueryResult {
+  const [data, setData] = useState<Record<string, unknown>[] | undefined>(undefined);
+  const [error, setError] = useState<Error | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
 
-    // Subscribe to version changes for refetch
-    const version = useVersion();
+  // Subscribe to database ready state
+  const dbReady = useDbReady();
 
-    const executeQueryFn = useCallback(() => {
-      if (!isReady || !sql) {
-        setIsLoading(!isReady);
-        return;
-      }
+  // Subscribe to version changes for refetch
+  const version = useVersion();
 
-      setIsLoading(true);
-      setError(null);
+  const executeQueryFn = useCallback(() => {
+    if (!isDbReady || !sql) {
+      setIsLoading(!isDbReady);
+      return;
+    }
 
-      try {
-        const results = executeQuery(sql, params);
-        setData(results);
-      } catch (err) {
-        setError(err instanceof Error ? err : new Error(String(err)));
-      } finally {
-        setIsLoading(false);
-      }
-    }, [sql, params, isReady]);
+    setIsLoading(true);
+    setError(null);
 
-    // Execute query on mount and when dependencies change
-    useEffect(() => {
-      executeQueryFn();
-    }, [executeQueryFn, version]);
+    try {
+      const results = executeQuery(sql, params);
+      setData(results);
+    } catch (err) {
+      console.error("[BrowserSqlProvider] Query error:", err, sql);
+      setError(err instanceof Error ? err : new Error(String(err)));
+    } finally {
+      setIsLoading(false);
+    }
+  }, [sql, params, dbReady]); // dbReady in deps triggers re-execution when ready
 
-    const refetch = useCallback(() => {
-      executeQueryFn();
-    }, [executeQueryFn]);
+  // Execute query on mount and when dependencies change
+  useEffect(() => {
+    executeQueryFn();
+  }, [executeQueryFn, version]);
 
-    return { data, isLoading, error, refetch };
-  };
+  const refetch = useCallback(() => {
+    executeQueryFn();
+  }, [executeQueryFn]);
+
+  return { data, isLoading, error, refetch };
 }
 
 /**
- * Creates a useMutation hook for sql.js.
+ * Mutation hook for sql.js
  */
-function createUseMutation(isReady: boolean) {
-  return function useMutation(): MutationResult {
-    const [isPending, setIsPending] = useState(false);
-    const [error, setError] = useState<Error | null>(null);
+function useMutation(): MutationResult {
+  const [isPending, setIsPending] = useState(false);
+  const [error, setError] = useState<Error | null>(null);
 
-    const mutate = useCallback(
-      async (sql: string, params?: Record<string, unknown>) => {
-        if (!isReady) {
-          console.warn("[BrowserSqlProvider] Database not ready, skipping mutation");
-          return;
-        }
+  const mutate = useCallback(
+    async (sql: string, params?: Record<string, unknown>) => {
+      if (!isDbReady) {
+        console.warn("[BrowserSqlProvider] Database not ready, skipping mutation");
+        return;
+      }
 
-        setIsPending(true);
-        setError(null);
+      setIsPending(true);
+      setError(null);
 
-        try {
-          executeMutation(sql, params);
-          // Trigger refetch of all queries
-          incrementVersion();
-        } catch (err) {
-          const e = err instanceof Error ? err : new Error(String(err));
-          setError(e);
-          throw e;
-        } finally {
-          setIsPending(false);
-        }
-      },
-      [isReady]
-    );
+      try {
+        executeMutation(sql, params);
+        // Trigger refetch of all queries
+        incrementVersion();
+      } catch (err) {
+        const e = err instanceof Error ? err : new Error(String(err));
+        setError(e);
+        throw e;
+      } finally {
+        setIsPending(false);
+      }
+    },
+    []
+  );
 
-    return { mutate, isPending, error };
-  };
+  return { mutate, isPending, error };
 }
 
 // ============================================================================
@@ -147,24 +174,21 @@ function createUseMutation(isReady: boolean) {
  * Does NOT block rendering - shows children immediately with loading states.
  */
 export function BrowserSqlProvider({ children }: BrowserSqlProviderProps) {
-  const [isReady, setIsReady] = useState(false);
   const [initError, setInitError] = useState<Error | null>(null);
 
   // Initialize database on mount
   useEffect(() => {
+    console.log("[BrowserSqlProvider] Initializing database...");
     initDatabase()
       .then(() => {
-        setIsReady(true);
+        console.log("[BrowserSqlProvider] Database ready!");
+        setDbReady(true);
       })
       .catch((err) => {
         console.error("[BrowserSqlProvider] Failed to initialize database:", err);
         setInitError(err instanceof Error ? err : new Error(String(err)));
       });
   }, []);
-
-  // Create hooks bound to current ready state
-  const useQuery = useMemo(() => createUseQuery(isReady), [isReady]);
-  const useMutation = useMemo(() => createUseMutation(isReady), [isReady]);
 
   return (
     <LiveQueryProvider useQuery={useQuery} useMutation={useMutation}>

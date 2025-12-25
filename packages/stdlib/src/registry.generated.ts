@@ -307,24 +307,6 @@ export const registry = {
       "lucide-react"
     ]
   },
-  "chart": {
-    "name": "Chart",
-    "category": "charts",
-    "description": "Build data visualizations with configurable chart components.",
-    "icon": "bar-chart-3",
-    "keywords": [
-      "chart",
-      "graph",
-      "visualization"
-    ],
-    "example": "<ChartContainer config={{}} className=\"h-[200px]\">\n  <div className=\"flex items-center justify-center h-full text-muted-foreground\">\n    Chart visualization area\n  </div>\n</ChartContainer>",
-    "files": [
-      "registry/components/ui/chart.tsx"
-    ],
-    "dependencies": [
-      "recharts"
-    ]
-  },
   "hover-card": {
     "name": "Hover Card",
     "category": "ui-overlay",
@@ -1112,46 +1094,6 @@ export const registry = {
     "dependencies": [
       "embla-carousel-react",
       "lucide-react"
-    ]
-  },
-  "bar-chart": {
-    "name": "Bar Chart",
-    "category": "charts",
-    "description": "Compare values across categories with vertical or horizontal bars.",
-    "icon": "bar-chart-2",
-    "keywords": [
-      "bar",
-      "chart",
-      "graph",
-      "comparison",
-      "data"
-    ],
-    "example": "<BarChart\n  data={[\n    { month: \"Jan\", sales: 4200 },\n    { month: \"Feb\", sales: 3800 },\n    { month: \"Mar\", sales: 5100 },\n  ]}\n  x=\"month\"\n  y=\"sales\"\n  height={300}\n/>",
-    "files": [
-      "registry/components/charts/bar-chart.tsx"
-    ],
-    "dependencies": [
-      "recharts"
-    ]
-  },
-  "line-chart": {
-    "name": "Line Chart",
-    "category": "charts",
-    "description": "Show trends over time with connected data points.",
-    "icon": "line-chart",
-    "keywords": [
-      "line",
-      "chart",
-      "graph",
-      "trend",
-      "time series"
-    ],
-    "example": "<LineChart\n  data={[\n    { month: \"Jan\", revenue: 4200 },\n    { month: \"Feb\", revenue: 3800 },\n    { month: \"Mar\", revenue: 5100 },\n  ]}\n  x=\"month\"\n  y=\"revenue\"\n  height={300}\n/>",
-    "files": [
-      "registry/components/charts/line-chart.tsx"
-    ],
-    "dependencies": [
-      "recharts"
     ]
   },
   "data-table": {

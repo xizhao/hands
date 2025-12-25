@@ -2,24 +2,28 @@
  * Sidebar State Hook
  *
  * Manages expansion state for sections and folders.
- * Uses module-level state to persist across route navigation.
+ * Uses module-level state for instant reactivity + server persistence.
  */
 
-import { useSyncExternalStore, useCallback } from "react";
+import { useSyncExternalStore, useCallback, useEffect } from "react";
+import { trpc } from "@/lib/trpc";
 
 // ============================================================================
 // Module-level state (persists across navigation)
 // ============================================================================
 
-// Section expansion state
-let pagesExpanded = true;
-let dataExpanded = true;
-let actionsExpanded = true;
-let pluginsExpanded = true;
+// Section expansion state (synced from server)
+let pagesExpanded = false;
+let dataExpanded = false;
+let actionsExpanded = false;
+let pluginsExpanded = false;
 
-// Folder/source expansion state
+// Folder/source expansion state (synced from server)
 let expandedFolders = new Set<string>();
 let expandedSources = new Set<string>();
+
+// Track if we've initialized from server
+let sidebarStateInitialized = false;
 
 // Snapshot type
 interface SidebarStateSnapshot {
@@ -70,6 +74,26 @@ function emitChange() {
   }
 }
 
+/** Initialize sidebar state from server */
+export function initializeSidebarFromServer(serverState: {
+  pagesExpanded: boolean;
+  dataExpanded: boolean;
+  actionsExpanded: boolean;
+  pluginsExpanded: boolean;
+  expandedFolders: string[];
+  expandedSources: string[];
+}) {
+  if (sidebarStateInitialized) return;
+  pagesExpanded = serverState.pagesExpanded;
+  dataExpanded = serverState.dataExpanded;
+  actionsExpanded = serverState.actionsExpanded;
+  pluginsExpanded = serverState.pluginsExpanded;
+  expandedFolders = new Set(serverState.expandedFolders);
+  expandedSources = new Set(serverState.expandedSources);
+  sidebarStateInitialized = true;
+  emitChange();
+}
+
 // ============================================================================
 // Setters (exported for direct access if needed)
 // ============================================================================
@@ -118,12 +142,13 @@ export function toggleSource(sourceId: string) {
 
 /** Reset all sidebar state (e.g., when switching workbooks) */
 export function resetSidebarState() {
-  pagesExpanded = true;
-  dataExpanded = true;
-  actionsExpanded = true;
-  pluginsExpanded = true;
+  pagesExpanded = false;
+  dataExpanded = false;
+  actionsExpanded = false;
+  pluginsExpanded = false;
   expandedFolders = new Set();
   expandedSources = new Set();
+  sidebarStateInitialized = false;
   emitChange();
 }
 
@@ -141,8 +166,80 @@ export interface SidebarStateOptions {
   };
 }
 
+/**
+ * Hook to initialize sidebar state from server on mount
+ * Should be called once at the app root level
+ */
+export function useSidebarStateSync() {
+  const { data: uiState } = trpc.editorState.getUiState.useQuery(undefined, {
+    staleTime: Number.POSITIVE_INFINITY,
+    refetchOnWindowFocus: false,
+  });
+
+  const { data: serverFolders } = trpc.editorState.getExpandedFolders.useQuery(undefined, {
+    staleTime: Number.POSITIVE_INFINITY,
+    refetchOnWindowFocus: false,
+  });
+
+  const { data: serverSources } = trpc.editorState.getExpandedSources.useQuery(undefined, {
+    staleTime: Number.POSITIVE_INFINITY,
+    refetchOnWindowFocus: false,
+  });
+
+  // Initialize from server state on first load
+  useEffect(() => {
+    if (uiState && serverFolders && serverSources && !sidebarStateInitialized) {
+      initializeSidebarFromServer({
+        pagesExpanded: uiState.pagesExpanded,
+        dataExpanded: uiState.dataExpanded,
+        actionsExpanded: uiState.actionsExpanded,
+        pluginsExpanded: uiState.pluginsExpanded,
+        expandedFolders: serverFolders,
+        expandedSources: serverSources,
+      });
+    }
+  }, [uiState, serverFolders, serverSources]);
+}
+
 export function useSidebarState(_options: SidebarStateOptions = {}) {
   const state = useSyncExternalStore(subscribe, getSnapshot, getSnapshot);
+
+  // Mutations for server sync
+  const updateUiMutation = trpc.editorState.updateUiState.useMutation();
+  const setFolderMutation = trpc.editorState.setFolderExpanded.useMutation();
+  const setSourceMutation = trpc.editorState.setSourceExpanded.useMutation();
+
+  const togglePagesWithSync = useCallback(() => {
+    togglePagesExpanded();
+    updateUiMutation.mutate({ pagesExpanded: !state.pagesExpanded });
+  }, [state.pagesExpanded, updateUiMutation]);
+
+  const toggleDataWithSync = useCallback(() => {
+    toggleDataExpanded();
+    updateUiMutation.mutate({ dataExpanded: !state.dataExpanded });
+  }, [state.dataExpanded, updateUiMutation]);
+
+  const toggleActionsWithSync = useCallback(() => {
+    toggleActionsExpanded();
+    updateUiMutation.mutate({ actionsExpanded: !state.actionsExpanded });
+  }, [state.actionsExpanded, updateUiMutation]);
+
+  const togglePluginsWithSync = useCallback(() => {
+    togglePluginsExpanded();
+    updateUiMutation.mutate({ pluginsExpanded: !state.pluginsExpanded });
+  }, [state.pluginsExpanded, updateUiMutation]);
+
+  const toggleFolderWithSync = useCallback((folderId: string) => {
+    const isCurrentlyExpanded = state.expandedFolders.has(folderId);
+    toggleFolder(folderId);
+    setFolderMutation.mutate({ path: folderId, expanded: !isCurrentlyExpanded });
+  }, [state.expandedFolders, setFolderMutation]);
+
+  const toggleSourceWithSync = useCallback((sourceId: string) => {
+    const isCurrentlyExpanded = state.expandedSources.has(sourceId);
+    toggleSource(sourceId);
+    setSourceMutation.mutate({ sourceId, expanded: !isCurrentlyExpanded });
+  }, [state.expandedSources, setSourceMutation]);
 
   const isFolderExpanded = useCallback(
     (folderId: string) => state.expandedFolders.has(folderId),
@@ -157,19 +254,19 @@ export function useSidebarState(_options: SidebarStateOptions = {}) {
   return {
     // Section states
     sections: {
-      pages: { expanded: state.pagesExpanded, toggle: togglePagesExpanded },
-      data: { expanded: state.dataExpanded, toggle: toggleDataExpanded },
-      actions: { expanded: state.actionsExpanded, toggle: toggleActionsExpanded },
-      plugins: { expanded: state.pluginsExpanded, toggle: togglePluginsExpanded },
+      pages: { expanded: state.pagesExpanded, toggle: togglePagesWithSync },
+      data: { expanded: state.dataExpanded, toggle: toggleDataWithSync },
+      actions: { expanded: state.actionsExpanded, toggle: toggleActionsWithSync },
+      plugins: { expanded: state.pluginsExpanded, toggle: togglePluginsWithSync },
     },
     // Folder states
     folders: {
-      toggle: toggleFolder,
+      toggle: toggleFolderWithSync,
       isExpanded: isFolderExpanded,
     },
     // Source states
     sources: {
-      toggle: toggleSource,
+      toggle: toggleSourceWithSync,
       isExpanded: isSourceExpanded,
     },
     // Reset function

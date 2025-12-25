@@ -8,6 +8,7 @@
 import { initTRPC, TRPCError } from "@trpc/server";
 import { z } from "zod";
 import { readFile } from "node:fs/promises";
+import { getEditorDb, insertActionRun } from "../db/editor-db.js";
 import { discoverActions } from "../workbook/discovery.js";
 import type { DiscoveredAction } from "../workbook/types.js";
 import { executeActionHttp } from "./executor-http.js";
@@ -151,6 +152,26 @@ export const actionsRouter = t.router({
       runtimeUrl: ctx.runtimeUrl,
       workbookDir: ctx.workbookDir,
     });
+
+    // Persist action run to editor database
+    try {
+      const db = getEditorDb(ctx.workbookDir);
+      insertActionRun(db, {
+        id: run.id,
+        actionId: run.actionId,
+        trigger: run.trigger,
+        status: run.status,
+        input: run.input,
+        output: run.output,
+        error: run.error,
+        startedAt: run.startedAt,
+        finishedAt: run.finishedAt,
+        durationMs: run.durationMs,
+      });
+    } catch (e) {
+      // Log but don't fail if persistence fails
+      console.error("Failed to persist action run:", e);
+    }
 
     return run;
   }),

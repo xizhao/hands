@@ -25,7 +25,7 @@ import { SidebarSection, SidebarEmptyState } from "../components/SidebarSection"
 import { listItemStyles, NestedItems } from "../components/SidebarItem";
 import { ItemActions } from "../components/ItemActions";
 import { TablePreviewHoverCard } from "../components/HoverCards";
-import { DataIcon, SourceIcon, SourceTypeIcon } from "../components/icons";
+import { SheetIcon, SourceIcon, SourceTypeIcon } from "../components/icons";
 import type { SidebarSource } from "../types";
 import type { SidebarState } from "../hooks/useSidebarState";
 import type { SidebarActions } from "../hooks/useSidebarActions";
@@ -61,6 +61,8 @@ interface DataSectionProps {
   actions: SidebarActions;
   /** Callback when menu opens/closes */
   onMenuOpenChange?: (open: boolean) => void;
+  /** Size variant */
+  size?: "default" | "lg";
 }
 
 export function DataSection({
@@ -76,6 +78,7 @@ export function DataSection({
   isDbLoading,
   actions,
   onMenuOpenChange,
+  size,
 }: DataSectionProps) {
   const [addSourceOpen, setAddSourceOpen] = useState(false);
   const [selectedSource, setSelectedSource] = useState<string | null>(null);
@@ -105,18 +108,22 @@ export function DataSection({
   };
 
   const hasData = sources.length > 0 || unassociatedTables.length > 0;
+  const totalTables = Array.from(sourceTableMap.values()).flat().length + unassociatedTables.length;
 
   return (
     <>
       <SidebarSection
-        title="Data"
+        title="Sheets"
+        type="sheets"
+        count={totalTables}
         expanded={expanded}
         onToggle={onToggle}
         onAdd={() => setAddSourceOpen(true)}
         addTooltip="Add source"
+        size={size}
       >
         {isDbLoading ? (
-          <SidebarEmptyState icon={<DataIcon empty />} label="Loading..." />
+          <SidebarEmptyState label="Loading..." />
         ) : hasData ? (
           <>
             {/* Sources with their tables */}
@@ -190,7 +197,7 @@ export function DataSection({
                       {filteredSourceTables.map((tableName) => (
                         <TablePreviewHoverCard key={tableName} tableName={tableName}>
                           <div className={listItemStyles}>
-                            <DataIcon />
+                            <SheetIcon />
                             <button
                               onClick={() => handleTableClick(tableName)}
                               className="flex-1 truncate text-left hover:underline"
@@ -215,7 +222,7 @@ export function DataSection({
             {unassociatedTables.map((tableName) => (
               <TablePreviewHoverCard key={tableName} tableName={tableName}>
                 <div className={listItemStyles}>
-                  <DataIcon colored={false} />
+                  <SheetIcon />
                   <button
                     onClick={() => handleTableClick(tableName)}
                     className="flex-1 truncate text-left hover:underline"
@@ -233,7 +240,7 @@ export function DataSection({
             ))}
           </>
         ) : (
-          <SidebarEmptyState icon={<DataIcon empty />} label="No data" />
+          <SidebarEmptyState label="No sheets" />
         )}
       </SidebarSection>
 

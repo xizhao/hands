@@ -3,9 +3,12 @@
  *
  * Allows components deep in the tree to trigger chat with pending attachments
  * without prop drilling. Uses useSyncExternalStore for React integration.
+ *
+ * chatExpanded state is persisted to server via tRPC.
  */
 
-import { useSyncExternalStore } from "react";
+import { useCallback, useEffect, useSyncExternalStore } from "react";
+import { trpc } from "@/lib/trpc";
 
 // Attachment type constants - use these instead of string literals
 export const ATTACHMENT_TYPE = {
@@ -54,6 +57,29 @@ let chatExpanded: boolean = false;
 let autoSubmitPending: boolean = false;
 let chatBarHidden: boolean = false;
 let sessionError: SessionError | null = null;
+let chatStateInitialized: boolean = false;
+
+// Debounce helper for server sync
+let chatSyncTimeout: ReturnType<typeof setTimeout> | null = null;
+let pendingChatSyncFn: (() => void) | null = null;
+
+function debouncedChatSync(fn: () => void, delay = 300) {
+  pendingChatSyncFn = fn;
+  if (chatSyncTimeout) clearTimeout(chatSyncTimeout);
+  chatSyncTimeout = setTimeout(() => {
+    pendingChatSyncFn?.();
+    pendingChatSyncFn = null;
+    chatSyncTimeout = null;
+  }, delay);
+}
+
+/** Initialize chatExpanded from server state */
+export function initializeChatFromServer(serverChatExpanded: boolean) {
+  if (chatStateInitialized) return;
+  chatExpanded = serverChatExpanded;
+  chatStateInitialized = true;
+  emitChange();
+}
 
 // Snapshot type
 interface ChatStateSnapshot {
@@ -131,14 +157,41 @@ export function clearSessionError() {
   emitChange();
 }
 
+/**
+ * Hook to initialize chat state from server on mount
+ * Should be called once at the app root level
+ */
+export function useChatStateSync() {
+  const { data: serverState } = trpc.editorState.getUiState.useQuery(undefined, {
+    staleTime: Number.POSITIVE_INFINITY,
+    refetchOnWindowFocus: false,
+  });
+
+  // Initialize from server state on first load
+  useEffect(() => {
+    if (serverState && !chatStateInitialized) {
+      initializeChatFromServer(serverState.chatExpanded);
+    }
+  }, [serverState]);
+}
+
 // Hook
 export function useChatState() {
   const state = useSyncExternalStore(subscribe, getSnapshot, getSnapshot);
+  const updateMutation = trpc.editorState.updateUiState.useMutation();
+
+  const setChatExpandedWithSync = useCallback((expanded: boolean) => {
+    setChatExpanded(expanded);
+    // Debounce sync to server
+    debouncedChatSync(() => {
+      updateMutation.mutate({ chatExpanded: expanded });
+    });
+  }, [updateMutation]);
 
   return {
     ...state,
     setPendingAttachment,
-    setChatExpanded,
+    setChatExpanded: setChatExpandedWithSync,
     setAutoSubmitPending,
     setChatBarHidden,
     setSessionError,

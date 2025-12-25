@@ -4,22 +4,17 @@ import { useState } from "react";
 const TEMPLATES = {
   revops: `# Revenue Operations Dashboard
 
-<Columns>
-  <LiveValue query="SELECT ROUND(SUM(amount) / 1000, 0) as value FROM deals WHERE status = 'closed_won' AND close_date >= date('now', '-30 days')" label="MRR" format="$%sk" />
-  <LiveValue query="SELECT ROUND(SUM(amount) / 1000, 0) as value FROM deals WHERE status = 'open'" label="Pipeline" format="$%sk" />
-  <LiveValue query="SELECT ROUND(AVG(win_rate) * 100, 0) as value FROM sales_metrics WHERE month >= date('now', '-90 days')" label="Win Rate" format="%s%" />
-  <LiveValue query="SELECT ROUND(AVG(sales_cycle_days), 0) as value FROM deals WHERE status = 'closed_won'" label="Avg Cycle" format="%s days" />
-</Columns>
+<LiveValue query="SELECT ROUND(SUM(amount) / 1000, 0) as value FROM deals WHERE status = 'closed_won'" />
 
 ## Revenue by Month
 
-<LiveValue query="SELECT month, revenue, target FROM revenue_monthly ORDER BY month">
-  <AreaChart xKey="month" yKey="revenue" targetKey="target" />
+<LiveValue query="SELECT month, revenue FROM revenue_monthly ORDER BY month">
+  <AreaChart xKey="month" yKey="revenue" />
 </LiveValue>
 
 ## Pipeline by Stage
 
-<LiveValue query="SELECT stage, COUNT(*) as count, SUM(amount) as value FROM deals WHERE status = 'open' GROUP BY stage ORDER BY CASE stage WHEN 'Discovery' THEN 1 WHEN 'Proposal' THEN 2 WHEN 'Negotiation' THEN 3 WHEN 'Contract' THEN 4 END">
+<LiveValue query="SELECT stage, SUM(amount) as value FROM deals WHERE status = 'open' GROUP BY stage ORDER BY value DESC">
   <BarChart xKey="stage" yKey="value" />
 </LiveValue>
 
@@ -27,15 +22,11 @@ const TEMPLATES = {
 
 ## Top Deals This Quarter
 
-<LiveValue query="SELECT company, owner, stage, amount, close_date, probability FROM deals WHERE status = 'open' ORDER BY amount DESC LIMIT 8">
-  <DataTable columns={["company", "owner", "stage", "amount", "close_date", "probability"]} />
-</LiveValue>
+<LiveValue query="SELECT company, owner, stage, amount, close_date FROM deals WHERE status = 'open' ORDER BY amount DESC LIMIT 8" display="table" />
 
 ## Sales Rep Performance
 
-<LiveValue query="SELECT rep_name, closed_revenue, quota, ROUND(closed_revenue * 100.0 / quota, 0) as attainment FROM rep_performance ORDER BY attainment DESC">
-  <DataTable columns={["rep_name", "closed_revenue", "quota", "attainment"]} />
-</LiveValue>
+<LiveValue query="SELECT rep_name, closed_revenue, quota FROM rep_performance ORDER BY closed_revenue DESC" display="table" />
 `,
 
   survey: `# Weekly Team Check-In
@@ -44,37 +35,28 @@ Complete this quick pulse survey to help us improve.
 
 ---
 
-<Form onSubmit="INSERT INTO survey_responses (submitted_at, mood, workload, blockers, wins, suggestions) VALUES (datetime('now'), :mood, :workload, :blockers, :wins, :suggestions)">
+<LiveAction sql="INSERT INTO survey_responses (submitted_at, mood, blockers, wins) VALUES (datetime('now'), {{mood}}, {{blockers}}, {{wins}})">
 
 ## How are you feeling this week?
 
-<RadioGroup name="mood" options={[
-  { value: "great", label: "😀 Great" },
-  { value: "good", label: "🙂 Good" },
-  { value: "okay", label: "😐 Okay" },
-  { value: "stressed", label: "😓 Stressed" },
-  { value: "burned_out", label: "😫 Burned Out" }
+<Select name="mood" options={[
+  { value: "great", label: "Great" },
+  { value: "good", label: "Good" },
+  { value: "okay", label: "Okay" },
+  { value: "stressed", label: "Stressed" }
 ]} />
-
-## Rate your workload (1-5)
-
-<Slider name="workload" min={1} max={5} labels={["Light", "Balanced", "Heavy"]} />
 
 ## Any blockers this week?
 
-<TextArea name="blockers" placeholder="What's slowing you down? Leave blank if none." rows={3} />
+<Textarea name="blockers" placeholder="What's slowing you down?" rows={3} />
 
 ## Wins to celebrate?
 
-<TextArea name="wins" placeholder="Share something that went well!" rows={2} />
+<Textarea name="wins" placeholder="Share something that went well!" rows={2} />
 
-## Suggestions for the team
+<Button>Submit Check-In</Button>
 
-<TextArea name="suggestions" placeholder="Ideas to improve how we work..." rows={2} optional />
-
-<SubmitButton>Submit Check-In</SubmitButton>
-
-</Form>
+</LiveAction>
 
 ---
 
@@ -83,100 +65,62 @@ Complete this quick pulse survey to help us improve.
 
   alerts: `# Operations Alert Center
 
-<Columns>
-  <LiveValue query="SELECT COUNT(*) as value FROM alerts WHERE status = 'active' AND severity = 'critical'" label="Critical" />
-  <LiveValue query="SELECT COUNT(*) as value FROM alerts WHERE status = 'active' AND severity = 'warning'" label="Warnings" />
-  <LiveValue query="SELECT ROUND(AVG(uptime_pct), 1) as value FROM system_health WHERE timestamp >= datetime('now', '-24 hours')" label="Uptime 24h" format="%s%" />
-  <LiveValue query="SELECT COUNT(*) as value FROM alerts WHERE status = 'resolved' AND resolved_at >= datetime('now', '-24 hours')" label="Resolved Today" />
-</Columns>
+<LiveValue query="SELECT COUNT(*) as value FROM alerts WHERE status = 'active' AND severity = 'critical'" />
 
 ## Active Alerts
 
-<LiveValue query="SELECT severity, system, message, triggered_at, acknowledged_by FROM alerts WHERE status = 'active' ORDER BY CASE severity WHEN 'critical' THEN 1 WHEN 'warning' THEN 2 ELSE 3 END, triggered_at DESC">
-  <DataTable columns={["severity", "system", "message", "triggered_at", "acknowledged_by"]} />
-</LiveValue>
+<LiveValue query="SELECT severity, system, message, triggered_at FROM alerts WHERE status = 'active' ORDER BY triggered_at DESC" display="table" />
 
 ---
 
-## 🚨 API Latency Spike Detected
-
-**System:** payments-api
-**Triggered:** 2 minutes ago
-**P95 Latency:** 2,450ms (threshold: 500ms)
+## API Latency Trend
 
 <LiveValue query="SELECT timestamp, latency_p95 FROM api_metrics WHERE system = 'payments-api' ORDER BY timestamp DESC LIMIT 20">
-  <LineChart xKey="timestamp" yKey="latency_p95" threshold={500} color="red" />
+  <LineChart xKey="timestamp" yKey="latency_p95" />
 </LiveValue>
 
-### Alert Rules
+<Alert variant="warning">
+When latency exceeds threshold for 5 minutes, on-call is paged automatically.
+</Alert>
 
-<Callout type="info">
-When latency exceeds threshold for 5 minutes:
-1. Page on-call engineer via PagerDuty
-2. Post to #incidents Slack channel
-3. Scale up API pods automatically
-</Callout>
-
-<LiveAction query="UPDATE alerts SET status = 'acknowledged', acknowledged_by = 'current_user' WHERE id = :alert_id">
-  <ActionButton variant="primary">Acknowledge Alert</ActionButton>
-</LiveAction>
-
-<LiveAction query="INSERT INTO incident_notes (alert_id, note, created_by) VALUES (:alert_id, :note, 'current_user')">
-  <ActionInput name="note" placeholder="Add investigation note..." />
-  <ActionButton>Add Note</ActionButton>
+<LiveAction sql="UPDATE alerts SET status = 'acknowledged' WHERE id = {{alertId}}">
+  <Input name="alertId" placeholder="Alert ID" />
+  <Button>Acknowledge Alert</Button>
 </LiveAction>
 `,
 
   onboarding: `# Customer Onboarding: Acme Corp
 
-<Columns>
-  <LiveValue query="SELECT ROUND(completed * 100.0 / total, 0) as value FROM onboarding_progress WHERE customer_id = 1" label="Progress" format="%s%" />
-  <LiveValue query="SELECT days_elapsed as value FROM onboarding_progress WHERE customer_id = 1" label="Day" format="Day %s" />
-  <LiveValue query="SELECT target_go_live as value FROM customers WHERE id = 1" label="Go-Live" />
-  <LiveValue query="SELECT csm_name as value FROM customers WHERE id = 1" label="CSM" />
-</Columns>
+<LiveValue query="SELECT ROUND(completed * 100.0 / total, 0) as value FROM onboarding_progress WHERE customer_id = 1" />
 
-## Onboarding Checklist
+## Onboarding Tasks
 
-<LiveValue query="SELECT phase, task, owner, status, due_date, completed_at FROM onboarding_tasks WHERE customer_id = 1 ORDER BY CASE phase WHEN 'Setup' THEN 1 WHEN 'Integration' THEN 2 WHEN 'Training' THEN 3 WHEN 'Go-Live' THEN 4 END, due_date">
-  <Checklist
-    groupBy="phase"
-    columns={["task", "owner", "status", "due_date"]}
-    onToggle="UPDATE onboarding_tasks SET status = :status, completed_at = CASE WHEN :status = 'done' THEN datetime('now') ELSE NULL END WHERE id = :id"
-  />
-</LiveValue>
+<LiveValue query="SELECT phase, task, owner, status, due_date FROM onboarding_tasks WHERE customer_id = 1 ORDER BY due_date" display="table" />
 
 ---
 
-## Automations Active
-
-<Callout type="success">
-**Task assigned** → Slack DM to owner
-**Phase complete** → Email customer + CSM
-**Overdue task** → Escalate to CSM manager
-**Go-live reached** → Trigger celebration workflow 🎉
-</Callout>
+<Alert variant="success">
+Automations: Task assigned → Slack DM, Phase complete → Email, Overdue → Escalate
+</Alert>
 
 ## Add Custom Task
 
-<LiveAction query="INSERT INTO onboarding_tasks (customer_id, phase, task, owner, status, due_date) VALUES (1, :phase, :task, :owner, 'pending', :due_date)">
-  <ActionSelect name="phase" options={[
+<LiveAction sql="INSERT INTO onboarding_tasks (customer_id, phase, task, owner, status, due_date) VALUES (1, {{phase}}, {{task}}, {{owner}}, 'pending', {{dueDate}})">
+  <Select name="phase" options={[
     { value: "Setup", label: "Setup" },
     { value: "Integration", label: "Integration" },
     { value: "Training", label: "Training" },
     { value: "Go-Live", label: "Go-Live" }
   ]} />
-  <ActionInput name="task" placeholder="Task description" />
-  <ActionInput name="owner" placeholder="Assignee" />
-  <ActionInput name="due_date" type="date" />
-  <ActionButton>Add Task</ActionButton>
+  <Input name="task" placeholder="Task description" />
+  <Input name="owner" placeholder="Assignee" />
+  <Input name="dueDate" placeholder="Due date (YYYY-MM-DD)" />
+  <Button>Add Task</Button>
 </LiveAction>
 
-## Notes
+## Recent Notes
 
-<LiveValue query="SELECT note, created_by, created_at FROM customer_notes WHERE customer_id = 1 ORDER BY created_at DESC LIMIT 5">
-  <DataTable columns={["note", "created_by", "created_at"]} />
-</LiveValue>
+<LiveValue query="SELECT note, created_by, created_at FROM customer_notes WHERE customer_id = 1 ORDER BY created_at DESC LIMIT 5" display="table" />
 `,
 };
 
@@ -186,14 +130,13 @@ interface TemplateTab {
   id: TemplateId;
   label: string;
   icon: "chart" | "clipboard" | "bell" | "rocket";
-  prompt: string;
 }
 
 const TEMPLATE_TABS: TemplateTab[] = [
-  { id: "revops", label: "Sales Dashboard", icon: "chart", prompt: "Show me revenue trends and pipeline" },
-  { id: "survey", label: "Team Survey", icon: "clipboard", prompt: "Create a weekly team check-in form" },
-  { id: "alerts", label: "Alert Center", icon: "bell", prompt: "Alert me when latency spikes" },
-  { id: "onboarding", label: "Onboarding", icon: "rocket", prompt: "Track customer onboarding progress" },
+  { id: "revops", label: "Sales Dashboard", icon: "chart" },
+  { id: "survey", label: "Team Survey", icon: "clipboard" },
+  { id: "alerts", label: "Alert Center", icon: "bell" },
+  { id: "onboarding", label: "Onboarding", icon: "rocket" },
 ];
 
 export function Demo() {
@@ -212,8 +155,6 @@ export function Demo() {
       case "rocket": return <RocketIcon className="w-3.5 h-3.5" />;
     }
   };
-
-  const currentTab = TEMPLATE_TABS.find(t => t.id === activeTab)!;
 
   return (
     <div className="rounded-xl overflow-hidden shadow-2xl shadow-black/20 dark:shadow-black/50 border border-border">
@@ -238,12 +179,6 @@ export function Demo() {
         <button className="flex items-center justify-center w-8 h-8 rounded-t-lg text-muted-foreground hover:bg-muted/80 hover:text-foreground transition-colors">
           <PlusIcon className="w-4 h-4" />
         </button>
-      </div>
-
-      {/* Prompt badge */}
-      <div className="px-4 py-2 bg-background border-b border-border/50 flex items-center gap-2">
-        <span className="text-xs text-muted-foreground">Prompt:</span>
-        <span className="text-xs text-foreground font-medium">&ldquo;{currentTab.prompt}&rdquo;</span>
       </div>
 
       {/* Editor Content - zoomed out for preview effect */}

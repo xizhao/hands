@@ -1,7 +1,9 @@
 /**
  * Sidebar Icons
  *
- * Consistent icon components for sidebar items.
+ * Minimalist icons for sidebar items.
+ * - Docs/Pages: horizontal bars
+ * - Sheets/Tables: circles
  */
 
 import {
@@ -11,7 +13,6 @@ import {
   Newspaper,
   PuzzlePiece,
   Square,
-  Table,
 } from "@phosphor-icons/react";
 import { cn } from "@/lib/utils";
 
@@ -22,28 +23,45 @@ interface IconProps {
   empty?: boolean;
 }
 
+/** Minimalist bar icon for docs/pages */
 export function PageIcon({ className, empty }: IconProps) {
   return (
     <span
       className={cn(
+        "inline-block w-3 h-0.5 rounded-full",
         iconStyles,
-        empty ? "opacity-50" : "group-hover:text-orange-400",
+        empty ? "bg-muted-foreground/30" : "bg-orange-400/70 group-hover:bg-orange-400",
         className,
       )}
-    >
-      &#x25AC;
-    </span>
+    />
   );
 }
+
+/** Minimalist circle icon for sheets/tables */
+export function SheetIcon({ className, empty }: IconProps) {
+  return (
+    <span
+      className={cn(
+        "inline-block w-2 h-2 rounded-full",
+        iconStyles,
+        empty ? "bg-muted-foreground/30" : "bg-emerald-400/70 group-hover:bg-emerald-400",
+        className,
+      )}
+    />
+  );
+}
+
+/** Alias for backwards compatibility */
+export const DataIcon = SheetIcon;
 
 export function PluginIcon({ className, empty }: IconProps) {
   return (
     <PuzzlePiece
       weight="duotone"
       className={cn(
-        "h-4 w-4",
+        "h-3.5 w-3.5",
         iconStyles,
-        empty ? "opacity-50" : "text-violet-400",
+        empty ? "opacity-30" : "text-violet-400/70 group-hover:text-violet-400",
         className,
       )}
     />
@@ -60,50 +78,31 @@ export function ActionIcon({
     <Icon
       weight="duotone"
       className={cn(
-        "h-4 w-4",
+        "h-3.5 w-3.5",
         iconStyles,
         empty
-          ? "opacity-50"
-          : "text-muted-foreground group-hover:text-foreground",
+          ? "opacity-30"
+          : "text-blue-400/70 group-hover:text-blue-400",
         className,
       )}
     />
   );
 }
 
-export function DataIcon({
-  className,
-  empty,
-  colored = true,
-}: IconProps & { colored?: boolean }) {
-  return (
-    <Table
-      weight="duotone"
-      className={cn(
-        "h-4 w-4",
-        iconStyles,
-        empty
-          ? "opacity-50"
-          : colored
-            ? "text-purple-400"
-            : "text-muted-foreground group-hover:text-foreground",
-        className,
-      )}
-    />
-  );
-}
-
+/** Triangle icon for sources */
 export function SourceIcon({ className, empty }: IconProps) {
   return (
     <span
       className={cn(
+        "inline-block w-0 h-0",
+        "border-l-[4px] border-l-transparent",
+        "border-r-[4px] border-r-transparent",
+        "border-b-[6px]",
         iconStyles,
-        empty ? "opacity-50" : "group-hover:text-green-400",
+        empty ? "border-b-muted-foreground/30" : "border-b-purple-400/70 group-hover:border-b-purple-400",
         className,
       )}
-    >
-      &#x25B2;
-    </span>
+    />
   );
 }
 

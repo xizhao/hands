@@ -1,15 +1,18 @@
 /**
- * Navigation state - Module-level state + localStorage
+ * Navigation state - Module-level state + server persistence
  *
  * Module state: panel, tab, session (persists across navigation)
- * localStorage: chatExpanded (ephemeral preference)
+ * Server persistence: sidebarWidth, rightPanel, activeTab
+ *
+ * Note: chatExpanded is managed by useChatState.ts
  *
  * This approach keeps UI state independent of URL routing,
  * so navigating between pages doesn't lose sidebar state.
  */
 
 import { useNavigate } from "@tanstack/react-router";
-import { useCallback, useSyncExternalStore } from "react";
+import { useCallback, useEffect, useSyncExternalStore } from "react";
+import { trpc } from "@/lib/trpc";
 
 // Types
 export type RightPanelId = "sources" | "database" | "settings" | "alerts" | "blocks" | null;
@@ -22,9 +25,6 @@ export interface NavSearchParams {
   session?: string;
 }
 
-// LocalStorage keys
-const CHAT_EXPANDED_KEY = "hands-chat-expanded";
-
 // ============================================
 // Module-level state (persists across navigation)
 // ============================================
@@ -33,6 +33,7 @@ let rightPanel: RightPanelId = null;
 let activeTab: TabId = "preview";
 let activeSession: string | null = null;
 let sidebarWidth = 280;
+let stateInitialized = false;
 
 interface NavStateSnapshot {
   rightPanel: RightPanelId;
@@ -73,6 +74,20 @@ function emitChange() {
   }
 }
 
+// Debounce helper for server sync
+let syncTimeout: ReturnType<typeof setTimeout> | null = null;
+let pendingSyncFn: (() => void) | null = null;
+
+function debouncedSync(fn: () => void, delay = 300) {
+  pendingSyncFn = fn;
+  if (syncTimeout) clearTimeout(syncTimeout);
+  syncTimeout = setTimeout(() => {
+    pendingSyncFn?.();
+    pendingSyncFn = null;
+    syncTimeout = null;
+  }, delay);
+}
+
 // Setters
 export function setRightPanelState(panel: RightPanelId) {
   rightPanel = panel;
@@ -94,39 +109,90 @@ export function setSidebarWidthState(width: number) {
   emitChange();
 }
 
+/** Initialize from server state */
+export function initializeFromServer(serverState: {
+  sidebarWidth: number;
+  rightPanel: string | null;
+  activeTab: string;
+}) {
+  if (stateInitialized) return;
+  sidebarWidth = serverState.sidebarWidth;
+  rightPanel = (serverState.rightPanel as RightPanelId) ?? null;
+  activeTab = (serverState.activeTab as TabId) ?? "preview";
+  stateInitialized = true;
+  emitChange();
+}
+
 /** Reset navigation state (e.g., when switching workbooks) */
 export function resetNavState() {
   rightPanel = null;
   activeTab = "preview";
   activeSession = null;
+  stateInitialized = false;
   // Note: sidebarWidth preserved across workbook switches
   emitChange();
 }
 
 // ============================================
-// Hooks (use module-level state)
+// Hooks (use module-level state + server sync)
 // ============================================
+
+/**
+ * Hook to initialize state from server on mount
+ * Should be called once at the app root level
+ */
+export function useEditorStateSync() {
+  const { data: serverState } = trpc.editorState.getUiState.useQuery(undefined, {
+    staleTime: Number.POSITIVE_INFINITY,
+    refetchOnWindowFocus: false,
+  });
+
+  const updateMutation = trpc.editorState.updateUiState.useMutation();
+
+  // Initialize from server state on first load
+  useEffect(() => {
+    if (serverState && !stateInitialized) {
+      initializeFromServer(serverState);
+    }
+  }, [serverState]);
+
+  // Return the mutation for other hooks to use
+  return { updateMutation };
+}
 
 export function useRightPanel() {
   const state = useSyncExternalStore(subscribe, getSnapshot, getSnapshot);
+  const updateMutation = trpc.editorState.updateUiState.useMutation();
 
   const setPanel = useCallback((newPanel: RightPanelId) => {
     setRightPanelState(newPanel);
-  }, []);
+    // Debounce sync to server
+    debouncedSync(() => {
+      updateMutation.mutate({ rightPanel: newPanel });
+    });
+  }, [updateMutation]);
 
   const togglePanel = useCallback((targetPanel: Exclude<RightPanelId, null>) => {
-    setRightPanelState(rightPanel === targetPanel ? null : targetPanel);
-  }, []);
+    const newPanel = rightPanel === targetPanel ? null : targetPanel;
+    setRightPanelState(newPanel);
+    debouncedSync(() => {
+      updateMutation.mutate({ rightPanel: newPanel });
+    });
+  }, [updateMutation]);
 
   return { panel: state.rightPanel, setPanel, togglePanel };
 }
 
 export function useActiveTab() {
   const state = useSyncExternalStore(subscribe, getSnapshot, getSnapshot);
+  const updateMutation = trpc.editorState.updateUiState.useMutation();
 
   const setTab = useCallback((newTab: TabId) => {
     setActiveTabState(newTab);
-  }, []);
+    debouncedSync(() => {
+      updateMutation.mutate({ activeTab: newTab });
+    });
+  }, [updateMutation]);
 
   return { tab: state.activeTab, setTab };
 }
@@ -136,6 +202,7 @@ export function useActiveSession() {
 
   const setSession = useCallback((newSessionId: string | null) => {
     setActiveSessionState(newSessionId);
+    // Session is ephemeral, no server sync needed
   }, []);
 
   return { sessionId: state.activeSession, setSession };
@@ -143,48 +210,17 @@ export function useActiveSession() {
 
 export function useSidebarWidth() {
   const state = useSyncExternalStore(subscribe, getSnapshot, getSnapshot);
+  const updateMutation = trpc.editorState.updateUiState.useMutation();
 
   const setWidth = useCallback((width: number) => {
     setSidebarWidthState(width);
-  }, []);
+    // Debounce sync to server (sidebar resizing is frequent)
+    debouncedSync(() => {
+      updateMutation.mutate({ sidebarWidth: width });
+    }, 500);
+  }, [updateMutation]);
 
   return { width: state.sidebarWidth, setWidth };
-}
-
-// ============================================
-// localStorage-based state (preferences)
-// ============================================
-
-function subscribeChatExpanded(callback: () => void) {
-  const handler = (e: StorageEvent) => {
-    if (e.key === CHAT_EXPANDED_KEY) callback();
-  };
-  window.addEventListener("storage", handler);
-  // Also listen for our custom event for same-tab updates
-  window.addEventListener("chat-expanded-change", callback);
-  return () => {
-    window.removeEventListener("storage", handler);
-    window.removeEventListener("chat-expanded-change", callback);
-  };
-}
-
-function getChatExpanded() {
-  try {
-    return localStorage.getItem(CHAT_EXPANDED_KEY) === "true";
-  } catch {
-    return false;
-  }
-}
-
-export function useChatExpanded() {
-  const expanded = useSyncExternalStore(subscribeChatExpanded, getChatExpanded, () => false);
-
-  const setExpanded = useCallback((value: boolean) => {
-    localStorage.setItem(CHAT_EXPANDED_KEY, String(value));
-    window.dispatchEvent(new Event("chat-expanded-change"));
-  }, []);
-
-  return { expanded, setExpanded };
 }
 
 // ============================================
