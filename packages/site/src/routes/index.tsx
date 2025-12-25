@@ -49,8 +49,8 @@ export default function IndexPage() {
               <AnimatedHeroHeadline />
               <FadeIn delay={100}>
                 <p className="text-xl text-muted-foreground max-w-md mb-8">
-                  Be extraodinarily productive. Run your business in a doc --
-                  with agents, reports & automations.
+                  An extraordinarily powerful document editor. Run your business
+                  by just writing.
                 </p>
               </FadeIn>
               <FadeIn delay={200}>
@@ -67,15 +67,16 @@ export default function IndexPage() {
 
             {/* Right side - Demo extending off screen */}
             <div className="hidden lg:block flex-1 min-w-0 self-start pt-28 relative">
-              <FadeIn delay={300} className="w-[700px] xl:w-[850px]">
-                <Demo />
-              </FadeIn>
-              {/* Chat bar positioned below demo, staggered left */}
+              {/* Chat bar appears first and types */}
               <FadeIn
-                delay={500}
-                className="absolute -bottom-4 left-0 w-[500px]"
+                delay={300}
+                className="absolute -bottom-4 left-0 w-[500px] z-10"
               >
                 <HeroChatBar />
+              </FadeIn>
+              {/* Demo fades in after chat bar finishes typing (~2s) */}
+              <FadeIn delay={2200} className="w-[700px] xl:w-[850px]">
+                <Demo />
               </FadeIn>
             </div>
           </div>
@@ -94,7 +95,7 @@ export default function IndexPage() {
                     </span>
                     Connect
                   </div>
-                  <h3 className="text-3xl font-bold text-foreground mb-4">
+                  <h3 className="site-header text-3xl font-bold text-foreground mb-4">
                     Point Hands towards any data
                   </h3>
                   <p className="text-lg text-muted-foreground mb-6">
@@ -136,7 +137,7 @@ export default function IndexPage() {
                     </span>
                     Analyze
                   </div>
-                  <h3 className="text-3xl font-bold text-foreground mb-4">
+                  <h3 className="site-header text-3xl font-bold text-foreground mb-4">
                     Analyze and iterate
                   </h3>
                   <p className="text-lg text-muted-foreground mb-6">
@@ -169,7 +170,7 @@ export default function IndexPage() {
                     </span>
                     Share
                   </div>
-                  <h3 className="text-3xl font-bold text-foreground mb-4">
+                  <h3 className="site-header text-3xl font-bold text-foreground mb-4">
                     Share living apps and automations
                   </h3>
                   <p className="text-lg text-muted-foreground mb-6">
@@ -202,7 +203,7 @@ export default function IndexPage() {
           <div className="max-w-4xl mx-auto">
             <FadeInOnScroll>
               <div className="text-center mb-16">
-                <h2 className="text-3xl font-bold text-foreground mb-4">
+                <h2 className="site-header text-3xl font-bold text-foreground mb-4">
                   Teams are switching from spreadsheets
                 </h2>
               </div>
@@ -242,7 +243,7 @@ export default function IndexPage() {
         <section className="py-32 px-8">
           <FadeInOnScroll>
             <div className="max-w-2xl mx-auto text-center">
-              <h2 className="text-4xl md:text-5xl font-bold text-foreground mb-6">
+              <h2 className="site-header text-4xl md:text-5xl font-bold text-foreground mb-6">
                 Never send a doc again.
               </h2>
               <p className="text-xl text-muted-foreground mb-10">
@@ -274,61 +275,72 @@ function AnimatedHeroHeadline() {
 
   return (
     <div className="mb-6">
-      <h1 className="text-5xl md:text-6xl lg:text-7xl font-bold tracking-tight text-foreground leading-[1.1]">
+      {/* Fixed size text that never wraps */}
+      <h1
+        className="site-header font-bold tracking-tight text-foreground leading-[1.1] whitespace-nowrap"
+        style={{ fontSize: "clamp(2.75rem, 4.5vw, 4.5rem)" }}
+      >
         {/* Line 1: "An extra set of" - starts shifted left, pushed into place */}
         <div className="relative inline-flex items-center">
           <span
             className="transition-transform duration-700 ease-out"
             style={{
-              transform: phase === "crooked" ? "translateX(-24px)" : "translateX(0)",
+              transform: phase === "crooked" ? "translateX(-20px)" : "translateX(0)",
             }}
           >
             An extra set of
           </span>
           {/* Pushing hand - comes from left, pushes text right */}
           <PushHandIcon
-            className="absolute -left-14 top-1/2 -translate-y-1/2 w-10 h-10 text-foreground transition-all duration-700 ease-out"
+            className="absolute -left-11 top-1/2 w-8 h-8 text-foreground transition-all duration-700 ease-out"
             style={{
               opacity: phase === "pushing" ? 1 : 0,
-              transform: `translateY(-50%) translateX(${phase === "pushing" ? "24px" : "0px"})`,
+              transform: `translateY(-50%) translateX(${phase === "pushing" ? "20px" : "0px"})`,
             }}
           />
         </div>
         <br />
         {/* Line 2: "hands at work." - starts rotated/shifted, OK hand drags period to straighten */}
-        <div className="relative inline-flex items-center">
+        <div className="relative inline-flex items-baseline">
           <span
-            className="text-muted-foreground transition-transform duration-700 ease-out origin-left"
+            className="text-muted-foreground transition-transform duration-700 ease-out origin-left inline-block"
             style={{
               transform: phase === "crooked" || phase === "pushing"
-                ? "rotate(2deg) translateY(4px)"
+                ? "rotate(1.5deg) translateY(3px)"
                 : "rotate(0deg) translateY(0px)",
             }}
           >
             hands at work
           </span>
-          {/* Period with OK hand dragging it */}
-          <span className="relative inline-block">
-            <span
-              className="text-muted-foreground transition-transform duration-700 ease-out inline-block"
-              style={{
-                transform: phase === "crooked" || phase === "pushing"
-                  ? "translateX(12px) translateY(8px)"
-                  : "translateX(0) translateY(0)",
-              }}
-            >
-              .
-            </span>
-            {/* OK hand - drags the period into place */}
+          {/* Period with OK hand pinching it */}
+          <span
+            className="relative inline-block text-muted-foreground transition-transform duration-700 ease-out"
+            style={{
+              transform: phase === "crooked" || phase === "pushing"
+                ? "translateX(8px) translateY(6px)"
+                : "translateX(0) translateY(0)",
+            }}
+          >
+            .
+            {/* OK hand - pinch point positioned exactly on period center */}
+            {/* Pinch point in SVG is at ~40% x, ~36% y (coords 10,9 in 25x25 viewBox) */}
             <OkHandIcon
-              className="absolute -top-2 -right-8 w-10 h-10 text-foreground transition-all duration-700 ease-out"
+              className="absolute w-12 h-12 text-foreground transition-all duration-700 ease-out pointer-events-none"
               style={{
-                opacity: phase === "dragging" ? 1 : phase === "done" ? 0.7 : 0,
+                // Position so pinch point (40% from left, 36% from top of icon) lands on period
+                // Icon is 3rem (48px). Pinch at 40%=19.2px from left, 36%=17.3px from top
+                // Period center is roughly at 0.15em from left of ".", 0.5em above baseline
+                // Offset: left = -19.2px + period_center, top = -17.3px + period_center
+                top: "calc(-0.9em)",
+                left: "calc(-0.65em)",
+                opacity: phase === "dragging" ? 1 : phase === "done" ? 0.5 : 0,
+                // Rotate around the pinch point so it stays on the period
+                transformOrigin: "40% 36%",
                 transform: phase === "dragging"
-                  ? "rotate(-15deg) translate(12px, 8px)"
+                  ? "rotate(-130deg)"
                   : phase === "done"
-                  ? "rotate(12deg) translate(0, 0)"
-                  : "rotate(-15deg) translate(20px, 16px)",
+                  ? "rotate(-130deg) scale(0.95)"
+                  : "rotate(-130deg) translate(6px, 6px)",
               }}
             />
           </span>
@@ -520,155 +532,233 @@ function HeroChatBar() {
   );
 }
 
-// Gmail Capture Demo - Shows email with S3 credentials being captured
-function GmailCaptureDemo() {
-  const [phase, setPhase] = useState<
-    "idle" | "capturing" | "processing" | "done"
-  >("idle");
+// Agent reasoning step type
+interface ReasoningStep {
+  type: "thought" | "tool" | "success";
+  text?: string;
+  name?: string;
+  args?: string;
+  status?: "running" | "done";
+  result?: string;
+}
+
+// Agent Capture Demo - Shows complex data capture with agent reasoning
+// Uses capture-action panel styles: pulsing glow, pill buttons, etc.
+function AgentCaptureDemo() {
+  const [phase, setPhase] = useState<"email" | "capturing" | "reasoning">("email");
+  const [reasoningStep, setReasoningStep] = useState(0);
+
+  const reasoningSteps: ReasoningStep[] = [
+    { type: "thought", text: "This appears to be a Parquet file on S3. I'll need to authenticate and parse the columnar format." },
+    { type: "tool", name: "read_file", args: "inventory_q4.parquet", status: "done", result: "Binary, 2.3MB, Apache Parquet" },
+    { type: "thought", text: "Parquet confirmed. Checking for AWS credentials in the email context..." },
+    { type: "tool", name: "extract_credentials", args: "screenshot_context", status: "done", result: "Found S3 bucket + IAM role ARN" },
+    { type: "tool", name: "aws_assume_role", args: "arn:aws:iam::847291...", status: "done", result: "Session token acquired" },
+    { type: "tool", name: "s3_get_object", args: "s3://ops-data-lake/exports/...", status: "done", result: "Downloaded 2.3MB" },
+    { type: "tool", name: "parse_parquet", args: "inventory_q4.parquet", status: "done", result: "12 columns, 48,291 rows" },
+    { type: "thought", text: "Schema: sku, warehouse_id, quantity, last_updated, cost_basis... Creating table." },
+    { type: "tool", name: "create_table", args: "inventory_data", status: "done", result: "Table created" },
+    { type: "tool", name: "insert_rows", args: "48,291 rows", status: "done", result: "Import complete" },
+    { type: "success", text: "Live sync established. Table refreshes every 15 minutes." },
+  ];
 
   useEffect(() => {
-    const cycle = () => {
-      setPhase("capturing");
-      setTimeout(() => setPhase("processing"), 1500);
-      setTimeout(() => setPhase("done"), 3000);
-      setTimeout(() => setPhase("idle"), 5000);
-    };
-
-    cycle();
-    const interval = setInterval(cycle, 6000);
-    return () => clearInterval(interval);
+    const timer1 = setTimeout(() => setPhase("capturing"), 2000);
+    const timer2 = setTimeout(() => setPhase("reasoning"), 3500);
+    return () => { clearTimeout(timer1); clearTimeout(timer2); };
   }, []);
 
+  useEffect(() => {
+    if (phase !== "reasoning") return;
+    if (reasoningStep >= reasoningSteps.length) return;
+
+    const delay = reasoningSteps[reasoningStep].type === "thought" ? 1200 : 600;
+    const timer = setTimeout(() => setReasoningStep(s => s + 1), delay);
+    return () => clearTimeout(timer);
+  }, [phase, reasoningStep, reasoningSteps.length]);
+
   return (
-    <div className="relative">
-      {/* Capture overlay */}
-      <div
-        className={`absolute inset-0 z-20 pointer-events-none transition-all duration-300 ${
-          phase === "capturing" ? "opacity-100" : "opacity-0"
-        }`}
-      >
-        <div className="absolute inset-0 border-4 border-violet-500 rounded-xl" />
-        <div className="absolute inset-0 border-4 border-violet-500 rounded-xl animate-ping opacity-50" />
-        <div className="absolute top-4 right-4 bg-violet-500 text-white px-3 py-1.5 rounded-full text-sm font-medium flex items-center gap-2 shadow-lg shadow-violet-500/30">
-          <div className="w-2 h-2 rounded-full bg-white animate-pulse" />
-          Capturing
+    <div className="space-y-3">
+      {/* Screenshot with pulsing glow - capture-action style */}
+      <div className="relative p-4">
+        {/* Glow layer - pulsing gradient blur */}
+        <div className="absolute inset-3 rounded-xl bg-gradient-to-r from-blue-500/50 via-purple-500/50 to-blue-500/50 blur-md animate-glow-pulse" />
+
+        {/* Email card on top */}
+        <div className="relative rounded-xl border border-border bg-card overflow-hidden shadow-xl">
+          {/* Capture overlay */}
+          <div className={`absolute inset-0 z-20 pointer-events-none transition-all duration-300 ${
+            phase === "capturing" ? "opacity-100" : "opacity-0"
+          }`}>
+            <div className="absolute inset-0 border-4 border-violet-500 rounded-xl" />
+            <div className="absolute inset-0 border-4 border-violet-500 rounded-xl animate-ping opacity-50" />
+            <div className="absolute top-4 right-4 bg-violet-500 text-white px-3 py-1.5 rounded-full text-sm font-medium flex items-center gap-2 shadow-lg shadow-violet-500/30">
+              <div className="w-2 h-2 rounded-full bg-white animate-pulse" />
+              Capturing
+            </div>
+            {/* Mac cursor */}
+            <div className="absolute bottom-8 right-12">
+              <MacCursor />
+            </div>
+          </div>
+
+          {/* Window chrome */}
+          <div className="h-10 bg-muted/50 border-b border-border flex items-center px-3 gap-2">
+            <div className="flex gap-1.5">
+              <div className="w-3 h-3 rounded-full bg-red-500/80" />
+              <div className="w-3 h-3 rounded-full bg-yellow-500/80" />
+              <div className="w-3 h-3 rounded-full bg-green-500/80" />
+            </div>
+            <div className="flex items-center gap-2 ml-2">
+              <MailIcon className="w-4 h-4 text-red-500" />
+              <span className="text-xs text-muted-foreground">Gmail</span>
+            </div>
+          </div>
+
+          {/* Email content */}
+          <div className="p-4 bg-background">
+            <div className="flex items-start gap-3 mb-3">
+              <div className="w-8 h-8 rounded-full bg-orange-500 flex items-center justify-center text-white text-sm font-medium">
+                M
+              </div>
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2">
+                  <span className="font-semibold text-foreground text-sm">Marcus (Data Eng)</span>
+                  <span className="text-xs text-muted-foreground">2:34 PM</span>
+                </div>
+                <div className="text-xs text-muted-foreground">Q4 inventory export</div>
+              </div>
+            </div>
+
+            <div className="text-sm text-foreground space-y-3">
+              <p className="text-muted-foreground">Here's that data — it's in our data lake:</p>
+
+              {/* File attachment */}
+              <div className="flex items-center gap-3 p-2.5 bg-muted rounded-lg border border-border/50">
+                <div className="w-9 h-9 rounded bg-emerald-500/10 flex items-center justify-center">
+                  <FileIcon className="w-4 h-4 text-emerald-600" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="font-medium text-sm">inventory_q4.parquet</div>
+                  <div className="text-xs text-muted-foreground">2.3 MB • Apache Parquet</div>
+                </div>
+              </div>
+
+              <div className="bg-muted/50 rounded p-2.5 font-mono text-[11px] space-y-1 border border-border/30">
+                <div><span className="text-muted-foreground">Location:</span> <span className="text-foreground">s3://ops-data-lake/exports/inventory_q4.parquet</span></div>
+                <div><span className="text-muted-foreground">Access:</span> <span className="text-foreground">arn:aws:iam::847291038471:role/DataAnalystRole</span></div>
+              </div>
+            </div>
+          </div>
         </div>
       </div>
 
-      {/* Processing overlay */}
-      <div
-        className={`absolute inset-0 z-20 bg-background/90 backdrop-blur-sm rounded-xl flex items-center justify-center transition-all duration-300 ${
-          phase === "processing"
-            ? "opacity-100"
-            : "opacity-0 pointer-events-none"
-        }`}
-      >
-        <div className="text-center">
-          <div className="w-10 h-10 border-2 border-muted-foreground/30 border-t-foreground rounded-full animate-spin mx-auto mb-3" />
-          <div className="text-sm font-medium text-foreground">
-            Extracting data...
-          </div>
+      {/* Workbook selector pill - capture-action style */}
+      <div className="px-4">
+        <button className="inline-flex items-center gap-1 px-3 py-1.5 bg-secondary/50 hover:bg-accent text-xs rounded-full border border-border/50 transition-colors">
+          <FolderIcon className="w-3 h-3" />
+          <span>Inventory Dashboard</span>
+          <ChevronDownIcon className="w-3 h-3 text-muted-foreground" />
+        </button>
+      </div>
+
+      {/* Agent message bubble - capture-action style */}
+      <div className="px-4">
+        <div className="inline-flex items-start gap-2 px-3 py-2 bg-card rounded-lg border border-border/50 max-w-full">
+          <HandsLogo className="w-4 h-4 text-muted-foreground shrink-0 mt-0.5" />
+          {phase !== "reasoning" ? (
+            <span className="text-sm text-muted-foreground italic animate-text-shimmer">Thinking...</span>
+          ) : (
+            <span className="text-sm text-foreground">Parquet file on S3 with IAM role access. Setting up live sync...</span>
+          )}
         </div>
       </div>
 
-      {/* Success overlay */}
-      <div
-        className={`absolute inset-0 z-20 bg-emerald-500/95 backdrop-blur-sm rounded-xl flex items-center justify-center transition-all duration-500 ${
-          phase === "done"
-            ? "opacity-100 scale-100"
-            : "opacity-0 scale-95 pointer-events-none"
-        }`}
-      >
-        <div className="text-center text-white">
-          <div className="w-14 h-14 rounded-full bg-white/20 flex items-center justify-center mx-auto mb-3 animate-bounce">
-            <CheckIcon className="w-7 h-7" />
-          </div>
-          <div className="font-semibold text-lg">4 fields extracted</div>
-          <div className="text-sm text-white/80">
-            Added to aws_credentials table
+      {/* Agent reasoning thread - shows tool calls */}
+      {phase === "reasoning" && (
+        <div className="px-4">
+          <div className="rounded-lg border border-border bg-card/50 overflow-hidden">
+            <div className="p-2.5 space-y-1.5 max-h-[200px] overflow-y-auto text-xs font-mono">
+              {reasoningSteps.slice(0, reasoningStep).map((step, i) => (
+                <div key={i} className="animate-in fade-in slide-in-from-bottom-1 duration-200">
+                  {step.type === "thought" && (
+                    <div className="flex gap-2 text-muted-foreground">
+                      <span className="shrink-0 opacity-50">→</span>
+                      <span className="italic">{step.text}</span>
+                    </div>
+                  )}
+                  {step.type === "tool" && (
+                    <div className="flex items-center gap-1.5">
+                      <span className="px-1 py-0.5 rounded text-[10px] font-medium bg-emerald-500/10 text-emerald-600">
+                        done
+                      </span>
+                      <span className="text-violet-500">{step.name}</span>
+                      <span className="text-muted-foreground">→</span>
+                      <span className="text-foreground/70 truncate">{step.result}</span>
+                    </div>
+                  )}
+                  {step.type === "success" && (
+                    <div className="flex items-center gap-2 mt-1.5 p-2 bg-emerald-500/10 rounded border border-emerald-500/20">
+                      <CheckIcon className="w-3.5 h-3.5 text-emerald-500" />
+                      <span className="text-emerald-700 dark:text-emerald-400 font-medium text-xs">{step.text}</span>
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
           </div>
         </div>
-      </div>
+      )}
 
-      {/* Fake Gmail UI */}
-      <div className="rounded-xl border border-border bg-card overflow-hidden shadow-xl transition-all duration-300 hover:shadow-2xl">
-        {/* Gmail header */}
-        <div className="h-14 bg-white dark:bg-zinc-900 border-b border-border flex items-center px-4 gap-4">
-          <div className="flex items-center gap-2">
-            <div className="w-8 h-8 rounded flex items-center justify-center">
-              <MailIcon className="w-5 h-5 text-red-500" />
-            </div>
-            <span className="font-medium text-foreground">Gmail</span>
-          </div>
-          <div className="flex-1 max-w-md">
-            <div className="bg-muted rounded-lg px-4 py-2 text-sm text-muted-foreground">
-              Search mail
-            </div>
-          </div>
+      {/* Action pills - capture-action style */}
+      {phase === "reasoning" && reasoningStep >= reasoningSteps.length && (
+        <div className="px-4 flex flex-wrap items-center gap-2">
+          {[
+            { icon: DatabaseIcon, label: "Import to table" },
+            { icon: ChartIcon, label: "Create dashboard" },
+          ].map((action, i) => (
+            <button
+              key={i}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-secondary/50 hover:bg-accent text-xs rounded-full border border-border/50 transition-all animate-in fade-in slide-in-from-bottom-2"
+              style={{ animationDelay: `${i * 80}ms`, animationFillMode: 'both' }}
+            >
+              <action.icon className="w-3 h-3" />
+              {action.label}
+            </button>
+          ))}
         </div>
-
-        {/* Email content */}
-        <div className="p-6 bg-background">
-          <div className="flex items-start gap-4 mb-6">
-            <div className="w-10 h-10 rounded-full bg-blue-500 flex items-center justify-center text-white font-medium shadow-lg shadow-blue-500/20">
-              D
-            </div>
-            <div className="flex-1">
-              <div className="flex items-center gap-2 mb-1">
-                <span className="font-semibold text-foreground">
-                  DevOps Team
-                </span>
-                <span className="text-sm text-muted-foreground">
-                  &lt;devops@company.com&gt;
-                </span>
-              </div>
-              <div className="text-sm text-muted-foreground">to me</div>
-            </div>
-            <div className="text-sm text-muted-foreground">10:42 AM</div>
-          </div>
-
-          <div className="space-y-4 text-foreground">
-            <p>Hey! Here are the AWS credentials for the analytics bucket:</p>
-
-            <div className="bg-muted rounded-lg p-4 font-mono text-sm space-y-2 border border-border/50">
-              <div>
-                <span className="text-muted-foreground">Bucket:</span>{" "}
-                s3://company-analytics-prod
-              </div>
-              <div>
-                <span className="text-muted-foreground">Access Key:</span>{" "}
-                AKIA3EXAMPLE7KEY
-              </div>
-              <div>
-                <span className="text-muted-foreground">Secret:</span>{" "}
-                wJalr•••••••••••••••••
-              </div>
-              <div>
-                <span className="text-muted-foreground">Region:</span> us-west-2
-              </div>
-            </div>
-
-            <p className="text-muted-foreground">
-              Let me know if you need anything else!
-            </p>
-          </div>
-        </div>
-      </div>
+      )}
 
       {/* Keyboard shortcut hint */}
-      <div className="mt-8 flex items-center justify-center gap-2 text-muted-foreground text-sm">
-        <kbd className="px-2 py-1 bg-muted border border-border rounded text-xs font-mono shadow-sm">
-          ⌘
-        </kbd>
-        <kbd className="px-2 py-1 bg-muted border border-border rounded text-xs font-mono shadow-sm">
-          ⇧
-        </kbd>
-        <kbd className="px-2 py-1 bg-muted border border-border rounded text-xs font-mono shadow-sm">
-          H
-        </kbd>
+      <div className="flex items-center justify-center gap-2 text-muted-foreground text-xs pt-2">
+        <kbd className="px-1.5 py-0.5 bg-muted border border-border rounded text-[10px] font-mono shadow-sm">⌘</kbd>
+        <kbd className="px-1.5 py-0.5 bg-muted border border-border rounded text-[10px] font-mono shadow-sm">⇧</kbd>
+        <kbd className="px-1.5 py-0.5 bg-muted border border-border rounded text-[10px] font-mono shadow-sm">H</kbd>
         <span>to capture</span>
       </div>
     </div>
+  );
+}
+
+// Mac cursor SVG
+function MacCursor() {
+  return (
+    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" className="drop-shadow-lg">
+      <path d="M5.5 3L5.5 21L10.5 16L14.5 21L17 19.5L13 14.5L19.5 14.5L5.5 3Z" fill="white" stroke="black" strokeWidth="1.5" strokeLinejoin="round"/>
+    </svg>
+  );
+}
+
+// File icon
+function FileIcon({ className }: { className?: string }) {
+  return (
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
+      <path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z" />
+      <path d="M14 2v4a2 2 0 0 0 2 2h4" />
+      <path d="M10 9H8" />
+      <path d="M16 13H8" />
+      <path d="M16 17H8" />
+    </svg>
   );
 }
 
