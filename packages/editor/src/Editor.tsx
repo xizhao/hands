@@ -11,7 +11,7 @@
  * (just a component) or advanced (custom Plate plugin + serialization).
  */
 
-import { MarkdownPlugin } from "@platejs/markdown";
+// Note: MarkdownPlugin import removed - all serialization now goes through worker
 import { cn } from "@udecode/cn";
 import type { TElement } from "platejs";
 import {
@@ -37,6 +37,7 @@ import {
 import { createPlugin, type PluginOptions } from "@hands/core/plugin";
 import { useEditorTables, useEditorTrpc } from "./context";
 import { FrontmatterHeader, type Frontmatter } from "./frontmatter";
+import { useMarkdownWorker, useMarkdownWorkerDebounced, getDeserializeCache, setDeserializeCache } from "./hooks/use-markdown-worker";
 import { createCopilotKit, type CopilotConfig } from "./plugins/copilot-kit";
 import { createMarkdownKit, type MarkdownRule } from "./plugins/markdown-kit";
 import { EditorCorePlugins } from "./plugins/presets";
@@ -252,6 +253,26 @@ export const Editor = forwardRef<EditorHandle, EditorProps>(function Editor(
   // Ref for keyboard navigation from editor to frontmatter
   const subtitleRef = useRef<HTMLDivElement>(null);
 
+  // Loading state for initial deserialization
+  const [isLoading, setIsLoading] = useState(false);
+
+  // Markdown worker for ALL serialization/deserialization (no sync code)
+  const { serialize: workerSerialize, deserialize: workerDeserialize } = useMarkdownWorker();
+
+  // Debounced serialization for onChange (high-frequency path)
+  const { queueSerialize } = useMarkdownWorkerDebounced({
+    delay: 100,
+    onSerialize: useCallback((markdown: string) => {
+      if (markdown !== lastValueRef.current) {
+        lastValueRef.current = markdown;
+        onChange?.(markdown);
+      }
+    }, [onChange]),
+    onError: useCallback((error: Error) => {
+      console.error("[Editor] Worker serialization failed:", error);
+    }, []),
+  });
+
   // Editor mode state (visual vs markdown)
   const [internalMode, setInternalMode] = useState<EditorMode>("visual");
   const mode = controlledMode ?? internalMode;
@@ -310,19 +331,27 @@ export const Editor = forwardRef<EditorHandle, EditorProps>(function Editor(
   const trpc = useEditorTrpc();
   const tables = useEditorTables();
   const effectiveCopilot = useMemo<CopilotConfig | null>(() => {
-    // Explicit prop takes priority
-    if (copilot) return copilot;
+    // Explicit prop takes priority - augment with worker functions
+    if (copilot) {
+      return {
+        ...copilot,
+        serialize: workerSerialize,
+        deserialize: workerDeserialize,
+      };
+    }
     // Use tRPC from context if available
     if (trpc) {
       return {
         trpc,
+        serialize: workerSerialize,
+        deserialize: workerDeserialize,
         tables,
         autoTrigger: false,
         debounceDelay: 150,
       };
     }
     return null;
-  }, [copilot, trpc, tables]);
+  }, [copilot, trpc, tables, workerSerialize, workerDeserialize]);
 
   // Build copilot plugins if configured
   const copilotPlugins = useMemo(
@@ -355,26 +384,41 @@ export const Editor = forwardRef<EditorHandle, EditorProps>(function Editor(
       editor: editor as PlateEditor,
       focus: () => editor.tf.focus(),
       getMarkdown: () => {
-        try {
-          const api = editor.getApi(MarkdownPlugin);
-          return api.markdown.serialize();
-        } catch {
-          return "";
-        }
+        // Return cached value (updated by worker on every change)
+        return lastValueRef.current ?? "";
       },
       setMarkdown: (markdown: string) => {
-        try {
-          const api = editor.getApi(MarkdownPlugin);
-          const nodes = api.markdown.deserialize(markdown);
-          if (nodes && nodes.length > 0) {
-            editor.tf.setValue(nodes);
-          }
-        } catch (err) {
-          console.error("[Editor] Failed to set markdown:", err);
+        // Check cache first for instant update
+        const cached = getDeserializeCache(markdown);
+        if (cached && cached.length > 0) {
+          isExternalUpdateRef.current = true;
+          editor.tf.setValue(cached);
+          lastValueRef.current = markdown;
+          setTimeout(() => {
+            isExternalUpdateRef.current = false;
+          }, 0);
+          return;
         }
+
+        // Cache miss - use worker
+        workerDeserialize(markdown)
+          .then((nodes) => {
+            if (nodes && nodes.length > 0) {
+              setDeserializeCache(markdown, nodes);
+              isExternalUpdateRef.current = true;
+              editor.tf.setValue(nodes);
+              lastValueRef.current = markdown;
+              setTimeout(() => {
+                isExternalUpdateRef.current = false;
+              }, 0);
+            }
+          })
+          .catch((err) => {
+            console.error("[Editor] Failed to set markdown:", err);
+          });
       },
     }),
-    [editor]
+    [editor, workerDeserialize]
   );
 
   // Auto-focus
@@ -384,48 +428,63 @@ export const Editor = forwardRef<EditorHandle, EditorProps>(function Editor(
     }
   }, [editor, autoFocus]);
 
-  // Sync external value to editor
+  // Sync external value to editor (uses cache first, then worker for deserialization)
   useEffect(() => {
     if (value == null) return; // Allow empty string to reset editor
     if (value === lastValueRef.current) return;
 
-    try {
-      isExternalUpdateRef.current = true;
-      const api = editor.getApi(MarkdownPlugin);
-      const nodes = api.markdown.deserialize(value);
-      // Reset to empty paragraph if content is empty, otherwise use deserialized nodes
-      const newValue = nodes && nodes.length > 0
-        ? nodes
+    isExternalUpdateRef.current = true;
+
+    // Check cache first - instant render, skip worker entirely
+    const cached = getDeserializeCache(value);
+    if (cached) {
+      const newValue = cached.length > 0
+        ? cached
         : [{ type: "p", children: [{ text: "" }] }];
       editor.tf.setValue(newValue);
       lastValueRef.current = value;
-    } catch (err) {
-      console.error("[Editor] Failed to deserialize:", err);
-    } finally {
       setTimeout(() => {
         isExternalUpdateRef.current = false;
       }, 0);
+      return;
     }
-  }, [value, editor]);
 
-  // Handle editor changes
+    // Cache miss - use worker
+    setIsLoading(true);
+    workerDeserialize(value)
+      .then((nodes) => {
+        // Cache the result for next time
+        if (nodes && nodes.length > 0) {
+          setDeserializeCache(value, nodes);
+        }
+        // Reset to empty paragraph if content is empty, otherwise use deserialized nodes
+        const newValue = nodes && nodes.length > 0
+          ? nodes
+          : [{ type: "p", children: [{ text: "" }] }];
+        editor.tf.setValue(newValue);
+        lastValueRef.current = value;
+      })
+      .catch((err) => {
+        console.error("[Editor] Failed to deserialize:", err);
+      })
+      .finally(() => {
+        setIsLoading(false);
+        setTimeout(() => {
+          isExternalUpdateRef.current = false;
+        }, 0);
+      });
+  }, [value, editor, workerDeserialize]);
+
+  // Handle editor changes - uses web worker for async serialization
   const handleChange = useCallback(
     ({ value: plateValue }: { value: TElement[] }) => {
       if (readOnly || isExternalUpdateRef.current) return;
       if (!onChange) return;
 
-      try {
-        const api = editor.getApi(MarkdownPlugin);
-        const markdown = api.markdown.serialize();
-        if (markdown !== lastValueRef.current) {
-          lastValueRef.current = markdown;
-          onChange(markdown);
-        }
-      } catch (err) {
-        console.error("[Editor] Failed to serialize:", err);
-      }
+      // Queue async serialization in web worker (debounced)
+      queueSerialize(plateValue);
     },
-    [editor, onChange, readOnly]
+    [onChange, readOnly, queueSerialize]
   );
 
   // Focus editor (from frontmatter on Enter/ArrowDown)
@@ -463,25 +522,28 @@ export const Editor = forwardRef<EditorHandle, EditorProps>(function Editor(
     [editor, frontmatter, externalOnKeyDown]
   );
 
-  // Sync markdown content when switching to markdown mode
+  // Sync markdown content when switching to markdown mode (uses worker)
   // Includes frontmatter if present to show the full raw file
   useEffect(() => {
     if (mode === "markdown") {
-      try {
-        const api = editor.getApi(MarkdownPlugin);
-        const bodyMarkdown = api.markdown.serialize();
-        // Prepend frontmatter if present
-        const rawContent = frontmatter
-          ? serializeFrontmatter(frontmatter) + "\n" + bodyMarkdown
-          : bodyMarkdown;
-        setMarkdownContent(rawContent);
-      } catch (err) {
-        console.error("[Editor] Failed to serialize for markdown mode:", err);
-      }
+      workerSerialize(editor.children as TElement[])
+        .then((bodyMarkdown) => {
+          // Prepend frontmatter if present
+          const rawContent = frontmatter
+            ? serializeFrontmatter(frontmatter) + "\n" + bodyMarkdown
+            : bodyMarkdown;
+          setMarkdownContent(rawContent);
+        })
+        .catch((err) => {
+          console.error("[Editor] Failed to serialize for markdown mode:", err);
+        });
     }
-  }, [mode, editor, frontmatter]);
+  }, [mode, editor.children, frontmatter, workerSerialize]);
 
-  // Handle markdown content changes in code editor mode
+  // Debounce timer for markdown code editor changes
+  const markdownChangeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Handle markdown content changes in code editor mode (uses worker)
   // Parses frontmatter from the raw content and updates both frontmatter and body
   const handleMarkdownChange = useCallback(
     (rawContent: string) => {
@@ -496,30 +558,38 @@ export const Editor = forwardRef<EditorHandle, EditorProps>(function Editor(
         onFrontmatterChange(parsedFrontmatter);
       }
 
-      // Sync body to visual editor
-      try {
-        isExternalUpdateRef.current = true;
-        const api = editor.getApi(MarkdownPlugin);
-        const nodes = api.markdown.deserialize(body);
-        if (nodes && nodes.length > 0) {
-          editor.tf.setValue(nodes);
-          lastValueRef.current = body;
-        }
-      } catch (err) {
-        // Ignore parse errors during typing
-      } finally {
-        setTimeout(() => {
-          isExternalUpdateRef.current = false;
-        }, 0);
+      // Debounce the worker deserialization to avoid flooding on fast typing
+      if (markdownChangeTimerRef.current) {
+        clearTimeout(markdownChangeTimerRef.current);
       }
 
-      // Also call onChange with body content
-      if (onChange && body !== lastValueRef.current) {
-        lastValueRef.current = body;
-        onChange(body);
-      }
+      markdownChangeTimerRef.current = setTimeout(() => {
+        // Sync body to visual editor via worker
+        isExternalUpdateRef.current = true;
+        workerDeserialize(body)
+          .then((nodes) => {
+            if (nodes && nodes.length > 0) {
+              editor.tf.setValue(nodes);
+              lastValueRef.current = body;
+            }
+          })
+          .catch(() => {
+            // Ignore parse errors during typing
+          })
+          .finally(() => {
+            setTimeout(() => {
+              isExternalUpdateRef.current = false;
+            }, 0);
+          });
+
+        // Also call onChange with body content
+        if (onChange && body !== lastValueRef.current) {
+          lastValueRef.current = body;
+          onChange(body);
+        }
+      }, 150);
     },
-    [editor, onChange, onFrontmatterChange]
+    [editor, onChange, onFrontmatterChange, workerDeserialize]
   );
 
   // Determine which toolbar to render
@@ -558,6 +628,16 @@ export const Editor = forwardRef<EditorHandle, EditorProps>(function Editor(
           {/* View content - each mode has its own container */}
           {mode === "visual" && (
             <div className="relative flex-1 min-h-0 overflow-y-auto pl-8 pr-6 cursor-text flex flex-col">
+              {/* Loading overlay */}
+              {isLoading && (
+                <div className="absolute inset-0 z-10 flex items-center justify-center bg-background/80 backdrop-blur-sm">
+                  <div className="flex items-center gap-2 text-muted-foreground text-sm">
+                    <div className="h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent" />
+                    Loading...
+                  </div>
+                </div>
+              )}
+
               {/* Table of contents - in left gutter */}
               {(frontmatter?.toc ?? tocProp) && (
                 <TocSidebar className="absolute top-4 left-0 w-8" />
@@ -582,7 +662,8 @@ export const Editor = forwardRef<EditorHandle, EditorProps>(function Editor(
                 className={cn(
                   "pt-4 pb-32 min-h-[200px] outline-none",
                   DEFAULT_PROSE_CLASSES,
-                  contentClassName
+                  contentClassName,
+                  isLoading && "opacity-50 pointer-events-none"
                 )}
                 placeholder={placeholder}
                 readOnly={readOnly}
@@ -608,7 +689,7 @@ export const Editor = forwardRef<EditorHandle, EditorProps>(function Editor(
           )}
 
           {mode === "slides" && (
-            <SlidesView className="flex-1 min-h-0" />
+            <SlidesView className="flex-1 min-h-0" frontmatter={frontmatter} />
           )}
 
           {/* Status bar - doc mode only */}

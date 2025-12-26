@@ -30,7 +30,7 @@ export function PageIcon({ className, empty }: IconProps) {
       className={cn(
         "inline-block w-3 h-0.5 rounded-full",
         iconStyles,
-        empty ? "bg-muted-foreground/30" : "bg-orange-400/70 group-hover:bg-orange-400",
+        empty ? "bg-muted-foreground/30" : "bg-blue-400/70 group-hover:bg-blue-400",
         className,
       )}
     />
@@ -82,7 +82,7 @@ export function ActionIcon({
         iconStyles,
         empty
           ? "opacity-30"
-          : "text-blue-400/70 group-hover:text-blue-400",
+          : "text-orange-400/70 group-hover:text-orange-400",
         className,
       )}
     />

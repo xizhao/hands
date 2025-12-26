@@ -10,7 +10,6 @@
  * structures (e.g., incomplete tables) before rendering.
  */
 
-import { MarkdownPlugin } from "@platejs/markdown";
 import { cn } from "@udecode/cn";
 import type { TElement, Descendant, Value } from "platejs";
 import {
@@ -18,8 +17,9 @@ import {
   PlateContent,
   usePlateEditor,
 } from "platejs/react";
-import { forwardRef, useMemo, type ReactNode } from "react";
+import { forwardRef, useEffect, useMemo, type ReactNode } from "react";
 
+import { useMarkdownWorker } from "./hooks/use-markdown-worker";
 import { EditorCorePlugins } from "./plugins/presets";
 import { createMarkdownKit } from "./plugins/markdown-kit";
 
@@ -269,6 +269,9 @@ export const PreviewEditor = forwardRef<HTMLDivElement, PreviewEditorProps>(
     { value, className, contentClassName, wrapper: Wrapper },
     ref
   ) {
+    // Use markdown worker for async serialization
+    const { deserialize } = useMarkdownWorker();
+
     // Build plugins - same as main editor but without copilot
     const plugins = useMemo(
       () => [...EditorCorePlugins, ...createMarkdownKit({})],
@@ -283,27 +286,36 @@ export const PreviewEditor = forwardRef<HTMLDivElement, PreviewEditorProps>(
 
     // Parse MDX and set editor value
     // Normalizes nodes to handle streaming/partial content gracefully
-    useMemo(() => {
+    useEffect(() => {
       if (!value) return;
 
-      try {
-        const api = editor.getApi(MarkdownPlugin);
-        const nodes = api.markdown.deserialize(value);
-        if (nodes && nodes.length > 0) {
-          // Normalize nodes to fix malformed structures from partial streaming
-          const normalized = normalizeNodes(nodes);
-          if (normalized.length > 0) {
-            editor.tf.setValue(normalized);
+      let cancelled = false;
+
+      (async () => {
+        try {
+          const nodes = await deserialize(value);
+          if (cancelled) return;
+
+          if (nodes && nodes.length > 0) {
+            // Normalize nodes to fix malformed structures from partial streaming
+            const normalized = normalizeNodes(nodes);
+            if (normalized.length > 0) {
+              editor.tf.setValue(normalized);
+            }
+          }
+        } catch (err) {
+          // Silently handle parse errors during streaming - content will render
+          // correctly once the stream completes
+          if (process.env.NODE_ENV === "development") {
+            console.debug("[PreviewEditor] Parse error (expected during streaming):", err);
           }
         }
-      } catch (err) {
-        // Silently handle parse errors during streaming - content will render
-        // correctly once the stream completes
-        if (process.env.NODE_ENV === "development") {
-          console.debug("[PreviewEditor] Parse error (expected during streaming):", err);
-        }
-      }
-    }, [value, editor]);
+      })();
+
+      return () => {
+        cancelled = true;
+      };
+    }, [value, editor, deserialize]);
 
     const content = (
       <div ref={ref} className={cn("preview-editor", className)}>

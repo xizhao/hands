@@ -130,7 +130,12 @@ function SelectElement(props: PlateElementProps) {
   const selected = useSelected();
   const actionCtx = useContext(LiveActionContext);
 
-  const { name, options = [], placeholder = "Select...", defaultValue, required } = element;
+  const { name, options: rawOptions, placeholder = "Select...", defaultValue, required } = element;
+  // Ensure options is always an array (may be string if deserialization failed)
+  const options = Array.isArray(rawOptions) ? rawOptions : [];
+  if (!Array.isArray(rawOptions) && rawOptions !== undefined) {
+    console.warn("[Select] options is not an array:", typeof rawOptions, rawOptions);
+  }
 
   const [value, setValue] = useState(defaultValue || "");
   const valueRef = useRef(value);

@@ -14,7 +14,6 @@
 
 import type { PlateElementProps } from "platejs/react";
 import { PlateElement, useEditorRef } from "platejs/react";
-import { MarkdownPlugin, serializeMd } from "@platejs/markdown";
 import {
   useCallback,
   useEffect,
@@ -27,6 +26,7 @@ import type { Descendant, TElement } from "platejs";
 import { MagnifyingGlass } from "@phosphor-icons/react";
 
 import { useEditorApi, useHasBackend } from "../../context";
+import { useMarkdownWorker } from "../../hooks/use-markdown-worker";
 import { pendingMdxQueries, createAtLoaderElement } from "./index";
 import { PreviewEditor } from "../../PreviewEditor";
 import { groups as slashMenuGroups } from "../../ui/slash-menu-items";
@@ -118,20 +118,19 @@ function parseRoutingPrompt(
 // Helper: Get document context
 // ============================================================================
 
-function getDocumentContext(editor: ReturnType<typeof useEditorRef>) {
+async function getDocumentContext(
+  editor: ReturnType<typeof useEditorRef>,
+  serialize: (value: TElement[]) => Promise<string>
+) {
   try {
-    const fullDoc = serializeMd(editor, {
-      value: editor.children as TElement[],
-    });
+    const fullDoc = await serialize(editor.children as TElement[]);
 
     const contextEntry = editor.api.block({ highest: true });
     if (!contextEntry) {
       return { prefix: fullDoc, suffix: "" };
     }
 
-    const currentBlock = serializeMd(editor, {
-      value: [contextEntry[0] as TElement],
-    });
+    const currentBlock = await serialize([contextEntry[0] as TElement]);
 
     const blockIndex = fullDoc.indexOf(currentBlock);
     const prefix =
@@ -573,6 +572,7 @@ export function AtGhostInputElement(props: PlateElementProps) {
   const editor = useEditorRef();
   const api = useEditorApi();
   const hasBackend = useHasBackend();
+  const { serialize, deserialize } = useMarkdownWorker();
 
   const inputRef = useRef<HTMLInputElement>(null);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -608,7 +608,7 @@ export function AtGhostInputElement(props: PlateElementProps) {
 
   // Fetch MDX for prompt (with routing for low/mid/high complexity)
   const fetchMdx = useCallback(
-    (promptText: string, force = false, errors?: string[]) => {
+    async (promptText: string, force = false, errors?: string[]) => {
       if (!promptText || !api) return;
 
       if (force || errors?.length) {
@@ -618,7 +618,7 @@ export function AtGhostInputElement(props: PlateElementProps) {
       let queryPromise = pendingMdxQueries.get(promptText);
 
       if (!queryPromise) {
-        const { prefix, suffix } = getDocumentContext(editor);
+        const { prefix, suffix } = await getDocumentContext(editor, serialize);
 
         // First call generateMdx (fast router)
         queryPromise = api
@@ -690,7 +690,7 @@ export function AtGhostInputElement(props: PlateElementProps) {
           }
         });
     },
-    [api, editor]
+    [api, editor, serialize]
   );
 
   // Debounced prefetch while typing (AI mode only)
@@ -763,8 +763,7 @@ export function AtGhostInputElement(props: PlateElementProps) {
     async (mdx: string, promptText: string) => {
       console.log('[at-ghost] insertContent mdx:', mdx);
       try {
-        const mdApi = editor.getApi(MarkdownPlugin);
-        const deserialized = mdApi.markdown.deserialize(mdx);
+        const deserialized = await deserialize(mdx);
         console.log('[at-ghost] insertContent deserialized:', JSON.stringify(deserialized, null, 2));
 
         if (!deserialized || deserialized.length === 0) {
@@ -853,7 +852,7 @@ export function AtGhostInputElement(props: PlateElementProps) {
         }
       }
     },
-    [editor, removeInput, fetchMdx]
+    [editor, removeInput, fetchMdx, deserialize]
   );
 
   // Insert loader element for lazy swap

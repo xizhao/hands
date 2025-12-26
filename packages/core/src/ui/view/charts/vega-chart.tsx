@@ -292,47 +292,60 @@ export function VegaChart({
     updateSize();
   }, [containerWidth, isEmbedded]);
 
-  // Handle loading state
-  if (ctx?.isLoading) {
-    return <ChartSkeleton height={height} className={className} />;
-  }
-
-  // Handle error state
-  if (ctx?.error) {
-    return <ChartError error={ctx.error} height={height} className={className} />;
-  }
-
-  // Handle empty data
+  // Determine content to show inside container
+  // Always render container div so containerRef is attached and ResizeObserver works
   const hasData = data && data.length > 0;
   const specHasData = spec.data !== undefined;
   const insideContext = ctx !== null;
-  if (!hasData && !specHasData) {
-    // If inside a LiveValue context but no data yet, show loading
+
+  // Determine what overlay to show (if any)
+  let overlayContent: React.ReactNode = null;
+  let showVegaContainer = true;
+
+  if (ctx?.isLoading) {
+    // Loading state
+    overlayContent = <ChartSkeleton height={height} />;
+    showVegaContainer = false;
+  } else if (ctx?.error) {
+    // Error state
+    overlayContent = <ChartError error={ctx.error} height={height} />;
+    showVegaContainer = false;
+  } else if (!hasData && !specHasData) {
+    // Empty data
     if (insideContext && !ctx.data) {
-      return <ChartSkeleton height={height} className={className} />;
+      overlayContent = <ChartSkeleton height={height} />;
+      showVegaContainer = false;
+    } else {
+      overlayContent = <ChartEmpty height={height} />;
+      showVegaContainer = false;
     }
-    return <ChartEmpty height={height} className={className} />;
+  } else if (containerWidth <= 0) {
+    // Still measuring container - show skeleton but keep vega container for ref
+    overlayContent = <ChartSkeleton height={height} />;
   }
 
-  // Show skeleton while measuring container (prevents invisible chart)
-  if (containerWidth <= 0) {
-    return (
-      <div
-        ref={containerRef}
-        className={`w-full ${className ?? ""}`}
-        style={{ minHeight: height }}
-      >
-        <ChartSkeleton height={height} />
-      </div>
-    );
-  }
-
+  // Use two separate divs: one for React-managed content, one for Vega
+  // This prevents React from trying to reconcile Vega's DOM manipulations
   return (
     <div
-      ref={containerRef}
-      className={`w-full ${className ?? ""}`}
+      className={`w-full relative ${className ?? ""}`}
       style={{ minHeight: height, contentVisibility: "auto", containIntrinsicSize: `auto ${height}px` }}
-    />
+    >
+      {/* Vega container - React never modifies children, only Vega does */}
+      <div
+        ref={containerRef}
+        className="w-full"
+        style={{
+          minHeight: height,
+          visibility: showVegaContainer && !overlayContent ? "visible" : "hidden",
+          position: showVegaContainer && !overlayContent ? "relative" : "absolute",
+          top: 0,
+          left: 0,
+        }}
+      />
+      {/* React-managed overlay content */}
+      {overlayContent}
+    </div>
   );
 }
 

@@ -6,7 +6,6 @@
  * - Column (individual column with width)
  */
 
-import { convertChildrenDeserialize } from "@platejs/markdown";
 import {
   COLUMN_GROUP_KEY,
   COLUMN_KEY,
@@ -38,9 +37,8 @@ export const columnsRule: MdxSerializationRule<TColumnGroupElement> = {
   deserialize: (node, _deco, options) => {
     // Deserialize children (should be Column elements)
     let children: TColumnGroupElement["children"] = [];
-    if (node.children && node.children.length > 0 && options) {
-      const converter = options.convertChildren ?? convertChildrenDeserialize;
-      const converted = converter(
+    if (node.children && node.children.length > 0 && options?.convertChildren) {
+      const converted = options.convertChildren(
         node.children as any,
         _deco as any,
         options as any
@@ -108,9 +106,8 @@ export const columnRule: MdxSerializationRule<TColumnElement> = {
     let children: TColumnElement["children"] = [
       { type: "p" as const, children: [{ text: "" }] },
     ];
-    if (node.children && node.children.length > 0 && options) {
-      const converter = options.convertChildren ?? convertChildrenDeserialize;
-      const converted = converter(
+    if (node.children && node.children.length > 0 && options?.convertChildren) {
+      const converted = options.convertChildren(
         node.children as any,
         _deco as any,
         options as any

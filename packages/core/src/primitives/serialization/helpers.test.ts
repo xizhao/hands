@@ -78,6 +78,31 @@ describe("parseAttributeValue", () => {
     });
     expect(result).toBe(false);
   });
+
+  // Worker context: expression objects may get stringified during structured cloning
+  it("parses stringified expression object (worker context)", () => {
+    const stringified = JSON.stringify({
+      type: "mdxJsxAttributeValueExpression",
+      value: '[{ value: "a", label: "Option A" }]',
+      data: { estree: { type: "Program" } }, // AST data from remark-mdx
+    });
+    const result = parseAttributeValue(stringified);
+    expect(result).toEqual([{ value: "a", label: "Option A" }]);
+  });
+
+  it("parses stringified expression with number value", () => {
+    const stringified = JSON.stringify({
+      type: "mdxJsxAttributeValueExpression",
+      value: "42",
+    });
+    const result = parseAttributeValue(stringified);
+    expect(result).toBe(42);
+  });
+
+  it("returns regular string if not a stringified expression", () => {
+    expect(parseAttributeValue("hello world")).toBe("hello world");
+    expect(parseAttributeValue('{"other": "json"}')).toBe('{"other": "json"}');
+  });
 });
 
 // ============================================================================

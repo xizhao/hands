@@ -22,7 +22,6 @@ import {
   type TLoaderElement,
 } from "../../../types";
 import type { MdxSerializationRule } from "../types";
-import { convertChildrenDeserialize } from "@platejs/markdown";
 import { parseAttributes, serializeAttributes, createVoidElement, serializeChildren } from "../helpers";
 
 // ============================================================================
@@ -110,7 +109,9 @@ export const badgeRule: MdxSerializationRule<TBadgeElement> = {
 
   deserialize: (node, deco, options) => {
     const props = parseAttributes(node);
-    const children = (options?.convertChildren ?? convertChildrenDeserialize)(node.children as any || [], deco as any, options as any) || [{ text: "" }];
+    const children = options?.convertChildren
+      ? options.convertChildren(node.children as any || [], deco as any, options as any)
+      : [{ text: "" }];
 
     return {
       type: BADGE_KEY,
@@ -228,7 +229,9 @@ export const alertRule: MdxSerializationRule<TAlertElement> = {
 
   deserialize: (node, deco, options) => {
     const props = parseAttributes(node);
-    const children = (options?.convertChildren ?? convertChildrenDeserialize)(node.children as any || [], deco as any, options as any) || [{ text: "" }];
+    const children = options?.convertChildren
+      ? options.convertChildren(node.children as any || [], deco as any, options as any)
+      : [{ text: "" }];
 
     return {
       type: ALERT_KEY,

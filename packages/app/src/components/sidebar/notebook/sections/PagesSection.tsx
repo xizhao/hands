@@ -172,9 +172,9 @@ export function PagesSection({
                 }
                 icon={
                   isFolderExpanded ? (
-                    <FolderOpen weight="duotone" className="h-4 w-4 text-orange-400/70" />
+                    <FolderOpen weight="duotone" className="h-4 w-4 text-blue-400/70" />
                   ) : (
-                    <Folder weight="duotone" className="h-4 w-4 text-orange-400/70" />
+                    <Folder weight="duotone" className="h-4 w-4 text-blue-400/70" />
                   )
                 }
                 label={folderName}

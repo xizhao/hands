@@ -8,8 +8,25 @@ export default defineConfig({
   plugins: [react()],
   root: __dirname,
   resolve: {
+    // Prefer 'worker' condition for packages like decode-named-character-reference
+    conditions: ['worker', 'import', 'module', 'browser', 'default'],
     alias: {
       '@hands/editor': path.resolve(__dirname, '../src'),
+    },
+  },
+  worker: {
+    format: 'es',
+    rollupOptions: {
+      output: {
+        inlineDynamicImports: true,
+      },
+    },
+  },
+  // Override resolve conditions to prefer 'worker' over 'browser'
+  // This prevents decode-named-character-reference from using its DOM version in workers
+  optimizeDeps: {
+    esbuildOptions: {
+      conditions: ['worker', 'module', 'import', 'default'],
     },
   },
   css: {

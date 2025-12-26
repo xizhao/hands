@@ -12,7 +12,10 @@ import type {
   SerializeOptions,
 } from "./types";
 import type { TElement, TText } from "platejs";
-import { convertNodesSerialize } from "@platejs/markdown";
+
+// Lazy import to avoid loading DOM-dependent code in workers
+// convertNodesSerialize is only used when options.editor is available (main thread)
+let convertNodesSerialize: ((children: (TElement | TText)[], options: any) => unknown[]) | null = null;
 
 // ============================================================================
 // Attribute Parsing (MDX → Props)
@@ -23,7 +26,7 @@ import { convertNodesSerialize } from "@platejs/markdown";
  *
  * Handles:
  * - null/undefined → true (boolean attribute like `required`)
- * - string → string
+ * - string → string (or stringified expression object)
  * - expression → parsed JSON or raw string
  */
 export function parseAttributeValue(
@@ -35,7 +38,19 @@ export function parseAttributeValue(
   }
 
   // String value: <Input name="email" /> → name: "email"
+  // Also handle stringified expression objects (can happen in worker contexts)
   if (typeof value === "string") {
+    // Check if it's a stringified mdxJsxAttributeValueExpression
+    if (value.startsWith('{"type":"mdxJsxAttributeValueExpression"')) {
+      try {
+        const parsed = JSON.parse(value);
+        if (parsed.type === "mdxJsxAttributeValueExpression" && parsed.value) {
+          return parseExpression(parsed.value);
+        }
+      } catch {
+        // Not valid JSON, fall through
+      }
+    }
     return value;
   }
 
@@ -48,6 +63,16 @@ export function parseAttributeValue(
   }
 
   return value;
+}
+
+/**
+ * Convert JS object syntax to valid JSON by quoting unquoted keys.
+ * e.g., `{value: "a", label: "A"}` → `{"value": "a", "label": "A"}`
+ */
+function jsObjectToJson(str: string): string {
+  // Match unquoted keys followed by colon
+  // This regex handles: { key: value } and { key : value }
+  return str.replace(/([{,]\s*)([a-zA-Z_$][a-zA-Z0-9_$]*)(\s*:)/g, '$1"$2"$3');
 }
 
 /**
@@ -81,10 +106,9 @@ export function parseExpression(expr: string): unknown {
     (trimmed.startsWith("{") && trimmed.endsWith("}"))
   ) {
     try {
-      // Use Function to safely evaluate JS syntax
-      // This handles { value: "a" } style objects
-      const fn = new Function(`return ${trimmed}`);
-      return fn();
+      // Convert JS object syntax to JSON by quoting keys
+      const jsonified = jsObjectToJson(trimmed);
+      return JSON.parse(jsonified);
     } catch {
       // Fallback to string
     }
@@ -424,7 +448,14 @@ export function serializeChildren(
 
   // Use Plate's convertNodesSerialize when editor is available
   if (options.editor) {
-    return convertNodesSerialize(children, options as any);
+    // Lazy load to avoid DOM dependencies in workers
+    if (!convertNodesSerialize) {
+      // This import only happens on the main thread when editor is available
+      // Workers won't reach this code path since they don't have an editor instance
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      convertNodesSerialize = require("@platejs/markdown").convertNodesSerialize;
+    }
+    return convertNodesSerialize!(children, options as any);
   }
 
   return [];

@@ -7,7 +7,6 @@
  * Each heading (h1, h2, h3) starts a new slide.
  */
 
-import { MarkdownPlugin } from "@platejs/markdown";
 import { ArrowLeft, ArrowRight } from "@phosphor-icons/react";
 import { cn } from "@udecode/cn";
 import type { TElement } from "platejs";
@@ -17,8 +16,9 @@ import {
   useEditorRef,
   usePlateEditor,
 } from "platejs/react";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
+import { useMarkdownWorker } from "../hooks/use-markdown-worker";
 import { DefaultEditorPlugins } from "../plugins/editor-config";
 import { Button } from "./button";
 
@@ -91,24 +91,25 @@ interface SlidesViewProps {
 export function SlidesView({ className, frontmatter }: SlidesViewProps) {
   const parentEditor = useEditorRef();
   const [currentIndex, setCurrentIndex] = useState(0);
+  const [slides, setSlides] = useState<Slide[]>([]);
   const markdownRef = useRef<string>("");
+  const { serialize, deserialize } = useMarkdownWorker();
 
-  // Get markdown from parent editor
-  const getMarkdown = useCallback(() => {
+  // Get markdown from parent editor (async)
+  const getMarkdown = useCallback(async () => {
     try {
-      const api = parentEditor.getApi(MarkdownPlugin);
-      return api.markdown.serialize();
+      const nodes = parentEditor.children as TElement[];
+      return await serialize(nodes);
     } catch {
       return "";
     }
-  }, [parentEditor]);
+  }, [parentEditor, serialize]);
 
-  // Update parent editor from markdown
+  // Update parent editor from markdown (async)
   const setMarkdown = useCallback(
-    (markdown: string) => {
+    async (markdown: string) => {
       try {
-        const api = parentEditor.getApi(MarkdownPlugin);
-        const nodes = api.markdown.deserialize(markdown);
+        const nodes = await deserialize(markdown);
         if (nodes && nodes.length > 0) {
           parentEditor.tf.setValue(nodes);
         }
@@ -116,29 +117,41 @@ export function SlidesView({ className, frontmatter }: SlidesViewProps) {
         console.error("[SlidesView] Failed to set markdown:", err);
       }
     },
-    [parentEditor]
+    [parentEditor, deserialize]
   );
 
   // Parse slides from current markdown, prepend title slide if frontmatter exists
-  const slides = useMemo(() => {
-    const md = getMarkdown();
-    markdownRef.current = md;
-    const contentSlides = parseSlides(md);
+  useEffect(() => {
+    let cancelled = false;
 
-    // Add title slide from frontmatter
-    if (frontmatter?.title) {
-      const titleSlide: Slide = {
-        id: "slide-title",
-        title: frontmatter.title,
-        depth: 0, // Special depth for title slide
-        content: "", // Title slide renders specially
-        startIndex: -1,
-        endIndex: -1,
-      };
-      return [titleSlide, ...contentSlides];
+    async function loadSlides() {
+      const md = await getMarkdown();
+      if (cancelled) return;
+
+      markdownRef.current = md;
+      const contentSlides = parseSlides(md);
+
+      // Add title slide from frontmatter
+      if (frontmatter?.title) {
+        const titleSlide: Slide = {
+          id: "slide-title",
+          title: frontmatter.title,
+          depth: 0, // Special depth for title slide
+          content: "", // Title slide renders specially
+          startIndex: -1,
+          endIndex: -1,
+        };
+        setSlides([titleSlide, ...contentSlides]);
+      } else {
+        setSlides(contentSlides);
+      }
     }
 
-    return contentSlides;
+    loadSlides();
+
+    return () => {
+      cancelled = true;
+    };
   }, [getMarkdown, parentEditor.children, frontmatter]);
 
   // Reset to valid slide index when slides change
@@ -160,7 +173,7 @@ export function SlidesView({ className, frontmatter }: SlidesViewProps) {
 
   // Handle slide content change
   const handleSlideChange = useCallback(
-    (newContent: string) => {
+    async (newContent: string) => {
       const fullMarkdown = markdownRef.current;
       const slide = slides[currentIndex];
       if (!slide) return;
@@ -170,7 +183,7 @@ export function SlidesView({ className, frontmatter }: SlidesViewProps) {
       const newMarkdown = before + newContent + after;
 
       markdownRef.current = newMarkdown;
-      setMarkdown(newMarkdown);
+      await setMarkdown(newMarkdown);
     },
     [slides, currentIndex, setMarkdown]
   );
@@ -303,6 +316,7 @@ function SlideEditor({
   onChange: (markdown: string) => void;
 }) {
   const hasInitializedRef = useRef(false);
+  const { serialize, deserialize } = useMarkdownWorker();
 
   // Create editor with shared config
   const editor = usePlateEditor({
@@ -314,32 +328,41 @@ function SlideEditor({
   useEffect(() => {
     if (!content.trim()) return;
 
-    try {
-      const api = editor.getApi(MarkdownPlugin);
-      const nodes = api.markdown.deserialize(content);
-      if (nodes && nodes.length > 0) {
-        editor.tf.setValue(nodes);
-        hasInitializedRef.current = true;
+    let cancelled = false;
+
+    async function initContent() {
+      try {
+        const nodes = await deserialize(content);
+        if (cancelled) return;
+        if (nodes && nodes.length > 0) {
+          editor.tf.setValue(nodes);
+          hasInitializedRef.current = true;
+        }
+      } catch (err) {
+        console.error("[SlideEditor] Failed to deserialize:", err);
       }
-    } catch (err) {
-      console.error("[SlideEditor] Failed to deserialize:", err);
     }
-  }, [editor, content]);
+
+    initContent();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [editor, content, deserialize]);
 
   // Handle changes
   const handleChange = useCallback(
-    ({ value }: { value: TElement[] }) => {
+    async ({ value }: { value: TElement[] }) => {
       if (!hasInitializedRef.current) return;
 
       try {
-        const api = editor.getApi(MarkdownPlugin);
-        const markdown = api.markdown.serialize();
+        const markdown = await serialize(value);
         onChange(markdown);
       } catch {
         // Ignore serialization errors
       }
     },
-    [editor, onChange]
+    [serialize, onChange]
   );
 
   if (!content.trim()) {

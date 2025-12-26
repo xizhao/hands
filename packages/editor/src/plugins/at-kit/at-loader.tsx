@@ -15,37 +15,12 @@ import {
   useEditorRef,
   useReadOnly,
 } from "platejs/react";
-import { MarkdownPlugin, serializeMd } from "@platejs/markdown";
 import type { Descendant, TElement } from "platejs";
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useCallback } from "react";
 
 import { useEditorApi } from "../../context";
+import { useMarkdownWorker } from "../../hooks/use-markdown-worker";
 import { type TAtLoaderElement, pendingMdxQueries } from "./index";
-
-// Helper to get document context
-function getDocumentContext(editor: ReturnType<typeof useEditorRef>) {
-  try {
-    const fullDoc = serializeMd(editor, {
-      value: editor.children as TElement[],
-    });
-    const contextEntry = editor.api.block({ highest: true });
-    if (!contextEntry) return { prefix: fullDoc, suffix: "" };
-
-    const currentBlock = serializeMd(editor, {
-      value: [contextEntry[0] as TElement],
-    });
-    const blockIndex = fullDoc.indexOf(currentBlock);
-    const prefix =
-      blockIndex >= 0
-        ? fullDoc.slice(0, blockIndex + currentBlock.length)
-        : currentBlock;
-    const suffix =
-      blockIndex >= 0 ? fullDoc.slice(blockIndex + currentBlock.length) : "";
-    return { prefix, suffix };
-  } catch {
-    return { prefix: "", suffix: "" };
-  }
-}
 
 const MAX_RETRIES = 3;
 
@@ -54,12 +29,34 @@ export function AtLoaderElement(props: PlateElementProps) {
   const editor = useEditorRef();
   const readOnly = useReadOnly();
   const api = useEditorApi();
+  const { serialize, deserialize } = useMarkdownWorker();
   const hasCalledRef = useRef(false);
   const retryCountRef = useRef(0);
   const errorsRef = useRef<string[]>([]);
   const previousGenerationsRef = useRef<string[]>([]);
 
   const { prompt } = element;
+
+  // Helper to get document context using the worker
+  const getDocumentContext = useCallback(async () => {
+    try {
+      const fullDoc = await serialize(editor.children as TElement[]);
+      const contextEntry = editor.api.block({ highest: true });
+      if (!contextEntry) return { prefix: fullDoc, suffix: "" };
+
+      const currentBlock = await serialize([contextEntry[0] as TElement]);
+      const blockIndex = fullDoc.indexOf(currentBlock);
+      const prefix =
+        blockIndex >= 0
+          ? fullDoc.slice(0, blockIndex + currentBlock.length)
+          : currentBlock;
+      const suffix =
+        blockIndex >= 0 ? fullDoc.slice(blockIndex + currentBlock.length) : "";
+      return { prefix, suffix };
+    } catch {
+      return { prefix: "", suffix: "" };
+    }
+  }, [editor, serialize]);
 
   useEffect(() => {
     if (readOnly || hasCalledRef.current || !api) return;
@@ -73,7 +70,7 @@ export function AtLoaderElement(props: PlateElementProps) {
       let queryPromise = errors?.length ? null : pendingMdxQueries.get(prompt);
 
       if (!queryPromise) {
-        const { prefix, suffix } = getDocumentContext(editor);
+        const { prefix, suffix } = await getDocumentContext();
         queryPromise = api.generateMdx({
           prompt,
           errors: errors?.length ? errors : undefined,
@@ -105,8 +102,7 @@ export function AtLoaderElement(props: PlateElementProps) {
         }
 
         try {
-          const mdApi = editor.getApi(MarkdownPlugin);
-          const deserialized = mdApi.markdown.deserialize(result.mdx);
+          const deserialized = await deserialize(result.mdx);
 
           let nodes: Descendant[];
           if (
@@ -171,7 +167,7 @@ export function AtLoaderElement(props: PlateElementProps) {
     };
 
     fetchAndSwap();
-  }, [readOnly, prompt, editor, element, api]);
+  }, [readOnly, prompt, editor, element, api, getDocumentContext, deserialize]);
 
   return (
     <PlateElement

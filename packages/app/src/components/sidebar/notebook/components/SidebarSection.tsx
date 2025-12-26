@@ -23,9 +23,9 @@ const sectionIcons: Record<SectionType, React.ElementType> = {
 };
 
 const sectionColors: Record<SectionType, string> = {
-  docs: "text-orange-400",
+  docs: "text-blue-400",
   sheets: "text-emerald-400",
-  actions: "text-blue-400",
+  actions: "text-orange-400",
   plugins: "text-violet-400",
 };
 

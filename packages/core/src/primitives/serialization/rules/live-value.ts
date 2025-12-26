@@ -12,7 +12,6 @@ import {
   type TLiveValueElement,
 } from "../../../types";
 import type { MdxSerializationRule, DeserializeOptions } from "../types";
-import { convertChildrenDeserialize } from "@platejs/markdown";
 import {
   parseAttributes,
   serializeAttributes,
@@ -79,9 +78,8 @@ function deserializeLiveValue(node: Parameters<MdxSerializationRule<TLiveValueEl
   // Handle children if present (template mode or chart children)
   let children: TLiveValueElement["children"] = [{ text: "" }];
   let hasChildren = false;
-  if (node.children && node.children.length > 0 && options) {
-    const converter = options.convertChildren ?? convertChildrenDeserialize;
-    const converted = converter(node.children as any, deco as any, options as any);
+  if (node.children && node.children.length > 0 && options?.convertChildren) {
+    const converted = options.convertChildren(node.children as any, deco as any, options as any);
     if (hasChildContent(converted)) {
       children = converted;
       hasChildren = true;

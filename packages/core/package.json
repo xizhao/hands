@@ -14,6 +14,7 @@
     "./ui/components": "./src/ui/components/index.ts",
     "./primitives": "./src/primitives/index.ts",
     "./primitives/plugin": "./src/primitives/plugin.tsx",
+    "./primitives/serialization": "./src/primitives/serialization/index.ts",
     "./types": "./src/types/index.ts",
     "./validation": "./src/validation/index.ts",
     "./docs": "./src/docs/stdlib.ts",

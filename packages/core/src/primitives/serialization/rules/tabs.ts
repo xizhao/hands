@@ -18,7 +18,6 @@ import {
   type TTabElement,
 } from "../../../types";
 import type { MdxSerializationRule } from "../types";
-import { convertChildrenDeserialize } from "@platejs/markdown";
 import { parseAttributes, serializeAttributes, serializeChildren } from "../helpers";
 
 // ============================================================================
@@ -39,11 +38,9 @@ export const tabRule: MdxSerializationRule<TTabElement> = {
 
   deserialize: (node, deco, options) => {
     const props = parseAttributes(node);
-    const children = (options?.convertChildren ?? convertChildrenDeserialize)(
-      (node.children as any) || [],
-      deco as any,
-      options as any
-    ) || [{ text: "" }];
+    const children = options?.convertChildren
+      ? options.convertChildren((node.children as any) || [], deco as any, options as any)
+      : [{ text: "" }];
 
     return {
       type: TAB_KEY,
@@ -96,8 +93,9 @@ export const tabsRule: MdxSerializationRule<TTabsElement> = {
 
   deserialize: (node, deco, options) => {
     const props = parseAttributes(node);
-    const convertChildren = options?.convertChildren ?? convertChildrenDeserialize;
-    const children = convertChildren((node.children as any) || [], deco as any, options as any);
+    const children = options?.convertChildren
+      ? options.convertChildren((node.children as any) || [], deco as any, options as any)
+      : [];
 
     // Filter to only Tab elements
     const tabChildren = (children || []).filter(

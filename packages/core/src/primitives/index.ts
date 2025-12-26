@@ -20,3 +20,6 @@ export * from "./actions";
 
 // Serialization primitives (MDX serialization rules)
 export * from "./serialization";
+
+// Sheet primitives (smart SQLite table abstraction)
+export * from "./sheet";

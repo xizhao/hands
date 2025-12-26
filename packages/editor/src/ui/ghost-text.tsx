@@ -1,11 +1,11 @@
 'use client';
 
 import { CopilotPlugin } from '@platejs/ai/react';
-import { deserializeMd } from '@platejs/markdown';
 import { type TElement } from 'platejs';
 import { createPlateEditor, Plate, PlateContent, useElement, useEditorRef, usePluginOption } from 'platejs/react';
-import { Component, type ErrorInfo, type ReactNode, useMemo, useRef } from 'react';
+import { Component, type ErrorInfo, type ReactNode, useEffect, useMemo, useState } from 'react';
 
+import { useMarkdownWorker } from '../hooks/use-markdown-worker';
 import { HoverCard, HoverCardContent, HoverCardTrigger } from './hover-card';
 
 // Silent error boundary - catches render errors and returns null
@@ -57,35 +57,49 @@ function GhostTextContent() {
   const suggestionText = usePluginOption(CopilotPlugin, 'suggestionText');
   const hasLeadingSpace = suggestionText?.startsWith(' ');
 
-  // Cache parser editor in ref - created once per component lifetime
-  const parserRef = useRef<ReturnType<typeof createPlateEditor> | null>(null);
-
-  // Get plugins from the parent editor (cast to any for compatibility)
+  // Get plugins from the parent editor
   const plugins = parentEditor.pluginList as any[];
 
-  // Parse markdown and create editor with full plugin support
+  // Use worker for async deserialization
+  const { deserialize } = useMarkdownWorker();
+  const [parsedNodes, setParsedNodes] = useState<TElement[] | null>(null);
+
+  // Deserialize suggestion text asynchronously
+  useEffect(() => {
+    if (!suggestionText) {
+      setParsedNodes(null);
+      return;
+    }
+
+    let cancelled = false;
+    deserialize(suggestionText)
+      .then((nodes) => {
+        if (!cancelled && nodes && nodes.length > 0) {
+          setParsedNodes(nodes);
+        }
+      })
+      .catch(() => {
+        // Silently fail - will show plain text fallback
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [suggestionText, deserialize]);
+
+  // Create editor with parsed nodes
   const ghostEditor = useMemo(() => {
-    if (!suggestionText) return null;
+    if (!parsedNodes || parsedNodes.length === 0) return null;
 
     try {
-      // Lazy create parser with parent editor's plugins
-      if (!parserRef.current) {
-        parserRef.current = createPlateEditor({ plugins: plugins as any });
-      }
-
-      const parsed = deserializeMd(parserRef.current, suggestionText);
-      if (!parsed || parsed.length === 0) return null;
-
-      // Create display editor with parent editor's plugins for live plugin rendering
       return createPlateEditor({
         plugins: plugins as any,
-        value: parsed as TElement[],
+        value: parsedNodes,
       });
     } catch {
-      // Silently fail - return null to show plain text fallback
       return null;
     }
-  }, [suggestionText, plugins]);
+  }, [parsedNodes, plugins]);
 
   const ghostContent = ghostEditor ? (
     <span className="inline opacity-50">

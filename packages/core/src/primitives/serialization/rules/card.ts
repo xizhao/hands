@@ -10,7 +10,6 @@
  * - CardDescription (container with text)
  */
 
-import { convertChildrenDeserialize } from "@platejs/markdown";
 import { serializeChildren } from "../helpers";
 import type { MdxSerializationRule, DeserializeOptions } from "../types";
 
@@ -86,9 +85,8 @@ export const cardRule: MdxSerializationRule<TCardElement> = {
     let children: TCardElement["children"] = [
       { type: "p" as const, children: [{ text: "" }] },
     ];
-    if (node.children && node.children.length > 0 && options) {
-      const converter = options.convertChildren ?? convertChildrenDeserialize;
-      const converted = converter(
+    if (node.children && node.children.length > 0 && options?.convertChildren) {
+      const converted = options.convertChildren(
         node.children as any,
         _deco as any,
         options as any
@@ -140,9 +138,8 @@ export const cardHeaderRule: MdxSerializationRule<TCardHeaderElement> = {
     let children: TCardHeaderElement["children"] = [
       { type: "p" as const, children: [{ text: "" }] },
     ];
-    if (node.children && node.children.length > 0 && options) {
-      const converter = options.convertChildren ?? convertChildrenDeserialize;
-      const converted = converter(
+    if (node.children && node.children.length > 0 && options?.convertChildren) {
+      const converted = options.convertChildren(
         node.children as any,
         _deco as any,
         options as any
@@ -193,9 +190,8 @@ export const cardContentRule: MdxSerializationRule<TCardContentElement> = {
     let children: TCardContentElement["children"] = [
       { type: "p" as const, children: [{ text: "" }] },
     ];
-    if (node.children && node.children.length > 0 && options) {
-      const converter = options.convertChildren ?? convertChildrenDeserialize;
-      const converted = converter(
+    if (node.children && node.children.length > 0 && options?.convertChildren) {
+      const converted = options.convertChildren(
         node.children as any,
         _deco as any,
         options as any
@@ -246,9 +242,8 @@ export const cardFooterRule: MdxSerializationRule<TCardFooterElement> = {
     let children: TCardFooterElement["children"] = [
       { type: "p" as const, children: [{ text: "" }] },
     ];
-    if (node.children && node.children.length > 0 && options) {
-      const converter = options.convertChildren ?? convertChildrenDeserialize;
-      const converted = converter(
+    if (node.children && node.children.length > 0 && options?.convertChildren) {
+      const converted = options.convertChildren(
         node.children as any,
         _deco as any,
         options as any
@@ -295,9 +290,8 @@ export const cardTitleRule: MdxSerializationRule<TCardTitleElement> = {
   deserialize: (node, _deco, options) => {
     // Deserialize children (title text)
     let children: TCardTitleElement["children"] = [{ text: "" }];
-    if (node.children && node.children.length > 0 && options) {
-      const converter = options.convertChildren ?? convertChildrenDeserialize;
-      const converted = converter(
+    if (node.children && node.children.length > 0 && options?.convertChildren) {
+      const converted = options.convertChildren(
         node.children as any,
         _deco as any,
         options as any
@@ -344,9 +338,8 @@ export const cardDescriptionRule: MdxSerializationRule<TCardDescriptionElement> 
   deserialize: (node, _deco, options) => {
     // Deserialize children (description text)
     let children: TCardDescriptionElement["children"] = [{ text: "" }];
-    if (node.children && node.children.length > 0 && options) {
-      const converter = options.convertChildren ?? convertChildrenDeserialize;
-      const converted = converter(
+    if (node.children && node.children.length > 0 && options?.convertChildren) {
+      const converted = options.convertChildren(
         node.children as any,
         _deco as any,
         options as any
