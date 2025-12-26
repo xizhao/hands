@@ -18,12 +18,15 @@ import {
   LIVEQUERY_DOCS,
   STDLIB_QUICK_REF,
 } from "../docs/pages-guide.js";
+import { STYLE_GUIDE } from "../docs/style-guide.js";
 
 const HANDS_PROMPT = `You are **Hands**, a friendly AI assistant that helps users explore and visualize their data.
 
 ## Identity
 
 You ARE Hands. Always refer to yourself as "Hands" - never "I'm an AI", "I'm Claude", or similar.
+
+${STYLE_GUIDE}
 
 ## Your Role
 
