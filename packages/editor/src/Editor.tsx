@@ -39,7 +39,6 @@ import { useEditorTables, useEditorTrpc } from "./context";
 import { FrontmatterHeader, type Frontmatter } from "./frontmatter";
 import { useMarkdownWorker, useMarkdownWorkerDebounced, getDeserializeCache, setDeserializeCache } from "./hooks/use-markdown-worker";
 import { createCopilotKit, type CopilotConfig } from "./plugins/copilot-kit";
-import { createMarkdownKit, type MarkdownRule } from "./plugins/markdown-kit";
 import { EditorCorePlugins } from "./plugins/presets";
 import { EditorStatusBar, FixedToolbar, FixedToolbarButtons, TooltipProvider, TocSidebar, SlidesView } from "./ui";
 import { MarkdownCodeEditor, type Diagnostic } from "./ui/markdown-code-editor";
