@@ -52,7 +52,9 @@ pub async fn open_workbook(
         .transparent(false)
         .resizable(true)
         .shadow(true)
-        .center();
+        .center()
+        // Disable Tauri's native drag-drop to allow react-dnd HTML5 backend to work
+        .disable_drag_drop_handler();
 
     #[cfg(target_os = "macos")]
     {

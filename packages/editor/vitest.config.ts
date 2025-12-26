@@ -1,5 +1,6 @@
 import { defineConfig } from "vitest/config";
 import { playwright } from "@vitest/browser-playwright";
+import path from "path";
 
 export default defineConfig({
   test: {
@@ -13,5 +14,15 @@ export default defineConfig({
       headless: true,
       instances: [{ browser: 'chromium' }],
     },
+  },
+  resolve: {
+    alias: {
+      // Mock the worker import for tests - the actual worker logic is tested separately
+      "../workers/markdown.worker?worker": path.resolve(__dirname, "src/test/__mocks__/markdown-worker-mock.ts"),
+    },
+  },
+  // Enable worker plugin for proper handling
+  worker: {
+    format: "es",
   },
 });

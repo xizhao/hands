@@ -265,8 +265,7 @@ function Draggable(props: PlateElementProps) {
     }
   }, [element.id]);
 
-  const { isAboutToDrag, isDragging, nodeRef, previewRef, handleRef } =
-    useDraggable({
+  const draggableResult = useDraggable({
       element,
       onDropHandler: (targetEditor, { dragItem }) => {
         const id = (dragItem as { id: string[] | string }).id;
@@ -430,6 +429,8 @@ function Draggable(props: PlateElementProps) {
       },
     });
 
+  const { isAboutToDrag, isDragging, nodeRef, previewRef, handleRef } = draggableResult;
+
   const isInColumn = path.length === 3;
   const isInTable = path.length === 4;
 
@@ -523,7 +524,7 @@ function Draggable(props: PlateElementProps) {
         ref={nodeRef}
       >
         <MemoizedChildren>{children}</MemoizedChildren>
-        <DropLine hidden={!!edgeDirection} />
+        <DropLine id={element.id as string} hidden={!!edgeDirection} />
         <VerticalDropLine direction={edgeDirection} />
       </div>
     </div>
@@ -671,9 +672,10 @@ const DragHandle = React.memo(function DragHandle({
 const DropLine = React.memo(function DropLine({
   className,
   hidden,
+  id,
   ...props
-}: React.ComponentProps<'div'> & { hidden?: boolean }) {
-  const { dropLine } = useDropLine();
+}: React.ComponentProps<'div'> & { hidden?: boolean; id?: string }) {
+  const { dropLine } = useDropLine({ id });
 
   if (!dropLine || hidden) return null;
 

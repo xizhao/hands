@@ -24,6 +24,7 @@ import {
 } from "react";
 import { UnifiedSidebar } from "../sidebar/UnifiedSidebar";
 import { ContentHeader } from "./ContentHeader";
+import { HeaderActionsProvider } from "./HeaderActionsContext";
 import { RightPanel } from "./panels/RightPanel";
 
 // ============================================================================
@@ -143,7 +144,8 @@ export function NotebookShell({ children }: NotebookShellProps) {
 
   return (
     <TooltipProvider delayDuration={300}>
-      <div className="h-screen flex bg-surface overflow-hidden relative">
+      <HeaderActionsProvider>
+        <div className="h-screen flex bg-surface overflow-hidden relative">
         <div
           className="absolute inset-0 pointer-events-none z-50 border border-black/[0.04] dark:border-white/[0.03]"
           style={{ borderRadius: "10px" }}
@@ -202,6 +204,7 @@ export function NotebookShell({ children }: NotebookShellProps) {
           disabled={!activeWorkbookId}
         />
       </div>
+      </HeaderActionsProvider>
     </TooltipProvider>
   );
 }

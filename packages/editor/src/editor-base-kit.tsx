@@ -6,12 +6,13 @@ import { BaseColumnKit } from './plugins/column-base-kit';
 import { BaseFontKit } from './plugins/font-base-kit';
 import { BaseLinkKit } from './plugins/link-base-kit';
 import { BaseListKit } from './plugins/list-base-kit';
-import { MarkdownKit } from './plugins/markdown-kit';
 import { BaseMediaKit } from './plugins/media-base-kit';
 import { BaseMentionKit } from './plugins/mention-base-kit';
 import { BaseTableKit } from './plugins/table-base-kit';
 import { BaseTocKit } from './plugins/toc-base-kit';
 import { BaseToggleKit } from './plugins/toggle-base-kit';
+
+// Note: Serialization handled by web worker, not MarkdownPlugin
 
 export const BaseEditorKit = [
   ...BaseBasicBlocksKit,
@@ -27,5 +28,4 @@ export const BaseEditorKit = [
   ...BaseBasicMarksKit,
   ...BaseFontKit,
   ...BaseListKit,
-  ...MarkdownKit,
 ];

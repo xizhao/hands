@@ -12,10 +12,10 @@ import type {
   SerializeOptions,
 } from "./types";
 import type { TElement, TText } from "platejs";
-
-// Lazy import to avoid loading DOM-dependent code in workers
-// convertNodesSerialize is only used when options.editor is available (main thread)
-let convertNodesSerialize: ((children: (TElement | TText)[], options: any) => unknown[]) | null = null;
+import {
+  convertNodesSerialize as plateConvertNodesSerialize,
+  convertChildrenDeserialize as plateConvertChildrenDeserialize,
+} from "@platejs/markdown";
 
 // ============================================================================
 // Attribute Parsing (MDX → Props)
@@ -431,9 +431,18 @@ export function serializeChildren(
   const rules = (options as any)._rules as Record<string, { serialize: (node: any, opts: SerializeOptions) => unknown }> | undefined;
   if (rules) {
     return children.map((node) => {
-      // Handle text nodes
+      // Handle text nodes with marks (bold, italic, code, strikethrough)
       if ("text" in node) {
-        return { type: "text", value: node.text };
+        const textNode = node as TText & { bold?: boolean; italic?: boolean; code?: boolean; strikethrough?: boolean };
+        // Inline code is special - it's a leaf node, not a wrapper
+        if (textNode.code) {
+          return { type: "inlineCode", value: textNode.text };
+        }
+        let result: any = { type: "text", value: textNode.text };
+        if (textNode.bold) result = { type: "strong", children: [result] };
+        if (textNode.italic) result = { type: "emphasis", children: [result] };
+        if (textNode.strikethrough) result = { type: "delete", children: [result] };
+        return result;
       }
       // Handle element nodes
       const element = node as TElement;
@@ -448,15 +457,31 @@ export function serializeChildren(
 
   // Use Plate's convertNodesSerialize when editor is available
   if (options.editor) {
-    // Lazy load to avoid DOM dependencies in workers
-    if (!convertNodesSerialize) {
-      // This import only happens on the main thread when editor is available
-      // Workers won't reach this code path since they don't have an editor instance
-      // eslint-disable-next-line @typescript-eslint/no-require-imports
-      convertNodesSerialize = require("@platejs/markdown").convertNodesSerialize;
-    }
-    return convertNodesSerialize!(children, options as any);
+    return plateConvertNodesSerialize(children, options as any);
   }
 
   return [];
+}
+
+// ============================================================================
+// Child Deserialization
+// ============================================================================
+
+/**
+ * Deserialize mdast children to Plate nodes.
+ *
+ * Uses convertChildrenDeserialize from Plate.
+ *
+ * @param children - Mdast children to deserialize
+ * @param deco - Decoration object (for marks)
+ * @param options - Deserialization options
+ * @returns Array of Plate nodes
+ */
+export function deserializeChildren(
+  children: unknown[],
+  deco: unknown,
+  options?: unknown
+): (TElement | TText)[] {
+  if (!children || children.length === 0) return [];
+  return plateConvertChildrenDeserialize(children as any, deco as any, options as any);
 }

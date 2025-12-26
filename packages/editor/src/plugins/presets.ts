@@ -24,7 +24,7 @@ import { FontKit } from "./font-kit";
 import { IndentKit } from "./indent-kit";
 import { LinkKit } from "./link-kit";
 import { ListKit } from "./list-kit";
-import { MarkdownKit } from "./markdown-kit";
+// MarkdownKit removed - worker handles serialization
 import { MediaKit } from "./media-kit";
 import { AtKit } from "./at-kit";
 import { TableKit } from "./table-kit";
@@ -68,7 +68,8 @@ export const EditorCorePlugins = [
 /**
  * BaseKit - Minimal editor with basic formatting
  *
- * Includes: paragraphs, headings, bold/italic/etc., autoformat, stdlib, markdown
+ * Includes: paragraphs, headings, bold/italic/etc., autoformat, stdlib
+ * Note: Serialization handled by web worker, not MarkdownPlugin
  */
 export const BaseKit = [
   ...NodeIdKit,
@@ -78,7 +79,6 @@ export const BaseKit = [
   TrailingBlockPlugin,
   ...StdlibKit,
   ...ColumnKit,
-  ...MarkdownKit,
 ];
 
 /**

@@ -3,12 +3,27 @@
  *
  * Factory for creating editor instances for testing.
  * Uses the same presets as the Editor component.
+ *
+ * Note: Includes MarkdownPlugin for sync API (tests only).
+ * Production code uses the web worker via useMarkdownWorker().
  */
 
 import { type TElement, type Value } from 'platejs';
 import { createPlateEditor } from 'platejs/react';
+import { MarkdownPlugin, remarkMdx } from '@platejs/markdown';
+import remarkGfm from 'remark-gfm';
 
 import { BaseKit, RichTextKit, FullKit } from '../plugins/presets';
+import { serializationRules, toMarkdownPluginRules } from '@hands/core/primitives';
+
+// Test-only MarkdownPlugin with full rules
+const TestMarkdownPlugin = MarkdownPlugin.configure({
+  options: {
+    remarkPlugins: [remarkGfm, remarkMdx],
+    // Type assertion needed - toMarkdownPluginRules returns compatible shape
+    rules: toMarkdownPluginRules(serializationRules) as any,
+  },
+});
 
 export interface CreateTestEditorOptions {
   /** Initial value for the editor */
@@ -22,7 +37,8 @@ export interface CreateTestEditorOptions {
 /**
  * Create a test editor instance.
  *
- * All presets include StdlibKit and MarkdownKit with stdlib rules.
+ * Includes MarkdownPlugin for sync serialize/deserialize API.
+ * This is TEST ONLY - production uses the web worker.
  *
  * @example
  * ```typescript
@@ -51,7 +67,8 @@ export function createTestEditor(options: CreateTestEditorOptions = {}) {
   }
 
   return createPlateEditor({
-    plugins: [...presetPlugins, ...plugins],
+    // TestMarkdownPlugin added for sync API in tests
+    plugins: [...presetPlugins, TestMarkdownPlugin, ...plugins],
     value: value as TElement[] | undefined,
   });
 }
