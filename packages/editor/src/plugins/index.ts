@@ -31,7 +31,6 @@ export * from "./link-kit";
 export * from "./link-base-kit";
 export * from "./list-kit";
 export * from "./list-base-kit";
-export * from "./markdown-kit";
 export * from "./media-kit";
 export * from "./media-base-kit";
 export * from "./mention-kit";

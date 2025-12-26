@@ -14,6 +14,7 @@ import {
   defaultRules,
   convertNodesSerialize,
   convertNodesDeserialize,
+  convertChildrenDeserialize,
   type MdRules,
 } from "@platejs/markdown";
 import { KEYS } from "platejs";
@@ -121,11 +122,15 @@ for (const rule of serializationRules) {
 const serializeOptions = {
   editor: editorShim as any,
   rules: mergedRules,
+  // Pass convertNodes so helpers.ts can use it for nested children
+  convertNodes: (children: any[], opts: any) => convertNodesSerialize(children, opts, true),
 };
 
 const deserializeOptions = {
   editor: editorShim as any,
   rules: mergedRules,
+  // Pass convertChildren so helpers.ts can use it for nested children
+  convertChildren: (children: any[], deco: any, opts: any) => convertChildrenDeserialize(children, deco, opts),
 };
 
 // ============================================================================
