@@ -87,9 +87,28 @@ async function executeAction(
       cloud: authToken ? { cloudUrl, authToken } : undefined,
     });
 
-    // Execute the action
-    ctx.log.info(`Starting action: ${action.name}`);
-    const output = await action.run(validatedInput, ctx);
+    // Inject secrets into process.env for action code that uses process.env directly
+    const originalEnv: Record<string, string | undefined> = {};
+    for (const [key, value] of Object.entries(secrets)) {
+      originalEnv[key] = process.env[key];
+      process.env[key] = value;
+    }
+
+    let output: unknown;
+    try {
+      // Execute the action
+      ctx.log.info(`Starting action: ${action.name}`);
+      output = await action.run(validatedInput, ctx);
+    } finally {
+      // Restore original process.env values
+      for (const key of Object.keys(secrets)) {
+        if (originalEnv[key] === undefined) {
+          delete process.env[key];
+        } else {
+          process.env[key] = originalEnv[key];
+        }
+      }
+    }
     const endTime = Date.now();
 
     ctx.log.info(`Action completed successfully`, { durationMs: endTime - startTime });

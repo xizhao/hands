@@ -57,9 +57,16 @@ function convertNode(node: any): unknown {
   const rule = rulesById.get(t);
   if (rule) {
     // Build options with _rules for serializeChildren
+    // Include ALL types (custom + built-in) so serializeChildren can handle any node
     const rulesMap: Record<string, any> = {};
+    // Add custom rules
     for (const r of serializationRules) {
       rulesMap[r.key] = { serialize: (el: any, opts: any) => convertNode(el) };
+    }
+    // Add built-in types - these are needed when custom rules have children
+    const builtInTypes = ["p", "h1", "h2", "h3", "h4", "h5", "h6", "blockquote", "code_block", "ul", "ol", "li", "hr", "a", "img"];
+    for (const type of builtInTypes) {
+      rulesMap[type] = { serialize: (el: any, opts: any) => convertNode(el) };
     }
     return rule.serialize(node, { _rules: rulesMap });
   }

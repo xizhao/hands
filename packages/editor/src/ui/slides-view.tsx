@@ -213,7 +213,7 @@ export function SlidesView({ className, frontmatter }: SlidesViewProps) {
   if (slides.length === 0) {
     return (
       <div className={cn("flex items-center justify-center h-full text-muted-foreground", className)}>
-        No content
+        No slides found - add headings (# ## ###) to create slides
       </div>
     );
   }

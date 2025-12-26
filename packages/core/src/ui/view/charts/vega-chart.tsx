@@ -233,11 +233,10 @@ export function VegaChart({
         embedResultRef.current = result;
         viewRef.current = result.view;
 
-        // Inject initial data if available
-        if (data && data.length > 0) {
-          result.view.data(DATA_SOURCE_NAME, data);
-          await result.view.runAsync();
-        }
+        // Always initialize data source (prevents "infinite extent" warnings)
+        // Even empty array is better than undefined for Vega's scale calculations
+        result.view.data(DATA_SOURCE_NAME, data ?? []);
+        await result.view.runAsync();
 
         setIsEmbedded(true);
       } catch (err) {
