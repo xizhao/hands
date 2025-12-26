@@ -299,31 +299,28 @@ export const Editor = forwardRef<EditorHandle, EditorProps>(function Editor(
     [platePlugins, legacyPlugins]
   );
 
-  // Process editor plugins into Plate plugins and markdown rules
-  const { generatedPlugins, generatedRules } = useMemo(() => {
+  // Process editor plugins into Plate plugins
+  // Note: Serialization rules are handled by the worker (stdlib rules only)
+  // Custom plugin serialization requires adding rules to @hands/core/primitives/serialization
+  const generatedPlugins = useMemo(() => {
     const plugins: PlatePlugin[] = [];
-    const rules: Record<string, MarkdownRule> = {};
 
     for (const editorPlugin of allEditorPlugins) {
       if (isAdvancedPlugin(editorPlugin)) {
-        // Advanced plugin - use provided plugin and rules
+        // Advanced plugin - use provided plugin
         plugins.push(editorPlugin.plugin);
-        Object.assign(rules, editorPlugin.rules);
       } else {
-        // Simple plugin - generate plugin and rules
-        const { plugin, rule } = createPlugin(
+        // Simple plugin - generate plugin
+        const { plugin } = createPlugin(
           editorPlugin.name,
           editorPlugin.component,
           editorPlugin.options
         );
         plugins.push(plugin);
-        // Add both deserialize (by tag name) and serialize (by key) rules
-        rules[rule.tagName] = { deserialize: rule.deserialize };
-        rules[rule.key] = { serialize: rule.serialize };
       }
     }
 
-    return { generatedPlugins: plugins, generatedRules: rules };
+    return plugins;
   }, [allEditorPlugins]);
 
   // Get copilot config from prop or derive from context
@@ -364,10 +361,9 @@ export const Editor = forwardRef<EditorHandle, EditorProps>(function Editor(
       ...EditorCorePlugins,
       ...generatedPlugins,
       ...allExtraPlugins,
-      ...createMarkdownKit(generatedRules),
       ...copilotPlugins,
     ],
-    [generatedPlugins, allExtraPlugins, generatedRules, copilotPlugins]
+    [generatedPlugins, allExtraPlugins, copilotPlugins]
   );
 
   // Create editor

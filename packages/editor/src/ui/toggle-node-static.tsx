@@ -10,7 +10,7 @@ export function ToggleElementStatic(props: SlateElementProps) {
           className="absolute top-0.5 left-0 flex cursor-pointer select-none items-center justify-center rounded-sm p-px transition-bg-ease hover:bg-slate-200"
           contentEditable={false}
         >
-          <CaretRight className="size-4 rotate-0 transition-transform duration-75" weight="bold" />
+          <CaretRight className="size-4 rotate-0 transition-transform duration-75" />
         </span>
         {props.children}
       </div>

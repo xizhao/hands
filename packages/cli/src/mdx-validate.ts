@@ -11,7 +11,7 @@ import path from "node:path";
 import {
   extractMdxComponents,
   type MdxComponent,
-  type SchemaTable,
+  type ValidationSchemaTable,
   type ValidationContext,
   type ValidationError,
   validateComponent,
@@ -20,7 +20,7 @@ import {
 import pc from "picocolors";
 
 // Re-export types for convenience
-export type { MdxComponent, SchemaTable, ValidationContext, ValidationError };
+export type { MdxComponent, ValidationSchemaTable as SchemaTable, ValidationContext, ValidationError };
 
 // Re-export core validation functions
 export { extractMdxComponents, validateComponent, validateMdxContent };
@@ -75,7 +75,7 @@ export function validateMdxFile(
 /**
  * Validate all MDX pages in a workbook.
  */
-export function validateMdxPages(workbookPath: string, schema: SchemaTable[]): ValidationError[] {
+export function validateMdxPages(workbookPath: string, schema: ValidationSchemaTable[]): ValidationError[] {
   const pagesDir = path.join(workbookPath, "pages");
   if (!existsSync(pagesDir)) return [];
 
@@ -102,7 +102,7 @@ export function validateMdxPages(workbookPath: string, schema: SchemaTable[]): V
 /**
  * Load schema from .hands/schema.json or runtime.
  */
-export function loadSchema(workbookPath: string): SchemaTable[] {
+export function loadSchema(workbookPath: string): ValidationSchemaTable[] {
   // Try .hands/schema.json first
   const schemaPath = path.join(workbookPath, ".hands", "schema.json");
   if (existsSync(schemaPath)) {

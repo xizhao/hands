@@ -43,6 +43,7 @@ export * from "./toc-base-kit";
 export * from "./toggle-kit";
 export * from "./toggle-base-kit";
 export * from "./page-context-kit";
+export * from "./stdlib-base-kit";
 
 // Presets
 export * from "./presets";

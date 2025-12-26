@@ -64,6 +64,8 @@ export default defineConfig({
           "tailwind-merge",
           "clsx",
           "class-variance-authority",
+          // rwsdk internals (must be pre-bundled to avoid stale cache errors)
+          "rwsdk/use-synced-state/worker",
         ],
         esbuildOptions: {
           // Worker uses "neutral" platform which ignores "main" by default
@@ -148,20 +150,32 @@ export default defineConfig({
       "react-dom",
     ],
     alias: {
+      // Use SSR variant of phosphor-icons (no React Context, works in workers)
+      "@phosphor-icons/react": "@phosphor-icons/react/ssr",
       // Workbook paths
       "@ui": path.resolve(workbookPath, "ui"),
       "@/blocks": path.resolve(workbookPath, "pages/blocks"),
       // Runtime provides utils for shadcn components
       "@ui/lib/utils": path.resolve(__dirname, "src/lib/utils.ts"),
       // Hands core (primitives, types, actions, services)
+      // NOTE: Subpath aliases must come BEFORE the base package alias
+      "@hands/core/ui/view": path.resolve(__dirname, "../core/src/ui/view/index.ts"),
+      "@hands/core/ui/action": path.resolve(__dirname, "../core/src/ui/action/index.ts"),
+      "@hands/core/ui/data": path.resolve(__dirname, "../core/src/ui/data/index.ts"),
+      "@hands/core/ui/components": path.resolve(__dirname, "../core/src/ui/components/index.ts"),
+      "@hands/core/ui": path.resolve(__dirname, "../core/src/ui/index.ts"),
       "@hands/core/primitives": path.resolve(__dirname, "../core/src/primitives/index.ts"),
       "@hands/core/services": path.resolve(__dirname, "../core/src/services/index.ts"),
+      "@hands/core/types": path.resolve(__dirname, "../core/src/types/index.ts"),
+      "@hands/core/validation": path.resolve(__dirname, "../core/src/validation/index.ts"),
+      "@hands/core/docs": path.resolve(__dirname, "../core/src/docs/stdlib.ts"),
       "@hands/core": path.resolve(__dirname, "../core/src/index.ts"),
       // Hands runtime
       "@hands/db": path.resolve(__dirname, "src/db/dev.ts"),
       "@hands/db/types": path.join(workbookPath, ".hands/db.d.ts"),
       "@hands/services": path.resolve(__dirname, "src/services/index.ts"),
       "@hands/runtime/components/PageStatic": path.resolve(__dirname, "src/components/PageStatic.tsx"),
+      "@hands/runtime/pages/Page": path.resolve(__dirname, "src/pages/Page.tsx"),
       "@hands/runtime": path.resolve(__dirname, "src/types/index.ts"),
       "@hands/pages": path.join(workbookPath, ".hands/pages/index.tsx"),
       "@hands/actions": path.join(workbookPath, ".hands/actions/index.ts"),

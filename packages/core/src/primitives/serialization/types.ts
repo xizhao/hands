@@ -80,6 +80,8 @@ export interface SerializeOptions {
   editor?: SlateEditor;
   /** Serialization rules - maps element types to serialize functions */
   rules?: Record<string, { serialize?: (node: TElement, options: SerializeOptions) => unknown }>;
+  /** Convert child nodes to mdast (provided by Plate or worker) */
+  convertNodes?: (children: (TElement | TText)[], options: SerializeOptions) => unknown[];
   /** Other options passed by MarkdownPlugin */
   [key: string]: unknown;
 }

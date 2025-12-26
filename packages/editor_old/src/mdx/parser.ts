@@ -6,11 +6,12 @@
  */
 
 import remarkFrontmatter from "remark-frontmatter";
+import remarkGfm from "remark-gfm";
 import remarkMdx from "remark-mdx";
 import remarkParse from "remark-parse";
 import { unified } from "unified";
 import type { TElement, Value } from "platejs";
-import type { Root, Content, Heading, Paragraph, Blockquote, Code, List, ListItem, Text, InlineCode, Strong, Emphasis, Link, Image, ThematicBreak } from "mdast";
+import type { Root, Content, Heading, Paragraph, Blockquote, Code, List, ListItem, Text, InlineCode, Strong, Emphasis, Link, Image, ThematicBreak, Table, TableRow, TableCell } from "mdast";
 import type { MdxJsxFlowElement, MdxJsxTextElement, MdxJsxAttribute, MdxJsxExpressionAttribute } from "mdast-util-mdx-jsx";
 
 import type { SourceLocation } from "../ast/oxc-parser";
@@ -65,6 +66,7 @@ function parseCssToStyleObject(cssString: string): Record<string, string> {
 const mdxProcessor = unified()
   .use(remarkParse)
   .use(remarkFrontmatter, ["yaml"])
+  .use(remarkGfm)
   .use(remarkMdx);
 
 // ============================================================================
@@ -221,6 +223,9 @@ function mdastNodeToPlate(
 
     case "list":
       return listToPlate(node as List, ctx);
+
+    case "table":
+      return tableToPlate(node as Table, ctx);
 
     case "thematicBreak":
       return thematicBreakToPlate(node as ThematicBreak, ctx);
@@ -403,6 +408,56 @@ function thematicBreakToPlate(node: ThematicBreak, ctx: ConversionContext): TEle
     id,
     _blankLinesBefore: blankLinesBefore,
     children: [{ text: "" }],
+  };
+}
+
+function tableToPlate(node: Table, ctx: ConversionContext): TElement {
+  const id = ctx.generateId("table");
+  const blankLinesBefore = calcBlankLinesBefore(node, ctx);
+
+  if (node.position) {
+    ctx.nodeLocations.set(id, {
+      start: node.position.start.offset ?? 0,
+      end: node.position.end.offset ?? 0,
+    });
+  }
+
+  const rows: TElement[] = [];
+  let isFirstRow = true;
+
+  for (const row of node.children) {
+    if (row.type === "tableRow") {
+      const rowId = ctx.generateId("tr");
+      const cells: TElement[] = [];
+
+      for (const cell of (row as TableRow).children) {
+        if (cell.type === "tableCell") {
+          const cellId = ctx.generateId("td");
+          const cellType = isFirstRow ? "th" : "td";
+
+          cells.push({
+            type: cellType,
+            id: cellId,
+            children: inlineNodesToPlate((cell as TableCell).children, ctx),
+          });
+        }
+      }
+
+      rows.push({
+        type: "tr",
+        id: rowId,
+        children: cells.length > 0 ? cells : [{ type: "td", children: [{ text: "" }] }],
+      });
+
+      isFirstRow = false;
+    }
+  }
+
+  return {
+    type: "table",
+    id,
+    _blankLinesBefore: blankLinesBefore,
+    children: rows.length > 0 ? rows : [{ type: "tr", children: [{ type: "td", children: [{ text: "" }] }] }],
   };
 }
 

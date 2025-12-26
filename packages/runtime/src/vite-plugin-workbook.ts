@@ -124,6 +124,7 @@ function generatePagesManifest(pages: PageMeta[], outputDir: string): void {
 
   const manifest = `// Auto-generated pages manifest - DO NOT EDIT
 import { route } from "rwsdk/router";
+import { Page } from "@hands/runtime/pages/Page";
 import { PageStatic } from "@hands/runtime/components/PageStatic";
 ${blockImports}
 
@@ -141,12 +142,11 @@ const ${sanitizeId(p.id)}Value = ${JSON.stringify(p.value)};`
 ${pages
   .map(
     (p) => `function ${sanitizeId(p.id)}Page() {
-  const title = (${sanitizeId(p.id)}Frontmatter.title as string) || "Untitled";
+  const fm = ${sanitizeId(p.id)}Frontmatter;
   return (
-    <article className="prose prose-slate max-w-none">
-      <h1>{title}</h1>
+    <Page title={fm.title as string} description={fm.description as string}>
       <PageStatic value={${sanitizeId(p.id)}Value} blocks={blocks} />
-    </article>
+    </Page>
   );
 }`
   )

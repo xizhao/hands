@@ -1,13 +1,17 @@
-import { route, render, RouteMiddleware } from "rwsdk/router";
+import { route, RouteMiddleware } from "rwsdk/router";
 import { defineApp } from "rwsdk/worker";
-import { Page } from "./pages/Page";
+import { env } from "cloudflare:workers";
+import {
+  SyncedStateServer,
+  syncedStateRoutes,
+} from "rwsdk/use-synced-state/worker";
 import { pages, pageRoutes } from "@hands/pages";
 import { Database } from "./db/dev";
 import { dbRoutes } from "./db/routes";
 import { actionRoutes } from "./actions/routes";
 
-// Export Durable Object for wrangler
-export { Database };
+// Export Durable Objects for wrangler
+export { Database, SyncedStateServer };
 
 export const setCommonHeaders =
   (): RouteMiddleware =>
@@ -48,6 +52,8 @@ const firstPageId = Object.keys(pages)[0];
 
 export default defineApp([
   setCommonHeaders(),
+  // Synced state routes for real-time collaboration
+  ...syncedStateRoutes(() => env.SYNCED_STATE_SERVER),
   // Health check endpoint for workbook-server polling
   route("/health", () =>
     new Response(JSON.stringify({ status: "ok" }), {
@@ -71,6 +77,6 @@ export default defineApp([
       headers: { "Content-Type": "application/json" },
     });
   }),
-  // Pages use rwsdk's render() for proper RSC/SSR handling
-  ...render(Page, pageRoutes),
+  // Pages (each page includes its own Page wrapper with frontmatter)
+  ...pageRoutes,
 ]);

@@ -29,12 +29,7 @@ import {
 import { join } from "node:path";
 import { stopScheduler } from "./actions/index.js";
 import { getRuntimeSourcePath } from "./config/index.js";
-import {
-  createPageRegistry,
-  PageRegistry,
-  type PageRenderContext,
-  renderPage,
-} from "./pages/index.js";
+import { createPageRegistry, PageRegistry } from "./pages/index.js";
 import { PORTS, waitForPortFree } from "./ports.js";
 import { getDbSubscriptionManager } from "./sqlite/trpc.js";
 import { registerTRPCRoutes } from "./trpc/index.js";
@@ -404,51 +399,52 @@ function createApp(config: RuntimeConfig) {
   app.use("/*", cors());
 
   // ============================================
-  // Page Rendering Route (kept as HTTP - returns HTML)
+  // Page Rendering Route - Proxy to RSC runtime
   // ============================================
 
-  // Render a page (server-side)
+  // Proxy page requests to the RSC runtime (rwsdk handles proper RSC/SSR)
   app.get("/pages/:path{.+}", async (c) => {
-    if (!state.pageRegistry) {
+    if (!state.rscReady || !state.rscPort) {
+      // Runtime not ready - show loading state
+      const error = state.rscError || "Runtime starting...";
       return c.html(
-        "<html><body><h1>Page registry not initialized</h1></body></html>",
+        `<!DOCTYPE html>
+<html><head><meta charset="utf-8"><title>Loading...</title>
+<script>setTimeout(() => location.reload(), 1000)</script>
+</head><body style="font-family: system-ui; padding: 2rem;">
+<h1>⏳ Runtime starting...</h1>
+<p>${error}</p>
+<p>This page will refresh automatically.</p>
+</body></html>`,
         503
       );
     }
 
-    const pagePath = c.req.param("path");
-    const route = pagePath.startsWith("/") ? pagePath : `/${pagePath}`;
-    const page = state.pageRegistry.match(route);
-
-    if (!page) {
-      return c.html("<html><body><h1>Page not found</h1></body></html>", 404);
-    }
-
-    // Create render context
-    const renderContext: PageRenderContext = {
-      pagesDir: state.pageRegistry.getPagesDir(),
-      blockServerPort: state.rscPort ?? undefined,
-      useRsc: state.rscReady,
-    };
+    // Proxy to RSC runtime
+    const url = new URL(c.req.url);
+    url.host = `localhost:${state.rscPort}`;
 
     try {
-      const result = await renderPage({
-        pagePath: page.path,
-        context: renderContext,
+      const response = await fetch(url.toString(), {
+        method: c.req.method,
+        headers: c.req.raw.headers,
       });
 
-      if (result.error) {
-        console.warn(`[runtime] Page render warning: ${result.error}`);
-      }
+      // Copy headers but remove transfer-encoding
+      const headers = new Headers(response.headers);
+      headers.delete("transfer-encoding");
 
-      return c.html(result.html);
+      return new Response(response.body, {
+        status: response.status,
+        headers,
+      });
     } catch (err) {
-      console.error("[runtime] Page render failed:", err);
+      console.error("[runtime] Page proxy failed:", err);
       return c.html(
-        `<html><body><h1>Render Error</h1><pre>${
+        `<html><body><h1>Proxy Error</h1><pre>${
           err instanceof Error ? err.message : String(err)
         }</pre></body></html>`,
-        500
+        502
       );
     }
   });
