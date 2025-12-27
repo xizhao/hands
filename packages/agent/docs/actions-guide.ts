@@ -484,3 +484,215 @@ export default defineAction({
 });
 \`\`\`
 `;
+
+/**
+ * Workflow actions documentation
+ */
+export const ACTION_WORKFLOW_DOCS = `
+## Workflow Actions
+
+For multi-step processes with retries, delays, and human-in-the-loop approvals, use \`workflow\` instead of \`run\`. Workflows are compatible with Cloudflare Workers Workflows.
+
+### When to Use Workflow vs Run
+
+| Use \`run\` when... | Use \`workflow\` when... |
+|---------------------|--------------------------|
+| Simple, single operation | Multi-step process |
+| No retries needed | Need per-step retries |
+| No delays/waits | Need sleeps between steps |
+| No human approval | Need human-in-the-loop |
+| Quick execution | Long-running process |
+
+### Basic Workflow
+
+\`\`\`typescript
+import { defineAction } from "@hands/core/primitives";
+
+export default defineAction({
+  name: "sync-orders",
+  description: "Sync orders with retries and rate limiting",
+
+  async workflow(step, ctx, input) {
+    // Each step.do() is retriable and its result is persisted
+    const { orders } = await step.do("fetch-orders", async () => {
+      const response = await fetch("https://api.example.com/orders");
+      return { orders: await response.json() };
+    });
+
+    // Sleep between API calls for rate limiting
+    await step.sleep("rate-limit", "5 seconds");
+
+    // Save to database
+    const { count } = await step.do("save-orders", async () => {
+      await ctx.sources.main.orders.upsert(orders, ["id"]);
+      return { count: orders.length };
+    });
+
+    return { synced: count };
+  },
+});
+\`\`\`
+
+### Step Primitives
+
+#### step.do(name, callback) - Execute retriable work
+\`\`\`typescript
+// Simple step
+const result = await step.do("fetch-data", async () => {
+  return { data: await fetchData() };
+});
+
+// With retry configuration
+const result = await step.do("call-api", {
+  retries: { limit: 3, delay: "10 seconds", backoff: "exponential" },
+  timeout: "30 seconds",
+}, async () => {
+  return await callUnreliableApi();
+});
+\`\`\`
+
+#### step.sleep(name, duration) - Pause execution
+\`\`\`typescript
+await step.sleep("rate-limit", "5 seconds");
+await step.sleep("daily-pause", "24 hours");
+\`\`\`
+
+Duration format: \`"{number} {unit}"\` where unit is: second(s), minute(s), hour(s), day(s)
+
+#### step.sleepUntil(name, timestamp) - Pause until specific time
+\`\`\`typescript
+await step.sleepUntil("wait-for-market-open", new Date("2024-01-15T09:30:00Z"));
+await step.sleepUntil("scheduled-time", Date.now() + 3600000); // 1 hour from now
+\`\`\`
+
+#### step.waitForEvent(name, options) - Wait for external event
+\`\`\`typescript
+// Wait for human approval (shows UI prompt in dev)
+const approval = await step.waitForEvent<{ approved: boolean }>("manager-approval", {
+  type: "human-approval",
+  timeout: "24 hours",
+});
+
+if (!approval.approved) {
+  throw new Error("Approval denied");
+}
+\`\`\`
+
+### Workflow with All Features
+
+\`\`\`typescript
+import { defineAction } from "@hands/core/primitives";
+import { z } from "zod";
+
+export default defineAction({
+  name: "process-refund",
+  description: "Process refund with approval workflow",
+  secrets: ["STRIPE_KEY", "HANDS_CLOUD_TOKEN"],
+
+  input: z.object({
+    orderId: z.string(),
+    amount: z.number(),
+    reason: z.string(),
+  }),
+
+  async workflow(step, ctx, input) {
+    // Step 1: Validate the order exists
+    const { order } = await step.do("validate-order", async () => {
+      const order = await ctx.sources.main.orders.selectOne({
+        where: \`id = '\${input.orderId}'\`,
+      });
+      if (!order) throw new Error(\`Order not found: \${input.orderId}\`);
+      return { order };
+    });
+
+    // Step 2: Check if amount requires approval
+    if (input.amount > 100) {
+      // Wait for manager approval
+      const approval = await step.waitForEvent<{ approved: boolean; approver: string }>(
+        "manager-approval",
+        { type: "human-approval", timeout: "48 hours" }
+      );
+
+      if (!approval.approved) {
+        await step.do("record-denial", async () => {
+          await ctx.sources.main.refund_requests.insert({
+            order_id: input.orderId,
+            amount: input.amount,
+            status: "denied",
+            denied_by: approval.approver,
+          });
+        });
+        return { success: false, reason: "Approval denied" };
+      }
+    }
+
+    // Step 3: Process refund with retries
+    const { refundId } = await step.do("process-stripe-refund", {
+      retries: { limit: 3, delay: "5 seconds", backoff: "exponential" },
+      timeout: "30 seconds",
+    }, async () => {
+      const response = await fetch("https://api.stripe.com/v1/refunds", {
+        method: "POST",
+        headers: {
+          "Authorization": \`Bearer \${ctx.secrets.STRIPE_KEY}\`,
+          "Content-Type": "application/x-www-form-urlencoded",
+        },
+        body: new URLSearchParams({
+          charge: order.stripe_charge_id,
+          amount: String(input.amount * 100),
+        }),
+      });
+      const data = await response.json();
+      return { refundId: data.id };
+    });
+
+    // Step 4: Update database
+    await step.do("update-records", async () => {
+      await ctx.sources.main.orders.update(
+        \`id = '\${input.orderId}'\`,
+        { status: "refunded", refund_id: refundId }
+      );
+    });
+
+    // Step 5: Send notification (with small delay)
+    await step.sleep("notification-delay", "2 seconds");
+
+    await step.do("notify-customer", async () => {
+      // Send email notification...
+    });
+
+    return { success: true, refundId };
+  },
+});
+\`\`\`
+
+### Return Types (Serializable)
+
+Workflow inputs and outputs must be serializable (for Cloudflare Workers compatibility):
+
+\`\`\`typescript
+// ✅ GOOD - Serializable types
+return { count: 42 };                    // object with primitives
+return { items: ["a", "b", "c"] };       // arrays
+return { date: new Date() };             // Date objects
+return { nested: { deep: { value: 1 } } }; // nested objects
+
+// ❌ BAD - Not serializable
+return { fn: () => {} };                 // functions
+return { element: document.body };       // DOM elements
+return { circular: obj };                // circular references
+\`\`\`
+
+### Parallel Execution
+
+Wrap parallel operations in a single step.do for proper caching:
+
+\`\`\`typescript
+const [users, orders] = await step.do("fetch-all", async () => {
+  return Promise.all([
+    fetch("/api/users").then(r => r.json()),
+    fetch("/api/orders").then(r => r.json()),
+  ]);
+});
+\`\`\`
+`;
