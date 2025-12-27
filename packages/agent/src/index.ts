@@ -22,8 +22,14 @@ const TOOLS_SOURCE = resolve(AGENT_PKG_DIR, "tool");
 
 /**
  * Symlink tools directory to .opencode/tool/
+ * Skips if running from bundled binary (source path doesn't exist)
  */
 function setupToolsSymlink(workingDir: string) {
+  // Skip if source doesn't exist (running from compiled binary)
+  if (!existsSync(TOOLS_SOURCE)) {
+    return;
+  }
+
   const opencodeDir = resolve(workingDir, ".opencode");
   const target = resolve(opencodeDir, "tool");
 
@@ -41,17 +47,28 @@ function setupToolsSymlink(workingDir: string) {
     }
   }
 
-  symlinkSync(TOOLS_SOURCE, target, "dir");
+  try {
+    symlinkSync(TOOLS_SOURCE, target, "dir");
+  } catch (err) {
+    // Ignore symlink errors in bundled mode
+  }
 }
 
 /**
  * Symlink plugin directory to .opencode/plugin/
  * OpenCode discovers plugins from the workbook's .opencode/plugin/ dir
+ * Skips if running from bundled binary (source path doesn't exist)
  */
 function setupPluginsSymlink(workingDir: string) {
+  const pluginSource = resolve(AGENT_PKG_DIR, "plugin");
+
+  // Skip if source doesn't exist (running from compiled binary)
+  if (!existsSync(pluginSource)) {
+    return;
+  }
+
   const opencodeDir = resolve(workingDir, ".opencode");
   const target = resolve(opencodeDir, "plugin");
-  const pluginSource = resolve(AGENT_PKG_DIR, "plugin");
 
   if (!existsSync(opencodeDir)) {
     mkdirSync(opencodeDir, { recursive: true });
@@ -67,7 +84,11 @@ function setupPluginsSymlink(workingDir: string) {
     }
   }
 
-  symlinkSync(pluginSource, target, "dir");
+  try {
+    symlinkSync(pluginSource, target, "dir");
+  } catch (err) {
+    // Ignore symlink errors in bundled mode
+  }
 }
 
 // Build config
