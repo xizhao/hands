@@ -7,7 +7,7 @@
 
 import { route } from "rwsdk/router";
 import { env } from "cloudflare:workers";
-import { getDb, kyselySql, runWithDbMode } from "./dev";
+import { getDb, getUserTables, kyselySql, runWithDbMode } from "./dev";
 
 function getSecret(): string | undefined {
   // @ts-expect-error - HANDS_SEED_SECRET is optional env var
@@ -96,14 +96,9 @@ export const seedRoutes = [
 
         await runWithDbMode("action", async () => {
           // Get all user tables
-          const tablesResult = await kyselySql<{ name: string; sql: string }>`
-            SELECT name, sql FROM sqlite_master
-            WHERE type='table'
-              AND name NOT LIKE 'sqlite_%'
-              AND name NOT GLOB '__*'
-          `.execute(db);
+          const userTables = await getUserTables();
 
-          for (const table of tablesResult.rows) {
+          for (const table of userTables) {
             // Add CREATE TABLE statement
             if (table.sql) {
               statements.push(table.sql.replace("CREATE TABLE", "CREATE TABLE IF NOT EXISTS"));
