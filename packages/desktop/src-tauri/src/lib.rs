@@ -1115,54 +1115,111 @@ async fn check_server_health(port: u16) -> Result<HealthCheck, String> {
 fn get_api_keys_from_store(app: &tauri::AppHandle) -> HashMap<String, String> {
     let mut env_vars = HashMap::new();
 
-    // First, try to read from .env.local in the desktop package (dev mode)
-    let env_local_path = format!("{}/../.env.local", env!("CARGO_MANIFEST_DIR"));
-    if let Ok(contents) = std::fs::read_to_string(&env_local_path) {
-        for line in contents.lines() {
-            if let Some((key, value)) = line.split_once('=') {
-                let key = key.trim();
-                let value = value.trim();
-                if !key.is_empty() && !value.is_empty() && !key.starts_with('#') {
-                    env_vars.insert(key.to_string(), value.to_string());
+    // In dev mode, try to read from .env.local in the desktop package
+    #[cfg(debug_assertions)]
+    {
+        let env_local_path = format!("{}/../.env.local", env!("CARGO_MANIFEST_DIR"));
+        println!("[env] Dev mode: checking {}", env_local_path);
+        if let Ok(contents) = std::fs::read_to_string(&env_local_path) {
+            for line in contents.lines() {
+                if let Some((key, value)) = line.split_once('=') {
+                    let key = key.trim();
+                    let value = value.trim();
+                    if !key.is_empty() && !value.is_empty() && !key.starts_with('#') {
+                        println!("[env] Found {} from .env.local", key);
+                        env_vars.insert(key.to_string(), value.to_string());
+                    }
                 }
             }
         }
     }
 
-    // Then override with store values (settings UI takes precedence)
+    // In production, try ~/.hands/.env for user-level config (optional fallback)
+    #[cfg(not(debug_assertions))]
+    {
+        if let Some(home) = dirs::home_dir() {
+            let env_path = home.join(".hands").join(".env");
+            println!("[env] Production mode: checking {:?}", env_path);
+            if let Ok(contents) = std::fs::read_to_string(&env_path) {
+                for line in contents.lines() {
+                    if let Some((key, value)) = line.split_once('=') {
+                        let key = key.trim();
+                        let value = value.trim();
+                        if !key.is_empty() && !value.is_empty() && !key.starts_with('#') {
+                            println!("[env] Found {} from ~/.hands/.env", key);
+                            env_vars.insert(key.to_string(), value.to_string());
+                        }
+                    }
+                }
+            } else {
+                println!("[env] No ~/.hands/.env file found (this is fine, using store)");
+            }
+        }
+    }
+
+    // Store values take precedence (set by settings UI)
     // OpenRouter is the primary key - provides access to all models
     if let Ok(store) = app.store("settings.json") {
         if let Some(value) = store.get("openrouter_api_key") {
             if let Some(s) = value.as_str() {
                 if !s.is_empty() {
+                    println!("[env] Found OPENROUTER_API_KEY from Tauri store");
                     env_vars.insert("OPENROUTER_API_KEY".to_string(), s.to_string());
                 }
             }
         }
+    } else {
+        println!("[env] WARNING: Could not open settings store");
     }
+
+    println!("[env] Total env vars loaded: {} (has OPENROUTER_API_KEY: {})",
+             env_vars.len(),
+             env_vars.contains_key("OPENROUTER_API_KEY"));
 
     env_vars
 }
 
 /// Check if OpenRouter API key is configured
 fn has_openrouter_api_key(app: &tauri::AppHandle) -> bool {
-    // Check .env.local first (dev mode)
-    let env_local_path = format!("{}/../.env.local", env!("CARGO_MANIFEST_DIR"));
-    if let Ok(contents) = std::fs::read_to_string(&env_local_path) {
-        for line in contents.lines() {
-            if let Some((key, value)) = line.split_once('=') {
-                if key.trim() == "OPENROUTER_API_KEY" && !value.trim().is_empty() {
+    // Check store first (always available, set by settings UI)
+    if let Ok(store) = app.store("settings.json") {
+        if let Some(value) = store.get("openrouter_api_key") {
+            if let Some(s) = value.as_str() {
+                if !s.is_empty() {
                     return true;
                 }
             }
         }
     }
 
-    // Check store
-    if let Ok(store) = app.store("settings.json") {
-        if let Some(value) = store.get("openrouter_api_key") {
-            if let Some(s) = value.as_str() {
-                return !s.is_empty();
+    // Dev mode: also check .env.local as fallback
+    #[cfg(debug_assertions)]
+    {
+        let env_local_path = format!("{}/../.env.local", env!("CARGO_MANIFEST_DIR"));
+        if let Ok(contents) = std::fs::read_to_string(&env_local_path) {
+            for line in contents.lines() {
+                if let Some((key, value)) = line.split_once('=') {
+                    if key.trim() == "OPENROUTER_API_KEY" && !value.trim().is_empty() {
+                        return true;
+                    }
+                }
+            }
+        }
+    }
+
+    // Production: also check ~/.hands/.env as fallback
+    #[cfg(not(debug_assertions))]
+    {
+        if let Some(home) = dirs::home_dir() {
+            let env_path = home.join(".hands").join(".env");
+            if let Ok(contents) = std::fs::read_to_string(&env_path) {
+                for line in contents.lines() {
+                    if let Some((key, value)) = line.split_once('=') {
+                        if key.trim() == "OPENROUTER_API_KEY" && !value.trim().is_empty() {
+                            return true;
+                        }
+                    }
+                }
             }
         }
     }
