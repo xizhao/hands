@@ -1,8 +1,25 @@
-import { spawn } from "node:child_process";
+import { spawnSync } from "node:child_process";
 import path from "node:path";
 import pc from "picocolors";
 import { preflight } from "../preflight.js";
 import { findWorkbookRoot } from "../utils.js";
+
+/**
+ * Run a command and wait for it to complete.
+ * Returns true if successful, false otherwise.
+ */
+function runCommand(
+  cmd: string,
+  args: string[],
+  opts: { cwd: string; env: Record<string, string | undefined> }
+): boolean {
+  const result = spawnSync(cmd, args, {
+    cwd: opts.cwd,
+    env: { ...process.env, ...opts.env },
+    stdio: "inherit",
+  });
+  return result.status === 0;
+}
 
 export async function deployCommand() {
   const workbookPath = await findWorkbookRoot();
@@ -15,7 +32,13 @@ export async function deployCommand() {
     process.exit(1);
   }
 
-  console.log(pc.blue(`Deploying ${pc.bold(path.basename(workbookPath))}...`));
+  // Workbook-specific worker name for production
+  // This ensures each workbook deploys to its own Cloudflare worker
+  // Local dev always uses "runtime" from wrangler.jsonc (separate from prod)
+  const workbookId = path.basename(workbookPath);
+  const workerName = `hands-${workbookId}`;
+
+  console.log(pc.blue(`Deploying ${pc.bold(workbookId)} as ${pc.bold(workerName)}...`));
 
   // Run preflight checks
   const preflightOk = await preflight(workbookPath);
@@ -26,25 +49,40 @@ export async function deployCommand() {
   // Find runtime package
   const runtimeDir = path.resolve(import.meta.dirname, "../../../runtime");
 
-  // Use rwsdk's release script which handles:
-  // 1. ensure-deploy-env (validates wrangler config)
-  // 2. clean (removes .vite cache)
-  // 3. build (vite build)
-  // 4. wrangler deploy
-  const child = spawn("bun", ["run", "release"], {
-    cwd: runtimeDir,
-    env: {
-      ...process.env,
-      HANDS_WORKBOOK_PATH: workbookPath,
-      NODE_ENV: "production",
-    },
-    stdio: "inherit",
-  });
+  const env = {
+    HANDS_WORKBOOK_PATH: workbookPath,
+    NODE_ENV: "production",
+  };
 
-  child.on("exit", (code) => {
-    if (code === 0) {
-      console.log(pc.green("\nDeployment complete!"));
-    }
-    process.exit(code ?? 0);
-  });
+  // Step 1: Run ensure-deploy-env (validates wrangler config, sets up secrets)
+  console.log(pc.dim("Running deployment preflight..."));
+  if (!runCommand("npx", ["rw-scripts", "ensure-deploy-env"], { cwd: runtimeDir, env })) {
+    console.error(pc.red("Deployment preflight failed"));
+    process.exit(1);
+  }
+
+  // Step 2: Clean vite cache
+  console.log(pc.dim("Cleaning build cache..."));
+  if (!runCommand("bun", ["run", "clean"], { cwd: runtimeDir, env })) {
+    console.error(pc.red("Clean failed"));
+    process.exit(1);
+  }
+
+  // Step 3: Build
+  console.log(pc.dim("Building for production..."));
+  if (!runCommand("bun", ["run", "build"], { cwd: runtimeDir, env })) {
+    console.error(pc.red("Build failed"));
+    process.exit(1);
+  }
+
+  // Step 4: Deploy with --name flag
+  // This deploys to Cloudflare with workbook-specific name
+  // Does NOT modify wrangler.jsonc (local dev stays on "runtime")
+  console.log(pc.dim(`Deploying to Cloudflare as ${workerName}...`));
+  if (!runCommand("npx", ["wrangler", "deploy", "--name", workerName], { cwd: runtimeDir, env })) {
+    console.error(pc.red("Deployment failed"));
+    process.exit(1);
+  }
+
+  console.log(pc.green("\nDeployment complete!"));
 }

@@ -33,7 +33,7 @@ async function getTables(): Promise<Array<{ name: string }>> {
     SELECT name FROM sqlite_master
     WHERE type = 'table'
       AND name NOT LIKE 'sqlite_%'
-      AND name NOT LIKE '__%'
+      AND name NOT GLOB '__*'
     ORDER BY name
   `.execute(db);
   return result.rows;

@@ -96,6 +96,7 @@ export default defineConfig({
       /^@platejs\//,
       "platejs",
       /^platejs\//,
+      /^lodash/,  // lodash is CJS, used by @platejs/slate
     ],
     optimizeDeps: {
       include: [

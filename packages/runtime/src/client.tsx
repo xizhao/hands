@@ -1,5 +1,3 @@
-"use client";
-
 import { initClient } from "rwsdk/client";
 import { mountCollab, getPageIdFromUrl } from "./collab/CollabRoot";
 
