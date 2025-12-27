@@ -4,7 +4,7 @@ import * as React from 'react';
 
 export function ToggleElementStatic(props: SlateElementProps) {
   return (
-    <SlateElement {...props} className="mb-1 pl-6">
+    <SlateElement {...props} className="mb-1 pl-6" data-block-id={props.element.id as string}>
       <div>
         <span
           className="absolute top-0.5 left-0 flex cursor-pointer select-none items-center justify-center rounded-sm p-px transition-bg-ease hover:bg-slate-200"

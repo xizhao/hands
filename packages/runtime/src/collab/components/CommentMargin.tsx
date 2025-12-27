@@ -6,7 +6,7 @@ import { CommentThread } from "./CommentThread";
 import { CommentInput } from "./CommentInput";
 
 interface CommentMarginProps {
-  blockIndex: number;
+  elementId: string;
   top: number;
   threads: CommentThreadType[];
   currentUser: CollabUser | null;
@@ -16,7 +16,7 @@ interface CommentMarginProps {
 }
 
 export function CommentMargin({
-  blockIndex,
+  elementId,
   top,
   threads,
   currentUser,
@@ -53,8 +53,8 @@ export function CommentMargin({
 
   return (
     <div
-      className="absolute -left-10 flex items-start"
-      style={{ top: `${top}px` }}
+      className="absolute flex items-start pointer-events-auto"
+      style={{ top: `${top}px`, left: "max(0.5rem, calc(50% - 30rem))" }}
     >
       {/* Margin icon button */}
       <button

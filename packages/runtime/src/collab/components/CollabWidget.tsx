@@ -10,37 +10,41 @@ export function CollabWidget() {
     user,
     otherUsers,
     blockPositions,
-    threadsByBlock,
+    threadsByElementId,
     pageMetadata,
     addComment,
     resolveThread,
     deleteComment,
   } = useCollab();
 
+  // Debug logging
+  console.log("[CollabWidget] user:", user?.name, "otherUsers:", otherUsers.length, "blocks:", blockPositions.length);
+
   return (
     <>
       {/* Logo and online status */}
       <LogoWidget user={user} otherUsers={otherUsers} pageMetadata={pageMetadata} />
 
-      {/* Other users' cursors */}
+      {/* Other users' cursors - absolute in document */}
       <CursorsOverlay users={otherUsers} />
 
-      {/* Comment margin icons */}
-      <div className="fixed left-0 top-0 w-0 h-0">
-        <div className="relative">
-          {blockPositions.map((pos) => (
+      {/* Comment margin icons - positioned absolutely in document */}
+      <div style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: 0, overflow: 'visible' }}>
+        {blockPositions.map((pos) => {
+          if (!pos.elementId) return null;
+          return (
             <CommentMargin
-              key={pos.index}
-              blockIndex={pos.index}
+              key={pos.elementId}
+              elementId={pos.elementId}
               top={pos.top}
-              threads={threadsByBlock[pos.index] || []}
+              threads={threadsByElementId[pos.elementId] || []}
               currentUser={user}
-              onAddComment={(content, threadId) => addComment(pos.index, content, threadId)}
+              onAddComment={(content, threadId) => addComment(pos.elementId!, content, threadId)}
               onResolve={resolveThread}
               onDelete={deleteComment}
             />
-          ))}
-        </div>
+          );
+        })}
       </div>
     </>
   );

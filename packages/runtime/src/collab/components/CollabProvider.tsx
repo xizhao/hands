@@ -12,9 +12,9 @@ interface CollabContextValue {
   user: CollabUser | null;
   otherUsers: UserPresence[];
   blockPositions: BlockPosition[];
-  threadsByBlock: Record<number, CommentThread[]>;
+  threadsByElementId: Record<string, CommentThread[]>;
   pageMetadata?: PageMetadata;
-  addComment: (blockIndex: number, content: string, threadId?: string) => void;
+  addComment: (elementId: string, content: string, threadId?: string) => void;
   resolveThread: (threadId: string) => void;
   deleteComment: (threadId: string, commentId: string) => void;
 }
@@ -36,7 +36,7 @@ interface CollabProviderProps {
 export function CollabProvider({ pageId, pageMetadata, children }: CollabProviderProps) {
   const user = useUserIdentity();
   const { otherUsers } = usePresence(pageId, user);
-  const { threadsByBlock, addComment, resolveThread, deleteComment } = useComments(pageId, user);
+  const { threadsByElementId, addComment, resolveThread, deleteComment } = useComments(pageId, user);
   const blockPositions = useBlockPositions();
 
   return (
@@ -45,7 +45,7 @@ export function CollabProvider({ pageId, pageMetadata, children }: CollabProvide
         user,
         otherUsers,
         blockPositions,
-        threadsByBlock,
+        threadsByElementId,
         pageMetadata,
         addComment,
         resolveThread,

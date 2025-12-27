@@ -40,10 +40,8 @@ function HandsLogo({ size = 16, className }: { size?: number; className?: string
 
 export function LogoWidget({ user, otherUsers, pageMetadata }: LogoWidgetProps) {
   const [showMetadata, setShowMetadata] = useState(false);
-  const [showViewers, setShowViewers] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
   const metadataTimeoutRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
-  const viewersTimeoutRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
   const allUsers = user ? [{ user, cursor: null }, ...otherUsers] : otherUsers;
   const displayUsers = allUsers.slice(0, 4);
@@ -58,32 +56,64 @@ export function LogoWidget({ user, otherUsers, pageMetadata }: LogoWidgetProps) 
     metadataTimeoutRef.current = setTimeout(() => setShowMetadata(false), 150);
   };
 
-  const handleAvatarsEnter = () => {
-    if (viewersTimeoutRef.current) clearTimeout(viewersTimeoutRef.current);
-    setShowViewers(true);
-  };
-
-  const handleAvatarsLeave = () => {
-    viewersTimeoutRef.current = setTimeout(() => setShowViewers(false), 150);
-  };
-
   useEffect(() => {
     return () => {
       if (metadataTimeoutRef.current) clearTimeout(metadataTimeoutRef.current);
-      if (viewersTimeoutRef.current) clearTimeout(viewersTimeoutRef.current);
     };
   }, []);
 
   return (
     <div
       ref={containerRef}
-      className="fixed top-4 left-4 z-40"
+      className="fixed top-4 right-4 z-40"
+      style={{ pointerEvents: 'auto' }}
     >
       {/* Premium dark toolbar */}
       <div
         className="relative flex items-center bg-neutral-900 border border-neutral-800/50 rounded-xl shadow-lg shadow-black/25"
       >
-        {/* Left: Hands logo - hover shows metadata */}
+        {/* Left: Overlapping avatars with tooltips */}
+        {allUsers.length > 0 && (
+          <div className="flex items-center h-12 px-2">
+            <div className="flex -space-x-1.5">
+              {displayUsers.map((p, i) => (
+                <div
+                  key={p.user.id}
+                  className="group relative w-5 h-5 rounded-full flex items-center justify-center text-[8px] font-semibold text-white ring-[1.5px] ring-neutral-900"
+                  style={{
+                    backgroundColor: p.user.color,
+                    zIndex: displayUsers.length - i,
+                  }}
+                >
+                  {p.user.name.split(" ").map(n => n[0]).join("")}
+                  {/* Centered tooltip above */}
+                  <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-2 py-1 bg-neutral-800 text-[10px] text-white rounded shadow-lg whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-50">
+                    {p.user.name}{p.user.id === user?.id ? " (you)" : ""}
+                  </div>
+                </div>
+              ))}
+              {extraCount > 0 && (
+                <div
+                  className="group relative w-5 h-5 rounded-full flex items-center justify-center text-[8px] font-semibold text-neutral-300 bg-neutral-700 ring-[1.5px] ring-neutral-900"
+                  style={{ zIndex: 0 }}
+                >
+                  +{extraCount}
+                  {/* Tooltip for extra count */}
+                  <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-2 py-1 bg-neutral-800 text-[10px] text-white rounded shadow-lg whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-50">
+                    {extraCount} more viewer{extraCount !== 1 ? "s" : ""}
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* Separator */}
+        {allUsers.length > 0 && (
+          <div className="w-px h-6 bg-neutral-700/40" />
+        )}
+
+        {/* Right: Hands logo - hover shows metadata */}
         <div
           className="relative"
           onMouseEnter={handleLogoEnter}
@@ -98,11 +128,11 @@ export function LogoWidget({ user, otherUsers, pageMetadata }: LogoWidgetProps) 
             <HandsLogo size={24} />
           </a>
 
-          {/* Metadata dropdown */}
+          {/* Metadata dropdown - opens to the left */}
           <div
             className={`
-              absolute top-full left-0 mt-1.5 w-52 bg-neutral-900 border border-neutral-800/50 rounded-lg shadow-xl shadow-black/30 overflow-hidden
-              transition-all duration-150 ease-out origin-top-left
+              absolute top-full right-0 mt-1.5 w-52 bg-neutral-900 border border-neutral-800/50 rounded-lg shadow-xl shadow-black/30 overflow-hidden
+              transition-all duration-150 ease-out origin-top-right
               ${showMetadata ? "opacity-100 scale-100" : "opacity-0 scale-95 pointer-events-none"}
             `}
           >
@@ -153,91 +183,6 @@ export function LogoWidget({ user, otherUsers, pageMetadata }: LogoWidgetProps) 
             </div>
           </div>
         </div>
-
-        {/* Separator */}
-        {allUsers.length > 0 && (
-          <div className="w-px h-6 bg-neutral-700/40" />
-        )}
-
-        {/* Right: Overlapping avatars - hover shows viewers */}
-        {allUsers.length > 0 && (
-          <div
-            className="relative px-2"
-            onMouseEnter={handleAvatarsEnter}
-            onMouseLeave={handleAvatarsLeave}
-          >
-            <div className="flex items-center h-12">
-              <div className="flex -space-x-1.5">
-                {displayUsers.map((p, i) => (
-                  <div
-                    key={p.user.id}
-                    className="group relative w-5 h-5 rounded-full flex items-center justify-center text-[8px] font-semibold text-white ring-[1.5px] ring-neutral-900 cursor-default"
-                    style={{
-                      backgroundColor: p.user.color,
-                      zIndex: displayUsers.length - i,
-                    }}
-                  >
-                    {p.user.name.split(" ").map(n => n[0]).join("")}
-                    {/* Tooltip */}
-                    <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1.5 px-2 py-1 bg-neutral-800 text-[10px] text-white rounded whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
-                      {p.user.name}{p.user.id === user?.id ? " (you)" : ""}
-                    </div>
-                  </div>
-                ))}
-                {extraCount > 0 && (
-                  <div
-                    className="w-5 h-5 rounded-full flex items-center justify-center text-[8px] font-semibold text-neutral-300 bg-neutral-700 ring-[1.5px] ring-neutral-900"
-                    style={{ zIndex: 0 }}
-                  >
-                    +{extraCount}
-                  </div>
-                )}
-              </div>
-            </div>
-
-            {/* Viewers dropdown */}
-            <div
-              className={`
-                absolute top-full right-0 mt-1.5 w-48 bg-neutral-900 border border-neutral-800/50 rounded-lg shadow-xl shadow-black/30 overflow-hidden
-                transition-all duration-150 ease-out origin-top-right
-                ${showViewers ? "opacity-100 scale-100" : "opacity-0 scale-95 pointer-events-none"}
-              `}
-            >
-              <div className="px-2 py-1.5">
-                <div className="text-[9px] uppercase tracking-wider text-neutral-500 mb-1 px-1">
-                  {allUsers.length} viewer{allUsers.length !== 1 ? "s" : ""}
-                </div>
-                <div className="space-y-0.5">
-                  {allUsers.map((p) => (
-                    <div
-                      key={p.user.id}
-                      className="flex items-center gap-1.5 px-1.5 py-1 rounded hover:bg-neutral-800/50 transition-colors"
-                    >
-                      <div
-                        className="w-4 h-4 rounded-full flex items-center justify-center text-[7px] font-semibold text-white flex-shrink-0"
-                        style={{ backgroundColor: p.user.color }}
-                      >
-                        {p.user.name.split(" ").map(n => n[0]).join("")}
-                      </div>
-                      <span className="text-[11px] text-neutral-200 truncate flex-1">
-                        {p.user.name}
-                      </span>
-                      {p.user.id === user?.id && (
-                        <span className="text-[9px] text-neutral-500">you</span>
-                      )}
-                      {p.cursor && (
-                        <div
-                          className="w-1.5 h-1.5 rounded-full animate-pulse"
-                          style={{ backgroundColor: p.user.color }}
-                        />
-                      )}
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
       </div>
     </div>
   );

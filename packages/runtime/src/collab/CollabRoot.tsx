@@ -22,6 +22,15 @@ export function mountCollab(pageId: string, pageMetadata?: PageMetadata) {
   if (!container) {
     container = document.createElement("div");
     container.id = "collab-root";
+    // Position at document origin for absolute positioning of children
+    container.style.position = "absolute";
+    container.style.top = "0";
+    container.style.left = "0";
+    container.style.width = "100%";
+    container.style.height = "0";
+    container.style.overflow = "visible";
+    container.style.pointerEvents = "none";
+    container.style.zIndex = "50";
     document.body.appendChild(container);
   }
 

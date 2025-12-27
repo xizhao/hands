@@ -5,6 +5,7 @@ import type { CollabUser, Comment, CommentThread, CommentsMap } from "../types";
 /**
  * Manage comment threads synced across users.
  * Uses rwsdk's useSyncedState with page-scoped key.
+ * Comments are anchored by stable Plate element IDs.
  */
 export function useComments(pageId: string, user: CollabUser | null) {
   // Use compound key for page-scoped state (rwsdk doesn't support room param yet)
@@ -14,7 +15,7 @@ export function useComments(pageId: string, user: CollabUser | null) {
   );
 
   const addComment = useCallback(
-    (blockIndex: number, content: string, threadId?: string) => {
+    (elementId: string, content: string, threadId?: string) => {
       if (!user || !content.trim()) return;
 
       const commentId = crypto.randomUUID();
@@ -45,12 +46,12 @@ export function useComments(pageId: string, user: CollabUser | null) {
           };
         }
 
-        // Create new thread
+        // Create new thread anchored to element ID
         return {
           ...prev,
           [newThreadId]: {
             id: newThreadId,
-            blockIndex,
+            elementId,
             comments: [comment],
             isResolved: false,
           },
@@ -107,21 +108,21 @@ export function useComments(pageId: string, user: CollabUser | null) {
     [setCommentsMap]
   );
 
-  // Group threads by block index (only unresolved)
-  const threadsByBlock = Object.values(commentsMap).reduce(
+  // Group threads by element ID (only unresolved)
+  const threadsByElementId = Object.values(commentsMap).reduce(
     (acc, thread) => {
       if (thread.isResolved) return acc;
-      const key = thread.blockIndex;
+      const key = thread.elementId;
       if (!acc[key]) acc[key] = [];
       acc[key].push(thread);
       return acc;
     },
-    {} as Record<number, CommentThread[]>
+    {} as Record<string, CommentThread[]>
   );
 
   return {
     commentsMap,
-    threadsByBlock,
+    threadsByElementId,
     addComment,
     resolveThread,
     deleteComment,

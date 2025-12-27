@@ -38,6 +38,10 @@ export default defineConfig({
   server: {
     host: true, // Expose to LAN
     allowedHosts: [".trycloudflare.com"], // Allow tunnel requests
+    watch: {
+      // Ignore build output to prevent HMR errors during deploy
+      ignored: ["**/dist/**"],
+    },
   },
   define: {
     "process.env.HANDS_WORKBOOK_PATH": JSON.stringify(workbookPath),

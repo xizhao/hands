@@ -14,6 +14,9 @@ export function usePresence(pageId: string, user: CollabUser | null) {
     `presence:${pageId}`
   );
 
+  // Debug logging
+  console.log("[usePresence] pageId:", pageId, "user:", user?.name, "presenceMap keys:", Object.keys(presenceMap));
+
   const lastUpdateRef = useRef(0);
   const rafIdRef = useRef<number | undefined>(undefined);
 
@@ -54,14 +57,10 @@ export function usePresence(pageId: string, user: CollabUser | null) {
     if (!user) return;
 
     const handleMouseMove = (e: MouseEvent) => {
-      // Use page coordinates (accounts for scroll) relative to document size
-      const docWidth = Math.max(document.documentElement.scrollWidth, window.innerWidth);
-      const docHeight = Math.max(document.documentElement.scrollHeight, window.innerHeight);
-      const x = (e.pageX / docWidth) * 100;
-      const y = (e.pageY / docHeight) * 100;
-
+      // Store absolute page coordinates (document-relative pixels)
+      // This way other users see cursor at correct document position
       if (rafIdRef.current) cancelAnimationFrame(rafIdRef.current);
-      rafIdRef.current = requestAnimationFrame(() => updateCursor(x, y));
+      rafIdRef.current = requestAnimationFrame(() => updateCursor(e.pageX, e.pageY));
     };
 
     const handleMouseLeave = () => {

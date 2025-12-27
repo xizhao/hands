@@ -33,6 +33,7 @@ export function HeadingElementStatic({
     <SlateElement
       as={variant}
       className={headingVariants({ isFirstBlock, variant })}
+      data-block-id={props.element.id as string}
       {...props}
     >
       {children}

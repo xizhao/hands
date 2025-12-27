@@ -14,6 +14,7 @@ export function TableElementStatic(props: SlateElementProps<TTableElement>) {
     <SlateElement
       {...props}
       className="overflow-x-auto py-5"
+      data-block-id={props.element.id as string}
       style={{ paddingLeft: marginLeft }}
     >
       <div className="group/table relative w-fit">

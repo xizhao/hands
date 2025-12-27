@@ -1235,6 +1235,53 @@ export const __SECRET_INTERNALS_DO_NOT_USE_OR_YOU_WILL_BE_FIRED = RD.__SECRET_IN
     }
   });
 
+  // ============================================
+  // Catch-all Vite Asset Proxy (must be LAST)
+  // ============================================
+  // Proxy Vite dev server assets: /src/*, /assets/*, /@vite/*, /@react-refresh, /node_modules/*
+  // This enables pages to load their scripts/styles when accessed via workbook-server port
+  app.get("*", async (c) => {
+    const path = c.req.path;
+
+    // Only proxy Vite-like paths
+    const isViteAsset =
+      path.startsWith("/src/") ||
+      path.startsWith("/assets/") ||
+      path.startsWith("/@vite/") ||
+      path.startsWith("/@react-refresh") ||
+      path.startsWith("/@fs/") ||
+      path.startsWith("/node_modules/");
+
+    if (!isViteAsset) {
+      return c.notFound();
+    }
+
+    if (!state.rscReady || !state.rscPort) {
+      return c.json({ error: "Runtime not ready" }, 503);
+    }
+
+    const url = new URL(c.req.url);
+    url.host = `localhost:${state.rscPort}`;
+
+    try {
+      const response = await fetch(url.toString(), {
+        method: c.req.method,
+        headers: c.req.raw.headers,
+      });
+
+      const headers = new Headers(response.headers);
+      headers.delete("transfer-encoding");
+
+      return new Response(response.body, {
+        status: response.status,
+        headers,
+      });
+    } catch (err) {
+      console.error("[runtime] Vite asset proxy failed:", err);
+      return c.json({ error: `Asset proxy failed: ${String(err)}` }, 502);
+    }
+  });
+
   return app;
 }
 

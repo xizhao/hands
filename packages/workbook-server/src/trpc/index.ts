@@ -14,6 +14,7 @@ import type { PageRegistry } from "../pages/index.js";
 import { sqliteTRPCRouter, type SQLiteTRPCContext } from "../sqlite/trpc.js";
 import { actionRunsRouter, type ActionRunsContext } from "./routers/action-runs.js";
 import { aiRouter, type AIContext } from "./routers/ai.js";
+import { deployRouter, type DeployContext } from "./routers/deploy.js";
 import { editorStateRouter, type EditorStateContext } from "./routers/editor-state.js";
 import { pagesRouter, type PagesContext } from "./routers/pages.js";
 import { secretsRouter, type SecretsContext } from "./routers/secrets.js";
@@ -56,7 +57,8 @@ interface CombinedContext
     AIContext,
     ActionsContext,
     EditorStateContext,
-    ActionRunsContext {}
+    ActionRunsContext,
+    DeployContext {}
 
 // Create a merged router that includes all routes
 const t = initTRPC.context<CombinedContext>().create();
@@ -84,6 +86,8 @@ const appRouter = t.router({
   editorState: editorStateRouter,
   // Action run history and logs
   actionRuns: actionRunsRouter,
+  // Deploy routes (build and publish to CF Workers)
+  deploy: deployRouter,
 });
 
 export type AppRouter = typeof appRouter;
@@ -131,6 +135,8 @@ export function registerTRPCRoutes(app: Hono, config: TRPCConfig) {
       // Pages context
       getPageRegistry,
       createPageRegistry,
+      // Deploy context
+      getRuntimeUrl,
     };
 
     // Use tRPC's fetch adapter
@@ -157,6 +163,7 @@ export type { SecretsRouter } from "./routers/secrets.js";
 export type { StatusRouter } from "./routers/status.js";
 export type { ThumbnailsRouter } from "./routers/thumbnails.js";
 export type { WorkbookRouter } from "./routers/workbook.js";
+export type { DeployRouter } from "./routers/deploy.js";
 
 // Re-export model types for client usage
 export type {

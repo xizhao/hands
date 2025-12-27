@@ -328,7 +328,7 @@ export function VegaChart({
   return (
     <div
       className={`w-full relative ${className ?? ""}`}
-      style={{ minHeight: height, contentVisibility: "auto", containIntrinsicSize: `auto ${height}px` }}
+      style={{ minHeight: height }}
     >
       {/* Vega container - React never modifies children, only Vega does */}
       <div

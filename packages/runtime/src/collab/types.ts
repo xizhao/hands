@@ -5,10 +5,10 @@ export interface CollabUser {
   color: string; // HSL color string
 }
 
-/** Cursor position as viewport percentage */
+/** Cursor position as document-relative pixels (pageX/pageY) */
 export interface CursorPosition {
-  x: number; // 0-100
-  y: number; // 0-100
+  x: number; // pixels from document left edge
+  y: number; // pixels from document top edge
   timestamp: number;
 }
 
@@ -36,7 +36,8 @@ export interface Comment {
 /** Comment thread attached to a block */
 export interface CommentThread {
   id: string;
-  blockIndex: number; // Index of block in the page
+  elementId: string; // Stable Plate element ID (preferred)
+  blockIndex?: number; // Fallback: index of block in the page
   comments: Comment[];
   isResolved: boolean;
 }

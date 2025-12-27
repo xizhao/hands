@@ -3,6 +3,31 @@ import { createSlateEditor, createSlatePlugin } from "platejs";
 import { Suspense } from "react";
 import { PlateStatic } from "platejs/static";
 
+// Types from core
+import type {
+  TLiveValueElement,
+  TBarChartElement,
+  TLineChartElement,
+  TAreaChartElement,
+  TPieChartElement,
+  TChartElement,
+  TScatterChartElement,
+  THistogramChartElement,
+  THeatmapChartElement,
+  TBoxPlotChartElement,
+  TMapChartElement,
+  TAlertElement,
+  TBadgeElement,
+  TMetricElement,
+  TProgressElement,
+  TLoaderElement,
+  TTabsElement,
+  TTabElement,
+} from "@hands/core/types";
+
+// Helpers from core (re-exported in view)
+import { selectDisplayType, formatCellValue } from "@hands/core/ui/view";
+
 // Base plugins - import DIRECTLY to avoid pulling in React deps from index
 import { BaseBasicBlocksKit } from "@hands/editor/plugins/basic-blocks-base-kit";
 import { BaseBasicMarksKit } from "@hands/editor/plugins/basic-marks-base-kit";
@@ -17,7 +42,7 @@ import { BaseMediaKit } from "@hands/editor/plugins/media-base-kit";
 import { BaseMentionKit } from "@hands/editor/plugins/mention-base-kit";
 import { BaseTocKit } from "@hands/editor/plugins/toc-base-kit";
 
-// Chart components (use client - will be hydrated by rwsdk)
+// Chart and view components (use client - will be hydrated by rwsdk)
 import {
   BarChart,
   LineChart,
@@ -25,6 +50,22 @@ import {
   PieChart,
   Chart,
   LiveValueProvider,
+  DataGrid,
+  TooltipProvider,
+  // Additional charts
+  ScatterChart,
+  HistogramChart,
+  HeatmapChart,
+  BoxPlotChart,
+  MapChart,
+  // View components
+  Alert,
+  Badge,
+  Metric,
+  Progress,
+  Loader,
+  Tabs,
+  Tab,
 } from "./charts-client";
 
 // Database access
@@ -37,22 +78,44 @@ interface RscBlockElement extends TElement {
   blockProps?: Record<string, unknown>;
 }
 
-interface LiveValueElement extends TElement {
-  type: "LiveValue";
-  query?: string;
-  data?: Record<string, unknown>[];
-  display?: "auto" | "inline" | "list" | "table";
-  params?: Record<string, unknown>;
+// Simple display components for RSC
+function InlineDisplay({ data }: { data: Record<string, unknown>[] }) {
+  if (!data || data.length === 0) {
+    return <span className="inline-flex items-center px-1.5 py-0.5 rounded bg-muted text-muted-foreground">—</span>;
+  }
+  const value = Object.values(data[0])[0];
+  return (
+    <span className="inline-flex items-center px-1.5 py-0.5 rounded bg-violet-500/10 text-violet-600 dark:text-violet-400 font-medium tabular-nums">
+      {formatCellValue(value)}
+    </span>
+  );
 }
 
-interface ChartElement extends TElement {
-  xKey?: string;
-  yKey?: string | string[];
-  height?: number;
-  showLegend?: boolean;
-  showGrid?: boolean;
-  stacked?: boolean;
-  layout?: "vertical" | "horizontal";
+function ListDisplay({ data }: { data: Record<string, unknown>[] }) {
+  if (!data || data.length === 0) {
+    return <div className="text-muted-foreground text-sm">No items</div>;
+  }
+  const key = Object.keys(data[0])[0];
+  return (
+    <ul className="list-disc list-inside space-y-0.5">
+      {data.map((row, i) => (
+        <li key={i} className="text-sm">{formatCellValue(row[key])}</li>
+      ))}
+    </ul>
+  );
+}
+
+function TableDisplay({ data }: { data: Record<string, unknown>[] }) {
+  return (
+    <DataGrid
+      data={data}
+      columns="auto"
+      height={Math.min(400, 36 + data.length * 36)}
+      readOnly
+      enableSearch={data.length > 10}
+      enablePaste={false}
+    />
+  );
 }
 
 interface PageStaticProps {
@@ -69,10 +132,14 @@ async function LiveValueDataFetcher({
   query,
   params,
   children,
+  display,
+  hasChildren,
 }: {
   query: string;
   params?: Record<string, unknown>;
   children: React.ReactNode;
+  display?: "auto" | "inline" | "list" | "table";
+  hasChildren: boolean;
 }) {
   let data: Record<string, unknown>[] = [];
   let error: Error | null = null;
@@ -101,30 +168,87 @@ async function LiveValueDataFetcher({
   const tableMatch = query.match(/FROM\s+["'`]?(\w+)["'`]?/i);
   const tableName = tableMatch ? tableMatch[1] : null;
 
+  // If has children (charts), just provide context
+  if (hasChildren) {
+    return (
+      <LiveValueProvider data={data} tableName={tableName} query={query} isLoading={false} error={null}>
+        {children}
+      </LiveValueProvider>
+    );
+  }
+
+  // No children - render auto-display
+  const displayType = display && display !== "auto" ? display : selectDisplayType(data);
+  let content: React.ReactNode;
+  switch (displayType) {
+    case "inline":
+      content = <InlineDisplay data={data} />;
+      break;
+    case "list":
+      content = <ListDisplay data={data} />;
+      break;
+    case "table":
+    default:
+      content = <TableDisplay data={data} />;
+      break;
+  }
+
   return (
     <LiveValueProvider data={data} tableName={tableName} query={query} isLoading={false} error={null}>
-      {children}
+      {content}
     </LiveValueProvider>
   );
+}
+
+/**
+ * Check if element has meaningful children (not just empty text nodes).
+ */
+function hasMeaningfulChildren(element: TLiveValueElement): boolean {
+  if (!element.children || element.children.length === 0) return false;
+  if (element.children.length === 1) {
+    const child = element.children[0];
+    if ("text" in child && (child as { text: string }).text === "") return false;
+  }
+  return true;
 }
 
 function LiveValueRSC({
   element,
   children,
 }: {
-  element: LiveValueElement;
+  element: TLiveValueElement;
   children: React.ReactNode;
 }) {
-  const { query, data: staticData } = element;
+  const { query, data: staticData, display } = element;
+  const hasChildren = hasMeaningfulChildren(element);
 
   // Static data - no fetch needed
   if (staticData) {
     const tableMatch = query?.match(/FROM\s+["'`]?(\w+)["'`]?/i);
     const tableName = tableMatch ? tableMatch[1] : null;
+
+    // Render auto-display if no children
+    let content: React.ReactNode = children;
+    if (!hasChildren) {
+      const displayType = display && display !== "auto" ? display : selectDisplayType(staticData);
+      switch (displayType) {
+        case "inline":
+          content = <InlineDisplay data={staticData} />;
+          break;
+        case "list":
+          content = <ListDisplay data={staticData} />;
+          break;
+        case "table":
+        default:
+          content = <TableDisplay data={staticData} />;
+          break;
+      }
+    }
+
     return (
       <div className="my-2">
         <LiveValueProvider data={staticData} tableName={tableName} query={query} isLoading={false} error={null}>
-          {children}
+          {content}
         </LiveValueProvider>
       </div>
     );
@@ -135,7 +259,7 @@ function LiveValueRSC({
     return (
       <div className="my-2">
         <LiveValueProvider data={[]} tableName={null} query={undefined} isLoading={false} error={null}>
-          {children}
+          {hasChildren ? children : <div className="text-muted-foreground text-sm">No data</div>}
         </LiveValueProvider>
       </div>
     );
@@ -149,7 +273,12 @@ function LiveValueRSC({
           <div className="w-full h-48 animate-pulse bg-muted/30 rounded-lg" />
         }
       >
-        <LiveValueDataFetcher query={query} params={element.params}>
+        <LiveValueDataFetcher
+          query={query}
+          params={element.params}
+          display={display}
+          hasChildren={hasChildren}
+        >
           {children}
         </LiveValueDataFetcher>
       </Suspense>
@@ -168,7 +297,7 @@ const LiveValuePlugin = createSlatePlugin({
     isElement: true,
     isVoid: false,
     component: ({ element, children }) => (
-      <LiveValueRSC element={element as LiveValueElement}>{children}</LiveValueRSC>
+      <LiveValueRSC element={element as TLiveValueElement}>{children}</LiveValueRSC>
     ),
   },
 });
@@ -181,7 +310,7 @@ const BarChartPlugin = createSlatePlugin({
     isVoid: true,
     isInline: true,
     component: ({ element }) => {
-      const el = element as ChartElement;
+      const el = element as TBarChartElement;
       return (
         <BarChart
           xKey={el.xKey}
@@ -205,7 +334,7 @@ const LineChartPlugin = createSlatePlugin({
     isVoid: true,
     isInline: true,
     component: ({ element }) => {
-      const el = element as ChartElement;
+      const el = element as TLineChartElement;
       return (
         <LineChart
           xKey={el.xKey}
@@ -227,7 +356,7 @@ const AreaChartPlugin = createSlatePlugin({
     isVoid: true,
     isInline: true,
     component: ({ element }) => {
-      const el = element as ChartElement;
+      const el = element as TAreaChartElement;
       return (
         <AreaChart
           xKey={el.xKey}
@@ -250,7 +379,7 @@ const PieChartPlugin = createSlatePlugin({
     isVoid: true,
     isInline: true,
     component: ({ element }) => {
-      const el = element as ChartElement & { valueKey?: string; nameKey?: string };
+      const el = element as TPieChartElement;
       return (
         <PieChart
           valueKey={el.valueKey}
@@ -271,8 +400,261 @@ const GenericChartPlugin = createSlatePlugin({
     isVoid: true,
     isInline: true,
     component: ({ element }) => {
-      const el = element as TElement & { vegaSpec?: unknown };
+      const el = element as TChartElement;
       return <Chart vegaSpec={el.vegaSpec as any} height={300} />;
+    },
+  },
+});
+
+// Additional Chart Plugins
+
+const ScatterChartPlugin = createSlatePlugin({
+  key: "ScatterChart",
+  node: {
+    type: "ScatterChart",
+    isElement: true,
+    isVoid: true,
+    isInline: true,
+    component: ({ element }) => {
+      const el = element as TScatterChartElement;
+      return (
+        <ScatterChart
+          xKey={el.xKey}
+          yKey={el.yKey}
+          colorKey={el.colorKey}
+          sizeKey={el.sizeKey}
+          height={el.height ?? 300}
+          showTooltip={el.showTooltip}
+          opacity={el.opacity}
+        />
+      );
+    },
+  },
+});
+
+const HistogramChartPlugin = createSlatePlugin({
+  key: "HistogramChart",
+  node: {
+    type: "HistogramChart",
+    isElement: true,
+    isVoid: true,
+    isInline: true,
+    component: ({ element }) => {
+      const el = element as THistogramChartElement;
+      return (
+        <HistogramChart
+          valueKey={el.valueKey}
+          binCount={el.binCount}
+          height={el.height ?? 300}
+          showTooltip={el.showTooltip}
+          color={el.color}
+        />
+      );
+    },
+  },
+});
+
+const HeatmapChartPlugin = createSlatePlugin({
+  key: "HeatmapChart",
+  node: {
+    type: "HeatmapChart",
+    isElement: true,
+    isVoid: true,
+    isInline: true,
+    component: ({ element }) => {
+      const el = element as THeatmapChartElement;
+      return (
+        <HeatmapChart
+          xKey={el.xKey}
+          yKey={el.yKey}
+          valueKey={el.valueKey}
+          height={el.height ?? 300}
+          colorScheme={el.colorScheme}
+          showTooltip={el.showTooltip}
+        />
+      );
+    },
+  },
+});
+
+const BoxPlotChartPlugin = createSlatePlugin({
+  key: "BoxPlotChart",
+  node: {
+    type: "BoxPlotChart",
+    isElement: true,
+    isVoid: true,
+    isInline: true,
+    component: ({ element }) => {
+      const el = element as TBoxPlotChartElement;
+      return (
+        <BoxPlotChart
+          categoryKey={el.categoryKey}
+          valueKey={el.valueKey}
+          height={el.height ?? 300}
+          showTooltip={el.showTooltip}
+          color={el.color}
+          orientation={el.orientation}
+        />
+      );
+    },
+  },
+});
+
+const MapChartPlugin = createSlatePlugin({
+  key: "MapChart",
+  node: {
+    type: "MapChart",
+    isElement: true,
+    isVoid: true,
+    isInline: true,
+    component: ({ element }) => {
+      const el = element as TMapChartElement;
+      return (
+        <MapChart
+          mapType={el.mapType}
+          geoKey={el.geoKey}
+          idKey={el.idKey}
+          valueKey={el.valueKey}
+          latKey={el.latKey}
+          lonKey={el.lonKey}
+          height={el.height ?? 400}
+          projection={el.projection}
+          topology={el.topology}
+          colorScheme={el.colorScheme}
+          showTooltip={el.showTooltip}
+        />
+      );
+    },
+  },
+});
+
+// View Component Plugins
+
+const AlertPlugin = createSlatePlugin({
+  key: "Alert",
+  node: {
+    type: "Alert",
+    isElement: true,
+    isVoid: false,
+    component: ({ element, children }) => {
+      const el = element as TAlertElement;
+      return (
+        <Alert title={el.title} variant={el.variant}>
+          {children}
+        </Alert>
+      );
+    },
+  },
+});
+
+const BadgePlugin = createSlatePlugin({
+  key: "Badge",
+  node: {
+    type: "Badge",
+    isElement: true,
+    isVoid: false,
+    isInline: true,
+    component: ({ element, children }) => {
+      const el = element as TBadgeElement;
+      return <Badge variant={el.variant}>{children}</Badge>;
+    },
+  },
+});
+
+const MetricPlugin = createSlatePlugin({
+  key: "Metric",
+  node: {
+    type: "Metric",
+    isElement: true,
+    isVoid: true,
+    component: ({ element }) => {
+      const el = element as TMetricElement;
+      return (
+        <Metric
+          value={el.value ?? "—"}
+          label={el.label}
+          prefix={el.prefix}
+          suffix={el.suffix}
+          change={el.change}
+          changeLabel={el.changeLabel}
+          size={el.size}
+        />
+      );
+    },
+  },
+});
+
+const ProgressPlugin = createSlatePlugin({
+  key: "Progress",
+  node: {
+    type: "Progress",
+    isElement: true,
+    isVoid: true,
+    component: ({ element }) => {
+      const el = element as TProgressElement;
+      return (
+        <Progress
+          value={el.value}
+          max={el.max}
+          indeterminate={el.indeterminate}
+          label={el.label}
+          showValue={el.showValue}
+          variant={el.variant}
+          size={el.size}
+        />
+      );
+    },
+  },
+});
+
+const LoaderPlugin = createSlatePlugin({
+  key: "Loader",
+  node: {
+    type: "Loader",
+    isElement: true,
+    isVoid: true,
+    isInline: true,
+    component: ({ element }) => {
+      const el = element as TLoaderElement;
+      return (
+        <Loader
+          variant={el.variant}
+          size={el.size}
+          color={el.color}
+          label={el.label}
+          speed={el.speed}
+        />
+      );
+    },
+  },
+});
+
+const TabsPlugin = createSlatePlugin({
+  key: "Tabs",
+  node: {
+    type: "Tabs",
+    isElement: true,
+    isVoid: false,
+    component: ({ element, children }) => {
+      const el = element as TTabsElement;
+      return <Tabs defaultValue={el.defaultValue}>{children}</Tabs>;
+    },
+  },
+});
+
+const TabPlugin = createSlatePlugin({
+  key: "Tab",
+  node: {
+    type: "Tab",
+    isElement: true,
+    isVoid: false,
+    component: ({ element, children }) => {
+      const el = element as TTabElement;
+      return (
+        <Tab value={el.value} label={el.label}>
+          {children}
+        </Tab>
+      );
     },
   },
 });
@@ -304,6 +686,20 @@ const RSCPlugins = [
   AreaChartPlugin,
   PieChartPlugin,
   GenericChartPlugin,
+  // Additional charts
+  ScatterChartPlugin,
+  HistogramChartPlugin,
+  HeatmapChartPlugin,
+  BoxPlotChartPlugin,
+  MapChartPlugin,
+  // View components
+  AlertPlugin,
+  BadgePlugin,
+  MetricPlugin,
+  ProgressPlugin,
+  LoaderPlugin,
+  TabsPlugin,
+  TabPlugin,
 ];
 
 /**
@@ -358,10 +754,12 @@ export function PageStatic({ value, blocks }: PageStaticProps) {
   });
 
   return (
-    <article className="prose prose-slate max-w-none px-4 py-6 sm:px-6 lg:px-8">
-      <div className="mx-auto max-w-4xl">
-        <PlateStatic editor={editor} />
-      </div>
-    </article>
+    <TooltipProvider>
+      <article className="prose prose-slate max-w-none px-4 py-6 sm:px-6 lg:px-8">
+        <div className="mx-auto max-w-4xl">
+          <PlateStatic editor={editor} />
+        </div>
+      </article>
+    </TooltipProvider>
   );
 }

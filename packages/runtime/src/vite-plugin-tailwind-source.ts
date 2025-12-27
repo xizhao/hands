@@ -38,14 +38,28 @@ export function tailwindSourcePlugin({ workbookPath }: TailwindSourcePluginOptio
       const cssDir = path.dirname(cleanId);
       const blocksRelative = path.relative(cssDir, path.join(workbookPath, "blocks"));
       const uiRelative = path.relative(cssDir, path.join(workbookPath, "ui"));
+      const pagesRelative = path.relative(cssDir, path.join(workbookPath, "pages"));
 
-      console.log("[tailwind-source] Injecting @source for:", blocksRelative, uiRelative);
+      // Core package UI components (DataGrid, charts, shadcn)
+      const coreUiRelative = path.relative(cssDir, path.resolve(__dirname, "../../core/src/ui"));
+      // Editor package components
+      const editorRelative = path.relative(cssDir, path.resolve(__dirname, "../../editor/src"));
+      // Runtime components
+      const runtimeRelative = path.relative(cssDir, path.resolve(__dirname, "../src"));
+
+      console.log("[tailwind-source] Injecting @source for workbook:", blocksRelative, uiRelative, pagesRelative);
+      console.log("[tailwind-source] Injecting @source for packages:", coreUiRelative, editorRelative, runtimeRelative);
 
       // Inject @source directives after @import/@plugin lines
       const sourceDirectives = `
 /* Workbook content sources (injected by vite-plugin-tailwind-source) */
 @source "${blocksRelative}";
 @source "${uiRelative}";
+@source "${pagesRelative}";
+/* Package content sources */
+@source "${coreUiRelative}";
+@source "${editorRelative}";
+@source "${runtimeRelative}";
 `;
 
       const importRegex = /(@import\s+['"][^'"]+['"];?\s*\n|@plugin\s+['"][^'"]+['"];?\s*\n)+/;

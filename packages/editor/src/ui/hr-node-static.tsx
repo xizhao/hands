@@ -5,7 +5,7 @@ import { cn } from '../lib/utils';
 
 export function HrElementStatic(props: SlateElementProps) {
   return (
-    <SlateElement className="mb-1 py-2" {...props}>
+    <SlateElement className="mb-1 py-2" data-block-id={props.element.id as string} {...props}>
       <div contentEditable={false}>
         <hr
           className={cn(

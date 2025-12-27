@@ -1,4 +1,4 @@
-import { route, RouteMiddleware } from "rwsdk/router";
+import { route, render, RouteMiddleware } from "rwsdk/router";
 import { defineApp } from "rwsdk/worker";
 import { env } from "cloudflare:workers";
 import {
@@ -6,8 +6,10 @@ import {
   syncedStateRoutes,
 } from "rwsdk/use-synced-state/worker";
 import { pages, pageRoutes } from "@hands/pages";
+import { Document } from "./pages/Document";
 import { Database } from "./db/dev";
 import { dbRoutes } from "./db/routes";
+import { seedRoutes } from "./db/seed-routes";
 import { actionRoutes } from "./actions/routes";
 
 // Export Durable Objects for wrangler
@@ -62,6 +64,8 @@ export default defineApp([
   ),
   // Database routes (dev only - for AI agent access)
   ...(import.meta.env.VITE_IS_DEV_SERVER ? dbRoutes : []),
+  // Seed routes (production - for deploying local DB state)
+  ...seedRoutes,
   // Action routes (dev only - for action execution)
   ...(import.meta.env.VITE_IS_DEV_SERVER ? actionRoutes : []),
   // Root route - redirect to first page or return health check if no pages
@@ -77,6 +81,8 @@ export default defineApp([
       headers: { "Content-Type": "application/json" },
     });
   }),
-  // Pages (each page includes its own Page wrapper with frontmatter)
-  ...pageRoutes,
+  // Pages wrapped in Document for proper hydration
+  render(Document, [
+    ...pageRoutes,
+  ]),
 ]);
