@@ -388,6 +388,46 @@ export function workbookPlugin(options: WorkbookPluginOptions): Plugin {
   const pagesOutputDir = path.join(workbookPath, ".hands/pages");
   const actionsOutputDir = path.join(workbookPath, ".hands/actions");
 
+  /**
+   * Generate stub files to ensure module resolution works.
+   * Called early (configResolved) before any modules are loaded.
+   */
+  function generateStubs() {
+    fs.mkdirSync(pagesOutputDir, { recursive: true });
+    fs.mkdirSync(actionsOutputDir, { recursive: true });
+
+    // Stub pages if not exists
+    const pagesIndex = path.join(pagesOutputDir, "index.tsx");
+    if (!fs.existsSync(pagesIndex)) {
+      fs.writeFileSync(pagesIndex, `// Stub - will be replaced at buildStart
+export const pages = {} as const;
+export type PageId = never;
+export const pageRoutes = [] as const;
+`);
+    }
+
+    // Stub actions if not exists
+    const actionsIndex = path.join(actionsOutputDir, "index.ts");
+    if (!fs.existsSync(actionsIndex)) {
+      fs.writeFileSync(actionsIndex, `// Stub - will be replaced at buildStart
+export const actions = {} as const;
+export type ActionId = never;
+export function getAction(_id: string) { return undefined; }
+export function listActions() { return []; }
+`);
+    }
+
+    // Stub workflows if not exists
+    const workflowsFile = path.join(actionsOutputDir, "workflows.ts");
+    if (!fs.existsSync(workflowsFile)) {
+      fs.writeFileSync(workflowsFile, `// Stub - will be replaced at buildStart
+export const workflowBindings = {} as const;
+export type WorkflowId = never;
+export function getWorkflowBinding(_id: string) { return undefined; }
+`);
+    }
+  }
+
   async function processAll() {
     // Process pages
     const pages = await processPages(pagesDir);
@@ -403,6 +443,11 @@ export function workbookPlugin(options: WorkbookPluginOptions): Plugin {
   return {
     name: "hands-workbook",
     enforce: "pre",
+
+    // Generate stubs early - before module resolution
+    configResolved() {
+      generateStubs();
+    },
 
     async buildStart() {
       await processAll();

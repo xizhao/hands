@@ -16,8 +16,8 @@ import { workflowRoutes } from "./actions/workflow-routes";
 // Export Durable Objects for wrangler
 export { Database, SyncedStateServer };
 
-// Export workflow classes for wrangler (generated at build time)
-// This re-export makes them available for CF to instantiate
+// Export workflow classes for CF to instantiate (generated at build time)
+// The vite plugin ensures this file always exists (empty stub in dev)
 export * from "@hands/actions/workflows";
 
 export const setCommonHeaders =
