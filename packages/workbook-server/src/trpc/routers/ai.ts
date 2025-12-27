@@ -15,8 +15,8 @@ import { generateObject, generateText, type LanguageModel } from "ai";
 
 // OpenRouter model mappings
 const MODELS = {
-  fast: "google/gemini-2.5-flash-lite-preview",  // Quick MDX generation
-  vision: "google/gemini-2.5-flash",              // Vision/screenshot analysis
+  fast: "google/gemini-2.5-flash-lite",  // Quick MDX generation
+  vision: "google/gemini-2.5-flash",     // Vision/screenshot analysis
 } as const;
 
 // Create OpenRouter provider

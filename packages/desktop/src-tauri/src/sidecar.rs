@@ -41,41 +41,34 @@ fn get_sidecar_path(sidecar: Sidecar) -> PathBuf {
 
     #[cfg(not(debug_assertions))]
     {
-        // Production - binaries are in the app bundle with target triple suffix
+        // Production - Tauri v2 puts binaries in Contents/MacOS/ without target triple suffix
         let exe_dir = std::env::current_exe()
             .expect("Failed to get executable path")
             .parent()
             .expect("Failed to get executable directory")
             .to_path_buf();
 
-        let target = get_target_triple_prod();
-        let binary_name = format!("{}-{}", sidecar.name(), target);
-
         #[cfg(target_os = "macos")]
         {
-            exe_dir.join("../Resources").join(binary_name)
+            // Tauri v2 bundles externalBin to MacOS/ folder, not Resources/
+            exe_dir.join(sidecar.name())
         }
 
         #[cfg(target_os = "windows")]
         {
-            exe_dir.join(format!("{}.exe", binary_name))
+            exe_dir.join(format!("{}.exe", sidecar.name()))
         }
 
         #[cfg(target_os = "linux")]
         {
-            exe_dir.join(binary_name)
+            exe_dir.join(sidecar.name())
         }
     }
 }
 
-/// Get the target triple for the current platform (dev builds)
+/// Get the target triple for the current platform (dev builds only)
 #[cfg(debug_assertions)]
 fn get_target_triple() -> &'static str {
-    get_target_triple_prod()
-}
-
-/// Get the target triple for the current platform
-fn get_target_triple_prod() -> &'static str {
     #[cfg(all(target_os = "macos", target_arch = "aarch64"))]
     { "aarch64-apple-darwin" }
 
