@@ -330,7 +330,6 @@ export function CaptureActionPanel() {
       {!isAnalyzing && (
         <div className="px-5 pb-3 flex flex-wrap items-center gap-2" onMouseDown={handleDragStart}>
           {/* AI suggested actions */}
-          {console.log("[CapturePanel] Rendering actions:", analysis?.actions)}
           {analysis?.actions && analysis.actions.length > 0 && analysis.actions.map((action, i) => {
           let Icon = Wand2;
 

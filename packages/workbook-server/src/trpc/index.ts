@@ -37,6 +37,8 @@ export interface TRPCConfig {
   // Page registry
   getPageRegistry: () => PageRegistry | null;
   createPageRegistry: (pagesDir: string) => PageRegistry;
+  // Deploy context (optional)
+  getRuntimeUrl?: () => string | null;
 }
 
 // Combined context for all routers
@@ -99,6 +101,7 @@ export function registerTRPCRoutes(app: Hono, config: TRPCConfig) {
     onSchemaChange,
     getPageRegistry,
     createPageRegistry,
+    getRuntimeUrl = () => null,
   } = config;
 
   // Handle all /trpc/* requests

@@ -6,6 +6,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import type { TElement } from "platejs";
 
 // Use Vite's worker bundling - creates a real worker file, not a blob URL
+// @ts-ignore - Vite worker import, type defined in vite-env.d.ts (ignored for non-Vite consumers)
 import MarkdownWorker from "../workers/markdown.worker?worker";
 
 // ============================================================================
@@ -130,7 +131,7 @@ function getOrCreateWorker(): Worker {
       }
     };
 
-    worker.onerror = (error) => {
+    worker.onerror = (error: ErrorEvent) => {
       console.error("[MarkdownWorker] Error:", error);
       for (const [id, pending] of pendingRequests) {
         pending.reject(new Error("Worker error"));
@@ -140,7 +141,7 @@ function getOrCreateWorker(): Worker {
 
     sharedWorker = worker;
   }
-  return sharedWorker;
+  return sharedWorker!;
 }
 
 function waitForReady(): Promise<void> {

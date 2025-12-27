@@ -145,7 +145,7 @@ function findLocalDbPath(workbookDir: string): string | null {
   const entries = readdirSync(dbDir, { recursive: true, withFileTypes: true });
   for (const entry of entries) {
     if (entry.isFile() && entry.name.endsWith(".sqlite")) {
-      const fullPath = join(entry.parentPath || entry.path, entry.name);
+      const fullPath = join(entry.parentPath, entry.name);
       // Check if this is a user database (not internal miniflare state)
       try {
         const db = new Database(fullPath, { readonly: true });

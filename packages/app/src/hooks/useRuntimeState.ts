@@ -171,7 +171,7 @@ export function useRuntimeState(): RuntimeState {
     staleTime: 0,
     refetchInterval: (query) => {
       const data = query.state.data;
-      const allReady = data?.services?.runtime?.ready;
+      const allReady = data?.services?.database?.ready;
       return allReady ? 10_000 : 1_000; // Fast poll during boot, slow when ready
     },
   });
@@ -186,7 +186,7 @@ export function useRuntimeState(): RuntimeState {
   // 4. Schema - ONLY fetch when runtime is confirmed ready (tRPC)
   // The db.schema procedure checks runtime readiness via middleware,
   // but we still guard here to avoid unnecessary failed requests
-  const runtimeReady = statusQuery.data?.services?.runtime?.ready ?? false;
+  const runtimeReady = statusQuery.data?.services?.database?.ready ?? false;
   const schemaQuery = trpc.db.schema.useQuery(undefined, {
     enabled: !!port && !!workbookId && runtimeReady,
     staleTime: 30_000,
@@ -222,7 +222,7 @@ export function useRuntimeState(): RuntimeState {
     const manifest = manifestQuery.data;
 
     // Check runtime status (includes SQLite database)
-    if (!statusQuery.data?.services?.runtime?.ready) {
+    if (!statusQuery.data?.services?.database?.ready) {
       return {
         phase: "db-booting",
         workbookId: workbook_id,

@@ -11,15 +11,12 @@ import type { Value } from "platejs";
 import { renderPlateToHtml } from "@hands/editor/lib/plate-static-render-node";
 import { compilePage, type CompiledPage, type PageMeta } from "./mdx.js";
 
-// Dynamic import for parseMdx (uses ESM)
-let parseMdxFn: ((source: string) => { frontmatter: Record<string, unknown>; value: Value; errors: string[] }) | null = null;
-
-async function getParseMdx() {
-  if (!parseMdxFn) {
-    const mod = await import("../../../editor_old/src/mdx/parser.js");
-    parseMdxFn = mod.parseMdx;
-  }
-  return parseMdxFn;
+// MDX parser stub - TODO: implement proper MDX to Plate parsing
+// The original implementation was in editor_old which has been removed
+function getParseMdx(): (source: string) => { frontmatter: Record<string, unknown>; value: Value; errors: string[] } {
+  return (_source: string) => {
+    throw new Error("MDX parsing not yet implemented - editor_old was removed");
+  };
 }
 
 // ============================================================================
