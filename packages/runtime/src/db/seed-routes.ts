@@ -100,7 +100,7 @@ export const seedRoutes = [
             SELECT name, sql FROM sqlite_master
             WHERE type='table'
               AND name NOT LIKE 'sqlite_%'
-              AND name NOT LIKE '__%'
+              AND name NOT GLOB '__*'
           `.execute(db);
 
           for (const table of tablesResult.rows) {
