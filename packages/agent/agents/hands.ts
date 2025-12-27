@@ -344,7 +344,7 @@ Run independent tasks in parallel:
 export const handsAgent: AgentConfig = {
   description: "Primary user-facing agent - friendly data assistant",
   mode: "primary",
-  model: "anthropic/claude-opus-4.5",
+  model: "openrouter/anthropic/claude-opus-4.5",
   prompt: HANDS_PROMPT,
   permission: {
     bash: { "*": "allow" },

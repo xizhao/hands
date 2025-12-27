@@ -104,7 +104,6 @@ export function NotebookSidebar({
             getFilteredSourceTables={data.getFilteredSourceTables}
             searchQuery={searchQuery}
             sourcesState={state.sources}
-            isDbLoading={data.isDbLoading}
             actions={actions}
             onMenuOpenChange={onMenuOpenChange}
             size={fullWidth ? "lg" : "default"}

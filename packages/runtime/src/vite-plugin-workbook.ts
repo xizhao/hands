@@ -65,6 +65,43 @@ function extractBlockIds(nodes: any[], blockIds: Set<string>): void {
   }
 }
 
+// Simple frontmatter parser to avoid importing from @hands/core
+function parseFrontmatter(content: string): { frontmatter: Record<string, unknown>; body: string } {
+  const match = content.match(/^---\r?\n([\s\S]*?)\r?\n---\r?\n([\s\S]*)$/);
+  if (!match) return { frontmatter: {}, body: content };
+
+  const yaml = match[1];
+  const body = match[2];
+  const frontmatter: Record<string, unknown> = {};
+
+  // Simple YAML parsing (key: value only)
+  for (const line of yaml.split('\n')) {
+    const colonIdx = line.indexOf(':');
+    if (colonIdx > 0) {
+      const key = line.slice(0, colonIdx).trim();
+      let value: unknown = line.slice(colonIdx + 1).trim();
+      // Remove quotes
+      if ((value as string).startsWith('"') && (value as string).endsWith('"')) {
+        value = (value as string).slice(1, -1);
+      }
+      frontmatter[key] = value;
+    }
+  }
+
+  return { frontmatter, body };
+}
+
+// Lazy-load the MDX parser only when needed (after Vite is running)
+let parseMdxToPlate: ((source: string) => { frontmatter: Record<string, unknown>; value: Value; errors: string[] }) | null = null;
+
+async function loadMdxParser() {
+  if (parseMdxToPlate) return parseMdxToPlate;
+  // Import from pre-built dist to avoid Node ESM resolution issues
+  const mod = await import("../../core/dist/primitives/serialization/mdx-parser.js");
+  parseMdxToPlate = mod.parseMdxToPlate;
+  return parseMdxToPlate;
+}
+
 async function processPages(pagesDir: string): Promise<PageMeta[]> {
   if (!fs.existsSync(pagesDir)) {
     return [];
@@ -74,7 +111,6 @@ async function processPages(pagesDir: string): Promise<PageMeta[]> {
     .readdirSync(pagesDir)
     .filter((f) => f.endsWith(".mdx") || f.endsWith(".md"));
 
-  const { parseMdx } = await import("../../editor_old/src/mdx/parser");
   const pages: PageMeta[] = [];
 
   for (const file of pageFiles) {
@@ -86,16 +122,20 @@ async function processPages(pagesDir: string): Promise<PageMeta[]> {
     contentHashes.set(filePath, hashContent(content));
 
     try {
-      const result = parseMdx(content);
+      // Try to use the full MDX parser
+      const parser = await loadMdxParser();
+      const result = parser(content);
       if (result.errors.length > 0) {
         console.warn(`[workbook:pages] Warnings for ${file}:`, result.errors);
       }
       pages.push({ id, frontmatter: result.frontmatter, content, value: result.value });
     } catch (err) {
+      // Fallback to simple frontmatter parsing
       console.error(`[workbook:pages] Failed to parse ${file}:`, err);
+      const { frontmatter } = parseFrontmatter(content);
       pages.push({
         id,
-        frontmatter: { title: id },
+        frontmatter: frontmatter.title ? frontmatter : { title: id, ...frontmatter },
         content,
         value: [{ type: "p", children: [{ text: `Error parsing page: ${err}` }] }],
       });

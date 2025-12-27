@@ -2,26 +2,27 @@
  * Markdown Worker - handles serialization off main thread
  *
  * Uses Plate's markdown serialization with minimal shim.
- * This avoids duplicating Plate's logic while keeping serialization off the main thread.
+ * Deserialization uses the shared parser from @hands/core.
  */
 
 import { unified } from "unified";
-import remarkParse from "remark-parse";
 import remarkStringify from "remark-stringify";
 import remarkGfm from "remark-gfm";
 import remarkMdx from "remark-mdx";
 import {
   defaultRules,
   convertNodesSerialize,
-  convertNodesDeserialize,
-  convertChildrenDeserialize,
   type MdRules,
 } from "@platejs/markdown";
 import { KEYS } from "platejs";
-import { serializationRules, toMarkdownPluginRules } from "@hands/core/primitives/serialization";
+import {
+  serializationRules,
+  toMarkdownPluginRules,
+} from "@hands/core/primitives/serialization";
+import { parseMarkdownToPlate } from "@hands/core/primitives/serialization/mdx-parser";
 
 // ============================================================================
-// Build Combined Rules
+// Build Combined Rules (for serialization)
 // ============================================================================
 
 // Merge Plate's default rules with our custom stdlib rules
@@ -126,12 +127,7 @@ const serializeOptions = {
   convertNodes: (children: any[], opts: any) => convertNodesSerialize(children, opts, true),
 };
 
-const deserializeOptions = {
-  editor: editorShim as any,
-  rules: mergedRules,
-  // Pass convertChildren so helpers.ts can use it for nested children
-  convertChildren: (children: any[], deco: any, opts: any) => convertChildrenDeserialize(children, deco, opts),
-};
+// Note: deserializeOptions removed - using shared parseMarkdownToPlate from @hands/core
 
 // ============================================================================
 // Message Handler
@@ -162,19 +158,8 @@ self.onmessage = (e) => {
 
       self.postMessage({ id, type: "serialize", result });
     } else if (type === "deserialize") {
-      const mdast = unified()
-        .use(remarkParse)
-        .use(remarkGfm)
-        .use(remarkMdx)
-        .parse(markdown);
-
-      // Use Plate's convertNodesDeserialize with our shim
-      const result = convertNodesDeserialize(
-        (mdast as any).children || [],
-        {},
-        deserializeOptions
-      );
-
+      // Use shared parser from @hands/core
+      const result = parseMarkdownToPlate(markdown);
       self.postMessage({ id, type: "deserialize", result });
     }
   } catch (err) {

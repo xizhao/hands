@@ -7,9 +7,10 @@ initClient();
 if (typeof window !== "undefined") {
   const mount = () => {
     const pageId = getPageIdFromUrl();
-    // Extract page metadata from meta tags if available
-    const title = document.querySelector('title')?.textContent?.replace(' | Hands', '') || undefined;
-    const description = document.querySelector('meta[name="description"]')?.getAttribute('content') || undefined;
+    // Extract page metadata from data attributes on Page wrapper
+    const pageEl = document.querySelector('[data-page-title]');
+    const title = pageEl?.getAttribute('data-page-title') || undefined;
+    const description = pageEl?.getAttribute('data-page-description') || undefined;
 
     mountCollab(pageId, { title, description });
   };

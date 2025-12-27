@@ -154,3 +154,11 @@ export { cardRules, cardRule, cardHeaderRule, cardContentRule, cardFooterRule, c
 export { columnRules, columnsRule, columnRule } from "./rules/column";
 export { blockRules, blockRule } from "./rules/block";
 export { tabsRules, tabsRule, tabRule } from "./rules/tabs";
+
+// MDX Parser
+export {
+  parseMdxToPlate,
+  parseMarkdownToPlate,
+  extractFrontmatter,
+  type ParseMdxResult,
+} from "./mdx-parser";

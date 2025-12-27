@@ -55,8 +55,6 @@ interface DataSectionProps {
   searchQuery: string;
   /** Source expansion state */
   sourcesState: SidebarState["sources"];
-  /** Whether DB is loading */
-  isDbLoading: boolean;
   /** Actions handlers */
   actions: SidebarActions;
   /** Callback when menu opens/closes */
@@ -75,7 +73,6 @@ export function DataSection({
   getFilteredSourceTables,
   searchQuery,
   sourcesState,
-  isDbLoading,
   actions,
   onMenuOpenChange,
   size,
@@ -122,9 +119,7 @@ export function DataSection({
         addTooltip="Add source"
         size={size}
       >
-        {isDbLoading ? (
-          <SidebarEmptyState label="Loading..." />
-        ) : hasData ? (
+        {hasData ? (
           <>
             {/* Sources with their tables */}
             {sources.map((source) => {

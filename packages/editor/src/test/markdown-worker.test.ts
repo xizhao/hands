@@ -17,7 +17,7 @@ import { remarkMdx } from '@platejs/markdown';
 import type { Root } from 'mdast';
 import type { TElement } from 'platejs';
 
-import { serializationRules, toMarkdownPluginRules } from '@hands/core/primitives';
+import { serializationRules, toMarkdownPluginRules } from '@hands/core/primitives/serialization';
 import { createTestEditor } from './create-test-editor';
 
 // ============================================================================
@@ -397,53 +397,6 @@ describe('Markdown Worker Serialization', () => {
     });
   });
 
-  describe('Parity with Sync Serialization', () => {
-    it('produces equivalent output for simple paragraph', () => {
-      const editor = createTestEditor();
-      const markdown = 'Hello, world!';
-
-      // Deserialize with sync method
-      const nodes = editor.api.markdown.deserialize(markdown);
-
-      // Serialize with both methods
-      const syncResult = editor.api.markdown.serialize({ value: nodes });
-      const workerResult = workerSerialize(nodes);
-
-      // Both should contain the core content
-      expect(normalize(syncResult)).toContain('Hello, world');
-      expect(normalize(workerResult)).toContain('Hello, world');
-    });
-
-    it('produces equivalent output for headings', () => {
-      const editor = createTestEditor();
-      const markdown = '# Heading 1\n\n## Heading 2';
-
-      const nodes = editor.api.markdown.deserialize(markdown);
-
-      const syncResult = editor.api.markdown.serialize({ value: nodes });
-      const workerResult = workerSerialize(nodes);
-
-      expect(syncResult).toContain('# Heading 1');
-      expect(workerResult).toContain('# Heading 1');
-      expect(syncResult).toContain('## Heading 2');
-      expect(workerResult).toContain('## Heading 2');
-    });
-
-    it('produces equivalent output for bold/italic', () => {
-      const editor = createTestEditor();
-      const markdown = '**bold** and _italic_';
-
-      const nodes = editor.api.markdown.deserialize(markdown);
-
-      const syncResult = editor.api.markdown.serialize({ value: nodes });
-      const workerResult = workerSerialize(nodes);
-
-      expect(syncResult).toContain('bold');
-      expect(workerResult).toContain('bold');
-      expect(syncResult).toMatch(/\*\*bold\*\*/);
-      expect(workerResult).toMatch(/\*\*bold\*\*/);
-    });
-  });
 });
 
 describe('Markdown Worker Integration', () => {

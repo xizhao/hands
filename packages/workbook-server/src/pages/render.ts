@@ -9,15 +9,8 @@ import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 import type { Value } from "platejs";
 import { renderPlateToHtml } from "@hands/editor/lib/plate-static-render-node";
+import { parseMdxToPlate } from "@hands/core/primitives/serialization/mdx-parser";
 import { compilePage, type CompiledPage, type PageMeta } from "./mdx.js";
-
-// MDX parser stub - TODO: implement proper MDX to Plate parsing
-// The original implementation was in editor_old which has been removed
-function getParseMdx(): (source: string) => { frontmatter: Record<string, unknown>; value: Value; errors: string[] } {
-  return (_source: string) => {
-    throw new Error("MDX parsing not yet implemented - editor_old was removed");
-  };
-}
 
 // ============================================================================
 // Types
@@ -80,9 +73,8 @@ export async function renderPage(options: RenderPageOptions): Promise<PageRender
     const filePath = join(pagesDir, pagePath);
     const source = await readFile(filePath, "utf-8");
 
-    // Parse MDX to Plate JSON using editor's parser
-    const parseMdx = await getParseMdx();
-    const parseResult = parseMdx(source);
+    // Parse MDX to Plate JSON using shared parser
+    const parseResult = parseMdxToPlate(source);
 
     if (parseResult.errors.length > 0) {
       console.warn(`[render] Parse warnings for ${pagePath}:`, parseResult.errors);
@@ -140,8 +132,7 @@ export async function renderCompiledPage(
 
   // Parse source to Plate format and render
   try {
-    const parseMdx = await getParseMdx();
-    const parseResult = parseMdx(compiled.source);
+    const parseResult = parseMdxToPlate(compiled.source);
     const html = renderPlateToHtml(parseResult.value);
 
     const fullHtml = wrapper

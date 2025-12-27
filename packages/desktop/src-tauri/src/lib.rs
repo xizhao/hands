@@ -97,6 +97,32 @@ fn get_workbook_dir(id: &str) -> Result<PathBuf, String> {
     Ok(get_hands_dir()?.join(id))
 }
 
+/// Get the path to the @hands/runtime package
+/// In dev: relative to CARGO_MANIFEST_DIR (packages/desktop/src-tauri -> packages/runtime)
+/// In production: would be bundled with app (not yet implemented)
+fn get_runtime_path() -> String {
+    #[cfg(debug_assertions)]
+    {
+        // Dev mode - runtime is at packages/runtime relative to src-tauri
+        let manifest_dir = env!("CARGO_MANIFEST_DIR");
+        let runtime_path = PathBuf::from(manifest_dir)
+            .join("../../runtime")
+            .canonicalize()
+            .unwrap_or_else(|_| PathBuf::from(manifest_dir).join("../../runtime"));
+        runtime_path.to_string_lossy().to_string()
+    }
+
+    #[cfg(not(debug_assertions))]
+    {
+        // Production - TODO: bundle runtime with app
+        // For now, fall back to monorepo structure assumption
+        let exe_dir = std::env::current_exe()
+            .map(|p| p.parent().unwrap_or(&p).to_path_buf())
+            .unwrap_or_default();
+        exe_dir.join("../Resources/runtime").to_string_lossy().to_string()
+    }
+}
+
 fn save_workbook_config(workbook: &Workbook) -> Result<(), String> {
     let workbook_dir = PathBuf::from(&workbook.directory);
     let package_path = workbook_dir.join("package.json");
@@ -494,12 +520,17 @@ async fn spawn_workbook_server(
     // Force cleanup any stale processes before starting
     force_cleanup_workbook_server().await;
 
+    // Get runtime path - in dev this is packages/runtime in monorepo
+    // The compiled sidecar needs this since import.meta.dir doesn't work in compiled binaries
+    let runtime_path = get_runtime_path();
+
     // Start hands-runtime process - run from the workbook directory
     let mut child = sidecar::command(sidecar::Sidecar::WorkbookServer)
         .args([
             &format!("--workbook-id={}", workbook_id),
             &format!("--workbook-dir={}", directory),
         ])
+        .env("HANDS_RUNTIME_PATH", &runtime_path)
         .envs(&env_vars)
         .current_dir(directory)
         .stdout(Stdio::piped())

@@ -65,7 +65,8 @@ async function buildSidecar(sidecar: Sidecar, targetTriple: string): Promise<voi
   }
 
   // Use bun build --compile to create standalone binary
-  await $`bun build --compile --minify ${entryPath} --outfile ${outputPath}`;
+  // Run from monorepo root for proper workspace resolution
+  await $`cd ${ROOT} && bun build --compile --minify ${entryPath} --outfile ${outputPath}`;
 
   console.log(`  ✓ Built ${outputName}`);
 }

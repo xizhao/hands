@@ -100,7 +100,6 @@ export function registerTRPCRoutes(app: Hono, config: TRPCConfig) {
     workbookId,
     workbookDir,
     getRuntimeUrl,
-    isDbReady,
     getState,
     getExternalConfig,
     formatBlockSource,
@@ -122,7 +121,6 @@ export function registerTRPCRoutes(app: Hono, config: TRPCConfig) {
       // Base context
       workbookId,
       workbookDir,
-      isDbReady: isDbReady(),
       // SQLite context - runtime URL for database access
       runtimeUrl: runtimeUrl ?? "http://localhost:55200",
       onSchemaChange,

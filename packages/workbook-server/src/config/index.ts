@@ -77,6 +77,16 @@ export function getStdlibSourcePath(): string {
  * Works in both development (monorepo) and production
  */
 export function getRuntimeSourcePath(): string {
+  // First check for explicit env var (set by Tauri for compiled sidecars)
+  const envPath = process.env.HANDS_RUNTIME_PATH;
+  if (envPath && existsSync(join(envPath, "vite.config.mts"))) {
+    try {
+      return realpathSync(envPath);
+    } catch {
+      return envPath;
+    }
+  }
+
   // In development, runtime is a sibling package in packages/runtime
   const devPath = resolve(import.meta.dir, "../../../runtime");
   if (existsSync(join(devPath, "vite.config.mts"))) {

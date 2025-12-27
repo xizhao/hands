@@ -7,9 +7,8 @@
  */
 
 import { describe, it, expect } from "vitest";
-import { MarkdownPlugin } from "@platejs/markdown";
 import { createPlateEditor } from "platejs/react";
-import { createTestEditor } from "./create-test-editor";
+import { createTestEditor, testDeserialize } from "./create-test-editor";
 
 describe("at-kit ghost preview", () => {
   /**
@@ -43,11 +42,10 @@ describe("at-kit ghost preview", () => {
 
   it("deserialized block content can be rendered in sub-editor", () => {
     const mainEditor = createTestEditor();
-    const mdApi = mainEditor.getApi(MarkdownPlugin);
 
     // Deserialize block content
     const chartMdx = `<BarChart data={[{name: "A", value: 10}]} xKey="name" yKeys={["value"]} />`;
-    const nodes = mdApi.markdown.deserialize(chartMdx);
+    const nodes = testDeserialize(chartMdx);
 
     expect(nodes.length).toBeGreaterThan(0);
 
@@ -75,9 +73,8 @@ describe("at-kit block insertion", () => {
     editor.tf.select({ path: [0, 0], offset: 6 });
 
     // Simulate what at-ghost-input does: deserialize block MDX and insert
-    const mdApi = editor.getApi(MarkdownPlugin);
     const chartMdx = `<BarChart data={[{name: "A", value: 10}]} xKey="name" yKeys={["value"]} />`;
-    const nodes = mdApi.markdown.deserialize(chartMdx);
+    const nodes = testDeserialize(chartMdx);
 
     // Insert block content at current position (simulating at-kit behavior)
     editor.tf.withoutNormalizing(() => {
@@ -105,9 +102,8 @@ describe("at-kit block insertion", () => {
 
     editor.tf.select({ path: [0, 0], offset: 4 });
 
-    const mdApi = editor.getApi(MarkdownPlugin);
     const tableMdx = `| Col1 | Col2 |\n|------|------|\n| A | B |`;
-    const nodes = mdApi.markdown.deserialize(tableMdx);
+    const nodes = testDeserialize(tableMdx);
 
     // Insert block content
     editor.tf.withoutNormalizing(() => {
@@ -158,18 +154,15 @@ describe("at-kit block insertion", () => {
   });
 
   it("isInline check correctly identifies block vs inline content", () => {
-    const editor = createTestEditor();
-    const mdApi = editor.getApi(MarkdownPlugin);
-
     // Block content - should NOT get trailing space
-    const chartNodes = mdApi.markdown.deserialize(
+    const chartNodes = testDeserialize(
       `<BarChart data={[]} xKey="x" yKeys={["y"]} />`
     );
     const isChartInline = chartNodes.length === 1 && !("type" in chartNodes[0]);
     expect(isChartInline).toBe(false);
 
     // Inline content from single paragraph - should get trailing space
-    const inlineNodes = mdApi.markdown.deserialize("hello world");
+    const inlineNodes = testDeserialize("hello world");
     // If it's a single paragraph, we unwrap to get inline children
     let finalNodes: (typeof inlineNodes[0] | { text: string })[] = inlineNodes;
     if (

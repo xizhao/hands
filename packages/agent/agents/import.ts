@@ -255,7 +255,7 @@ Always report:
 export const importAgent: AgentConfig = {
   description: "Data ingestion specialist - gets files into the database",
   mode: "subagent",
-  model: "google/gemini-2.5-flash",
+  model: "openrouter/google/gemini-2.5-flash",
   temperature: 0.1,
   prompt: IMPORT_PROMPT,
   permission: {

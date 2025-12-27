@@ -42,13 +42,13 @@ export function tailwindSourcePlugin({ workbookPath }: TailwindSourcePluginOptio
 
       // Core package UI components (DataGrid, charts, shadcn)
       const coreUiRelative = path.relative(cssDir, path.resolve(__dirname, "../../core/src/ui"));
-      // Editor package components
-      const editorRelative = path.relative(cssDir, path.resolve(__dirname, "../../editor/src"));
       // Runtime components
       const runtimeRelative = path.relative(cssDir, path.resolve(__dirname, "../src"));
+      // Editor UI components only (not workers which have problematic imports)
+      const editorUiRelative = path.relative(cssDir, path.resolve(__dirname, "../../editor/src/ui"));
 
       console.log("[tailwind-source] Injecting @source for workbook:", blocksRelative, uiRelative, pagesRelative);
-      console.log("[tailwind-source] Injecting @source for packages:", coreUiRelative, editorRelative, runtimeRelative);
+      console.log("[tailwind-source] Injecting @source for packages:", coreUiRelative, editorUiRelative, runtimeRelative);
 
       // Inject @source directives after @import/@plugin lines
       const sourceDirectives = `
@@ -58,7 +58,7 @@ export function tailwindSourcePlugin({ workbookPath }: TailwindSourcePluginOptio
 @source "${pagesRelative}";
 /* Package content sources */
 @source "${coreUiRelative}";
-@source "${editorRelative}";
+@source "${editorUiRelative}";
 @source "${runtimeRelative}";
 `;
 

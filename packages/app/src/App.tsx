@@ -46,12 +46,37 @@ function getMutationLabel(mutationKey: unknown): string | null {
   return mutationLabels[key] ?? null;
 }
 
+/**
+ * Check if an error is a connection error (server not ready yet)
+ */
+function isConnectionError(error: unknown): boolean {
+  if (error instanceof Error) {
+    const msg = error.message.toLowerCase();
+    return (
+      msg.includes("fetch failed") ||
+      msg.includes("network") ||
+      msg.includes("econnrefused") ||
+      msg.includes("unable to connect") ||
+      msg.includes("failed to fetch")
+    );
+  }
+  return false;
+}
+
 // Export queryClient so SSE handler can access it
 export const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
       staleTime: 5000,
       refetchOnWindowFocus: false,
+      // Retry connection errors silently during boot
+      retry: (failureCount, error) => {
+        // Don't retry non-connection errors
+        if (!isConnectionError(error)) return false;
+        // Retry up to 10 times for connection errors (covers ~30s boot time)
+        return failureCount < 10;
+      },
+      retryDelay: (attemptIndex) => Math.min(1000 * (attemptIndex + 1), 5000),
     },
   },
   mutationCache: new MutationCache({

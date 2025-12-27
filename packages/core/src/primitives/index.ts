@@ -18,8 +18,8 @@ export * from "./schema";
 // Action primitives (serverless compute functions)
 export * from "./actions";
 
-// Serialization primitives (MDX serialization rules)
-export * from "./serialization";
+// Serialization primitives - NOT re-exported here to avoid Node ESM issues
+// Import directly from "@hands/core/primitives/serialization" instead
 
 // Sheet primitives (smart SQLite table abstraction)
 export * from "./sheet";
