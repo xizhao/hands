@@ -98,10 +98,47 @@ function getRuntimePath(): string {
   return join(dirname(workbookServerDir), "runtime");
 }
 
+interface WorkflowBinding {
+  className: string;
+  binding: string;
+}
+
+/**
+ * Read workflow bindings from generated manifest
+ */
+function readWorkflowBindings(workbookDir: string): Record<string, WorkflowBinding> {
+  const workflowsPath = join(workbookDir, ".hands/actions/workflows.ts");
+  if (!existsSync(workflowsPath)) {
+    return {};
+  }
+
+  try {
+    const content = readFileSync(workflowsPath, "utf-8");
+    // Extract workflowBindings object from the generated file
+    const match = content.match(/export const workflowBindings = \{([^}]+)\}/s);
+    if (!match) return {};
+
+    const bindings: Record<string, WorkflowBinding> = {};
+    const bindingMatches = match[1].matchAll(/"([^"]+)":\s*\{\s*className:\s*"([^"]+)",\s*binding:\s*"([^"]+)"\s*\}/g);
+
+    for (const [, id, className, binding] of bindingMatches) {
+      bindings[id] = { className, binding };
+    }
+
+    return bindings;
+  } catch {
+    return {};
+  }
+}
+
 /**
  * Generate wrangler.json for deployment
  */
-function generateWranglerConfig(workerName: string, seedSecret?: string): object {
+function generateWranglerConfig(
+  workerName: string,
+  workflowBindings: Record<string, WorkflowBinding>,
+  seedSecret?: string
+): object {
   const config: Record<string, unknown> = {
     name: workerName,
     main: "worker/index.js",
@@ -123,6 +160,16 @@ function generateWranglerConfig(workerName: string, seedSecret?: string): object
     ],
     observability: { enabled: true },
   };
+
+  // Add workflow bindings if any
+  const workflowEntries = Object.entries(workflowBindings);
+  if (workflowEntries.length > 0) {
+    config.workflows = workflowEntries.map(([id, { className, binding }]) => ({
+      name: id,
+      class_name: className,
+      binding,
+    }));
+  }
 
   // Add seed secret as env var if provided
   if (seedSecret) {
@@ -330,7 +377,14 @@ export const deployRouter = t.router({
       // Generate seed secret if including DB
       const seedSecret = includeDb ? generateSeedSecret() : undefined;
 
-      const wranglerConfig = generateWranglerConfig(workerName, seedSecret);
+      // Read workflow bindings from generated manifest
+      const workflowBindings = readWorkflowBindings(workbookDir);
+      const workflowCount = Object.keys(workflowBindings).length;
+      if (workflowCount > 0) {
+        console.log(`[deploy] Found ${workflowCount} workflow actions`);
+      }
+
+      const wranglerConfig = generateWranglerConfig(workerName, workflowBindings, seedSecret);
       const wranglerPath = join(distDir, "wrangler.json");
       writeFileSync(wranglerPath, JSON.stringify(wranglerConfig, null, 2));
       console.log(`[deploy] Generated wrangler.json for ${workerName}`);

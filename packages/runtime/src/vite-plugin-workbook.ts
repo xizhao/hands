@@ -175,6 +175,7 @@ interface ActionMeta {
   id: string;
   path: string;
   relativePath: string;
+  isWorkflow: boolean;
 }
 
 function discoverActions(actionsDir: string): ActionMeta[] {
@@ -189,13 +190,27 @@ function discoverActions(actionsDir: string): ActionMeta[] {
   return actionFiles.map((file) => {
     const id = path.basename(file, ".ts");
     const filePath = path.join(actionsDir, file);
-    contentHashes.set(filePath, hashContent(fs.readFileSync(filePath, "utf-8")));
+    const content = fs.readFileSync(filePath, "utf-8");
+    contentHashes.set(filePath, hashContent(content));
+
+    // Detect workflow actions by looking for "workflow" property/function
+    // This is a simple heuristic - workflow actions use `workflow:` or `async workflow(`
+    const isWorkflow = /\bworkflow\s*[:(]/.test(content);
+
     return {
       id,
       path: filePath,
       relativePath: `actions/${file}`,
+      isWorkflow,
     };
   });
+}
+
+function toPascalCase(id: string): string {
+  return id
+    .split(/[-_]/)
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join("");
 }
 
 function generateActionsManifest(actions: ActionMeta[], outputDir: string, workbookPath: string): void {
@@ -228,6 +243,97 @@ export function listActions(): Array<{ id: string; definition: ActionDefinition 
 
   fs.mkdirSync(outputDir, { recursive: true });
   fs.writeFileSync(path.join(outputDir, "index.ts"), manifest);
+
+  // Generate CF Workflow classes for workflow actions (always generate, even if empty)
+  const workflowActions = actions.filter((a) => a.isWorkflow);
+  generateWorkflowClasses(workflowActions, outputDir, workbookPath);
+}
+
+/**
+ * Generate CF WorkflowEntrypoint classes for workflow actions.
+ * These are used when deploying to production CF Workers.
+ * Always generates a file, even if empty (for module resolution).
+ */
+function generateWorkflowClasses(
+  workflowActions: ActionMeta[],
+  outputDir: string,
+  workbookPath: string
+): void {
+  // Handle empty case - still generate file for module resolution
+  if (workflowActions.length === 0) {
+    const emptyManifest = `// Auto-generated CF Workflow classes - DO NOT EDIT
+// No workflow actions found in this workbook
+
+export const workflowBindings = {} as const;
+
+export type WorkflowId = never;
+
+export function getWorkflowBinding(_id: string): { className: string; binding: string } | undefined {
+  return undefined;
+}
+`;
+    fs.writeFileSync(path.join(outputDir, "workflows.ts"), emptyManifest);
+    return;
+  }
+
+  const imports = workflowActions
+    .map((a) => `import ${sanitizeId(a.id)}Action from "${path.join(workbookPath, a.relativePath)}";`)
+    .join("\n");
+
+  const workflowClasses = workflowActions
+    .map((a) => {
+      const className = `${toPascalCase(a.id)}Workflow`;
+      const varName = sanitizeId(a.id);
+      return `
+/**
+ * CF Workflow class for "${a.id}" action.
+ * Auto-generated - DO NOT EDIT.
+ */
+export class ${className} extends WorkflowEntrypoint<Env, unknown> {
+  async run(event: WorkflowEvent<unknown>, step: WorkflowStep): Promise<unknown> {
+    const ctx = buildActionContext(this.env);
+    return ${varName}Action.workflow(step, ctx, event.payload);
+  }
+}`;
+    })
+    .join("\n");
+
+  const workflowBindings = workflowActions
+    .map((a) => {
+      const className = `${toPascalCase(a.id)}Workflow`;
+      const bindingName = `${a.id.toUpperCase().replace(/-/g, "_")}_WORKFLOW`;
+      return `  "${a.id}": { className: "${className}", binding: "${bindingName}" },`;
+    })
+    .join("\n");
+
+  const workflowManifest = `// Auto-generated CF Workflow classes - DO NOT EDIT
+// Env type is globally available from worker-configuration.d.ts
+import { WorkflowEntrypoint, WorkflowStep, WorkflowEvent } from "cloudflare:workers";
+import { buildActionContext } from "@hands/runtime/actions/context";
+${imports}
+
+// =============================================================================
+// Workflow Classes
+// =============================================================================
+${workflowClasses}
+
+// =============================================================================
+// Workflow Registry
+// =============================================================================
+
+export const workflowBindings = {
+${workflowBindings}
+} as const;
+
+export type WorkflowId = keyof typeof workflowBindings;
+
+export function getWorkflowBinding(id: string): { className: string; binding: string } | undefined {
+  return workflowBindings[id as WorkflowId];
+}
+`;
+
+  fs.writeFileSync(path.join(outputDir, "workflows.ts"), workflowManifest);
+  console.log(`[workbook] Generated ${workflowActions.length} workflow classes`);
 }
 
 // =============================================================================
