@@ -173,9 +173,9 @@ export function VegaChart({
 
     return {
       ...spec,
-      // Use measured container width minus horizontal padding
-      width: containerWidth - 10,
-      height: height - 30,
+      // Use measured container width
+      width: containerWidth,
+      height,
       // Use named data source for dynamic updates
       data: { name: DATA_SOURCE_NAME },
       // Apply theme config
@@ -183,12 +183,10 @@ export function VegaChart({
         ...vegaTheme,
         ...((spec.config as Record<string, unknown>) ?? {}),
       },
-      // Padding for axis labels (bottom for angled x-axis labels)
-      padding: { top: 5, right: 5, bottom: 25, left: 5 },
-      // Autosize to fit within padding
+      // Autosize: "pad" grows chart to fit content including axes/labels
       autosize: {
-        type: "fit",
-        contains: "padding",
+        type: "pad",
+        resize: true,
       },
     };
   }, [spec, height, vegaTheme, containerWidth]);
@@ -280,8 +278,7 @@ export function VegaChart({
 
     const updateSize = async () => {
       try {
-        // Match the padding used in baseSpec
-        view.width(containerWidth - 10);
+        view.width(containerWidth);
         await view.runAsync();
       } catch (err) {
         // Ignore resize errors

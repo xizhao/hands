@@ -14,8 +14,6 @@ export function usePresence(pageId: string, user: CollabUser | null) {
     `presence:${pageId}`
   );
 
-  // Debug logging
-  console.log("[usePresence] pageId:", pageId, "user:", user?.name, "presenceMap keys:", Object.keys(presenceMap));
 
   const lastUpdateRef = useRef(0);
   const rafIdRef = useRef<number | undefined>(undefined);

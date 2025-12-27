@@ -4,6 +4,10 @@
   "description": "Hands runtime - workbook dev server",
   "main": "index.js",
   "type": "module",
+  "sideEffects": [
+    "./src/client.tsx",
+    "./src/collab/**/*"
+  ],
   "keywords": [],
   "author": "team@hands.app",
   "scripts": {

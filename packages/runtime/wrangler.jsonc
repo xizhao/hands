@@ -1,18 +1,12 @@
 {
-  // Schema reference for wrangler configuration
   "$schema": "node_modules/wrangler/config-schema.json",
-
-  // Name of your worker
-  "name": "__change_me__",
-
-  // Entry point for your worker
+  "name": "runtime",
   "main": "src/worker.tsx",
-
-  // Compatibility settings
   "compatibility_date": "2025-12-01",
-  "compatibility_flags": ["nodejs_compat", "nodejs_als"],
-
-  // Durable Objects for SQLite database and synced state
+  "compatibility_flags": [
+    "nodejs_compat",
+    "nodejs_als"
+  ],
   "durable_objects": {
     "bindings": [
       {
@@ -25,31 +19,25 @@
       }
     ]
   },
-
-  // DO migrations - declares SQLite-backed classes
   "migrations": [
     {
       "tag": "v1",
-      "new_sqlite_classes": ["Database"]
+      "new_sqlite_classes": [
+        "Database"
+      ]
     },
     {
       "tag": "v2",
-      "new_sqlite_classes": ["SyncedStateServer"]
+      "new_sqlite_classes": [
+        "SyncedStateServer"
+      ]
     }
   ],
-
-  // Assets configuration
   "assets": {
     "binding": "ASSETS"
   },
-
-  // Observability settings
   "observability": {
     "enabled": true
   },
-
-  // Environment variables
-  "vars": {
-    // Add your environment variables here
-  }
+  "vars": {}
 }

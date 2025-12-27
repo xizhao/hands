@@ -1,13 +1,13 @@
+"use client";
+
 import { initClient } from "rwsdk/client";
-import { mountCollab, getPageIdFromUrl } from "./collab";
+import { mountCollab, getPageIdFromUrl } from "./collab/CollabRoot";
 
 initClient();
 
 // Mount the collaboration widget after DOM is ready
 if (typeof window !== "undefined") {
-  console.log("[collab] client.tsx loaded");
   const mount = () => {
-    console.log("[collab] mounting widget...");
     const pageId = getPageIdFromUrl();
     // Extract page metadata from meta tags if available
     const title = document.querySelector('title')?.textContent?.replace(' | Hands', '') || undefined;

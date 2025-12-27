@@ -17,9 +17,6 @@ export function CollabWidget() {
     deleteComment,
   } = useCollab();
 
-  // Debug logging
-  console.log("[CollabWidget] user:", user?.name, "otherUsers:", otherUsers.length, "blocks:", blockPositions.length);
-
   return (
     <>
       {/* Logo and online status */}
