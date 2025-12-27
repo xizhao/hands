@@ -9,6 +9,7 @@
  */
 
 import type { ActionSchema } from "../schema/types.js";
+import type { Serializable, WorkflowFn } from "./workflow.js";
 
 // =============================================================================
 // Trigger Types
@@ -39,6 +40,8 @@ export interface ActionRun {
   startedAt: string;
   finishedAt?: string;
   durationMs?: number;
+  /** Workflow steps (for workflow actions only) */
+  steps?: import("./workflow.js").StepRecord[];
 }
 
 // =============================================================================
@@ -260,7 +263,10 @@ export interface InputValidator<T> {
   description?: string;
 }
 
-export interface ActionDefinition<TInput = unknown, TOutput = unknown> {
+/**
+ * Base action definition properties (shared by run and workflow actions)
+ */
+interface ActionDefinitionBase<TInput = unknown> {
   /** Unique action name (used in API routes, must be URL-safe) */
   name: string;
 
@@ -291,10 +297,52 @@ export interface ActionDefinition<TInput = unknown, TOutput = unknown> {
    * Compile-time validation is handled by Kysely types.
    */
   schema?: ActionSchema;
+}
 
+/**
+ * Action with simple run function (legacy style)
+ */
+export interface RunActionDefinition<TInput = unknown, TOutput = unknown>
+  extends ActionDefinitionBase<TInput> {
   /** The action function */
   run: (input: TInput, ctx: ActionContext) => Promise<TOutput>;
+  workflow?: never;
 }
+
+/**
+ * Action with CF-style workflow function
+ */
+export interface WorkflowActionDefinition<
+  TInput extends Serializable = Serializable,
+  TOutput extends Serializable = Serializable
+> extends ActionDefinitionBase<TInput> {
+  /**
+   * CF-style workflow function with step primitives.
+   * Steps are recorded for visualization and compile to CF Workers.
+   *
+   * @example
+   * ```typescript
+   * async workflow(step, ctx, input) {
+   *   const data = await step.do("fetch", async () => fetchData());
+   *   await step.sleep("rate-limit", "5 seconds");
+   *   await step.do("save", async () => saveData(data));
+   *   return { saved: true };
+   * }
+   * ```
+   */
+  workflow: WorkflowFn<TInput, TOutput>;
+  run?: never;
+}
+
+/**
+ * Action definition - either run-based or workflow-based
+ */
+export type ActionDefinition<TInput = unknown, TOutput = unknown> =
+  | RunActionDefinition<TInput, TOutput>
+  | WorkflowActionDefinition<
+      TInput extends Serializable ? TInput : Serializable,
+      TOutput extends Serializable ? TOutput : Serializable
+    >;
 
 // =============================================================================
 // Discovered Action (Runtime)
@@ -340,7 +388,7 @@ export type DiscoveredAction = ValidAction | InvalidAction;
 // =============================================================================
 
 /**
- * Define an action (serverless compute function)
+ * Define a run-based action (simple async function)
  *
  * @example
  * ```typescript
@@ -364,7 +412,67 @@ export type DiscoveredAction = ValidAction | InvalidAction;
  * ```
  */
 export function defineAction<TInput, TOutput>(
+  config: RunActionDefinition<TInput, TOutput>,
+): RunActionDefinition<TInput, TOutput>;
+
+/**
+ * Define a workflow-based action (CF Workers compatible)
+ *
+ * @example
+ * ```typescript
+ * import { defineAction } from "@hands/core/primitives";
+ * import { z } from "zod";
+ *
+ * export default defineAction({
+ *   name: "sync-orders",
+ *   description: "Sync orders with step primitives",
+ *   schedule: "0 * * * *",
+ *   input: z.object({ limit: z.number().default(100) }),
+ *   async workflow(step, ctx, input) {
+ *     const { orders } = await step.do("fetch", async () => {
+ *       return { orders: await fetchOrders(input.limit) };
+ *     });
+ *     await step.sleep("rate-limit", "5 seconds");
+ *     await step.do("save", async () => {
+ *       await ctx.sql`INSERT INTO orders ${orders}`;
+ *     });
+ *     return { synced: orders.length };
+ *   },
+ * });
+ * ```
+ */
+export function defineAction<
+  TInput extends Serializable,
+  TOutput extends Serializable
+>(
+  config: WorkflowActionDefinition<TInput, TOutput>,
+): WorkflowActionDefinition<TInput, TOutput>;
+
+// Implementation
+export function defineAction<TInput, TOutput>(
   config: ActionDefinition<TInput, TOutput>,
 ): ActionDefinition<TInput, TOutput> {
   return config;
+}
+
+// =============================================================================
+// Type Guards
+// =============================================================================
+
+/**
+ * Check if action uses workflow (vs run)
+ */
+export function isWorkflowAction(
+  action: ActionDefinition
+): action is WorkflowActionDefinition {
+  return "workflow" in action && typeof action.workflow === "function";
+}
+
+/**
+ * Check if action uses run (vs workflow)
+ */
+export function isRunAction(
+  action: ActionDefinition
+): action is RunActionDefinition {
+  return "run" in action && typeof action.run === "function";
 }

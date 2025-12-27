@@ -8,9 +8,17 @@
 
 import { route } from "rwsdk/router";
 import type { ActionDefinition, ActionRun, ActionTriggerType } from "../types/action";
+import { isWorkflowAction, type StepRecord } from "@hands/core/primitives";
 import { buildActionContext, createRunMeta } from "./context";
+import { executeWorkflow } from "./workflow-executor";
 import { getUserTables } from "../db/dev";
 import { actions, listActions } from "@hands/actions";
+
+/** Extended ActionRun with workflow steps */
+export interface WorkflowActionRun extends ActionRun {
+  /** Steps executed (for workflow actions only) */
+  steps?: StepRecord[];
+}
 
 /** Cloud API URL from environment */
 const cloudUrl = process.env.HANDS_CLOUD_URL ?? "https://api.hands.app";
@@ -42,7 +50,7 @@ async function executeAction(
   input: unknown,
   secrets: Record<string, string>,
   authToken?: string
-): Promise<ActionRun> {
+): Promise<WorkflowActionRun> {
   const runId = generateRunId();
   const startTime = Date.now();
 
@@ -88,10 +96,26 @@ async function executeAction(
     }
 
     let output: unknown;
+    let steps: StepRecord[] | undefined;
+
     try {
-      // Execute the action
       ctx.log.info(`Starting action: ${action.name}`);
-      output = await action.run(validatedInput, ctx);
+
+      // Check if this is a workflow action or run action
+      if (isWorkflowAction(action)) {
+        // Execute as workflow with step recording
+        const workflowResult = await executeWorkflow({
+          action,
+          input: validatedInput as import("@hands/core/primitives").Serializable,
+          ctx,
+          runId,
+        });
+        output = workflowResult.result;
+        steps = workflowResult.steps;
+      } else {
+        // Execute as simple run action
+        output = await action.run(validatedInput, ctx);
+      }
     } finally {
       // Restore original process.env values
       for (const key of Object.keys(secrets)) {
@@ -113,6 +137,7 @@ async function executeAction(
       status: "success",
       input: validatedInput,
       output,
+      steps,
       startedAt: new Date(startTime).toISOString(),
       finishedAt: new Date(endTime).toISOString(),
       durationMs: endTime - startTime,
@@ -152,6 +177,8 @@ export const actionRoutes = [
         triggers: definition.triggers ?? ["manual"],
         schedule: definition.schedule,
         secrets: definition.secrets,
+        // Indicate if this action uses workflow (for UI)
+        isWorkflow: isWorkflowAction(definition),
       }));
 
       return new Response(JSON.stringify(actionList), {

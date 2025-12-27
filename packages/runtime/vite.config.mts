@@ -184,6 +184,7 @@ export default defineConfig({
       "@hands/runtime": path.resolve(__dirname, "src/types/index.ts"),
       "@hands/pages": path.join(workbookPath, ".hands/pages/index.tsx"),
       "@hands/actions": path.join(workbookPath, ".hands/actions/index.ts"),
+      "@hands/actions/workflows": path.join(workbookPath, ".hands/actions/workflows.ts"),
       // Shared deps from runtime (workbook imports these but doesn't install them)
       "platejs/static": path.resolve(__dirname, "node_modules/platejs/dist/static/index.js"),
       "platejs/react": path.resolve(__dirname, "node_modules/platejs/dist/react/index.js"),

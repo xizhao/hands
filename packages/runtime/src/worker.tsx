@@ -11,9 +11,14 @@ import { Database } from "./db/dev";
 import { dbRoutes } from "./db/routes";
 import { seedRoutes } from "./db/seed-routes";
 import { actionRoutes } from "./actions/routes";
+import { workflowRoutes } from "./actions/workflow-routes";
 
 // Export Durable Objects for wrangler
 export { Database, SyncedStateServer };
+
+// Export workflow classes for wrangler (generated at build time)
+// This re-export makes them available for CF to instantiate
+export * from "@hands/actions/workflows";
 
 export const setCommonHeaders =
   (): RouteMiddleware =>
@@ -66,8 +71,10 @@ export default defineApp([
   ...(import.meta.env.VITE_IS_DEV_SERVER ? dbRoutes : []),
   // Seed routes (production - for deploying local DB state)
   ...seedRoutes,
-  // Action routes (dev only - for action execution)
+  // Action routes (dev only - for action execution via local executor)
   ...(import.meta.env.VITE_IS_DEV_SERVER ? actionRoutes : []),
+  // Workflow routes (production - for CF Workflow execution)
+  ...(!import.meta.env.VITE_IS_DEV_SERVER ? workflowRoutes : []),
   // Root route - redirect to first page or return health check if no pages
   route("/", () => {
     if (firstPageId) {

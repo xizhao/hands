@@ -167,6 +167,7 @@ export type { DeployRouter } from "./routers/deploy.js";
 export type {
   ActionRunRecord,
   ActionRunLog,
+  StepRecord,
   UiState,
   RecentItem,
 } from "../db/editor-db.js";

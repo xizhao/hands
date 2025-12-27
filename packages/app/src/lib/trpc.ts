@@ -34,6 +34,7 @@ export type { AppRouter };
 export type {
   ActionRunRecord,
   ActionRunLog,
+  StepRecord,
   UiState,
   RecentItem,
 } from "@hands/workbook-server/trpc";
