@@ -1,44 +1,33 @@
 #!/usr/bin/env bun
 
 /**
- * Hands Runtime - Instant streaming dev server
+ * Hands Workbook Server
+ *
+ * Lightweight server for workbook operations with direct SQLite database access.
  *
  * Usage:
- *   hands-runtime --workbook-id=<id> --workbook-dir=<dir> [--port=<port>]
- *   hands-runtime check <workbook-dir> [--json] [--strict]
- *
- * Architecture:
- *   1. Immediately starts HTTP server (manifest available instantly)
- *   2. Boots Vite worker in background (SQLite via Durable Objects)
- *   3. Progressive readiness - manifest first, then RSC runtime
+ *   hands-workbook-server --workbook-id=<id> --workbook-dir=<dir> [--port=<port>]
+ *   hands-workbook-server check <workbook-dir> [--json] [--strict]
  */
 
 import { gateway } from "@ai-sdk/gateway";
 import { generateText } from "ai";
 import { Hono } from "hono";
 import { cors } from "hono/cors";
-import { type ChildProcess, spawn } from "node:child_process";
 import {
   existsSync,
   type FSWatcher,
   readdirSync,
   readFileSync,
-  rmSync,
   watch,
 } from "node:fs";
 import { join } from "node:path";
 import { stopScheduler } from "./actions/index.js";
-import { getRuntimeSourcePath } from "./config/index.js";
-import {
-  createPageRegistry,
-  PageRegistry,
-  type PageRenderContext,
-  renderPage,
-} from "./pages/index.js";
-import { PORTS, waitForPortFree } from "./ports.js";
+import { closeWorkbookDb, getWorkbookDb, getSchema } from "./db/workbook-db.js";
+import { createPageRegistry, PageRegistry } from "./pages/index.js";
+import { PORTS } from "./ports.js";
 import { getDbSubscriptionManager } from "./sqlite/trpc.js";
 import { registerTRPCRoutes } from "./trpc/index.js";
-import { discoverWorkbook } from "./workbook/discovery.js";
 
 interface RuntimeConfig {
   workbookId: string;
@@ -47,22 +36,13 @@ interface RuntimeConfig {
 }
 
 interface RuntimeState {
-  /** Runtime ready - includes SQLite database */
-  rscReady: boolean;
-  rscPort: number | null;
-  rscProc: ChildProcess | null;
-  rscError: string | null;
   fileWatchers: FSWatcher[];
   buildErrors: string[];
   pageRegistry: PageRegistry | null;
 }
 
-// Global state for progressive readiness
+// Global state
 const state: RuntimeState = {
-  rscReady: false,
-  rscPort: null,
-  rscProc: null,
-  rscError: null,
   buildErrors: [],
   fileWatchers: [],
   pageRegistry: null,
@@ -70,7 +50,6 @@ const state: RuntimeState = {
 
 /**
  * Format a block source file with Biome + TypeScript import organization
- * Runs silently - errors are logged but don't fail the operation
  */
 async function formatBlockSource(
   filePath: string,
@@ -134,7 +113,7 @@ async function formatBlockSource(
     spawnSync(biomeCmd, ["check", "--write", filePath], { cwd: workbookDir });
     return true;
   } catch (err) {
-    console.error("[runtime] Format failed:", err);
+    console.error("[server] Format failed:", err);
     return false;
   }
 }
@@ -152,7 +131,7 @@ function parseArgs(): RuntimeConfig {
 
   if (!args.workbook_id || !args.workbook_dir) {
     console.error(
-      "Usage: hands-runtime --workbook-id=<id> --workbook-dir=<dir> [--port=<port>]"
+      "Usage: hands-workbook-server --workbook-id=<id> --workbook-dir=<dir> [--port=<port>]"
     );
     process.exit(1);
   }
@@ -191,9 +170,8 @@ function walkDirectory(
   const entries = readdirSync(dir, { withFileTypes: true });
   for (const entry of entries) {
     const fullPath = join(dir, entry.name);
-    const relativePath = fullPath.substring(baseDir.length + 1); // +1 for leading slash
+    const relativePath = fullPath.substring(baseDir.length + 1);
     if (entry.isDirectory()) {
-      // Skip hidden directories and node_modules
       if (!entry.name.startsWith(".") && entry.name !== "node_modules") {
         walkDirectory(fullPath, baseDir, callback);
       }
@@ -207,7 +185,6 @@ function walkDirectory(
  * Generate default block source code
  */
 function generateDefaultBlockSource(blockId: string): string {
-  // Convert blockId to PascalCase for function name
   const functionName = blockId
     .split(/[-_]/)
     .map((word) => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
@@ -250,7 +227,6 @@ function getBlockIds(blocksDir: string): Set<string> {
       (filename.endsWith(".tsx") || filename.endsWith(".ts")) &&
       !filename.startsWith("_")
     ) {
-      // ID is relative path without extension (e.g., "ui/email-events")
       const id = relativePath.replace(/\.tsx?$/, "");
       blockIds.add(id);
     }
@@ -259,49 +235,11 @@ function getBlockIds(blocksDir: string): Set<string> {
   return blockIds;
 }
 
-// Track known block IDs for restart detection
+// Track known block IDs
 let knownBlockIds: Set<string> = new Set();
 
-// Guard against concurrent block reloads
-let blockReloadPending = false;
-let blockReloadTimer: ReturnType<typeof setTimeout> | null = null;
-
 /**
- * Handle block file changes.
- *
- * The runtime package uses import.meta.glob for dynamic block discovery,
- * so Vite handles HMR automatically. We just log the event.
- */
-async function hotReloadBlocks(_config: RuntimeConfig) {
-  // Debounce rapid reload requests (fs.watch can fire multiple times)
-  if (blockReloadTimer) {
-    clearTimeout(blockReloadTimer);
-  }
-
-  blockReloadTimer = setTimeout(async () => {
-    // Guard against concurrent reloads
-    if (blockReloadPending) {
-      return;
-    }
-
-    blockReloadPending = true;
-
-    try {
-      // Runtime package uses import.meta.glob for dynamic discovery
-      // Vite's file watcher handles HMR automatically
-    } finally {
-      blockReloadPending = false;
-      blockReloadTimer = null;
-    }
-  }, 200);
-}
-
-/**
- * Start watching blocks/ directory for changes
- * Uses fs.watch for real-time updates (not polling)
- * - Triggers pgtyped type generation on .ts/.tsx file changes
- * - Restarts Vite when blocks are added/removed (static imports require rebuild)
- * - Edits to existing blocks use Vite's HMR (no restart needed)
+ * Start watching blocks/ and pages/ directories for changes
  */
 function startFileWatcher(config: RuntimeConfig) {
   const { workbookDir } = config;
@@ -310,7 +248,7 @@ function startFileWatcher(config: RuntimeConfig) {
   // Initialize known block IDs
   knownBlockIds = getBlockIds(blocksDir);
   console.log(
-    `[runtime] Initial blocks: ${[...knownBlockIds].join(", ") || "(none)"}`
+    `[server] Initial blocks: ${[...knownBlockIds].join(", ") || "(none)"}`
   );
 
   // Watch blocks directory
@@ -324,10 +262,8 @@ function startFileWatcher(config: RuntimeConfig) {
             filename &&
             (filename.endsWith(".ts") || filename.endsWith(".tsx"))
           ) {
-            // Skip .types.ts files to avoid infinite loops
             if (filename.endsWith(".types.ts")) return;
 
-            // Check if block list changed (add/remove)
             const currentBlockIds = getBlockIds(blocksDir);
             const added = [...currentBlockIds].filter(
               (id) => !knownBlockIds.has(id)
@@ -338,26 +274,18 @@ function startFileWatcher(config: RuntimeConfig) {
 
             if (added.length > 0 || removed.length > 0) {
               if (added.length > 0)
-                console.log(`[runtime] Blocks added: ${added.join(", ")}`);
+                console.log(`[server] Blocks added: ${added.join(", ")}`);
               if (removed.length > 0)
-                console.log(`[runtime] Blocks removed: ${removed.join(", ")}`);
-
-              // Update known blocks
+                console.log(`[server] Blocks removed: ${removed.join(", ")}`);
               knownBlockIds = currentBlockIds;
-
-              // Hot-reload blocks via HMR (or fallback to restart)
-              await hotReloadBlocks(config);
             }
-            // File edits are handled by Vite HMR automatically
           }
         }
       );
       state.fileWatchers.push(watcher);
-      console.log(
-        "[runtime] Watching blocks/ for changes (restarts Vite on add/remove)"
-      );
+      console.log("[server] Watching blocks/ for changes");
     } catch (err) {
-      console.warn("[runtime] Could not watch blocks/:", err);
+      console.warn("[server] Could not watch blocks/:", err);
     }
   }
 
@@ -375,27 +303,26 @@ function startFileWatcher(config: RuntimeConfig) {
               filename.endsWith(".mdx") ||
               filename.endsWith(".plate.json"))
           ) {
-            // Reload page registry to pick up changes
             if (state.pageRegistry) {
               try {
                 await state.pageRegistry.load();
               } catch (err) {
-                console.warn("[runtime] Failed to reload page registry:", err);
+                console.warn("[server] Failed to reload page registry:", err);
               }
             }
           }
         }
       );
       state.fileWatchers.push(pagesWatcher);
-      console.log("[runtime] Watching pages/ for changes");
+      console.log("[server] Watching pages/ for changes");
     } catch (err) {
-      console.warn("[runtime] Could not watch pages/:", err);
+      console.warn("[server] Could not watch pages/:", err);
     }
   }
 }
 
 /**
- * Create the Hono app for instant serving
+ * Create the Hono app
  */
 function createApp(config: RuntimeConfig) {
   const app = new Hono();
@@ -403,79 +330,14 @@ function createApp(config: RuntimeConfig) {
   // CORS
   app.use("/*", cors());
 
-  // ============================================
-  // Page Rendering Route (kept as HTTP - returns HTML)
-  // ============================================
-
-  // Render a page (server-side)
-  app.get("/pages/:path{.+}", async (c) => {
-    if (!state.pageRegistry) {
-      return c.html(
-        "<html><body><h1>Page registry not initialized</h1></body></html>",
-        503
-      );
-    }
-
-    const pagePath = c.req.param("path");
-    const route = pagePath.startsWith("/") ? pagePath : `/${pagePath}`;
-    const page = state.pageRegistry.match(route);
-
-    if (!page) {
-      return c.html("<html><body><h1>Page not found</h1></body></html>", 404);
-    }
-
-    // Create render context
-    const renderContext: PageRenderContext = {
-      pagesDir: state.pageRegistry.getPagesDir(),
-      blockServerPort: state.rscPort ?? undefined,
-      useRsc: state.rscReady,
-    };
-
-    try {
-      const result = await renderPage({
-        pagePath: page.path,
-        context: renderContext,
-      });
-
-      if (result.error) {
-        console.warn(`[runtime] Page render warning: ${result.error}`);
-      }
-
-      return c.html(result.html);
-    } catch (err) {
-      console.error("[runtime] Page render failed:", err);
-      return c.html(
-        `<html><body><h1>Render Error</h1><pre>${
-          err instanceof Error ? err.message : String(err)
-        }</pre></body></html>`,
-        500
-      );
-    }
+  // Health endpoint
+  app.get("/health", (c) => {
+    return c.json({ ready: true, status: "ready" });
   });
 
-  // ============================================
-  // Utility Routes (kept as HTTP)
-  // ============================================
-
-  // Get block context (for Vite server to use)
-  app.get("/ctx", async (c) => {
-    if (!state.rscReady) {
-      return c.json({ error: "Runtime not ready", booting: true }, 503);
-    }
-    // Context is ready - Vite will call this to check
-    return c.json({ ready: true });
-  });
-
-  // ============================================
   // Database Change Subscription (SSE)
-  // ============================================
   app.get("/db/subscribe", async (c) => {
-    if (!state.rscReady || !state.rscPort) {
-      return c.json({ error: "Database not ready" }, 503);
-    }
-
-    const runtimeUrl = `http://localhost:${state.rscPort}`;
-    const manager = getDbSubscriptionManager(runtimeUrl);
+    const manager = getDbSubscriptionManager(config.workbookDir);
     const stream = manager.createStream();
 
     return new Response(stream, {
@@ -488,17 +350,14 @@ function createApp(config: RuntimeConfig) {
     });
   });
 
-  // Stop endpoint for graceful shutdown (used by Tauri)
+  // Stop endpoint for graceful shutdown
   app.post("/stop", async (c) => {
-    console.log("[runtime] Stop requested via /stop endpoint");
-    // Trigger shutdown after responding
+    console.log("[server] Stop requested via /stop endpoint");
     setTimeout(() => process.exit(0), 100);
     return c.json({ success: true });
   });
 
-  // ============================================
-  // Media Upload (images/videos/audio to public/)
-  // ============================================
+  // Media Upload
   app.post("/upload", async (c) => {
     try {
       const formData = await c.req.formData();
@@ -508,7 +367,6 @@ function createApp(config: RuntimeConfig) {
         return c.json({ error: "No file provided" }, 400);
       }
 
-      // Only allow media files
       const allowedTypes = ["image/", "video/", "audio/"];
       const isMedia = allowedTypes.some((type) => file.type.startsWith(type));
       if (!isMedia) {
@@ -518,34 +376,30 @@ function createApp(config: RuntimeConfig) {
         );
       }
 
-      // Create public directory if it doesn't exist
       const publicDir = join(config.workbookDir, "public");
       if (!existsSync(publicDir)) {
         const { mkdirSync } = await import("node:fs");
         mkdirSync(publicDir, { recursive: true });
       }
 
-      // Generate unique filename to avoid collisions
       const ext = file.name.split(".").pop() || "";
       const timestamp = Date.now();
       const randomId = Math.random().toString(36).substring(2, 8);
       const safeOriginalName = file.name
-        .replace(/\.[^/.]+$/, "") // remove extension
-        .replace(/[^a-zA-Z0-9-_]/g, "-") // sanitize
-        .substring(0, 50); // limit length
+        .replace(/\.[^/.]+$/, "")
+        .replace(/[^a-zA-Z0-9-_]/g, "-")
+        .substring(0, 50);
       const filename = `${safeOriginalName}-${timestamp}-${randomId}.${ext}`;
 
-      // Write file
       const filePath = join(publicDir, filename);
       const buffer = await file.arrayBuffer();
       const { writeFileSync } = await import("node:fs");
       writeFileSync(filePath, Buffer.from(buffer));
 
       console.log(
-        `[runtime] Uploaded media: ${filename} (${file.type}, ${file.size} bytes)`
+        `[server] Uploaded media: ${filename} (${file.type}, ${file.size} bytes)`
       );
 
-      // Return URL relative to public/
       return c.json({
         url: `/public/${filename}`,
         name: file.name,
@@ -553,12 +407,12 @@ function createApp(config: RuntimeConfig) {
         type: file.type,
       });
     } catch (err) {
-      console.error("[runtime] Upload failed:", err);
+      console.error("[server] Upload failed:", err);
       return c.json({ error: "Upload failed" }, 500);
     }
   });
 
-  // Serve public/ directory for uploaded media
+  // Serve public/ directory
   app.get("/public/*", async (c) => {
     const filePath = c.req.path.replace("/public/", "");
     const fullPath = join(config.workbookDir, "public", filePath);
@@ -571,7 +425,6 @@ function createApp(config: RuntimeConfig) {
       const { readFileSync } = await import("node:fs");
       const content = readFileSync(fullPath);
 
-      // Determine content type
       const ext = filePath.split(".").pop()?.toLowerCase() || "";
       const mimeTypes: Record<string, string> = {
         jpg: "image/jpeg",
@@ -596,14 +449,12 @@ function createApp(config: RuntimeConfig) {
         },
       });
     } catch (err) {
-      console.error("[runtime] Failed to serve file:", err);
+      console.error("[server] Failed to serve file:", err);
       return c.json({ error: "Failed to serve file" }, 500);
     }
   });
 
-  // ============================================
-  // AI Copilot Route (FIM completion for editor)
-  // ============================================
+  // AI Copilot Route
   app.post("/api/ai/copilot", async (c) => {
     try {
       const body = await c.req.json();
@@ -611,7 +462,6 @@ function createApp(config: RuntimeConfig) {
       let prefix = body.prefix;
       let suffix = body.suffix;
 
-      // CopilotPlugin sends getPrompt result as 'prompt' - parse if JSON
       let title: string | undefined;
       let description: string | undefined;
       if (prompt && prefix === undefined) {
@@ -622,7 +472,7 @@ function createApp(config: RuntimeConfig) {
             suffix = parsed.suffix ?? "";
             title = parsed.title;
             description = parsed.description;
-            prompt = null; // Use FIM mode
+            prompt = null;
           }
         } catch {
           // Not JSON, use as regular prompt
@@ -634,31 +484,28 @@ function createApp(config: RuntimeConfig) {
         console.error("[copilot] HANDS_AI_API_KEY not set");
         return c.json({ error: "HANDS_AI_API_KEY not set" }, 500);
       }
-      // Gateway SDK uses AI_GATEWAY_API_KEY
       process.env.AI_GATEWAY_API_KEY = apiKey;
 
-      // Fetch current schema for context
-      const runtimeUrl =
-        state.rscReady && state.rscPort
-          ? `http://localhost:${state.rscPort}`
-          : null;
-
+      // Fetch schema from local database
       let schema: Array<{
         table_name: string;
         columns: Array<{ name: string; type: string; nullable: boolean }>;
       }> = [];
-      if (runtimeUrl) {
-        try {
-          const schemaRes = await fetch(`${runtimeUrl}/db/schema`);
-          if (schemaRes.ok) {
-            schema = await schemaRes.json();
-          }
-        } catch {
-          // Schema fetch failed - proceed without it
-        }
+      try {
+        const db = getWorkbookDb(config.workbookDir);
+        const schemaResult = getSchema(db);
+        schema = schemaResult.tables.map((t) => ({
+          table_name: t.name,
+          columns: t.columns.map((col) => ({
+            name: col.name,
+            type: col.type,
+            nullable: col.nullable,
+          })),
+        }));
+      } catch {
+        // Schema fetch failed - proceed without it
       }
 
-      // STATIC system prompt (cacheable - put all static content here)
       const systemPrompt = `You are a precision MDX autocompletion engine for a data dashboard.
 
 ## Output Rules
@@ -682,8 +529,6 @@ function createApp(config: RuntimeConfig) {
 - SQL must be valid for the provided schema.
 - Return "0" if no sensible completion.`;
 
-      // DYNAMIC user prompt (schema + context - structured for partial caching)
-      // Schema first (changes rarely), then prefix/suffix (changes often)
       const schemaContext =
         schema.length > 0
           ? schema
@@ -694,7 +539,6 @@ function createApp(config: RuntimeConfig) {
               .join("\n")
           : "No tables yet";
 
-      // Build page context section if available
       const pageContext =
         title || description
           ? `## Page\nTitle: ${title || "Untitled"}\n${
@@ -730,12 +574,11 @@ ${(suffix || "").slice(0, 100)}
         prompt: userPrompt,
         maxOutputTokens: 400,
         temperature: 0,
-        abortSignal: AbortSignal.timeout(10000), // 10s timeout
+        abortSignal: AbortSignal.timeout(10000),
       });
       const latency = performance.now() - start;
       console.log(`[copilot] Latency: ${latency.toFixed(0)}ms`);
 
-      // Return JSON with `text` field (required by @platejs/ai CopilotPlugin)
       return c.json({ text: result.text || "" });
     } catch (err) {
       console.error("[copilot] Error:", err);
@@ -743,34 +586,19 @@ ${(suffix || "").slice(0, 100)}
     }
   });
 
-  // ============================================
-  // tRPC Routes (type-safe API)
-  // ============================================
+  // tRPC Routes
   registerTRPCRoutes(app, {
     workbookId: config.workbookId,
     workbookDir: config.workbookDir,
-    // SQLite database lives in the runtime - provide runtime URL
-    getRuntimeUrl: () =>
-      state.rscReady && state.rscPort
-        ? `http://localhost:${state.rscPort}`
-        : null,
-    isDbReady: () => state.rscReady,
     getState: () => ({
-      rscReady: state.rscReady,
-      rscPort: state.rscPort,
-      rscError: state.rscError,
       buildErrors: state.buildErrors,
     }),
-    // Config from package.json
     getExternalConfig: async () => getConfig(config.workbookDir),
     formatBlockSource: (filePath: string) =>
       formatBlockSource(filePath, config.workbookDir),
     generateDefaultBlockSource,
     onSchemaChange: async () => {
-      // Schema regeneration is handled by the runtime
-      console.log(
-        "[runtime] Schema changed - runtime will handle regeneration"
-      );
+      console.log("[server] Schema changed");
     },
     getPageRegistry: () => state.pageRegistry,
     createPageRegistry: (pagesDir: string) => {
@@ -779,713 +607,49 @@ ${(suffix || "").slice(0, 100)}
     },
   });
 
-  // Serve client modules for RSC hydration
-  // These are "use client" components that need to be loaded client-side
-  // Path format: /client-modules/ui/counter-button.tsx -> blocks/ui/counter-button.tsx
-  app.get("/client-modules/*", async (c) => {
-    if (!state.rscReady || !state.rscPort) {
-      const error = state.rscError || "Block server not ready";
-      const booting = !state.rscError;
-      return c.json({ error, booting, blockServerError: state.rscError }, 503);
-    }
-
-    // Extract the module path from the request
-    const modulePath = c.req.path.replace("/client-modules", "");
-
-    // Request this module from Vite using the fs prefix for absolute paths
-    // Vite's dev server can serve files outside the root using /@fs/ prefix
-    const blocksDir = join(config.workbookDir, "blocks");
-    const absolutePath = join(blocksDir, modulePath);
-    const viteUrl = `http://localhost:${state.rscPort}/@fs${absolutePath}`;
-
-    try {
-      const response = await fetch(viteUrl, {
-        headers: {
-          // Vite needs these headers to know we want ESM
-          Accept: "application/javascript, */*",
-        },
-      });
-
-      if (!response.ok) {
-        console.error(
-          `[runtime] Failed to fetch client module: ${viteUrl} -> ${response.status}`
-        );
-        return c.json({ error: `Module not found: ${modulePath}` }, 404);
-      }
-
-      // Get the module content as text so we can rewrite imports
-      let content = await response.text();
-
-      // Rewrite imports to be absolute URLs pointing to this runtime
-      // This is necessary because the module will be loaded from a different origin (editor)
-      const runtimeOrigin = `http://localhost:${config.port}`;
-
-      // Rewrite Vite's special paths to go through our proxy
-      // /@vite/client, /@react-refresh, /node_modules/.vite/deps/*, etc.
-      // Include query strings like ?v=xxx
-      content = content.replace(
-        /from\s+["'](\/[^"']+)["']/g,
-        (_match, path) => {
-          return `from "${runtimeOrigin}/vite-proxy${path}"`;
-        }
-      );
-      content = content.replace(
-        /import\s+["'](\/[^"']+)["']/g,
-        (_match, path) => {
-          return `import "${runtimeOrigin}/vite-proxy${path}"`;
-        }
-      );
-      // Also handle import() calls
-      content = content.replace(
-        /import\(["'](\/[^"']+)["']\)/g,
-        (_match, path) => {
-          return `import("${runtimeOrigin}/vite-proxy${path}")`;
-        }
-      );
-
-      // Return transformed JavaScript module
-      const headers = new Headers();
-      // Set correct content type for ES module
-      headers.set("Content-Type", "application/javascript; charset=utf-8");
-      // Allow CORS for cross-origin module loading
-      headers.set("Access-Control-Allow-Origin", "*");
-
-      return new Response(content, {
-        status: response.status,
-        headers,
-      });
-    } catch (err) {
-      console.error(`[runtime] Client module proxy failed:`, err);
-      return c.json({ error: `Module proxy failed: ${String(err)}` }, 502);
-    }
-  });
-
-  // Proxy Vite internal routes for client module dependencies
-  // Handles: /@vite/client, /@react-refresh, /node_modules/.vite/deps/*, /@fs/*
-  app.get("/vite-proxy/*", async (c) => {
-    if (!state.rscReady || !state.rscPort) {
-      const error = state.rscError || "Block server not ready";
-      const booting = !state.rscError;
-      return c.json({ error, booting, blockServerError: state.rscError }, 503);
-    }
-
-    // Extract the path after /vite-proxy
-    const vitePath = c.req.path.replace("/vite-proxy", "");
-
-    // CRITICAL: Intercept React deps and return shims that use window.__HANDS_REACT__
-    // This prevents "multiple React copies" errors when loading client components cross-origin.
-    // The editor must expose window.__HANDS_REACT__ with { React, ReactDOM, ReactJSXRuntime }
-    const reactShims: Record<string, string> = {
-      // Main React export - re-export all from window.__HANDS_REACT__.React
-      "react.js": `
-const R = window.__HANDS_REACT__?.React;
-if (!R) throw new Error("[hands-runtime] window.__HANDS_REACT__.React not found - editor must expose React");
-export default R;
-export const useState = R.useState;
-export const useEffect = R.useEffect;
-export const useCallback = R.useCallback;
-export const useMemo = R.useMemo;
-export const useRef = R.useRef;
-export const useContext = R.useContext;
-export const useReducer = R.useReducer;
-export const useLayoutEffect = R.useLayoutEffect;
-export const useImperativeHandle = R.useImperativeHandle;
-export const useDebugValue = R.useDebugValue;
-export const useDeferredValue = R.useDeferredValue;
-export const useTransition = R.useTransition;
-export const useId = R.useId;
-export const useSyncExternalStore = R.useSyncExternalStore;
-export const useInsertionEffect = R.useInsertionEffect;
-export const createContext = R.createContext;
-export const createElement = R.createElement;
-export const cloneElement = R.cloneElement;
-export const isValidElement = R.isValidElement;
-export const Children = R.Children;
-export const Fragment = R.Fragment;
-export const StrictMode = R.StrictMode;
-export const Suspense = R.Suspense;
-export const lazy = R.lazy;
-export const memo = R.memo;
-export const forwardRef = R.forwardRef;
-export const startTransition = R.startTransition;
-export const Component = R.Component;
-export const PureComponent = R.PureComponent;
-export const createRef = R.createRef;
-export const use = R.use;
-export const useOptimistic = R.useOptimistic;
-export const useActionState = R.useActionState;
-export const cache = R.cache;
-`,
-      // react-dom
-      "react-dom.js": `
-const RD = window.__HANDS_REACT__?.ReactDOM;
-if (!RD) throw new Error("[hands-runtime] window.__HANDS_REACT__.ReactDOM not found");
-export default RD;
-export const createRoot = RD.createRoot;
-export const hydrateRoot = RD.hydrateRoot;
-export const createPortal = RD.createPortal;
-export const flushSync = RD.flushSync;
-export const unstable_batchedUpdates = RD.unstable_batchedUpdates;
-`,
-      // JSX runtime
-      "react_jsx-runtime.js": `
-const JSX = window.__HANDS_REACT__?.ReactJSXRuntime;
-if (!JSX) throw new Error("[hands-runtime] window.__HANDS_REACT__.ReactJSXRuntime not found");
-export default JSX;
-export const jsx = JSX.jsx;
-export const jsxs = JSX.jsxs;
-export const Fragment = JSX.Fragment;
-`,
-      // JSX dev runtime - uses ReactJSXDevRuntime which has jsxDEV
-      "react_jsx-dev-runtime.js": `
-const JSX = window.__HANDS_REACT__?.ReactJSXDevRuntime;
-if (!JSX) throw new Error("[hands-runtime] window.__HANDS_REACT__.ReactJSXDevRuntime not found");
-export default JSX;
-export const jsx = JSX.jsx;
-export const jsxs = JSX.jsxs;
-export const jsxDEV = JSX.jsxDEV;
-export const Fragment = JSX.Fragment;
-`,
-    };
-
-    // Check if this is a React dep request
-    const depMatch = vitePath.match(
-      /\/node_modules\/\.vite\/deps\/(react[^?]*)/
-    );
-    if (depMatch) {
-      const depName = depMatch[1];
-      const shim = reactShims[depName];
-      if (shim) {
-        console.debug(`[runtime] Serving React shim for: ${depName}`);
-        const headers = new Headers();
-        headers.set("Content-Type", "application/javascript; charset=utf-8");
-        headers.set("Access-Control-Allow-Origin", "*");
-        headers.set("Cache-Control", "no-cache");
-        return new Response(shim.trim(), { status: 200, headers });
-      }
-    }
-
-    const viteUrl = `http://localhost:${state.rscPort}${vitePath}`;
-
-    try {
-      const response = await fetch(viteUrl, {
-        headers: {
-          Accept: "application/javascript, */*",
-        },
-      });
-
-      if (!response.ok) {
-        console.error(
-          `[runtime] Failed to fetch vite dep: ${viteUrl} -> ${response.status}`
-        );
-        return c.json({ error: `Vite dependency not found: ${vitePath}` }, 404);
-      }
-
-      // Get the content as text to potentially rewrite nested imports
-      let content = await response.text();
-
-      // CRITICAL: If this chunk contains React or ReactDOM internals, replace with shim
-      // to avoid "multiple copies of React" errors.
-      if (vitePath.includes("chunk-")) {
-        const isReactChunk =
-          content.includes("node_modules/react/cjs/react.development.js") ||
-          content.includes("node_modules/react/cjs/react.production");
-        const isReactDOMChunk =
-          content.includes(
-            "node_modules/react-dom/cjs/react-dom.development.js"
-          ) ||
-          content.includes("node_modules/react-dom/cjs/react-dom.production");
-
-        if (isReactChunk) {
-          console.debug(
-            `[runtime] Detected React chunk, replacing with shim: ${vitePath}`
-          );
-          const shimContent = `
-// Shim: React chunk -> window.__HANDS_REACT__
-const R = window.__HANDS_REACT__?.React;
-if (!R) throw new Error("[hands-runtime] React chunk requires window.__HANDS_REACT__");
-
-// esbuild CJS interop - other chunks import require_react from this chunk
-export function require_react() { return R; }
-
-export { R as exports };
-export default R;
-export const useState = R.useState;
-export const useEffect = R.useEffect;
-export const useCallback = R.useCallback;
-export const useMemo = R.useMemo;
-export const useRef = R.useRef;
-export const useContext = R.useContext;
-export const useReducer = R.useReducer;
-export const useLayoutEffect = R.useLayoutEffect;
-export const useImperativeHandle = R.useImperativeHandle;
-export const useDebugValue = R.useDebugValue;
-export const useDeferredValue = R.useDeferredValue;
-export const useTransition = R.useTransition;
-export const useId = R.useId;
-export const useSyncExternalStore = R.useSyncExternalStore;
-export const useInsertionEffect = R.useInsertionEffect;
-export const createContext = R.createContext;
-export const createElement = R.createElement;
-export const cloneElement = R.cloneElement;
-export const isValidElement = R.isValidElement;
-export const Children = R.Children;
-export const Fragment = R.Fragment;
-export const StrictMode = R.StrictMode;
-export const Suspense = R.Suspense;
-export const lazy = R.lazy;
-export const memo = R.memo;
-export const forwardRef = R.forwardRef;
-export const startTransition = R.startTransition;
-export const Component = R.Component;
-export const PureComponent = R.PureComponent;
-export const createRef = R.createRef;
-export const use = R.use;
-export const useOptimistic = R.useOptimistic;
-export const useActionState = R.useActionState;
-export const cache = R.cache;
-export const __SECRET_INTERNALS_DO_NOT_USE_OR_YOU_WILL_BE_FIRED = R.__SECRET_INTERNALS_DO_NOT_USE_OR_YOU_WILL_BE_FIRED;
-`;
-          const headers = new Headers();
-          headers.set("Content-Type", "application/javascript; charset=utf-8");
-          headers.set("Access-Control-Allow-Origin", "*");
-          headers.set("Cache-Control", "no-cache");
-          return new Response(shimContent.trim(), { status: 200, headers });
-        }
-
-        if (isReactDOMChunk) {
-          console.debug(
-            `[runtime] Detected ReactDOM chunk, replacing with shim: ${vitePath}`
-          );
-          const shimContent = `
-// Shim: ReactDOM chunk -> window.__HANDS_REACT__
-const R = window.__HANDS_REACT__?.React;
-const RD = window.__HANDS_REACT__?.ReactDOM;
-if (!RD) throw new Error("[hands-runtime] ReactDOM chunk requires window.__HANDS_REACT__");
-
-// esbuild CJS interop - other chunks import these from this chunk
-export function require_react() { return R; }
-export function require_react_dom() { return RD; }
-export function require_react_dom_development() { return RD; }
-
-export { RD as exports };
-export default RD;
-export const createRoot = RD.createRoot;
-export const hydrateRoot = RD.hydrateRoot;
-export const createPortal = RD.createPortal;
-export const flushSync = RD.flushSync;
-export const unstable_batchedUpdates = RD.unstable_batchedUpdates;
-export const version = RD.version;
-export const __SECRET_INTERNALS_DO_NOT_USE_OR_YOU_WILL_BE_FIRED = RD.__SECRET_INTERNALS_DO_NOT_USE_OR_YOU_WILL_BE_FIRED;
-`;
-          const headers = new Headers();
-          headers.set("Content-Type", "application/javascript; charset=utf-8");
-          headers.set("Access-Control-Allow-Origin", "*");
-          headers.set("Cache-Control", "no-cache");
-          return new Response(shimContent.trim(), { status: 200, headers });
-        }
-      }
-
-      // Rewrite any nested imports in Vite deps to go through our proxy
-      const runtimeOrigin = `http://localhost:${config.port}`;
-      content = content.replace(
-        /from\s+["'](\/[^"']+)["']/g,
-        (_match, path) => {
-          return `from "${runtimeOrigin}/vite-proxy${path}"`;
-        }
-      );
-      content = content.replace(
-        /import\s+["'](\/[^"']+)["']/g,
-        (_match, path) => {
-          return `import "${runtimeOrigin}/vite-proxy${path}"`;
-        }
-      );
-      content = content.replace(
-        /import\(["'](\/[^"']+)["']\)/g,
-        (_match, path) => {
-          return `import("${runtimeOrigin}/vite-proxy${path}")`;
-        }
-      );
-
-      const headers = new Headers();
-      headers.set("Content-Type", "application/javascript; charset=utf-8");
-      headers.set("Access-Control-Allow-Origin", "*");
-
-      return new Response(content, {
-        status: response.status,
-        headers,
-      });
-    } catch (err) {
-      console.error(`[runtime] Vite proxy failed:`, err);
-      return c.json({ error: `Vite proxy failed: ${String(err)}` }, 502);
-    }
-  });
-
-  // Proxy tunnel metadata from RSC runtime
-  app.get("/__hands__", async (c) => {
-    if (!state.rscReady || !state.rscPort) {
-      return c.json({ publicUrl: null, localUrl: "", status: "connecting" });
-    }
-
-    try {
-      const response = await fetch(
-        `http://localhost:${state.rscPort}/__hands__`,
-        {
-          signal: AbortSignal.timeout(2000),
-        }
-      );
-      const data = await response.json();
-      return c.json(data);
-    } catch {
-      return c.json({
-        publicUrl: null,
-        localUrl: "",
-        status: "error",
-        error: "Failed to fetch tunnel status",
-      });
-    }
-  });
-
-  // Proxy to block server for RSC routes (editor-only)
-  app.all("/_editor/blocks/*", async (c) => {
-    if (!state.rscReady || !state.rscPort) {
-      // Include actual error message if block server crashed (e.g., compilation errors)
-      const error = state.rscError || "Block server not ready";
-      const booting = !state.rscError; // Only "booting" if there's no error
-      return c.json({ error, booting, blockServerError: state.rscError }, 503);
-    }
-
-    const url = new URL(c.req.url);
-    url.host = `localhost:${state.rscPort}`;
-
-    try {
-      const response = await fetch(url.toString(), {
-        method: c.req.method,
-        headers: c.req.raw.headers,
-        body: c.req.method !== "GET" ? await c.req.text() : undefined,
-      });
-
-      // Copy headers but remove transfer-encoding to avoid conflicts
-      // The Node.js server will handle chunked encoding itself
-      const headers = new Headers(response.headers);
-      headers.delete("transfer-encoding");
-
-      return new Response(response.body, {
-        status: response.status,
-        headers,
-      });
-    } catch (err) {
-      return c.json({ error: `Vite proxy failed: ${String(err)}` }, 502);
-    }
-  });
-
-  // Proxy /_client/* to Vite for editor client component loading
-  // The editorPlugin in runtime handles React shimming for cross-origin loading
-  app.all("/_client/*", async (c) => {
-    if (!state.rscReady || !state.rscPort) {
-      const error = state.rscError || "Block server not ready";
-      return c.json({ error }, 503);
-    }
-
-    const url = new URL(c.req.url);
-    url.host = `localhost:${state.rscPort}`;
-
-    try {
-      const response = await fetch(url.toString(), {
-        method: c.req.method,
-        headers: c.req.raw.headers,
-      });
-
-      const headers = new Headers(response.headers);
-      headers.delete("transfer-encoding");
-
-      return new Response(response.body, {
-        status: response.status,
-        headers,
-      });
-    } catch (err) {
-      return c.json({ error: `Vite proxy failed: ${String(err)}` }, 502);
-    }
-  });
-
-  // Proxy RSC component routes to block server
-  // This allows the editor to render arbitrary components via Flight
-  app.all("/rsc/*", async (c) => {
-    if (!state.rscReady || !state.rscPort) {
-      const error = state.rscError || "Block server not ready";
-      const booting = !state.rscError;
-      return c.json({ error, booting, blockServerError: state.rscError }, 503);
-    }
-
-    const url = new URL(c.req.url);
-    url.host = `localhost:${state.rscPort}`;
-
-    try {
-      const response = await fetch(url.toString(), {
-        method: c.req.method,
-        headers: c.req.raw.headers,
-        body: c.req.method !== "GET" ? await c.req.text() : undefined,
-      });
-
-      const headers = new Headers(response.headers);
-      headers.delete("transfer-encoding");
-
-      return new Response(response.body, {
-        status: response.status,
-        headers,
-      });
-    } catch (err) {
-      return c.json({ error: `Vite proxy failed: ${String(err)}` }, 502);
-    }
-  });
-
   return app;
 }
 
 /**
  * Boot page registry for MDX pages
- * Discovers pages from workbookDir/pages/
  */
 async function bootPages(workbookDir: string) {
   const pagesDir = join(workbookDir, "pages");
 
-  // Only initialize if pages directory exists
   if (!existsSync(pagesDir)) {
-    console.log("[runtime] No pages/ directory found, skipping page registry");
+    console.log("[server] No pages/ directory found, skipping page registry");
     return;
   }
 
-  console.log(`[runtime] Booting page registry for ${pagesDir}...`);
+  console.log(`[server] Booting page registry for ${pagesDir}...`);
 
   try {
     state.pageRegistry = createPageRegistry({
       pagesDir,
-      precompile: false, // Compile on demand for faster startup
+      precompile: false,
     });
 
     const result = await state.pageRegistry.load();
-    console.log(`[runtime] Page registry ready: ${result.pages.length} pages`);
+    console.log(`[server] Page registry ready: ${result.pages.length} pages`);
 
     if (result.errors.length > 0) {
-      console.warn("[runtime] Page discovery errors:");
+      console.warn("[server] Page discovery errors:");
       for (const err of result.errors) {
         console.warn(`  - ${err.file}: ${err.error}`);
       }
     }
   } catch (err) {
-    console.error("[runtime] Page registry failed:", err);
+    console.error("[server] Page registry failed:", err);
   }
 }
 
 /**
- * Extract the most relevant error from Vite output
- * Looks for common error patterns like "Cannot find module", "Error:", etc.
- */
-function extractViteError(output: string): string | null {
-  if (!output) return null;
-
-  // Look for module resolution errors (most common)
-  const moduleMatch = output.match(/Cannot find module ['"]([^'"]+)['"]/);
-  if (moduleMatch) {
-    // Find the full error line with context
-    const errorLine = output.match(/Error:[^\n]*Cannot find module[^\n]*/);
-    return errorLine ? errorLine[0] : `Cannot find module '${moduleMatch[1]}'`;
-  }
-
-  // Look for generic Error: lines
-  const errorMatch = output.match(/Error:\s*([^\n]+)/);
-  if (errorMatch) {
-    return `Error: ${errorMatch[1]}`;
-  }
-
-  // Look for Vite-specific errors
-  const viteErrorMatch = output.match(/\[vite\][^\n]*error[^\n]*/i);
-  if (viteErrorMatch) {
-    return viteErrorMatch[0];
-  }
-
-  // Fallback: return last non-empty line if it looks like an error
-  const lines = output.trim().split("\n").filter(Boolean);
-  const lastLine = lines[lines.length - 1];
-  if (lastLine && (lastLine.includes("Error") || lastLine.includes("error"))) {
-    return lastLine;
-  }
-
-  return null;
-}
-
-/**
- * Boot the RSC runtime in background
- *
- * Uses the @hands/runtime package which has a static vite.config.mts.
- * The runtime uses HANDS_WORKBOOK_PATH env var to locate the workbook.
- */
-async function bootRuntime(config: RuntimeConfig) {
-  const { workbookDir } = config;
-  const rscPort = PORTS.WORKER; // RSC runtime port (55200)
-
-  // Get the runtime package path (contains vite.config.mts)
-  const runtimePath = getRuntimeSourcePath();
-  console.log(`[runtime] Using runtime at: ${runtimePath}`);
-
-  if (!existsSync(join(runtimePath, "vite.config.mts"))) {
-    console.error(
-      `[runtime] vite.config.mts not found in runtime package at ${runtimePath}`
-    );
-    state.rscError = "Runtime package vite.config.mts not found";
-    return;
-  }
-
-  try {
-    // Ensure port is free before starting
-    const portFree = await waitForPortFree(rscPort, 3000, true);
-    if (!portFree) {
-      throw new Error(`Port ${rscPort} is still in use after cleanup attempt`);
-    }
-
-    // Spawn RSC runtime from the runtime package directory
-    // The runtime's vite.config.mts uses HANDS_WORKBOOK_PATH to locate the workbook
-    console.log(`[runtime] Starting RSC runtime on port ${rscPort}...`);
-    state.rscProc = spawn(
-      "npx",
-      ["vite", "dev", "--port", String(rscPort), "--host", "127.0.0.1"],
-      {
-        cwd: runtimePath,
-        stdio: ["ignore", "pipe", "pipe"],
-        env: {
-          ...process.env,
-          HANDS_WORKBOOK_PATH: workbookDir,
-        },
-      }
-    );
-
-    // Forward runtime output with [worker] prefix for visibility
-    let outputBuffer = "";
-    const captureOutput = (data: Buffer) => {
-      const str = data.toString();
-      outputBuffer += str;
-      if (outputBuffer.length > 4000) {
-        outputBuffer = outputBuffer.slice(-4000);
-      }
-    };
-    const prefixLines = (data: Buffer, prefix: string) => {
-      const str = data.toString();
-      return str
-        .split("\n")
-        .map((line) => (line ? `${prefix} ${line}` : ""))
-        .join("\n");
-    };
-    state.rscProc.stdout?.on("data", (data) => {
-      captureOutput(data);
-      const prefixed = prefixLines(data, "[worker]");
-      if (prefixed.trim()) {
-        console.log(prefixed);
-      }
-    });
-    state.rscProc.stderr?.on("data", (data) => {
-      captureOutput(data);
-      const prefixed = prefixLines(data, "[worker]");
-      if (prefixed.trim()) {
-        console.error(prefixed);
-      }
-    });
-
-    // Monitor for crashes and auto-restart
-    state.rscProc.on("exit", (code, signal) => {
-      const wasReady = state.rscReady;
-      console.error(
-        `[runtime] RSC runtime exited (code=${code}, signal=${signal}, wasReady=${wasReady})`
-      );
-      state.rscReady = false;
-      state.rscError =
-        extractViteError(outputBuffer) ||
-        `RSC runtime exited with code ${code}`;
-      state.rscProc = null;
-
-      // Clear cache on crash
-      const cacheDir = join(runtimePath, "node_modules", ".vite");
-      if (existsSync(cacheDir)) {
-        console.log("[runtime] Clearing cache after crash...");
-        try {
-          rmSync(cacheDir, { recursive: true, force: true });
-        } catch (err) {
-          console.warn("[runtime] Failed to clear cache:", err);
-        }
-      }
-
-      // Auto-restart after a delay (unless this was a clean shutdown)
-      if (code !== 0 && code !== null) {
-        console.log("[runtime] Auto-restarting RSC runtime in 2s...");
-        setTimeout(() => {
-          bootRuntime(config).catch((err) => {
-            console.error("[runtime] Failed to restart RSC runtime:", err);
-          });
-        }, 2000);
-      }
-    });
-
-    // Wait for runtime to be ready
-    const timeout = 30000;
-    const startTime = Date.now();
-
-    while (Date.now() - startTime < timeout) {
-      try {
-        const response = await fetch(`http://localhost:${rscPort}/health`, {
-          signal: AbortSignal.timeout(1000),
-        });
-        if (response.ok) {
-          state.rscPort = rscPort;
-          state.rscReady = true;
-          state.rscError = null;
-          console.log(`[runtime] RSC runtime ready on port ${rscPort}`);
-          return;
-        }
-        if (response.status >= 400) {
-          try {
-            const text = await response.text();
-            const moduleMatch = text.match(
-              /Cannot find module ['"]([^'"]+)['"]/
-            );
-            if (moduleMatch) {
-              state.rscError = `Cannot find module '${moduleMatch[1]}'`;
-            }
-          } catch {
-            // Ignore response parsing errors
-          }
-        }
-      } catch {
-        // Not ready yet
-      }
-      await new Promise((resolve) => setTimeout(resolve, 500));
-    }
-
-    // Timeout
-    if (!state.rscError) {
-      const extractedError = extractViteError(outputBuffer);
-      state.rscError =
-        extractedError || "RSC runtime failed to start within timeout";
-    }
-    console.error("[runtime] RSC runtime failed to start within timeout");
-    if (outputBuffer) {
-      console.error("[runtime] Captured output:\n", outputBuffer);
-    }
-  } catch (err) {
-    console.error("[runtime] RSC runtime boot failed:", err);
-    state.rscError = err instanceof Error ? err.message : String(err);
-  }
-}
-
-/**
- * Run the check command - diagnostics without starting server
- *
- * Usage: hands-runtime check <workbook-dir> [--json] [--fix]
+ * Run the check command
  */
 async function runCheck() {
   const args = process.argv.slice(2);
-  // Remove 'check' command
   const restArgs = args.slice(1);
 
-  // Parse args
   let workbookDir = process.cwd();
   let jsonOutput = false;
   let autoFix = false;
@@ -1500,12 +664,10 @@ async function runCheck() {
     }
   }
 
-  // Resolve relative paths
   if (!workbookDir.startsWith("/")) {
     workbookDir = join(process.cwd(), workbookDir);
   }
 
-  // Use preflight system for all checks
   const { runPreflight, printPreflightResults } = await import(
     "./preflight.js"
   );
@@ -1516,7 +678,6 @@ async function runCheck() {
   });
 
   if (jsonOutput) {
-    // JSON output for scripting
     console.log(
       JSON.stringify(
         {
@@ -1536,7 +697,6 @@ async function runCheck() {
       )
     );
   } else {
-    // Human-readable output
     printPreflightResults(result);
   }
 
@@ -1547,7 +707,6 @@ async function runCheck() {
  * Main entry point
  */
 async function main() {
-  // Check for 'check' subcommand early
   const firstArg = process.argv[2];
   if (firstArg === "check") {
     await runCheck();
@@ -1557,9 +716,13 @@ async function main() {
   const config = parseArgs();
   const { workbookId, workbookDir, port } = config;
 
-  console.log(`[runtime] Starting workbook: ${workbookId}`);
+  console.log(`[server] Starting workbook: ${workbookId}`);
 
-  // 1. Start HTTP server using Bun's native server with Hono
+  // Initialize database (this creates it if needed)
+  getWorkbookDb(workbookDir);
+  console.log(`[server] Database ready at ${workbookDir}/.hands/workbook.db`);
+
+  // Start HTTP server
   const app = createApp(config);
 
   let server: ReturnType<typeof Bun.serve>;
@@ -1570,30 +733,27 @@ async function main() {
         port,
         fetch: app.fetch,
         error(error) {
-          console.error("[runtime] Request error:", error);
+          console.error("[server] Request error:", error);
           return new Response("Internal Server Error", { status: 500 });
         },
       });
 
       console.log(
-        `[runtime] Server ready on http://localhost:${port}${
+        `[server] Server ready on http://localhost:${port}${
           retried ? " (after retry)" : ""
         }`
-      );
-      console.log(
-        `[runtime] Manifest available at http://localhost:${port}/workbook/manifest`
       );
     } catch (err: any) {
       if (err?.code === "EADDRINUSE" && !retried) {
         console.error(
-          `[runtime] Port ${port} in use, attempting to free it...`
+          `[server] Port ${port} in use, attempting to free it...`
         );
         const { killProcessOnPort } = await import("./ports.js");
         await killProcessOnPort(port);
         await new Promise((resolve) => setTimeout(resolve, 1000));
         await startServer(true);
       } else {
-        console.error(`[runtime] Server error:`, err);
+        console.error(`[server] Server error:`, err);
         process.exit(1);
       }
     }
@@ -1601,11 +761,10 @@ async function main() {
 
   await startServer();
 
-  // 3. Boot critical services - pages can run in parallel (non-blocking)
+  // Boot pages
   bootPages(workbookDir);
 
-  // Output ready JSON for Tauri - format must match lib.rs expectations
-  // Note: Database is SQLite in runtime, accessible via runtimePort
+  // Output ready JSON for Tauri
   console.log(
     JSON.stringify({
       type: "ready",
@@ -1613,26 +772,17 @@ async function main() {
     })
   );
 
-  // Boot Vite (block server) - can take a few seconds
-  bootRuntime(config).catch((err) => {
-    console.error("[runtime] Vite boot failed:", err);
-    state.rscError = err instanceof Error ? err.message : String(err);
-  });
-
-  // 4. Start file watcher for real-time manifest updates
+  // Start file watcher
   startFileWatcher(config);
 
   // Handle shutdown
   const shutdown = async () => {
-    console.log("[runtime] Shutting down...");
-    // Stop the action scheduler
+    console.log("[server] Shutting down...");
     stopScheduler();
-    // Close file watchers
     for (const watcher of state.fileWatchers) {
       watcher.close();
     }
-    // Close runtime process (SQLite database lives in runtime)
-    if (state.rscProc) state.rscProc.kill();
+    closeWorkbookDb(workbookDir);
     server.stop();
     process.exit(0);
   };

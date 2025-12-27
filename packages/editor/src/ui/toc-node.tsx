@@ -2,7 +2,6 @@ import { BlockSelectionPlugin } from '@platejs/selection/react';
 import { useTocElement, useTocElementState } from '@platejs/toc/react';
 import { cva } from 'class-variance-authority';
 import { PlateElement, type PlateElementProps } from 'platejs/react';
-import * as React from 'react';
 
 import { Button } from './button';
 

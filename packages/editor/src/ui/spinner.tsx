@@ -1,6 +1,5 @@
 import { cva, type VariantProps } from 'class-variance-authority';
 import { CircleNotch, type IconProps } from '@phosphor-icons/react';
-import * as React from 'react';
 
 import { cn } from '../lib/utils';
 

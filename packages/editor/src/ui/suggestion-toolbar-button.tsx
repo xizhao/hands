@@ -3,7 +3,6 @@
 import { SuggestionPlugin } from '@platejs/suggestion/react';
 import { PencilLine } from '@phosphor-icons/react';
 import { useEditorPlugin, usePluginOption } from 'platejs/react';
-import * as React from 'react';
 
 import { cn } from '../lib/utils';
 

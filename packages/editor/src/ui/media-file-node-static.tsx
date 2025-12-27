@@ -2,7 +2,6 @@ import { FileArrowUp } from '@phosphor-icons/react';
 
 import type { TFileElement } from 'platejs';
 import { SlateElement, type SlateElementProps } from 'platejs/static';
-import * as React from 'react';
 
 export function MediaFileElementStatic(props: SlateElementProps<TFileElement>) {
   const { name, url } = props.element;

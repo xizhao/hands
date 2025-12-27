@@ -1,45 +1,5 @@
-import { spawn } from "node:child_process";
-import path from "node:path";
 import { tool } from "@opencode-ai/plugin";
-
-// Path to CLI binary (relative to this file in agent/tool/)
-const CLI_PATH = path.resolve(
-  import.meta.dirname ?? import.meta.dir ?? __dirname,
-  "../../cli/bin/hands.js"
-);
-
-/**
- * Execute a hands CLI command and return the output
- */
-function runHandsCommand(
-  args: string[],
-): Promise<{ stdout: string; stderr: string; code: number }> {
-  return new Promise((resolve) => {
-    const proc = spawn("node", [CLI_PATH, ...args], {
-      cwd: process.cwd(),
-      env: process.env,
-    });
-
-    let stdout = "";
-    let stderr = "";
-
-    proc.stdout.on("data", (data) => {
-      stdout += data.toString();
-    });
-
-    proc.stderr.on("data", (data) => {
-      stderr += data.toString();
-    });
-
-    proc.on("close", (code) => {
-      resolve({ stdout, stderr, code: code ?? 0 });
-    });
-
-    proc.on("error", (err) => {
-      resolve({ stdout: "", stderr: err.message, code: 1 });
-    });
-  });
-}
+import { runCli } from "../lib/cli";
 
 const check = tool({
   description: `Run code quality checks on the workbook.
@@ -69,7 +29,7 @@ Use this tool to:
     if (fix) cmdArgs.push("--fix");
     if (strict) cmdArgs.push("--strict");
 
-    const result = await runHandsCommand(cmdArgs);
+    const result = await runCli(cmdArgs);
 
     // Combine stdout and stderr for full output
     const output = [result.stdout, result.stderr].filter(Boolean).join("\n").trim();

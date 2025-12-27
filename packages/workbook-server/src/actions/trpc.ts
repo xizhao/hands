@@ -8,10 +8,8 @@
 import { initTRPC, TRPCError } from "@trpc/server";
 import { z } from "zod";
 import { readFile } from "node:fs/promises";
-import { getEditorDb, insertActionRun } from "../db/editor-db.js";
 import { discoverActions } from "../workbook/discovery.js";
 import type { DiscoveredAction } from "../workbook/types.js";
-import { executeActionHttp } from "./executor-http.js";
 
 // ============================================================================
 // Context
@@ -19,9 +17,6 @@ import { executeActionHttp } from "./executor-http.js";
 
 export interface ActionsContext {
   workbookDir: string;
-  /** Runtime URL for action execution (e.g., http://localhost:55200) */
-  runtimeUrl: string;
-  isDbReady: boolean;
   // Cached discoveries (optional, for performance)
   actions?: DiscoveredAction[];
 }
@@ -33,17 +28,6 @@ export interface ActionsContext {
 const t = initTRPC.context<ActionsContext>().create();
 
 const publicProcedure = t.procedure;
-
-// Middleware to ensure runtime is ready for execution
-const runtimeProcedure = publicProcedure.use(async ({ ctx, next }) => {
-  if (!ctx.isDbReady) {
-    throw new TRPCError({
-      code: "PRECONDITION_FAILED",
-      message: "Runtime not ready",
-    });
-  }
-  return next({ ctx });
-});
 
 // ============================================================================
 // Input Schemas
@@ -123,7 +107,7 @@ export const actionsRouter = t.router({
   // ==================
 
   /** Run an action manually */
-  run: runtimeProcedure.input(runActionInput).mutation(async ({ ctx, input }) => {
+  run: publicProcedure.input(runActionInput).mutation(async ({ ctx, input }) => {
     // Discover action
     const actionsDir = join(ctx.workbookDir, "actions");
     const result = await discoverActions(actionsDir, ctx.workbookDir);
@@ -144,36 +128,12 @@ export const actionsRouter = t.router({
       });
     }
 
-    // Execute the action via runtime
-    const run = await executeActionHttp({
-      action,
-      trigger: "manual",
-      input: input.input,
-      runtimeUrl: ctx.runtimeUrl,
-      workbookDir: ctx.workbookDir,
+    // Action execution requires the Vite runtime which has been removed
+    // TODO: Implement direct action execution
+    throw new TRPCError({
+      code: "NOT_IMPLEMENTED",
+      message: "Action execution is not yet implemented in the new architecture",
     });
-
-    // Persist action run to editor database
-    try {
-      const db = getEditorDb(ctx.workbookDir);
-      insertActionRun(db, {
-        id: run.id,
-        actionId: run.actionId,
-        trigger: run.trigger,
-        status: run.status,
-        input: run.input,
-        output: run.output,
-        error: run.error,
-        startedAt: run.startedAt,
-        finishedAt: run.finishedAt,
-        durationMs: run.durationMs,
-      });
-    } catch (e) {
-      // Log but don't fail if persistence fails
-      console.error("Failed to persist action run:", e);
-    }
-
-    return run;
   }),
 });
 

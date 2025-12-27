@@ -92,15 +92,18 @@ SSE events use SDK's typed `GlobalEvent` discriminated union:
 - `message.part.updated`
 - `todo.updated`
 
-### Development Mode Requirement
+### Database Architecture
 
-**Runtime and Editor MUST always run in dev mode.** Never build the editor for production.
+- SQLite database stored at `{workbook}/.hands/workbook.db`
+- Direct access via `bun:sqlite` (no external process)
+- LiveValue/LiveQuery components use tRPC for data access
+- SSE subscription for live query updates
 
-Both services communicate via React Server Components (RSC) protocol, which requires matching dev/prod modes. The runtime spawns the editor dev server and proxies it via `/sandbox/*`.
+### Development
 
-- `bun run dev:desktop` runs Vite dev server only (no editor build)
-- Runtime spawns editor dev server on demand
-- Production builds of editor sandbox are NOT supported
+- `bun run tauri:dev` - Run the desktop app in development mode
+- `bun run build:sidecars` - Build the sidecar binaries (required before tauri:dev)
+- Sidecars are standalone compiled binaries (no external Node/Bun required)
 
 ### File Safety
 

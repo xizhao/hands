@@ -297,7 +297,7 @@ Keep responses concise - the primary agent will communicate with the user.`;
 export const coderAgent: AgentConfig = {
   description: "Technical specialist for creating plugins (TSX), pages (MDX), and actions",
   mode: "subagent",
-  model: "google/gemini-3-flash-preview",
+  model: "google/gemini-2.5-flash",
   prompt: CODER_PROMPT,
   tools: {
     // Files

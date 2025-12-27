@@ -286,8 +286,7 @@ export async function initDatabase(): Promise<Database> {
       script.src = "/sql-wasm/sql-wasm.js";
       script.onload = async () => {
         try {
-          // @ts-expect-error - initSqlJs is added to window by the script
-          const SQL = await window.initSqlJs({
+          const SQL = await (window as any).initSqlJs({
             locateFile: () => `/sql-wasm/sql-wasm.wasm`,
           });
           resolve(SQL);

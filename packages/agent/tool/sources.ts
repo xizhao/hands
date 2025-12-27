@@ -1,38 +1,5 @@
-import { spawn } from "node:child_process";
 import { tool } from "@opencode-ai/plugin";
-
-/**
- * Execute a hands CLI command and return the output
- */
-function runHandsCommand(
-  args: string[],
-): Promise<{ stdout: string; stderr: string; code: number }> {
-  return new Promise((resolve) => {
-    const proc = spawn("hands", args, {
-      cwd: process.cwd(),
-      env: process.env,
-    });
-
-    let stdout = "";
-    let stderr = "";
-
-    proc.stdout.on("data", (data) => {
-      stdout += data.toString();
-    });
-
-    proc.stderr.on("data", (data) => {
-      stderr += data.toString();
-    });
-
-    proc.on("close", (code) => {
-      resolve({ stdout, stderr, code: code ?? 0 });
-    });
-
-    proc.on("error", (err) => {
-      resolve({ stdout: "", stderr: err.message, code: 1 });
-    });
-  });
-}
+import { runCli } from "../lib/cli";
 
 const sources = tool({
   description: `Manage external data sources for the workbook.
@@ -66,7 +33,7 @@ Use this tool to:
     const { action, name, schedule } = args;
 
     if (action === "list") {
-      const result = await runHandsCommand(["sources"]);
+      const result = await runCli(["sources"]);
 
       if (result.code !== 0) {
         return `Failed to list sources: ${result.stderr || result.stdout}`;
@@ -91,7 +58,7 @@ Example: Use action='add' with name='hackernews'`;
         cmdArgs.push("-s", schedule);
       }
 
-      const result = await runHandsCommand(cmdArgs);
+      const result = await runCli(cmdArgs);
 
       if (result.code !== 0) {
         const errorMsg = result.stderr || result.stdout;

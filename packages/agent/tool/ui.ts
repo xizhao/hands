@@ -3,11 +3,7 @@
  */
 
 import { tool } from "@opencode-ai/plugin";
-import { execSync } from "node:child_process";
-import path from "node:path";
-
-// Path to the hands CLI
-const handsCliPath = path.resolve(import.meta.dirname, "../../cli/bin/hands.js");
+import { runCliSync } from "../lib/cli";
 
 const ui = tool({
   description: `Search and add UI components from shadcn and other registries.
@@ -46,11 +42,14 @@ Examples:
     try {
       if (action === "search") {
         const searchQuery = query ?? "";
-        const cmd = `"${handsCliPath}" ui search ${registry} -q "${searchQuery}"`;
-        const result = execSync(cmd, { encoding: "utf-8", timeout: 30000 });
+        const result = runCliSync(["ui", "search", registry, "-q", searchQuery], { timeout: 30000 });
+
+        if (result.code !== 0) {
+          return `Error: ${result.stderr || result.stdout}`;
+        }
 
         // Parse JSON output
-        const data = JSON.parse(result.split("\n").slice(1).join("\n")); // Skip "Running:" line
+        const data = JSON.parse(result.stdout.split("\n").slice(1).join("\n")); // Skip "Running:" line
 
         if (!data.items || data.items.length === 0) {
           return `No components found for "${searchQuery}" in ${registry}`;
@@ -79,15 +78,13 @@ Examples:
 
         // Run from workbook directory where components.json lives
         const workbookDir = process.cwd();
-        const cmd = `"${handsCliPath}" ui add ${component}`;
-        const result = execSync(cmd, {
-          encoding: "utf-8",
-          timeout: 60000,
-          cwd: workbookDir,
-          stdio: ["pipe", "pipe", "pipe"],
-        });
+        const result = runCliSync(["ui", "add", component], { cwd: workbookDir, timeout: 60000 });
 
-        return `Added ${component}\n\n${result}`;
+        if (result.code !== 0) {
+          return `Error: ${result.stderr || result.stdout}`;
+        }
+
+        return `Added ${component}\n\n${result.stdout}`;
       }
 
       return `Unknown action: ${action}. Use 'search' or 'add'.`;

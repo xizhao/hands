@@ -1,12 +1,12 @@
 /**
  * AI Completion Edge Function
  *
- * Proxies MDX generation requests to Claude API.
+ * Proxies MDX generation requests to OpenRouter API.
  * Deployed as Cloudflare Worker or Vercel Edge Function.
  */
 
 interface Env {
-  ANTHROPIC_API_KEY: string;
+  OPENROUTER_API_KEY: string;
 }
 
 interface GenerateMdxInput {
@@ -42,9 +42,9 @@ export async function onRequest(
     return new Response("Method not allowed", { status: 405 });
   }
 
-  const apiKey = context.env.ANTHROPIC_API_KEY;
+  const apiKey = context.env.OPENROUTER_API_KEY;
   if (!apiKey) {
-    return new Response("ANTHROPIC_API_KEY not configured", { status: 500 });
+    return new Response("OPENROUTER_API_KEY not configured", { status: 500 });
   }
 
   try {
@@ -53,18 +53,23 @@ export async function onRequest(
     const systemPrompt = buildSystemPrompt(input);
     const userPrompt = buildUserPrompt(input);
 
-    const response = await fetch("https://api.anthropic.com/v1/messages", {
+    // OpenRouter uses OpenAI-compatible API format
+    const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        "x-api-key": apiKey,
-        "anthropic-version": "2023-06-01",
+        "Authorization": `Bearer ${apiKey}`,
+        "HTTP-Referer": "https://hands.dev",
+        "X-Title": "Hands",
       },
       body: JSON.stringify({
-        model: "claude-sonnet-4-20250514",
+        model: "anthropic/claude-sonnet-4",
         max_tokens: 4096,
-        system: systemPrompt,
         messages: [
+          {
+            role: "system",
+            content: systemPrompt,
+          },
           {
             role: "user",
             content: userPrompt,
@@ -75,19 +80,19 @@ export async function onRequest(
 
     if (!response.ok) {
       const error = await response.text();
-      console.error("Anthropic API error:", error);
+      console.error("OpenRouter API error:", error);
       return new Response(`AI API error: ${error}`, { status: 500 });
     }
 
     const data = await response.json();
-    const content = data.content?.[0];
+    const content = data.choices?.[0]?.message?.content;
 
-    if (content?.type !== "text") {
+    if (!content) {
       return new Response("Unexpected response format", { status: 500 });
     }
 
     const result: GenerateMdxOutput = {
-      mdx: content.text,
+      mdx: content,
     };
 
     return new Response(JSON.stringify(result), {

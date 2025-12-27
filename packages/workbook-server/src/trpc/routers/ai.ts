@@ -9,9 +9,37 @@
  * 3. Agent (heavy) - reasoning="high" only for iteration/analysis tasks
  */
 
-import { gateway } from "@ai-sdk/gateway";
+import { createOpenAI } from "@ai-sdk/openai";
 import { initTRPC, TRPCError } from "@trpc/server";
-import { generateObject, generateText } from "ai";
+import { generateObject, generateText, type LanguageModel } from "ai";
+
+// OpenRouter model mappings
+const MODELS = {
+  fast: "google/gemini-2.5-flash-lite-preview",  // Quick MDX generation
+  vision: "google/gemini-2.5-flash",              // Vision/screenshot analysis
+} as const;
+
+// Create OpenRouter provider (OpenAI-compatible API)
+function createOpenRouterProvider() {
+  const apiKey = process.env.OPENROUTER_API_KEY;
+  if (!apiKey) {
+    throw new TRPCError({
+      code: "INTERNAL_SERVER_ERROR",
+      message: "OPENROUTER_API_KEY not set",
+    });
+  }
+  return createOpenAI({
+    apiKey,
+    baseURL: "https://openrouter.ai/api/v1",
+  });
+}
+
+// Helper to get model with proper typing (OpenRouter uses OpenAI-compatible API)
+function getModel(modelId: string): LanguageModel {
+  const provider = createOpenRouterProvider();
+  // Cast needed due to SDK version mismatch - runtime works correctly
+  return provider(modelId) as unknown as LanguageModel;
+}
 import { z } from "zod";
 import { STDLIB_DOCS, STDLIB_QUICK_REF } from "@hands/core/docs";
 import { validateMdxContent, type ValidationContext, type ValidationError } from "@hands/core/validation";
@@ -49,15 +77,6 @@ export const aiRouter = t.router({
       const { prompt, tables, errors, previousGenerations, prefix, suffix, title, description } = input;
 
       console.log('[ai.generateMdx] Request received:', { prompt, tableCount: tables.length, errorCount: errors?.length ?? 0, previousGenCount: previousGenerations?.length ?? 0, hasContext: !!(prefix || suffix) });
-
-      const apiKey = process.env.HANDS_AI_API_KEY;
-      if (!apiKey) {
-        throw new TRPCError({
-          code: "INTERNAL_SERVER_ERROR",
-          message: "HANDS_AI_API_KEY not set",
-        });
-      }
-      process.env.AI_GATEWAY_API_KEY = apiKey;
 
       const schemaContext = tables.length > 0
         ? tables.map((t) => `${t.name}(${t.columns.join(", ")})`).join("\n")
@@ -136,7 +155,7 @@ ${prompt}${retryContext}
 
       try {
         const result = await generateText({
-          model: gateway("google/gemini-2.5-flash-lite"),
+          model: getModel(MODELS.fast),
           system: systemPrompt,
           prompt: userPrompt,
           maxOutputTokens: 300,
@@ -212,15 +231,6 @@ ${prompt}${retryContext}
 
       console.log('[ai.generateMdxBlock] Request:', { prompt, tableCount: tables.length, reasoning });
 
-      const apiKey = process.env.HANDS_AI_API_KEY;
-      if (!apiKey) {
-        throw new TRPCError({
-          code: "INTERNAL_SERVER_ERROR",
-          message: "HANDS_AI_API_KEY not set",
-        });
-      }
-      process.env.AI_GATEWAY_API_KEY = apiKey;
-
       const schemaContext = tables.length > 0
         ? tables.map((t) => `${t.name}(${t.columns.join(", ")})`).join("\n")
         : "(No tables available)";
@@ -257,15 +267,11 @@ ${prompt}
 
       try {
         const result = await generateText({
-          model: gateway("google/gemini-2.5-flash-lite"),
+          model: getModel(MODELS.fast),
           system: systemPrompt,
           prompt: userPrompt,
           maxOutputTokens: 2000,
           temperature: reasoning === "mid" ? 0.3 : 0.1,
-          // Enable thinking for "mid" reasoning
-          providerOptions: reasoning === "mid" ? {
-            google: { thinkingConfig: { thinkingBudget: 1024 } },
-          } : undefined,
           abortSignal: AbortSignal.timeout(30000), // Longer timeout for block generation
         });
 
@@ -336,12 +342,10 @@ ${prompt}
         return { hint: cached, cached: true };
       }
 
-      const apiKey = process.env.HANDS_AI_API_KEY;
-      if (!apiKey) {
+      if (!process.env.OPENROUTER_API_KEY) {
         // No API key - return raw content as fallback
         return { hint: content, cached: false };
       }
-      process.env.AI_GATEWAY_API_KEY = apiKey;
 
       const contextStr = context?.tables?.length
         ? `Tables involved: ${context.tables.join(", ")}. `
@@ -361,7 +365,7 @@ Examples:
 
       try {
         const result = await generateText({
-          model: gateway("google/gemini-2.5-flash-lite"),
+          model: getModel(MODELS.fast),
           system: systemPrompt,
           prompt: `${contextStr}${content}`,
           maxOutputTokens: 50,
@@ -420,15 +424,13 @@ Examples:
         return { hints: results };
       }
 
-      const apiKey = process.env.HANDS_AI_API_KEY;
-      if (!apiKey) {
+      if (!process.env.OPENROUTER_API_KEY) {
         // No API key - return raw content as fallback
         for (const item of uncachedItems) {
           results[item.idx] = { content: item.content, hint: item.content, cached: false };
         }
         return { hints: results };
       }
-      process.env.AI_GATEWAY_API_KEY = apiKey;
 
       // Build batch prompt
       const batchPrompt = uncachedItems.map((item, i) =>
@@ -443,7 +445,7 @@ Examples:
 
       try {
         const result = await generateText({
-          model: gateway("google/gemini-2.5-flash-lite"),
+          model: getModel(MODELS.fast),
           system: systemPrompt,
           prompt: batchPrompt,
           maxOutputTokens: 50 * uncachedItems.length,
@@ -501,15 +503,6 @@ Examples:
 
       console.log('[ai.analyzeScreenshot] Analyzing:', imagePath);
 
-      const apiKey = process.env.HANDS_AI_API_KEY;
-      if (!apiKey) {
-        throw new TRPCError({
-          code: "INTERNAL_SERVER_ERROR",
-          message: "HANDS_AI_API_KEY not set",
-        });
-      }
-      process.env.AI_GATEWAY_API_KEY = apiKey;
-
       // Define schema for structured output
       const screenshotAnalysisSchema = z.object({
         response: z.string().describe("Respond in first person (use 'I can...' or 'I found...'). Describe the data opportunity briefly. Don't reference 'the image' or 'screenshot'. If nothing actionable, respond playfully. 1-2 sentences max."),
@@ -540,7 +533,7 @@ Examples:
         const mimeType = imagePath.endsWith(".png") ? "image/png" : "image/jpeg";
 
         const result = await generateObject({
-          model: gateway("google/gemini-3-flash-preview"),
+          model: getModel(MODELS.vision),
           schema: screenshotAnalysisSchema,
           messages: [
             {

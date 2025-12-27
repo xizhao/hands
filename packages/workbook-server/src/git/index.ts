@@ -1,13 +1,14 @@
 /**
  * Git Integration Module
  *
- * Provides git operations for workbook version control using simple-git.
+ * Provides git operations for workbook version control using isomorphic-git.
+ * Pure JavaScript implementation - no external git binary required.
  * All commits use a fixed identity: Hands <hello@hands.app>
  */
 
-import { existsSync, statSync, writeFileSync } from "node:fs";
+import * as fs from "node:fs";
 import { join } from "node:path";
-import simpleGit, { type SimpleGit } from "simple-git";
+import git from "isomorphic-git";
 
 // Fixed committer identity for all workbook commits
 const GIT_AUTHOR = {
@@ -64,19 +65,12 @@ Thumbs.db
 `;
 
 /**
- * Get git instance for a workbook directory
- */
-function getGit(workbookDir: string): SimpleGit {
-  return simpleGit(workbookDir);
-}
-
-/**
  * Check if directory is a git repository
  */
 export async function isGitRepo(workbookDir: string): Promise<boolean> {
   try {
-    const git = getGit(workbookDir);
-    return await git.checkIsRepo();
+    await git.findRoot({ fs, filepath: workbookDir });
+    return true;
   } catch {
     return false;
   }
@@ -102,31 +96,69 @@ export async function getGitStatus(workbookDir: string): Promise<GitStatus> {
     };
   }
 
-  const git = getGit(workbookDir);
-
   try {
-    const status = await git.status();
+    // Get current branch
+    const branch = await git.currentBranch({ fs, dir: workbookDir }) || null;
+
+    // Get status matrix
+    // Format: [filepath, HEAD, WORKDIR, STAGE]
+    // Values: 0 = absent, 1 = identical to HEAD, 2 = different from HEAD
+    const statusMatrix = await git.statusMatrix({ fs, dir: workbookDir });
+
+    const staged: string[] = [];
+    const unstaged: string[] = [];
+    const untracked: string[] = [];
+
+    for (const row of statusMatrix) {
+      const filepath = row[0] as string;
+      const head = row[1] as number;
+      const workdir = row[2] as number;
+      const stage = row[3] as number;
+
+      // Untracked: not in HEAD, in workdir, not staged
+      if (head === 0 && workdir === 2 && stage === 0) {
+        untracked.push(filepath);
+      }
+      // Staged (added or modified): stage differs from HEAD
+      else if (stage === 2 || (head === 0 && stage === 2)) {
+        staged.push(filepath);
+      }
+      // Unstaged modifications: workdir differs from stage/HEAD
+      else if (workdir === 2 && stage !== 2) {
+        unstaged.push(filepath);
+      }
+      // Staged for deletion
+      else if (head === 1 && workdir === 0 && stage === 0) {
+        staged.push(filepath);
+      }
+    }
+
+    const hasChanges = staged.length > 0 || unstaged.length > 0 || untracked.length > 0;
 
     // Get remote URL if configured
     let remote: string | null = null;
     try {
-      const remotes = await git.getRemotes(true);
-      const origin = remotes.find((r) => r.name === "origin");
-      remote = origin?.refs?.fetch || origin?.refs?.push || null;
+      const remotes = await git.listRemotes({ fs, dir: workbookDir });
+      const origin = remotes.find((r: { remote: string; url: string }) => r.remote === "origin");
+      remote = origin?.url || null;
     } catch {
       // No remotes configured
     }
 
+    // TODO: Calculate ahead/behind (requires fetching remote refs)
+    const ahead = 0;
+    const behind = 0;
+
     return {
       isRepo: true,
-      branch: status.current,
-      hasChanges: !status.isClean(),
-      staged: status.staged,
-      unstaged: status.modified,
-      untracked: status.not_added,
+      branch,
+      hasChanges,
+      staged,
+      unstaged,
+      untracked,
       remote,
-      ahead: status.ahead,
-      behind: status.behind,
+      ahead,
+      behind,
     };
   } catch (err) {
     console.error("[git] Failed to get status:", err);
@@ -148,20 +180,28 @@ export async function getGitStatus(workbookDir: string): Promise<GitStatus> {
  * Initialize a git repository for a workbook
  */
 export async function initRepo(workbookDir: string): Promise<void> {
-  const git = getGit(workbookDir);
-
   // Initialize repo
-  await git.init();
+  await git.init({ fs, dir: workbookDir, defaultBranch: "main" });
 
   // Create .gitignore if it doesn't exist
   const gitignorePath = join(workbookDir, ".gitignore");
-  if (!existsSync(gitignorePath)) {
-    writeFileSync(gitignorePath, DEFAULT_GITIGNORE);
+  if (!fs.existsSync(gitignorePath)) {
+    fs.writeFileSync(gitignorePath, DEFAULT_GITIGNORE);
   }
 
-  // Configure local identity for this repo
-  await git.addConfig("user.name", GIT_AUTHOR.name, false, "local");
-  await git.addConfig("user.email", GIT_AUTHOR.email, false, "local");
+  // Set local config for author
+  await git.setConfig({
+    fs,
+    dir: workbookDir,
+    path: "user.name",
+    value: GIT_AUTHOR.name,
+  });
+  await git.setConfig({
+    fs,
+    dir: workbookDir,
+    path: "user.email",
+    value: GIT_AUTHOR.email,
+  });
 
   console.log(`[git] Initialized repository in ${workbookDir}`);
 }
@@ -169,13 +209,8 @@ export async function initRepo(workbookDir: string): Promise<void> {
 /**
  * Generate an automatic commit message based on changes
  */
-function generateCommitMessage(status: {
-  staged: string[];
-  modified: string[];
-  not_added: string[];
-}): string {
-  const allFiles = [...status.staged, ...status.modified, ...status.not_added];
-  const uniqueFiles = [...new Set(allFiles)];
+function generateCommitMessage(files: string[]): string {
+  const uniqueFiles = [...new Set(files)];
 
   // Check for specific file patterns
   const hasDbChanges = uniqueFiles.some((f) => f.endsWith("db.sqlite"));
@@ -227,30 +262,53 @@ export async function commit(
   workbookDir: string,
   message?: string,
 ): Promise<{ hash: string; message: string }> {
-  const git = getGit(workbookDir);
+  // Get current status
+  const statusMatrix = await git.statusMatrix({ fs, dir: workbookDir });
 
-  // Get current status for message generation
-  const status = await git.status();
+  // Find files that need to be staged
+  const filesToStage: string[] = [];
+  const filesToRemove: string[] = [];
 
-  if (status.isClean()) {
+  for (const [filepath, head, workdir, _stage] of statusMatrix) {
+    if (workdir === 0 && head === 1) {
+      // File was deleted
+      filesToRemove.push(filepath);
+    } else if (workdir === 2) {
+      // File was added or modified
+      filesToStage.push(filepath);
+    }
+  }
+
+  if (filesToStage.length === 0 && filesToRemove.length === 0) {
     throw new Error("Nothing to commit - working tree is clean");
   }
 
-  // Stage all changes
-  await git.add(".");
+  // Stage all files
+  for (const filepath of filesToStage) {
+    await git.add({ fs, dir: workbookDir, filepath });
+  }
+
+  // Remove deleted files from index
+  for (const filepath of filesToRemove) {
+    await git.remove({ fs, dir: workbookDir, filepath });
+  }
 
   // Generate message if not provided
-  const commitMessage = message || generateCommitMessage(status);
+  const allFiles = [...filesToStage, ...filesToRemove];
+  const commitMessage = message || generateCommitMessage(allFiles);
 
-  // Commit with fixed author
-  const result = await git.commit(commitMessage, {
-    "--author": `${GIT_AUTHOR.name} <${GIT_AUTHOR.email}>`,
+  // Commit
+  const hash = await git.commit({
+    fs,
+    dir: workbookDir,
+    message: commitMessage,
+    author: GIT_AUTHOR,
   });
 
-  console.log(`[git] Committed: ${result.commit} - ${commitMessage}`);
+  console.log(`[git] Committed: ${hash.substring(0, 7)} - ${commitMessage}`);
 
   return {
-    hash: result.commit,
+    hash,
     message: commitMessage,
   };
 }
@@ -264,19 +322,17 @@ export async function getHistory(workbookDir: string, limit = 50): Promise<GitCo
     return [];
   }
 
-  const git = getGit(workbookDir);
-
   try {
-    const log = await git.log({ maxCount: limit });
+    const commits = await git.log({ fs, dir: workbookDir, depth: limit });
 
-    return log.all.map((entry) => ({
-      hash: entry.hash,
-      shortHash: entry.hash.substring(0, 7),
-      message: entry.message,
-      author: entry.author_name,
-      email: entry.author_email,
-      date: entry.date,
-      timestamp: new Date(entry.date).getTime(),
+    return commits.map((entry: { oid: string; commit: { message: string; author: { name: string; email: string; timestamp: number } } }) => ({
+      hash: entry.oid,
+      shortHash: entry.oid.substring(0, 7),
+      message: entry.commit.message,
+      author: entry.commit.author.name,
+      email: entry.commit.author.email,
+      date: new Date(entry.commit.author.timestamp * 1000).toISOString(),
+      timestamp: entry.commit.author.timestamp * 1000,
     }));
   } catch {
     // No commits yet
@@ -288,17 +344,15 @@ export async function getHistory(workbookDir: string, limit = 50): Promise<GitCo
  * Set or update the remote origin URL
  */
 export async function setRemote(workbookDir: string, url: string): Promise<void> {
-  const git = getGit(workbookDir);
-
   try {
-    const remotes = await git.getRemotes();
-    const hasOrigin = remotes.some((r) => r.name === "origin");
+    const remotes = await git.listRemotes({ fs, dir: workbookDir });
+    const hasOrigin = remotes.some((r: { remote: string }) => r.remote === "origin");
 
     if (hasOrigin) {
-      await git.remote(["set-url", "origin", url]);
-    } else {
-      await git.addRemote("origin", url);
+      await git.deleteRemote({ fs, dir: workbookDir, remote: "origin" });
     }
+
+    await git.addRemote({ fs, dir: workbookDir, remote: "origin", url });
 
     console.log(`[git] Remote origin set to: ${url}`);
   } catch (err) {
@@ -309,46 +363,24 @@ export async function setRemote(workbookDir: string, url: string): Promise<void>
 
 /**
  * Push to remote
+ * Note: Remote operations require http transport and authentication.
+ * This is not yet implemented for the bundled version.
  */
-export async function push(workbookDir: string): Promise<void> {
-  const git = getGit(workbookDir);
-
-  try {
-    const status = await git.status();
-    const branch = status.current;
-
-    if (!branch) {
-      throw new Error("Not on a branch");
-    }
-
-    // Check if remote is configured
-    const remotes = await git.getRemotes();
-    if (!remotes.some((r) => r.name === "origin")) {
-      throw new Error("No remote configured. Set a remote first.");
-    }
-
-    // Push with upstream tracking
-    await git.push("origin", branch, ["--set-upstream"]);
-    console.log(`[git] Pushed to origin/${branch}`);
-  } catch (err) {
-    console.error("[git] Push failed:", err);
-    throw err;
-  }
+export async function push(_workbookDir: string): Promise<void> {
+  // TODO: Implement with isomorphic-git http transport when needed
+  // This would require: import http from 'isomorphic-git/http/node'
+  // and passing http to git.push({ fs, http, dir, ... })
+  throw new Error("Remote push is not yet implemented. Use local git for remote operations.");
 }
 
 /**
  * Pull from remote
+ * Note: Remote operations require http transport and authentication.
+ * This is not yet implemented for the bundled version.
  */
-export async function pull(workbookDir: string): Promise<void> {
-  const git = getGit(workbookDir);
-
-  try {
-    await git.pull();
-    console.log("[git] Pulled from remote");
-  } catch (err) {
-    console.error("[git] Pull failed:", err);
-    throw err;
-  }
+export async function pull(_workbookDir: string): Promise<void> {
+  // TODO: Implement with isomorphic-git http transport when needed
+  throw new Error("Remote pull is not yet implemented. Use local git for remote operations.");
 }
 
 /**
@@ -360,52 +392,50 @@ export async function revertToCommit(
   targetHash: string,
   saveDb: () => Promise<void>,
 ): Promise<{ hash: string; message: string }> {
-  const git = getGit(workbookDir);
-
   // First, verify the target commit exists
   try {
-    await git.show([targetHash, "--quiet"]);
+    await git.readCommit({ fs, dir: workbookDir, oid: targetHash });
   } catch {
     throw new Error(`Commit ${targetHash} not found`);
   }
 
   // Get the target commit's message for reference
-  const targetLog = await git.log({ from: targetHash, to: targetHash, maxCount: 1 });
-  const targetMessage = targetLog.latest?.message || "unknown";
+  const targetCommit = await git.readCommit({ fs, dir: workbookDir, oid: targetHash });
+  const targetMessage = targetCommit.commit.message;
 
   // Check if there are unsaved changes - save them first
-  const status = await git.status();
-  if (!status.isClean()) {
+  const status = await getGitStatus(workbookDir);
+  if (status.hasChanges) {
     // Save current state first
     await saveDb();
-    await git.add(".");
-    await git.commit("Auto-save before revert", {
-      "--author": `${GIT_AUTHOR.name} <${GIT_AUTHOR.email}>`,
+    await commit(workbookDir, "Auto-save before revert");
+  }
+
+  // Checkout the target commit's tree to restore files
+  await git.checkout({
+    fs,
+    dir: workbookDir,
+    ref: targetHash,
+    force: true,
+  });
+
+  // Get back to the branch
+  const branch = await git.currentBranch({ fs, dir: workbookDir });
+  if (branch) {
+    await git.checkout({
+      fs,
+      dir: workbookDir,
+      ref: branch,
     });
   }
 
-  // Use git checkout to restore files from target commit, then commit
-  // This is safer than reset --hard because it preserves history
-  await git.checkout([targetHash, "--", "."]);
-
-  // Restore the database from the reverted state
-  // The db.sqlite from the target commit is now in the working directory
-
-  // Stage and commit the revert
-  await git.add(".");
-
+  // Commit the revert
   const revertMessage = `Revert to: ${targetMessage.split("\n")[0]}`;
-
-  const result = await git.commit(revertMessage, {
-    "--author": `${GIT_AUTHOR.name} <${GIT_AUTHOR.email}>`,
-  });
+  const result = await commit(workbookDir, revertMessage);
 
   console.log(`[git] Reverted to ${targetHash.substring(0, 7)}: ${revertMessage}`);
 
-  return {
-    hash: result.commit,
-    message: revertMessage,
-  };
+  return result;
 }
 
 /**
@@ -440,7 +470,7 @@ export async function saveAndCommit(
 }
 
 /**
- * Get diff statistics for uncommitted changes (excluding db.sqlite for line stats)
+ * Get diff statistics for uncommitted changes
  */
 export async function getDiffStats(workbookDir: string): Promise<GitDiffStats> {
   const repo = await isGitRepo(workbookDir);
@@ -455,11 +485,9 @@ export async function getDiffStats(workbookDir: string): Promise<GitDiffStats> {
     };
   }
 
-  const git = getGit(workbookDir);
-  const status = await git.status();
+  const status = await getGitStatus(workbookDir);
 
-  // Check if there are changes
-  if (status.isClean()) {
+  if (!status.hasChanges) {
     return {
       filesChanged: 0,
       insertions: 0,
@@ -471,16 +499,16 @@ export async function getDiffStats(workbookDir: string): Promise<GitDiffStats> {
   }
 
   // Get all changed files
-  const allFiles = [...status.staged, ...status.modified, ...status.not_added];
+  const allFiles = [...status.staged, ...status.unstaged, ...status.untracked];
   const uniqueFiles = [...new Set(allFiles)];
   const hasDbChange = uniqueFiles.some((f) => f.endsWith("db.sqlite"));
 
   // Get current db.sqlite size
   const dbPath = join(workbookDir, "db.sqlite");
   let dbSizeCurrent: number | null = null;
-  if (existsSync(dbPath)) {
+  if (fs.existsSync(dbPath)) {
     try {
-      dbSizeCurrent = statSync(dbPath).size;
+      dbSizeCurrent = fs.statSync(dbPath).size;
     } catch {
       // Ignore
     }
@@ -489,42 +517,29 @@ export async function getDiffStats(workbookDir: string): Promise<GitDiffStats> {
   // Get db.sqlite size from last commit
   let dbSizeLastCommit: number | null = null;
   try {
-    const result = await git.raw(["ls-tree", "-l", "HEAD", "db.sqlite"]);
-    if (result.trim()) {
-      // Format: mode type hash size filename
-      const parts = result.trim().split(/\s+/);
-      if (parts.length >= 4) {
-        dbSizeLastCommit = parseInt(parts[3], 10);
-      }
+    const commits = await git.log({ fs, dir: workbookDir, depth: 1 });
+    if (commits.length > 0) {
+      const headCommit = commits[0].oid;
+      const { blob } = await git.readBlob({
+        fs,
+        dir: workbookDir,
+        oid: headCommit,
+        filepath: "db.sqlite",
+      });
+      dbSizeLastCommit = blob.length;
     }
   } catch {
     // No previous commit or db.sqlite not in last commit
   }
 
-  // Get diff stats excluding db.sqlite (binary file would skew stats)
-  let insertions = 0;
-  let deletions = 0;
+  // For now, we don't calculate line-level insertions/deletions
+  // This would require implementing a diff algorithm
   const filesChanged = uniqueFiles.filter((f) => !f.endsWith("db.sqlite")).length;
-
-  try {
-    // Get numstat for tracked files (excluding db.sqlite)
-    const diffResult = await git.diff(["--numstat", "--", ".", ":(exclude)db.sqlite"]);
-    if (diffResult.trim()) {
-      const lines = diffResult.trim().split("\n");
-      for (const line of lines) {
-        const [add, del] = line.split("\t");
-        if (add !== "-") insertions += parseInt(add, 10) || 0;
-        if (del !== "-") deletions += parseInt(del, 10) || 0;
-      }
-    }
-  } catch {
-    // Diff failed, use file count only
-  }
 
   return {
     filesChanged,
-    insertions,
-    deletions,
+    insertions: 0, // Would need diff implementation
+    deletions: 0, // Would need diff implementation
     dbSizeCurrent,
     dbSizeLastCommit,
     hasDbChange,

@@ -53,6 +53,12 @@ const mockTrpcClient: EditorTrpcClient = {
     generateMdxBlock: {
       mutate: generateMdxFromApi,
     },
+    generateHint: {
+      mutate: async () => ({ hint: "", cached: false }),
+    },
+    generateHintsBatch: {
+      mutate: async () => ({ hints: [] }),
+    },
   },
 };
 

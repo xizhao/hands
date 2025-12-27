@@ -16,7 +16,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { useServer } from "@/hooks/useServer";
-import { modelOptions, providerOptions, type Settings, useSettings } from "@/hooks/useSettings";
+import { modelOptions, useSettings } from "@/hooks/useSettings";
 import { getTheme, getThemeList, setTheme } from "@/lib/theme";
 import { cn } from "@/lib/utils";
 
@@ -267,53 +267,14 @@ function ThemeButton({
 }
 
 function AISettings() {
-  const { settings, updateSetting, apiKeys, updateApiKey, syncModel } = useSettings();
+  const { settings, updateSetting, currentApiKey, updateApiKey, syncModel } = useSettings();
   const { restartServer } = useServer();
 
-  const currentModel = modelOptions[settings.provider]?.find((m) => m.value === settings.model);
-
-  const getApiKeyField = () => {
-    switch (settings.provider) {
-      case "anthropic":
-        return "anthropic_api_key" as const;
-      case "openai":
-        return "openai_api_key" as const;
-      case "google":
-        return "google_api_key" as const;
-      default:
-        return null;
-    }
-  };
-
-  const apiKeyField = getApiKeyField();
-  const currentApiKey = apiKeyField ? apiKeys[apiKeyField] : "";
+  const currentModel = modelOptions.find((m) => m.value === settings.model);
 
   return (
     <div className="space-y-6">
-      <SettingGroup title="AI Provider" description="Choose your preferred AI provider">
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <button className="w-full max-w-xs flex items-center justify-between h-9 px-3 text-sm bg-muted rounded-md border border-border hover:bg-muted/80 transition-colors">
-              <span>{providerOptions.find((p) => p.value === settings.provider)?.label}</span>
-              <ChevronDown className="h-4 w-4 text-muted-foreground" />
-            </button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="start" className="w-48">
-            {providerOptions.map((opt) => (
-              <DropdownMenuItem
-                key={opt.value}
-                onClick={() => updateSetting("provider", opt.value as Settings["provider"])}
-                className="flex items-center justify-between"
-              >
-                <span>{opt.label}</span>
-                {settings.provider === opt.value && <Check className="h-4 w-4" />}
-              </DropdownMenuItem>
-            ))}
-          </DropdownMenuContent>
-        </DropdownMenu>
-      </SettingGroup>
-
-      <SettingGroup title="Model" description="Select the AI model to use">
+      <SettingGroup title="Model" description="All models available via OpenRouter">
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <button className="w-full max-w-xs flex items-center justify-between h-9 px-3 text-sm bg-muted rounded-md border border-border hover:bg-muted/80 transition-colors">
@@ -322,7 +283,7 @@ function AISettings() {
             </button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="start" className="w-64 max-h-64 overflow-y-auto">
-            {modelOptions[settings.provider]?.map((opt) => (
+            {modelOptions.map((opt) => (
               <DropdownMenuItem
                 key={opt.value}
                 onClick={() => updateSetting("model", opt.value)}
@@ -336,40 +297,47 @@ function AISettings() {
         </DropdownMenu>
       </SettingGroup>
 
-      {apiKeyField && (
-        <SettingGroup
-          title="API Key"
-          description={`Your ${providerOptions.find((p) => p.value === settings.provider)?.label} API key`}
-        >
-          <div className="flex items-center gap-2 max-w-md">
-            <div className="relative flex-1">
-              <Key
-                weight="duotone"
-                className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground"
-              />
-              <input
-                type="password"
-                value={currentApiKey}
-                onChange={(e) => updateApiKey(apiKeyField, e.target.value)}
-                placeholder="sk-..."
-                className="w-full h-9 pl-9 pr-3 text-sm bg-muted border border-border rounded-md placeholder:text-muted-foreground/50 focus:outline-none focus:ring-1 focus:ring-ring font-mono"
-              />
-            </div>
-            <button
-              onClick={async () => {
-                await restartServer();
-                setTimeout(() => syncModel(), 1000);
-              }}
-              className="h-9 px-3 text-sm bg-primary text-primary-foreground rounded-md hover:bg-primary/90 transition-colors"
-            >
-              Save
-            </button>
+      <SettingGroup
+        title="OpenRouter API Key"
+        description="Your OpenRouter API key - one key for all AI providers"
+      >
+        <div className="flex items-center gap-2 max-w-md">
+          <div className="relative flex-1">
+            <Key
+              weight="duotone"
+              className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground"
+            />
+            <input
+              type="password"
+              value={currentApiKey}
+              onChange={(e) => updateApiKey(e.target.value)}
+              placeholder="sk-or-..."
+              className="w-full h-9 pl-9 pr-3 text-sm bg-muted border border-border rounded-md placeholder:text-muted-foreground/50 focus:outline-none focus:ring-1 focus:ring-ring font-mono"
+            />
           </div>
-          <p className="text-xs text-muted-foreground mt-2">
-            Your API key is stored locally and never sent to our servers.
-          </p>
-        </SettingGroup>
-      )}
+          <button
+            onClick={async () => {
+              await restartServer();
+              setTimeout(() => syncModel(), 1000);
+            }}
+            className="h-9 px-3 text-sm bg-primary text-primary-foreground rounded-md hover:bg-primary/90 transition-colors"
+          >
+            Save
+          </button>
+        </div>
+        <p className="text-xs text-muted-foreground mt-2">
+          Get your API key at{" "}
+          <a
+            href="https://openrouter.ai/keys"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-primary hover:underline"
+          >
+            openrouter.ai/keys
+          </a>
+          . Your key is stored locally and never sent to our servers.
+        </p>
+      </SettingGroup>
     </div>
   );
 }

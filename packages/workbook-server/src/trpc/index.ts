@@ -14,6 +14,7 @@ import type { PageRegistry } from "../pages/index.js";
 import { sqliteTRPCRouter, type SQLiteTRPCContext } from "../sqlite/trpc.js";
 import { actionRunsRouter, type ActionRunsContext } from "./routers/action-runs.js";
 import { aiRouter, type AIContext } from "./routers/ai.js";
+import { deployRouter, type DeployContext } from "./routers/deploy.js";
 import { editorStateRouter, type EditorStateContext } from "./routers/editor-state.js";
 import { pagesRouter, type PagesContext } from "./routers/pages.js";
 import { secretsRouter, type SecretsContext } from "./routers/secrets.js";
@@ -24,14 +25,7 @@ import { workbookRouter, type WorkbookContext } from "./routers/workbook.js";
 export interface TRPCConfig {
   workbookId: string;
   workbookDir: string;
-  /** Runtime URL for SQLite database access (e.g., http://localhost:55200) */
-  getRuntimeUrl: () => string | null;
-  /** Whether the runtime/database is ready */
-  isDbReady: () => boolean;
   getState: () => {
-    rscReady: boolean;
-    rscPort: number | null;
-    rscError: string | null;
     buildErrors: string[];
   };
   /** Optional: provides config from package.json */
@@ -56,7 +50,8 @@ interface CombinedContext
     AIContext,
     ActionsContext,
     EditorStateContext,
-    ActionRunsContext {}
+    ActionRunsContext,
+    DeployContext {}
 
 // Create a merged router that includes all routes
 const t = initTRPC.context<CombinedContext>().create();
@@ -84,6 +79,8 @@ const appRouter = t.router({
   editorState: editorStateRouter,
   // Action run history and logs
   actionRuns: actionRunsRouter,
+  // Deploy routes (build and publish to CF Workers)
+  deploy: deployRouter,
 });
 
 export type AppRouter = typeof appRouter;
@@ -95,8 +92,6 @@ export function registerTRPCRoutes(app: Hono, config: TRPCConfig) {
   const {
     workbookId,
     workbookDir,
-    getRuntimeUrl,
-    isDbReady,
     getState,
     getExternalConfig,
     formatBlockSource,
@@ -108,19 +103,12 @@ export function registerTRPCRoutes(app: Hono, config: TRPCConfig) {
 
   // Handle all /trpc/* requests
   app.all("/trpc/*", async (c) => {
-    const _path = c.req.path.replace("/trpc", "");
-
-    // Get runtime URL for SQLite access
-    const runtimeUrl = getRuntimeUrl();
-
     // Create combined context for this request
     const ctx: CombinedContext = {
       // Base context
       workbookId,
       workbookDir,
-      isDbReady: isDbReady(),
-      // SQLite context - runtime URL for database access
-      runtimeUrl: runtimeUrl ?? "http://localhost:55200",
+      // SQLite context - direct database access via workbookDir
       onSchemaChange,
       // Status context
       getState,
@@ -157,6 +145,7 @@ export type { SecretsRouter } from "./routers/secrets.js";
 export type { StatusRouter } from "./routers/status.js";
 export type { ThumbnailsRouter } from "./routers/thumbnails.js";
 export type { WorkbookRouter } from "./routers/workbook.js";
+export type { DeployRouter } from "./routers/deploy.js";
 
 // Re-export model types for client usage
 export type {

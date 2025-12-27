@@ -1032,23 +1032,6 @@ function AIAnalysisDemo() {
   );
 }
 
-// Animated chart bar
-function ChartBar({ height, delay }: { height: number; delay: number }) {
-  const [visible, setVisible] = useState(false);
-
-  useEffect(() => {
-    const timer = setTimeout(() => setVisible(true), delay + 300);
-    return () => clearTimeout(timer);
-  }, [delay]);
-
-  return (
-    <div
-      className="w-12 bg-gradient-to-t from-violet-500 to-fuchsia-500 rounded-t transition-all duration-700 ease-out shadow-lg shadow-violet-500/20"
-      style={{ height: visible ? `${height}%` : "0%" }}
-    />
-  );
-}
-
 // Dashboard Demo
 function DashboardDemo() {
   return (
@@ -1196,24 +1179,6 @@ function HandsLogo({ className }: { className?: string }) {
   );
 }
 
-function SparklesIcon({ className }: { className?: string }) {
-  return (
-    <svg
-      xmlns="http://www.w3.org/2000/svg"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      className={className}
-    >
-      <path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275L12 3Z" />
-      <path d="M5 3v4M19 17v4M3 5h4M17 19h4" />
-    </svg>
-  );
-}
-
 function ArrowUpIcon({ className }: { className?: string }) {
   return (
     <svg
@@ -1245,24 +1210,6 @@ function CheckIcon({ className }: { className?: string }) {
       className={className}
     >
       <path d="M20 6 9 17l-5-5" />
-    </svg>
-  );
-}
-
-function CameraIcon({ className }: { className?: string }) {
-  return (
-    <svg
-      xmlns="http://www.w3.org/2000/svg"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      className={className}
-    >
-      <path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3z" />
-      <circle cx="12" cy="13" r="3" />
     </svg>
   );
 }

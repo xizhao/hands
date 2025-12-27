@@ -2,7 +2,7 @@
  * ChatSettings - Hands Agent settings popover shown when clicking the Hand icon
  *
  * Shows:
- * - Model/provider selection
+ * - Model selection (all via OpenRouter)
  * - Agent server status with restart button
  * - Advanced: Available agents and tools (collapsible)
  */
@@ -18,7 +18,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { useServer } from "@/hooks/useServer";
-import { modelOptions, providerOptions, type Settings, useSettings } from "@/hooks/useSettings";
+import { modelOptions, useSettings } from "@/hooks/useSettings";
 import { api } from "@/lib/api";
 import { cn } from "@/lib/utils";
 
@@ -45,21 +45,7 @@ export function ChatSettings({ children }: ChatSettingsProps) {
     enabled: isConnected,
   });
 
-  const getApiKeyField = () => {
-    switch (settings.provider) {
-      case "anthropic":
-        return "anthropic_api_key" as const;
-      case "openai":
-        return "openai_api_key" as const;
-      case "google":
-        return "google_api_key" as const;
-      default:
-        return null;
-    }
-  };
-
-  const apiKeyField = getApiKeyField();
-  const currentModel = modelOptions[settings.provider]?.find((m) => m.value === settings.model);
+  const currentModel = modelOptions.find((m) => m.value === settings.model);
 
   if (loading) {
     return <>{children}</>;
@@ -116,39 +102,6 @@ export function ChatSettings({ children }: ChatSettingsProps) {
 
         {/* Model selection */}
         <div className="p-3 space-y-3">
-          {/* Provider dropdown */}
-          <div className="space-y-1.5">
-            <span className="text-[10px] uppercase tracking-wide text-muted-foreground block">
-              Provider
-            </span>
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <button
-                  type="button"
-                  className="w-full flex items-center justify-between h-8 px-2 text-sm bg-muted rounded-md border border-border hover:bg-muted/80 transition-colors"
-                >
-                  <span>{providerOptions.find((p) => p.value === settings.provider)?.label}</span>
-                  <ChevronDown className="h-3 w-3 text-muted-foreground" />
-                </button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent
-                align="start"
-                className="w-[--radix-dropdown-menu-trigger-width]"
-              >
-                {providerOptions.map((opt) => (
-                  <DropdownMenuItem
-                    key={opt.value}
-                    onClick={() => updateSetting("provider", opt.value as Settings["provider"])}
-                    className="flex items-center justify-between"
-                  >
-                    <span>{opt.label}</span>
-                    {settings.provider === opt.value && <Check className="h-4 w-4" />}
-                  </DropdownMenuItem>
-                ))}
-              </DropdownMenuContent>
-            </DropdownMenu>
-          </div>
-
           {/* Model dropdown */}
           <div className="space-y-1.5">
             <span className="text-[10px] uppercase tracking-wide text-muted-foreground block">
@@ -168,7 +121,7 @@ export function ChatSettings({ children }: ChatSettingsProps) {
                 align="start"
                 className="w-[--radix-dropdown-menu-trigger-width] max-h-64 overflow-y-auto"
               >
-                {modelOptions[settings.provider]?.map((opt) => (
+                {modelOptions.map((opt) => (
                   <DropdownMenuItem
                     key={opt.value}
                     onClick={() => updateSetting("model", opt.value)}
@@ -183,34 +136,32 @@ export function ChatSettings({ children }: ChatSettingsProps) {
           </div>
 
           {/* API Key */}
-          {apiKeyField && (
-            <div className="space-y-1.5">
-              <label
-                htmlFor="api-key-input"
-                className="text-[10px] uppercase tracking-wide text-muted-foreground"
-              >
-                API Key
-              </label>
-              <input
-                id="api-key-input"
-                type="password"
-                value={currentApiKey}
-                onChange={(e) => updateApiKey(apiKeyField, e.target.value)}
-                onBlur={async () => {
-                  if (currentApiKey) {
-                    try {
-                      await restartServer();
-                      setTimeout(() => syncModel(), 1000);
-                    } catch (e) {
-                      console.error("Failed to restart server:", e);
-                    }
+          <div className="space-y-1.5">
+            <label
+              htmlFor="api-key-input"
+              className="text-[10px] uppercase tracking-wide text-muted-foreground"
+            >
+              OpenRouter API Key
+            </label>
+            <input
+              id="api-key-input"
+              type="password"
+              value={currentApiKey}
+              onChange={(e) => updateApiKey(e.target.value)}
+              onBlur={async () => {
+                if (currentApiKey) {
+                  try {
+                    await restartServer();
+                    setTimeout(() => syncModel(), 1000);
+                  } catch (e) {
+                    console.error("Failed to restart server:", e);
                   }
-                }}
-                placeholder={`${settings.provider} API key`}
-                className="w-full h-8 px-2 text-xs bg-muted border border-border rounded-md placeholder:text-muted-foreground/50 focus:outline-none focus:ring-1 focus:ring-ring font-mono"
-              />
-            </div>
-          )}
+                }
+              }}
+              placeholder="sk-or-..."
+              className="w-full h-8 px-2 text-xs bg-muted border border-border rounded-md placeholder:text-muted-foreground/50 focus:outline-none focus:ring-1 focus:ring-ring font-mono"
+            />
+          </div>
         </div>
 
         {/* Advanced section (collapsible) */}

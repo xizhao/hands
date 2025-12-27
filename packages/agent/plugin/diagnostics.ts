@@ -6,8 +6,7 @@
  */
 import type { Plugin } from "@opencode-ai/plugin";
 import { tool } from "@opencode-ai/plugin";
-import { spawn } from "child_process";
-import path from "path";
+import { runCli } from "../lib/cli";
 
 // Max diagnostics to show before truncating
 const MAX_DIAGNOSTICS = 5;
@@ -15,39 +14,14 @@ const MAX_DIAGNOSTICS = 5;
 /**
  * Run `hands check --fix` and return the output
  */
-function runCheck(
-  cliPath: string,
+async function runCheck(
   cwd: string
 ): Promise<{ output: string; code: number }> {
-  return new Promise((resolve) => {
-    // Run via node since cliPath is a .js file
-    const child = spawn("node", [cliPath, "check", "--fix"], {
-      cwd,
-      stdio: ["ignore", "pipe", "pipe"],
-    });
-
-    let stdout = "";
-    let stderr = "";
-
-    child.stdout?.on("data", (data) => {
-      stdout += data.toString();
-    });
-
-    child.stderr?.on("data", (data) => {
-      stderr += data.toString();
-    });
-
-    child.on("exit", (code) => {
-      const output = stdout + stderr;
-      // Strip ANSI codes for cleaner output
-      const cleaned = output.replace(/\x1b\[[0-9;]*[a-zA-Z]/g, "");
-      resolve({ output: cleaned, code: code ?? 0 });
-    });
-
-    child.on("error", (err) => {
-      resolve({ output: `Failed to run diagnostics: ${err.message}`, code: 1 });
-    });
-  });
+  const result = await runCli(["check", "--fix"], { cwd });
+  const output = result.stdout + result.stderr;
+  // Strip ANSI codes for cleaner output
+  const cleaned = output.replace(/\x1b\[[0-9;]*[a-zA-Z]/g, "");
+  return { output: cleaned, code: result.code };
 }
 
 /**
@@ -74,10 +48,6 @@ function extractErrors(output: string): string[] {
 }
 
 const plugin: Plugin = async ({ directory }) => {
-  // Handle different runtime environments (Bun uses import.meta.dir, Node 20+ uses import.meta.dirname)
-  const currentDir = import.meta.dirname ?? import.meta.dir ?? path.dirname(new URL(import.meta.url).pathname);
-  const cliPath = path.resolve(currentDir, "../../cli/bin/hands.js");
-
   return {
     tool: {
       hands_diagnostics: tool({
@@ -86,7 +56,7 @@ const plugin: Plugin = async ({ directory }) => {
           "Runs TypeScript type checking and Biome linting on workbook files.",
         args: {},
         async execute() {
-          const result = await runCheck(cliPath, directory);
+          const result = await runCheck(directory);
           return result.output || (result.code === 0 ? "All checks passed" : "Check failed");
         },
       }),
@@ -99,7 +69,7 @@ const plugin: Plugin = async ({ directory }) => {
         return;
       }
 
-      const result = await runCheck(cliPath, directory);
+      const result = await runCheck(directory);
 
       // If check passed, don't inject anything
       if (result.code === 0) {

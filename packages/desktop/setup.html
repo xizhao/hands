@@ -1,0 +1,222 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="/hands.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Welcome to Hands</title>
+    <style>
+      * { box-sizing: border-box; margin: 0; padding: 0; }
+
+      html, body {
+        height: 100%;
+        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        background: #18181b;
+        color: #fafafa;
+        -webkit-font-smoothing: antialiased;
+      }
+
+      body {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        padding: 32px;
+      }
+
+      /* Draggable title bar area */
+      .titlebar {
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        height: 28px;
+        -webkit-app-region: drag;
+      }
+
+      .logo {
+        width: 48px;
+        height: 48px;
+        margin-bottom: 20px;
+        opacity: 0.9;
+      }
+
+      h1 {
+        font-size: 20px;
+        font-weight: 600;
+        margin-bottom: 8px;
+      }
+
+      .subtitle {
+        font-size: 13px;
+        color: #a1a1aa;
+        margin-bottom: 24px;
+        text-align: center;
+        line-height: 1.5;
+      }
+
+      .form {
+        width: 100%;
+        max-width: 320px;
+      }
+
+      label {
+        display: block;
+        font-size: 12px;
+        font-weight: 500;
+        color: #a1a1aa;
+        margin-bottom: 6px;
+      }
+
+      input {
+        width: 100%;
+        padding: 10px 12px;
+        font-size: 14px;
+        font-family: ui-monospace, monospace;
+        background: #27272a;
+        border: 1px solid #3f3f46;
+        border-radius: 8px;
+        color: #fafafa;
+        outline: none;
+        transition: border-color 0.15s;
+      }
+
+      input:focus {
+        border-color: #3b82f6;
+      }
+
+      input::placeholder {
+        color: #71717a;
+      }
+
+      .error {
+        font-size: 12px;
+        color: #ef4444;
+        margin-top: 6px;
+        display: none;
+      }
+
+      .error.show {
+        display: block;
+      }
+
+      button {
+        width: 100%;
+        margin-top: 16px;
+        padding: 10px 16px;
+        font-size: 14px;
+        font-weight: 500;
+        background: #3b82f6;
+        color: white;
+        border: none;
+        border-radius: 8px;
+        cursor: pointer;
+        transition: background 0.15s;
+      }
+
+      button:hover {
+        background: #2563eb;
+      }
+
+      button:disabled {
+        background: #3f3f46;
+        cursor: not-allowed;
+      }
+
+      .link {
+        margin-top: 16px;
+        font-size: 12px;
+        color: #71717a;
+      }
+
+      .link a {
+        color: #3b82f6;
+        text-decoration: none;
+      }
+
+      .link a:hover {
+        text-decoration: underline;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="titlebar"></div>
+
+    <svg class="logo" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M18 11V6a2 2 0 0 0-2-2a2 2 0 0 0-2 2" />
+      <path d="M14 10V4a2 2 0 0 0-2-2a2 2 0 0 0-2 2v2" />
+      <path d="M10 10.5V6a2 2 0 0 0-2-2a2 2 0 0 0-2 2v8" />
+      <path d="M18 8a2 2 0 1 1 4 0v6a8 8 0 0 1-8 8h-2c-2.8 0-4.5-.86-5.99-2.34l-3.6-3.6a2 2 0 0 1 2.83-2.82L7 15" />
+    </svg>
+
+    <h1>Welcome to Hands</h1>
+    <p class="subtitle">
+      Enter your OpenRouter API key to get started.<br/>
+      This gives you access to all AI models.
+    </p>
+
+    <form class="form" id="setup-form">
+      <label for="api-key">OpenRouter API Key</label>
+      <input
+        type="password"
+        id="api-key"
+        placeholder="sk-or-..."
+        autocomplete="off"
+        spellcheck="false"
+      />
+      <p class="error" id="error"></p>
+      <button type="submit" id="submit-btn">Continue</button>
+    </form>
+
+    <p class="link">
+      Don't have a key? <a href="https://openrouter.ai/keys" target="_blank">Get one at openrouter.ai</a>
+    </p>
+
+    <script type="module">
+      const { invoke } = await import("@tauri-apps/api/core");
+
+      const form = document.getElementById("setup-form");
+      const input = document.getElementById("api-key");
+      const error = document.getElementById("error");
+      const btn = document.getElementById("submit-btn");
+
+      form.addEventListener("submit", async (e) => {
+        e.preventDefault();
+
+        const apiKey = input.value.trim();
+
+        if (!apiKey) {
+          error.textContent = "Please enter your API key";
+          error.classList.add("show");
+          return;
+        }
+
+        if (!apiKey.startsWith("sk-or-")) {
+          error.textContent = "OpenRouter keys start with sk-or-";
+          error.classList.add("show");
+          return;
+        }
+
+        error.classList.remove("show");
+        btn.disabled = true;
+        btn.textContent = "Starting...";
+
+        try {
+          await invoke("save_api_key_and_launch", { apiKey });
+        } catch (err) {
+          error.textContent = err.toString();
+          error.classList.add("show");
+          btn.disabled = false;
+          btn.textContent = "Continue";
+        }
+      });
+
+      input.addEventListener("input", () => {
+        error.classList.remove("show");
+      });
+
+      // Focus input on load
+      input.focus();
+    </script>
+  </body>
+</html>

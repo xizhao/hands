@@ -5,7 +5,6 @@ import {
   type TVideoElement,
 } from 'platejs';
 import { SlateElement, type SlateElementProps } from 'platejs/static';
-import * as React from 'react';
 
 import { cn } from '../lib/utils';
 

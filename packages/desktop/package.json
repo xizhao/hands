@@ -15,8 +15,9 @@
     "tauri": "tauri",
     "build:docs": "cd ../../docs && bun run build",
     "cleanup": "lsof -ti:1420,55300 | xargs kill -9 2>/dev/null || true",
-    "tauri:dev": "bun run cleanup && tauri dev",
-    "tauri:build": "bun run build:docs && tauri build"
+    "tauri:dev": "bun run build:sidecars && bun run cleanup && tauri dev",
+    "tauri:build": "bun run build:sidecars && bun run build:docs && tauri build",
+    "build:sidecars": "bun run scripts/build-sidecars.ts"
   },
   "dependencies": {
     "@hands/app": "workspace:*",

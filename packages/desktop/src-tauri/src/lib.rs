@@ -10,7 +10,7 @@ use tauri::{Emitter, Manager};
 use tauri_plugin_dialog::DialogExt;
 use tauri_plugin_store::StoreExt;
 use tokio::io::{AsyncBufReadExt, BufReader};
-use tokio::process::{Child, Command};
+use tokio::process::Child;
 use tokio::sync::Mutex;
 
 // Modules
@@ -20,6 +20,7 @@ pub mod capture;
 pub mod runtime_manager;
 pub mod jobs;
 pub mod window_manager;
+pub mod sidecar;
 
 use runtime_manager::RuntimeManager;
 use jobs::{JobRegistry, SessionEvent};
@@ -152,13 +153,8 @@ fn read_workbook_config(workbook_dir: &PathBuf) -> Option<Workbook> {
 /// Initialize workbook by calling the shared TypeScript implementation.
 /// This ensures CLI and desktop app create identical workbook structures.
 fn init_workbook(workbook_dir: &PathBuf, name: &str, _description: Option<&str>) -> Result<(), String> {
-    // Get the config CLI script path (relative to CARGO_MANIFEST_DIR which is src-tauri)
-    let config_script = format!("{}/../../workbook-server/src/config/cli.ts", env!("CARGO_MANIFEST_DIR"));
-
-    let output = std::process::Command::new("bun")
+    let output = sidecar::command_sync(sidecar::Sidecar::Cli)
         .args([
-            "run",
-            &config_script,
             "init",
             &format!("--name={}", name),
             &format!("--dir={}", workbook_dir.to_string_lossy()),
@@ -192,16 +188,9 @@ async fn create_workbook(
     let workbook_dir = get_workbook_dir(&id)?;
     fs::create_dir_all(&workbook_dir).map_err(|e| format!("Failed to create workbook directory: {}", e))?;
 
-    // Initialize git repo
-    let output = std::process::Command::new("git")
-        .args(["init"])
-        .current_dir(&workbook_dir)
-        .output()
-        .map_err(|e| format!("Failed to initialize git: {}", e))?;
-
-    if !output.status.success() {
-        return Err(format!("Git init failed: {}", String::from_utf8_lossy(&output.stderr)));
-    }
+    // Initialize git repo using libgit2 (no external git dependency)
+    git2::Repository::init(&workbook_dir)
+        .map_err(|e| format!("Failed to initialize git repository: {}", e))?;
 
     // Create project structure from template
     init_workbook(&workbook_dir, &request.name, request.description.as_deref())?;
@@ -505,14 +494,9 @@ async fn spawn_workbook_server(
     // Force cleanup any stale processes before starting
     force_cleanup_workbook_server().await;
 
-    // Get the workbook-server script path (relative to CARGO_MANIFEST_DIR which is src-tauri)
-    let runtime_script = format!("{}/../../workbook-server/src/index.ts", env!("CARGO_MANIFEST_DIR"));
-
     // Start hands-runtime process - run from the workbook directory
-    let mut child = Command::new("bun")
+    let mut child = sidecar::command(sidecar::Sidecar::WorkbookServer)
         .args([
-            "run",
-            &runtime_script,
             &format!("--workbook-id={}", workbook_id),
             &format!("--workbook-dir={}", directory),
         ])
@@ -1115,26 +1099,99 @@ fn get_api_keys_from_store(app: &tauri::AppHandle) -> HashMap<String, String> {
     }
 
     // Then override with store values (settings UI takes precedence)
+    // OpenRouter is the primary key - provides access to all models
     if let Ok(store) = app.store("settings.json") {
-        let keys = [
-            ("anthropic_api_key", "ANTHROPIC_API_KEY"),
-            ("openai_api_key", "OPENAI_API_KEY"),
-            ("google_api_key", "GOOGLE_GENERATIVE_AI_API_KEY"),
-            ("hands_ai_api_key", "HANDS_AI_API_KEY"),
-        ];
-
-        for (store_key, env_key) in keys {
-            if let Some(value) = store.get(store_key) {
-                if let Some(s) = value.as_str() {
-                    if !s.is_empty() {
-                        env_vars.insert(env_key.to_string(), s.to_string());
-                    }
+        if let Some(value) = store.get("openrouter_api_key") {
+            if let Some(s) = value.as_str() {
+                if !s.is_empty() {
+                    env_vars.insert("OPENROUTER_API_KEY".to_string(), s.to_string());
                 }
             }
         }
     }
 
     env_vars
+}
+
+/// Check if OpenRouter API key is configured
+fn has_openrouter_api_key(app: &tauri::AppHandle) -> bool {
+    // Check .env.local first (dev mode)
+    let env_local_path = format!("{}/../.env.local", env!("CARGO_MANIFEST_DIR"));
+    if let Ok(contents) = std::fs::read_to_string(&env_local_path) {
+        for line in contents.lines() {
+            if let Some((key, value)) = line.split_once('=') {
+                if key.trim() == "OPENROUTER_API_KEY" && !value.trim().is_empty() {
+                    return true;
+                }
+            }
+        }
+    }
+
+    // Check store
+    if let Ok(store) = app.store("settings.json") {
+        if let Some(value) = store.get("openrouter_api_key") {
+            if let Some(s) = value.as_str() {
+                return !s.is_empty();
+            }
+        }
+    }
+
+    false
+}
+
+/// Save OpenRouter API key and launch main app
+#[tauri::command]
+async fn save_api_key_and_launch(
+    app: tauri::AppHandle,
+    state: tauri::State<'_, Arc<Mutex<AppState>>>,
+    api_key: String,
+) -> Result<(), String> {
+    // Save to store
+    let store = app.store("settings.json")
+        .map_err(|e| format!("Failed to open settings store: {}", e))?;
+
+    store.set("openrouter_api_key", serde_json::json!(api_key));
+    store.save().map_err(|e| format!("Failed to save settings: {}", e))?;
+
+    // Close setup window
+    if let Some(setup_window) = app.get_webview_window("setup") {
+        let _ = setup_window.close();
+    }
+
+    // Open the main workbook window
+    let _ = window_manager::open_startup_workbook(&app, &state).await;
+
+    // Restart opencode server with new API key
+    let env_vars = get_api_keys_from_store(&app);
+    let model = get_model_from_store(&app);
+
+    // Clone the Arc for use in spawn
+    let state_clone = state.inner().clone();
+
+    // Kill existing server
+    {
+        let mut s = state_clone.lock().await;
+        if let Some(ref mut child) = s.server {
+            let _ = child.kill().await;
+        }
+        s.server = None;
+    }
+
+    // Start new server with API key
+    tauri::async_runtime::spawn(async move {
+        match start_opencode_server(PORT_OPENCODE, model, env_vars, None).await {
+            Ok(child) => {
+                let mut s = state_clone.lock().await;
+                s.server = Some(child);
+                println!("Hands agent restarted with new API key");
+            }
+            Err(e) => {
+                eprintln!("Failed to restart Hands agent: {}", e);
+            }
+        }
+    });
+
+    Ok(())
 }
 
 fn get_model_from_store(app: &tauri::AppHandle) -> Option<String> {
@@ -1207,13 +1264,9 @@ async fn start_opencode_server(
         all_env.insert("HANDS_WORKBOOK_DIR".to_string(), dir.clone());
     }
 
-    // Get the agent server script path (relative to CARGO_MANIFEST_DIR which is src-tauri)
-    let agent_script = format!("{}/../../agent/src/index.ts", env!("CARGO_MANIFEST_DIR"));
-
     // Build command - run from the workbook directory if provided
-    let mut cmd = Command::new("bun");
-    cmd.args(["run", &agent_script])
-        .envs(&all_env)
+    let mut cmd = sidecar::command(sidecar::Sidecar::Agent);
+    cmd.envs(&all_env)
         .stdout(Stdio::inherit())
         .stderr(Stdio::inherit())
         .kill_on_drop(true);
@@ -1680,6 +1733,33 @@ async fn open_docs(app: tauri::AppHandle) -> Result<(), String> {
     Ok(())
 }
 
+/// Open the setup window for first-time API key configuration
+fn open_setup_window(app: &tauri::AppHandle) -> Result<(), String> {
+    use tauri::{WebviewUrl, WebviewWindowBuilder};
+
+    let mut builder = WebviewWindowBuilder::new(app, "setup", WebviewUrl::App("setup.html".into()))
+        .title("Welcome to Hands")
+        .inner_size(400.0, 440.0)
+        .resizable(false)
+        .maximizable(false)
+        .minimizable(false)
+        .center();
+
+    #[cfg(target_os = "macos")]
+    {
+        use tauri::TitleBarStyle;
+        builder = builder
+            .title_bar_style(TitleBarStyle::Overlay)
+            .hidden_title(true);
+    }
+
+    builder
+        .build()
+        .map_err(|e| format!("Failed to create setup window: {}", e))?;
+
+    Ok(())
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -1721,7 +1801,8 @@ pub fn run() {
             capture::capture_region,
             capture::cancel_capture,
             capture::close_capture_panel,
-            capture::set_ignore_cursor_events
+            capture::set_ignore_cursor_events,
+            save_api_key_and_launch
         ])
         .setup(|app| {
             let state = Arc::new(Mutex::new(AppState {
@@ -1750,12 +1831,27 @@ pub fn run() {
             // Start SSE listener for job tracking
             start_sse_job_listener(state.clone(), app.handle().clone());
 
+            // Check if API key is configured - show setup window if not
             let startup_app = app.handle().clone();
             let startup_state = state.clone();
-            tauri::async_runtime::spawn(async move {
-                tokio::time::sleep(std::time::Duration::from_millis(100)).await;
-                let _ = window_manager::open_startup_workbook(&startup_app, &startup_state).await;
-            });
+            let has_api_key = has_openrouter_api_key(app.handle());
+
+            if has_api_key {
+                // API key exists - open main workbook window
+                tauri::async_runtime::spawn(async move {
+                    tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+                    let _ = window_manager::open_startup_workbook(&startup_app, &startup_state).await;
+                });
+            } else {
+                // No API key - show setup window
+                let setup_app = app.handle().clone();
+                tauri::async_runtime::spawn(async move {
+                    tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+                    if let Err(e) = open_setup_window(&setup_app) {
+                        eprintln!("Failed to open setup window: {}", e);
+                    }
+                });
+            }
 
             // Build the application menu
             let app_handle = app.handle();
