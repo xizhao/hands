@@ -291,7 +291,8 @@ export function getWorkflowBinding(_id: string): { className: string; binding: s
  */
 export class ${className} extends WorkflowEntrypoint<Env, unknown> {
   async run(event: WorkflowEvent<unknown>, step: WorkflowStep): Promise<unknown> {
-    const ctx = buildActionContext(this.env);
+    const runId = crypto.randomUUID();
+    const ctx = buildWorkflowContext(this.env, runId);
     return ${varName}Action.workflow(step, ctx, event.payload);
   }
 }`;
@@ -309,7 +310,7 @@ export class ${className} extends WorkflowEntrypoint<Env, unknown> {
   const workflowManifest = `// Auto-generated CF Workflow classes - DO NOT EDIT
 // Env type is globally available from worker-configuration.d.ts
 import { WorkflowEntrypoint, WorkflowStep, WorkflowEvent } from "cloudflare:workers";
-import { buildActionContext } from "@hands/runtime/actions/context";
+import { buildWorkflowContext } from "@hands/runtime/actions/workflow-context";
 ${imports}
 
 // =============================================================================

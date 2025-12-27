@@ -7,8 +7,11 @@
 // Routes (dev mode HTTP endpoints)
 export { actionRoutes } from "./routes";
 
-// Context builder (direct DB access)
+// Context builder (direct DB access for dev)
 export { buildActionContext, createRunMeta } from "./context";
+
+// Context builder (production CF Workflows)
+export { buildWorkflowContext } from "./workflow-context";
 
 // Schema utilities
 export { validateSchema, assertSchemaValid } from "./schema";
