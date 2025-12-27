@@ -90,6 +90,7 @@ interface ThreadTabBarProps {
   activeSessionId: string | null;
   onSwitchThread: (id: string) => void;
   onDeleteThread: (id: string, e: React.MouseEvent) => void;
+  onPopOut?: (id: string) => void;
   compact?: boolean;
   isTwoColumn: boolean;
   needsPopover: boolean;
@@ -101,6 +102,7 @@ const ThreadTabBar = memo(function ThreadTabBar({
   activeSessionId,
   onSwitchThread,
   onDeleteThread,
+  onPopOut,
   compact = false,
   isTwoColumn,
   needsPopover,
@@ -229,8 +231,16 @@ const ThreadTabBar = memo(function ThreadTabBar({
           {allChips.slice(0, 4).map((chip) => (
             <div
               key={chip.id}
+              draggable
+              onDragEnd={(e) => {
+                // Pop out if dragged outside window bounds
+                if (onPopOut && (e.clientX < 0 || e.clientY < 0 ||
+                    e.clientX > window.innerWidth || e.clientY > window.innerHeight)) {
+                  onPopOut(chip.id);
+                }
+              }}
               className={cn(
-                "group flex items-center gap-1.5 px-2.5 h-7 text-xs font-medium rounded-md transition-all min-w-0",
+                "group flex items-center gap-1.5 px-2.5 h-7 text-xs font-medium rounded-md transition-all min-w-0 cursor-grab active:cursor-grabbing",
                 chip.isCurrent
                   ? "bg-background text-foreground shadow-sm border border-border/50"
                   : "text-muted-foreground hover:text-foreground hover:bg-muted/50"
@@ -356,6 +366,7 @@ export function UnifiedSidebar({
   const [isUploadingFile, setIsUploadingFile] = useState(false);
   const [isInputExpanded, setIsInputExpanded] = useState(false);
   const [containerWidth, setContainerWidth] = useState(0);
+  const [poppedOutSessions, setPoppedOutSessions] = useState<Set<string>>(new Set());
   const inputRef = useRef<HTMLInputElement>(null);
   const expandedInputRef = useRef<HTMLTextAreaElement>(null);
   const messagesContainerRef = useRef<HTMLDivElement>(null);
@@ -379,6 +390,45 @@ export function UnifiedSidebar({
     observer.observe(container);
     return () => observer.disconnect();
   }, []);
+
+  // Listen for floating chat opened/closed events
+  useEffect(() => {
+    const unlistenOpened = listen<{ sessionId: string; workbookDir: string }>(
+      "floating-chat-opened",
+      (event) => {
+        setPoppedOutSessions((prev) => new Set([...prev, event.payload.sessionId]));
+      }
+    );
+    const unlistenClosed = listen<{ sessionId: string; workbookDir: string }>(
+      "floating-chat-closed",
+      (event) => {
+        setPoppedOutSessions((prev) => {
+          const next = new Set(prev);
+          next.delete(event.payload.sessionId);
+          return next;
+        });
+      }
+    );
+    const unlistenDock = listen<{ sessionId: string; workbookDir: string }>(
+      "dock-floating-chat",
+      (event) => {
+        // Switch to the docked session
+        setActiveSession(event.payload.sessionId);
+        // Remove from popped out (closed event will also fire, but this is immediate)
+        setPoppedOutSessions((prev) => {
+          const next = new Set(prev);
+          next.delete(event.payload.sessionId);
+          return next;
+        });
+      }
+    );
+
+    return () => {
+      unlistenOpened.then((fn) => fn());
+      unlistenClosed.then((fn) => fn());
+      unlistenDock.then((fn) => fn());
+    };
+  }, [setActiveSession]);
 
   // Listen for capture action prompts from the capture panel
   useEffect(() => {
@@ -1117,14 +1167,28 @@ ${STDLIB_QUICK_REF}
     if (id === activeSessionId) setActiveSession(null);
   }, [activeSessionId, deleteSession, setActiveSession]);
 
+  const handlePopOutStable = useCallback((id: string) => {
+    if (!activeWorkbook?.directory) return;
+    invoke("open_floating_chat", {
+      sessionId: id,
+      workbookDir: activeWorkbook.directory,
+    });
+    // Clear active session if we're popping out the current one
+    if (id === activeSessionId) setActiveSession(null);
+  }, [activeWorkbook?.directory, activeSessionId, setActiveSession]);
+
+  // Filter out sessions that are popped out to floating windows
+  const visibleSessions = sessions.filter((s) => !poppedOutSessions.has(s.id));
+
   // Memoized tab bar component
   const tabBar = (
     <ThreadTabBar
-      sessions={sessions}
+      sessions={visibleSessions}
       sessionStatuses={sessionStatuses}
       activeSessionId={activeSessionId}
       onSwitchThread={handleSwitchThreadStable}
       onDeleteThread={handleDeleteThreadStable}
+      onPopOut={handlePopOutStable}
       compact={compact}
       isTwoColumn={isTwoColumn}
       needsPopover={needsPopover}

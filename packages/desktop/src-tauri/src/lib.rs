@@ -21,6 +21,7 @@ pub mod runtime_manager;
 pub mod jobs;
 pub mod window_manager;
 pub mod sidecar;
+pub mod floating_chat;
 
 use runtime_manager::RuntimeManager;
 use jobs::{JobRegistry, SessionEvent};
@@ -1874,7 +1875,11 @@ pub fn run() {
             capture::cancel_capture,
             capture::close_capture_panel,
             capture::set_ignore_cursor_events,
-            save_api_key_and_launch
+            save_api_key_and_launch,
+            floating_chat::open_floating_chat,
+            floating_chat::hide_floating_chat,
+            floating_chat::show_floating_chat,
+            floating_chat::toggle_floating_chat
         ])
         .setup(|app| {
             let state = Arc::new(Mutex::new(AppState {
@@ -1909,10 +1914,19 @@ pub fn run() {
             let has_api_key = has_openrouter_api_key(app.handle());
 
             if has_api_key {
-                // API key exists - open main workbook window
+                // API key exists - open floating chat (the primary UI)
                 tauri::async_runtime::spawn(async move {
                     tokio::time::sleep(std::time::Duration::from_millis(100)).await;
-                    let _ = window_manager::open_startup_workbook(&startup_app, &startup_state).await;
+
+                    // Get first workbook directory for floating chat
+                    if let Ok(workbooks) = list_workbooks().await {
+                        if let Some(workbook) = workbooks.first() {
+                            let _ = floating_chat::open_floating_chat(
+                                startup_app,
+                                workbook.directory.clone()
+                            ).await;
+                        }
+                    }
                 });
             } else {
                 // No API key - show setup window
