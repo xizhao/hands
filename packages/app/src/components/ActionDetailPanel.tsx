@@ -9,17 +9,17 @@
  * - Missing secrets overlay with configuration form
  */
 
-import { CaretDown, CaretRight, CheckCircle, CircleNotch, Clock, Code, Eye, EyeSlash, Globe, Key, Lock, Play, XCircle } from "@phosphor-icons/react";
+import { CaretDown, CaretRight, CheckCircle, CircleNotch, Clock, Code, Eye, EyeSlash, GitBranch, Globe, Key, Lock, Play, XCircle } from "@phosphor-icons/react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
 import { useState } from "react";
-import { ActionEditor } from "@hands/editor";
+import { ActionEditor, WorkflowStepGraph } from "@hands/editor";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { useRuntimePort } from "@/hooks/useRuntimeState";
-import { trpc, type ActionRunRecord, type ActionRunLog } from "@/lib/trpc";
+import { trpc, type ActionRunRecord, type ActionRunLog, type StepRecord } from "@/lib/trpc";
 import { cn } from "@/lib/utils";
 
 interface ActionDetailPanelProps {
@@ -248,6 +248,20 @@ function RunHistoryPanel({ actionId }: { actionId: string }) {
 
             {isExpanded && (
               <div className="px-3 pb-3 space-y-2">
+                {/* Workflow Steps Graph */}
+                {run.steps && run.steps.length > 0 && (
+                  <div className="space-y-1">
+                    <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                      <GitBranch weight="bold" className="h-3.5 w-3.5" />
+                      <span>Workflow Steps ({run.steps.length})</span>
+                    </div>
+                    <WorkflowStepGraph
+                      steps={run.steps as StepRecord[]}
+                      height={Math.min(180, 60 + run.steps.length * 30)}
+                    />
+                  </div>
+                )}
+
                 {/* Error message */}
                 {run.error ? (
                   <div className="p-2 rounded bg-red-500/10 border border-red-500/20 text-red-600 dark:text-red-400 font-mono text-xs whitespace-pre-wrap">

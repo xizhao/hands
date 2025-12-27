@@ -25,7 +25,7 @@ import { existsSync, mkdirSync, renameSync } from "node:fs";
 import { join } from "node:path";
 
 // Current schema version
-const CURRENT_SCHEMA_VERSION = 1;
+const CURRENT_SCHEMA_VERSION = 2;
 
 // Singleton database instances per workbook
 const dbInstances = new Map<string, Database>();
@@ -157,6 +157,17 @@ INSERT INTO schema_migrations (version) VALUES (1);
 `;
 
 /**
+ * Migration 002: Add steps column for workflow actions
+ */
+const MIGRATION_002 = `
+-- Add steps column to action_runs for workflow step recording
+ALTER TABLE action_runs ADD COLUMN steps TEXT;
+
+-- Record migration
+INSERT INTO schema_migrations (version) VALUES (2);
+`;
+
+/**
  * Get or create editor database for a workbook
  */
 export function getEditorDb(workbookDir: string): Database {
@@ -233,12 +244,14 @@ function runMigrations(db: Database) {
 
   if (currentVersion < CURRENT_SCHEMA_VERSION) {
     // Run pending migrations
-    // For now, we only have version 1
     if (currentVersion < 1) {
       db.run(MIGRATION_001);
     }
+    if (currentVersion < 2) {
+      db.run(MIGRATION_002);
+    }
     // Add future migrations here:
-    // if (currentVersion < 2) { db.run(MIGRATION_002); }
+    // if (currentVersion < 3) { db.run(MIGRATION_003); }
   }
 }
 
@@ -452,6 +465,22 @@ export function addRecentItem(db: Database, itemType: string, itemId: string) {
 // Action Runs Operations
 // ============================================================================
 
+/** Step record from workflow execution */
+export interface StepRecord {
+  name: string;
+  type: "do" | "sleep" | "sleepUntil" | "waitForEvent";
+  startedAt?: string;
+  finishedAt?: string;
+  status: "pending" | "running" | "success" | "failed" | "waiting";
+  result?: unknown;
+  error?: string;
+  children?: StepRecord[];
+  config?: {
+    retries?: { limit: number; delay: string | number; backoff?: string };
+    timeout?: string | number;
+  };
+}
+
 export interface ActionRunRecord {
   id: string;
   actionId: string;
@@ -464,6 +493,8 @@ export interface ActionRunRecord {
   finishedAt: string | null;
   durationMs: number | null;
   createdAt: string;
+  /** Workflow steps (for workflow actions only) */
+  steps: StepRecord[] | null;
 }
 
 export function getActionRuns(
@@ -483,9 +514,10 @@ export function getActionRuns(
     finished_at: string | null;
     duration_ms: number | null;
     created_at: string;
+    steps: string | null;
   }, [string, number]>(
     `SELECT id, action_id, trigger, status, input, output, error,
-            started_at, finished_at, duration_ms, created_at
+            started_at, finished_at, duration_ms, created_at, steps
      FROM action_runs
      WHERE action_id = ?
      ORDER BY started_at DESC
@@ -504,6 +536,7 @@ export function getActionRuns(
     finishedAt: r.finished_at,
     durationMs: r.duration_ms,
     createdAt: r.created_at,
+    steps: r.steps ? JSON.parse(r.steps) : null,
   }));
 }
 
@@ -520,9 +553,10 @@ export function getActionRun(db: Database, runId: string): ActionRunRecord | nul
     finished_at: string | null;
     duration_ms: number | null;
     created_at: string;
+    steps: string | null;
   }, [string]>(
     `SELECT id, action_id, trigger, status, input, output, error,
-            started_at, finished_at, duration_ms, created_at
+            started_at, finished_at, duration_ms, created_at, steps
      FROM action_runs
      WHERE id = ?`
   ).get(runId);
@@ -541,6 +575,7 @@ export function getActionRun(db: Database, runId: string): ActionRunRecord | nul
     finishedAt: row.finished_at,
     durationMs: row.duration_ms,
     createdAt: row.created_at,
+    steps: row.steps ? JSON.parse(row.steps) : null,
   };
 }
 
@@ -557,11 +592,12 @@ export function insertActionRun(
     startedAt: string;
     finishedAt?: string;
     durationMs?: number;
+    steps?: StepRecord[];
   }
 ) {
   db.run(
-    `INSERT INTO action_runs (id, action_id, trigger, status, input, output, error, started_at, finished_at, duration_ms)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    `INSERT INTO action_runs (id, action_id, trigger, status, input, output, error, started_at, finished_at, duration_ms, steps)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [
       run.id,
       run.actionId,
@@ -573,6 +609,7 @@ export function insertActionRun(
       run.startedAt,
       run.finishedAt ?? null,
       run.durationMs ?? null,
+      run.steps !== undefined ? JSON.stringify(run.steps) : null,
     ]
   );
 
@@ -599,6 +636,7 @@ export function updateActionRun(
     error?: string;
     finishedAt?: string;
     durationMs?: number;
+    steps?: StepRecord[];
   }
 ) {
   const setClauses: string[] = [];
@@ -623,6 +661,10 @@ export function updateActionRun(
   if (updates.durationMs !== undefined) {
     setClauses.push("duration_ms = ?");
     params.push(updates.durationMs);
+  }
+  if (updates.steps !== undefined) {
+    setClauses.push("steps = ?");
+    params.push(JSON.stringify(updates.steps));
   }
 
   if (setClauses.length === 0) return;

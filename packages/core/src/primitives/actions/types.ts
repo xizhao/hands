@@ -40,6 +40,8 @@ export interface ActionRun {
   startedAt: string;
   finishedAt?: string;
   durationMs?: number;
+  /** Workflow steps (for workflow actions only) */
+  steps?: import("./workflow.js").StepRecord[];
 }
 
 // =============================================================================

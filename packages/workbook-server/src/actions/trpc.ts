@@ -167,6 +167,7 @@ export const actionsRouter = t.router({
         startedAt: run.startedAt,
         finishedAt: run.finishedAt,
         durationMs: run.durationMs,
+        steps: run.steps,
       });
     } catch (e) {
       // Log but don't fail if persistence fails
