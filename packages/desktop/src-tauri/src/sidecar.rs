@@ -41,33 +41,41 @@ fn get_sidecar_path(sidecar: Sidecar) -> PathBuf {
 
     #[cfg(not(debug_assertions))]
     {
-        // Production - binaries are in the app bundle
+        // Production - binaries are in the app bundle with target triple suffix
         let exe_dir = std::env::current_exe()
             .expect("Failed to get executable path")
             .parent()
             .expect("Failed to get executable directory")
             .to_path_buf();
 
+        let target = get_target_triple_prod();
+        let binary_name = format!("{}-{}", sidecar.name(), target);
+
         #[cfg(target_os = "macos")]
         {
-            exe_dir.join("../Resources").join(sidecar.name())
+            exe_dir.join("../Resources").join(binary_name)
         }
 
         #[cfg(target_os = "windows")]
         {
-            exe_dir.join(format!("{}.exe", sidecar.name()))
+            exe_dir.join(format!("{}.exe", binary_name))
         }
 
         #[cfg(target_os = "linux")]
         {
-            exe_dir.join(sidecar.name())
+            exe_dir.join(binary_name)
         }
     }
 }
 
-/// Get the target triple for the current platform
+/// Get the target triple for the current platform (dev builds)
 #[cfg(debug_assertions)]
 fn get_target_triple() -> &'static str {
+    get_target_triple_prod()
+}
+
+/// Get the target triple for the current platform
+fn get_target_triple_prod() -> &'static str {
     #[cfg(all(target_os = "macos", target_arch = "aarch64"))]
     { "aarch64-apple-darwin" }
 
@@ -87,11 +95,24 @@ fn get_target_triple() -> &'static str {
 /// Create a command for running a sidecar
 pub fn command(sidecar: Sidecar) -> Command {
     let binary_path = get_sidecar_path(sidecar);
+    println!("[sidecar] Running {:?} from: {:?}", sidecar, binary_path);
+
+    // Check if binary exists and is executable
+    if !binary_path.exists() {
+        eprintln!("[sidecar] ERROR: Binary not found at {:?}", binary_path);
+    }
+
     Command::new(binary_path)
 }
 
 /// Create a synchronous command for running a sidecar
 pub fn command_sync(sidecar: Sidecar) -> std::process::Command {
     let binary_path = get_sidecar_path(sidecar);
+    println!("[sidecar] Running {:?} from: {:?}", sidecar, binary_path);
+
+    if !binary_path.exists() {
+        eprintln!("[sidecar] ERROR: Binary not found at {:?}", binary_path);
+    }
+
     std::process::Command::new(binary_path)
 }

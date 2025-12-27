@@ -9,7 +9,7 @@
  * 3. Agent (heavy) - reasoning="high" only for iteration/analysis tasks
  */
 
-import { createOpenAI } from "@ai-sdk/openai";
+import { createOpenRouter } from "@openrouter/ai-sdk-provider";
 import { initTRPC, TRPCError } from "@trpc/server";
 import { generateObject, generateText, type LanguageModel } from "ai";
 
@@ -19,8 +19,8 @@ const MODELS = {
   vision: "google/gemini-2.5-flash",              // Vision/screenshot analysis
 } as const;
 
-// Create OpenRouter provider (OpenAI-compatible API)
-function createOpenRouterProvider() {
+// Create OpenRouter provider
+function getOpenRouter() {
   const apiKey = process.env.OPENROUTER_API_KEY;
   if (!apiKey) {
     throw new TRPCError({
@@ -28,17 +28,13 @@ function createOpenRouterProvider() {
       message: "OPENROUTER_API_KEY not set",
     });
   }
-  return createOpenAI({
-    apiKey,
-    baseURL: "https://openrouter.ai/api/v1",
-  });
+  return createOpenRouter({ apiKey });
 }
 
-// Helper to get model with proper typing (OpenRouter uses OpenAI-compatible API)
+// Helper to get model
 function getModel(modelId: string): LanguageModel {
-  const provider = createOpenRouterProvider();
-  // Cast needed due to SDK version mismatch - runtime works correctly
-  return provider(modelId) as unknown as LanguageModel;
+  const openrouter = getOpenRouter();
+  return openrouter(modelId) as LanguageModel;
 }
 import { z } from "zod";
 import { STDLIB_DOCS, STDLIB_QUICK_REF } from "@hands/core/docs";
