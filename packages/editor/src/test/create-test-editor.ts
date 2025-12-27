@@ -59,10 +59,13 @@ const editorShim = {
 };
 
 // Register known Plate types
+// Note: Include both new (disc/decimal) and classic (ul/ol) list keys
+// The markdown serializer uses classic keys (ul/ol)
 const knownTypes = [
   KEYS.p, KEYS.blockquote, KEYS.codeBlock, KEYS.codeLine,
   KEYS.h1, KEYS.h2, KEYS.h3, KEYS.h4, KEYS.h5, KEYS.h6,
   KEYS.ul, KEYS.ol, KEYS.li, KEYS.lic,
+  KEYS.ulClassic, KEYS.olClassic, // Classic list keys for markdown serialization
   KEYS.hr, KEYS.a, KEYS.img,
   KEYS.table, KEYS.tr, KEYS.td, KEYS.th,
   KEYS.column, KEYS.columnGroup,

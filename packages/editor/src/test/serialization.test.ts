@@ -79,12 +79,19 @@ function hello() {
 - Item 3`;
 
       const parsed = testDeserialize(mdx);
+
+      // Verify structure: should be a ul with li children
+      expect(parsed.length).toBe(1);
+      expect(parsed[0].type).toBe('ul');
+      expect(parsed[0].children).toHaveLength(3);
+      expect(parsed[0].children[0].type).toBe('li');
+      expect(parsed[0].children[1].type).toBe('li');
+      expect(parsed[0].children[2].type).toBe('li');
+
       const serialized = testSerialize(parsed);
-      // Markdown serializer may use * instead of - for lists - both are valid
-      expect(serialized).toContain('Item 1');
-      expect(serialized).toContain('Item 2');
-      expect(serialized).toContain('Item 3');
-      expect(serialized.includes('- ') || serialized.includes('* ')).toBe(true);
+
+      // TRUE ROUNDTRIP: output should match input exactly
+      expect(normalize(serialized)).toBe(normalize(mdx));
     });
 
     it('roundtrips ordered lists', () => {
@@ -93,13 +100,56 @@ function hello() {
 3. Third item`;
 
       const parsed = testDeserialize(mdx);
+
+      // Verify structure: should be an ol with li children
+      expect(parsed.length).toBe(1);
+      expect(parsed[0].type).toBe('ol');
+      expect(parsed[0].children).toHaveLength(3);
+      expect(parsed[0].children[0].type).toBe('li');
+      expect(parsed[0].children[1].type).toBe('li');
+      expect(parsed[0].children[2].type).toBe('li');
+
       const serialized = testSerialize(parsed);
-      // Note: Plate's list serialization may convert to unordered - check content is preserved
-      expect(serialized).toContain('First item');
-      expect(serialized).toContain('Second item');
-      expect(serialized).toContain('Third item');
-      // Should have some list markers (either ordered 1. or unordered -)
-      expect(serialized).toMatch(/^(\d+\.|[-*]) /m);
+
+      // TRUE ROUNDTRIP: output should match input exactly
+      expect(normalize(serialized)).toBe(normalize(mdx));
+    });
+
+    it('roundtrips nested unordered lists', () => {
+      const mdx = `- Parent 1
+  - Child 1.1
+  - Child 1.2
+- Parent 2`;
+
+      const parsed = testDeserialize(mdx);
+
+      // Verify nested structure exists
+      expect(parsed.length).toBe(1);
+      expect(parsed[0].type).toBe('ul');
+
+      const serialized = testSerialize(parsed);
+
+      // Verify indentation preserved
+      expect(serialized).toContain('Parent 1');
+      expect(serialized).toContain('Child 1.1');
+      expect(serialized).toContain('Child 1.2');
+      expect(serialized).toContain('Parent 2');
+    });
+
+    it('roundtrips mixed nested lists', () => {
+      const mdx = `1. First ordered
+   - Nested unordered
+   - Another nested
+2. Second ordered`;
+
+      const parsed = testDeserialize(mdx);
+      const serialized = testSerialize(parsed);
+
+      // Verify content preserved
+      expect(serialized).toContain('First ordered');
+      expect(serialized).toContain('Nested unordered');
+      expect(serialized).toContain('Another nested');
+      expect(serialized).toContain('Second ordered');
     });
 
     it('roundtrips links', () => {
@@ -260,6 +310,256 @@ Some text after.`;
     // Should have blank line between components
     expect(serialized).toContain('/>\n\n<LiveValue');
   });
+});
+
+describe('Tables', () => {
+  it('roundtrips simple table', () => {
+    const mdx = `| Name | Age |
+| --- | --- |
+| Alice | 30 |
+| Bob | 25 |`;
+
+    const parsed = testDeserialize(mdx);
+
+    // Verify table structure
+    expect(parsed.length).toBe(1);
+    expect(parsed[0].type).toBe('table');
+
+    const serialized = testSerialize(parsed);
+
+    // Verify table preserved
+    expect(serialized).toContain('Name');
+    expect(serialized).toContain('Age');
+    expect(serialized).toContain('Alice');
+    expect(serialized).toContain('30');
+    expect(serialized).toContain('Bob');
+    expect(serialized).toContain('25');
+    // Should have table separators
+    expect(serialized).toContain('|');
+    expect(serialized).toContain('---');
+  });
+
+  it('roundtrips table with alignment', () => {
+    const mdx = `| Left | Center | Right |
+| :--- | :---: | ---: |
+| L | C | R |`;
+
+    const parsed = testDeserialize(mdx);
+    const serialized = testSerialize(parsed);
+
+    expect(serialized).toContain('Left');
+    expect(serialized).toContain('Center');
+    expect(serialized).toContain('Right');
+  });
+});
+
+describe('Horizontal Rules', () => {
+  it('roundtrips horizontal rule', () => {
+    const mdx = `Before
+
+---
+
+After`;
+
+    const parsed = testDeserialize(mdx);
+    const serialized = testSerialize(parsed);
+
+    expect(serialized).toContain('Before');
+    expect(serialized).toContain('After');
+    // May use --- or *** or ___ for horizontal rule
+    expect(serialized).toMatch(/(---|[*]{3}|___)/);
+
+  });
+});
+
+describe('Complex Documents', () => {
+  it('roundtrips document with multiple element types', () => {
+    const mdx = `# Report Title
+
+## Summary
+
+This is the **summary** with _emphasis_.
+
+## Data
+
+<LiveValue query="SELECT * FROM metrics" />
+
+### Details
+
+- Point 1
+- Point 2
+- Point 3
+
+1. Step one
+2. Step two
+3. Step three
+
+## Code Example
+
+\`\`\`sql
+SELECT COUNT(*) FROM users;
+\`\`\`
+
+> Important note here.`;
+
+    const parsed = testDeserialize(mdx);
+    const serialized = testSerialize(parsed);
+
+    // Verify all elements preserved
+    expect(serialized).toContain('# Report Title');
+    expect(serialized).toContain('## Summary');
+    expect(serialized).toContain('**summary**');
+    expect(serialized).toContain('## Data');
+    expect(serialized).toContain('LiveValue');
+    expect(serialized).toContain('### Details');
+    expect(serialized).toContain('Point 1');
+    expect(serialized).toContain('Step one');
+    expect(serialized).toContain('```sql');
+    expect(serialized).toContain('SELECT COUNT(*)');
+    expect(serialized).toContain('> Important note');
+  });
+
+  it('roundtrips lists followed by paragraphs', () => {
+    const mdx = `Here's a list:
+
+- Item 1
+- Item 2
+
+And here's text after the list.`;
+
+    const parsed = testDeserialize(mdx);
+    const serialized = testSerialize(parsed);
+
+    expect(serialized).toContain("Here's a list:");
+    expect(serialized).toContain('Item 1');
+    expect(serialized).toContain('Item 2');
+    expect(serialized).toContain('And here');
+  });
+
+  it('roundtrips MDX between list items', () => {
+    const mdx = `- Item with <LiveValue query="SELECT 1" /> inline
+- Normal item
+- Another <LiveValue query="SELECT 2" /> inline`;
+
+    const parsed = testDeserialize(mdx);
+    const serialized = testSerialize(parsed);
+
+    expect(serialized).toContain('Item with');
+    expect(serialized).toContain('LiveValue');
+    expect(serialized).toContain('SELECT 1');
+    expect(serialized).toContain('Normal item');
+    expect(serialized).toContain('SELECT 2');
+  });
+});
+
+describe('Edge Cases', () => {
+  it('handles empty list items', () => {
+    const mdx = `-
+- Item
+- `;
+
+    const parsed = testDeserialize(mdx);
+    const serialized = testSerialize(parsed);
+
+    // Should not crash and preserve non-empty item
+    expect(serialized).toContain('Item');
+  });
+
+  it('handles special characters in list items', () => {
+    // Note: <angle> would be parsed as MDX, so we test other special chars
+    const mdx = `- Item with "quotes"
+- Item with 'apostrophe'
+- Item with & ampersand`;
+
+    const parsed = testDeserialize(mdx);
+    const serialized = testSerialize(parsed);
+
+    expect(serialized).toContain('quotes');
+    expect(serialized).toContain('apostrophe');
+    expect(serialized).toContain('ampersand');
+  });
+
+  it('handles code in list items', () => {
+    const mdx = `- Run \`npm install\`
+- Execute \`npm start\``;
+
+    const parsed = testDeserialize(mdx);
+    const serialized = testSerialize(parsed);
+
+    expect(serialized).toContain('`npm install`');
+    expect(serialized).toContain('`npm start`');
+  });
+
+  it('handles bold and italic in list items', () => {
+    const mdx = `- **Bold item**
+- *Italic item*
+- Normal item`;
+
+    const parsed = testDeserialize(mdx);
+    const serialized = testSerialize(parsed);
+
+    expect(serialized).toContain('**Bold item**');
+    // May use _ for italic
+    expect(serialized.includes('*Italic item*') || serialized.includes('_Italic item_')).toBe(true);
+  });
+
+  it('handles links in list items', () => {
+    const mdx = `- [Link 1](https://example.com/1)
+- [Link 2](https://example.com/2)`;
+
+    const parsed = testDeserialize(mdx);
+    const serialized = testSerialize(parsed);
+
+    expect(serialized).toContain('[Link 1](https://example.com/1)');
+    expect(serialized).toContain('[Link 2](https://example.com/2)');
+  });
+
+  it('preserves list after heading', () => {
+    const mdx = `# Heading
+
+- Item 1
+- Item 2`;
+
+    const parsed = testDeserialize(mdx);
+    const serialized = testSerialize(parsed);
+
+    expect(serialized).toContain('# Heading');
+    expect(serialized).toContain('Item 1');
+    expect(serialized).toContain('Item 2');
+    // List markers should be present
+    expect(serialized).toMatch(/[-*] Item 1/);
+  });
+});
+
+describe('Strict Roundtrip Tests', () => {
+  // These tests verify exact MDX → Plate → MDX equality
+  // If any of these fail, serialization is broken
+
+  const strictRoundtripCases = [
+    { name: 'paragraph', mdx: 'Hello world' },
+    { name: 'heading h1', mdx: '# Title' },
+    { name: 'heading h2', mdx: '## Subtitle' },
+    { name: 'heading h3', mdx: '### Section' },
+    { name: 'bold', mdx: '**bold text**' },
+    { name: 'inline code', mdx: 'Use `console.log()` here' },
+    { name: 'unordered list', mdx: '- Item 1\n- Item 2\n- Item 3' },
+    { name: 'ordered list', mdx: '1. First\n2. Second\n3. Third' },
+    { name: 'code block', mdx: '```js\nconst x = 1;\n```' },
+    { name: 'blockquote', mdx: '> Quote here' },
+    { name: 'link', mdx: '[link](https://example.com)' },
+    { name: 'LiveValue simple', mdx: '<LiveValue query="SELECT 1" />' },
+    { name: 'LiveValue with display', mdx: '<LiveValue query="SELECT * FROM users" display="table" />' },
+    { name: 'BarChart', mdx: '<BarChart xKey="x" yKey="y" />' },
+    { name: 'mixed document', mdx: '# Title\n\nParagraph\n\n- List item\n\n<LiveValue query="SELECT 1" />' },
+  ];
+
+  for (const { name, mdx } of strictRoundtripCases) {
+    it(`exact roundtrip: ${name}`, () => {
+      const parsed = testDeserialize(mdx);
+      const serialized = testSerialize(parsed);
+      expect(normalize(serialized)).toBe(normalize(mdx));
+    });
+  }
 });
 
 describe('Editor Presets', () => {
