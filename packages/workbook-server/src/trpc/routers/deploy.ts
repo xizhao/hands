@@ -104,6 +104,48 @@ interface WorkflowBinding {
 }
 
 /**
+ * Parse .env.local file and return secrets
+ */
+function readSecretsFromEnvLocal(workbookDir: string): Record<string, string> {
+  const envPath = join(workbookDir, ".env.local");
+  if (!existsSync(envPath)) {
+    return {};
+  }
+
+  try {
+    const content = readFileSync(envPath, "utf-8");
+    const secrets: Record<string, string> = {};
+
+    for (const line of content.split("\n")) {
+      const trimmed = line.trim();
+      if (!trimmed || trimmed.startsWith("#")) continue;
+      const eqIndex = trimmed.indexOf("=");
+      if (eqIndex === -1) continue;
+
+      const key = trimmed.slice(0, eqIndex).trim();
+      let value = trimmed.slice(eqIndex + 1).trim();
+
+      // Remove quotes if present
+      if (
+        (value.startsWith('"') && value.endsWith('"')) ||
+        (value.startsWith("'") && value.endsWith("'"))
+      ) {
+        value = value.slice(1, -1);
+      }
+
+      // Only include non-empty values
+      if (value) {
+        secrets[key] = value;
+      }
+    }
+
+    return secrets;
+  } catch {
+    return {};
+  }
+}
+
+/**
  * Read workflow bindings from generated manifest
  */
 function readWorkflowBindings(workbookDir: string): Record<string, WorkflowBinding> {
@@ -137,6 +179,7 @@ function readWorkflowBindings(workbookDir: string): Record<string, WorkflowBindi
 function generateWranglerConfig(
   workerName: string,
   workflowBindings: Record<string, WorkflowBinding>,
+  secrets: Record<string, string>,
   seedSecret?: string
 ): object {
   const config: Record<string, unknown> = {
@@ -171,9 +214,22 @@ function generateWranglerConfig(
     }));
   }
 
-  // Add seed secret as env var if provided
+  // Build vars object with secrets and seed secret
+  const vars: Record<string, string> = {};
+
+  // Add secrets as HANDS_SECRET_* vars
+  for (const [key, value] of Object.entries(secrets)) {
+    vars[`HANDS_SECRET_${key}`] = value;
+  }
+
+  // Add seed secret if provided
   if (seedSecret) {
-    config.vars = { HANDS_SEED_SECRET: seedSecret };
+    vars.HANDS_SEED_SECRET = seedSecret;
+  }
+
+  // Only add vars if we have any
+  if (Object.keys(vars).length > 0) {
+    config.vars = vars;
   }
 
   return config;
@@ -384,7 +440,14 @@ export const deployRouter = t.router({
         console.log(`[deploy] Found ${workflowCount} workflow actions`);
       }
 
-      const wranglerConfig = generateWranglerConfig(workerName, workflowBindings, seedSecret);
+      // Read secrets from .env.local
+      const secrets = readSecretsFromEnvLocal(workbookDir);
+      const secretCount = Object.keys(secrets).length;
+      if (secretCount > 0) {
+        console.log(`[deploy] Including ${secretCount} secrets from .env.local`);
+      }
+
+      const wranglerConfig = generateWranglerConfig(workerName, workflowBindings, secrets, seedSecret);
       const wranglerPath = join(distDir, "wrangler.json");
       writeFileSync(wranglerPath, JSON.stringify(wranglerConfig, null, 2));
       console.log(`[deploy] Generated wrangler.json for ${workerName}`);

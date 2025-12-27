@@ -2,59 +2,105 @@
  * Workflow Context Builder (Production)
  *
  * Creates ActionContext for CF Workflow execution in production.
- * Uses D1/Hyperdrive for database access (when available).
+ * Uses the Database Durable Object for SQL access (same as dev).
  */
 
 import type {
   ActionContext,
   ActionLogger,
   ActionNotify,
-  ActionRunMeta,
 } from "../types/action";
+import { sql as kyselySql } from "kysely";
+import { createDb } from "rwsdk/db";
+import type { DB } from "@hands/db/types";
+
+/**
+ * Escape a SQL value for safe interpolation
+ */
+function escapeValue(value: unknown): string {
+  if (value === null || value === undefined) {
+    return "NULL";
+  }
+  if (typeof value === "number") {
+    return String(value);
+  }
+  if (typeof value === "boolean") {
+    return value ? "1" : "0";
+  }
+  if (value instanceof Date) {
+    return `'${value.toISOString()}'`;
+  }
+  if (typeof value === "object") {
+    return `'${JSON.stringify(value).replace(/'/g, "''")}'`;
+  }
+  // String - escape single quotes
+  return `'${String(value).replace(/'/g, "''")}'`;
+}
 
 /**
  * Build an ActionContext for production workflow execution.
  *
- * Note: In production, database access may use D1 or Hyperdrive
- * depending on how the workbook is configured. For now, we provide
- * a stub that throws - full D1 integration is a future enhancement.
+ * Uses the DATABASE Durable Object binding for SQL access.
+ * Secrets are extracted from env bindings (HANDS_SECRET_*).
  */
 export function buildWorkflowContext(env: Env, runId: string): ActionContext {
   // Build logger
   const log = buildLogger(runId);
 
-  // Build notify (stub)
+  // Build notify
   const notify = buildNotify();
 
-  // SQL stub - production DB access requires D1/Hyperdrive setup
+  // Get Kysely instance via DATABASE Durable Object
+  const db = createDb<DB>(env.DATABASE, "hands-db");
+
+  // SQL tagged template using Kysely raw queries
+  // Matches the dev context pattern: escape values inline, use .execute()
   const sql = async <T = unknown>(
-    _strings: TemplateStringsArray,
-    ..._values: unknown[]
+    strings: TemplateStringsArray,
+    ...values: unknown[]
   ): Promise<T[]> => {
-    // TODO: Implement D1 or Hyperdrive-based SQL execution
-    // For now, throw to indicate this needs setup
-    throw new Error(
-      "Database access in production workflows requires D1 configuration. " +
-        "See docs for setting up D1 binding."
-    );
+    // Build query with escaped values (same as dev context)
+    let query = strings[0];
+    for (let i = 0; i < values.length; i++) {
+      query += escapeValue(values[i]) + strings[i + 1];
+    }
+
+    const result = await kyselySql.raw<T>(query).execute(db);
+    return result.rows as T[];
   };
 
-  // Sources stub
-  const sources = new Proxy(
-    {},
-    {
-      get: () => {
-        throw new Error("Sources not available in production workflows");
-      },
-    }
-  ) as ActionContext["sources"];
+  // Sources proxy - provides table access via sql
+  // In production, we recommend using ctx.sql directly for type safety
+  const sources = new Proxy({} as ActionContext["sources"], {
+    get: () => {
+      return new Proxy({}, {
+        get: () => ({
+          select: async () => {
+            throw new Error("Use ctx.sql`SELECT...` in production workflows for better type safety");
+          },
+          insert: async () => {
+            throw new Error("Use ctx.sql`INSERT...` in production workflows for better type safety");
+          },
+          update: async () => {
+            throw new Error("Use ctx.sql`UPDATE...` in production workflows for better type safety");
+          },
+          delete: async () => {
+            throw new Error("Use ctx.sql`DELETE...` in production workflows for better type safety");
+          },
+        }),
+      });
+    },
+  });
+
+  // Extract secrets from env (HANDS_SECRET_* pattern)
+  const secrets = extractSecrets(env);
 
   return {
     sources,
     sql,
     log,
     notify,
-    secrets: {}, // Secrets should be in env.* bindings in production
+    secrets,
     run: {
       id: runId,
       trigger: "manual", // CF Workflows are triggered via API
@@ -62,6 +108,25 @@ export function buildWorkflowContext(env: Env, runId: string): ActionContext {
       input: undefined,
     },
   };
+}
+
+/**
+ * Extract secrets from env bindings.
+ * Looks for HANDS_SECRET_* pattern and strips prefix.
+ */
+function extractSecrets(env: Env): Record<string, string> {
+  const secrets: Record<string, string> = {};
+  const envRecord = env as unknown as Record<string, unknown>;
+
+  for (const [key, value] of Object.entries(envRecord)) {
+    if (key.startsWith("HANDS_SECRET_") && typeof value === "string") {
+      // HANDS_SECRET_MY_API_KEY -> MY_API_KEY
+      const secretName = key.replace("HANDS_SECRET_", "");
+      secrets[secretName] = value;
+    }
+  }
+
+  return secrets;
 }
 
 function buildLogger(runId: string): ActionLogger {
