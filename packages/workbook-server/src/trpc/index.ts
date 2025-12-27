@@ -25,7 +25,14 @@ import { workbookRouter, type WorkbookContext } from "./routers/workbook.js";
 export interface TRPCConfig {
   workbookId: string;
   workbookDir: string;
+  /** Runtime URL for SQLite database access (e.g., http://localhost:55200) */
+  getRuntimeUrl: () => string | null;
+  /** Whether the runtime/database is ready */
+  isDbReady: () => boolean;
   getState: () => {
+    rscReady: boolean;
+    rscPort: number | null;
+    rscError: string | null;
     buildErrors: string[];
   };
   /** Optional: provides config from package.json */
@@ -37,8 +44,6 @@ export interface TRPCConfig {
   // Page registry
   getPageRegistry: () => PageRegistry | null;
   createPageRegistry: (pagesDir: string) => PageRegistry;
-  // Deploy context (optional)
-  getRuntimeUrl?: () => string | null;
 }
 
 // Combined context for all routers
@@ -94,6 +99,8 @@ export function registerTRPCRoutes(app: Hono, config: TRPCConfig) {
   const {
     workbookId,
     workbookDir,
+    getRuntimeUrl,
+    isDbReady,
     getState,
     getExternalConfig,
     formatBlockSource,
@@ -101,17 +108,23 @@ export function registerTRPCRoutes(app: Hono, config: TRPCConfig) {
     onSchemaChange,
     getPageRegistry,
     createPageRegistry,
-    getRuntimeUrl = () => null,
   } = config;
 
   // Handle all /trpc/* requests
   app.all("/trpc/*", async (c) => {
+    const _path = c.req.path.replace("/trpc", "");
+
+    // Get runtime URL for SQLite access
+    const runtimeUrl = getRuntimeUrl();
+
     // Create combined context for this request
     const ctx: CombinedContext = {
       // Base context
       workbookId,
       workbookDir,
-      // SQLite context - direct database access via workbookDir
+      isDbReady: isDbReady(),
+      // SQLite context - runtime URL for database access
+      runtimeUrl: runtimeUrl ?? "http://localhost:55200",
       onSchemaChange,
       // Status context
       getState,

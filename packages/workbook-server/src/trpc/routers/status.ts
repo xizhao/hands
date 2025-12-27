@@ -14,6 +14,9 @@ export interface StatusContext {
   workbookId: string;
   workbookDir: string;
   getState: () => {
+    rscReady: boolean;
+    rscPort: number | null;
+    rscError: string | null;
     buildErrors: string[];
   };
 }
@@ -32,10 +35,11 @@ const publicProcedure = t.procedure;
 
 export const statusRouter = t.router({
   /** Basic health check */
-  health: publicProcedure.query(() => {
+  health: publicProcedure.query(({ ctx }) => {
+    const state = ctx.getState();
     return {
-      ready: true,
-      status: "ready" as const,
+      ready: state.rscReady,
+      status: state.rscReady ? ("ready" as const) : ("booting" as const),
     };
   }),
 
@@ -46,8 +50,10 @@ export const statusRouter = t.router({
       workbookId: ctx.workbookId,
       workbookDir: ctx.workbookDir,
       services: {
-        database: {
-          ready: true,
+        runtime: {
+          ready: state.rscReady,
+          port: state.rscPort,
+          error: state.rscError,
         },
       },
       buildErrors: state.buildErrors,
@@ -55,7 +61,8 @@ export const statusRouter = t.router({
   }),
 
   /** Eval diagnostics for AlertsPanel */
-  eval: publicProcedure.query(() => {
+  eval: publicProcedure.query(({ ctx }) => {
+    const state = ctx.getState();
     return {
       timestamp: Date.now(),
       duration: 0,
@@ -64,8 +71,10 @@ export const statusRouter = t.router({
       format: { fixed: [] as string[], errors: [] as string[] },
       unused: { exports: [] as string[], files: [] as string[] },
       services: {
-        database: {
-          up: true,
+        runtime: {
+          up: state.rscReady,
+          port: state.rscPort ?? 0,
+          error: state.rscReady ? undefined : state.rscError || "Runtime is starting",
         },
       },
     };
