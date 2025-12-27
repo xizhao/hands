@@ -1,258 +1,299 @@
 import { useEffect, useRef, useState } from "react";
+import { motion, useMotionValue, animate } from "motion/react";
 import { Demo } from "../components/Demo";
 import { useTheme } from "../hooks/useTheme";
 import { SiteEditorProvider } from "../providers/SiteEditorProvider";
 
+// Intro animation phases
+// 1. headline-in: crooked headline fades in
+// 2. hands-anim: hands push text into place
+// 3. prompt-typing: prompt bar types
+// 4. editor-fade: editor fades in
+// 5. done: scroll unlocks
+type IntroPhase = "headline-in" | "hands-anim" | "prompt-typing" | "editor-fade" | "done";
+
 export default function IndexPage() {
   const { theme, toggleTheme } = useTheme();
+  const [introPhase, setIntroPhase] = useState<IntroPhase>("headline-in");
+  const introProgress = useMotionValue(0);
+  const [introProgressValue, setIntroProgressValue] = useState(0);
+  const [activeSection, setActiveSection] = useState(0);
+
+
+  // Refs for each section to track visibility
+  const sectionRefs = [
+    useRef<HTMLDivElement>(null),
+    useRef<HTMLDivElement>(null),
+    useRef<HTMLDivElement>(null),
+    useRef<HTMLDivElement>(null),
+  ];
+
+  // Lock scroll permanently for now
+  useEffect(() => {
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = "";
+    };
+  }, []);
+
+  // Phase 1: Headline fades in crooked, then immediately start hands + typing
+  useEffect(() => {
+    if (introPhase !== "headline-in") return;
+
+    const timer = setTimeout(() => {
+      setIntroPhase("hands-anim");
+    }, 400); // Quick transition after headline starts fading in
+
+    return () => clearTimeout(timer);
+  }, [introPhase]);
+
+  // Phase 2: Run hands animation
+  useEffect(() => {
+    if (introPhase !== "hands-anim") return;
+
+    const controls = animate(introProgress, 1, {
+      duration: 2.8,
+      ease: [0.25, 0.1, 0.25, 1],
+      onUpdate: (v) => setIntroProgressValue(v),
+      onComplete: () => {
+        setIntroPhase("prompt-typing");
+      },
+    });
+
+    return () => controls.stop();
+  }, [introPhase, introProgress]);
+
+  // Phase 3: Callback when prompt typing completes
+  const onPromptTypingComplete = () => {
+    if (introPhase === "prompt-typing") {
+      setIntroPhase("editor-fade");
+    }
+  };
+
+  // Phase 4: Callback when editor fade-in completes
+  const onEditorFadeComplete = () => {
+    if (introPhase === "editor-fade") {
+      setIntroPhase("done");
+      document.body.style.overflow = "";
+    }
+  };
+
+  // Track which section is in view using IntersectionObserver
+  useEffect(() => {
+    if (introPhase !== "done") return;
+
+    const observers = sectionRefs.map((ref, index) => {
+      const observer = new IntersectionObserver(
+        ([entry]) => {
+          if (entry.isIntersecting && entry.intersectionRatio > 0.5) {
+            setActiveSection(index);
+          }
+        },
+        { threshold: 0.5, rootMargin: "-20% 0px -20% 0px" }
+      );
+
+      if (ref.current) {
+        observer.observe(ref.current);
+      }
+
+      return observer;
+    });
+
+    return () => {
+      observers.forEach((observer) => observer.disconnect());
+    };
+  }, [introPhase]);
 
   return (
     <SiteEditorProvider>
       <div className="min-h-screen bg-background overflow-x-hidden">
-        {/* Floating Toolbar */}
-        <nav className="fixed top-4 left-1/2 -translate-x-1/2 z-50">
-          <div className="flex items-center gap-1 px-2 py-1.5 bg-zinc-950 dark:bg-zinc-900 rounded-xl shadow-lg shadow-black/25 border border-zinc-800 dark:border-zinc-700 backdrop-blur-xl">
-            <div className="flex items-center gap-2 px-3 py-1.5 text-white">
-              <HandsLogo className="w-4 h-4" />
-              <span className="text-sm font-medium">Hands</span>
+        {/* Right side - FIXED position, vertically centered */}
+        <div className="hidden lg:flex fixed top-0 right-0 w-[55%] xl:w-[60%] h-screen items-center justify-center pr-8 z-10">
+          <div className="relative w-full max-w-[900px]">
+            {/* Demo 0: Editor with chat bar */}
+            <div className={`absolute inset-0 flex items-center justify-center ${activeSection === 0 ? "" : "opacity-0 pointer-events-none"}`}>
+              <div className="space-y-4">
+                {/* Prompt bar - fades in when prompt-typing starts, types text */}
+                <motion.div
+                  className="w-[500px]"
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{
+                    opacity: introPhase === "prompt-typing" || introPhase === "editor-fade" || introPhase === "done" ? 1 : 0,
+                    y: introPhase === "prompt-typing" || introPhase === "editor-fade" || introPhase === "done" ? 0 : 20,
+                  }}
+                  transition={{ duration: 0.5, ease: [0.22, 1, 0.36, 1] }}
+                >
+                  <HeroChatBar
+                    isIntro={introPhase === "prompt-typing"}
+                    onTypingComplete={onPromptTypingComplete}
+                  />
+                </motion.div>
+                {/* Editor - fades in after prompt typing completes */}
+                <motion.div
+                  className="w-[700px] xl:w-[850px]"
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{
+                    opacity: introPhase === "editor-fade" || introPhase === "done" ? 1 : 0,
+                    y: introPhase === "editor-fade" || introPhase === "done" ? 0 : 20,
+                  }}
+                  transition={{ duration: 0.6, ease: [0.22, 1, 0.36, 1] }}
+                  onAnimationComplete={() => {
+                    if (introPhase === "editor-fade") {
+                      onEditorFadeComplete();
+                    }
+                  }}
+                >
+                  <Demo />
+                </motion.div>
+              </div>
             </div>
-            <div className="w-px h-4 bg-zinc-700" />
-            <a
-              href="https://github.com/hands"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="px-3 py-1.5 text-sm text-zinc-400 hover:text-white transition-all duration-200"
-            >
-              GitHub
-            </a>
-            <button
-              onClick={toggleTheme}
-              className="p-2 rounded-full hover:bg-zinc-700 transition-all duration-200 text-zinc-400 hover:text-white"
-              aria-label="Toggle theme"
-            >
-              {theme === "system" ? (
-                <MonitorIcon className="w-4 h-4" />
-              ) : theme === "dark" ? (
-                <MoonIcon className="w-4 h-4" />
-              ) : (
-                <SunIcon className="w-4 h-4" />
-              )}
-            </button>
+
+            {/* Demo 1: Agent Capture */}
+            <FixedDemo isActive={activeSection === 1}>
+              <AgentCaptureDemo isActive={activeSection === 1} />
+            </FixedDemo>
+
+            {/* Demo 2: AI Analysis */}
+            <FixedDemo isActive={activeSection === 2}>
+              <AIAnalysisDemo isActive={activeSection === 2} />
+            </FixedDemo>
+
+            {/* Demo 3: Dashboard */}
+            <FixedDemo isActive={activeSection === 3}>
+              <DashboardDemo />
+            </FixedDemo>
           </div>
-        </nav>
+        </div>
 
-        {/* Hero Section - Split Layout */}
-        <section className="min-h-screen flex items-center">
-          <div className="w-full max-w-[1800px] mx-auto flex items-center">
-            {/* Left side - Hero text */}
-            <div className="w-full lg:w-[45%] xl:w-[40%] px-8 lg:px-16 py-32 shrink-0">
-              <AnimatedHeroHeadline />
-              <FadeIn delay={100}>
-                <p className="text-xl text-muted-foreground max-w-md mb-8">
-                  An extraordinarily powerful document editor to run your
-                  business in.
-                </p>
-              </FadeIn>
-              <FadeIn delay={200}>
-                <div className="flex items-center gap-4">
-                  <button className="group px-6 py-3 bg-foreground text-background rounded-lg font-medium transition-all duration-200 hover:scale-[1.02] hover:shadow-lg active:scale-[0.98]">
-                    Download for Mac
-                  </button>
-                  <button className="px-6 py-3 border border-border rounded-lg font-medium transition-all duration-200 hover:bg-muted hover:border-muted-foreground/20 active:scale-[0.98]">
-                    View Demo
-                  </button>
-                </div>
-              </FadeIn>
-            </div>
-
-            {/* Right side - Demo extending off screen */}
-            <div className="hidden lg:block flex-1 min-w-0 self-start pt-28 relative">
-              {/* Chat bar appears first and types */}
-              <FadeIn
-                delay={300}
-                className="absolute -bottom-4 left-0 w-[500px] z-10"
+        {/* Left side - Normal scrolling content */}
+        <div className="lg:w-[45%] xl:w-[40%]">
+          {/* Section 0: Hero */}
+          <section
+            ref={sectionRefs[0]}
+            className="min-h-screen flex flex-col justify-center px-8 lg:px-16 pt-24"
+          >
+            <AnimatedHeroHeadline
+              scrollProgress={introProgressValue}
+              isVisible={true}
+            />
+            <motion.div
+              className="flex items-center gap-4"
+              initial={{ opacity: 0, y: 20 }}
+              animate={{
+                opacity: introPhase === "prompt-typing" || introPhase === "editor-fade" || introPhase === "done" ? 1 : 0,
+                y: introPhase === "prompt-typing" || introPhase === "editor-fade" || introPhase === "done" ? 0 : 20
+              }}
+              transition={{ duration: 0.5, ease: [0.22, 1, 0.36, 1] }}
+            >
+              <a
+                href="/download"
+                className="group px-6 py-3 bg-foreground text-background rounded-lg font-medium transition-all duration-200 hover:scale-[1.02] hover:shadow-lg active:scale-[0.98] flex items-center gap-2"
               >
-                <HeroChatBar />
-              </FadeIn>
-              {/* Demo fades in after chat bar finishes typing (~2s) */}
-              <FadeIn delay={2200} className="w-[700px] xl:w-[850px]">
-                <Demo />
-              </FadeIn>
+                <AppleIcon className="w-5 h-5" />
+                Download for Mac
+              </a>
+            </motion.div>
+          </section>
+
+          {/* Hidden for now */}
+          <div className="hidden">
+          {/* Section 1: Connect */}
+          <section
+            ref={sectionRefs[1]}
+            className="min-h-screen flex flex-col justify-center px-8 lg:px-16"
+          >
+            <div className="inline-flex items-center gap-2 px-3 py-1 bg-muted rounded-full text-sm text-muted-foreground mb-4 w-fit">
+              <span className="w-5 h-5 rounded-full bg-foreground text-background flex items-center justify-center text-xs font-bold">
+                1
+              </span>
+              Connect
             </div>
+            <h3 className="site-header text-3xl font-bold text-foreground mb-4">
+              Point Hands towards any data
+            </h3>
+            <p className="text-lg text-muted-foreground mb-6">
+              Hands will figure out how to set up live syncs to any
+              business process — whether you know how to, or not. Press{" "}
+              <kbd className="px-2 py-1 bg-muted border border-border rounded text-sm font-mono shadow-sm">
+                ⌘⇧H
+              </kbd>{" "}
+              to capture anything on screen.
+            </p>
+            <ul className="space-y-3 text-muted-foreground">
+              <FeatureItem>Works with databases, APIs, spreadsheets, files</FeatureItem>
+              <FeatureItem>Figures out auth, parsing, and sync logic</FeatureItem>
+              <FeatureItem>Builds the integration automatically</FeatureItem>
+            </ul>
+          </section>
+
+          {/* Section 2: Analyze */}
+          <section
+            ref={sectionRefs[2]}
+            className="min-h-screen flex flex-col justify-center px-8 lg:px-16"
+          >
+            <div className="inline-flex items-center gap-2 px-3 py-1 bg-muted rounded-full text-sm text-muted-foreground mb-4 w-fit">
+              <span className="w-5 h-5 rounded-full bg-foreground text-background flex items-center justify-center text-xs font-bold">
+                2
+              </span>
+              Analyze
+            </div>
+            <h3 className="site-header text-3xl font-bold text-foreground mb-4">
+              Analyze and iterate
+            </h3>
+            <p className="text-lg text-muted-foreground mb-6">
+              Describe what you want to see. Hands' AI agent writes the
+              queries, builds the charts, and refines until it's right.
+              Just keep describing — it keeps improving.
+            </p>
+            <ul className="space-y-3 text-muted-foreground">
+              <FeatureItem>Natural language to SQL and charts</FeatureItem>
+              <FeatureItem>Iterative refinement through conversation</FeatureItem>
+              <FeatureItem>AI that understands your business context</FeatureItem>
+            </ul>
+          </section>
+
+          {/* Section 3: Share */}
+          <section
+            ref={sectionRefs[3]}
+            className="min-h-screen flex flex-col justify-center px-8 lg:px-16"
+          >
+            <div className="inline-flex items-center gap-2 px-3 py-1 bg-muted rounded-full text-sm text-muted-foreground mb-4 w-fit">
+              <span className="w-5 h-5 rounded-full bg-foreground text-background flex items-center justify-center text-xs font-bold">
+                3
+              </span>
+              Share
+            </div>
+            <h3 className="site-header text-3xl font-bold text-foreground mb-4">
+              Build documents you can run your business in
+            </h3>
+            <p className="text-lg text-muted-foreground mb-6">
+              Share living apps and automations. Replaces docs and
+              spreadsheets. Your workbooks stay live — data updates
+              automatically, charts refresh, automations run on schedule.
+            </p>
+            <ul className="space-y-3 text-muted-foreground">
+              <FeatureItem>Live dashboards that update automatically</FeatureItem>
+              <FeatureItem>Scheduled actions, alerts, and workflows</FeatureItem>
+              <FeatureItem>Share links instead of attachments</FeatureItem>
+            </ul>
+          </section>
           </div>
-        </section>
+        </div>
 
-        {/* How to Use Hands Section */}
-        <section className="py-32 px-8">
-          <div className="max-w-6xl mx-auto">
-            {/* Step 1: Point at Data */}
-            <div className="grid lg:grid-cols-2 gap-16 items-start mb-32">
-              <FadeInOnScroll>
-                <div className="sticky top-32">
-                  <div className="inline-flex items-center gap-2 px-3 py-1 bg-muted rounded-full text-sm text-muted-foreground mb-4">
-                    <span className="w-5 h-5 rounded-full bg-foreground text-background flex items-center justify-center text-xs font-bold">
-                      1
-                    </span>
-                    Connect
-                  </div>
-                  <h3 className="site-header text-3xl font-bold text-foreground mb-4">
-                    Point Hands towards any data
-                  </h3>
-                  <p className="text-lg text-muted-foreground mb-6">
-                    Hands will figure out how to set up live syncs to any
-                    business process — whether you know how to, or not. Press{" "}
-                    <kbd className="px-2 py-1 bg-muted border border-border rounded text-sm font-mono shadow-sm">
-                      ⌘⇧H
-                    </kbd>{" "}
-                    to capture anything on screen.
-                  </p>
-                  <ul className="space-y-3 text-muted-foreground">
-                    <FeatureItem>
-                      Works with databases, APIs, spreadsheets, files
-                    </FeatureItem>
-                    <FeatureItem>
-                      Figures out auth, parsing, and sync logic
-                    </FeatureItem>
-                    <FeatureItem>
-                      Builds the integration automatically
-                    </FeatureItem>
-                  </ul>
-                </div>
-              </FadeInOnScroll>
-              <FadeInOnScroll delay={100}>
-                <AgentCaptureDemo />
-              </FadeInOnScroll>
-            </div>
-
-            {/* Step 2: Analyze and Iterate */}
-            <div className="grid lg:grid-cols-2 gap-16 items-center mb-32">
-              <FadeInOnScroll className="order-2 lg:order-1" delay={100}>
-                <AIAnalysisDemo />
-              </FadeInOnScroll>
-              <FadeInOnScroll className="order-1 lg:order-2">
-                <div>
-                  <div className="inline-flex items-center gap-2 px-3 py-1 bg-muted rounded-full text-sm text-muted-foreground mb-4">
-                    <span className="w-5 h-5 rounded-full bg-foreground text-background flex items-center justify-center text-xs font-bold">
-                      2
-                    </span>
-                    Analyze
-                  </div>
-                  <h3 className="site-header text-3xl font-bold text-foreground mb-4">
-                    Analyze and iterate
-                  </h3>
-                  <p className="text-lg text-muted-foreground mb-6">
-                    Describe what you want to see. Hands' AI agent writes the
-                    queries, builds the charts, and refines until it's right.
-                    Just keep describing — it keeps improving.
-                  </p>
-                  <ul className="space-y-3 text-muted-foreground">
-                    <FeatureItem>
-                      Natural language to SQL and charts
-                    </FeatureItem>
-                    <FeatureItem>
-                      Iterative refinement through conversation
-                    </FeatureItem>
-                    <FeatureItem>
-                      AI that understands your business context
-                    </FeatureItem>
-                  </ul>
-                </div>
-              </FadeInOnScroll>
-            </div>
-
-            {/* Step 3: Share Living Apps */}
-            <div className="grid lg:grid-cols-2 gap-16 items-center">
-              <FadeInOnScroll>
-                <div>
-                  <div className="inline-flex items-center gap-2 px-3 py-1 bg-muted rounded-full text-sm text-muted-foreground mb-4">
-                    <span className="w-5 h-5 rounded-full bg-foreground text-background flex items-center justify-center text-xs font-bold">
-                      3
-                    </span>
-                    Share
-                  </div>
-                  <h3 className="site-header text-3xl font-bold text-foreground mb-4">
-                    Run your business by writing
-                  </h3>
-                  <p className="text-lg text-muted-foreground mb-6">
-                    Share living apps and automations. Replaces docs and
-                    spreadsheets. Your workbooks stay live — data updates
-                    automatically, charts refresh, automations run on schedule.
-                    Share a link, not a static file.
-                  </p>
-                  <ul className="space-y-3 text-muted-foreground">
-                    <FeatureItem>
-                      Live dashboards that update automatically
-                    </FeatureItem>
-                    <FeatureItem>
-                      Scheduled actions, alerts, and workflows
-                    </FeatureItem>
-                    <FeatureItem>
-                      Share links instead of attachments
-                    </FeatureItem>
-                  </ul>
-                </div>
-              </FadeInOnScroll>
-              <FadeInOnScroll delay={100}>
-                <DashboardDemo />
-              </FadeInOnScroll>
-            </div>
-          </div>
-        </section>
-
-        {/* Social Proof Section */}
-        <section className="py-32 px-8 bg-muted/30">
-          <div className="max-w-4xl mx-auto">
-            <FadeInOnScroll>
-              <div className="text-center mb-16">
-                <h2 className="site-header text-3xl font-bold text-foreground mb-4">
-                  Teams are switching from spreadsheets
-                </h2>
-              </div>
-            </FadeInOnScroll>
-
-            <FadeInOnScroll delay={100}>
-              <div className="bg-card rounded-2xl border border-border p-8 md:p-12 shadow-lg">
-                <div className="flex items-start gap-6">
-                  <div className="w-14 h-14 rounded-full bg-gradient-to-br from-violet-500 to-fuchsia-500 flex items-center justify-center text-white font-bold text-xl shrink-0">
-                    S
-                  </div>
-                  <div>
-                    <blockquote className="text-xl md:text-2xl text-foreground mb-6 leading-relaxed">
-                      "We used to email spreadsheets back and forth for weekly
-                      reports. Now we just share a Hands workbook — it's always
-                      up to date, and the team can drill into the data
-                      themselves."
-                    </blockquote>
-                    <div className="flex items-center gap-4">
-                      <div>
-                        <div className="font-semibold text-foreground">
-                          Sarah Chen
-                        </div>
-                        <div className="text-sm text-muted-foreground">
-                          Head of Operations, TechStartup
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </FadeInOnScroll>
-          </div>
-        </section>
-
-        {/* CTA Section */}
-        <section className="py-32 px-8">
+        {/* CTA Section - hidden for now */}
+        <section className="hidden py-32 px-8">
           <FadeInOnScroll>
             <div className="max-w-2xl mx-auto text-center">
               <h2 className="site-header text-4xl md:text-5xl font-bold text-foreground mb-6">
-                Never send a doc again.
+                Before you log into your SaaS tools, just ask Hands.
               </h2>
-              <p className="text-xl text-muted-foreground mb-10">
-                Send a Hands Workbook.
-              </p>
-              <button className="px-8 py-4 bg-foreground text-background rounded-lg font-medium text-lg transition-all duration-200 hover:scale-[1.02] hover:shadow-xl active:scale-[0.98]">
+              <a
+                href="/download"
+                className="px-8 py-4 bg-foreground text-background rounded-lg font-medium text-lg transition-all duration-200 hover:scale-[1.02] hover:shadow-xl active:scale-[0.98] flex items-center gap-2 mx-auto"
+              >
+                <AppleIcon className="w-5 h-5" />
                 Download for Mac
-              </button>
+              </a>
             </div>
           </FadeInOnScroll>
         </section>
@@ -261,23 +302,65 @@ export default function IndexPage() {
   );
 }
 
-// Animated Hero Headline - hands push crooked text into place
-function AnimatedHeroHeadline() {
-  const [phase, setPhase] = useState<
-    "crooked" | "pushing" | "dragging" | "done"
-  >("crooked");
+// Fixed demo wrapper - crossfades based on active state
+function FixedDemo({
+  children,
+  isActive,
+  onAnimationComplete,
+}: {
+  children: React.ReactNode;
+  isActive: boolean;
+  onAnimationComplete?: () => void;
+}) {
+  return (
+    <motion.div
+      className="absolute inset-0 flex items-center justify-center"
+      initial={{ opacity: 0, scale: 0.95 }}
+      animate={{
+        opacity: isActive ? 1 : 0,
+        scale: isActive ? 1 : 0.95,
+        pointerEvents: isActive ? "auto" : "none",
+      }}
+      transition={{ duration: 0.6, ease: [0.22, 1, 0.36, 1] }}
+      onAnimationComplete={() => {
+        if (isActive && onAnimationComplete) {
+          onAnimationComplete();
+        }
+      }}
+    >
+      {children}
+    </motion.div>
+  );
+}
 
-  useEffect(() => {
-    const timers = [
-      setTimeout(() => setPhase("pushing"), 400),
-      setTimeout(() => setPhase("dragging"), 1200),
-      setTimeout(() => setPhase("done"), 2000),
-    ];
-    return () => timers.forEach(clearTimeout);
-  }, []);
+// Animated Hero Headline - fades in crooked, then hands push it into place
+function AnimatedHeroHeadline({
+  scrollProgress = 0,
+  isVisible = false,
+}: {
+  scrollProgress?: number;
+  isVisible?: boolean;
+}) {
+  // Map scroll progress to animation phases
+  // 0-0.1: crooked, 0.1-0.45: pushing (text moves), 0.45-0.55: pause, 0.55-0.9: dragging, 0.9-1: done
+  const phase: "crooked" | "pushing" | "dragging" | "done" =
+    scrollProgress < 0.1
+      ? "crooked"
+      : scrollProgress < 0.5
+      ? "pushing"
+      : scrollProgress < 0.9
+      ? "dragging"
+      : "done";
+
+  const easing = [0.22, 1, 0.36, 1] as const;
 
   return (
-    <div className="mb-6">
+    <motion.div
+      className="mb-6"
+      initial={{ opacity: 0, y: 20 }}
+      animate={{ opacity: isVisible ? 1 : 0, y: isVisible ? 0 : 20 }}
+      transition={{ duration: 0.4, ease: easing }}
+    >
       {/* Fixed size text that never wraps */}
       <h1
         className="site-header font-bold tracking-tight text-foreground leading-[1.1] whitespace-nowrap"
@@ -285,76 +368,62 @@ function AnimatedHeroHeadline() {
       >
         {/* Line 1: "An extra set of" - starts shifted left, pushed into place */}
         <div className="relative inline-flex items-center">
-          <span
-            className="transition-transform duration-700 ease-out"
-            style={{
-              transform:
-                phase === "crooked" ? "translateX(-20px)" : "translateX(0)",
-            }}
+          <motion.span
+            initial={false}
+            animate={{ x: phase === "crooked" ? -20 : 0 }}
+            transition={{ duration: 0.8, ease: easing }}
           >
             An extra set of
-          </span>
+          </motion.span>
           {/* Pushing hand - comes from left, pushes text right */}
-          <PushHandIcon
-            className="absolute -left-11 top-1/2 w-8 h-8 text-foreground transition-all duration-700 ease-out"
-            style={{
+          <motion.div
+            className="absolute -left-11 top-1/2 w-8 h-8 text-foreground pointer-events-none"
+            initial={false}
+            animate={{
               opacity: phase === "pushing" ? 1 : 0,
-              transform: `translateY(-50%) translateX(${
-                phase === "pushing" ? "20px" : "0px"
-              })`,
+              x: phase === "pushing" ? 20 : 0,
+              y: "-50%",
             }}
-          />
+            transition={{ duration: 0.6, ease: easing }}
+          >
+            <PushHandIcon className="w-full h-full" />
+          </motion.div>
         </div>
         <br />
-        {/* Line 2: "hands at work." - starts rotated/shifted, OK hand drags period to straighten */}
+        {/* Line 2: "hands at work." - stays rotated until OK hand drags it into place */}
         <div className="relative inline-flex items-baseline">
-          <span
-            className="text-muted-foreground transition-transform duration-700 ease-out origin-left inline-block"
+          {/* OK hand - drags the whole line into place */}
+          <motion.div
+            className="absolute w-12 h-12 text-foreground pointer-events-none z-10"
             style={{
-              transform:
-                phase === "crooked" || phase === "pushing"
-                  ? "rotate(1.5deg) translateY(3px)"
-                  : "rotate(0deg) translateY(0px)",
+              right: "-2.5em",
+              top: "0.1em",
+              transformOrigin: "40% 36%",
             }}
-          >
-            hands at work
-          </span>
-          {/* Period with OK hand pinching it */}
-          <span
-            className="relative inline-block text-muted-foreground transition-transform duration-700 ease-out"
-            style={{
-              transform:
-                phase === "crooked" || phase === "pushing"
-                  ? "translateX(8px) translateY(6px)"
-                  : "translateX(0) translateY(0)",
+            initial={false}
+            animate={{
+              opacity: phase === "dragging" ? 1 : 0,
+              rotate: -130,
+              y: phase === "crooked" || phase === "pushing" ? 20 : phase === "dragging" ? 0 : -10,
             }}
+            transition={{ duration: 0.5, ease: easing }}
           >
-            .{/* OK hand - pinch point positioned exactly on period center */}
-            {/* Pinch point in SVG is at ~40% x, ~36% y (coords 10,9 in 25x25 viewBox) */}
-            <OkHandIcon
-              className="absolute w-12 h-12 text-foreground transition-all duration-700 ease-out pointer-events-none"
-              style={{
-                // Position so pinch point (40% from left, 36% from top of icon) lands on period
-                // Icon is 3rem (48px). Pinch at 40%=19.2px from left, 36%=17.3px from top
-                // Period center is roughly at 0.15em from left of ".", 0.5em above baseline
-                // Offset: left = -19.2px + period_center, top = -17.3px + period_center
-                top: "calc(-0.9em)",
-                left: "calc(-0.65em)",
-                opacity: phase === "dragging" ? 1 : phase === "done" ? 0.5 : 0,
-                // Rotate around the pinch point so it stays on the period
-                transformOrigin: "40% 36%",
-                transform:
-                  phase === "dragging"
-                    ? "rotate(-130deg)"
-                    : phase === "done"
-                    ? "rotate(-130deg) scale(0.95)"
-                    : "rotate(-130deg) translate(6px, 6px)",
-              }}
-            />
-          </span>
+            <OkHandIcon className="w-full h-full" />
+          </motion.div>
+          <motion.span
+            className="text-muted-foreground origin-left inline-block"
+            initial={false}
+            animate={{
+              rotate: phase === "crooked" || phase === "pushing" ? 1.5 : 0,
+              y: phase === "crooked" || phase === "pushing" ? 3 : 0,
+            }}
+            transition={{ duration: 0.8, ease: easing }}
+          >
+            hands at work.
+          </motion.span>
         </div>
       </h1>
-    </div>
+    </motion.div>
   );
 }
 
@@ -493,11 +562,16 @@ function FeatureItem({ children }: { children: React.ReactNode }) {
 }
 
 // Hero Chat Bar Component - positioned relative to demo
-function HeroChatBar() {
+function HeroChatBar({
+  isIntro = false,
+  onTypingComplete,
+}: {
+  isIntro?: boolean;
+  onTypingComplete?: () => void;
+}) {
   const [displayText, setDisplayText] = useState("");
-  const [phase, setPhase] = useState<"typing" | "waiting" | "deleting">(
-    "typing"
-  );
+  const [phase, setPhase] = useState<"typing" | "waiting" | "deleting">("typing");
+  const [introComplete, setIntroComplete] = useState(false);
   const fullText = "Show me revenue trends by month";
 
   useEffect(() => {
@@ -511,6 +585,11 @@ function HeroChatBar() {
           setDisplayText(fullText.slice(0, index));
           timeout = setTimeout(animate, 40 + Math.random() * 30);
         } else {
+          // Typing complete
+          if (isIntro && !introComplete) {
+            setIntroComplete(true);
+            onTypingComplete?.();
+          }
           setPhase("waiting");
           timeout = setTimeout(() => setPhase("deleting"), 2500);
         }
@@ -528,13 +607,13 @@ function HeroChatBar() {
 
     animate();
     return () => clearTimeout(timeout);
-  }, [phase]);
+  }, [phase, isIntro, introComplete, onTypingComplete]);
 
   return (
     <div className="flex items-center gap-3 bg-background rounded-2xl px-5 py-4 border border-border/40 shadow-xl">
-      <button className="h-10 w-10 shrink-0 rounded-xl flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-muted transition-colors">
-        <SettingsIcon className="w-5 h-5" />
-      </button>
+      <div className="h-10 w-10 shrink-0 rounded-xl flex items-center justify-center text-foreground">
+        <HandsLogo className="w-5 h-5" />
+      </div>
       <div className="flex-1 min-w-0 py-1 text-lg">
         {displayText ? (
           <span className="text-foreground">{displayText}</span>
@@ -564,11 +643,42 @@ interface ReasoningStep {
 
 // Agent Capture Demo - Shows complex data capture with agent reasoning
 // Uses capture-action panel styles: pulsing glow, pill buttons, etc.
-function AgentCaptureDemo() {
-  const [phase, setPhase] = useState<"email" | "capturing" | "reasoning">(
-    "email"
-  );
+function AgentCaptureDemo({ isActive = false }: { isActive?: boolean }) {
+  const [phase, setPhase] = useState<"email" | "capturing" | "reasoning">("email");
   const [reasoningStep, setReasoningStep] = useState(0);
+
+  // Animate through phases when active
+  useEffect(() => {
+    if (!isActive) {
+      setPhase("email");
+      setReasoningStep(0);
+      return;
+    }
+
+    // Phase 1: Show email for 500ms
+    const t1 = setTimeout(() => setPhase("capturing"), 500);
+    // Phase 2: Show capturing for 800ms
+    const t2 = setTimeout(() => setPhase("reasoning"), 1300);
+
+    return () => {
+      clearTimeout(t1);
+      clearTimeout(t2);
+    };
+  }, [isActive]);
+
+  // Animate reasoning steps when in reasoning phase
+  useEffect(() => {
+    if (phase !== "reasoning") return;
+
+    const interval = setInterval(() => {
+      setReasoningStep((prev) => {
+        if (prev >= 10) return prev; // Stop at last step
+        return prev + 1;
+      });
+    }, 300);
+
+    return () => clearInterval(interval);
+  }, [phase]);
 
   const reasoningSteps: ReasoningStep[] = [
     {
@@ -637,24 +747,6 @@ function AgentCaptureDemo() {
       text: "Live sync established. Table refreshes every 15 minutes.",
     },
   ];
-
-  useEffect(() => {
-    const timer1 = setTimeout(() => setPhase("capturing"), 2000);
-    const timer2 = setTimeout(() => setPhase("reasoning"), 3500);
-    return () => {
-      clearTimeout(timer1);
-      clearTimeout(timer2);
-    };
-  }, []);
-
-  useEffect(() => {
-    if (phase !== "reasoning") return;
-    if (reasoningStep >= reasoningSteps.length) return;
-
-    const delay = reasoningSteps[reasoningStep].type === "thought" ? 1200 : 600;
-    const timer = setTimeout(() => setReasoningStep((s) => s + 1), delay);
-    return () => clearTimeout(timer);
-  }, [phase, reasoningStep, reasoningSteps.length]);
 
   return (
     <div className="space-y-3">
@@ -906,19 +998,25 @@ function FileIcon({ className }: { className?: string }) {
 }
 
 // AI Analysis Demo - matches capture-action window style
-function AIAnalysisDemo() {
-  const [phase, setPhase] = useState<"thinking" | "summary" | "actions">(
-    "thinking"
-  );
+// Now driven by scroll progress instead of time
+function AIAnalysisDemo({ isActive = false }: { isActive?: boolean }) {
+  const [phase, setPhase] = useState<"thinking" | "summary" | "actions">("thinking");
 
+  // Animate through phases when active
   useEffect(() => {
-    const timer1 = setTimeout(() => setPhase("summary"), 1500);
-    const timer2 = setTimeout(() => setPhase("actions"), 2500);
+    if (!isActive) {
+      setPhase("thinking");
+      return;
+    }
+
+    const t1 = setTimeout(() => setPhase("summary"), 1000);
+    const t2 = setTimeout(() => setPhase("actions"), 2000);
+
     return () => {
-      clearTimeout(timer1);
-      clearTimeout(timer2);
+      clearTimeout(t1);
+      clearTimeout(t2);
     };
-  }, []);
+  }, [isActive]);
 
   return (
     <div className="relative">
@@ -1341,6 +1439,19 @@ function WandIcon({ className }: { className?: string }) {
       <path d="M7 8H3" />
       <path d="M21 16h-4" />
       <path d="M11 3H9" />
+    </svg>
+  );
+}
+
+function AppleIcon({ className }: { className?: string }) {
+  return (
+    <svg
+      xmlns="http://www.w3.org/2000/svg"
+      viewBox="0 0 24 24"
+      fill="currentColor"
+      className={className}
+    >
+      <path d="M18.71 19.5c-.83 1.24-1.71 2.45-3.05 2.47-1.34.03-1.77-.79-3.29-.79-1.53 0-2 .77-3.27.82-1.31.05-2.3-1.32-3.14-2.53C4.25 17 2.94 12.45 4.7 9.39c.87-1.52 2.43-2.48 4.12-2.51 1.28-.02 2.5.87 3.29.87.78 0 2.26-1.07 3.81-.91.65.03 2.47.26 3.64 1.98-.09.06-2.17 1.28-2.15 3.81.03 3.02 2.65 4.03 2.68 4.04-.03.07-.42 1.44-1.38 2.83M13 3.5c.73-.83 1.94-1.46 2.94-1.5.13 1.17-.34 2.35-1.04 3.19-.69.85-1.83 1.51-2.95 1.42-.15-1.15.41-2.35 1.05-3.11z" />
     </svg>
   );
 }

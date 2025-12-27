@@ -2,23 +2,17 @@
  * ChatSettings - Hands Agent settings popover shown when clicking the Hand icon
  *
  * Shows:
- * - Model selection (all via OpenRouter)
  * - Agent server status with restart button
+ * - OpenRouter API key input
  * - Advanced: Available agents and tools (collapsible)
  */
 
 import { useQuery } from "@tanstack/react-query";
-import { Bot, Check, ChevronDown, ChevronRight, Hand, RotateCw, Wrench } from "lucide-react";
+import { Bot, ChevronDown, ChevronRight, Hand, RotateCw, Wrench } from "lucide-react";
 import { useState } from "react";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { useServer } from "@/hooks/useServer";
-import { modelOptions, useSettings } from "@/hooks/useSettings";
+import { useSettings } from "@/hooks/useSettings";
 import { api } from "@/lib/api";
 import { cn } from "@/lib/utils";
 
@@ -28,8 +22,7 @@ interface ChatSettingsProps {
 
 export function ChatSettings({ children }: ChatSettingsProps) {
   const [advancedOpen, setAdvancedOpen] = useState(false);
-  const { settings, loading, updateSetting, updateApiKey, currentApiKey, syncModel } =
-    useSettings();
+  const { loading, updateApiKey, currentApiKey } = useSettings();
   const { isConnected, isConnecting, isRestarting, restartServer } = useServer();
 
   // Fetch agents and tools
@@ -44,8 +37,6 @@ export function ChatSettings({ children }: ChatSettingsProps) {
     queryFn: api.tools.ids,
     enabled: isConnected,
   });
-
-  const currentModel = modelOptions.find((m) => m.value === settings.model);
 
   if (loading) {
     return <>{children}</>;
@@ -100,42 +91,8 @@ export function ChatSettings({ children }: ChatSettingsProps) {
           </div>
         </div>
 
-        {/* Model selection */}
-        <div className="p-3 space-y-3">
-          {/* Model dropdown */}
-          <div className="space-y-1.5">
-            <span className="text-[10px] uppercase tracking-wide text-muted-foreground block">
-              Model
-            </span>
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <button
-                  type="button"
-                  className="w-full flex items-center justify-between h-8 px-2 text-sm bg-muted rounded-md border border-border hover:bg-muted/80 transition-colors"
-                >
-                  <span className="truncate">{currentModel?.label || settings.model}</span>
-                  <ChevronDown className="h-3 w-3 text-muted-foreground shrink-0" />
-                </button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent
-                align="start"
-                className="w-[--radix-dropdown-menu-trigger-width] max-h-64 overflow-y-auto"
-              >
-                {modelOptions.map((opt) => (
-                  <DropdownMenuItem
-                    key={opt.value}
-                    onClick={() => updateSetting("model", opt.value)}
-                    className="flex items-center justify-between"
-                  >
-                    <span>{opt.label}</span>
-                    {settings.model === opt.value && <Check className="h-4 w-4" />}
-                  </DropdownMenuItem>
-                ))}
-              </DropdownMenuContent>
-            </DropdownMenu>
-          </div>
-
-          {/* API Key */}
+        {/* API Key */}
+        <div className="p-3">
           <div className="space-y-1.5">
             <label
               htmlFor="api-key-input"
@@ -152,7 +109,6 @@ export function ChatSettings({ children }: ChatSettingsProps) {
                 if (currentApiKey) {
                   try {
                     await restartServer();
-                    setTimeout(() => syncModel(), 1000);
                   } catch (e) {
                     console.error("Failed to restart server:", e);
                   }

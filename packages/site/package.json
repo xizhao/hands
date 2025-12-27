@@ -7,11 +7,14 @@
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "deploy": "bun run build && wrangler pages deploy dist --project-name=hands-site",
+    "upload:dmg": "wrangler r2 object put hands-releases/Hands_latest_aarch64.dmg --file ../desktop/src-tauri/target/release/bundle/dmg/Hands_0.1.0_aarch64.dmg"
   },
   "dependencies": {
     "@hands/core": "workspace:*",
     "@hands/editor": "workspace:*",
+    "motion": "^12.23.26",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
     "react-router-dom": "^7.0.0",

@@ -7,16 +7,10 @@
  */
 
 import { Desktop, Info, Key, Keyboard, Palette, Robot } from "@phosphor-icons/react";
-import { Check, ChevronDown, X } from "lucide-react";
+import { Check, X } from "lucide-react";
 import { useEffect, useState } from "react";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
 import { useServer } from "@/hooks/useServer";
-import { modelOptions, useSettings } from "@/hooks/useSettings";
+import { useSettings } from "@/hooks/useSettings";
 import { getTheme, getThemeList, setTheme } from "@/lib/theme";
 import { cn } from "@/lib/utils";
 
@@ -267,39 +261,14 @@ function ThemeButton({
 }
 
 function AISettings() {
-  const { settings, updateSetting, currentApiKey, updateApiKey, syncModel } = useSettings();
+  const { currentApiKey, updateApiKey } = useSettings();
   const { restartServer } = useServer();
-
-  const currentModel = modelOptions.find((m) => m.value === settings.model);
 
   return (
     <div className="space-y-6">
-      <SettingGroup title="Model" description="All models available via OpenRouter">
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <button className="w-full max-w-xs flex items-center justify-between h-9 px-3 text-sm bg-muted rounded-md border border-border hover:bg-muted/80 transition-colors">
-              <span className="truncate">{currentModel?.label || settings.model}</span>
-              <ChevronDown className="h-4 w-4 text-muted-foreground shrink-0" />
-            </button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="start" className="w-64 max-h-64 overflow-y-auto">
-            {modelOptions.map((opt) => (
-              <DropdownMenuItem
-                key={opt.value}
-                onClick={() => updateSetting("model", opt.value)}
-                className="flex items-center justify-between"
-              >
-                <span>{opt.label}</span>
-                {settings.model === opt.value && <Check className="h-4 w-4" />}
-              </DropdownMenuItem>
-            ))}
-          </DropdownMenuContent>
-        </DropdownMenu>
-      </SettingGroup>
-
       <SettingGroup
         title="OpenRouter API Key"
-        description="Your OpenRouter API key - one key for all AI providers"
+        description="Your OpenRouter API key for Claude Opus 4.5"
       >
         <div className="flex items-center gap-2 max-w-md">
           <div className="relative flex-1">
@@ -318,7 +287,6 @@ function AISettings() {
           <button
             onClick={async () => {
               await restartServer();
-              setTimeout(() => syncModel(), 1000);
             }}
             className="h-9 px-3 text-sm bg-primary text-primary-foreground rounded-md hover:bg-primary/90 transition-colors"
           >

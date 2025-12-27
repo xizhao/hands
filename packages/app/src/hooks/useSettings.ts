@@ -5,17 +5,14 @@
  * Uses the platform adapter for cross-platform storage.
  *
  * All AI calls go through OpenRouter - users only need one API key.
+ * Model is hardcoded in packages/agent (claude-opus-4.5 via OpenRouter).
  */
 
 import { useCallback, useEffect, useState } from "react";
 import { usePlatform } from "../platform";
-import { api } from "@/lib/api";
 import { PORTS } from "@/lib/ports";
 
 export interface Settings {
-  // AI model (OpenRouter format: provider/model)
-  model: string;
-
   // Server settings
   serverPort: number;
 
@@ -29,7 +26,6 @@ export interface ApiKeys {
 }
 
 const defaultSettings: Settings = {
-  model: "anthropic/claude-sonnet-4.5",
   serverPort: PORTS.OPENCODE,
   theme: "dark",
 };
@@ -37,21 +33,6 @@ const defaultSettings: Settings = {
 const defaultApiKeys: ApiKeys = {
   openrouter_api_key: "",
 };
-
-// All models available via OpenRouter
-export const modelOptions: { value: string; label: string }[] = [
-  // Anthropic
-  { value: "anthropic/claude-opus-4.5", label: "Claude Opus 4.5" },
-  { value: "anthropic/claude-sonnet-4.5", label: "Claude Sonnet 4.5" },
-  { value: "anthropic/claude-haiku-4.5", label: "Claude Haiku 4.5" },
-  // OpenAI
-  { value: "openai/gpt-5.1", label: "GPT-5.1" },
-  { value: "openai/gpt-5", label: "GPT-5" },
-  { value: "openai/o1", label: "OpenAI o1" },
-  // Google
-  { value: "google/gemini-2.5-pro", label: "Gemini 2.5 Pro" },
-  { value: "google/gemini-2.5-flash", label: "Gemini 2.5 Flash" },
-];
 
 export function useSettings() {
   const platform = usePlatform();
@@ -63,7 +44,6 @@ export function useSettings() {
   useEffect(() => {
     async function loadSettings() {
       if (!platform.storage) {
-        // On web, use defaults (could also use localStorage via platform.storage)
         setLoading(false);
         return;
       }
@@ -88,23 +68,6 @@ export function useSettings() {
     loadSettings();
   }, [platform.storage]);
 
-  // Sync model config with OpenCode server
-  const syncModelWithOpenCode = useCallback(async (model: string) => {
-    try {
-      // OpenRouter models use provider/model format - extract provider
-      const [provider] = model.split("/");
-      await api.config.setModel(provider || "openrouter", model);
-      console.log(`Synced model to OpenCode: ${model}`);
-    } catch (error) {
-      console.error("Failed to sync model with OpenCode:", error);
-    }
-  }, []);
-
-  // Sync current model settings
-  const syncModel = useCallback(() => {
-    syncModelWithOpenCode(settings.model);
-  }, [settings.model, syncModelWithOpenCode]);
-
   // Update a single setting
   const updateSetting = useCallback(
     async <K extends keyof Settings>(key: K, value: Settings[K]) => {
@@ -115,16 +78,11 @@ export function useSettings() {
         if (platform.storage) {
           await platform.storage.set("settings", newSettings);
         }
-
-        // Sync with OpenCode when model changes
-        if (key === "model") {
-          await syncModelWithOpenCode(value as string);
-        }
       } catch (error) {
         console.error("Failed to save setting:", error);
       }
     },
-    [settings, syncModelWithOpenCode, platform.storage],
+    [settings, platform.storage],
   );
 
   // Update the API key
@@ -133,7 +91,6 @@ export function useSettings() {
 
     try {
       if (platform.storage) {
-        // Store at root level so Rust can easily read it
         await platform.storage.set("openrouter_api_key", value);
       }
     } catch (error) {
@@ -178,6 +135,5 @@ export function useSettings() {
     resetSettings,
     hasApiKey,
     currentApiKey: apiKeys.openrouter_api_key,
-    syncModel,
   };
 }

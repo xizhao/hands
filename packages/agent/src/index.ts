@@ -13,7 +13,7 @@ import { coderAgent, handsAgent, importAgent } from "../agents";
 
 // Configuration
 const PORT = parseInt(process.env.HANDS_AGENT_PORT || "55300", 10);
-const MODEL = process.env.HANDS_MODEL || "openrouter/anthropic/claude-sonnet-4";
+const MODEL = "openrouter/anthropic/claude-opus-4.5";
 
 // Paths
 // Bun uses import.meta.dir, Node uses import.meta.dirname

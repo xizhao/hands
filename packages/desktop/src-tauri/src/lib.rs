@@ -1251,7 +1251,6 @@ async fn save_api_key_and_launch(
 
     // Restart opencode server with new API key
     let env_vars = get_api_keys_from_store(&app);
-    let model = get_model_from_store(&app);
 
     // Clone the Arc for use in spawn
     let state_clone = state.inner().clone();
@@ -1265,9 +1264,9 @@ async fn save_api_key_and_launch(
         s.server = None;
     }
 
-    // Start new server with API key
+    // Start new server with API key (model defaults to OpenRouter in agent)
     tauri::async_runtime::spawn(async move {
-        match start_opencode_server(PORT_OPENCODE, model, env_vars, None).await {
+        match start_opencode_server(PORT_OPENCODE, None, env_vars, None).await {
             Ok(child) => {
                 let mut s = state_clone.lock().await;
                 s.server = Some(child);
@@ -1281,21 +1280,6 @@ async fn save_api_key_and_launch(
 
     Ok(())
 }
-
-fn get_model_from_store(app: &tauri::AppHandle) -> Option<String> {
-    if let Ok(store) = app.store("settings.json") {
-        if let Some(settings) = store.get("settings") {
-            let provider = settings.get("provider").and_then(|v| v.as_str());
-            let model = settings.get("model").and_then(|v| v.as_str());
-
-            if let (Some(p), Some(m)) = (provider, model) {
-                return Some(format!("{}/{}", p, m));
-            }
-        }
-    }
-    None
-}
-
 /// Kill any existing process listening on the given port (except ourselves)
 async fn kill_process_on_port(port: u16) -> Result<(), String> {
     // Get our own process ID to avoid killing ourselves
@@ -1408,7 +1392,6 @@ async fn restart_server_with_dir(
     }
 
     let mut env_vars = get_api_keys_from_store(&app);
-    let model = get_model_from_store(&app);
 
     // Add database URL if runtime is available (optional - AI works without DB)
     // Set runtime port for agent tools to access SQLite via tRPC
@@ -1419,7 +1402,8 @@ async fn restart_server_with_dir(
 
     println!("Restarting OpenCode server with working directory: {}", workbook_dir);
 
-    match start_opencode_server(PORT_OPENCODE, model, env_vars, Some(workbook_dir)).await {
+    // Model defaults to OpenRouter in agent
+    match start_opencode_server(PORT_OPENCODE, None, env_vars, Some(workbook_dir)).await {
         Ok(child) => {
             state_guard.server = Some(child);
 
@@ -1477,9 +1461,9 @@ async fn restart_server(
         }
 
         let env_vars = get_api_keys_from_store(&app);
-        let model = get_model_from_store(&app);
 
-        match start_opencode_server(PORT_OPENCODE, model, env_vars, None).await {
+        // Model defaults to OpenRouter in agent
+        match start_opencode_server(PORT_OPENCODE, None, env_vars, None).await {
             Ok(child) => {
                 state_guard.server = Some(child);
 
@@ -2015,12 +1999,12 @@ pub fn run() {
 
             let app_handle = app.handle().clone();
             let env_vars = get_api_keys_from_store(&app_handle);
-            let model = get_model_from_store(&app_handle);
 
             // Start Hands agent server (no postgres - runtime manages it per workbook)
             // No working directory at startup - will be set when workbook is activated
+            // Model defaults to OpenRouter in agent
             tauri::async_runtime::spawn(async move {
-                match start_opencode_server(PORT_OPENCODE, model, env_vars, None).await {
+                match start_opencode_server(PORT_OPENCODE, None, env_vars, None).await {
                     Ok(child) => {
                         let mut s = state.lock().await;
                         s.server = Some(child);

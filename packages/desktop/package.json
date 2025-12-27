@@ -15,8 +15,10 @@
     "build:docs": "test -d ../../docs && (cd ../../docs && bun run build) || echo 'Skipping docs build (docs/ not found)'",
     "cleanup": "lsof -ti:1420,55300 | xargs kill -9 2>/dev/null || true",
     "tauri:dev": "bun run build:sidecars && bun run cleanup && tauri dev",
-    "tauri:build": "bun run build:sidecars && bun run build:docs && tauri build",
-    "build:sidecars": "bun run scripts/build-sidecars.ts"
+    "tauri:build": "bun run build:sidecars && bun run build:docs && tauri build && bun run scripts/sign-and-package.ts",
+    "tauri:build:unsigned": "bun run build:sidecars && bun run build:docs && tauri build",
+    "build:sidecars": "bun run scripts/build-sidecars.ts",
+    "release": "bun run scripts/release.ts"
   },
   "dependencies": {
     "@hands/app": "workspace:*",

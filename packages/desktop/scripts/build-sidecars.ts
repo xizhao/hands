@@ -7,7 +7,7 @@
  */
 
 import { $ } from "bun";
-import { existsSync, mkdirSync } from "fs";
+import { existsSync, mkdirSync, copyFileSync } from "fs";
 import { join, dirname } from "path";
 import { fileURLToPath } from "url";
 
@@ -68,7 +68,56 @@ async function buildSidecar(sidecar: Sidecar, targetTriple: string): Promise<voi
   // Run from monorepo root for proper workspace resolution
   await $`cd ${ROOT} && bun build --compile --minify ${entryPath} --outfile ${outputPath}`;
 
-  console.log(`  ✓ Built ${outputName}`);
+  // Ad-hoc sign the binary (required for macOS Gatekeeper)
+  if (process.platform === "darwin") {
+    await $`codesign --force --sign - ${outputPath}`;
+    console.log(`  ✓ Built and signed ${outputName}`);
+  } else {
+    console.log(`  ✓ Built ${outputName}`);
+  }
+}
+
+async function copyOpencode(targetTriple: string): Promise<void> {
+  console.log("Copying opencode binary...");
+
+  // Find the actual opencode binary (not the wrapper script)
+  // `which opencode` might return a node wrapper script, so we use `which -a`
+  // to get all matches and find the real binary
+  const result = Bun.spawnSync(["which", "-a", "opencode"]);
+  const paths = result.stdout.toString().trim().split("\n").filter(Boolean);
+
+  let opencodePath: string | null = null;
+
+  for (const path of paths) {
+    // Check if this is an actual binary (not a script)
+    const fileResult = Bun.spawnSync(["file", path]);
+    const fileType = fileResult.stdout.toString();
+    if (fileType.includes("Mach-O") || fileType.includes("ELF")) {
+      opencodePath = path;
+      break;
+    }
+  }
+
+  if (!opencodePath) {
+    throw new Error("opencode binary not found in PATH. Please install it with: npm install -g opencode");
+  }
+
+  console.log(`  Source: ${opencodePath}`);
+
+  const outputName = `opencode-${targetTriple}`;
+  const outputPath = join(BINARIES_DIR, outputName);
+  console.log(`  Output: ${outputPath}`);
+
+  // Copy the binary
+  copyFileSync(opencodePath, outputPath);
+
+  // Ad-hoc sign on macOS (required for Gatekeeper)
+  if (process.platform === "darwin") {
+    await $`codesign --force --sign - ${outputPath}`;
+    console.log(`  ✓ Copied and signed ${outputName}`);
+  } else {
+    console.log(`  ✓ Copied ${outputName}`);
+  }
 }
 
 async function main(): Promise<void> {
@@ -84,6 +133,9 @@ async function main(): Promise<void> {
   for (const sidecar of SIDECARS) {
     await buildSidecar(sidecar, targetTriple);
   }
+
+  // Copy opencode binary
+  await copyOpencode(targetTriple);
 
   console.log("\n✓ All sidecars built successfully\n");
 }
