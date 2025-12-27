@@ -3,16 +3,16 @@
  *
  * Shared plugin configuration for all editor modes (doc, slides, code).
  * This ensures consistent behavior across all editor instances.
+ *
+ * Note: Serialization is handled by the web worker, not MarkdownPlugin.
+ * Custom serialization rules should be added to @hands/core/primitives/serialization.
  */
 
 import { EditorCorePlugins } from "./presets";
-import { createMarkdownKit, type MarkdownRule } from "./markdown-kit";
 
 export interface EditorConfig {
   /** Additional plugins beyond the core set */
   extraPlugins?: any[];
-  /** Additional markdown serialization rules */
-  markdownRules?: Record<string, MarkdownRule>;
 }
 
 /**
@@ -20,12 +20,11 @@ export interface EditorConfig {
  * Used by DocEditor, SlideEditor, etc. to ensure consistent configuration.
  */
 export function createEditorPlugins(config: EditorConfig = {}) {
-  const { extraPlugins = [], markdownRules = {} } = config;
+  const { extraPlugins = [] } = config;
 
   return [
     ...EditorCorePlugins,
     ...extraPlugins,
-    ...createMarkdownKit(markdownRules),
   ];
 }
 

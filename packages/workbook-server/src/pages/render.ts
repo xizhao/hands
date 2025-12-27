@@ -1,18 +1,26 @@
 /**
  * Page Rendering
  *
- * Renders MDX pages with embedded blocks.
- *
- * Two modes:
- * - Dev: Blocks rendered via RSC Flight streaming
- * - Prod: Blocks rendered via SSR
+ * Renders MDX pages with embedded blocks using PlateStatic.
+ * Uses shared render function from @hands/editor.
  */
 
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
-import { renderToString } from "react-dom/server";
-import * as React from "react";
+import type { Value } from "platejs";
+import { renderPlateToHtml } from "@hands/editor/lib/plate-static-render-node";
 import { compilePage, type CompiledPage, type PageMeta } from "./mdx.js";
+
+// Dynamic import for parseMdx (uses ESM)
+let parseMdxFn: ((source: string) => { frontmatter: Record<string, unknown>; value: Value; errors: string[] }) | null = null;
+
+async function getParseMdx() {
+  if (!parseMdxFn) {
+    const mod = await import("../../../editor_old/src/mdx/parser.js");
+    parseMdxFn = mod.parseMdx;
+  }
+  return parseMdxFn;
+}
 
 // ============================================================================
 // Types
@@ -75,54 +83,36 @@ export async function renderPage(options: RenderPageOptions): Promise<PageRender
     const filePath = join(pagesDir, pagePath);
     const source = await readFile(filePath, "utf-8");
 
-    // Compile page
-    const compiled = compilePage(source);
+    // Parse MDX to Plate JSON using editor's parser
+    const parseMdx = await getParseMdx();
+    const parseResult = parseMdx(source);
 
-    if (compiled.errors.length > 0) {
-      return {
-        html: renderErrorPage(compiled.errors.join("\n")),
-        meta: compiled.meta,
-        blockIds: [],
-        error: compiled.errors.join("\n"),
-      };
+    if (parseResult.errors.length > 0) {
+      console.warn(`[render] Parse warnings for ${pagePath}:`, parseResult.errors);
     }
 
-    // Render markdown to HTML
-    let html = renderMarkdown(compiled.content);
+    const meta: PageMeta = {
+      title: (parseResult.frontmatter.title as string) || "Untitled",
+      description: parseResult.frontmatter.description as string | undefined,
+      ...parseResult.frontmatter,
+    };
 
-    // Render embedded blocks
-    const blockIds: string[] = [];
-    for (const blockRef of compiled.blocks) {
-      blockIds.push(blockRef.id);
-
-      let blockHtml: string;
-      try {
-        blockHtml = await renderBlockInPage(blockRef.id, blockRef.props, context);
-      } catch (err) {
-        blockHtml = renderBlockError(blockRef.id, err instanceof Error ? err.message : String(err));
-      }
-
-      // Replace Block element with rendered HTML
-      // Match the full <Block ... /> or <Block ...>...</Block> element
-      const blockPattern = new RegExp(
-        `<Block[^>]*src=["']${escapeRegex(blockRef.id)}["'][^>]*/?>`,
-        "g"
-      );
-      html = html.replace(blockPattern, blockHtml);
-    }
+    // Render Plate value using shared renderer
+    const html = renderPlateToHtml(parseResult.value);
 
     // Apply wrapper or default
     const fullHtml = wrapper
-      ? wrapper(html, compiled.meta)
-      : wrapPageHtml(html, compiled.meta);
+      ? wrapper(html, meta)
+      : wrapPageHtml(html, meta);
 
     return {
       html: fullHtml,
-      meta: compiled.meta,
-      blockIds,
+      meta,
+      blockIds: [], // TODO: extract block IDs from Plate value
     };
   } catch (err) {
     const error = err instanceof Error ? err.message : String(err);
+    console.error(`[render] Failed to render ${pagePath}:`, error);
     return {
       html: renderErrorPage(error),
       meta: { title: "Error" },
@@ -132,8 +122,10 @@ export async function renderPage(options: RenderPageOptions): Promise<PageRender
   }
 }
 
+
 /**
  * Render a compiled page (when source is already parsed)
+ * @deprecated Use renderPage instead which parses to Plate format
  */
 export async function renderCompiledPage(
   compiled: CompiledPage,
@@ -149,39 +141,30 @@ export async function renderCompiledPage(
     };
   }
 
-  // Render markdown to HTML
-  let html = renderMarkdown(compiled.content);
+  // Parse source to Plate format and render
+  try {
+    const parseMdx = await getParseMdx();
+    const parseResult = parseMdx(compiled.source);
+    const html = renderPlateToHtml(parseResult.value);
 
-  // Render embedded blocks
-  const blockIds: string[] = [];
-  for (const blockRef of compiled.blocks) {
-    blockIds.push(blockRef.id);
+    const fullHtml = wrapper
+      ? wrapper(html, compiled.meta)
+      : wrapPageHtml(html, compiled.meta);
 
-    let blockHtml: string;
-    try {
-      blockHtml = await renderBlockInPage(blockRef.id, blockRef.props, context);
-    } catch (err) {
-      blockHtml = renderBlockError(blockRef.id, err instanceof Error ? err.message : String(err));
-    }
-
-    // Replace Block element with rendered HTML
-    const blockPattern = new RegExp(
-      `<Block[^>]*src=["']${escapeRegex(blockRef.id)}["'][^>]*/?>`,
-      "g"
-    );
-    html = html.replace(blockPattern, blockHtml);
+    return {
+      html: fullHtml,
+      meta: compiled.meta,
+      blockIds: compiled.blocks.map(b => b.id),
+    };
+  } catch (err) {
+    const error = err instanceof Error ? err.message : String(err);
+    return {
+      html: renderErrorPage(error),
+      meta: compiled.meta,
+      blockIds: [],
+      error,
+    };
   }
-
-  // Apply wrapper or default
-  const fullHtml = wrapper
-    ? wrapper(html, compiled.meta)
-    : wrapPageHtml(html, compiled.meta);
-
-  return {
-    html: fullHtml,
-    meta: compiled.meta,
-    blockIds,
-  };
 }
 
 // ============================================================================

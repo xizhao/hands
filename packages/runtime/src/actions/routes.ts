@@ -9,7 +9,7 @@
 import { route } from "rwsdk/router";
 import type { ActionDefinition, ActionRun, ActionTriggerType } from "../types/action";
 import { buildActionContext, createRunMeta } from "./context";
-import { getDb, kyselySql } from "../db/dev";
+import { getUserTables } from "../db/dev";
 import { actions, listActions } from "@hands/actions";
 
 /** Cloud API URL from environment */
@@ -28,15 +28,8 @@ function generateRunId(): string {
  * Get all tables in the database (for building context)
  */
 async function getTables(): Promise<Array<{ name: string }>> {
-  const db = getDb();
-  const result = await kyselySql<{ name: string }>`
-    SELECT name FROM sqlite_master
-    WHERE type = 'table'
-      AND name NOT LIKE 'sqlite_%'
-      AND name NOT LIKE '__%'
-    ORDER BY name
-  `.execute(db);
-  return result.rows;
+  const userTables = await getUserTables();
+  return userTables.map((t) => ({ name: t.name }));
 }
 
 /**

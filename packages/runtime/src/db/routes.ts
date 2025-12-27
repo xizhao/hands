@@ -6,7 +6,7 @@
  */
 
 import { route } from "rwsdk/router";
-import { getDb, kyselySql, runWithDbMode } from "./dev";
+import { getDb, getUserTables, kyselySql, runWithDbMode } from "./dev";
 
 export const dbRoutes = [
   route("/db/health", () =>
@@ -18,16 +18,10 @@ export const dbRoutes = [
   route("/db/schema", async () => {
     try {
       const db = getDb();
-      const tablesResult = await kyselySql<{ name: string }>`
-        SELECT name FROM sqlite_master
-        WHERE type = 'table'
-          AND name NOT LIKE 'sqlite_%'
-          AND name NOT LIKE '__%'
-        ORDER BY name
-      `.execute(db);
+      const userTables = await getUserTables();
 
       const tables = await Promise.all(
-        tablesResult.rows.map(async (t) => {
+        userTables.map(async (t) => {
           const columnsResult = await kyselySql<{
             name: string;
             type: string;

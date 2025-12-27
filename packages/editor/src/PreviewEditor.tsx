@@ -21,7 +21,6 @@ import { forwardRef, useEffect, useMemo, type ReactNode } from "react";
 
 import { useMarkdownWorker } from "./hooks/use-markdown-worker";
 import { EditorCorePlugins } from "./plugins/presets";
-import { createMarkdownKit } from "./plugins/markdown-kit";
 
 // ============================================================================
 // Node Normalization (for streaming/partial content)
@@ -273,10 +272,8 @@ export const PreviewEditor = forwardRef<HTMLDivElement, PreviewEditorProps>(
     const { deserialize } = useMarkdownWorker();
 
     // Build plugins - same as main editor but without copilot
-    const plugins = useMemo(
-      () => [...EditorCorePlugins, ...createMarkdownKit({})],
-      []
-    );
+    // Note: Serialization is handled by the worker, not MarkdownPlugin
+    const plugins = useMemo(() => EditorCorePlugins, []);
 
     // Create editor instance
     const editor = usePlateEditor({

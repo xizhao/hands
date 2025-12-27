@@ -12,7 +12,7 @@ import { emit } from "@tauri-apps/api/event";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { convertFileSrc } from "@tauri-apps/api/core";
 import { ChevronDown, Database, Hand, RefreshCw, Wand2, X } from "lucide-react";
-import { motion, AnimatePresence } from "framer-motion";
+import { motion } from "framer-motion";
 import { useCallback, useEffect, useState, useRef } from "react";
 import { useQuery } from "@tanstack/react-query";
 
@@ -73,21 +73,12 @@ export function CaptureActionPanel() {
 
   const contentRef = useRef<HTMLDivElement>(null);
 
-  const setClickThrough = useCallback(async (ignore: boolean) => {
-    try {
-      await invoke("set_ignore_cursor_events", { ignore });
-    } catch (err) {
-      console.error("Failed to set cursor events:", err);
-    }
-  }, []);
-
   useEffect(() => {
     document.documentElement.classList.add("transparent-overlay", "dark");
-    setClickThrough(true);
     return () => {
       document.documentElement.classList.remove("transparent-overlay", "dark");
     };
-  }, [setClickThrough]);
+  }, []);
 
   // Parse query params on mount
   useEffect(() => {
@@ -228,12 +219,14 @@ export function CaptureActionPanel() {
   const selectedWorkbookName = workbooks.find(w => w.id === selectedWorkbook)?.name || "Select workbook...";
 
   return (
-    <div className="h-screen w-screen flex flex-col bg-transparent">
+    <div
+      className="h-screen w-screen flex flex-col bg-transparent"
+      onClick={handleClose}
+    >
       <div
         ref={contentRef}
         className="flex flex-col gap-2"
-        onMouseEnter={() => setClickThrough(false)}
-        onMouseLeave={() => setClickThrough(true)}
+        onClick={(e) => e.stopPropagation()}
       >
       {/* Screenshot with pulsing glow - padding creates space for glow effect */}
       {screenshotPath && imgWidth > 0 && imgHeight > 0 && (

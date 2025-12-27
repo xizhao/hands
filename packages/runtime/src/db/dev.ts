@@ -126,6 +126,24 @@ export function getDb(): Kysely<DB> {
 }
 
 /**
+ * Get all user tables from sqlite_master.
+ * Excludes sqlite internal tables and tables starting with __ (migrations, etc.)
+ *
+ * Note: Uses GLOB instead of LIKE because _ is a wildcard in LIKE.
+ */
+export async function getUserTables(): Promise<Array<{ name: string; sql: string }>> {
+  const db = getKysely();
+  const result = await kyselySql<{ name: string; sql: string }>`
+    SELECT name, sql FROM sqlite_master
+    WHERE type = 'table'
+      AND name NOT LIKE 'sqlite_%'
+      AND name NOT GLOB '__*'
+    ORDER BY name
+  `.execute(db);
+  return result.rows;
+}
+
+/**
  * Re-export Kysely's sql helper for building raw SQL fragments
  */
 export { kyselySql };

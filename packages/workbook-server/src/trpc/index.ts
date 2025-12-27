@@ -119,6 +119,8 @@ export function registerTRPCRoutes(app: Hono, config: TRPCConfig) {
       // Pages context
       getPageRegistry,
       createPageRegistry,
+      // Deploy context
+      getRuntimeUrl,
     };
 
     // Use tRPC's fetch adapter

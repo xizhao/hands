@@ -15,7 +15,7 @@ export function ColumnElementStatic(props: SlateElementProps<TColumnElement>) {
 
 export function ColumnGroupElementStatic(props: SlateElementProps) {
   return (
-    <SlateElement className="my-2" {...props}>
+    <SlateElement className="my-2" data-block-id={props.element.id as string} {...props}>
       <div className="flex size-full gap-4 rounded">{props.children}</div>
     </SlateElement>
   );

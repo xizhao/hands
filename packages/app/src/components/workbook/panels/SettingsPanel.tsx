@@ -3,7 +3,10 @@
  */
 
 import {
+  ArrowSquareOut,
   CaretRight,
+  Check,
+  CircleNotch,
   Database,
   Eye,
   EyeSlash,
@@ -12,11 +15,14 @@ import {
   Globe,
   Key,
   Plus,
+  Rocket,
   Trash,
+  Warning,
 } from "@phosphor-icons/react";
 import { useState } from "react";
 import { useRuntimeState } from "@/hooks/useRuntimeState";
 import { useUpdateWorkbook, useWorkbook } from "@/hooks/useWorkbook";
+import { trpc } from "@/hooks/useTRPC";
 import { cn } from "@/lib/utils";
 
 type SettingsSection = "general" | "secrets" | "database" | "deployment";
@@ -263,15 +269,114 @@ function DatabaseSettings() {
 }
 
 function DeploymentSettings() {
+  const publishMutation = trpc.deploy.publish.useMutation();
+  const statusQuery = trpc.deploy.status.useQuery(undefined, {
+    staleTime: 30000, // Cache for 30s to avoid slow wrangler calls
+  });
+
+  const handleDeploy = () => {
+    publishMutation.mutate(undefined);
+  };
+
+  const openDeployedUrl = async () => {
+    const url = publishMutation.data?.url || statusQuery.data?.url;
+    if (url) {
+      try {
+        const { open } = await import("@tauri-apps/plugin-shell");
+        await open(url);
+      } catch (err) {
+        // Fallback for web
+        window.open(url, "_blank");
+      }
+    }
+  };
+
+  const isDeploying = publishMutation.isPending;
+  const deployError = publishMutation.error?.message || publishMutation.data?.error;
+  const deploySuccess = publishMutation.isSuccess && publishMutation.data?.success;
+
   return (
     <div className="space-y-4">
       <p className="text-xs text-muted-foreground">
-        Configure how your workbook is deployed to production.
+        Deploy your workbook to Cloudflare Workers for public access.
       </p>
-      <div className="p-3 bg-muted/50 rounded-md text-center">
-        <Globe weight="duotone" className="h-6 w-6 text-muted-foreground/50 mx-auto mb-2" />
-        <div className="text-xs text-muted-foreground">Deployment coming soon</div>
-      </div>
+
+      {/* Current deployment status */}
+      {statusQuery.data?.deployed && !deploySuccess && (
+        <div className="p-3 bg-muted/50 rounded-md">
+          <div className="flex items-center gap-2 text-xs text-muted-foreground">
+            <Globe weight="duotone" className="h-4 w-4 text-green-500" />
+            <span>Currently deployed</span>
+          </div>
+          {statusQuery.data.url && (
+            <button
+              onClick={openDeployedUrl}
+              className="mt-2 flex items-center gap-1 text-xs text-primary hover:underline"
+            >
+              {statusQuery.data.url}
+              <ArrowSquareOut weight="bold" className="h-3 w-3" />
+            </button>
+          )}
+        </div>
+      )}
+
+      {/* Deploy success message */}
+      {deploySuccess && (
+        <div className="p-3 bg-green-500/10 border border-green-500/20 rounded-md">
+          <div className="flex items-center gap-2 text-xs text-green-600 dark:text-green-400">
+            <Check weight="bold" className="h-4 w-4" />
+            <span>Deployed successfully!</span>
+          </div>
+          {publishMutation.data?.url && (
+            <button
+              onClick={openDeployedUrl}
+              className="mt-2 flex items-center gap-1 text-xs text-primary hover:underline"
+            >
+              {publishMutation.data.url}
+              <ArrowSquareOut weight="bold" className="h-3 w-3" />
+            </button>
+          )}
+        </div>
+      )}
+
+      {/* Deploy error message */}
+      {deployError && (
+        <div className="p-3 bg-red-500/10 border border-red-500/20 rounded-md">
+          <div className="flex items-start gap-2 text-xs text-red-600 dark:text-red-400">
+            <Warning weight="bold" className="h-4 w-4 shrink-0 mt-0.5" />
+            <span>{deployError}</span>
+          </div>
+        </div>
+      )}
+
+      {/* Deploy button */}
+      <button
+        onClick={handleDeploy}
+        disabled={isDeploying}
+        className={cn(
+          "w-full flex items-center justify-center gap-2 px-3 py-2 rounded-md text-sm font-medium transition-colors",
+          isDeploying
+            ? "bg-muted text-muted-foreground cursor-not-allowed"
+            : "bg-primary text-primary-foreground hover:bg-primary/90"
+        )}
+      >
+        {isDeploying ? (
+          <>
+            <CircleNotch weight="bold" className="h-4 w-4 animate-spin" />
+            Deploying...
+          </>
+        ) : (
+          <>
+            <Rocket weight="duotone" className="h-4 w-4" />
+            {statusQuery.data?.deployed ? "Redeploy" : "Deploy to Cloudflare"}
+          </>
+        )}
+      </button>
+
+      {/* Note about CF token */}
+      <p className="text-xs text-muted-foreground/70">
+        Requires <code className="px-1 py-0.5 bg-muted rounded text-[10px]">HANDS_CF_TOKEN</code> environment variable.
+      </p>
     </div>
   );
 }

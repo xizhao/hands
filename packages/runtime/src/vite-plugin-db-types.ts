@@ -146,21 +146,66 @@ export interface DB {}
   }
 }
 
+/**
+ * Get the script name from wrangler.jsonc - this determines the DO folder name.
+ * Must match what the cloudflare vite plugin uses.
+ */
+function getScriptName(): string {
+  const wranglerPath = path.resolve(__dirname, "../wrangler.jsonc");
+  try {
+    const content = fs.readFileSync(wranglerPath, "utf-8");
+    // Strip comments and parse as JSON
+    const json = content.replace(/\/\*[\s\S]*?\*\/|\/\/.*/g, "");
+    const config = JSON.parse(json);
+    return config.name || "runtime";
+  } catch {
+    return "runtime";
+  }
+}
+
+/**
+ * Find the sqlite file in the DO state directory.
+ * Uses the script name from wrangler.jsonc to find the correct folder.
+ * This ensures we read the same DB that the runtime writes to.
+ */
 function findSqliteFile(doStatePath: string): string | null {
   if (!fs.existsSync(doStatePath)) {
     return null;
   }
 
-  // Recursively find .sqlite files
-  const files = walkDir(doStatePath);
+  // Look in the specific folder for our Database DO class
+  // Structure: {persistState}/v3/do/{scriptName}-Database/{idHash}.sqlite
+  const scriptName = getScriptName();
+  const dbFolder = path.join(doStatePath, "v3", "do", `${scriptName}-Database`);
+
+  if (!fs.existsSync(dbFolder)) {
+    // Fallback: scan all folders (for migration from old structure)
+    const files = walkDir(doStatePath);
+    const sqliteFiles = files.filter((f) => f.endsWith(".sqlite") && f.includes("-Database/"));
+    if (sqliteFiles.length === 0) return null;
+    // Return most recently modified (active one)
+    sqliteFiles.sort((a, b) => fs.statSync(b).mtimeMs - fs.statSync(a).mtimeMs);
+    return sqliteFiles[0];
+  }
+
+  // Find sqlite files in the correct folder
+  const files = fs.readdirSync(dbFolder);
   const sqliteFiles = files.filter((f) => f.endsWith(".sqlite"));
 
   if (sqliteFiles.length === 0) {
     return null;
   }
 
-  // Return the first one (there should typically be one per DO class)
-  return sqliteFiles[0];
+  // If multiple (shouldn't happen with stable DO ID), use most recent
+  if (sqliteFiles.length > 1) {
+    sqliteFiles.sort((a, b) => {
+      const aPath = path.join(dbFolder, a);
+      const bPath = path.join(dbFolder, b);
+      return fs.statSync(bPath).mtimeMs - fs.statSync(aPath).mtimeMs;
+    });
+  }
+
+  return path.join(dbFolder, sqliteFiles[0]);
 }
 
 function walkDir(dir: string): string[] {

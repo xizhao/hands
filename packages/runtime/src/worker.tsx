@@ -1,13 +1,19 @@
 import { route, render, RouteMiddleware } from "rwsdk/router";
 import { defineApp } from "rwsdk/worker";
-import { Page } from "./pages/Page";
+import { env } from "cloudflare:workers";
+import {
+  SyncedStateServer,
+  syncedStateRoutes,
+} from "rwsdk/use-synced-state/worker";
 import { pages, pageRoutes } from "@hands/pages";
+import { Document } from "./pages/Document";
 import { Database } from "./db/dev";
 import { dbRoutes } from "./db/routes";
+import { seedRoutes } from "./db/seed-routes";
 import { actionRoutes } from "./actions/routes";
 
-// Export Durable Object for wrangler
-export { Database };
+// Export Durable Objects for wrangler
+export { Database, SyncedStateServer };
 
 export const setCommonHeaders =
   (): RouteMiddleware =>
@@ -48,6 +54,8 @@ const firstPageId = Object.keys(pages)[0];
 
 export default defineApp([
   setCommonHeaders(),
+  // Synced state routes for real-time collaboration
+  ...syncedStateRoutes(() => env.SYNCED_STATE_SERVER),
   // Health check endpoint for workbook-server polling
   route("/health", () =>
     new Response(JSON.stringify({ status: "ok" }), {
@@ -56,6 +64,8 @@ export default defineApp([
   ),
   // Database routes (dev only - for AI agent access)
   ...(import.meta.env.VITE_IS_DEV_SERVER ? dbRoutes : []),
+  // Seed routes (production - for deploying local DB state)
+  ...seedRoutes,
   // Action routes (dev only - for action execution)
   ...(import.meta.env.VITE_IS_DEV_SERVER ? actionRoutes : []),
   // Root route - redirect to first page or return health check if no pages
@@ -71,6 +81,8 @@ export default defineApp([
       headers: { "Content-Type": "application/json" },
     });
   }),
-  // Pages use rwsdk's render() for proper RSC/SSR handling
-  ...render(Page, pageRoutes),
+  // Pages wrapped in Document for proper hydration
+  render(Document, [
+    ...pageRoutes,
+  ]),
 ]);

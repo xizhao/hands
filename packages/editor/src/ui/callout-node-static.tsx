@@ -4,6 +4,7 @@ export function CalloutElementStatic(props: SlateElementProps) {
   return (
     <SlateElement
       className="my-1 flex rounded-sm bg-muted p-4 pl-3"
+      data-block-id={props.element.id as string}
       style={{
         backgroundColor: props.element.backgroundColor as any,
       }}

@@ -27,6 +27,7 @@ import Database from "bun:sqlite";
 export interface DeployContext {
   workbookId: string;
   workbookDir: string;
+  getRuntimeUrl: () => string | null;
 }
 
 // ============================================================================
@@ -144,7 +145,7 @@ function findLocalDbPath(workbookDir: string): string | null {
   const entries = readdirSync(dbDir, { recursive: true, withFileTypes: true });
   for (const entry of entries) {
     if (entry.isFile() && entry.name.endsWith(".sqlite")) {
-      const fullPath = join(entry.parentPath ?? dbDir, entry.name);
+      const fullPath = join(entry.parentPath || entry.path, entry.name);
       // Check if this is a user database (not internal miniflare state)
       try {
         const db = new Database(fullPath, { readonly: true });
@@ -536,7 +537,7 @@ export const deployRouter = t.router({
    * Pull production database to local
    */
   pullDb: publicProcedure.mutation(async ({ ctx }) => {
-    const { workbookDir } = ctx;
+    const { workbookDir, getRuntimeUrl } = ctx;
 
     // Get deployment info
     const distDir = join(workbookDir, ".hands/dist");
@@ -570,9 +571,11 @@ export const deployRouter = t.router({
     const subdomain = await getWorkersSubdomain(distDir, cfToken);
     const deployedUrl = buildWorkerUrl(config.name, subdomain);
 
-    // Get local database
-    const dbPath = join(workbookDir, ".hands", "workbook.db");
-    const db = new Database(dbPath);
+    // Get runtime URL to execute SQL locally
+    const runtimeUrl = getRuntimeUrl();
+    if (!runtimeUrl) {
+      return { success: false, error: "Runtime not running. Start the runtime first." };
+    }
 
     try {
       // Fetch DB dump from production
@@ -590,14 +593,19 @@ export const deployRouter = t.router({
       const { statements } = (await dumpResponse.json()) as { statements: string[] };
       console.log(`[pullDb] Received ${statements.length} SQL statements from production`);
 
-      // Execute each statement locally using direct SQLite
+      // Execute each statement locally
       let executed = 0;
       for (const stmt of statements) {
-        try {
-          db.run(stmt);
+        const execResponse = await fetch(`${runtimeUrl}/db/query`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ sql: stmt }),
+        });
+
+        if (execResponse.ok) {
           executed++;
-        } catch (err) {
-          console.warn(`[pullDb] Failed to execute: ${stmt.slice(0, 100)}... - ${err}`);
+        } else {
+          console.warn(`[pullDb] Failed to execute: ${stmt.slice(0, 100)}...`);
         }
       }
 
@@ -612,8 +620,6 @@ export const deployRouter = t.router({
         success: false,
         error: `Pull failed: ${err instanceof Error ? err.message : String(err)}`,
       };
-    } finally {
-      db.close();
     }
   }),
 });

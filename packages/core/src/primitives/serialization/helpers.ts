@@ -10,12 +10,9 @@ import type {
   MdxJsxAttributeValueExpression,
   MdxDeserializeNode,
   SerializeOptions,
+  DeserializeOptions,
 } from "./types";
 import type { TElement, TText } from "platejs";
-import {
-  convertNodesSerialize as plateConvertNodesSerialize,
-  convertChildrenDeserialize as plateConvertChildrenDeserialize,
-} from "@platejs/markdown";
 
 // ============================================================================
 // Attribute Parsing (MDX → Props)
@@ -455,9 +452,9 @@ export function serializeChildren(
     });
   }
 
-  // Use Plate's convertNodesSerialize when editor is available
-  if (options.editor) {
-    return plateConvertNodesSerialize(children, options as any);
+  // Use convertNodes from options (provided by Plate or worker)
+  if (options.convertNodes) {
+    return options.convertNodes(children, options);
   }
 
   return [];
@@ -470,7 +467,7 @@ export function serializeChildren(
 /**
  * Deserialize mdast children to Plate nodes.
  *
- * Uses convertChildrenDeserialize from Plate.
+ * Uses convertChildren from options (provided by Plate).
  *
  * @param children - Mdast children to deserialize
  * @param deco - Decoration object (for marks)
@@ -480,8 +477,9 @@ export function serializeChildren(
 export function deserializeChildren(
   children: unknown[],
   deco: unknown,
-  options?: unknown
+  options?: DeserializeOptions
 ): (TElement | TText)[] {
   if (!children || children.length === 0) return [];
-  return plateConvertChildrenDeserialize(children as any, deco as any, options as any);
+  if (!options?.convertChildren) return [];
+  return options.convertChildren(children, deco, options);
 }

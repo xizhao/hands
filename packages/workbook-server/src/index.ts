@@ -24,8 +24,9 @@ import {
 import { join } from "node:path";
 import { stopScheduler } from "./actions/index.js";
 import { closeWorkbookDb, getWorkbookDb, getSchema } from "./db/workbook-db.js";
+import { getRuntimeSourcePath } from "./config/index.js";
 import { createPageRegistry, PageRegistry } from "./pages/index.js";
-import { PORTS } from "./ports.js";
+import { PORTS, waitForPortFree } from "./ports.js";
 import { getDbSubscriptionManager } from "./sqlite/trpc.js";
 import { registerTRPCRoutes } from "./trpc/index.js";
 
@@ -330,7 +331,7 @@ function createApp(config: RuntimeConfig) {
   // CORS
   app.use("/*", cors());
 
-  // Health endpoint
+// Health endpoint
   app.get("/health", (c) => {
     return c.json({ ready: true, status: "ready" });
   });
