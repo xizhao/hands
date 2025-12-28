@@ -1910,7 +1910,6 @@ pub fn run() {
 
             // Check if API key is configured - show setup window if not
             let startup_app = app.handle().clone();
-            let startup_state = state.clone();
             let has_api_key = has_openrouter_api_key(app.handle());
 
             if has_api_key {
