@@ -13,6 +13,7 @@ import { listen } from "@tauri-apps/api/event";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import {
   ChevronDown,
+  GripVertical,
   Loader2,
   Minus,
   Plus,
@@ -352,11 +353,16 @@ export function FloatingChat() {
   return (
     <div className="h-screen w-screen flex flex-col bg-transparent">
       <div className="flex flex-col h-full bg-card/95 backdrop-blur-md rounded-xl shadow-2xl border border-border/50 overflow-hidden">
-        {/* Header - draggable */}
+        {/* Header - draggable with grip on left */}
         <div
-          className="flex items-center gap-1 px-2 py-1.5 border-b border-border/50 bg-muted/30"
+          className="flex items-center gap-1.5 px-2 py-1.5 border-b border-border/50 bg-muted/30"
           onMouseDown={handleDragStart}
         >
+          {/* Drag handle on left */}
+          <div className="flex items-center cursor-grab active:cursor-grabbing shrink-0">
+            <GripVertical className="h-4 w-4 text-muted-foreground/50" />
+          </div>
+
           {/* Thread tabs */}
           <div className="flex items-center gap-0.5 flex-1 min-w-0 overflow-hidden">
             {visibleThreads.map((session) => {

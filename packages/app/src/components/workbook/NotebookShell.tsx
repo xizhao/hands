@@ -22,7 +22,7 @@ import {
   useState,
   type ReactNode,
 } from "react";
-import { WorkbookBrowser } from "../sidebar/WorkbookBrowser";
+import { UnifiedSidebar } from "../sidebar/UnifiedSidebar";
 import { ContentHeader } from "./ContentHeader";
 import { HeaderActionsProvider } from "./HeaderActionsContext";
 import { RightPanel } from "./panels/RightPanel";
@@ -155,7 +155,7 @@ export function NotebookShell({ children }: NotebookShellProps) {
           style={{ width: isFullscreenSidebar ? "100%" : sidebarWidth }}
           className="shrink-0 flex flex-col h-full relative"
         >
-          <WorkbookBrowser />
+          <UnifiedSidebar hideChat />
 
           {/* Resize handle - only when not in empty state */}
           {!isFullscreenSidebar && (

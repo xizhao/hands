@@ -319,6 +319,7 @@ type SessionWithParent = Session & { parentID?: string };
 
 interface UnifiedSidebarProps {
   compact?: boolean;
+  hideChat?: boolean;
   onSelectItem?: (
     type: "page" | "source" | "table" | "action",
     id: string
@@ -327,6 +328,7 @@ interface UnifiedSidebarProps {
 
 export function UnifiedSidebar({
   compact = false,
+  hideChat = false,
   onSelectItem,
 }: UnifiedSidebarProps) {
   const router = useRouter();
@@ -1246,6 +1248,18 @@ ${STDLIB_QUICK_REF}
   // ============================================================================
   // Render
   // ============================================================================
+
+  // When hideChat is true, just show browse content (no chat UI)
+  if (hideChat) {
+    return (
+      <div ref={containerRef} className="flex flex-col h-full w-full">
+        {workbookHeader}
+        <div className="flex-1 overflow-y-auto">
+          {browseContent}
+        </div>
+      </div>
+    );
+  }
 
   // Two-column layout: Chat on left, Browse on right
   if (isTwoColumn) {
