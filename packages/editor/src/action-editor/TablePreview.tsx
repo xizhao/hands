@@ -293,11 +293,17 @@ function formatValue(value: unknown): string {
 }
 
 /**
- * Hook to fetch table preview data
+ * Hook to fetch table preview data via tRPC
+ * Uses EditorContext for tRPC access - no runtime dependency
  */
 export function useTablePreview(
   table: string,
-  runtimePort: number | null
+  trpc?: {
+    db?: {
+      schema: { query: () => Promise<Array<{ table_name: string; columns: Array<{ name: string; type: string; nullable?: boolean }> }>> };
+      select: { query: (input: { sql: string }) => Promise<{ rows: unknown[] }> };
+    }
+  } | null
 ): {
   data: TablePreviewData | null;
   loading: boolean;
@@ -309,65 +315,37 @@ export function useTablePreview(
   const [error, setError] = useState<string | null>(null);
 
   const fetchData = useCallback(async () => {
-    if (!runtimePort || !table) return;
+    if (!trpc?.db || !table) return;
 
     setLoading(true);
     setError(null);
 
     try {
-      // Fetch schema for all tables
-      const schemaRes = await fetch(
-        `http://localhost:${runtimePort}/db/schema`
+      // Fetch schema via tRPC
+      const schemaResult = await trpc.db.schema.query();
+      const tableSchema = schemaResult?.find(
+        (t) => t.table_name.toLowerCase() === table.toLowerCase()
       );
 
-      if (!schemaRes.ok) {
-        throw new Error("Failed to fetch schema");
-      }
+      // Fetch sample rows via tRPC
+      const rowsResult = await trpc.db.select.query({
+        sql: `SELECT * FROM "${table}" LIMIT 5`
+      });
+      const rows = (rowsResult?.rows ?? []) as Record<string, unknown>[];
 
-      const schemaJson = await schemaRes.json();
-      const tableSchema = schemaJson.tables?.find(
-        (t: { name: string }) => t.name.toLowerCase() === table.toLowerCase()
-      );
-
-      // Fetch sample rows
-      const rowsRes = await fetch(
-        `http://localhost:${runtimePort}/db/query`,
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ sql: `SELECT * FROM "${table}" LIMIT 5` }),
-        }
-      );
-
-      let rows: Record<string, unknown>[] = [];
-      if (rowsRes.ok) {
-        const rowsJson = await rowsRes.json();
-        rows = rowsJson.rows ?? [];
-      }
-
-      // Fetch total count
-      const countRes = await fetch(
-        `http://localhost:${runtimePort}/db/query`,
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ sql: `SELECT COUNT(*) as count FROM "${table}"` }),
-        }
-      );
-
-      let totalRows: number | undefined;
-      if (countRes.ok) {
-        const countJson = await countRes.json();
-        totalRows = countJson.rows?.[0]?.count;
-      }
+      // Fetch total count via tRPC
+      const countResult = await trpc.db.select.query({
+        sql: `SELECT COUNT(*) as count FROM "${table}"`
+      });
+      const totalRows = (countResult?.rows?.[0] as { count?: number })?.count;
 
       setData({
         schema: {
           name: table,
-          columns: tableSchema?.columns?.map((c: { name: string; type: string; isPrimary?: boolean; nullable?: boolean }) => ({
+          columns: tableSchema?.columns?.map((c) => ({
             name: c.name,
             type: c.type,
-            primaryKey: c.isPrimary,
+            primaryKey: false, // Schema doesn't include primary key info currently
             nullable: c.nullable,
           })) ?? [],
         },
@@ -379,7 +357,7 @@ export function useTablePreview(
     } finally {
       setLoading(false);
     }
-  }, [table, runtimePort]);
+  }, [table, trpc]);
 
   useEffect(() => {
     fetchData();

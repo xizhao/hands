@@ -25,10 +25,8 @@ import { workbookRouter, type WorkbookContext } from "./routers/workbook.js";
 export interface TRPCConfig {
   workbookId: string;
   workbookDir: string;
-  /** Runtime URL for SQLite database access (e.g., http://localhost:55200) */
+  /** Runtime URL for RSC rendering (e.g., http://localhost:55200) */
   getRuntimeUrl: () => string | null;
-  /** Whether the runtime/database is ready */
-  isDbReady: () => boolean;
   getState: () => {
     rscReady: boolean;
     rscPort: number | null;
@@ -113,7 +111,7 @@ export function registerTRPCRoutes(app: Hono, config: TRPCConfig) {
   app.all("/trpc/*", async (c) => {
     const _path = c.req.path.replace("/trpc", "");
 
-    // Get runtime URL for SQLite access
+    // Get runtime URL for actions (actions still execute in runtime)
     const runtimeUrl = getRuntimeUrl();
 
     // Create combined context for this request
@@ -121,9 +119,10 @@ export function registerTRPCRoutes(app: Hono, config: TRPCConfig) {
       // Base context
       workbookId,
       workbookDir,
-      // SQLite context - runtime URL for database access
-      runtimeUrl: runtimeUrl ?? "http://localhost:55200",
+      // SQLite context - direct bun:sqlite access via workbookDir
       onSchemaChange,
+      // Actions context - still needs runtime for action execution
+      runtimeUrl: runtimeUrl ?? "http://localhost:55200",
       // Status context
       getState,
       // Workbook context

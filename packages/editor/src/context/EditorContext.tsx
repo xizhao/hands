@@ -95,6 +95,20 @@ export interface EditorTrpcClient {
       mutate: (input: GenerateHintsBatchInput) => Promise<GenerateHintsBatchOutput>;
     };
   };
+  db?: {
+    schema: {
+      query: () => Promise<Array<{
+        table_name: string;
+        columns: Array<{ name: string; type: string; nullable: boolean }>;
+      }>>;
+    };
+    select: {
+      query: (input: { sql: string; params?: unknown[] }) => Promise<{
+        rows: unknown[];
+        rowCount: number;
+      }>;
+    };
+  };
 }
 
 /**

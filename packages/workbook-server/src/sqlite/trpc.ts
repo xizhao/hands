@@ -1,21 +1,25 @@
 /**
  * SQLite tRPC Router
  *
- * Type-safe API for database operations via the runtime's SQLite.
- * The runtime manages the actual SQLite database via Durable Objects.
- * This router communicates with the runtime over HTTP.
+ * Type-safe API for database operations via direct bun:sqlite.
+ * No runtime dependency - queries go straight to the workbook database.
  */
 
 import { initTRPC, TRPCError } from "@trpc/server";
 import { z } from "zod";
+import {
+  getWorkbookDb,
+  executeQuery as execSqlite,
+  getSchema as getSchemaDirect,
+} from "../db/workbook-db.js";
 
 // ============================================================================
 // Context
 // ============================================================================
 
 export interface SQLiteTRPCContext {
-  /** Runtime URL (e.g., http://localhost:5173) */
-  runtimeUrl: string;
+  /** Workbook directory (contains .hands/workbook.db) */
+  workbookDir: string;
   /** Callback when schema changes (DDL executed) */
   onSchemaChange?: () => Promise<void>;
 }
@@ -50,62 +54,44 @@ function isDDL(sql: string): boolean {
   return ddlKeywords.some((kw) => upperSql.startsWith(kw));
 }
 
-interface RuntimeQueryResult {
+interface QueryResult {
   rows: unknown[];
   changes?: number;
   lastInsertRowid?: number;
 }
 
 /**
- * Execute SQL via runtime's query endpoint
+ * Execute SQL directly via bun:sqlite
  */
-async function executeQuery(
-  runtimeUrl: string,
+function executeQuery(
+  workbookDir: string,
   sql: string,
   params?: unknown[]
-): Promise<RuntimeQueryResult> {
-  const response = await fetch(`${runtimeUrl}/db/query`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ sql, params }),
-  });
-
-  if (!response.ok) {
-    const error = await response.text();
+): QueryResult {
+  try {
+    const db = getWorkbookDb(workbookDir);
+    return execSqlite(db, sql, params);
+  } catch (error) {
     throw new TRPCError({
       code: "INTERNAL_SERVER_ERROR",
-      message: `Database query failed: ${error}`,
+      message: `Database query failed: ${error instanceof Error ? error.message : String(error)}`,
     });
   }
-
-  return response.json() as Promise<RuntimeQueryResult>;
 }
 
 /**
- * Get schema info via runtime's schema endpoint
+ * Get schema info directly via bun:sqlite
  */
-async function getSchema(runtimeUrl: string): Promise<{
-  tables: Array<{
-    name: string;
-    columns: Array<{
-      name: string;
-      type: string;
-      nullable: boolean;
-      isPrimary: boolean;
-    }>;
-  }>;
-}> {
-  const response = await fetch(`${runtimeUrl}/db/schema`);
-
-  if (!response.ok) {
-    const error = await response.text();
+function getSchema(workbookDir: string) {
+  try {
+    const db = getWorkbookDb(workbookDir);
+    return getSchemaDirect(db);
+  } catch (error) {
     throw new TRPCError({
       code: "INTERNAL_SERVER_ERROR",
-      message: `Failed to get schema: ${error}`,
+      message: `Failed to get schema: ${error instanceof Error ? error.message : String(error)}`,
     });
   }
-
-  return response.json();
 }
 
 // ============================================================================
@@ -117,7 +103,7 @@ export const sqliteTRPCRouter = t.router({
    * Execute a read-only SELECT query (useQuery - cached/deduplicated)
    * Used by LiveValue for reactive data display
    */
-  select: publicProcedure.input(queryInput).query(async ({ ctx, input }) => {
+  select: publicProcedure.input(queryInput).query(({ ctx, input }) => {
     // Validate it's a SELECT query
     const upperSql = input.sql.trim().toUpperCase();
     if (!upperSql.startsWith("SELECT") && !upperSql.startsWith("PRAGMA")) {
@@ -127,7 +113,7 @@ export const sqliteTRPCRouter = t.router({
       });
     }
 
-    const result = await executeQuery(ctx.runtimeUrl, input.sql, input.params);
+    const result = executeQuery(ctx.workbookDir, input.sql, input.params);
     return {
       rows: result.rows,
       rowCount: result.rows.length,
@@ -136,7 +122,7 @@ export const sqliteTRPCRouter = t.router({
 
   /** Execute a SQL query/mutation (useMutation - not cached) */
   query: publicProcedure.input(queryInput).mutation(async ({ ctx, input }) => {
-    const result = await executeQuery(ctx.runtimeUrl, input.sql, input.params);
+    const result = executeQuery(ctx.workbookDir, input.sql, input.params);
 
     // Trigger schema regeneration if DDL detected
     if (isDDL(input.sql) && ctx.onSchemaChange) {
@@ -151,14 +137,14 @@ export const sqliteTRPCRouter = t.router({
   }),
 
   /** List all tables */
-  tables: publicProcedure.query(async ({ ctx }) => {
-    const schema = await getSchema(ctx.runtimeUrl);
+  tables: publicProcedure.query(({ ctx }) => {
+    const schema = getSchema(ctx.workbookDir);
     return schema.tables.map((t) => ({ name: t.name }));
   }),
 
   /** Get detailed schema for all tables */
-  schema: publicProcedure.query(async ({ ctx }) => {
-    const schema = await getSchema(ctx.runtimeUrl);
+  schema: publicProcedure.query(({ ctx }) => {
+    const schema = getSchema(ctx.workbookDir);
     return schema.tables.map((t) => ({
       table_name: t.name,
       columns: t.columns.map((c) => ({
@@ -180,7 +166,7 @@ export const sqliteTRPCRouter = t.router({
       });
     }
 
-    await executeQuery(ctx.runtimeUrl, `DROP TABLE IF EXISTS "${safeName}"`);
+    executeQuery(ctx.workbookDir, `DROP TABLE IF EXISTS "${safeName}"`);
 
     // Trigger schema regeneration
     if (ctx.onSchemaChange) {
@@ -190,14 +176,13 @@ export const sqliteTRPCRouter = t.router({
     return { success: true, tableName: safeName };
   }),
 
-  /** Health check - is runtime database reachable? */
-  health: publicProcedure.query(async ({ ctx }) => {
+  /** Health check - is database accessible? */
+  health: publicProcedure.query(({ ctx }) => {
     try {
-      const response = await fetch(`${ctx.runtimeUrl}/db/health`, {
-        method: "GET",
-        signal: AbortSignal.timeout(5000),
-      });
-      return { ready: response.ok };
+      const db = getWorkbookDb(ctx.workbookDir);
+      // Simple query to verify db is accessible
+      db.query("SELECT 1").get();
+      return { ready: true };
     } catch {
       return { ready: false };
     }
@@ -224,7 +209,7 @@ export interface DbSubscriptionState {
 /**
  * Create a subscription manager for database changes
  */
-export function createDbSubscriptionManager(runtimeUrl: string) {
+export function createDbSubscriptionManager(workbookDir: string) {
   const state: DbSubscriptionState = {
     lastDataVersion: 0,
     clients: new Set(),
@@ -233,20 +218,13 @@ export function createDbSubscriptionManager(runtimeUrl: string) {
   let pollInterval: ReturnType<typeof setInterval> | null = null;
 
   /**
-   * Poll SQLite for data_version changes
+   * Poll SQLite for data_version changes (direct bun:sqlite)
    */
-  async function pollForChanges() {
+  function pollForChanges() {
     try {
-      const response = await fetch(`${runtimeUrl}/db/query`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ sql: "PRAGMA data_version" }),
-      });
-
-      if (!response.ok) return;
-
-      const result = (await response.json()) as { rows: Array<{ data_version: number }> };
-      const currentVersion = result.rows[0]?.data_version ?? 0;
+      const db = getWorkbookDb(workbookDir);
+      const result = db.query<{ data_version: number }, []>("PRAGMA data_version").get();
+      const currentVersion = result?.data_version ?? 0;
 
       if (currentVersion !== state.lastDataVersion && state.lastDataVersion !== 0) {
         // Data changed - notify all clients
@@ -324,15 +302,17 @@ export function createDbSubscriptionManager(runtimeUrl: string) {
   return { createStream, broadcast };
 }
 
-// Global subscription manager (lazily initialized)
-let subscriptionManager: ReturnType<typeof createDbSubscriptionManager> | null = null;
+// Global subscription manager (lazily initialized per workbook)
+const subscriptionManagers = new Map<string, ReturnType<typeof createDbSubscriptionManager>>();
 
 /**
- * Get or create the subscription manager
+ * Get or create the subscription manager for a workbook
  */
-export function getDbSubscriptionManager(runtimeUrl: string) {
-  if (!subscriptionManager) {
-    subscriptionManager = createDbSubscriptionManager(runtimeUrl);
+export function getDbSubscriptionManager(workbookDir: string) {
+  let manager = subscriptionManagers.get(workbookDir);
+  if (!manager) {
+    manager = createDbSubscriptionManager(workbookDir);
+    subscriptionManagers.set(workbookDir, manager);
   }
-  return subscriptionManager;
+  return manager;
 }

@@ -2,20 +2,54 @@
  * Workbook Data Database
  *
  * SQLite database for user data (tables created via LiveValue queries).
- * Located at {workbookDir}/.hands/workbook.db
+ * Uses the same database as the runtime (wrangler's Durable Object storage).
  *
- * This replaces the Vite/rwsdk database with direct bun:sqlite access.
+ * Database location (in order of precedence):
+ * 1. Runtime DO database: .hands/db/v3/do/runtime-Database/*.sqlite
+ * 2. Fallback: .hands/workbook.db
  */
 
 import { Database } from "bun:sqlite";
-import { existsSync, mkdirSync, renameSync } from "node:fs";
+import { existsSync, mkdirSync, readdirSync, renameSync } from "node:fs";
 import { join } from "node:path";
 
 // Singleton database instances per workbook
 const dbInstances = new Map<string, Database>();
 
 /**
+ * Find the runtime's Durable Object SQLite database
+ * Wrangler stores DO data in: .hands/db/v3/do/{namespace}-Database/{hash}.sqlite
+ */
+function findRuntimeDbPath(workbookDir: string): string | null {
+  const doDir = join(workbookDir, ".hands/db/v3/do");
+
+  if (!existsSync(doDir)) {
+    return null;
+  }
+
+  // Look for runtime-Database or any *-Database directory
+  try {
+    const entries = readdirSync(doDir);
+    for (const entry of entries) {
+      if (entry.endsWith("-Database")) {
+        const dbDir = join(doDir, entry);
+        const files = readdirSync(dbDir);
+        const sqliteFile = files.find(f => f.endsWith(".sqlite"));
+        if (sqliteFile) {
+          return join(dbDir, sqliteFile);
+        }
+      }
+    }
+  } catch {
+    // Directory doesn't exist or can't be read
+  }
+
+  return null;
+}
+
+/**
  * Get or create workbook database
+ * Prefers the runtime's DO database if it exists
  */
 export function getWorkbookDb(workbookDir: string): Database {
   const existing = dbInstances.get(workbookDir);
@@ -24,9 +58,16 @@ export function getWorkbookDb(workbookDir: string): Database {
   }
 
   const handsDir = join(workbookDir, ".hands");
-  const dbPath = join(handsDir, "workbook.db");
 
-  // Ensure .hands directory exists
+  // First, try to find runtime's DO database
+  const runtimeDbPath = findRuntimeDbPath(workbookDir);
+  const dbPath = runtimeDbPath ?? join(handsDir, "workbook.db");
+
+  if (runtimeDbPath) {
+    console.log(`[db] Using runtime DO database: ${runtimeDbPath}`);
+  }
+
+  // Ensure .hands directory exists (for fallback)
   if (!existsSync(handsDir)) {
     mkdirSync(handsDir, { recursive: true });
   }

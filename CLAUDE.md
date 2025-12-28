@@ -4,15 +4,33 @@
 
 ```
 packages/
-  desktop/     # Tauri + React desktop app
-    src/
-      components/   # React components (Toolbar, SlidePanel, ChatMessage)
-      hooks/        # React Query hooks (useSession, useWorkbook)
-      lib/          # API client, utilities
-      stores/       # Zustand stores (ui, theme)
-    src-tauri/      # Rust backend
-
+  desktop/          # Tauri + React desktop app
+  editor/           # Rich text editor (Plate.js) - pure UI, no runtime deps
+  workbook-server/  # Local dev server - tRPC API, direct SQLite access
+  runtime/          # Cloudflare Worker - actions, RSC blocks, deploy target
+  core/             # Shared primitives (MDX parsing, serialization)
 ```
+
+## Architecture: Editor vs Runtime
+
+The codebase separates trusted (fast, local) from untrusted (sandboxed) operations:
+
+**Editor/Workbook-Server (trusted, direct access)**
+- Read/write MDX files
+- SQLite queries via `bun:sqlite` (no runtime needed)
+- File watching, tRPC API for desktop
+- Always available, sub-millisecond latency
+
+**Runtime (untrusted, sandboxed)**
+- Execute actions (user-defined server code)
+- Render RSC blocks (server components)
+- Run plugins/arbitrary code
+- Build and deploy to Cloudflare Workers
+
+This means the editor works immediately without waiting for runtime. Runtime only spins up when you:
+1. Run an action
+2. Preview a block with server code
+3. Build/deploy the workbook
 
 ## Tech Stack
 
@@ -95,9 +113,10 @@ SSE events use SDK's typed `GlobalEvent` discriminated union:
 ### Database Architecture
 
 - SQLite database stored at `{workbook}/.hands/workbook.db`
-- Direct access via `bun:sqlite` (no external process)
-- LiveValue/LiveQuery components use tRPC for data access
-- SSE subscription for live query updates
+- **Workbook-server**: Direct access via `bun:sqlite` - no runtime dependency
+- **Editor**: Uses tRPC (`db.select`, `db.schema`) through workbook-server
+- **Runtime**: Uses Kysely + Durable Objects for Cloudflare Workers (production)
+- SSE subscription for live query updates via `PRAGMA data_version` polling
 
 ### Development
 
