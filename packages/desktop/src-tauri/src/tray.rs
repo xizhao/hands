@@ -116,8 +116,8 @@ fn handle_menu_event(app: &AppHandle, menu_id: &str) {
             start_capture_flow(app);
         }
         "show_window" => {
-            // Open/focus last workbook
-            show_or_open_workbook(app, None);
+            // Open/focus floating chat (the primary UI)
+            show_floating_chat(app);
         }
         "settings" => {
             // Open workbook and emit settings event
@@ -133,6 +133,42 @@ fn handle_menu_event(app: &AppHandle, menu_id: &str) {
         }
         _ => {}
     }
+}
+
+fn show_floating_chat(app: &AppHandle) {
+    let app = app.clone();
+    tauri::async_runtime::spawn(async move {
+        // Get active workbook directory
+        let workbook_dir = {
+            let Some(state) = app.try_state::<Arc<Mutex<AppState>>>() else { return };
+            let state = state.lock().await;
+            if let Some(ref workbook_id) = state.active_workbook_id {
+                // Find workbook directory
+                if let Ok(workbooks) = list_workbooks().await {
+                    workbooks.iter()
+                        .find(|w| &w.id == workbook_id)
+                        .map(|w| w.directory.clone())
+                } else {
+                    None
+                }
+            } else {
+                // Use first workbook if none active
+                if let Ok(workbooks) = list_workbooks().await {
+                    workbooks.first().map(|w| w.directory.clone())
+                } else {
+                    None
+                }
+            }
+        };
+
+        if let Some(dir) = workbook_dir {
+            if let Err(e) = crate::floating_chat::open_floating_chat(app, dir).await {
+                eprintln!("[tray] Failed to open floating chat: {}", e);
+            }
+        } else {
+            eprintln!("[tray] No workbook available for floating chat");
+        }
+    });
 }
 
 fn show_or_open_workbook(app: &AppHandle, event: Option<&'static str>) {
