@@ -18,6 +18,7 @@ import { KEYS } from "platejs";
 import {
   serializationRules,
   toMarkdownPluginRules,
+  convertIndentListsToClassic,
 } from "@hands/core/primitives/serialization";
 import { parseMarkdownToPlate } from "@hands/core/primitives/serialization/mdx-parser";
 
@@ -149,8 +150,10 @@ self.onmessage = (e) => {
 
   try {
     if (type === "serialize") {
+      // Convert indent-based lists to classic format before serializing
+      const classicValue = convertIndentListsToClassic(value);
       // Use Plate's convertNodesSerialize with our shim
-      const mdastChildren = convertNodesSerialize(value, serializeOptions, true);
+      const mdastChildren = convertNodesSerialize(classicValue, serializeOptions, true);
       const mdast = { type: "root", children: mdastChildren };
 
       const result = unified()

@@ -9,9 +9,13 @@ export default defineConfig({
     environment: "node",
   },
   resolve: {
-    alias: {
-      // Mock all worker imports - match the full path pattern
-      [path.resolve(__dirname, "src/workers/markdown.worker?worker")]: path.resolve(__dirname, "src/test/__mocks__/markdown-worker-mock.ts"),
-    },
+    alias: [
+      // Mock worker imports - the ?worker suffix is a Vite convention
+      // Use regex to match any path ending with .worker?worker
+      {
+        find: /^(.*)\.worker\?worker$/,
+        replacement: path.resolve(__dirname, "src/test/__mocks__/markdown-worker-mock.ts"),
+      },
+    ],
   },
 });

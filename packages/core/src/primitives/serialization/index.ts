@@ -162,3 +162,9 @@ export {
   extractFrontmatter,
   type ParseMdxResult,
 } from "./mdx-parser";
+
+// List format conversion (indent-based ↔ classic)
+export {
+  convertClassicListsToIndent,
+  convertIndentListsToClassic,
+} from "./list-conversion";

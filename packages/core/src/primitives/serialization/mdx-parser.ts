@@ -76,7 +76,8 @@ const typeToKeyMap: Record<string, string> = {};
 
 // Minimal editor shim for @platejs/markdown deserialization
 const editorShim = {
-  plugins: {} as Record<string, { key: string; node?: { type?: string } }>,
+  // Add 'list' plugin marker so deserializer outputs indent-based format
+  plugins: { list: true } as Record<string, unknown>,
   pluginList: [] as { key: string; node?: { type?: string } }[],
   meta: {
     pluginCache: {

@@ -745,12 +745,11 @@ ${(suffix || "").slice(0, 100)}
   registerTRPCRoutes(app, {
     workbookId: config.workbookId,
     workbookDir: config.workbookDir,
-    // SQLite database lives in the runtime - provide runtime URL
+    // Runtime URL for RSC rendering (DB access is now direct via bun:sqlite)
     getRuntimeUrl: () =>
       state.rscReady && state.rscPort
         ? `http://localhost:${state.rscPort}`
         : null,
-    isDbReady: () => state.rscReady,
     getState: () => ({
       rscReady: state.rscReady,
       rscPort: state.rscPort,
