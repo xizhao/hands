@@ -5,53 +5,86 @@
  * Spawned by Tauri as a subprocess.
  */
 
-import { existsSync, lstatSync, mkdirSync, symlinkSync, unlinkSync } from "node:fs";
-import { dirname, resolve } from "node:path";
+import { existsSync, lstatSync, mkdirSync, symlinkSync, unlinkSync, writeFileSync } from "node:fs";
+import { dirname, resolve, join } from "node:path";
+
+// Setup NODE_PATH for native modules (nodejs-polars) shipped with the binary
+// This must be done before any imports that might need these modules
+function setupNodePath() {
+  // In compiled binary, process.execPath points to the binary itself
+  const binaryDir = dirname(process.execPath);
+
+  // Check multiple possible locations for lib/node_modules:
+  // 1. Next to binary (dev mode or simple deployment)
+  // 2. In Resources folder (macOS app bundle: Contents/MacOS/../Resources/lib)
+  // 3. In parent lib folder (Linux/Windows app bundle)
+  const possiblePaths = [
+    join(binaryDir, "lib", "node_modules"),
+    join(binaryDir, "..", "Resources", "lib", "node_modules"),
+    join(binaryDir, "..", "lib", "node_modules"),
+  ];
+
+  for (const libPath of possiblePaths) {
+    if (existsSync(libPath)) {
+      // Prepend to NODE_PATH so shipped modules take precedence
+      const currentNodePath = process.env.NODE_PATH || "";
+      process.env.NODE_PATH = currentNodePath
+        ? `${libPath}:${currentNodePath}`
+        : libPath;
+      console.log(`[agent] Set NODE_PATH to include: ${libPath}`);
+      return;
+    }
+  }
+}
+setupNodePath();
 import type { Config } from "@opencode-ai/sdk";
 import { createOpencode } from "@opencode-ai/sdk";
 import { coderAgent, handsAgent, importAgent } from "../agents";
+// Generated at build time by scripts/bundle-tools.ts
+// eslint-disable-next-line @typescript-eslint/ban-ts-comment
+// @ts-ignore - file may not exist in dev mode
+import { EMBEDDED_TOOLS } from "./embedded-tools.generated";
 
 // Configuration
 const PORT = parseInt(process.env.HANDS_AGENT_PORT || "55300", 10);
 const MODEL = "openrouter/anthropic/claude-opus-4.5";
 
 // Paths
-// Bun uses import.meta.dir, Node uses import.meta.dirname
 const AGENT_PKG_DIR = resolve(dirname(import.meta.dir ?? import.meta.dirname ?? __dirname), ".");
-const TOOLS_SOURCE = resolve(AGENT_PKG_DIR, "tool");
 
 /**
- * Symlink tools directory to .opencode/tool/
- * Skips if running from bundled binary (source path doesn't exist)
+ * Setup tools in .opencode/tool/
+ * Always writes tool files (no symlinks - more reliable across platforms)
  */
-function setupToolsSymlink(workingDir: string) {
-  // Skip if source doesn't exist (running from compiled binary)
-  if (!existsSync(TOOLS_SOURCE)) {
+function setupTools(workingDir: string) {
+  const opencodeDir = resolve(workingDir, ".opencode");
+  const toolDir = resolve(opencodeDir, "tool");
+
+  // Clean up any existing symlink or directory
+  try {
+    const stat = lstatSync(toolDir);
+    if (stat.isSymbolicLink()) {
+      unlinkSync(toolDir);
+    }
+  } catch {
+    // Doesn't exist - fine
+  }
+
+  if (!existsSync(toolDir)) {
+    mkdirSync(toolDir, { recursive: true });
+  }
+
+  // EMBEDDED_TOOLS is generated at build time by scripts/bundle-tools.ts
+  if (!EMBEDDED_TOOLS || Object.keys(EMBEDDED_TOOLS).length === 0) {
+    console.warn("[agent] No embedded tools found - tools will not be available");
     return;
   }
 
-  const opencodeDir = resolve(workingDir, ".opencode");
-  const target = resolve(opencodeDir, "tool");
-
-  if (!existsSync(opencodeDir)) {
-    mkdirSync(opencodeDir, { recursive: true });
+  for (const [filename, source] of Object.entries(EMBEDDED_TOOLS)) {
+    const filePath = resolve(toolDir, filename);
+    writeFileSync(filePath, source, "utf-8");
   }
-
-  if (existsSync(target)) {
-    const stat = lstatSync(target);
-    if (stat.isSymbolicLink()) {
-      unlinkSync(target);
-    } else {
-      console.warn(`[agent] Warning: ${target} exists and is not a symlink`);
-      return;
-    }
-  }
-
-  try {
-    symlinkSync(TOOLS_SOURCE, target, "dir");
-  } catch (err) {
-    // Ignore symlink errors in bundled mode
-  }
+  console.log(`[agent] Wrote ${Object.keys(EMBEDDED_TOOLS).length} tools to ${toolDir}`);
 }
 
 /**
@@ -112,8 +145,8 @@ async function main() {
   // Get working directory from env (set by Tauri) or use cwd
   const workingDir = process.env.HANDS_WORKBOOK_DIR || process.cwd();
 
-  // Setup tools and plugins symlinks (both in workbook dir)
-  setupToolsSymlink(workingDir);
+  // Setup tools and plugins (symlink in dev, embed in bundled)
+  setupTools(workingDir);
   setupPluginsSymlink(workingDir);
 
   try {

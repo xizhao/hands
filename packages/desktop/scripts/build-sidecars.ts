@@ -7,7 +7,7 @@
  */
 
 import { $ } from "bun";
-import { existsSync, mkdirSync, copyFileSync } from "fs";
+import { existsSync, mkdirSync, copyFileSync, cpSync, rmSync } from "fs";
 import { join, dirname } from "path";
 import { fileURLToPath } from "url";
 
@@ -50,6 +50,18 @@ const SIDECARS: Sidecar[] = [
     entry: "packages/workbook-server/src/config/cli.ts",
   },
 ];
+
+async function bundleAgentTools(): Promise<void> {
+  const agentDir = join(ROOT, "packages/agent");
+  const bundleScript = join(agentDir, "scripts/bundle-tools.ts");
+
+  console.log("Bundling agent tools...");
+
+  // Run the bundle script - this generates embedded-tools.generated.ts
+  await $`cd ${agentDir} && bun run ${bundleScript}`;
+
+  console.log("  ✓ Tools bundled and generated");
+}
 
 async function buildSidecar(sidecar: Sidecar, targetTriple: string): Promise<void> {
   const entryPath = join(ROOT, sidecar.entry);
@@ -120,6 +132,53 @@ async function copyOpencode(targetTriple: string): Promise<void> {
   }
 }
 
+/**
+ * Copy nodejs-polars native modules for the polars tool
+ * These are needed at runtime since native addons can't be bundled
+ */
+async function copyPolarsNativeModules(): Promise<void> {
+  console.log("Copying nodejs-polars native modules...");
+
+  const libDir = join(BINARIES_DIR, "lib", "node_modules");
+
+  // Clean and recreate lib directory
+  if (existsSync(libDir)) {
+    rmSync(libDir, { recursive: true });
+  }
+  mkdirSync(libDir, { recursive: true });
+
+  // Find nodejs-polars in node_modules (bun uses .bun/ structure)
+  const bunModules = join(ROOT, "node_modules/.bun");
+
+  // Copy main nodejs-polars package
+  const polarsDir = join(bunModules, "nodejs-polars@0.17.0/node_modules/nodejs-polars");
+  if (!existsSync(polarsDir)) {
+    throw new Error(`nodejs-polars not found at ${polarsDir}. Run 'bun install' first.`);
+  }
+  cpSync(polarsDir, join(libDir, "nodejs-polars"), { recursive: true });
+  console.log("  ✓ Copied nodejs-polars");
+
+  // Copy platform-specific native binary
+  const arch = process.arch === "arm64" ? "arm64" : "x64";
+  const platform = process.platform;
+  let nativePkgName: string;
+
+  if (platform === "darwin") {
+    nativePkgName = `nodejs-polars-darwin-${arch}`;
+  } else if (platform === "win32") {
+    nativePkgName = `nodejs-polars-win32-${arch}-msvc`;
+  } else {
+    nativePkgName = `nodejs-polars-linux-${arch}-gnu`;
+  }
+
+  const nativeDir = join(bunModules, `${nativePkgName}@0.17.0/node_modules/${nativePkgName}`);
+  if (!existsSync(nativeDir)) {
+    throw new Error(`Native module ${nativePkgName} not found at ${nativeDir}. Run 'bun install' first.`);
+  }
+  cpSync(nativeDir, join(libDir, nativePkgName), { recursive: true });
+  console.log(`  ✓ Copied ${nativePkgName}`);
+}
+
 async function main(): Promise<void> {
   const targetTriple = getTargetTriple();
   console.log(`\nBuilding sidecars for target: ${targetTriple}\n`);
@@ -129,6 +188,9 @@ async function main(): Promise<void> {
     mkdirSync(BINARIES_DIR, { recursive: true });
   }
 
+  // Bundle agent tools first (generates embedded-tools.generated.ts)
+  await bundleAgentTools();
+
   // Build each sidecar
   for (const sidecar of SIDECARS) {
     await buildSidecar(sidecar, targetTriple);
@@ -136,6 +198,9 @@ async function main(): Promise<void> {
 
   // Copy opencode binary
   await copyOpencode(targetTriple);
+
+  // Copy nodejs-polars native modules for the polars tool
+  await copyPolarsNativeModules();
 
   console.log("\n✓ All sidecars built successfully\n");
 }

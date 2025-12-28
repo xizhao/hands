@@ -34,6 +34,9 @@ npm-debug.log*
 # TanStack Router generated route tree
 **/routeTree.gen.ts
 
+# Generated embedded tools (built by scripts/bundle-tools.ts)
+packages/agent/src/embedded-tools.generated.ts
+
 # Bun
 bun.lockb
 
@@ -45,5 +48,8 @@ packages/desktop/src-tauri/binaries/
 
 # Generated opencode resources (built from packages/agent)
 packages/desktop/src-tauri/resources/opencode/
+
+# OpenCode runtime directory (tools written at runtime)
+packages/desktop/src-tauri/.opencode/
 
 .wrangler/

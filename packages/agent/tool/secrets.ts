@@ -3,14 +3,6 @@ import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { tool } from "@opencode-ai/plugin";
 
-/**
- * Secrets tool - check and request workbook secrets
- *
- * When secrets are missing, returns a structured JSON response that the UI
- * renders as an interactive form. After the user provides secrets, the agent
- * can retry and get the values.
- */
-
 interface SecretsRequestOutput {
   type: "secrets_request";
   secrets: Array<{
@@ -22,49 +14,26 @@ interface SecretsRequestOutput {
   message: string;
 }
 
-/**
- * Parse .env.local file into a map of key-value pairs
- */
 function parseEnvFile(content: string): Map<string, string> {
   const env = new Map<string, string>();
-
   for (const line of content.split("\n")) {
     const trimmed = line.trim();
-    // Skip empty lines and comments
     if (!trimmed || trimmed.startsWith("#")) continue;
-
     const eqIndex = trimmed.indexOf("=");
     if (eqIndex === -1) continue;
-
     const key = trimmed.slice(0, eqIndex).trim();
     let value = trimmed.slice(eqIndex + 1).trim();
-
-    // Remove surrounding quotes if present
-    if (
-      (value.startsWith('"') && value.endsWith('"')) ||
-      (value.startsWith("'") && value.endsWith("'"))
-    ) {
+    if ((value.startsWith('"') && value.endsWith('"')) || (value.startsWith("'") && value.endsWith("'"))) {
       value = value.slice(1, -1);
     }
-
-    if (key) {
-      env.set(key, value);
-    }
+    if (key) env.set(key, value);
   }
-
   return env;
 }
 
-/**
- * Read secrets from .env.local in workbook directory
- */
 async function readSecrets(workbookDir: string): Promise<Map<string, string>> {
   const envPath = join(workbookDir, ".env.local");
-
-  if (!existsSync(envPath)) {
-    return new Map();
-  }
-
+  if (!existsSync(envPath)) return new Map();
   try {
     const content = await readFile(envPath, "utf-8");
     return parseEnvFile(content);
@@ -73,9 +42,6 @@ async function readSecrets(workbookDir: string): Promise<Map<string, string>> {
   }
 }
 
-/**
- * Known secrets with their descriptions
- */
 const KNOWN_SECRETS: Record<string, string> = {
   GITHUB_TOKEN: "GitHub personal access token for API access",
   OPENAI_API_KEY: "OpenAI API key for AI features",
@@ -100,83 +66,43 @@ Use this tool when you need API keys, tokens, or other credentials to connect to
 **Important:**
 - When a source or API requires credentials, ALWAYS use this tool to check/request them first
 - For GitHub source: check for GITHUB_TOKEN
-- The tool output for 'request' action renders as an interactive form in the UI
 - After user provides secrets, you can retry your operation
-- You will NEVER see secret values - only whether they exist or not
-
-**Example flow:**
-1. User wants to add GitHub source
-2. You call: secrets action="check" keys=["GITHUB_TOKEN"]
-3. If missing, call: secrets action="request" keys=["GITHUB_TOKEN"]
-4. Wait for user to provide the secret via the UI form
-5. Retry adding the GitHub source`,
+- You will NEVER see secret values - only whether they exist or not`,
 
   args: {
-    action: tool.schema
-      .enum(["check", "request"])
-      .describe("Action: check if secrets exist, or request from user"),
-    keys: tool.schema
-      .array(tool.schema.string())
-      .optional()
-      .describe("Secret keys to check or request (e.g., ['GITHUB_TOKEN', 'OPENAI_API_KEY'])"),
+    action: tool.schema.enum(["check", "request"]).describe("Action: check if secrets exist, or request from user"),
+    keys: tool.schema.array(tool.schema.string()).optional().describe("Secret keys to check or request (e.g., ['GITHUB_TOKEN'])"),
   },
 
   async execute(args, _ctx) {
     const { action, keys } = args;
     const workbookDir = process.cwd();
-
     const existingSecrets = await readSecrets(workbookDir);
 
     if (action === "check") {
-      if (!keys || keys.length === 0) {
-        return "Error: 'keys' parameter required for check action.";
-      }
-
-      const results = keys.map((key) => ({
-        key,
-        exists: existingSecrets.has(key),
-      }));
-
+      if (!keys || keys.length === 0) return "Error: 'keys' parameter required for check action.";
+      const results = keys.map((key) => ({ key, exists: existingSecrets.has(key) }));
       const missing = results.filter((r) => !r.exists).map((r) => r.key);
       const present = results.filter((r) => r.exists).map((r) => r.key);
-
-      if (missing.length === 0) {
-        return `All secrets present: ${present.join(", ")}`;
-      }
-
-      return `Secrets check:
-- Present: ${present.length > 0 ? present.join(", ") : "none"}
-- Missing: ${missing.join(", ")}
-
-Use action="request" to ask the user to provide the missing secrets.`;
+      if (missing.length === 0) return `All secrets present: ${present.join(", ")}`;
+      return `Secrets check:\n- Present: ${present.length > 0 ? present.join(", ") : "none"}\n- Missing: ${missing.join(", ")}\n\nUse action="request" to ask the user to provide the missing secrets.`;
     }
 
     if (action === "request") {
-      if (!keys || keys.length === 0) {
-        return "Error: 'keys' parameter required for request action.";
-      }
-
-      // Build the secrets request output
+      if (!keys || keys.length === 0) return "Error: 'keys' parameter required for request action.";
       const secretsInfo = keys.map((key) => ({
         key,
         description: KNOWN_SECRETS[key] || `Secret value for ${key}`,
         required: true,
         exists: existingSecrets.has(key),
       }));
-
       const missing = secretsInfo.filter((s) => !s.exists);
-
-      if (missing.length === 0) {
-        return `All requested secrets already exist: ${keys.join(", ")}`;
-      }
-
-      // Return structured output that UI will render as a form
+      if (missing.length === 0) return `All requested secrets already exist: ${keys.join(", ")}`;
       const output: SecretsRequestOutput = {
         type: "secrets_request",
         secrets: secretsInfo,
         message: `Please provide the following secret${missing.length > 1 ? "s" : ""} to continue:`,
       };
-
       return JSON.stringify(output);
     }
 

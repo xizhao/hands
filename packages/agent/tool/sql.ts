@@ -1,7 +1,35 @@
 import { tool } from "@opencode-ai/plugin";
-import { getRuntimePort, getTRPCClient } from "../lib/trpc";
 
-// Execute query via tRPC
+
+const DEFAULT_RUNTIME_PORT = 55000;
+function getRuntimePort(): number {
+  const envPort = process.env.HANDS_RUNTIME_PORT;
+  if (envPort) return parseInt(envPort, 10);
+  return DEFAULT_RUNTIME_PORT;
+}
+
+
+import { createTRPCClient, httpBatchLink } from "@trpc/client";
+
+let client: ReturnType<typeof createTRPCClient<any>> | null = null;
+let currentPort: number | null = null;
+
+function getTRPCClient() {
+  const port = getRuntimePort();
+  if (client && currentPort === port) return client;
+
+  client = createTRPCClient({
+    links: [
+      httpBatchLink({
+        url: `http://localhost:${port}/trpc`,
+      }),
+    ],
+  });
+  currentPort = port;
+  return client;
+}
+
+
 async function executeQuery(sql: string): Promise<{ rows: unknown[]; rowCount: number; changes?: number }> {
   const trpc = getTRPCClient();
   return trpc.db.query.mutate({ sql });
@@ -9,31 +37,27 @@ async function executeQuery(sql: string): Promise<{ rows: unknown[]; rowCount: n
 
 function formatTable(rows: Record<string, unknown>[]): string {
   if (rows.length === 0) return "(no rows)";
-
   const headers = Object.keys(rows[0]);
   const widths = headers.map((h) =>
-    Math.max(h.length, ...rows.map((r) => String(r[h] ?? "").length)),
+    Math.max(h.length, ...rows.map((r) => String(r[h] ?? "").length))
   );
   const separator = widths.map((w) => "-".repeat(w)).join("-+-");
   const headerRow = headers.map((h, i) => h.padEnd(widths[i])).join(" | ");
   const dataRows = rows.map((r) =>
-    headers.map((h, i) => String(r[h] ?? "").padEnd(widths[i])).join(" | "),
+    headers.map((h, i) => String(r[h] ?? "").padEnd(widths[i])).join(" | ")
   );
   return [headerRow, separator, ...dataRows].join("\n");
 }
 
 function formatCsv(rows: Record<string, unknown>[]): string {
   if (rows.length === 0) return "";
-
   const headers = Object.keys(rows[0]);
   const headerRow = headers.join(",");
   const dataRows = rows.map((r) =>
-    headers
-      .map((h) => {
-        const val = String(r[h] ?? "");
-        return val.includes(",") ? `"${val}"` : val;
-      })
-      .join(","),
+    headers.map((h) => {
+      const val = String(r[h] ?? "");
+      return val.includes(",") ? `"${val}"` : val;
+    }).join(",")
   );
   return [headerRow, ...dataRows].join("\n");
 }
@@ -47,7 +71,7 @@ Use this tool to:
 - Insert/update data (INSERT, UPDATE)
 - Debug data issues
 
-TIP: Use the SchemaRead tool first to see available tables and columns.
+TIP: Use the schema tool first to see available tables and columns.
 
 SQLite-specific notes:
 - Uses SQLite syntax (not PostgreSQL)
@@ -58,14 +82,8 @@ SQLite-specific notes:
 
   args: {
     query: tool.schema.string().describe("SQL query to execute"),
-    format: tool.schema
-      .enum(["table", "json", "csv"])
-      .optional()
-      .describe("Output format. Defaults to table."),
-    confirm_destructive: tool.schema
-      .boolean()
-      .optional()
-      .describe("Set to true to confirm destructive operations (DROP, TRUNCATE, DELETE)"),
+    format: tool.schema.enum(["table", "json", "csv"]).optional().describe("Output format. Defaults to table."),
+    confirm_destructive: tool.schema.boolean().optional().describe("Set to true to confirm destructive operations (DROP, TRUNCATE, DELETE)"),
   },
 
   async execute(args, _ctx) {
@@ -88,7 +106,6 @@ This would modify/delete data. To proceed, run again with confirm_destructive: t
     try {
       const result = await executeQuery(query);
 
-      // For non-SELECT queries
       if (!Array.isArray(result.rows) || result.rows.length === 0) {
         if (result.changes !== undefined && result.changes > 0) {
           return `Query executed successfully. Rows affected: ${result.changes}`;
@@ -96,10 +113,9 @@ This would modify/delete data. To proceed, run again with confirm_destructive: t
         if (result.rowCount !== undefined && result.rowCount > 0) {
           return `Query executed successfully. Rows affected: ${result.rowCount}`;
         }
-        return `Query executed successfully.`;
+        return "Query executed successfully.";
       }
 
-      // Format results
       const rows = result.rows as Record<string, unknown>[];
 
       if (format === "json") {
@@ -112,17 +128,15 @@ This would modify/delete data. To proceed, run again with confirm_destructive: t
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
 
-      // Check for connection errors
       if (message.includes("ECONNREFUSED") || message.includes("fetch failed")) {
-        return `❌ Cannot connect to runtime.
+        return `❌ Cannot connect to workbook server.
 
 Error: ${message}
 
-Make sure a workbook is open in Hands (the runtime provides the database).
-Runtime port: ${getRuntimePort()}`;
+Make sure a workbook is open in Hands.
+Server port: ${getRuntimePort()}`;
       }
 
-      // Check for booting database
       if (message.includes("booting") || message.includes("not ready")) {
         return `⏳ Database is starting up.
 

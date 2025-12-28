@@ -316,6 +316,7 @@ This creates a clickable card in the chat that takes the user directly to what y
 
 ## Anti-Patterns
 
+- Do NOT use bash/curl to access the database - always use the sql and schema tools
 - Do NOT expose technical details to the user
 - Do NOT ask the user technical questions ("what column?", "what type?")
 - Do NOT show code in your responses
