@@ -1,16 +1,25 @@
 /**
- * FloatingChat - Floating chat window for a single thread
+ * FloatingChat - Persistent floating chat sidebar
  *
- * A lightweight overlay window that:
- * - Shows one OpenCode thread/session
- * - Can be opened from anywhere (capture, keyboard shortcut, etc.)
- * - Has dock button to move thread to main workbook editor
+ * A standalone chat window that:
+ * - Shows all threads with tab switching
+ * - Can create new threads
+ * - Always on top, draggable
+ * - Works independently of main workbook window
  */
 
 import { invoke } from "@tauri-apps/api/core";
-import { emit } from "@tauri-apps/api/event";
+import { listen } from "@tauri-apps/api/event";
 import { getCurrentWindow } from "@tauri-apps/api/window";
-import { ArrowUpRight, Loader2, Send, X } from "lucide-react";
+import {
+  ChevronDown,
+  Loader2,
+  Minus,
+  Plus,
+  Send,
+  Square,
+  X,
+} from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { createOpencodeClient } from "@opencode-ai/sdk/client";
@@ -42,6 +51,7 @@ interface MessageWithParts {
 interface Session {
   id: string;
   title?: string;
+  parentID?: string;
   time: { created: number; updated: number };
 }
 
@@ -53,7 +63,6 @@ interface SessionStatus {
 // API Client
 // ============================================================================
 
-// Matches PORT_OPENCODE in lib.rs (55 * 1000 + 300)
 const OPENCODE_PORT = 55300;
 
 function createClient(directory: string) {
@@ -69,17 +78,16 @@ function createClient(directory: string) {
 
 export function FloatingChat() {
   const [inputValue, setInputValue] = useState("");
+  const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
+  const [showAllThreads, setShowAllThreads] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const queryClient = useQueryClient();
 
-  // Parse query params
-  const { sessionId, workbookDir } = useMemo(() => {
+  // Parse workbook dir from query params
+  const workbookDir = useMemo(() => {
     const params = new URLSearchParams(window.location.search);
-    return {
-      sessionId: params.get("session-id") || "",
-      workbookDir: params.get("workbook-dir") || "",
-    };
+    return params.get("workbook-dir") || "";
   }, []);
 
   // Create API client
@@ -94,49 +102,60 @@ export function FloatingChat() {
     return () => document.documentElement.classList.remove("dark");
   }, []);
 
-  // Emit opened event on mount, closed on unmount
-  useEffect(() => {
-    if (sessionId) {
-      emit("floating-chat-opened", { sessionId, workbookDir });
-    }
-    return () => {
-      if (sessionId) {
-        emit("floating-chat-closed", { sessionId, workbookDir });
-      }
-    };
-  }, [sessionId, workbookDir]);
-
-  // Focus input on mount
+  // Focus input on mount and when switching sessions
   useEffect(() => {
     inputRef.current?.focus();
+  }, [activeSessionId]);
+
+  // Listen for workbook to request focus on a session
+  useEffect(() => {
+    const unlisten = listen<{ sessionId: string }>(
+      "floating-chat-focus-session",
+      (event) => {
+        setActiveSessionId(event.payload.sessionId);
+      }
+    );
+    return () => {
+      unlisten.then((fn) => fn());
+    };
   }, []);
 
   // ========== Queries ==========
 
-  // Fetch session info
-  const sessionQuery = useQuery({
-    queryKey: ["floating-session", sessionId, workbookDir],
+  // Fetch all sessions
+  const sessionsQuery = useQuery({
+    queryKey: ["floating-sessions", workbookDir],
     queryFn: async () => {
-      if (!client || !sessionId) return null;
-      const result = await client.session.get({ path: { id: sessionId } });
-      return result.data as Session;
+      if (!client) return [];
+      const result = await client.session.list();
+      return (result.data as Session[]) || [];
     },
-    enabled: !!client && !!sessionId,
+    enabled: !!client,
+    refetchInterval: 3000,
   });
 
-  // Fetch messages
+  // Filter to foreground sessions (no parentID)
+  const sessions = useMemo(() => {
+    return (sessionsQuery.data || [])
+      .filter((s) => !s.parentID && s.title)
+      .sort((a, b) => b.time.updated - a.time.updated);
+  }, [sessionsQuery.data]);
+
+  // Fetch messages for active session
   const messagesQuery = useQuery({
-    queryKey: ["floating-messages", sessionId, workbookDir],
+    queryKey: ["floating-messages", activeSessionId, workbookDir],
     queryFn: async () => {
-      if (!client || !sessionId) return [];
-      const result = await client.session.messages({ path: { id: sessionId } });
+      if (!client || !activeSessionId) return [];
+      const result = await client.session.messages({
+        path: { id: activeSessionId },
+      });
       return result.data as MessageWithParts[];
     },
-    enabled: !!client && !!sessionId,
-    refetchInterval: 2000, // Poll for updates
+    enabled: !!client && !!activeSessionId,
+    refetchInterval: 1500,
   });
 
-  // Fetch session status
+  // Fetch session statuses
   const statusQuery = useQuery({
     queryKey: ["floating-status", workbookDir],
     queryFn: async () => {
@@ -148,24 +167,53 @@ export function FloatingChat() {
     refetchInterval: 1000,
   });
 
-  const status = statusQuery.data?.[sessionId];
-  const isBusy = status?.type === "busy" || status?.type === "running";
+  const activeStatus = activeSessionId
+    ? statusQuery.data?.[activeSessionId]
+    : null;
+  const isBusy =
+    activeStatus?.type === "busy" || activeStatus?.type === "running";
+
+  // Check if any session is busy
+  const anyBusy = useMemo(() => {
+    const statuses = statusQuery.data || {};
+    return Object.values(statuses).some(
+      (s) => s.type === "busy" || s.type === "running"
+    );
+  }, [statusQuery.data]);
 
   // ========== Mutations ==========
 
+  const createSession = useMutation({
+    mutationFn: async () => {
+      if (!client) throw new Error("No client");
+      const result = await client.session.create({});
+      return result.data as Session;
+    },
+    onSuccess: (newSession) => {
+      setActiveSessionId(newSession.id);
+      queryClient.invalidateQueries({
+        queryKey: ["floating-sessions", workbookDir],
+      });
+    },
+  });
+
   const sendMessage = useMutation({
-    mutationFn: async (content: string) => {
-      if (!client || !sessionId) throw new Error("No client/session");
+    mutationFn: async ({
+      sessionId,
+      content,
+    }: {
+      sessionId: string;
+      content: string;
+    }) => {
+      if (!client) throw new Error("No client");
       return client.session.promptAsync({
         path: { id: sessionId },
         body: {
           parts: [{ type: "text", text: content }],
-          agent: "hands",
         },
       });
     },
-    onMutate: async (content) => {
-      // Optimistic update
+    onMutate: async ({ sessionId, content }) => {
       const now = Date.now();
       const optimisticMessage: MessageWithParts = {
         info: {
@@ -190,42 +238,54 @@ export function FloatingChat() {
         (old) => [...(old ?? []), optimisticMessage]
       );
     },
-    onSettled: () => {
+    onSettled: (_, __, { sessionId }) => {
       queryClient.invalidateQueries({
         queryKey: ["floating-messages", sessionId, workbookDir],
       });
     },
   });
 
+  const abortSession = useMutation({
+    mutationFn: async (sessionId: string) => {
+      if (!client) throw new Error("No client");
+      return client.session.abort({ path: { id: sessionId } });
+    },
+  });
+
+  const deleteSession = useMutation({
+    mutationFn: async (sessionId: string) => {
+      if (!client) throw new Error("No client");
+      return client.session.delete({ path: { id: sessionId } });
+    },
+    onSuccess: (_, deletedId) => {
+      if (activeSessionId === deletedId) {
+        setActiveSessionId(null);
+      }
+      queryClient.invalidateQueries({
+        queryKey: ["floating-sessions", workbookDir],
+      });
+    },
+  });
+
   // ========== Handlers ==========
+
+  const handleMinimize = useCallback(async () => {
+    try {
+      const win = getCurrentWindow();
+      await win.minimize();
+    } catch (err) {
+      console.error("Failed to minimize:", err);
+    }
+  }, []);
 
   const handleClose = useCallback(async () => {
     try {
       const win = getCurrentWindow();
-      await win.close();
+      await win.hide();
     } catch (err) {
-      console.error("Failed to close:", err);
+      console.error("Failed to hide:", err);
     }
   }, []);
-
-  const handleDock = useCallback(async () => {
-    try {
-      // Emit event for workbook to pick up
-      await emit("dock-floating-chat", {
-        sessionId,
-        workbookDir,
-      });
-
-      // Open workbook window
-      const workbookId = workbookDir.split("/").pop() || "";
-      await invoke("open_workbook_window", { workbookId });
-
-      // Close this floating chat
-      await handleClose();
-    } catch (err) {
-      console.error("Failed to dock:", err);
-    }
-  }, [sessionId, workbookDir, handleClose]);
 
   const handleDragStart = async (e: React.MouseEvent) => {
     e.preventDefault();
@@ -241,124 +301,242 @@ export function FloatingChat() {
     const content = inputValue.trim();
     if (!content || isBusy) return;
 
-    sendMessage.mutate(content);
+    if (!activeSessionId) {
+      // Create new session and send
+      createSession.mutate(undefined, {
+        onSuccess: (newSession) => {
+          sendMessage.mutate({ sessionId: newSession.id, content });
+        },
+      });
+    } else {
+      sendMessage.mutate({ sessionId: activeSessionId, content });
+    }
     setInputValue("");
-  }, [inputValue, isBusy, sendMessage]);
+  }, [inputValue, isBusy, activeSessionId, createSession, sendMessage]);
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
       handleSend();
     }
-    if (e.key === "Escape") {
-      handleClose();
-    }
   };
 
-  // Scroll to bottom on new messages
+  const handleAbort = useCallback(() => {
+    if (activeSessionId) {
+      abortSession.mutate(activeSessionId);
+    }
+  }, [activeSessionId, abortSession]);
+
+  // Scroll to top on new messages (with flex-col-reverse, top is newest)
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+    if (messagesEndRef.current) {
+      messagesEndRef.current.scrollTo({ top: 0, behavior: "smooth" });
+    }
   }, [messagesQuery.data]);
 
   const messages = messagesQuery.data ?? [];
-  const sessionTitle = sessionQuery.data?.title || "Chat";
+  const activeSession = sessions.find((s) => s.id === activeSessionId);
+
+  // Get visible threads (first 3 + active if not in first 3)
+  const visibleThreads = useMemo(() => {
+    const first3 = sessions.slice(0, 3);
+    if (activeSessionId && !first3.find((s) => s.id === activeSessionId)) {
+      const active = sessions.find((s) => s.id === activeSessionId);
+      if (active) return [...first3.slice(0, 2), active];
+    }
+    return first3;
+  }, [sessions, activeSessionId]);
+
+  const hasMoreThreads = sessions.length > 3;
 
   return (
-    <div
-      className="h-screen w-screen flex flex-col bg-transparent"
-      onClick={handleClose}
-    >
-      <div
-        className="flex flex-col h-full bg-card/95 backdrop-blur-sm rounded-lg shadow-2xl border border-border overflow-hidden"
-        onClick={(e) => e.stopPropagation()}
-      >
-        {/* Header */}
+    <div className="h-screen w-screen flex flex-col bg-transparent">
+      <div className="flex flex-col h-full bg-card/95 backdrop-blur-md rounded-xl shadow-2xl border border-border/50 overflow-hidden">
+        {/* Header - draggable */}
         <div
-          className="flex items-center gap-2 px-3 py-2 border-b border-border bg-muted/50"
+          className="flex items-center gap-1 px-2 py-1.5 border-b border-border/50 bg-muted/30"
           onMouseDown={handleDragStart}
         >
-          {/* Session title chip */}
-          <div className="flex-1 min-w-0">
-            <div className="flex items-center gap-2">
-              {isBusy && (
-                <Loader2 className="h-3 w-3 animate-spin text-muted-foreground" />
-              )}
-              <span className="text-sm font-medium text-foreground truncate">
-                {sessionTitle}
-              </span>
-            </div>
+          {/* Thread tabs */}
+          <div className="flex items-center gap-0.5 flex-1 min-w-0 overflow-hidden">
+            {visibleThreads.map((session) => {
+              const isActive = session.id === activeSessionId;
+              const status = statusQuery.data?.[session.id];
+              const sessionBusy =
+                status?.type === "busy" || status?.type === "running";
+
+              return (
+                <button
+                  key={session.id}
+                  onClick={() => setActiveSessionId(session.id)}
+                  onMouseDown={(e) => e.stopPropagation()}
+                  className={`group flex items-center gap-1 px-2 py-1 text-xs rounded-md transition-all max-w-[100px] ${
+                    isActive
+                      ? "bg-background text-foreground shadow-sm"
+                      : "text-muted-foreground hover:text-foreground hover:bg-muted/50"
+                  }`}
+                >
+                  {sessionBusy && (
+                    <span className="relative flex h-1.5 w-1.5 shrink-0">
+                      <span className="animate-ping absolute h-full w-full rounded-full bg-green-400 opacity-75" />
+                      <span className="relative rounded-full h-1.5 w-1.5 bg-green-500" />
+                    </span>
+                  )}
+                  <span className="truncate">{session.title || "Chat"}</span>
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      deleteSession.mutate(session.id);
+                    }}
+                    className="p-0.5 rounded opacity-0 group-hover:opacity-60 hover:!opacity-100 hover:bg-accent shrink-0"
+                  >
+                    <X className="h-2.5 w-2.5" />
+                  </button>
+                </button>
+              );
+            })}
+
+            {/* More threads dropdown */}
+            {hasMoreThreads && (
+              <div className="relative">
+                <button
+                  onClick={() => setShowAllThreads(!showAllThreads)}
+                  onMouseDown={(e) => e.stopPropagation()}
+                  className="flex items-center gap-0.5 px-1.5 py-1 text-xs text-muted-foreground hover:text-foreground rounded-md hover:bg-muted/50"
+                >
+                  {anyBusy && (
+                    <span className="relative flex h-1.5 w-1.5">
+                      <span className="animate-ping absolute h-full w-full rounded-full bg-green-400 opacity-75" />
+                      <span className="relative rounded-full h-1.5 w-1.5 bg-green-500" />
+                    </span>
+                  )}
+                  <span>+{sessions.length - 3}</span>
+                  <ChevronDown className="h-3 w-3" />
+                </button>
+
+                {showAllThreads && (
+                  <div className="absolute top-full left-0 mt-1 bg-popover border border-border rounded-lg shadow-lg z-50 min-w-[150px] py-1">
+                    {sessions.slice(3).map((session) => (
+                      <button
+                        key={session.id}
+                        onClick={() => {
+                          setActiveSessionId(session.id);
+                          setShowAllThreads(false);
+                        }}
+                        className="w-full text-left px-3 py-1.5 text-xs hover:bg-accent truncate"
+                      >
+                        {session.title || "Chat"}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* New thread button */}
+            <button
+              onClick={() => createSession.mutate()}
+              onMouseDown={(e) => e.stopPropagation()}
+              disabled={createSession.isPending}
+              className="p-1 text-muted-foreground hover:text-foreground rounded-md hover:bg-muted/50 shrink-0"
+              title="New thread"
+            >
+              <Plus className="h-3.5 w-3.5" />
+            </button>
           </div>
 
-          {/* Dock button */}
-          <button
-            onClick={handleDock}
-            onMouseDown={(e) => e.stopPropagation()}
-            className="p-1.5 rounded-md hover:bg-accent text-muted-foreground hover:text-foreground transition-colors"
-            title="Open in workbook"
-          >
-            <ArrowUpRight className="h-4 w-4" />
-          </button>
-
-          {/* Close button */}
-          <button
-            onClick={handleClose}
-            onMouseDown={(e) => e.stopPropagation()}
-            className="p-1.5 rounded-md hover:bg-accent text-muted-foreground hover:text-foreground transition-colors"
-            title="Close (Esc)"
-          >
-            <X className="h-4 w-4" />
-          </button>
+          {/* Window controls */}
+          <div className="flex items-center gap-0.5 shrink-0">
+            <button
+              onClick={handleMinimize}
+              onMouseDown={(e) => e.stopPropagation()}
+              className="p-1 rounded-md hover:bg-accent text-muted-foreground hover:text-foreground"
+            >
+              <Minus className="h-3.5 w-3.5" />
+            </button>
+            <button
+              onClick={handleClose}
+              onMouseDown={(e) => e.stopPropagation()}
+              className="p-1 rounded-md hover:bg-accent text-muted-foreground hover:text-foreground"
+            >
+              <X className="h-3.5 w-3.5" />
+            </button>
+          </div>
         </div>
 
-        {/* Messages */}
-        <div className="flex-1 overflow-y-auto p-3 space-y-3">
-          {messages.length === 0 && !messagesQuery.isLoading && (
-            <div className="text-center text-muted-foreground text-sm py-8">
-              Start a conversation...
-            </div>
-          )}
-
-          {messages.map((msg) => (
-            <MessageBubble key={msg.info.id} message={msg} />
-          ))}
-
-          {isBusy && messages[messages.length - 1]?.info.role === "user" && (
-            <div className="flex justify-start">
-              <div className="px-3 py-2 bg-muted rounded-lg">
-                <span className="text-sm text-muted-foreground italic">
-                  Thinking...
-                </span>
+        {/* Messages - flex-col-reverse so newest at top, scroll down for older */}
+        <div ref={messagesEndRef} className="flex-1 overflow-y-auto p-3">
+          <div className="flex flex-col-reverse gap-2">
+            {isBusy && messages[messages.length - 1]?.info.role === "user" && (
+              <div className="flex justify-start">
+                <div className="px-3 py-2 bg-muted rounded-lg">
+                  <span className="text-sm text-muted-foreground italic">
+                    Thinking...
+                  </span>
+                </div>
               </div>
-            </div>
-          )}
+            )}
 
-          <div ref={messagesEndRef} />
+            {messages.map((msg) => (
+              <MessageBubble key={msg.info.id} message={msg} />
+            ))}
+
+            {activeSessionId && messages.length === 0 && !messagesQuery.isLoading && (
+              <div className="text-center text-muted-foreground text-sm py-8">
+                {activeSession?.title || "New conversation"}
+              </div>
+            )}
+
+            {!activeSessionId && sessions.length > 0 && (
+              <div className="text-center text-muted-foreground text-sm py-8">
+                Select a thread or start a new one
+              </div>
+            )}
+
+            {!activeSessionId && sessions.length === 0 && (
+              <div className="text-center text-muted-foreground text-sm py-8">
+                Start a conversation...
+              </div>
+            )}
+          </div>
         </div>
 
         {/* Input */}
-        <div className="p-3 border-t border-border bg-muted/30">
+        <div className="p-2 border-t border-border/50 bg-muted/20">
           <div className="flex items-end gap-2">
             <textarea
               ref={inputRef}
               value={inputValue}
               onChange={(e) => setInputValue(e.target.value)}
               onKeyDown={handleKeyDown}
-              placeholder="Type a message..."
+              placeholder={
+                activeSessionId ? "Type a message..." : "Start a new chat..."
+              }
               rows={1}
-              className="flex-1 resize-none bg-background text-foreground text-sm rounded-lg px-3 py-2 border border-border focus:outline-none focus:ring-1 focus:ring-ring"
-              style={{ minHeight: "36px", maxHeight: "120px" }}
+              className="flex-1 resize-none bg-background text-foreground text-sm rounded-lg px-3 py-2 border border-border/50 focus:outline-none focus:ring-1 focus:ring-ring/50"
+              style={{ minHeight: "36px", maxHeight: "100px" }}
             />
-            <button
-              onClick={handleSend}
-              disabled={!inputValue.trim() || isBusy}
-              className="p-2 rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-            >
-              {isBusy ? (
-                <Loader2 className="h-4 w-4 animate-spin" />
-              ) : (
-                <Send className="h-4 w-4" />
-              )}
-            </button>
+            {isBusy ? (
+              <button
+                onClick={handleAbort}
+                className="p-2 rounded-lg bg-destructive/10 text-destructive hover:bg-destructive/20 transition-colors"
+                title="Stop"
+              >
+                <Square className="h-4 w-4" />
+              </button>
+            ) : (
+              <button
+                onClick={handleSend}
+                disabled={!inputValue.trim()}
+                className="p-2 rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              >
+                {sendMessage.isPending || createSession.isPending ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <Send className="h-4 w-4" />
+                )}
+              </button>
+            )}
           </div>
         </div>
       </div>
@@ -373,13 +551,11 @@ export function FloatingChat() {
 function MessageBubble({ message }: { message: MessageWithParts }) {
   const isUser = message.info.role === "user";
 
-  // Extract text content from parts
   const textContent = message.parts
     .filter((p) => p.type === "text" && p.text)
     .map((p) => p.text)
     .join("\n");
 
-  // Count tool calls
   const toolCount = message.parts.filter((p) => p.type === "tool").length;
 
   return (
