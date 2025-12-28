@@ -80,6 +80,10 @@ export default defineConfig({
         // Ensure consistent resolution in worker
         mainFields: ["module", "main", "browser"],
         dedupe: ["is-hotkey", "slate", "slate-dom", "slate-react"],
+        // Worker environment needs explicit aliases (doesn't inherit from root)
+        alias: {
+          "@hands/actions/workflows": path.join(workbookPath, ".hands/actions/workflows.ts"),
+        },
       },
     },
   },
@@ -185,6 +189,9 @@ export default defineConfig({
       "@hands/pages": path.join(workbookPath, ".hands/pages/index.tsx"),
       "@hands/actions": path.join(workbookPath, ".hands/actions/index.ts"),
       "@hands/actions/workflows": path.join(workbookPath, ".hands/actions/workflows.ts"),
+      // Editor plugins (used by PageStatic for SSR)
+      "@hands/editor/plugins": path.resolve(__dirname, "../editor/src/plugins"),
+      "@hands/editor": path.resolve(__dirname, "../editor/src"),
       // Shared deps from runtime (workbook imports these but doesn't install them)
       "platejs/static": path.resolve(__dirname, "node_modules/platejs/dist/static/index.js"),
       "platejs/react": path.resolve(__dirname, "node_modules/platejs/dist/react/index.js"),

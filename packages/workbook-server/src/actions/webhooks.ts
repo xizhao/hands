@@ -2,13 +2,12 @@
  * Action Webhooks
  *
  * HTTP webhook handlers for actions that support webhook triggers.
- * Delegates execution to runtime via HTTP.
+ * Queries runtime for action metadata and delegates execution via HTTP.
  */
 
 import type { Hono } from "hono";
-import { join } from "node:path";
-import { discoverActions } from "../workbook/discovery.js";
 import { executeActionHttp } from "./executor-http.js";
+import { fetchActionsFromRuntime } from "./runtime-client.js";
 
 export interface WebhookConfig {
   workbookDir: string;
@@ -37,10 +36,9 @@ export function registerWebhookRoutes(app: Hono, config: WebhookConfig): void {
       return c.json({ error: "Runtime not available", code: "RUNTIME_NOT_AVAILABLE" }, 503);
     }
 
-    // Discover actions and find the one we want
-    const actionsDir = join(workbookDir, "actions");
-    const result = await discoverActions(actionsDir, workbookDir);
-    const action = result.items.find((a) => a.id === actionId);
+    // Fetch action metadata from runtime
+    const actions = await fetchActionsFromRuntime(runtimeUrl);
+    const action = actions.find((a) => a.id === actionId);
 
     if (!action) {
       return c.json({ error: `Action not found: ${actionId}`, code: "ACTION_NOT_FOUND" }, 404);
@@ -135,12 +133,11 @@ export function registerWebhookRoutes(app: Hono, config: WebhookConfig): void {
       return c.json({ error: "Runtime not available", code: "RUNTIME_NOT_AVAILABLE" }, 503);
     }
 
-    // Discover actions and find matching one
-    const actionsDir = join(workbookDir, "actions");
-    const result = await discoverActions(actionsDir, workbookDir);
+    // Fetch action metadata from runtime
+    const actions = await fetchActionsFromRuntime(runtimeUrl);
 
     // First try exact action ID match with custom path (only valid actions)
-    let action = result.items.find(
+    let action = actions.find(
       (a) =>
         a.id === actionId &&
         a.valid &&
@@ -150,7 +147,7 @@ export function registerWebhookRoutes(app: Hono, config: WebhookConfig): void {
 
     // Fall back to just action ID (only valid actions)
     if (!action) {
-      action = result.items.find(
+      action = actions.find(
         (a) =>
           a.id === actionId &&
           a.valid &&

@@ -16,9 +16,10 @@ import { workflowRoutes } from "./actions/workflow-routes";
 // Export Durable Objects for wrangler
 export { Database, SyncedStateServer };
 
-// Export workflow classes for CF to instantiate (generated at build time)
-// The vite plugin ensures this file always exists (empty stub in dev)
-export * from "@hands/actions/workflows";
+// Workflow bindings are exported for production CF Worker
+// In dev mode, this exports empty bindings from the stub
+// In production builds, the vite-plugin-workbook generates real workflow classes
+export * from "./actions/workflows";
 
 export const setCommonHeaders =
   (): RouteMiddleware =>

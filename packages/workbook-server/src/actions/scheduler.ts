@@ -2,13 +2,12 @@
  * Action Scheduler
  *
  * Handles cron-based scheduling for actions.
- * Delegates execution to runtime via HTTP.
+ * Queries runtime for action metadata and delegates execution via HTTP.
  */
 
-import { join } from "node:path";
 import type { DiscoveredAction } from "../workbook/types.js";
-import { discoverActions } from "../workbook/discovery.js";
 import { executeActionHttp } from "./executor-http.js";
+import { fetchActionsFromRuntime } from "./runtime-client.js";
 
 /** Type guard: valid action with a schedule */
 function isScheduledAction(action: DiscoveredAction): action is DiscoveredAction & { schedule: string } {
@@ -213,10 +212,10 @@ async function checkScheduledActions(
   }
 
   try {
-    const actionsDir = join(workbookDir, "actions");
-    const result = await discoverActions(actionsDir, workbookDir);
+    // Fetch action metadata from runtime
+    const actions = await fetchActionsFromRuntime(runtimeUrl);
     // Filter to only valid actions with schedules (type guard narrows the type)
-    const scheduledActions = result.items.filter(isScheduledAction);
+    const scheduledActions = actions.filter(isScheduledAction);
 
     for (const action of scheduledActions) {
       const cron = parseCron(action.schedule);

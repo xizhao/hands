@@ -253,7 +253,7 @@ function toPascalCase(id: string): string {
     .join("");
 }
 
-function generateActionsManifest(actions: ActionMeta[], outputDir: string, workbookPath: string): void {
+function generateActionsManifest(actions: ActionMeta[], outputDir: string, workbookPath: string, isDev: boolean): void {
   const imports = actions
     .map((a) => `import ${sanitizeId(a.id)}Action from "${path.join(workbookPath, a.relativePath)}";`)
     .join("\n");
@@ -284,21 +284,29 @@ export function listActions(): Array<{ id: string; definition: ActionDefinition 
   fs.mkdirSync(outputDir, { recursive: true });
   fs.writeFileSync(path.join(outputDir, "index.ts"), manifest);
 
-  // Generate CF Workflow classes for workflow actions (always generate, even if empty)
+  // Generate CF Workflow classes for workflow actions (skip in dev mode)
   const workflowActions = actions.filter((a) => a.isWorkflow);
-  generateWorkflowClasses(workflowActions, outputDir, workbookPath);
+  generateWorkflowClasses(workflowActions, outputDir, workbookPath, isDev);
 }
 
 /**
  * Generate CF WorkflowEntrypoint classes for workflow actions.
  * These are used when deploying to production CF Workers.
- * Always generates a file, even if empty (for module resolution).
+ * In dev mode, skip generation to keep the stub file (CF imports don't work in dev).
  */
 function generateWorkflowClasses(
   workflowActions: ActionMeta[],
   outputDir: string,
-  workbookPath: string
+  workbookPath: string,
+  isDev: boolean
 ): void {
+  // In dev mode, don't generate workflow classes - keep the stub
+  // Workflow classes use cloudflare:workers imports which only work in production
+  if (isDev) {
+    console.log(`[workbook] Skipping workflow class generation (dev mode)`);
+    return;
+  }
+
   // Handle empty case - still generate file for module resolution
   if (workflowActions.length === 0) {
     const emptyManifest = `// Auto-generated CF Workflow classes - DO NOT EDIT
@@ -388,28 +396,32 @@ export function workbookPlugin(options: WorkbookPluginOptions): Plugin {
   const pagesOutputDir = path.join(workbookPath, ".hands/pages");
   const actionsOutputDir = path.join(workbookPath, ".hands/actions");
 
+  // Track if we're in dev mode (set in configResolved)
+  let isDev = process.env.NODE_ENV !== "production";
+
   /**
-   * Generate stub files to ensure module resolution works.
-   * Called early (configResolved) before any modules are loaded.
+   * Generate initial files synchronously before any modules load.
+   * This is required because CF worker environment resolves modules
+   * from disk, not through Vite's virtual module hooks.
    */
-  function generateStubs() {
+  function ensureFilesExist() {
     fs.mkdirSync(pagesOutputDir, { recursive: true });
     fs.mkdirSync(actionsOutputDir, { recursive: true });
 
-    // Stub pages if not exists
+    // Pages stub
     const pagesIndex = path.join(pagesOutputDir, "index.tsx");
     if (!fs.existsSync(pagesIndex)) {
-      fs.writeFileSync(pagesIndex, `// Stub - will be replaced at buildStart
+      fs.writeFileSync(pagesIndex, `// Auto-generated - DO NOT EDIT
 export const pages = {} as const;
 export type PageId = never;
 export const pageRoutes = [] as const;
 `);
     }
 
-    // Stub actions if not exists
+    // Actions stub
     const actionsIndex = path.join(actionsOutputDir, "index.ts");
     if (!fs.existsSync(actionsIndex)) {
-      fs.writeFileSync(actionsIndex, `// Stub - will be replaced at buildStart
+      fs.writeFileSync(actionsIndex, `// Auto-generated - DO NOT EDIT
 export const actions = {} as const;
 export type ActionId = never;
 export function getAction(_id: string) { return undefined; }
@@ -417,15 +429,15 @@ export function listActions() { return []; }
 `);
     }
 
-    // Stub workflows if not exists
+    // Workflows stub - always write on startup to ensure clean state
+    // In dev mode, we keep this stub; in prod, generateWorkflowClasses overwrites it
     const workflowsFile = path.join(actionsOutputDir, "workflows.ts");
-    if (!fs.existsSync(workflowsFile)) {
-      fs.writeFileSync(workflowsFile, `// Stub - will be replaced at buildStart
+    fs.writeFileSync(workflowsFile, `// Auto-generated - DO NOT EDIT
+// Workflows only run in production CF deployments
 export const workflowBindings = {} as const;
 export type WorkflowId = never;
 export function getWorkflowBinding(_id: string) { return undefined; }
 `);
-    }
   }
 
   async function processAll() {
@@ -434,19 +446,39 @@ export function getWorkflowBinding(_id: string) { return undefined; }
     generatePagesManifest(pages, pagesOutputDir);
     console.log(`[workbook] Generated ${pages.length} pages`);
 
-    // Process actions
+    // Process actions (generates workflows.ts only in prod mode)
     const actions = discoverActions(actionsDir);
-    generateActionsManifest(actions, actionsOutputDir, workbookPath);
+    generateActionsManifest(actions, actionsOutputDir, workbookPath, isDev);
     console.log(`[workbook] Generated ${actions.length} actions`);
   }
+
+  // Generate files immediately when plugin is loaded (before Vite starts)
+  ensureFilesExist();
+
+  // Full path to the workflows file for module resolution
+  const workflowsFilePath = path.join(actionsOutputDir, "workflows.ts");
 
   return {
     name: "hands-workbook",
     enforce: "pre",
 
-    // Generate stubs early - before module resolution
-    configResolved() {
-      generateStubs();
+    configResolved(config) {
+      // Update isDev based on resolved Vite config
+      isDev = config.command === "serve";
+    },
+
+    // Resolve @hands/actions/* imports to the generated files
+    resolveId(id) {
+      if (id === "@hands/actions/workflows") {
+        return workflowsFilePath;
+      }
+      if (id === "@hands/actions") {
+        return path.join(actionsOutputDir, "index.ts");
+      }
+      if (id === "@hands/pages") {
+        return path.join(pagesOutputDir, "index.tsx");
+      }
+      return null;
     },
 
     async buildStart() {

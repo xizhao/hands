@@ -8,17 +8,9 @@
 import { route } from "rwsdk/router";
 import { env } from "cloudflare:workers";
 
-// Import workflow bindings (generated at build time)
-// This will be empty if no workflow actions exist
-let workflowBindings: Record<string, { className: string; binding: string }> = {};
-
-try {
-  // Dynamic import to handle case where no workflows exist
-  const workflows = await import("@hands/actions/workflows");
-  workflowBindings = workflows.workflowBindings ?? {};
-} catch {
-  // No workflows generated - that's fine
-}
+// Import workflow bindings (empty in dev, populated in production)
+import { workflowBindings as importedBindings } from "./workflows";
+const workflowBindings = importedBindings as Record<string, { className: string; binding: string }>;
 
 /**
  * CF Workflow binding interface (minimal typing for runtime use)

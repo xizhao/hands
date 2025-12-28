@@ -2,13 +2,13 @@
  * tRPC Router for Actions
  *
  * Type-safe API for action management and execution.
- * Actions are discovered from the workbook discovery module and executed via HTTP to runtime.
+ * Queries runtime's /actions endpoint for action metadata.
  */
 
 import { initTRPC, TRPCError } from "@trpc/server";
 import { z } from "zod";
 import { readFile } from "node:fs/promises";
-import { discoverActions } from "../workbook/discovery.js";
+import { fetchActionsFromRuntime } from "./runtime-client.js";
 import type { DiscoveredAction } from "../workbook/types.js";
 
 // ============================================================================
@@ -17,6 +17,7 @@ import type { DiscoveredAction } from "../workbook/types.js";
 
 export interface ActionsContext {
   workbookDir: string;
+  runtimeUrl: string;
   // Cached discoveries (optional, for performance)
   actions?: DiscoveredAction[];
 }
@@ -54,18 +55,16 @@ export const actionsRouter = t.router({
   // Action Discovery
   // ==================
 
-  /** List all discovered actions */
+  /** List all actions */
   list: publicProcedure.query(async ({ ctx }) => {
-    const actionsDir = join(ctx.workbookDir, "actions");
-    const result = await discoverActions(actionsDir, ctx.workbookDir);
-    return result.items;
+    const actions = await fetchActionsFromRuntime(ctx.runtimeUrl);
+    return actions;
   }),
 
   /** Get a specific action by ID */
   get: publicProcedure.input(getActionInput).query(async ({ ctx, input }) => {
-    const actionsDir = join(ctx.workbookDir, "actions");
-    const result = await discoverActions(actionsDir, ctx.workbookDir);
-    const action = result.items.find((a) => a.id === input.id);
+    const actions = await fetchActionsFromRuntime(ctx.runtimeUrl);
+    const action = actions.find((a) => a.id === input.id);
 
     if (!action) {
       throw new TRPCError({
@@ -79,9 +78,8 @@ export const actionsRouter = t.router({
 
   /** Get action source code */
   source: publicProcedure.input(getActionInput).query(async ({ ctx, input }) => {
-    const actionsDir = join(ctx.workbookDir, "actions");
-    const result = await discoverActions(actionsDir, ctx.workbookDir);
-    const action = result.items.find((a) => a.id === input.id);
+    const actions = await fetchActionsFromRuntime(ctx.runtimeUrl);
+    const action = actions.find((a) => a.id === input.id);
 
     if (!action) {
       throw new TRPCError({
@@ -108,10 +106,8 @@ export const actionsRouter = t.router({
 
   /** Run an action manually */
   run: publicProcedure.input(runActionInput).mutation(async ({ ctx, input }) => {
-    // Discover action
-    const actionsDir = join(ctx.workbookDir, "actions");
-    const result = await discoverActions(actionsDir, ctx.workbookDir);
-    const action = result.items.find((a) => a.id === input.id);
+    const actions = await fetchActionsFromRuntime(ctx.runtimeUrl);
+    const action = actions.find((a) => a.id === input.id);
 
     if (!action) {
       throw new TRPCError({

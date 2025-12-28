@@ -395,63 +395,31 @@ function readEnvFile(workbookDir: string): Map<string, string> {
 
 /**
  * Discover a single action file.
- * Always returns an action if the file exists - errors are tracked as state.
+ *
+ * NOTE: This only lists files - it does NOT import them.
+ * Actual module loading happens through runtime's Vite pipeline.
+ * Full metadata (name, description, etc.) comes from runtime's /actions endpoint.
  */
-async function discoverAction(
+function discoverActionFile(
   actionPath: string,
   actionId: string,
-  secrets: Record<string, string>,
   rootPath: string
-): Promise<DiscoveredAction | null> {
+): DiscoveredAction | null {
   if (!existsSync(actionPath)) {
     return null;
   }
 
   const basePath = relative(rootPath, actionPath);
 
-  try {
-    const mod = await import(actionPath);
-    const definition = mod.default as ActionDefinition | undefined;
-
-    if (!definition?.name || !definition?.run) {
-      return {
-        id: actionId,
-        path: basePath,
-        valid: false,
-        error: "Invalid action: missing 'name' or 'run' export",
-      };
-    }
-
-    // Check for missing secrets
-    const missingSecrets = definition.secrets?.filter((secret) => !secrets[secret]);
-
-    return {
-      id: actionId,
-      path: basePath,
-      valid: true,
-      name: definition.name,
-      description: definition.description,
-      schedule: definition.schedule,
-      triggers: definition.triggers ?? ["manual"],
-      hasWebhook: definition.triggers?.includes("webhook") ?? false,
-      webhookPath: definition.webhookPath,
-      secrets: definition.secrets,
-      missingSecrets: missingSecrets?.length ? missingSecrets : undefined,
-      hasInput: !!definition.input,
-      hasSchema: !!definition.schema,
-      nextRun: undefined, // TODO: Calculate from cron schedule
-    };
-  } catch (err) {
-    const errorMessage = err instanceof Error ? err.message : String(err);
-    console.warn(`[actions] Failed to load action ${actionId}: ${errorMessage}`);
-
-    return {
-      id: actionId,
-      path: basePath,
-      valid: false,
-      error: errorMessage,
-    };
-  }
+  // Just return file info - don't import the module
+  // Runtime will load it through Vite for proper alias resolution
+  return {
+    id: actionId,
+    path: basePath,
+    valid: true, // Assume valid until runtime proves otherwise
+    name: actionId, // Placeholder - runtime provides real name
+    triggers: ["manual"], // Default - runtime provides real triggers
+  };
 }
 
 /**
@@ -461,19 +429,16 @@ async function discoverAction(
  * - actions/<name>.ts (single file actions)
  * - actions/<name>/action.ts (folder-based actions)
  */
-export async function discoverActions(
+export function discoverActions(
   actionsDir: string,
   rootPath: string
-): Promise<DiscoveryResult<DiscoveredAction>> {
+): DiscoveryResult<DiscoveredAction> {
   const items: DiscoveredAction[] = [];
   const errors: DiscoveryError[] = [];
 
   if (!existsSync(actionsDir)) {
     return { items, errors };
   }
-
-  const secretsMap = readEnvFile(rootPath);
-  const secrets = Object.fromEntries(secretsMap);
 
   const entries = readdirSync(actionsDir);
 
@@ -490,12 +455,12 @@ export async function discoverActions(
 
       if (stat.isDirectory()) {
         // Folder-based action: actions/<name>/action.ts
-        const action = await discoverAction(join(entryPath, "action.ts"), entry, secrets, rootPath);
+        const action = discoverActionFile(join(entryPath, "action.ts"), entry, rootPath);
         if (action) items.push(action);
       } else if (entry.endsWith(".ts") && !entry.endsWith(".d.ts")) {
         // Single file action: actions/<name>.ts
         const actionId = basename(entry, ".ts");
-        const action = await discoverAction(entryPath, actionId, secrets, rootPath);
+        const action = discoverActionFile(entryPath, actionId, rootPath);
         if (action) items.push(action);
       }
     } catch (err) {
@@ -520,15 +485,15 @@ export async function discoverActions(
 export async function discoverWorkbook(config: WorkbookConfig): Promise<WorkbookManifest> {
   const resolved = resolveConfig(config);
 
-  const [blocksResult, pagesResult, pluginsResult, componentsResult, actionsResult] = await Promise.all([
+  const [blocksResult, pagesResult, pluginsResult, componentsResult] = await Promise.all([
     discoverBlocks(resolved.pagesDir), // Blocks are in pages/blocks/
     discoverPages(resolved.pagesDir),
     discoverPlugins(resolved.pluginsDir),
     discoverComponents(resolved.uiDir),
-    discoverActions(resolved.actionsDir, resolved.rootPath),
   ]);
 
-  // Table discovery is sync (bun:sqlite is sync)
+  // Sync discoveries (no module imports)
+  const actionsResult = discoverActions(resolved.actionsDir, resolved.rootPath);
   const tablesResult = discoverTables(resolved.rootPath);
 
   return {

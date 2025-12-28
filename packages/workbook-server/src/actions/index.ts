@@ -2,11 +2,20 @@
  * Actions Module
  *
  * Exports all action-related functionality for the workbook-server.
- * Action execution is delegated to runtime via HTTP.
+ *
+ * Discovery Architecture:
+ * - Filesystem: discoverActions() lists action files (no module loading)
+ * - Runtime API: fetchActionsFromRuntime() gets full metadata via HTTP
+ *
+ * The runtime loads actions through Vite which handles TypeScript,
+ * alias resolution (@hands/db, etc.), and validation.
  */
 
-// Discovery (from unified workbook discovery)
+// Filesystem discovery (lists action files, no module loading)
 export { discoverActions } from "../workbook/discovery.js";
+
+// Runtime client (fetches metadata from runtime's /actions endpoint)
+export { fetchActionsFromRuntime, isRuntimeReady } from "./runtime-client.js";
 
 // Executor (HTTP - delegates to runtime)
 export {
