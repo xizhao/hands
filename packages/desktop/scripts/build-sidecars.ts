@@ -177,6 +177,17 @@ async function copyPolarsNativeModules(): Promise<void> {
   }
   cpSync(nativeDir, join(libDir, nativePkgName), { recursive: true });
   console.log(`  ✓ Copied ${nativePkgName}`);
+
+  // Sign the native binary for notarization (macOS only)
+  if (platform === "darwin") {
+    const nodeFile = join(libDir, nativePkgName, `nodejs-polars.darwin-${arch}.node`);
+    if (existsSync(nodeFile)) {
+      // Sign with Developer ID (uses APPLE_SIGNING_IDENTITY env var or defaults to ad-hoc)
+      const identity = process.env.APPLE_SIGNING_IDENTITY || "Developer ID Application";
+      await $`codesign --force --timestamp --options runtime --sign ${identity} ${nodeFile}`;
+      console.log(`  ✓ Signed ${nativePkgName} native binary`);
+    }
+  }
 }
 
 async function main(): Promise<void> {

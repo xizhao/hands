@@ -1139,6 +1139,7 @@ ${STDLIB_QUICK_REF}
   }, [messages.length, activeSessionId]);
 
   // Chat messages content
+  // Note: flex-col-reverse means idx 0 is the newest/last message
   const chatContent = (
     <div
       className={cn(
@@ -1151,6 +1152,7 @@ ${STDLIB_QUICK_REF}
           key={message.info.id || idx}
           message={message}
           compact
+          isStreaming={isBusy && idx === 0 && message.info.role === "assistant"}
         />
       ))}
       {waitingForResponse && (

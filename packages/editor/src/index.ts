@@ -20,8 +20,12 @@ export { type EditorMode } from "./ui/mode-toggle";
 // Diagnostics type (for code editor mode)
 export { type Diagnostic } from "./code-editor/types";
 
-// Preview Editor (read-only, for previewing content)
-export { PreviewEditor, type PreviewEditorProps } from "./PreviewEditor";
+// Preview Editor (read-only, with optional streaming support)
+export {
+  PreviewEditor,
+  type PreviewEditorProps,
+  type PreviewEditorHandle,
+} from "./PreviewEditor";
 
 // Re-export Frontmatter type from Editor (it's already in frontmatter.ts but nice to have at top level)
 export type { Frontmatter } from "./frontmatter";
