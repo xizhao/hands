@@ -53,7 +53,7 @@ export interface SessionError {
 
 // Module-level state
 let pendingAttachment: AnyPendingAttachment | null = null;
-let chatExpanded: boolean = false;
+let chatExpanded: boolean = false; // Default collapsed
 let autoSubmitPending: boolean = false;
 let chatBarHidden: boolean = false;
 let sessionError: SessionError | null = null;
@@ -76,7 +76,8 @@ function debouncedChatSync(fn: () => void, delay = 300) {
 /** Initialize chatExpanded from server state */
 export function initializeChatFromServer(serverChatExpanded: boolean) {
   if (chatStateInitialized) return;
-  chatExpanded = serverChatExpanded;
+  // Always start with chat collapsed, ignore server state
+  chatExpanded = false;
   chatStateInitialized = true;
   emitChange();
 }

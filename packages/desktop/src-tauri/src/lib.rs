@@ -22,6 +22,9 @@ pub mod jobs;
 pub mod window_manager;
 pub mod sidecar;
 pub mod floating_chat;
+pub mod stt;
+pub mod keyboard;
+pub mod sfx;
 
 use runtime_manager::RuntimeManager;
 use jobs::{JobRegistry, SessionEvent};
@@ -794,15 +797,14 @@ async fn handle_session_event(
     }
 }
 
-/// Start the hands-runtime for a workbook
-#[tauri::command]
-async fn start_workbook_server(
-    app: tauri::AppHandle,
-    state: tauri::State<'_, Arc<Mutex<AppState>>>,
-    workbook_id: String,
-    directory: String,
+/// Internal version of start_workbook_server for use from startup code
+pub async fn start_workbook_server_internal(
+    app: &tauri::AppHandle,
+    state: &Arc<Mutex<AppState>>,
+    workbook_id: &str,
+    directory: &str,
 ) -> Result<DevServerStatus, String> {
-    println!("[tauri] start_workbook_server: {} at {}", workbook_id, directory);
+    println!("[internal] start_workbook_server: {} at {}", workbook_id, directory);
 
     // Stop ALL existing runtimes first (they share port 55000)
     {
@@ -811,7 +813,7 @@ async fn start_workbook_server(
 
         for existing_id in existing_ids {
             if let Some(mut runtime) = state_guard.workbook_servers.remove(&existing_id) {
-                println!("[tauri] Stopping existing runtime: {}", existing_id);
+                println!("[internal] Stopping existing runtime: {}", existing_id);
                 // Try graceful shutdown
                 let stop_url = format!("http://localhost:{}/stop", runtime.runtime_port);
                 let _ = reqwest::Client::new()
@@ -833,16 +835,16 @@ async fn start_workbook_server(
     kill_processes_on_port(runtime_port_default);
     tokio::time::sleep(Duration::from_millis(300)).await;
 
-    let env_vars = get_api_keys_from_store(&app);
+    let env_vars = get_api_keys_from_store(app);
     let (child, runtime_port) =
-        spawn_workbook_server(&workbook_id, &directory, env_vars).await?;
+        spawn_workbook_server(workbook_id, directory, env_vars).await?;
 
     // Re-acquire lock and store
     let mut state_guard = state.lock().await;
-    state_guard.workbook_servers.insert(workbook_id.clone(), WorkbookServerProcess {
+    state_guard.workbook_servers.insert(workbook_id.to_string(), WorkbookServerProcess {
         child,
         runtime_port,
-        directory: directory.clone(),
+        directory: directory.to_string(),
         restart_count: 0,
     });
 
@@ -853,11 +855,22 @@ async fn start_workbook_server(
 
     Ok(DevServerStatus {
         running: true,
-        workbook_id,
-        directory,
+        workbook_id: workbook_id.to_string(),
+        directory: directory.to_string(),
         runtime_port,
         message: format!("Workbook server started on port {}", runtime_port),
     })
+}
+
+/// Start the hands-runtime for a workbook (Tauri command wrapper)
+#[tauri::command]
+async fn start_workbook_server(
+    app: tauri::AppHandle,
+    state: tauri::State<'_, Arc<Mutex<AppState>>>,
+    workbook_id: String,
+    directory: String,
+) -> Result<DevServerStatus, String> {
+    start_workbook_server_internal(&app, state.inner(), &workbook_id, &directory).await
 }
 
 /// Set the active workbook and restart OpenCode server with new database URL
@@ -883,8 +896,54 @@ async fn set_active_workbook(
         state_guard.active_workbook_id = Some(workbook_id.clone());
     }
 
+    // Emit event so floating chat can update its context
+    use tauri::Emitter;
+    let _ = app.emit("active-workbook-changed", serde_json::json!({
+        "workbook_id": workbook_id,
+        "workbook_dir": workbook_dir_str,
+    }));
+
     // Restart server to pick up new working directory and database URL
     restart_server_with_dir(app, state, workbook_id, workbook_dir_str).await
+}
+
+/// Internal version of set_active_workbook for use from tray.rs
+pub async fn set_active_workbook_internal(app: &tauri::AppHandle, workbook_id: &str) -> Result<(), String> {
+    use tauri::Manager;
+
+    // Get the workbook directory
+    let workbook_dir = get_workbook_dir(workbook_id)?;
+    let workbook_dir_str = workbook_dir.to_string_lossy().to_string();
+
+    if !workbook_dir.exists() {
+        return Err(format!("Workbook directory does not exist: {}", workbook_dir_str));
+    }
+
+    println!("Set active workbook to: {} (dir: {})", workbook_id, workbook_dir_str);
+
+    // Update state
+    {
+        let Some(state) = app.try_state::<Arc<Mutex<AppState>>>() else {
+            return Err("Failed to get app state".to_string());
+        };
+        let mut state_guard = state.lock().await;
+        state_guard.active_workbook_id = Some(workbook_id.to_string());
+    }
+
+    // Emit event so floating chat can update its context
+    use tauri::Emitter;
+    let _ = app.emit("active-workbook-changed", serde_json::json!({
+        "workbook_id": workbook_id,
+        "workbook_dir": workbook_dir_str,
+    }));
+
+    // Restart OpenCode server with new workbook directory
+    let Some(state) = app.try_state::<Arc<Mutex<AppState>>>() else {
+        return Err("Failed to get app state".to_string());
+    };
+    let _ = restart_server_with_dir(app.clone(), state, workbook_id.to_string(), workbook_dir_str).await?;
+
+    Ok(())
 }
 
 /// Stop the runtime for a workbook
@@ -1683,6 +1742,33 @@ async fn open_workbook_window(
     window_manager::open_workbook(&app, &state_arc, &workbook_id).await
 }
 
+/// Navigate to a route within a workbook window
+/// Opens/focuses the window and emits a navigation event
+#[tauri::command]
+async fn navigate_in_workbook(
+    app: tauri::AppHandle,
+    state: tauri::State<'_, Arc<Mutex<AppState>>>,
+    workbook_id: String,
+    route: String,
+) -> Result<(), String> {
+    use tauri::Emitter;
+
+    // Open/focus the workbook window
+    let state_arc = state.inner().clone();
+    let label = window_manager::open_workbook(&app, &state_arc, &workbook_id).await?;
+
+    // Small delay to ensure window is ready
+    tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
+
+    // Emit navigation event to that specific window
+    if let Some(window) = app.get_webview_window(&label) {
+        window.emit("navigate", &route)
+            .map_err(|e| format!("Failed to emit navigate event: {}", e))?;
+    }
+
+    Ok(())
+}
+
 /// Close a workbook window
 #[tauri::command]
 async fn close_workbook_window(
@@ -1866,6 +1952,7 @@ pub fn run() {
             pick_folder,
             // New commands for taskbar service
             open_workbook_window,
+            navigate_in_workbook,
             close_workbook_window,
             list_workbook_windows,
             has_active_jobs,
@@ -1877,9 +1964,19 @@ pub fn run() {
             capture::set_ignore_cursor_events,
             save_api_key_and_launch,
             floating_chat::open_floating_chat,
+            floating_chat::open_floating_chat_with_prompt,
             floating_chat::hide_floating_chat,
             floating_chat::show_floating_chat,
-            floating_chat::toggle_floating_chat
+            floating_chat::toggle_floating_chat,
+            floating_chat::expand_floating_chat,
+            floating_chat::collapse_floating_chat,
+            stt::stt_model_available,
+            stt::stt_model_path,
+            stt::stt_download_model,
+            stt::stt_start_recording,
+            stt::stt_stop_recording,
+            stt::stt_is_recording,
+            sfx::play_sfx
         ])
         .setup(|app| {
             let state = Arc::new(Mutex::new(AppState {
@@ -1902,6 +1999,9 @@ pub fn run() {
                 eprintln!("[hotkeys] Failed to register global shortcuts: {}", e);
             }
 
+            // Start global keyboard listener for Option key STT (using device_query polling)
+            keyboard::start_keyboard_listener(app.handle().clone());
+
             // Start runtime monitor for auto-restart
             start_workbook_server_monitor(state.clone(), app.handle().clone());
 
@@ -1913,17 +2013,44 @@ pub fn run() {
             let has_api_key = has_openrouter_api_key(app.handle());
 
             if has_api_key {
-                // API key exists - open floating chat (the primary UI)
+                // API key exists - start runtime and open floating chat
+                let startup_state = state.clone();
                 tauri::async_runtime::spawn(async move {
                     tokio::time::sleep(std::time::Duration::from_millis(100)).await;
 
-                    // Get first workbook directory for floating chat
+                    // Get first workbook
                     if let Ok(workbooks) = list_workbooks().await {
                         if let Some(workbook) = workbooks.first() {
+                            // 1. Start the workbook runtime (tRPC/Vite server)
+                            println!("[startup] Starting runtime for workbook: {}", workbook.id);
+                            if let Err(e) = start_workbook_server_internal(
+                                &startup_app,
+                                &startup_state,
+                                &workbook.id,
+                                &workbook.directory,
+                            ).await {
+                                eprintln!("[startup] Failed to start runtime: {}", e);
+                            }
+
+                            // 2. Set as active workbook (restarts OpenCode with workbook context)
+                            println!("[startup] Setting active workbook: {}", workbook.id);
+                            if let Err(e) = set_active_workbook_internal(&startup_app, &workbook.id).await {
+                                eprintln!("[startup] Failed to set active workbook: {}", e);
+                            }
+
+                            // 3. Update tray menu with workbook list
+                            if let Err(e) = tray::update_tray_menu(&startup_app).await {
+                                eprintln!("[startup] Failed to update tray menu: {}", e);
+                            }
+
+                            // 4. Open floating chat
                             let _ = floating_chat::open_floating_chat(
                                 startup_app,
                                 workbook.directory.clone()
                             ).await;
+
+                            // Play startup sound after windows are ready
+                            sfx::play("startup");
                         }
                     }
                 });

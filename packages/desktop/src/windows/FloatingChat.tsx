@@ -1,596 +1,1264 @@
 /**
- * FloatingChat - Persistent floating chat sidebar
+ * FloatingChat - Right-edge anchored chat drawer
  *
- * A standalone chat window that:
- * - Shows all threads with tab switching
- * - Can create new threads
- * - Always on top, draggable
- * - Works independently of main workbook window
+ * The drawer lives on the right edge of the screen.
+ * - Starts expanded showing the full chat interface
+ * - Can collapse to just show the Hands icon strip
+ * - Expands on hover, click, or Option key press
  */
 
+import { emit, listen } from "@tauri-apps/api/event";
 import { invoke } from "@tauri-apps/api/core";
-import { listen } from "@tauri-apps/api/event";
-import { getCurrentWindow } from "@tauri-apps/api/window";
+import { motion, AnimatePresence } from "framer-motion";
 import {
+  ArrowUp,
+  Book,
+  Camera,
+  Check,
   ChevronDown,
-  GripVertical,
+  ChevronLeft,
+  File,
+  FileUp,
+  Folder,
+  Hand,
+  Layers,
   Loader2,
-  Minus,
+  MessageSquare,
+  Mic,
+  Paperclip,
   Plus,
-  Send,
   Square,
+  Trash2,
   X,
 } from "lucide-react";
+import { ChatMessage } from "@/components/ChatMessage";
+import { ChatSettings } from "@/components/ChatSettings";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { ThinkingIndicator } from "@/components/ui/thinking-indicator";
+import {
+  TRPCProvider,
+  useActiveRuntime,
+  LinkNavigationProvider,
+  LinkClickHandler,
+  useWorkbooks,
+  useOpenWorkbook,
+  useCreateWorkbook,
+  type Workbook,
+} from "@hands/app";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { createOpencodeClient } from "@opencode-ai/sdk/client";
+import { useQueryClient } from "@tanstack/react-query";
+
+// Use shared api and hooks - same as workbook editor
+import { type Session } from "@/lib/api";
+import { startSSESync } from "@/lib/sse";
+import {
+  useMessages,
+  useSendMessage,
+  useSessions,
+  useSessionStatuses,
+  useCreateSession,
+  useDeleteSession,
+  useAbortSession,
+} from "@/hooks/useSession";
 
 // ============================================================================
-// Types
+// Status Dot Component
 // ============================================================================
 
-interface Message {
-  id: string;
-  sessionID: string;
-  role: "user" | "assistant";
-  time: { created: number; updated: number };
-}
-
-interface Part {
-  id: string;
-  type: string;
-  text?: string;
-  messageID: string;
-  sessionID: string;
-}
-
-interface MessageWithParts {
-  info: Message;
-  parts: Part[];
-}
-
-interface Session {
-  id: string;
-  title?: string;
-  parentID?: string;
-  time: { created: number; updated: number };
-}
-
-interface SessionStatus {
-  type: "idle" | "busy" | "running" | "waiting" | "retry";
+function StatusDot({ status }: { status: "busy" | "error" | null }) {
+  if (!status) return null;
+  if (status === "busy") {
+    return (
+      <span className="relative flex h-2 w-2">
+        <span className="animate-ping absolute h-full w-full rounded-full bg-emerald-400 opacity-75" />
+        <span className="relative rounded-full h-2 w-2 bg-emerald-500" />
+      </span>
+    );
+  }
+  return <span className="h-2 w-2 rounded-full bg-red-500" />;
 }
 
 // ============================================================================
-// API Client
-// ============================================================================
-
-const OPENCODE_PORT = 55300;
-
-function createClient(directory: string) {
-  return createOpencodeClient({
-    baseUrl: `http://localhost:${OPENCODE_PORT}`,
-    directory,
-  });
-}
-
-// ============================================================================
-// Component
+// Main Component
 // ============================================================================
 
 export function FloatingChat() {
   const [inputValue, setInputValue] = useState("");
   const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
-  const [showAllThreads, setShowAllThreads] = useState(false);
-  const messagesEndRef = useRef<HTMLDivElement>(null);
+  const [isExpanded, setIsExpanded] = useState(false); // Start collapsed
+  const [isDragging, setIsDragging] = useState(false);
+  const [showThreadsDropdown, setShowThreadsDropdown] = useState(false);
+  const [pendingFiles, setPendingFiles] = useState<string[]>([]);
+  const [isRecording, setIsRecording] = useState(false);
+  const [sttPreview, setSttPreview] = useState(""); // Real-time STT preview
+  const [sttDownloading, setSttDownloading] = useState(false);
+  const [sttDownloadProgress, setSttDownloadProgress] = useState(0); // 0-1
+  const scrollRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
+  const hasHandledDrop = useRef(false);
   const queryClient = useQueryClient();
+  const lastIgnoreState = useRef<boolean | null>(null);
 
-  // Parse workbook dir from query params
-  const workbookDir = useMemo(() => {
+  // Click-through for transparent background (only when expanded)
+  // When collapsed, we need all mouse events for hover-to-expand
+  // When expanded, pass clicks on transparent areas through to windows behind
+  useEffect(() => {
+    // When collapsed, always capture events (for hover detection)
+    if (!isExpanded) {
+      if (lastIgnoreState.current !== false) {
+        lastIgnoreState.current = false;
+        invoke("set_ignore_cursor_events", { ignore: false }).catch(() => {});
+      }
+      return;
+    }
+
+    // When expanded, enable click-through for transparent areas
+    const handleMouseMove = (e: MouseEvent) => {
+      const target = e.target as HTMLElement;
+
+      // Check if inside a data-interactive region
+      const isOverInteractive = target.closest("[data-interactive]") !== null;
+      const shouldIgnore = !isOverInteractive;
+
+      // Only update if state changed (avoid spamming Tauri)
+      if (lastIgnoreState.current !== shouldIgnore) {
+        lastIgnoreState.current = shouldIgnore;
+        invoke("set_ignore_cursor_events", { ignore: shouldIgnore }).catch(() => {});
+      }
+    };
+
+    // When mouse leaves window entirely, enable click-through
+    const handleMouseLeave = () => {
+      if (lastIgnoreState.current !== true) {
+        lastIgnoreState.current = true;
+        invoke("set_ignore_cursor_events", { ignore: true }).catch(() => {});
+      }
+    };
+
+    document.addEventListener("mousemove", handleMouseMove);
+    document.addEventListener("mouseleave", handleMouseLeave);
+    return () => {
+      document.removeEventListener("mousemove", handleMouseMove);
+      document.removeEventListener("mouseleave", handleMouseLeave);
+      // Reset to capture events
+      invoke("set_ignore_cursor_events", { ignore: false }).catch(() => {});
+    };
+  }, [isExpanded]);
+
+  // Expand/collapse handlers - call Rust backend to resize window
+  const handleExpand = useCallback(async () => {
+    if (isExpanded) return;
+    try {
+      await invoke("expand_floating_chat");
+      setIsExpanded(true);
+    } catch (err) {
+      console.error("[FloatingChat] Failed to expand:", err);
+    }
+  }, [isExpanded]);
+
+  // Collapse: animate content out first, then resize window after animation completes
+  const handleCollapse = useCallback(async () => {
+    if (!isExpanded) return;
+    // First trigger content animation out
+    setIsExpanded(false);
+    // Wait for animation to complete (matches duration-200)
+    await new Promise((resolve) => setTimeout(resolve, 250));
+    // Then resize window
+    try {
+      await invoke("collapse_floating_chat");
+    } catch (err) {
+      console.error("[FloatingChat] Failed to collapse:", err);
+    }
+  }, [isExpanded]);
+
+  // Listen for expand/collapse events from backend
+  useEffect(() => {
+    const unlisteners: (() => void)[] = [];
+
+    const setup = async () => {
+      unlisteners.push(
+        await listen("floating-chat-expanded", () => {
+          setIsExpanded(true);
+        })
+      );
+      unlisteners.push(
+        await listen("floating-chat-collapsed", () => {
+          setIsExpanded(false);
+        })
+      );
+    };
+
+    setup();
+    return () => {
+      unlisteners.forEach((fn) => fn());
+    };
+  }, []);
+
+  // Speech-to-text: Option key triggers recording via global keyboard listener
+  useEffect(() => {
+    const unlisteners: (() => void)[] = [];
+
+    const setup = async () => {
+      // Option pressed - expand and start recording
+      unlisteners.push(
+        await listen("option-key-pressed", async () => {
+          console.log("[FloatingChat] Option pressed - starting STT");
+          handleExpand();
+          setIsRecording(true);
+          setSttPreview(""); // Clear any previous preview
+          try {
+            await invoke("stt_start_recording");
+          } catch (err: unknown) {
+            console.error("[FloatingChat] Failed to start recording:", err);
+            setIsRecording(false);
+            // Auto-download model in background if missing
+            const errMsg = String(err).toLowerCase();
+            if (errMsg.includes("model") || errMsg.includes("missing") || errMsg.includes("download") || errMsg.includes("tokenizer") || errMsg.includes("load") || errMsg.includes("failed")) {
+              console.log("[FloatingChat] Model missing - auto-downloading in background");
+              setSttDownloading(true);
+              invoke("stt_download_model")
+                .then(() => {
+                  console.log("[FloatingChat] STT model downloaded successfully");
+                  setSttDownloading(false);
+                })
+                .catch((downloadErr) => {
+                  console.error("[FloatingChat] Failed to download STT model:", downloadErr);
+                  setSttDownloading(false);
+                });
+            }
+          }
+        })
+      );
+
+      // Real-time STT partial transcription
+      unlisteners.push(
+        await listen<string>("stt:partial", (event) => {
+          setSttPreview(event.payload);
+        })
+      );
+
+      // STT download progress
+      unlisteners.push(
+        await listen<number>("stt:download-progress", (event) => {
+          setSttDownloadProgress(event.payload);
+          if (event.payload >= 1) {
+            // Download complete, reset after a moment
+            setTimeout(() => {
+              setSttDownloading(false);
+              setSttDownloadProgress(0);
+            }, 500);
+          }
+        })
+      );
+
+      // Option released - stop recording and get transcription
+      unlisteners.push(
+        await listen("option-key-released", async () => {
+          console.log("[FloatingChat] Option released - stopping STT");
+          setIsRecording(false);
+          setSttPreview(""); // Clear preview
+          try {
+            const text = await invoke<string>("stt_stop_recording");
+            console.log("[FloatingChat] STT result:", text || "(empty)");
+            if (text) {
+              setInputValue((prev) => prev + (prev ? " " : "") + text);
+              inputRef.current?.focus();
+            }
+          } catch (err) {
+            console.error("[FloatingChat] Failed to stop recording:", err);
+          }
+        })
+      );
+
+      // Option tapped quickly - just expand and focus input
+      unlisteners.push(
+        await listen("option-key-tapped", () => {
+          console.log("[FloatingChat] Option tapped - expanding + focusing input");
+          handleExpand();
+          setTimeout(() => inputRef.current?.focus(), 100);
+        })
+      );
+
+      // Option+Space - toggle expand/collapse
+      unlisteners.push(
+        await listen("option-space-pressed", async () => {
+          console.log("[FloatingChat] Option+Space - toggle expand/collapse");
+          if (isExpanded) {
+            handleCollapse();
+          } else {
+            handleExpand();
+            setTimeout(() => inputRef.current?.focus(), 100);
+          }
+        })
+      );
+    };
+
+    setup();
+    return () => {
+      unlisteners.forEach((fn) => fn());
+    };
+  }, [handleExpand, handleCollapse, isExpanded]);
+
+  // Add transparent-overlay class for window transparency
+  // Note: dark/light class is handled by initTheme() in overlay.tsx
+  useEffect(() => {
+    document.documentElement.classList.add("transparent-overlay");
+    return () => {
+      document.documentElement.classList.remove("transparent-overlay");
+    };
+  }, []);
+
+  // Signal to Rust that we're ready (shows window, avoids black flash)
+  useEffect(() => {
+    emit("floating-chat-ready");
+  }, []);
+
+  // Workbook directory - starts from URL params, updates on active workbook change
+  const [workbookDir, setWorkbookDir] = useState(() => {
     const params = new URLSearchParams(window.location.search);
-    return params.get("workbook-dir") || "";
-  }, []);
+    const dir = params.get("workbook-dir") || "";
+    console.log("[FloatingChat] Initial workbookDir:", dir);
+    return dir;
+  });
 
-  // Create API client
-  const client = useMemo(
-    () => (workbookDir ? createClient(workbookDir) : null),
-    [workbookDir]
-  );
-
-  // Add dark mode class
+  // Listen for active workbook changes - invalidate caches to refetch from new workbook
   useEffect(() => {
-    document.documentElement.classList.add("dark");
-    return () => document.documentElement.classList.remove("dark");
-  }, []);
-
-  // Focus input on mount and when switching sessions
-  useEffect(() => {
-    inputRef.current?.focus();
-  }, [activeSessionId]);
-
-  // Listen for workbook to request focus on a session
-  useEffect(() => {
-    const unlisten = listen<{ sessionId: string }>(
-      "floating-chat-focus-session",
+    const unlisten = listen<{ workbook_id: string; workbook_dir: string }>(
+      "active-workbook-changed",
       (event) => {
-        setActiveSessionId(event.payload.sessionId);
+        console.log("[FloatingChat] Active workbook changed:", event.payload);
+        const newDir = event.payload.workbook_dir;
+        if (newDir && newDir !== workbookDir) {
+          setWorkbookDir(newDir);
+          setActiveSessionId(null); // Clear active session when switching workbooks
+          // Invalidate runtime cache so it re-fetches from Tauri
+          queryClient.invalidateQueries({ queryKey: ["active-runtime"] });
+          // Invalidate all session-related queries to refetch from new workbook
+          queryClient.invalidateQueries({ queryKey: ["sessions"] });
+          queryClient.invalidateQueries({ queryKey: ["messages"] });
+          queryClient.invalidateQueries({ queryKey: ["session-statuses"] });
+        }
       }
     );
     return () => {
       unlisten.then((fn) => fn());
     };
+  }, [workbookDir, queryClient]);
+
+  // Focus input on mount
+  useEffect(() => {
+    setTimeout(() => inputRef.current?.focus(), 200);
   }, []);
 
-  // ========== Queries ==========
+  // SSE subscription using shared startSSESync (same as workbook editor)
+  useEffect(() => {
+    if (!workbookDir) return;
+    console.log("[FloatingChat] Starting SSE sync for:", workbookDir);
+    const cleanup = startSSESync(queryClient);
+    return cleanup;
+  }, [workbookDir, queryClient]);
 
-  // Fetch all sessions
-  const sessionsQuery = useQuery({
-    queryKey: ["floating-sessions", workbookDir],
-    queryFn: async () => {
-      if (!client) return [];
-      const result = await client.session.list();
-      return (result.data as Session[]) || [];
-    },
-    enabled: !!client,
-    refetchInterval: 3000,
-  });
+  // Drag & Drop for files
+  useEffect(() => {
+    const unlisteners: (() => void)[] = [];
+    const setupListeners = async () => {
+      const unlistenDrop = await listen<{ paths: string[] }>("tauri://drag-drop", async (event) => {
+        if (hasHandledDrop.current) return;
+        hasHandledDrop.current = true;
+        setTimeout(() => { hasHandledDrop.current = false; }, 500);
+        if (event.payload.paths.length === 0) return;
+        setIsDragging(false);
+        setPendingFiles(event.payload.paths);
+        handleExpand();
+      });
+      unlisteners.push(unlistenDrop);
+      unlisteners.push(await listen("tauri://drag-enter", () => setIsDragging(true)));
+      unlisteners.push(await listen("tauri://drag-leave", () => setIsDragging(false)));
+    };
+    setupListeners();
+    return () => { unlisteners.forEach((fn) => fn()); };
+  }, [handleExpand]);
 
-  // Filter to foreground sessions (no parentID)
+  // Listen for external session focus
+  useEffect(() => {
+    const unlisten = listen<{ sessionId: string }>("floating-chat-focus-session", (event) => {
+      setActiveSessionId(event.payload.sessionId);
+      handleExpand();
+    });
+    return () => { unlisten.then((fn) => fn()); };
+  }, [handleExpand]);
+
+  // Use shared hooks - same as workbook editor (UnifiedSidebar)
+  const { data: allSessions = [] } = useSessions();
+  const { data: messages = [] } = useMessages(activeSessionId);
+  const { data: sessionStatuses = {} } = useSessionStatuses();
+
   const sessions = useMemo(() => {
-    return (sessionsQuery.data || [])
+    return allSessions
       .filter((s) => !s.parentID && s.title)
       .sort((a, b) => b.time.updated - a.time.updated);
-  }, [sessionsQuery.data]);
+  }, [allSessions]);
 
-  // Fetch messages for active session
-  const messagesQuery = useQuery({
-    queryKey: ["floating-messages", activeSessionId, workbookDir],
-    queryFn: async () => {
-      if (!client || !activeSessionId) return [];
-      const result = await client.session.messages({
-        path: { id: activeSessionId },
-      });
-      return result.data as MessageWithParts[];
-    },
-    enabled: !!client && !!activeSessionId,
-    refetchInterval: 1500,
-  });
-
-  // Fetch session statuses
-  const statusQuery = useQuery({
-    queryKey: ["floating-status", workbookDir],
-    queryFn: async () => {
-      if (!client) return {};
-      const result = await client.session.status();
-      return result.data as Record<string, SessionStatus>;
-    },
-    enabled: !!client,
-    refetchInterval: 1000,
-  });
-
-  const activeStatus = activeSessionId
-    ? statusQuery.data?.[activeSessionId]
-    : null;
-  const isBusy =
-    activeStatus?.type === "busy" || activeStatus?.type === "running";
-
-  // Check if any session is busy
-  const anyBusy = useMemo(() => {
-    const statuses = statusQuery.data || {};
-    return Object.values(statuses).some(
-      (s) => s.type === "busy" || s.type === "running"
-    );
-  }, [statusQuery.data]);
-
-  // ========== Mutations ==========
-
-  const createSession = useMutation({
-    mutationFn: async () => {
-      if (!client) throw new Error("No client");
-      const result = await client.session.create({});
-      return result.data as Session;
-    },
-    onSuccess: (newSession) => {
-      setActiveSessionId(newSession.id);
-      queryClient.invalidateQueries({
-        queryKey: ["floating-sessions", workbookDir],
-      });
-    },
-  });
-
-  const sendMessage = useMutation({
-    mutationFn: async ({
-      sessionId,
-      content,
-    }: {
-      sessionId: string;
-      content: string;
-    }) => {
-      if (!client) throw new Error("No client");
-      return client.session.promptAsync({
-        path: { id: sessionId },
-        body: {
-          parts: [{ type: "text", text: content }],
-        },
-      });
-    },
-    onMutate: async ({ sessionId, content }) => {
-      const now = Date.now();
-      const optimisticMessage: MessageWithParts = {
-        info: {
-          id: `optimistic-${now}`,
-          sessionID: sessionId,
-          role: "user",
-          time: { created: now, updated: now },
-        },
-        parts: [
-          {
-            id: `optimistic-part-${now}`,
-            type: "text",
-            text: content,
-            messageID: `optimistic-${now}`,
-            sessionID: sessionId,
-          },
-        ],
-      };
-
-      queryClient.setQueryData<MessageWithParts[]>(
-        ["floating-messages", sessionId, workbookDir],
-        (old) => [...(old ?? []), optimisticMessage]
-      );
-    },
-    onSettled: (_, __, { sessionId }) => {
-      queryClient.invalidateQueries({
-        queryKey: ["floating-messages", sessionId, workbookDir],
-      });
-    },
-  });
-
-  const abortSession = useMutation({
-    mutationFn: async (sessionId: string) => {
-      if (!client) throw new Error("No client");
-      return client.session.abort({ path: { id: sessionId } });
-    },
-  });
-
-  const deleteSession = useMutation({
-    mutationFn: async (sessionId: string) => {
-      if (!client) throw new Error("No client");
-      return client.session.delete({ path: { id: sessionId } });
-    },
-    onSuccess: (_, deletedId) => {
-      if (activeSessionId === deletedId) {
-        setActiveSessionId(null);
-      }
-      queryClient.invalidateQueries({
-        queryKey: ["floating-sessions", workbookDir],
-      });
-    },
-  });
-
-  // ========== Handlers ==========
-
-  const handleMinimize = useCallback(async () => {
-    try {
-      const win = getCurrentWindow();
-      await win.minimize();
-    } catch (err) {
-      console.error("Failed to minimize:", err);
-    }
-  }, []);
-
-  const handleClose = useCallback(async () => {
-    try {
-      const win = getCurrentWindow();
-      await win.hide();
-    } catch (err) {
-      console.error("Failed to hide:", err);
-    }
-  }, []);
-
-  const handleDragStart = async (e: React.MouseEvent) => {
-    e.preventDefault();
-    try {
-      const win = getCurrentWindow();
-      await win.startDragging();
-    } catch (err) {
-      console.error("Failed to start dragging:", err);
-    }
+  const getSessionStatus = (sessionId: string): "busy" | "error" | null => {
+    const status = sessionStatuses[sessionId];
+    if (status?.type === "busy" || status?.type === "running") return "busy";
+    return null;
   };
 
-  const handleSend = useCallback(() => {
-    const content = inputValue.trim();
-    if (!content || isBusy) return;
+  const activeStatus = activeSessionId ? sessionStatuses[activeSessionId] : null;
+  const isBusy = activeStatus?.type === "busy" || activeStatus?.type === "running";
 
-    if (!activeSessionId) {
-      // Create new session and send
-      createSession.mutate(undefined, {
+  // Use shared mutation hooks - same as workbook editor (UnifiedSidebar)
+  const createSessionMutation = useCreateSession();
+  const sendMessageMutation = useSendMessage();
+  const abortSessionMutation = useAbortSession(activeSessionId);
+  const deleteSessionMutation = useDeleteSession();
+
+  // Workbook management
+  const { data: workbooks = [] } = useWorkbooks();
+  const openWorkbook = useOpenWorkbook();
+  const createWorkbook = useCreateWorkbook();
+  const currentWorkbook = workbooks.find((w) => w.directory === workbookDir);
+
+  const handleSwitchWorkbook = useCallback(
+    (workbook: Workbook) => {
+      if (!workbook.directory) {
+        console.log("[FloatingChat] No directory for workbook:", workbook);
+        return;
+      }
+      console.log("[FloatingChat] Switching to workbook:", workbook.name, workbook.directory);
+
+      // Update local state immediately
+      setWorkbookDir(workbook.directory);
+      setActiveSessionId(null);
+
+      // Emit event so other windows know
+      emit("active-workbook-changed", {
+        workbook_id: workbook.id,
+        workbook_dir: workbook.directory,
+      });
+
+      // Invalidate queries to refetch for new workbook
+      queryClient.invalidateQueries({ queryKey: ["sessions"] });
+      queryClient.invalidateQueries({ queryKey: ["messages"] });
+      queryClient.invalidateQueries({ queryKey: ["session-statuses"] });
+      queryClient.invalidateQueries({ queryKey: ["active-runtime"] });
+
+      // Also trigger runtime to open this workbook
+      openWorkbook.mutate(workbook);
+    },
+    [openWorkbook, queryClient]
+  );
+
+  const handleCreateWorkbook = useCallback(() => {
+    createWorkbook.mutate(
+      { name: "Untitled Workbook" },
+      {
+        onSuccess: (newWorkbook) => {
+          handleSwitchWorkbook(newWorkbook);
+        },
+      }
+    );
+  }, [createWorkbook, handleSwitchWorkbook]);
+
+  // Listen for prompts forwarded from workbook sidebar
+  useEffect(() => {
+    const unlisten = listen<string>("floating-chat-prompt", (event) => {
+      const prompt = event.payload;
+      console.log("[FloatingChat] Received prompt:", prompt);
+
+      // Create a new session and send the prompt
+      createSessionMutation.mutate(undefined, {
         onSuccess: (newSession) => {
-          sendMessage.mutate({ sessionId: newSession.id, content });
+          setActiveSessionId(newSession.id);
+          handleExpand();
+          sendMessageMutation.mutate({ sessionId: newSession.id, content: prompt });
+        },
+      });
+    });
+
+    return () => {
+      unlisten.then((fn) => fn());
+    };
+  }, [createSessionMutation, sendMessageMutation, handleExpand]);
+
+  // Wrapper for createSession to also expand and set active
+  const handleCreateSession = useCallback(() => {
+    createSessionMutation.mutate(undefined, {
+      onSuccess: (newSession) => {
+        setActiveSessionId(newSession.id);
+        handleExpand();
+      },
+    });
+  }, [createSessionMutation, handleExpand]);
+
+  // Track hover and focus state with refs (avoids stale closure issues)
+  const isHoveringRef = useRef(false);
+  const isInputFocusedRef = useRef(false);
+  const collapseTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Unified collapse check - only collapse if not hovering AND not focused
+  const maybeCollapse = useCallback(() => {
+    // Clear any pending collapse
+    if (collapseTimeoutRef.current) {
+      clearTimeout(collapseTimeoutRef.current);
+    }
+    // Delay collapse slightly to handle rapid state changes
+    collapseTimeoutRef.current = setTimeout(() => {
+      if (!isHoveringRef.current && !isInputFocusedRef.current) {
+        handleCollapse();
+      }
+    }, 100);
+  }, [handleCollapse]);
+
+  // Hover handlers
+  const handleMouseEnter = useCallback(() => {
+    isHoveringRef.current = true;
+    if (collapseTimeoutRef.current) {
+      clearTimeout(collapseTimeoutRef.current);
+    }
+    if (!isExpanded) {
+      handleExpand();
+    }
+  }, [isExpanded, handleExpand]);
+
+  const handleMouseLeave = useCallback(() => {
+    isHoveringRef.current = false;
+    maybeCollapse();
+  }, [maybeCollapse]);
+
+  // Input focus handlers
+  const handleInputFocus = useCallback(() => {
+    isInputFocusedRef.current = true;
+    if (collapseTimeoutRef.current) {
+      clearTimeout(collapseTimeoutRef.current);
+    }
+    if (!isExpanded) {
+      handleExpand();
+    }
+  }, [isExpanded, handleExpand]);
+
+  const handleInputBlur = useCallback(() => {
+    isInputFocusedRef.current = false;
+    maybeCollapse();
+  }, [maybeCollapse]);
+
+  // Attachment handlers
+  const handleSnapshot = useCallback(async () => {
+    try {
+      await invoke("start_capture");
+    } catch (err) {
+      console.error("[FloatingChat] Failed to start capture:", err);
+    }
+  }, []);
+
+  const handlePickFile = useCallback(async () => {
+    try {
+      const path = await invoke<string | null>("pick_file");
+      if (path) {
+        setPendingFiles((prev) => [...prev, path]);
+      }
+    } catch (err) {
+      console.error("[FloatingChat] Failed to pick file:", err);
+    }
+  }, []);
+
+  const handlePickFolder = useCallback(async () => {
+    try {
+      const path = await invoke<string | null>("pick_folder");
+      if (path) {
+        setPendingFiles((prev) => [...prev, path]);
+      }
+    } catch (err) {
+      console.error("[FloatingChat] Failed to pick folder:", err);
+    }
+  }, []);
+
+  // Message handlers
+  const handleSend = useCallback(() => {
+    console.log("[FloatingChat] handleSend called, inputValue:", inputValue, "activeSessionId:", activeSessionId);
+    let content = inputValue.trim();
+    if (!content && pendingFiles.length === 0) {
+      console.log("[FloatingChat] No content, returning");
+      return;
+    }
+    if (isBusy) {
+      console.log("[FloatingChat] Busy, returning");
+      return;
+    }
+    if (pendingFiles.length > 0) {
+      const filePrompt = `@import ${pendingFiles.join(" ")}`;
+      content = content ? `${content}\n\n${filePrompt}` : filePrompt;
+      setPendingFiles([]);
+    }
+    if (!content) return;
+    if (!activeSessionId) {
+      createSessionMutation.mutate(undefined, {
+        onSuccess: (newSession) => {
+          setActiveSessionId(newSession.id);
+          sendMessageMutation.mutate({ sessionId: newSession.id, content });
         },
       });
     } else {
-      sendMessage.mutate({ sessionId: activeSessionId, content });
+      sendMessageMutation.mutate({ sessionId: activeSessionId, content });
     }
     setInputValue("");
-  }, [inputValue, isBusy, activeSessionId, createSession, sendMessage]);
+    // Reset textarea height
+    if (inputRef.current) {
+      inputRef.current.style.height = "auto";
+    }
+  }, [inputValue, pendingFiles, isBusy, activeSessionId, createSessionMutation, sendMessageMutation]);
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === "Enter" && !e.shiftKey) {
-      e.preventDefault();
-      handleSend();
+    if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); handleSend(); }
+    if (e.key === "Escape") {
+      if (pendingFiles.length > 0) setPendingFiles([]);
+      else if (isExpanded) handleCollapse();
     }
   };
 
+  // Auto-resize textarea as content grows
+  const handleInputChange = useCallback((e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    setInputValue(e.target.value);
+    // Reset height to auto to get the correct scrollHeight
+    e.target.style.height = "auto";
+    // Set height to scrollHeight, capped at max
+    const maxHeight = 120; // ~5 lines
+    e.target.style.height = `${Math.min(e.target.scrollHeight, maxHeight)}px`;
+  }, []);
+
   const handleAbort = useCallback(() => {
-    if (activeSessionId) {
-      abortSession.mutate(activeSessionId);
-    }
-  }, [activeSessionId, abortSession]);
+    if (activeSessionId) abortSessionMutation.mutate();
+  }, [activeSessionId, abortSessionMutation]);
 
-  // Scroll to top on new messages (with flex-col-reverse, top is newest)
+
+  // Scroll to bottom when new messages arrive
   useEffect(() => {
-    if (messagesEndRef.current) {
-      messagesEndRef.current.scrollTo({ top: 0, behavior: "smooth" });
+    if (scrollRef.current) {
+      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
     }
-  }, [messagesQuery.data]);
+  }, [messages, isExpanded]);
 
-  const messages = messagesQuery.data ?? [];
   const activeSession = sessions.find((s) => s.id === activeSessionId);
 
-  // Get visible threads (first 3 + active if not in first 3)
-  const visibleThreads = useMemo(() => {
-    const first3 = sessions.slice(0, 3);
-    if (activeSessionId && !first3.find((s) => s.id === activeSessionId)) {
-      const active = sessions.find((s) => s.id === activeSessionId);
-      if (active) return [...first3.slice(0, 2), active];
-    }
-    return first3;
-  }, [sessions, activeSessionId]);
+  // Separate foreground and background sessions
+  const foregroundSessions = sessions.filter((s) => {
+    const sp = s as Session & { parentID?: string };
+    return s.title && !sp.parentID;
+  });
+  const backgroundSessions = sessions.filter(
+    (s) => (s as Session & { parentID?: string }).parentID
+  );
 
-  const hasMoreThreads = sessions.length > 3;
+  // Check if any session is busy (for collapsed indicator)
+  const hasActiveSessions = sessions.some((s) => getSessionStatus(s.id) === "busy");
 
-  return (
-    <div className="h-screen w-screen flex flex-col bg-transparent">
-      <div className="flex flex-col h-full bg-card/95 backdrop-blur-md rounded-xl shadow-2xl border border-border/50 overflow-hidden">
-        {/* Header - draggable with grip on left */}
-        <div
-          className="flex items-center gap-1.5 px-2 py-1.5 border-b border-border/50 bg-muted/30"
-          onMouseDown={handleDragStart}
-        >
-          {/* Drag handle on left */}
-          <div className="flex items-center cursor-grab active:cursor-grabbing shrink-0">
-            <GripVertical className="h-4 w-4 text-muted-foreground/50" />
-          </div>
+  // Get runtime port for tRPC (enables live query charts in ChatMessage)
+  const { data: runtime } = useActiveRuntime();
+  const runtimePort = runtime?.runtime_port ?? null;
 
-          {/* Thread tabs */}
-          <div className="flex items-center gap-0.5 flex-1 min-w-0 overflow-hidden">
-            {visibleThreads.map((session) => {
-              const isActive = session.id === activeSessionId;
-              const status = statusQuery.data?.[session.id];
-              const sessionBusy =
-                status?.type === "busy" || status?.type === "running";
+  const content = (
+    <div
+      className={`h-screen w-screen flex flex-col pr-3 pt-3 pb-20 gap-2 relative ${isExpanded ? "pl-3" : "pl-0"} ${isDragging ? "bg-blue-500/10" : ""}`}
+      onMouseEnter={handleMouseEnter}
+      onMouseLeave={handleMouseLeave}
+    >
+      {/* Drop overlay */}
+      <AnimatePresence>
+        {isDragging && (
+          <motion.div
+            data-interactive
+            initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+            className="absolute inset-0 border-2 border-dashed border-blue-500 bg-blue-500/10 backdrop-blur-sm flex items-center justify-center z-50"
+          >
+            <div className="flex flex-col items-center gap-2 text-blue-400">
+              <FileUp className="h-8 w-8" />
+              <span className="text-sm font-medium">Drop files to import</span>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
-              return (
-                <button
-                  key={session.id}
-                  onClick={() => setActiveSessionId(session.id)}
-                  onMouseDown={(e) => e.stopPropagation()}
-                  className={`group flex items-center gap-1 px-2 py-1 text-xs rounded-md transition-all max-w-[100px] ${
-                    isActive
-                      ? "bg-background text-foreground shadow-sm"
-                      : "text-muted-foreground hover:text-foreground hover:bg-muted/50"
-                  }`}
-                >
-                  {sessionBusy && (
-                    <span className="relative flex h-1.5 w-1.5 shrink-0">
-                      <span className="animate-ping absolute h-full w-full rounded-full bg-green-400 opacity-75" />
-                      <span className="relative rounded-full h-1.5 w-1.5 bg-green-500" />
-                    </span>
-                  )}
-                  <span className="truncate">{session.title || "Chat"}</span>
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      deleteSession.mutate(session.id);
-                    }}
-                    className="p-0.5 rounded opacity-0 group-hover:opacity-60 hover:!opacity-100 hover:bg-accent shrink-0"
+      {/* Content area - changes based on whether we're in a thread */}
+      <AnimatePresence mode="wait">
+        {isExpanded && activeSessionId && messages.length > 0 ? (
+          /* IN A THREAD: Show messages */
+          <motion.div
+            key="messages"
+            data-interactive
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: 20 }}
+            ref={scrollRef}
+            className="flex-1 overflow-y-auto min-h-0 flex flex-col"
+          >
+            <LinkClickHandler className="flex flex-col gap-3 mt-auto">
+              {messages.map((msg) => (
+                <ChatMessage key={msg.info.id} message={msg} compact tailDown />
+              ))}
+              <AnimatePresence>
+                {isBusy && messages[messages.length - 1]?.info.role === "user" && (
+                  <motion.div
+                    initial={{ opacity: 0, y: 10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: 10 }}
+                    className="rounded-2xl rounded-bl-sm bg-zinc-800 shadow-sm px-2.5 py-1.5 w-fit"
                   >
-                    <X className="h-2.5 w-2.5" />
-                  </button>
-                </button>
-              );
-            })}
-
-            {/* More threads dropdown */}
-            {hasMoreThreads && (
-              <div className="relative">
-                <button
-                  onClick={() => setShowAllThreads(!showAllThreads)}
-                  onMouseDown={(e) => e.stopPropagation()}
-                  className="flex items-center gap-0.5 px-1.5 py-1 text-xs text-muted-foreground hover:text-foreground rounded-md hover:bg-muted/50"
-                >
-                  {anyBusy && (
-                    <span className="relative flex h-1.5 w-1.5">
-                      <span className="animate-ping absolute h-full w-full rounded-full bg-green-400 opacity-75" />
-                      <span className="relative rounded-full h-1.5 w-1.5 bg-green-500" />
-                    </span>
-                  )}
-                  <span>+{sessions.length - 3}</span>
-                  <ChevronDown className="h-3 w-3" />
-                </button>
-
-                {showAllThreads && (
-                  <div className="absolute top-full left-0 mt-1 bg-popover border border-border rounded-lg shadow-lg z-50 min-w-[150px] py-1">
-                    {sessions.slice(3).map((session) => (
+                    <ThinkingIndicator />
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </LinkClickHandler>
+          </motion.div>
+        ) : isExpanded ? (
+          /* NOT IN A THREAD: Show thread chips + dropdown */
+          <motion.div
+            key="toc"
+            data-interactive
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: 20 }}
+            className="flex-1 flex flex-col justify-end min-h-0"
+          >
+            {/* Empty state */}
+            {foregroundSessions.length === 0 && backgroundSessions.length === 0 ? (
+              <div className="flex-1 flex flex-col items-center justify-center px-1 py-8">
+                <MessageSquare className="h-8 w-8 text-zinc-700 mb-2" />
+                <p className="text-xs text-zinc-500">No threads yet</p>
+                <p className="text-[10px] text-zinc-600 mt-1">Start typing to create one</p>
+              </div>
+            ) : (
+              /* Thread list - vertically stacked, compact pills */
+              <div className="flex flex-col gap-1 mt-auto items-start">
+                {foregroundSessions.slice(0, 6).map((session) => {
+                  const status = getSessionStatus(session.id);
+                  return (
+                    <div
+                      key={session.id}
+                      className="group flex items-center gap-1.5 pl-2.5 pr-1.5 py-1.5 text-xs rounded-lg bg-zinc-800/80 hover:bg-zinc-700 text-zinc-300 hover:text-zinc-100 border border-zinc-700/50 transition-all"
+                    >
+                      <StatusDot status={status} />
                       <button
-                        key={session.id}
-                        onClick={() => {
-                          setActiveSessionId(session.id);
-                          setShowAllThreads(false);
-                        }}
-                        className="w-full text-left px-3 py-1.5 text-xs hover:bg-accent truncate"
+                        onClick={() => setActiveSessionId(session.id)}
+                        className="max-w-[140px] truncate hover:text-white transition-colors"
                       >
-                        {session.title || "Chat"}
+                        {session.title || "Untitled"}
                       </button>
-                    ))}
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          deleteSessionMutation.mutate(session.id);
+                        }}
+                        className="p-0.5 rounded hover:bg-zinc-600 text-zinc-500 hover:text-zinc-300 opacity-0 group-hover:opacity-100 transition-all"
+                      >
+                        <X className="h-3 w-3" />
+                      </button>
+                    </div>
+                  );
+                })}
+
+                {/* Overflow + Background row */}
+                {(foregroundSessions.length > 6 || backgroundSessions.length > 0) && (
+                  <div className="flex items-center gap-2 mt-1">
+                    {/* Overflow dropdown */}
+                    {foregroundSessions.length > 6 && (
+                      <div className="relative">
+                        <button
+                          onClick={() => setShowThreadsDropdown(!showThreadsDropdown)}
+                          className="flex items-center gap-1.5 px-2.5 h-7 text-xs text-zinc-400 hover:text-zinc-200 bg-zinc-800 hover:bg-zinc-700 border border-zinc-700/50 rounded-lg transition-colors"
+                        >
+                          <span>+{foregroundSessions.length - 6} more</span>
+                          <ChevronDown className="h-3 w-3" />
+                        </button>
+
+                        <AnimatePresence>
+                          {showThreadsDropdown && (
+                            <motion.div
+                              initial={{ opacity: 0, y: 5 }}
+                              animate={{ opacity: 1, y: 0 }}
+                              exit={{ opacity: 0, y: 5 }}
+                              className="absolute bottom-full left-0 mb-1 bg-zinc-800 border border-zinc-700 rounded-lg shadow-xl z-50 min-w-[220px] py-1 max-h-[300px] overflow-y-auto"
+                            >
+                              {foregroundSessions.slice(6).map((session) => (
+                                <div
+                                  key={session.id}
+                                  className="group w-full flex items-center gap-2 px-3 py-1.5 text-xs text-zinc-300 hover:bg-zinc-700 transition-colors"
+                                >
+                                  <StatusDot status={getSessionStatus(session.id)} />
+                                  <button
+                                    onClick={() => {
+                                      setActiveSessionId(session.id);
+                                      setShowThreadsDropdown(false);
+                                    }}
+                                    className="truncate flex-1 text-left hover:text-white"
+                                  >
+                                    {session.title || "Untitled"}
+                                  </button>
+                                  <button
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      deleteSessionMutation.mutate(session.id);
+                                    }}
+                                    className="p-0.5 rounded hover:bg-zinc-600 text-zinc-500 hover:text-zinc-300 opacity-0 group-hover:opacity-100 transition-all"
+                                  >
+                                    <X className="h-3 w-3" />
+                                  </button>
+                                </div>
+                              ))}
+                            </motion.div>
+                          )}
+                        </AnimatePresence>
+                      </div>
+                    )}
+
+                    {/* Background jobs pill */}
+                    {backgroundSessions.length > 0 && (
+                      <div className="relative">
+                        <button
+                          onClick={() => setShowThreadsDropdown(!showThreadsDropdown)}
+                          className="flex items-center gap-1.5 px-2.5 h-7 text-xs text-zinc-400 hover:text-zinc-200 bg-zinc-800 hover:bg-zinc-700 border border-zinc-700/50 rounded-lg transition-colors"
+                        >
+                          <Layers className="h-3.5 w-3.5" />
+                          <span>{backgroundSessions.length}</span>
+                          {backgroundSessions.some(s => getSessionStatus(s.id) === "busy") && (
+                            <span className="relative flex h-1.5 w-1.5">
+                              <span className="animate-ping absolute h-full w-full rounded-full bg-emerald-400 opacity-75" />
+                              <span className="relative rounded-full h-1.5 w-1.5 bg-emerald-500" />
+                            </span>
+                          )}
+                        </button>
+
+                        <AnimatePresence>
+                          {showThreadsDropdown && foregroundSessions.length <= 6 && (
+                            <motion.div
+                              initial={{ opacity: 0, y: 5 }}
+                              animate={{ opacity: 1, y: 0 }}
+                              exit={{ opacity: 0, y: 5 }}
+                              className="absolute bottom-full left-0 mb-1 bg-zinc-800 border border-zinc-700 rounded-lg shadow-xl z-50 min-w-[220px] py-1"
+                            >
+                              <div className="flex items-center gap-1.5 px-3 py-1 text-[10px] uppercase text-zinc-500 font-medium">
+                                <Layers className="h-3 w-3" />
+                                Background Jobs
+                              </div>
+                              {backgroundSessions.map((session) => (
+                                <div
+                                  key={session.id}
+                                  className="group w-full flex items-center gap-2 px-3 py-1.5 text-xs text-zinc-400 hover:bg-zinc-700 transition-colors"
+                                >
+                                  <StatusDot status={getSessionStatus(session.id)} />
+                                  <button
+                                    onClick={() => {
+                                      setActiveSessionId(session.id);
+                                      setShowThreadsDropdown(false);
+                                    }}
+                                    className="truncate flex-1 text-left hover:text-zinc-200"
+                                  >
+                                    {session.title || `Subtask ${session.id.slice(0, 6)}`}
+                                  </button>
+                                  <button
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      deleteSessionMutation.mutate(session.id);
+                                    }}
+                                    className="p-0.5 rounded hover:bg-zinc-600 text-zinc-500 hover:text-zinc-300 opacity-0 group-hover:opacity-100 transition-all"
+                                  >
+                                    <X className="h-3 w-3" />
+                                  </button>
+                                </div>
+                              ))}
+                            </motion.div>
+                          )}
+                        </AnimatePresence>
+                      </div>
+                    )}
+
+                    {/* New thread button */}
+                    <button
+                      onClick={handleCreateSession}
+                      disabled={createSessionMutation.isPending}
+                      className="flex items-center justify-center h-7 w-7 text-zinc-400 hover:text-zinc-200 bg-zinc-800 hover:bg-zinc-700 border border-zinc-700/50 rounded-lg transition-colors ml-auto"
+                    >
+                      {createSessionMutation.isPending ? (
+                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                      ) : (
+                        <Plus className="h-3.5 w-3.5" />
+                      )}
+                    </button>
                   </div>
                 )}
+
+                {/* New thread button when no overflow/bg */}
+                {foregroundSessions.length <= 6 && backgroundSessions.length === 0 && (
+                  <button
+                    onClick={handleCreateSession}
+                    disabled={createSessionMutation.isPending}
+                    className="flex items-center justify-center gap-1.5 px-3 py-2 text-xs text-zinc-500 hover:text-zinc-300 bg-zinc-800/50 hover:bg-zinc-800 border border-dashed border-zinc-700/50 rounded-lg transition-colors"
+                  >
+                    {createSessionMutation.isPending ? (
+                      <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                    ) : (
+                      <>
+                        <Plus className="h-3.5 w-3.5" />
+                        <span>New thread</span>
+                      </>
+                    )}
+                  </button>
+                )}
               </div>
             )}
+          </motion.div>
+        ) : null}
+      </AnimatePresence>
 
-            {/* New thread button */}
+      {/* Navigation pills - only when in a thread */}
+      <AnimatePresence>
+        {isExpanded && activeSessionId && messages.length > 0 && (
+          <motion.div
+            data-interactive
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: 10 }}
+            className="flex items-center gap-2 shrink-0"
+          >
+            {/* Back button + thread title */}
             <button
-              onClick={() => createSession.mutate()}
-              onMouseDown={(e) => e.stopPropagation()}
-              disabled={createSession.isPending}
-              className="p-1 text-muted-foreground hover:text-foreground rounded-md hover:bg-muted/50 shrink-0"
-              title="New thread"
+              onClick={() => setActiveSessionId(null)}
+              className="flex items-center gap-1.5 px-2 h-7 text-xs text-zinc-400 hover:text-zinc-200 bg-zinc-800 hover:bg-zinc-700 rounded-md transition-colors"
             >
-              <Plus className="h-3.5 w-3.5" />
+              <ChevronLeft className="h-3.5 w-3.5" />
+              <span className="max-w-[120px] truncate">{activeSession?.title || "Thread"}</span>
             </button>
-          </div>
 
-          {/* Window controls */}
-          <div className="flex items-center gap-0.5 shrink-0">
-            <button
-              onClick={handleMinimize}
-              onMouseDown={(e) => e.stopPropagation()}
-              className="p-1 rounded-md hover:bg-accent text-muted-foreground hover:text-foreground"
-            >
-              <Minus className="h-3.5 w-3.5" />
-            </button>
-            <button
-              onClick={handleClose}
-              onMouseDown={(e) => e.stopPropagation()}
-              className="p-1 rounded-md hover:bg-accent text-muted-foreground hover:text-foreground"
-            >
-              <X className="h-3.5 w-3.5" />
-            </button>
-          </div>
-        </div>
-
-        {/* Messages - flex-col-reverse so newest at top, scroll down for older */}
-        <div ref={messagesEndRef} className="flex-1 overflow-y-auto p-3">
-          <div className="flex flex-col-reverse gap-2">
-            {isBusy && messages[messages.length - 1]?.info.role === "user" && (
-              <div className="flex justify-start">
-                <div className="px-3 py-2 bg-muted rounded-lg">
-                  <span className="text-sm text-muted-foreground italic">
-                    Thinking...
+            {/* Background jobs indicator */}
+            {backgroundSessions.length > 0 && (
+              <button
+                onClick={() => setActiveSessionId(null)}
+                className="flex items-center gap-1.5 px-2 h-7 text-xs text-zinc-400 hover:text-zinc-200 bg-zinc-800 hover:bg-zinc-700 rounded-md transition-colors"
+              >
+                <Layers className="h-3.5 w-3.5" />
+                <span>{backgroundSessions.filter(s => getSessionStatus(s.id) === "busy").length || backgroundSessions.length}</span>
+                {backgroundSessions.some(s => getSessionStatus(s.id) === "busy") && (
+                  <span className="relative flex h-1.5 w-1.5">
+                    <span className="animate-ping absolute h-full w-full rounded-full bg-green-400 opacity-75" />
+                    <span className="relative rounded-full h-1.5 w-1.5 bg-green-500" />
                   </span>
-                </div>
-              </div>
-            )}
-
-            {messages.map((msg) => (
-              <MessageBubble key={msg.info.id} message={msg} />
-            ))}
-
-            {activeSessionId && messages.length === 0 && !messagesQuery.isLoading && (
-              <div className="text-center text-muted-foreground text-sm py-8">
-                {activeSession?.title || "New conversation"}
-              </div>
-            )}
-
-            {!activeSessionId && sessions.length > 0 && (
-              <div className="text-center text-muted-foreground text-sm py-8">
-                Select a thread or start a new one
-              </div>
-            )}
-
-            {!activeSessionId && sessions.length === 0 && (
-              <div className="text-center text-muted-foreground text-sm py-8">
-                Start a conversation...
-              </div>
-            )}
-          </div>
-        </div>
-
-        {/* Input */}
-        <div className="p-2 border-t border-border/50 bg-muted/20">
-          <div className="flex items-end gap-2">
-            <textarea
-              ref={inputRef}
-              value={inputValue}
-              onChange={(e) => setInputValue(e.target.value)}
-              onKeyDown={handleKeyDown}
-              placeholder={
-                activeSessionId ? "Type a message..." : "Start a new chat..."
-              }
-              rows={1}
-              className="flex-1 resize-none bg-background text-foreground text-sm rounded-lg px-3 py-2 border border-border/50 focus:outline-none focus:ring-1 focus:ring-ring/50"
-              style={{ minHeight: "36px", maxHeight: "100px" }}
-            />
-            {isBusy ? (
-              <button
-                onClick={handleAbort}
-                className="p-2 rounded-lg bg-destructive/10 text-destructive hover:bg-destructive/20 transition-colors"
-                title="Stop"
-              >
-                <Square className="h-4 w-4" />
-              </button>
-            ) : (
-              <button
-                onClick={handleSend}
-                disabled={!inputValue.trim()}
-                className="p-2 rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-              >
-                {sendMessage.isPending || createSession.isPending ? (
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                ) : (
-                  <Send className="h-4 w-4" />
                 )}
               </button>
             )}
-          </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Collapsed ToC preview - absolutely positioned to cross-fade without layout shift */}
+      <AnimatePresence>
+        {!isExpanded && (foregroundSessions.length > 0 || backgroundSessions.length > 0) && (
+          <motion.div
+            data-interactive
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="absolute bottom-[140px] left-0 flex flex-col items-center gap-1.5 w-[52px] pointer-events-auto"
+          >
+            {foregroundSessions.slice(0, 6).map((session, idx) => {
+              const status = getSessionStatus(session.id);
+              const isActive = session.id === activeSessionId;
+              return (
+                <motion.div
+                  key={session.id}
+                  initial={{ width: 0 }}
+                  animate={{ width: isActive ? 24 : 16 - Math.min(idx, 2) * 3 }}
+                  className={`h-[3px] rounded-full cursor-pointer transition-colors ${
+                    status === "busy"
+                      ? "bg-emerald-500"
+                      : isActive
+                        ? "bg-blue-400"
+                        : "bg-zinc-700 hover:bg-zinc-500"
+                  }`}
+                  onClick={() => {
+                    setActiveSessionId(session.id);
+                    handleExpand();
+                  }}
+                />
+              );
+            })}
+            {foregroundSessions.length > 6 && (
+              <span className="text-[8px] text-zinc-600">
+                +{foregroundSessions.length - 6}
+              </span>
+            )}
+            {/* Background jobs indicator */}
+            {backgroundSessions.length > 0 && (
+              <div
+                className="flex items-center justify-center gap-0.5 mt-1 cursor-pointer"
+                onClick={handleExpand}
+              >
+                <Layers className="h-2.5 w-2.5 text-zinc-500" />
+                {backgroundSessions.some(s => getSessionStatus(s.id) === "busy") && (
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                )}
+              </div>
+            )}
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Bottom container - toolbar + workbook bar */}
+      <div className="mt-auto shrink-0 flex flex-col gap-1">
+        {/* Floating toolbar - acts as tab when collapsed */}
+        <div
+          data-interactive
+          className={`flex items-center gap-2 min-h-[52px] bg-zinc-900 border border-zinc-700/50 shadow-2xl self-start py-1.5 transition-all duration-200 ease-out ${
+            isExpanded
+              ? "w-full rounded-2xl px-2 border-l"
+              : "w-[52px] rounded-r-2xl rounded-l-none border-l-0 px-1.5"
+          }`}
+        >
+        {/* Hand icon button with ChatSettings popover */}
+        <ChatSettings>
+          <motion.button
+            whileHover={{ scale: 1.05 }}
+            whileTap={{ scale: 0.95 }}
+            className={`h-9 w-9 rounded-xl flex items-center justify-center transition-colors relative shrink-0 self-center ${
+              isRecording ? "text-red-400" : sttDownloading ? "text-blue-400" : "text-zinc-300 hover:text-zinc-100"
+            }`}
+          >
+            {sttDownloading ? (
+              <div className="relative h-5 w-5">
+                {/* Background circle */}
+                <svg className="h-5 w-5 -rotate-90" viewBox="0 0 20 20">
+                  <circle
+                    cx="10"
+                    cy="10"
+                    r="8"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    className="text-zinc-700"
+                  />
+                  <circle
+                    cx="10"
+                    cy="10"
+                    r="8"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeDasharray={2 * Math.PI * 8}
+                    strokeDashoffset={2 * Math.PI * 8 * (1 - sttDownloadProgress)}
+                    strokeLinecap="round"
+                    className="text-blue-400 transition-all duration-300"
+                  />
+                </svg>
+                {/* Percentage text */}
+                <span className="absolute inset-0 flex items-center justify-center text-[8px] font-medium text-blue-400">
+                  {Math.round(sttDownloadProgress * 100)}
+                </span>
+              </div>
+            ) : isRecording ? (
+              <Mic className="h-5 w-5 animate-pulse" />
+            ) : (
+              <Hand className="h-5 w-5" />
+            )}
+            {/* Activity indicator when collapsed */}
+            {!isExpanded && hasActiveSessions && !sttDownloading && (
+              <span className="absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full bg-green-500 animate-pulse" />
+            )}
+          </motion.button>
+        </ChatSettings>
+
+        {/* Input section - only when expanded: [text][attach][submit] */}
+        <AnimatePresence>
+          {isExpanded && (
+            <motion.div
+              initial={{ opacity: 0, width: 0 }}
+              animate={{ opacity: 1, width: "auto" }}
+              exit={{ opacity: 0, width: 0 }}
+              className="flex-1 flex items-end overflow-hidden"
+            >
+              {/* Text input - auto-resizing textarea */}
+              <textarea
+                ref={inputRef}
+                value={isRecording && sttPreview ? sttPreview : inputValue}
+                onChange={handleInputChange}
+                onKeyDown={handleKeyDown}
+                onFocus={handleInputFocus}
+                onBlur={handleInputBlur}
+                placeholder={isRecording ? "Listening..." : "Ask anything..."}
+                rows={1}
+                readOnly={isRecording}
+                className={`flex-1 bg-transparent py-2 text-sm text-zinc-100 placeholder:text-zinc-500 focus:outline-none min-w-0 resize-none overflow-y-auto ${isRecording ? "placeholder:text-red-400 text-red-300" : ""}`}
+                style={{ maxHeight: "120px" }}
+              />
+
+              {/* Attachment dropdown - no bg */}
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <button className="h-8 w-8 rounded-lg flex items-center justify-center text-zinc-400 hover:text-zinc-200 transition-colors shrink-0 self-center relative">
+                    <Paperclip className="h-4 w-4" />
+                    {pendingFiles.length > 0 && (
+                      <span className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-blue-500 text-[10px] text-white flex items-center justify-center">
+                        {pendingFiles.length}
+                      </span>
+                    )}
+                  </button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" side="top" sideOffset={8}>
+                  <DropdownMenuItem onClick={handleSnapshot} className="gap-2">
+                    <Camera className="h-4 w-4" />
+                    <span>Snapshot</span>
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={handlePickFile} className="gap-2">
+                    <File className="h-4 w-4" />
+                    <span>File</span>
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={handlePickFolder} className="gap-2">
+                    <Folder className="h-4 w-4" />
+                    <span>Folder</span>
+                  </DropdownMenuItem>
+                  {pendingFiles.length > 0 && (
+                    <>
+                      <div className="border-t border-border my-1" />
+                      <div className="px-2 py-1 text-[10px] uppercase text-muted-foreground">
+                        Pending ({pendingFiles.length})
+                      </div>
+                      {pendingFiles.map((file, i) => (
+                        <DropdownMenuItem
+                          key={i}
+                          onClick={() => setPendingFiles((prev) => prev.filter((_, j) => j !== i))}
+                          className="gap-2 text-xs"
+                        >
+                          <X className="h-3 w-3 text-red-400" />
+                          <span className="truncate">{file.split("/").pop()}</span>
+                        </DropdownMenuItem>
+                      ))}
+                    </>
+                  )}
+                </DropdownMenuContent>
+              </DropdownMenu>
+
+              {/* Submit/Abort button - no bg */}
+              <AnimatePresence mode="wait">
+                {isBusy ? (
+                  <motion.button
+                    key="abort"
+                    initial={{ scale: 0.8, opacity: 0 }}
+                    animate={{ scale: 1, opacity: 1 }}
+                    exit={{ scale: 0.8, opacity: 0 }}
+                    onClick={handleAbort}
+                    className="h-8 w-8 rounded-lg flex items-center justify-center text-red-400 hover:text-red-300 shrink-0 self-center"
+                  >
+                    <Square className="h-4 w-4" />
+                  </motion.button>
+                ) : (
+                  <motion.button
+                    key="send"
+                    initial={{ scale: 0.8, opacity: 0 }}
+                    animate={{ scale: 1, opacity: 1 }}
+                    exit={{ scale: 0.8, opacity: 0 }}
+                    onClick={handleSend}
+                    disabled={!inputValue.trim() && pendingFiles.length === 0}
+                    className={`h-8 w-8 rounded-lg flex items-center justify-center shrink-0 self-center transition-colors ${
+                      inputValue.trim() || pendingFiles.length > 0
+                        ? "text-zinc-100 hover:text-white"
+                        : "text-zinc-500"
+                    }`}
+                  >
+                    {sendMessageMutation.isPending || createSessionMutation.isPending ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : (
+                      <ArrowUp className="h-4 w-4" />
+                    )}
+                  </motion.button>
+                )}
+              </AnimatePresence>
+            </motion.div>
+          )}
+        </AnimatePresence>
         </div>
+
+        {/* Workbook bar - below chat input when expanded */}
+        <AnimatePresence>
+          {isExpanded && (
+            <motion.div
+              data-interactive
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: 10 }}
+              className="flex items-center gap-2 px-2 py-1.5 text-xs text-zinc-400 self-start"
+            >
+              <Book className="h-3.5 w-3.5 shrink-0" />
+
+              {/* Workbook name - dropdown to switch */}
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <button className="flex items-center gap-1 truncate hover:text-zinc-200 transition-colors">
+                    <span className="truncate">{currentWorkbook?.name || "No workbook"}</span>
+                    <ChevronDown className="h-3 w-3 shrink-0" />
+                  </button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="start" side="top" sideOffset={4} className="w-[200px]">
+                  {workbooks.map((wb) => (
+                    <DropdownMenuItem
+                      key={wb.id}
+                      onClick={() => handleSwitchWorkbook(wb)}
+                      className="flex items-center justify-between"
+                    >
+                      <span className="truncate text-[13px]">{wb.name}</span>
+                      {wb.directory === workbookDir && (
+                        <Check className="h-3.5 w-3.5 text-primary shrink-0" />
+                      )}
+                    </DropdownMenuItem>
+                  ))}
+                  {workbooks.length > 0 && <div className="border-t border-border my-1" />}
+                  <DropdownMenuItem onClick={handleCreateWorkbook} className="gap-2">
+                    <Plus className="h-3.5 w-3.5" />
+                    <span className="text-[13px]">New Notebook</span>
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+
+              {/* Open button - opens workbook editor */}
+              <button
+                onClick={() => {
+                  if (currentWorkbook) {
+                    invoke("open_workbook_window", { workbookId: currentWorkbook.id });
+                  }
+                }}
+                className="ml-auto px-2 py-0.5 rounded text-[11px] text-zinc-300 hover:text-zinc-100 bg-zinc-800 hover:bg-zinc-700 transition-colors"
+              >
+                Open
+              </button>
+            </motion.div>
+          )}
+        </AnimatePresence>
       </div>
     </div>
   );
-}
 
-// ============================================================================
-// Message Bubble Component
-// ============================================================================
+  // Extract workbook ID from directory path (last segment)
+  const workbookId = workbookDir ? workbookDir.split("/").pop() || null : null;
 
-function MessageBubble({ message }: { message: MessageWithParts }) {
-  const isUser = message.info.role === "user";
-
-  const textContent = message.parts
-    .filter((p) => p.type === "text" && p.text)
-    .map((p) => p.text)
-    .join("\n");
-
-  const toolCount = message.parts.filter((p) => p.type === "tool").length;
-
-  return (
-    <div className={`flex ${isUser ? "justify-end" : "justify-start"}`}>
-      <div
-        className={`max-w-[85%] px-3 py-2 rounded-lg ${
-          isUser
-            ? "bg-primary text-primary-foreground rounded-br-sm"
-            : "bg-muted text-foreground rounded-bl-sm"
-        }`}
-      >
-        {textContent && (
-          <p className="text-sm whitespace-pre-wrap break-words">{textContent}</p>
-        )}
-
-        {toolCount > 0 && !isUser && (
-          <div className="text-xs text-muted-foreground mt-1">
-            {toolCount} tool {toolCount === 1 ? "call" : "calls"}
-          </div>
-        )}
-
-        {!textContent && toolCount === 0 && (
-          <span className="text-sm text-muted-foreground italic">
-            (empty message)
-          </span>
-        )}
-      </div>
-    </div>
+  // Wrap content with providers
+  let wrappedContent = (
+    <LinkNavigationProvider isFloatingChat workbookId={workbookId}>
+      {content}
+    </LinkNavigationProvider>
   );
+
+  // Wrap with TRPCProvider when runtime is connected (enables live query charts)
+  if (runtimePort) {
+    wrappedContent = (
+      <TRPCProvider queryClient={queryClient} runtimePort={runtimePort}>
+        {wrappedContent}
+      </TRPCProvider>
+    );
+  }
+
+  return wrappedContent;
 }
 
 export default FloatingChat;

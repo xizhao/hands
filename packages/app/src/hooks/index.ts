@@ -81,5 +81,8 @@ export * from "./useThumbnails";
 // tRPC
 export * from "./useTRPC";
 
+// Link navigation
+export * from "./useLinkNavigation";
+
 // UI utility hooks (from ui folder, takes precedence)
 export * from "./ui";

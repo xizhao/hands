@@ -1,6 +1,9 @@
 //! Global hotkey registration for Hands.
 //!
-//! Registers system-wide shortcuts like Cmd+Shift+H for screen capture.
+//! Registers system-wide shortcuts:
+//! - Cmd+Shift+H for screen capture
+//!
+//! Note: Option key handling (STT, show/hide) is done via rdev in keyboard.rs
 
 use tauri::AppHandle;
 use tauri_plugin_global_shortcut::{Code, GlobalShortcutExt, Modifiers, Shortcut, ShortcutState};

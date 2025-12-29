@@ -19,8 +19,8 @@ pub fn create_tray(app: &AppHandle) -> Result<(), Box<dyn std::error::Error>> {
 
     println!("[tray] Found tray with id 'main'");
 
-    // Build and set the menu
-    let menu = build_tray_menu(app, &[])?;
+    // Build and set the menu (no active workbook initially)
+    let menu = build_tray_menu(app, &[], None)?;
     tray.set_menu(Some(menu))?;
     println!("[tray] Menu set");
 
@@ -44,7 +44,7 @@ pub fn create_tray(app: &AppHandle) -> Result<(), Box<dyn std::error::Error>> {
 }
 
 /// Build the tray menu with current workbook list
-fn build_tray_menu(app: &AppHandle, workbooks: &[Workbook]) -> Result<Menu<Wry>, Box<dyn std::error::Error>> {
+fn build_tray_menu(app: &AppHandle, workbooks: &[Workbook], active_workbook_id: Option<&str>) -> Result<Menu<Wry>, Box<dyn std::error::Error>> {
     let mut menu_builder = MenuBuilder::new(app);
 
     // Quick capture action
@@ -68,7 +68,14 @@ fn build_tray_menu(app: &AppHandle, workbooks: &[Workbook]) -> Result<Menu<Wry>,
         let mut workbooks_submenu = SubmenuBuilder::new(app, "Workbooks");
 
         for workbook in workbooks.iter().take(10) {
-            let item = MenuItemBuilder::new(&workbook.name)
+            // Show checkmark for active workbook
+            let is_active = active_workbook_id == Some(&workbook.id);
+            let label = if is_active {
+                format!("✓ {}", workbook.name)
+            } else {
+                format!("   {}", workbook.name)
+            };
+            let item = MenuItemBuilder::new(&label)
                 .id(format!("workbook:{}", workbook.id))
                 .build(app)?;
             workbooks_submenu = workbooks_submenu.item(&item);
@@ -129,7 +136,7 @@ fn handle_menu_event(app: &AppHandle, menu_id: &str) {
         }
         id if id.starts_with("workbook:") => {
             let workbook_id = id.strip_prefix("workbook:").unwrap();
-            open_workbook_window_from_tray(app, workbook_id);
+            switch_active_workbook(app, workbook_id);
         }
         _ => {}
     }
@@ -188,14 +195,55 @@ fn show_or_open_workbook(app: &AppHandle, event: Option<&'static str>) {
     });
 }
 
-fn open_workbook_window_from_tray(app: &AppHandle, workbook_id: &str) {
+/// Switch to a different active workbook (starts runtime, updates floating chat context)
+fn switch_active_workbook(app: &AppHandle, workbook_id: &str) {
     let app = app.clone();
     let workbook_id = workbook_id.to_string();
     tauri::async_runtime::spawn(async move {
-        if let Some(state) = app.try_state::<Arc<Mutex<AppState>>>() {
-            let _ = window_manager::open_workbook(&app, &state, &workbook_id).await;
-        } else {
+        // Get workbook directory
+        let workbooks = match list_workbooks().await {
+            Ok(w) => w,
+            Err(e) => {
+                eprintln!("[tray] Failed to list workbooks: {}", e);
+                return;
+            }
+        };
+        let workbook = match workbooks.iter().find(|w| w.id == workbook_id) {
+            Some(w) => w,
+            None => {
+                eprintln!("[tray] Workbook not found: {}", workbook_id);
+                return;
+            }
+        };
+
+        // Get app state
+        let Some(state) = app.try_state::<Arc<Mutex<AppState>>>() else {
             eprintln!("[tray] Failed to get app state");
+            return;
+        };
+
+        // 1. Start the workbook runtime (tRPC/Vite server)
+        println!("[tray] Starting runtime for workbook: {}", workbook_id);
+        if let Err(e) = crate::start_workbook_server_internal(
+            &app,
+            &state,
+            &workbook_id,
+            &workbook.directory,
+        ).await {
+            eprintln!("[tray] Failed to start runtime: {}", e);
+            // Continue anyway - runtime might already be running
+        }
+
+        // 2. Set active workbook (emits active-workbook-changed event, restarts OpenCode)
+        if let Err(e) = crate::set_active_workbook_internal(&app, &workbook_id).await {
+            eprintln!("[tray] Failed to switch workbook: {}", e);
+            return;
+        }
+        println!("[tray] Switched to workbook: {}", workbook_id);
+
+        // 3. Update tray menu to show new active workbook
+        if let Err(e) = update_tray_menu(&app).await {
+            eprintln!("[tray] Failed to update menu: {}", e);
         }
     });
 }
@@ -216,8 +264,18 @@ pub async fn update_tray_menu(app: &AppHandle) -> Result<(), Box<dyn std::error:
     // Fetch current workbooks
     let workbooks = list_workbooks().await.unwrap_or_default();
 
-    // Rebuild menu
-    let menu = build_tray_menu(app, &workbooks)?;
+    // Get active workbook ID
+    let active_workbook_id = {
+        if let Some(state) = app.try_state::<Arc<Mutex<AppState>>>() {
+            let state = state.lock().await;
+            state.active_workbook_id.clone()
+        } else {
+            None
+        }
+    };
+
+    // Rebuild menu with active workbook indicator
+    let menu = build_tray_menu(app, &workbooks, active_workbook_id.as_deref())?;
 
     // Update tray menu
     if let Some(tray) = app.tray_by_id("main") {

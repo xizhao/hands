@@ -1,16 +1,22 @@
 /**
  * Overlay Entry Point
  *
- * Separate entry for transparent overlay windows (capture overlay, capture action panel).
+ * Separate entry for transparent overlay windows (capture overlay, capture action panel, floating chat).
  */
 
 import React from "react";
 import ReactDOM from "react-dom/client";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { PlatformProvider, initTheme } from "@hands/app";
+import { TooltipProvider } from "@/components/ui/tooltip";
+import { TauriPlatformAdapter } from "./platform/TauriAdapter";
 import { CaptureOverlay } from "./windows/CaptureOverlay";
 import { CaptureActionPanel } from "./windows/CaptureActionPanel";
 import { FloatingChat } from "./windows/FloatingChat";
 import "./index.css";
+
+// Initialize theme before render (reads from localStorage, applies CSS vars)
+initTheme();
 
 const queryClient = new QueryClient();
 
@@ -25,7 +31,13 @@ function App() {
   const windowType = getWindowType();
 
   if (windowType === "floating-chat") {
-    return <FloatingChat />;
+    return (
+      <PlatformProvider adapter={TauriPlatformAdapter}>
+        <TooltipProvider>
+          <FloatingChat />
+        </TooltipProvider>
+      </PlatformProvider>
+    );
   }
   if (windowType === "capture-action") {
     return <CaptureActionPanel />;

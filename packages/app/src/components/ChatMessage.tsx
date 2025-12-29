@@ -55,6 +55,8 @@ interface ChatMessageProps {
   message: MessageWithParts;
   isStreaming?: boolean;
   compact?: boolean;
+  /** When true, bubble tails point down (for bottom-up message flow like FloatingChat) */
+  tailDown?: boolean;
 }
 
 // Format token count with K/M suffix
@@ -956,16 +958,27 @@ const MdxShimmerBlock = memo(({ blockType, compact = false }: { blockType: strin
 
 MdxShimmerBlock.displayName = "MdxShimmerBlock";
 
-// Wrapper that provides LiveQueryProvider for chat previews
-function ChatQueryWrapper({ children }: { children: ReactNode }) {
-  const { data: runtime } = useActiveRuntime();
-  const runtimePort = runtime?.runtime_port ?? null;
+// No-op query adapter when runtime not connected
+const noopQueryAdapter = (): QueryResult => ({
+  data: [],
+  isLoading: false,
+  error: null,
+  refetch: async () => {},
+});
 
-  // Query adapter for LiveQueryProvider
+const noopMutationAdapter = (): MutationResult => ({
+  mutate: async () => {},
+  isPending: false,
+  error: null,
+});
+
+// Inner wrapper that uses live query (only rendered when runtime connected)
+function LiveChatQueryWrapper({ children, runtimePort }: { children: ReactNode; runtimePort: number }) {
   const useQueryAdapter = useCallback(
     (sql: string, params?: Record<string, unknown>): QueryResult => {
       const paramsArray = params ? Object.values(params) : undefined;
 
+      // eslint-disable-next-line react-hooks/rules-of-hooks
       const result = useDesktopLiveQuery({
         sql,
         params: paramsArray,
@@ -983,7 +996,6 @@ function ChatQueryWrapper({ children }: { children: ReactNode }) {
     [runtimePort]
   );
 
-  // Mutation adapter (no-op for chat previews - read-only)
   const useMutationAdapter = useCallback((): MutationResult => ({
     mutate: async () => {
       console.warn("[ChatPreview] Mutations not supported in chat preview");
@@ -996,6 +1008,27 @@ function ChatQueryWrapper({ children }: { children: ReactNode }) {
     <LiveQueryProvider useQuery={useQueryAdapter} useMutation={useMutationAdapter}>
       {children}
     </LiveQueryProvider>
+  );
+}
+
+// Wrapper that provides LiveQueryProvider for chat previews
+function ChatQueryWrapper({ children }: { children: ReactNode }) {
+  const { data: runtime } = useActiveRuntime();
+  const runtimePort = runtime?.runtime_port ?? null;
+
+  // When runtime not connected, use no-op adapters (avoids tRPC context error)
+  if (!runtimePort) {
+    return (
+      <LiveQueryProvider useQuery={noopQueryAdapter} useMutation={noopMutationAdapter}>
+        {children}
+      </LiveQueryProvider>
+    );
+  }
+
+  return (
+    <LiveChatQueryWrapper runtimePort={runtimePort}>
+      {children}
+    </LiveChatQueryWrapper>
   );
 }
 
@@ -1348,7 +1381,7 @@ MessageProgress.displayName = "MessageProgress";
 
 // Main message component - iOS style bubbles
 export const ChatMessage = memo(
-  ({ message, isStreaming = false, compact = false }: ChatMessageProps) => {
+  ({ message, isStreaming = false, compact = false, tailDown = false }: ChatMessageProps) => {
     const { info, parts = [] } = message;
     const isUser = info.role === "user";
     const isAssistant = info.role === "assistant";
@@ -1412,11 +1445,12 @@ export const ChatMessage = memo(
         transition={{ duration: 0.15, ease: "easeOut" }}
         className={cn("flex w-full", isUser ? "justify-end" : "justify-start")}
       >
-        {/* User message - on right, corner points up (toward newer messages) */}
+        {/* User message - on right, corner points toward newer messages */}
         {isUser && (
           <div
             className={cn(
-              "max-w-[85%] rounded-2xl rounded-tr-sm shadow-sm",
+              "max-w-[85%] rounded-2xl shadow-sm",
+              tailDown ? "rounded-br-sm" : "rounded-tr-sm",
               "bg-primary text-primary-foreground",
               compact ? "px-2.5 py-1.5" : "px-3.5 py-2",
             )}
@@ -1433,9 +1467,15 @@ export const ChatMessage = memo(
           </div>
         )}
 
-        {/* Hands/Assistant message - no bubble styling, plain text */}
+        {/* Hands/Assistant message - bubble styling when tailDown, otherwise plain text */}
         {isAssistant && (
-          <div className="max-w-full">
+          <div
+            className={cn(
+              "max-w-full",
+              tailDown && "rounded-2xl rounded-bl-sm bg-zinc-800 shadow-sm",
+              tailDown && (compact ? "px-2.5 py-1.5" : "px-3.5 py-2"),
+            )}
+          >
             <div className="space-y-0.5">
               {groupedContent.map((group, idx) => {
                 if (group.type === "text") {

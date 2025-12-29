@@ -29,6 +29,7 @@
   "bundle": {
     "active": true,
     "targets": "all",
+    "resources": ["resources/sfx/*"],
     "externalBin": [
       "binaries/hands-agent",
       "binaries/hands-workbook-server",

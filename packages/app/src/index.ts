@@ -19,3 +19,9 @@ export { router } from "./router";
 
 // tRPC Provider (for platform-specific wrapping)
 export { TRPCProvider } from "./TRPCProvider";
+
+// Theme utilities
+export { initTheme, getTheme, setTheme, getThemeList } from "./lib/theme";
+
+// Components (for direct use in platform-specific code)
+export { SaveStatusIndicator } from "./components/SaveStatusIndicator";

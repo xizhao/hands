@@ -18,6 +18,7 @@ import { Toaster, toast } from "sonner";
 import { TRPCProvider } from "./TRPCProvider";
 import { TooltipProvider } from "./components/ui/tooltip";
 import { useActiveRuntime } from "./hooks/useWorkbook";
+import { LinkNavigationProvider } from "./hooks/useLinkNavigation";
 import { router } from "./router";
 
 // Map mutation keys to user-friendly action names
@@ -135,15 +136,18 @@ function AppShell({ children }: { children: React.ReactNode }) {
 function AppContent() {
   const { data: runtime } = useActiveRuntime();
   const runtimePort = runtime?.runtime_port ?? null;
+  const workbookId = runtime?.workbook_id ?? null;
 
   // Always render the router - workbook init logic needs it
   // tRPC provider only mounts when runtime is connected
   if (runtimePort) {
     return (
       <TRPCProvider queryClient={queryClient} runtimePort={runtimePort}>
-        <AppShell>
-          <RouterProvider router={router} />
-        </AppShell>
+        <LinkNavigationProvider isFloatingChat={false} workbookId={workbookId}>
+          <AppShell>
+            <RouterProvider router={router} />
+          </AppShell>
+        </LinkNavigationProvider>
       </TRPCProvider>
     );
   }
@@ -151,9 +155,11 @@ function AppContent() {
   // No runtime yet - render without tRPC
   // Workbook picker and initialization work via platform adapter
   return (
-    <AppShell>
-      <RouterProvider router={router} />
-    </AppShell>
+    <LinkNavigationProvider isFloatingChat={false} workbookId={workbookId}>
+      <AppShell>
+        <RouterProvider router={router} />
+      </AppShell>
+    </LinkNavigationProvider>
   );
 }
 
