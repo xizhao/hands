@@ -84,5 +84,14 @@ export * from "./useTRPC";
 // Link navigation
 export * from "./useLinkNavigation";
 
+// File picker
+export * from "./useFilePicker";
+
+// Workbook switcher
+export * from "./useWorkbookSwitcher";
+
+// Speech-to-text
+export * from "./useStt";
+
 // UI utility hooks (from ui folder, takes precedence)
 export * from "./ui";

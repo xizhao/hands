@@ -32,6 +32,7 @@ import {
   useWorkbook,
   useWorkbooks,
 } from "@/hooks/useWorkbook";
+import { useFilePicker } from "@/hooks/useFilePicker";
 import type { Workbook } from "@/lib/workbook";
 import { cn } from "@/lib/utils";
 import { invoke } from "@tauri-apps/api/core";
@@ -163,45 +164,23 @@ export function UnifiedSidebar({
     }
   };
 
-  const handlePickFile = useCallback(async () => {
-    try {
-      const filePath = await invoke<string | null>("pick_file");
-      if (filePath) {
-        const fileName = filePath.split("/").pop() || filePath;
-        chatState.setPendingAttachment({
-          type: ATTACHMENT_TYPE.FILEPATH,
-          filePath,
-          name: fileName,
-        });
-      }
-    } catch (err) {
-      console.error("[UnifiedSidebar] Failed to pick file:", err);
-    }
-  }, [chatState]);
-
-  const handlePickFolder = useCallback(async () => {
-    try {
-      const folderPath = await invoke<string | null>("pick_folder");
-      if (folderPath) {
-        const folderName = folderPath.split("/").pop() || folderPath;
-        chatState.setPendingAttachment({
-          type: ATTACHMENT_TYPE.FILEPATH,
-          filePath: folderPath,
-          name: folderName,
-        });
-      }
-    } catch (err) {
-      console.error("[UnifiedSidebar] Failed to pick folder:", err);
-    }
-  }, [chatState]);
-
-  const handleSnapshot = useCallback(async () => {
-    try {
-      await invoke("start_capture_command");
-    } catch (err) {
-      console.error("[UnifiedSidebar] Failed to start capture:", err);
-    }
-  }, []);
+  // File picker handlers - using shared hook
+  const { handlePickFile, handlePickFolder, handleSnapshot } = useFilePicker({
+    onFileSelected: (filePath, fileName) => {
+      chatState.setPendingAttachment({
+        type: ATTACHMENT_TYPE.FILEPATH,
+        filePath,
+        name: fileName,
+      });
+    },
+    onFolderSelected: (folderPath, folderName) => {
+      chatState.setPendingAttachment({
+        type: ATTACHMENT_TYPE.FILEPATH,
+        filePath: folderPath,
+        name: folderName,
+      });
+    },
+  });
 
   // Workbook handlers
   const handleSwitchWorkbook = useCallback(

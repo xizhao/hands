@@ -1975,6 +1975,7 @@ pub fn run() {
             stt::stt_download_model,
             stt::stt_start_recording,
             stt::stt_stop_recording,
+            stt::stt_cancel_recording,
             stt::stt_is_recording,
             sfx::play_sfx
         ])
@@ -2209,6 +2210,9 @@ pub fn run() {
                     // Only cleanup when main window is actually destroyed (from quit)
                     if window.label() == "main" {
                         println!("[shutdown] Main window destroyed, cleaning up...");
+
+                        // Stop global keyboard listener thread
+                        keyboard::stop_keyboard_listener();
 
                         // Force cleanup runtime lockfile and kill any orphaned processes
                         tauri::async_runtime::block_on(async {

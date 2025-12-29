@@ -25,3 +25,5 @@ export { initTheme, getTheme, setTheme, getThemeList } from "./lib/theme";
 
 // Components (for direct use in platform-specific code)
 export { SaveStatusIndicator } from "./components/SaveStatusIndicator";
+export { WorkbookDropdown, type WorkbookDropdownProps } from "./components/WorkbookDropdown";
+export { AttachmentMenu, type AttachmentMenuProps } from "./components/AttachmentMenu";

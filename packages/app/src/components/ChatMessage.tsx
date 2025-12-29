@@ -974,35 +974,38 @@ const noopMutationAdapter = (): MutationResult => ({
 
 // Inner wrapper that uses live query (only rendered when runtime connected)
 function LiveChatQueryWrapper({ children, runtimePort }: { children: ReactNode; runtimePort: number }) {
-  const useQueryAdapter = useCallback(
-    (sql: string, params?: Record<string, unknown>): QueryResult => {
-      const paramsArray = params ? Object.values(params) : undefined;
+  // Query adapter for LiveQueryProvider - NOT wrapped in useCallback
+  // because it needs to be called as a hook during render
+  const useQueryAdapter = (
+    sql: string,
+    params?: Record<string, unknown>
+  ): QueryResult => {
+    const paramsArray = params ? Object.values(params) : undefined;
 
-      // eslint-disable-next-line react-hooks/rules-of-hooks
-      const result = useDesktopLiveQuery({
-        sql,
-        params: paramsArray,
-        enabled: !!sql && sql.trim().length > 0,
-        runtimePort,
-      });
+    // eslint-disable-next-line react-hooks/rules-of-hooks
+    const result = useDesktopLiveQuery({
+      sql,
+      params: paramsArray,
+      enabled: !!sql && sql.trim().length > 0,
+      runtimePort,
+    });
 
-      return {
-        data: result.data,
-        isLoading: result.isLoading,
-        error: result.error,
-        refetch: result.refetch,
-      };
-    },
-    [runtimePort]
-  );
+    return {
+      data: result.data,
+      isLoading: result.isLoading,
+      error: result.error,
+      refetch: result.refetch,
+    };
+  };
 
-  const useMutationAdapter = useCallback((): MutationResult => ({
+  // Mutation adapter - chat previews are read-only
+  const useMutationAdapter = (): MutationResult => ({
     mutate: async () => {
       console.warn("[ChatPreview] Mutations not supported in chat preview");
     },
     isPending: false,
     error: null,
-  }), []);
+  });
 
   return (
     <LiveQueryProvider useQuery={useQueryAdapter} useMutation={useMutationAdapter}>

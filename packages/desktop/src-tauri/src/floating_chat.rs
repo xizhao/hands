@@ -70,8 +70,9 @@ pub async fn open_floating_chat(
         .map_err(|e| format!("Failed to create floating chat: {}", e))?;
 
     // Listen for ready signal from frontend to show window (avoids black flash)
+    // Using once() instead of listen() since we only need to show once and it auto-unregisters
     let window_clone = window.clone();
-    app.listen("floating-chat-ready", move |_| {
+    app.once("floating-chat-ready", move |_| {
         let _ = window_clone.show();
     });
 

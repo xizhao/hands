@@ -1,9 +1,10 @@
 //! Global keyboard listener for Option key detection.
 //!
 //! Uses device_query (polling-based) to detect Option key press/release for STT activation.
-//! - Option press: Show floating chat + start STT recording
+//! - Option press ALONE: Show floating chat + start STT recording
 //! - Option release: Stop recording, transcribe, insert text
 //! - Option+Space: Toggle text input focus / hide window
+//! - Option+other key: Ignored (allows Option+C, Option+V, etc. to work normally)
 
 use device_query::{DeviceQuery, DeviceState, Keycode};
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -15,9 +16,21 @@ use tauri::{AppHandle, Emitter, Manager};
 static OPTION_HELD: AtomicBool = AtomicBool::new(false);
 /// Tracks whether Space was pressed while Option was held
 static SPACE_PRESSED_WITH_OPTION: AtomicBool = AtomicBool::new(false);
+/// Tracks whether another key was pressed with Option (makes it a combo, not STT trigger)
+static OTHER_KEY_WITH_OPTION: AtomicBool = AtomicBool::new(false);
+/// Shutdown flag for the keyboard listener thread
+static SHUTDOWN: AtomicBool = AtomicBool::new(false);
+
+/// Check if only Option key(s) are pressed (no other keys)
+fn is_option_alone(keys: &[Keycode]) -> bool {
+    keys.iter().all(|k| matches!(k, Keycode::LOption | Keycode::ROption))
+}
 
 /// Start the global keyboard listener using device_query (polling-based)
 pub fn start_keyboard_listener(app: AppHandle) {
+    // Reset shutdown flag in case of restart
+    SHUTDOWN.store(false, Ordering::SeqCst);
+
     let app_handle = app.clone();
 
     thread::spawn(move || {
@@ -25,32 +38,54 @@ pub fn start_keyboard_listener(app: AppHandle) {
         let mut option_press_time: Option<Instant> = None;
         let mut prev_option_held = false;
         let mut prev_space_held = false;
+        let mut stt_started = false;
 
-        loop {
+        println!("[keyboard] Listener thread started");
+
+        while !SHUTDOWN.load(Ordering::SeqCst) {
             let keys: Vec<Keycode> = device_state.get_keys();
 
             // Check if Option is held - on macOS it's LOption/ROption
             let option_held = keys.contains(&Keycode::LOption)
                 || keys.contains(&Keycode::ROption);
             let space_held = keys.contains(&Keycode::Space);
+            let option_alone = is_option_alone(&keys);
 
             // Option key pressed (transition from not held to held)
             if option_held && !prev_option_held {
                 OPTION_HELD.store(true, Ordering::SeqCst);
                 option_press_time = Some(Instant::now());
                 SPACE_PRESSED_WITH_OPTION.store(false, Ordering::SeqCst);
+                OTHER_KEY_WITH_OPTION.store(false, Ordering::SeqCst);
+                stt_started = false;
 
-                // Show floating chat window
-                let app_for_show = app_handle.clone();
-                tauri::async_runtime::spawn(async move {
-                    if let Some(window) = app_for_show.get_webview_window("floating_chat") {
-                        let _ = window.show();
-                        let _ = window.set_focus();
+                // Only trigger STT if Option is pressed alone
+                if option_alone {
+                    // Show floating chat window
+                    let app_for_show = app_handle.clone();
+                    tauri::async_runtime::spawn(async move {
+                        if let Some(window) = app_for_show.get_webview_window("floating_chat") {
+                            let _ = window.show();
+                            let _ = window.set_focus();
+                        }
+                    });
+
+                    // Emit event to start STT
+                    let _ = app_handle.emit("option-key-pressed", ());
+                    stt_started = true;
+                }
+            }
+
+            // If Option is held and another key is pressed, mark as combo (not STT)
+            if option_held && !option_alone && !space_held {
+                if !OTHER_KEY_WITH_OPTION.load(Ordering::SeqCst) {
+                    OTHER_KEY_WITH_OPTION.store(true, Ordering::SeqCst);
+                    // Cancel STT if it was started
+                    if stt_started {
+                        let _ = app_handle.emit("option-key-cancelled", ());
+                        stt_started = false;
                     }
-                });
-
-                // Emit event to start STT
-                let _ = app_handle.emit("option-key-pressed", ());
+                }
             }
 
             // Space pressed while Option is held
@@ -68,8 +103,14 @@ pub fn start_keyboard_listener(app: AppHandle) {
                     .map(|t| t.elapsed() < Duration::from_millis(200))
                     .unwrap_or(false);
 
-                // Only trigger STT completion if Space wasn't pressed
-                if !SPACE_PRESSED_WITH_OPTION.load(Ordering::SeqCst) {
+                // Only trigger STT completion if:
+                // - Space wasn't pressed
+                // - No other key was pressed with Option (not a combo like Option+C)
+                // - STT was actually started
+                let space_pressed = SPACE_PRESSED_WITH_OPTION.load(Ordering::SeqCst);
+                let other_key_pressed = OTHER_KEY_WITH_OPTION.load(Ordering::SeqCst);
+
+                if !space_pressed && !other_key_pressed && stt_started {
                     if was_quick_tap {
                         let _ = app_handle.emit("option-key-tapped", ());
                     } else {
@@ -78,7 +119,9 @@ pub fn start_keyboard_listener(app: AppHandle) {
                 }
 
                 option_press_time = None;
+                stt_started = false;
                 SPACE_PRESSED_WITH_OPTION.store(false, Ordering::SeqCst);
+                OTHER_KEY_WITH_OPTION.store(false, Ordering::SeqCst);
             }
 
             prev_option_held = option_held;
@@ -87,7 +130,15 @@ pub fn start_keyboard_listener(app: AppHandle) {
             // Poll every 10ms (100Hz) - low latency but minimal CPU
             thread::sleep(Duration::from_millis(10));
         }
+
+        println!("[keyboard] Listener thread stopped");
     });
+}
+
+/// Stop the keyboard listener thread.
+/// Call this on app shutdown to prevent resource leaks.
+pub fn stop_keyboard_listener() {
+    SHUTDOWN.store(true, Ordering::SeqCst);
 }
 
 /// Check if Option key is currently held

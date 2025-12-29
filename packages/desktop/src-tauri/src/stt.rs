@@ -364,6 +364,22 @@ pub async fn stt_stop_recording(app: AppHandle) -> Result<String, String> {
     Ok(final_text)
 }
 
+/// Cancel recording without transcribing (used when Option+other key is pressed)
+#[tauri::command]
+pub async fn stt_cancel_recording(app: AppHandle) -> Result<(), String> {
+    let state = get_state(&app);
+    let mut guard = state.lock().unwrap();
+
+    if !guard.is_recording {
+        return Ok(());
+    }
+
+    println!("[stt] Recording cancelled");
+    guard.is_recording = false;
+    guard.audio_buffer.clear();
+    Ok(())
+}
+
 /// Check if currently recording
 #[tauri::command]
 pub async fn stt_is_recording(app: AppHandle) -> bool {

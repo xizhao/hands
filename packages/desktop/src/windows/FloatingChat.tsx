@@ -13,32 +13,20 @@ import { motion, AnimatePresence } from "framer-motion";
 import {
   ArrowUp,
   Book,
-  Camera,
-  Check,
   ChevronDown,
   ChevronLeft,
-  File,
   FileUp,
-  Folder,
   Hand,
   Layers,
   Loader2,
   MessageSquare,
   Mic,
-  Paperclip,
   Plus,
   Square,
-  Trash2,
   X,
 } from "lucide-react";
 import { ChatMessage } from "@/components/ChatMessage";
 import { ChatSettings } from "@/components/ChatSettings";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
 import { ThinkingIndicator } from "@/components/ui/thinking-indicator";
 import {
   TRPCProvider,
@@ -48,6 +36,9 @@ import {
   useWorkbooks,
   useOpenWorkbook,
   useCreateWorkbook,
+  useFilePicker,
+  WorkbookDropdown,
+  AttachmentMenu,
   type Workbook,
 } from "@hands/app";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -281,6 +272,22 @@ export function FloatingChat() {
           console.log("[FloatingChat] Option tapped - expanding + focusing input");
           handleExpand();
           setTimeout(() => inputRef.current?.focus(), 100);
+        })
+      );
+
+      // Option+other key pressed - cancel STT (allows Option+C, Option+V, etc.)
+      unlisteners.push(
+        await listen("option-key-cancelled", async () => {
+          console.log("[FloatingChat] Option combo detected - cancelling STT");
+          if (isRecording) {
+            setIsRecording(false);
+            setSttPreview("");
+            try {
+              await invoke("stt_cancel_recording");
+            } catch (err) {
+              // Ignore errors - recording might not have started
+            }
+          }
         })
       );
 
@@ -548,36 +555,11 @@ export function FloatingChat() {
     maybeCollapse();
   }, [maybeCollapse]);
 
-  // Attachment handlers
-  const handleSnapshot = useCallback(async () => {
-    try {
-      await invoke("start_capture");
-    } catch (err) {
-      console.error("[FloatingChat] Failed to start capture:", err);
-    }
-  }, []);
-
-  const handlePickFile = useCallback(async () => {
-    try {
-      const path = await invoke<string | null>("pick_file");
-      if (path) {
-        setPendingFiles((prev) => [...prev, path]);
-      }
-    } catch (err) {
-      console.error("[FloatingChat] Failed to pick file:", err);
-    }
-  }, []);
-
-  const handlePickFolder = useCallback(async () => {
-    try {
-      const path = await invoke<string | null>("pick_folder");
-      if (path) {
-        setPendingFiles((prev) => [...prev, path]);
-      }
-    } catch (err) {
-      console.error("[FloatingChat] Failed to pick folder:", err);
-    }
-  }, []);
+  // Attachment handlers - using shared hook
+  const { handlePickFile, handlePickFolder, handleSnapshot } = useFilePicker({
+    onFileSelected: (path) => setPendingFiles((prev) => [...prev, path]),
+    onFolderSelected: (path) => setPendingFiles((prev) => [...prev, path]),
+  });
 
   // Message handlers
   const handleSend = useCallback(() => {
@@ -1094,51 +1076,15 @@ export function FloatingChat() {
                 style={{ maxHeight: "120px" }}
               />
 
-              {/* Attachment dropdown - no bg */}
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <button className="h-8 w-8 rounded-lg flex items-center justify-center text-zinc-400 hover:text-zinc-200 transition-colors shrink-0 self-center relative">
-                    <Paperclip className="h-4 w-4" />
-                    {pendingFiles.length > 0 && (
-                      <span className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-blue-500 text-[10px] text-white flex items-center justify-center">
-                        {pendingFiles.length}
-                      </span>
-                    )}
-                  </button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end" side="top" sideOffset={8}>
-                  <DropdownMenuItem onClick={handleSnapshot} className="gap-2">
-                    <Camera className="h-4 w-4" />
-                    <span>Snapshot</span>
-                  </DropdownMenuItem>
-                  <DropdownMenuItem onClick={handlePickFile} className="gap-2">
-                    <File className="h-4 w-4" />
-                    <span>File</span>
-                  </DropdownMenuItem>
-                  <DropdownMenuItem onClick={handlePickFolder} className="gap-2">
-                    <Folder className="h-4 w-4" />
-                    <span>Folder</span>
-                  </DropdownMenuItem>
-                  {pendingFiles.length > 0 && (
-                    <>
-                      <div className="border-t border-border my-1" />
-                      <div className="px-2 py-1 text-[10px] uppercase text-muted-foreground">
-                        Pending ({pendingFiles.length})
-                      </div>
-                      {pendingFiles.map((file, i) => (
-                        <DropdownMenuItem
-                          key={i}
-                          onClick={() => setPendingFiles((prev) => prev.filter((_, j) => j !== i))}
-                          className="gap-2 text-xs"
-                        >
-                          <X className="h-3 w-3 text-red-400" />
-                          <span className="truncate">{file.split("/").pop()}</span>
-                        </DropdownMenuItem>
-                      ))}
-                    </>
-                  )}
-                </DropdownMenuContent>
-              </DropdownMenu>
+              {/* Attachment dropdown - shared component */}
+              <AttachmentMenu
+                onSnapshot={handleSnapshot}
+                onPickFile={handlePickFile}
+                onPickFolder={handlePickFolder}
+                pendingFiles={pendingFiles}
+                onRemoveFile={(i) => setPendingFiles((prev) => prev.filter((_, j) => j !== i))}
+                triggerClassName="h-8 w-8 rounded-lg flex items-center justify-center text-zinc-400 hover:text-zinc-200 transition-colors shrink-0 self-center relative"
+              />
 
               {/* Submit/Abort button - no bg */}
               <AnimatePresence mode="wait">
@@ -1192,34 +1138,14 @@ export function FloatingChat() {
             >
               <Book className="h-3.5 w-3.5 shrink-0" />
 
-              {/* Workbook name - dropdown to switch */}
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <button className="flex items-center gap-1 truncate hover:text-zinc-200 transition-colors">
-                    <span className="truncate">{currentWorkbook?.name || "No workbook"}</span>
-                    <ChevronDown className="h-3 w-3 shrink-0" />
-                  </button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="start" side="top" sideOffset={4} className="w-[200px]">
-                  {workbooks.map((wb) => (
-                    <DropdownMenuItem
-                      key={wb.id}
-                      onClick={() => handleSwitchWorkbook(wb)}
-                      className="flex items-center justify-between"
-                    >
-                      <span className="truncate text-[13px]">{wb.name}</span>
-                      {wb.directory === workbookDir && (
-                        <Check className="h-3.5 w-3.5 text-primary shrink-0" />
-                      )}
-                    </DropdownMenuItem>
-                  ))}
-                  {workbooks.length > 0 && <div className="border-t border-border my-1" />}
-                  <DropdownMenuItem onClick={handleCreateWorkbook} className="gap-2">
-                    <Plus className="h-3.5 w-3.5" />
-                    <span className="text-[13px]">New Notebook</span>
-                  </DropdownMenuItem>
-                </DropdownMenuContent>
-              </DropdownMenu>
+              {/* Workbook name - shared dropdown to switch */}
+              <WorkbookDropdown
+                workbooks={workbooks}
+                currentWorkbook={currentWorkbook}
+                currentWorkbookDir={workbookDir}
+                onSwitchWorkbook={handleSwitchWorkbook}
+                onCreateWorkbook={handleCreateWorkbook}
+              />
 
               {/* Open button - opens workbook editor */}
               <button
