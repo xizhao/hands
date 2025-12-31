@@ -91,6 +91,57 @@ export function TocSidebar({
   const headingList = useEditorSelector(getHeadingList, [], { equalityFn: headingsEqual });
   const [activeId, setActiveId] = React.useState<string>('');
 
+  // Scrollspy - track visible headings with IntersectionObserver
+  React.useEffect(() => {
+    if (headingList.length === 0) return;
+
+    // Map DOM elements to heading IDs
+    const elementToId = new Map<Element, string>();
+    const visibleHeadings = new Set<string>();
+
+    // Observe all heading elements
+    const elements: Element[] = [];
+    for (const heading of headingList) {
+      const node = NodeApi.get(editor, heading.path);
+      if (!node) continue;
+      const el = editor.api.toDOMNode(node);
+      if (el) {
+        elements.push(el);
+        elementToId.set(el, heading.id);
+      }
+    }
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        for (const entry of entries) {
+          const id = elementToId.get(entry.target);
+          if (!id) continue;
+
+          if (entry.isIntersecting) {
+            visibleHeadings.add(id);
+          } else {
+            visibleHeadings.delete(id);
+          }
+        }
+
+        // Set active to the first visible heading (topmost in document order)
+        for (const heading of headingList) {
+          if (visibleHeadings.has(heading.id)) {
+            setActiveId(heading.id);
+            break;
+          }
+        }
+      },
+      { rootMargin: '-10% 0px -80% 0px' } // Trigger when heading is in top 20% of viewport
+    );
+
+    for (const el of elements) {
+      observer.observe(el);
+    }
+
+    return () => observer.disconnect();
+  }, [editor, headingList]);
+
   // Handle click - scroll to heading using scrollIntoView
   const handleClick = React.useCallback((e: React.MouseEvent, item: Heading) => {
     e.preventDefault();

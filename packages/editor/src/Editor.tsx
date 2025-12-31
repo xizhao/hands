@@ -607,57 +607,52 @@ export const Editor = forwardRef<EditorHandle, EditorProps>(function Editor(
 
           {/* View content - each mode has its own container */}
           {mode === "visual" && (
-            <div className="relative flex-1 min-h-0 overflow-y-auto cursor-text flex">
-              {/* Main content column */}
-              <div className="flex-1 px-6 flex flex-col">
-                {/* Loading overlay */}
-                {isLoading && (
-                  <div className="absolute inset-0 z-10 flex items-center justify-center bg-background/80 backdrop-blur-sm">
-                    <div className="flex items-center gap-2 text-muted-foreground text-sm">
-                      <div className="h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent" />
-                      Loading...
-                    </div>
+            <div className="relative flex-1 min-h-0 overflow-y-auto cursor-text flex flex-col px-6">
+              {/* Loading overlay */}
+              {isLoading && (
+                <div className="absolute inset-0 z-10 flex items-center justify-center bg-background/80 backdrop-blur-sm">
+                  <div className="flex items-center gap-2 text-muted-foreground text-sm">
+                    <div className="h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent" />
+                    Loading...
                   </div>
-                )}
-
-                {/* Frontmatter header */}
-                {frontmatter && onFrontmatterChange && (
-                  <FrontmatterHeader
-                    frontmatter={frontmatter}
-                    onFrontmatterChange={onFrontmatterChange}
-                    onFocusEditor={handleFocusEditor}
-                    subtitleRef={subtitleRef}
-                    showTitle={showTitle}
-                    showDescription={showDescription}
-                    compact
-                  />
-                )}
-
-                {/* Custom header slot */}
-                {header}
-
-                {/* Editor content */}
-                <PlateContent
-                  className={cn(
-                    "pt-4 pb-32 min-h-[200px] outline-none",
-                    DEFAULT_PROSE_CLASSES,
-                    contentClassName,
-                    isLoading && "opacity-50 pointer-events-none"
-                  )}
-                  placeholder={placeholder}
-                  readOnly={readOnly}
-                  onKeyDown={handleEditorKeyDown}
-                />
-
-                {footer}
-              </div>
-
-              {/* Table of contents - sticky in right gutter */}
-              {(frontmatter?.toc ?? tocProp) && (
-                <div className="w-10 shrink-0 pr-2">
-                  <TocSidebar className="sticky top-4" position="right" />
                 </div>
               )}
+
+              {/* Table of contents - fixed to viewport, vertically centered */}
+              {(frontmatter?.toc ?? tocProp) && (
+                <TocSidebar className="fixed right-4 top-1/2 -translate-y-1/2 w-8 z-40" position="right" />
+              )}
+
+              {/* Frontmatter header */}
+              {frontmatter && onFrontmatterChange && (
+                <FrontmatterHeader
+                  frontmatter={frontmatter}
+                  onFrontmatterChange={onFrontmatterChange}
+                  onFocusEditor={handleFocusEditor}
+                  subtitleRef={subtitleRef}
+                  showTitle={showTitle}
+                  showDescription={showDescription}
+                  compact
+                />
+              )}
+
+              {/* Custom header slot */}
+              {header}
+
+              {/* Editor content */}
+              <PlateContent
+                className={cn(
+                  "pt-4 pb-32 min-h-[200px] outline-none",
+                  DEFAULT_PROSE_CLASSES,
+                  contentClassName,
+                  isLoading && "opacity-50 pointer-events-none"
+                )}
+                placeholder={placeholder}
+                readOnly={readOnly}
+                onKeyDown={handleEditorKeyDown}
+              />
+
+              {footer}
             </div>
           )}
 

@@ -279,7 +279,8 @@ export function VegaChart({
 
     const updateSize = async () => {
       try {
-        view.width(containerWidth);
+        // Use same -1 buffer as initial embed to prevent overflow triggering resize loop
+        view.width(Math.max(100, containerWidth - 1));
         await view.runAsync();
       } catch (err) {
         // Ignore resize errors
@@ -331,7 +332,7 @@ export function VegaChart({
       {/* Vega container - React never modifies children, only Vega does */}
       <div
         ref={containerRef}
-        className="w-full"
+        className="w-full overflow-hidden"
         style={{
           minHeight: height,
           visibility: showVegaContainer && !overlayContent ? "visible" : "hidden",
