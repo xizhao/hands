@@ -12,6 +12,8 @@ import { FileText, Table2, Zap } from "lucide-react";
 import type { ReactNode } from "react";
 import type { DomainTab } from "@/components/sidebar/domain/types";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { useNeedsTrafficLightOffset } from "@/hooks/useFullscreen";
+import { useSidebarMode } from "@/hooks/useNavState";
 import { useRuntimeState } from "@/hooks/useRuntimeState";
 import { cn } from "@/lib/utils";
 import { HeaderActionsSlot, SpecBarSlot, SyncStatusSlot } from "./HeaderActionsContext";
@@ -172,6 +174,9 @@ export function ContentHeader({ children }: ContentHeaderProps) {
 function DomainTabs({ domainId, onClose }: { domainId: string; onClose: () => void }) {
   const router = useRouter();
   const routerState = useRouterState();
+  const needsTrafficLightOffset = useNeedsTrafficLightOffset();
+  const { mode: sidebarMode } = useSidebarMode();
+  const isFloating = sidebarMode === "floating";
 
   // Get current tab from URL search params
   const search = routerState.location.search as { tab?: string };
@@ -289,7 +294,14 @@ function DomainTabs({ domainId, onClose }: { domainId: string; onClose: () => vo
   };
 
   return (
-    <div className="flex items-end flex-1 gap-1" data-tauri-drag-region>
+    <div
+      className={cn(
+        "flex items-end flex-1 gap-1",
+        // In floating mode, content needs left padding for traffic lights
+        isFloating && needsTrafficLightOffset && "pl-[72px]",
+      )}
+      data-tauri-drag-region
+    >
       {/* Page title tab with close button inside */}
       {renderPrimaryTab(primaryTab)}
 

@@ -163,7 +163,7 @@ export function NotebookShell({ children }: NotebookShellProps) {
               "flex flex-col h-full relative",
               !isFloating && "shrink-0",
               isFloating && !isFullscreenSidebar && [
-                "absolute top-2 bottom-2 left-2 z-30",
+                "absolute top-0 bottom-2 left-0 z-30",
                 "rounded-xl border border-border/60 bg-surface",
                 "shadow-xl shadow-black/10 dark:shadow-black/30",
                 "transition-transform duration-200 ease-out",
