@@ -16,10 +16,12 @@ import { usePlatform } from "../platform";
 import { trpc } from "@/lib/trpc";
 import type { RuntimeStatus } from "../platform/types";
 
-/** Workbook manifest from runtime */
+/** Workbook manifest from runtime (domains come from tRPC separately) */
 export interface WorkbookManifest {
   workbookId: string;
   workbookDir: string;
+
+  /** Blocks (reusable components) */
   blocks: Array<{
     id: string;
     title: string;
@@ -28,18 +30,9 @@ export interface WorkbookManifest {
     description?: string;
     uninitialized?: boolean;
   }>;
-  sources?: Array<{
-    id: string;
-    name: string;
-    title: string;
-    description: string;
-    schedule?: string;
-    secrets: string[];
-    missingSecrets: string[];
-    path: string;
-    spec?: string;
-  }>;
-  actions?: Array<{
+
+  /** Actions */
+  actions: Array<{
     id: string;
     name?: string;
     description?: string;
@@ -49,24 +42,7 @@ export interface WorkbookManifest {
     valid: boolean;
     error?: string;
   }>;
-  pages?: Array<{
-    id: string;
-    route: string;
-    path: string;
-    parentDir: string;
-    isBlock: boolean;
-    title: string;
-  }>;
-  plugins?: Array<{
-    id: string;
-    name: string;
-    path: string;
-    description?: string;
-  }>;
-  tables?: Array<{
-    name: string;
-    columns: string[];
-  }>;
+
   isEmpty: boolean;
 }
 

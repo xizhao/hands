@@ -59,12 +59,12 @@ export function ThreadList({
         return (
           <div
             key={session.id}
-            className="group flex items-center gap-1.5 pl-2.5 pr-1.5 py-1.5 text-xs rounded-lg bg-zinc-800/80 hover:bg-zinc-700 text-zinc-300 hover:text-zinc-100 border border-zinc-700/50 transition-all"
+            className="group flex items-center gap-1.5 pl-2.5 pr-1.5 py-1.5 text-xs rounded-lg bg-secondary/80 dark:bg-muted/80 hover:bg-secondary dark:hover:bg-muted text-muted-foreground hover:text-foreground border border-border transition-all"
           >
             <StatusDot status={status} />
             <button
               onClick={() => onSessionSelect(session.id)}
-              className="max-w-[140px] truncate hover:text-white transition-colors"
+              className="max-w-[140px] truncate hover:text-foreground transition-colors"
             >
               {session.title || "Untitled"}
             </button>
@@ -74,7 +74,7 @@ export function ThreadList({
                   e.stopPropagation();
                   onSessionDelete(session.id);
                 }}
-                className="p-0.5 rounded hover:bg-zinc-600 text-zinc-500 hover:text-zinc-300 opacity-0 group-hover:opacity-100 transition-all"
+                className="p-0.5 rounded hover:bg-muted text-muted-foreground/60 hover:text-muted-foreground opacity-0 group-hover:opacity-100 transition-all"
               >
                 <X className="h-3 w-3" />
               </button>
@@ -91,7 +91,7 @@ export function ThreadList({
             <div className="relative">
               <button
                 onClick={() => setShowDropdown(!showDropdown)}
-                className="flex items-center gap-1.5 px-2.5 h-7 text-xs text-zinc-400 hover:text-zinc-200 bg-zinc-800 hover:bg-zinc-700 border border-zinc-700/50 rounded-lg transition-colors"
+                className="flex items-center gap-1.5 px-2.5 h-7 text-xs text-muted-foreground hover:text-foreground bg-secondary dark:bg-muted hover:bg-secondary/80 dark:hover:bg-muted/80 border border-border rounded-lg transition-colors"
               >
                 <span>+{overflowSessions.length} more</span>
                 <ChevronDown className="h-3 w-3" />
@@ -103,12 +103,12 @@ export function ThreadList({
                     initial={{ opacity: 0, y: 5 }}
                     animate={{ opacity: 1, y: 0 }}
                     exit={{ opacity: 0, y: 5 }}
-                    className="absolute bottom-full left-0 mb-1 bg-zinc-800 border border-zinc-700 rounded-lg shadow-xl z-50 min-w-[220px] py-1 max-h-[300px] overflow-y-auto"
+                    className="absolute bottom-full left-0 mb-1 bg-popover border border-border rounded-lg shadow-xl z-50 min-w-[220px] py-1 max-h-[300px] overflow-y-auto"
                   >
                     {overflowSessions.map((session) => (
                       <div
                         key={session.id}
-                        className="group w-full flex items-center gap-2 px-3 py-1.5 text-xs text-zinc-300 hover:bg-zinc-700 transition-colors"
+                        className="group w-full flex items-center gap-2 px-3 py-1.5 text-xs text-muted-foreground hover:bg-muted transition-colors"
                       >
                         <StatusDot status={getSessionStatus(session.id)} />
                         <button
@@ -116,7 +116,7 @@ export function ThreadList({
                             onSessionSelect(session.id);
                             setShowDropdown(false);
                           }}
-                          className="truncate flex-1 text-left hover:text-white"
+                          className="truncate flex-1 text-left hover:text-foreground"
                         >
                           {session.title || "Untitled"}
                         </button>
@@ -126,7 +126,7 @@ export function ThreadList({
                               e.stopPropagation();
                               onSessionDelete(session.id);
                             }}
-                            className="p-0.5 rounded hover:bg-zinc-600 text-zinc-500 hover:text-zinc-300 opacity-0 group-hover:opacity-100 transition-all"
+                            className="p-0.5 rounded hover:bg-muted text-muted-foreground/60 hover:text-muted-foreground opacity-0 group-hover:opacity-100 transition-all"
                           >
                             <X className="h-3 w-3" />
                           </button>
@@ -144,7 +144,7 @@ export function ThreadList({
             <div className="relative">
               <button
                 onClick={() => setShowDropdown(!showDropdown)}
-                className="flex items-center gap-1.5 px-2.5 h-7 text-xs text-zinc-400 hover:text-zinc-200 bg-zinc-800 hover:bg-zinc-700 border border-zinc-700/50 rounded-lg transition-colors"
+                className="flex items-center gap-1.5 px-2.5 h-7 text-xs text-muted-foreground hover:text-foreground bg-secondary dark:bg-muted hover:bg-secondary/80 dark:hover:bg-muted/80 border border-border rounded-lg transition-colors"
               >
                 <Layers className="h-3.5 w-3.5" />
                 <span>{backgroundSessions.length}</span>
@@ -164,16 +164,16 @@ export function ThreadList({
                     initial={{ opacity: 0, y: 5 }}
                     animate={{ opacity: 1, y: 0 }}
                     exit={{ opacity: 0, y: 5 }}
-                    className="absolute bottom-full left-0 mb-1 bg-zinc-800 border border-zinc-700 rounded-lg shadow-xl z-50 min-w-[220px] py-1"
+                    className="absolute bottom-full left-0 mb-1 bg-popover border border-border rounded-lg shadow-xl z-50 min-w-[220px] py-1"
                   >
-                    <div className="flex items-center gap-1.5 px-3 py-1 text-[10px] uppercase text-zinc-500 font-medium">
+                    <div className="flex items-center gap-1.5 px-3 py-1 text-[10px] uppercase text-muted-foreground/60 font-medium">
                       <Layers className="h-3 w-3" />
                       Background Jobs
                     </div>
                     {backgroundSessions.map((session) => (
                       <div
                         key={session.id}
-                        className="group w-full flex items-center gap-2 px-3 py-1.5 text-xs text-zinc-400 hover:bg-zinc-700 transition-colors"
+                        className="group w-full flex items-center gap-2 px-3 py-1.5 text-xs text-muted-foreground hover:bg-muted transition-colors"
                       >
                         <StatusDot status={getSessionStatus(session.id)} />
                         <button
@@ -181,7 +181,7 @@ export function ThreadList({
                             onSessionSelect(session.id);
                             setShowDropdown(false);
                           }}
-                          className="truncate flex-1 text-left hover:text-zinc-200"
+                          className="truncate flex-1 text-left hover:text-foreground"
                         >
                           {session.title || `Subtask ${session.id.slice(0, 6)}`}
                         </button>
@@ -191,7 +191,7 @@ export function ThreadList({
                               e.stopPropagation();
                               onSessionDelete(session.id);
                             }}
-                            className="p-0.5 rounded hover:bg-zinc-600 text-zinc-500 hover:text-zinc-300 opacity-0 group-hover:opacity-100 transition-all"
+                            className="p-0.5 rounded hover:bg-muted text-muted-foreground/60 hover:text-muted-foreground opacity-0 group-hover:opacity-100 transition-all"
                           >
                             <X className="h-3 w-3" />
                           </button>
@@ -209,7 +209,7 @@ export function ThreadList({
             <button
               onClick={onCreateSession}
               disabled={isCreating}
-              className="flex items-center justify-center h-7 w-7 text-zinc-400 hover:text-zinc-200 bg-zinc-800 hover:bg-zinc-700 border border-zinc-700/50 rounded-lg transition-colors ml-auto"
+              className="flex items-center justify-center h-7 w-7 text-muted-foreground hover:text-foreground bg-secondary dark:bg-muted hover:bg-secondary/80 dark:hover:bg-muted/80 border border-border rounded-lg transition-colors ml-auto"
             >
               {isCreating ? (
                 <Loader2 className="h-3.5 w-3.5 animate-spin" />
@@ -226,7 +226,7 @@ export function ThreadList({
         <button
           onClick={onCreateSession}
           disabled={isCreating}
-          className="flex items-center justify-center gap-1.5 px-3 py-2 text-xs text-zinc-500 hover:text-zinc-300 bg-zinc-800/50 hover:bg-zinc-800 border border-dashed border-zinc-700/50 rounded-lg transition-colors"
+          className="flex items-center justify-center gap-1.5 px-3 py-2 text-xs text-muted-foreground/60 hover:text-muted-foreground bg-secondary/50 dark:bg-muted/50 hover:bg-secondary dark:hover:bg-muted border border-dashed border-border rounded-lg transition-colors"
         >
           {isCreating ? (
             <Loader2 className="h-3.5 w-3.5 animate-spin" />

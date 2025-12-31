@@ -25,7 +25,6 @@ import {
 import { UnifiedSidebar } from "../sidebar/UnifiedSidebar";
 import { ContentHeader } from "./ContentHeader";
 import { HeaderActionsProvider } from "./HeaderActionsContext";
-import { RightPanel } from "./panels/RightPanel";
 
 // ============================================================================
 // Main Component
@@ -178,16 +177,23 @@ export function NotebookShell({ children }: NotebookShellProps) {
         >
           <ContentHeader />
           <main className="flex-1 min-h-0 overflow-hidden">
-            <div className="h-full p-2 pl-1">
-              <div className="h-full rounded-lg border border-border/40 bg-background overflow-hidden shadow-sm">
+            <div className={cn(
+              "h-full pl-1 pr-2 pb-2",
+              // No top padding for domain routes - tabs connect directly
+              currentPath.startsWith("/domains/") ? "pt-0" : "pt-2"
+            )}>
+              <div className={cn(
+                "h-full border border-border/40 bg-background overflow-hidden shadow-sm",
+                // Adjust rounding for domain routes - no top-right rounding where tabs are
+                currentPath.startsWith("/domains/")
+                  ? "rounded-b-lg rounded-tl-lg"
+                  : "rounded-lg"
+              )}>
                 {children}
               </div>
             </div>
           </main>
         </div>
-
-        {/* Right panel overlay */}
-        <RightPanel />
 
         {/* Hidden file input for import */}
         <input

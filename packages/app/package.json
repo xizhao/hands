@@ -19,6 +19,7 @@
     "@hands/workbook-server": "workspace:*",
     "@opencode-ai/sdk": "^1.0.198",
     "@phosphor-icons/react": "^2.1.10",
+    "@radix-ui/react-alert-dialog": "^1.1.15",
     "@tanstack/react-query": "^5.90.12",
     "@tanstack/react-router": "^1.140.5",
     "@tanstack/react-virtual": "^3.13.13",

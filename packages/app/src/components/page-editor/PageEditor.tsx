@@ -3,6 +3,7 @@
  *
  * Thin wrapper around @hands/editor's Editor component.
  * Handles page source fetching/saving via tRPC.
+ * Shows ChatGPT-style prompt input for empty pages.
  */
 
 import { cn } from "@/lib/utils";
@@ -15,12 +16,18 @@ import {
   serializeFrontmatter,
   type Frontmatter,
   PageContextPlugin,
+  SpecBar,
 } from "@hands/editor";
-import { useCallback, useEffect, useRef, type ReactNode } from "react";
+import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 
 import { usePageSource } from "./hooks/usePageSource";
 import { DesktopEditorProvider } from "./DesktopEditorProvider";
 import { PromptPlugin, PromptMarkdownRules } from "./plugins/prompt-kit";
+import { useSendMessage, useCreateSession, useSessionStatus } from "@/hooks/useSession";
+import { setActiveSessionState } from "@/hooks/useNavState";
+import { setChatExpanded } from "@/hooks/useChatState";
+import { SpecBarPortal, SyncStatusPortal } from "@/components/workbook/HeaderActionsContext";
+import { RefreshCw } from "lucide-react";
 
 // ============================================================================
 // Custom Blocks for Desktop
@@ -92,6 +99,15 @@ export function PageEditor({
     saveSourceNow,
   } = usePageSource({ pageId, readOnly });
 
+  // Session management for agent dispatch
+  const createSession = useCreateSession();
+  const sendMessage = useSendMessage();
+
+  // Track sync session - derive isSyncing from session status
+  const [syncSessionId, setSyncSessionId] = useState<string | null>(null);
+  const { data: syncStatus } = useSessionStatus(syncSessionId);
+  const isSyncing = syncSessionId !== null && (syncStatus?.type === "busy" || syncStatus?.type === "running");
+
   // Extract content (body without frontmatter)
   const content = source ? source.slice(parseFrontmatter(source).contentStart) : "";
 
@@ -124,6 +140,65 @@ export function PageEditor({
     },
     [setFrontmatter]
   );
+
+  // Handle description changes from SpecBar
+  const handleDescriptionChange = useCallback(
+    (description: string) => {
+      setFrontmatter({ ...frontmatter, description: description || undefined });
+    },
+    [frontmatter, setFrontmatter]
+  );
+
+  // Handle Sync: Dispatch to @hands to generate/regenerate page from spec + schema
+  const handleSync = useCallback(async () => {
+    // Don't create duplicate sync sessions
+    if (isSyncing) return;
+
+    try {
+      // Create a new session for this sync task
+      const newSession = await createSession.mutateAsync({
+        title: `Sync: ${frontmatter.title || pageId}`
+      });
+      const sessionId = newSession.id;
+
+      // Track this session for status updates
+      setSyncSessionId(sessionId);
+
+      // Open chat with this session so user can see progress
+      setActiveSessionState(sessionId);
+      setChatExpanded(true);
+
+      // Get current content for context
+      const currentContent = editorRef.current?.getMarkdown() ?? "";
+
+      // Build prompt for @hands
+      const spec = frontmatter.description
+        ? `**Spec:** ${frontmatter.description}`
+        : "No spec provided - generate sensible content based on the page title and available schema.";
+
+      const prompt = `Generate/update the page content based on this spec:
+
+**Page:** ${frontmatter.title || pageId}
+${spec}
+
+${currentContent ? `**Current content (preserve user sections where appropriate):**
+\`\`\`mdx
+${currentContent}
+\`\`\`` : "This is a new page - generate initial content."}
+
+Write the content directly to the page file. Use the schema tool to understand available data. Use LiveValue for data display and LiveAction for interactions where appropriate.`;
+
+      await sendMessage.mutateAsync({
+        sessionId,
+        content: prompt,
+        agent: "hands",
+      });
+    } catch (err) {
+      console.error("Sync failed:", err);
+      // Clear sync session on error so user can retry
+      setSyncSessionId(null);
+    }
+  }, [isSyncing, frontmatter, pageId, createSession, sendMessage]);
 
   // Cmd+S to force immediate save
   useEffect(() => {
@@ -166,6 +241,24 @@ export function PageEditor({
 
   return (
     <EditorWithProviders>
+      {/* Sync status indicator in tab */}
+      <SyncStatusPortal>
+        {isSyncing && (
+          <RefreshCw className="h-3 w-3 ml-1 text-primary animate-spin" />
+        )}
+      </SyncStatusPortal>
+
+      {/* SpecBar portaled into header tab dropdown */}
+      <SpecBarPortal>
+        <SpecBar
+          description={frontmatter.description ?? ""}
+          onDescriptionChange={handleDescriptionChange}
+          onSync={handleSync}
+          isSyncing={isSyncing}
+          readOnly={readOnly}
+        />
+      </SpecBarPortal>
+
       <Editor
         ref={editorRef}
         value={content}
@@ -174,6 +267,8 @@ export function PageEditor({
         plugins={[PageContextPlugin] as unknown as EditorProps["plugins"]}
         frontmatter={frontmatter}
         onFrontmatterChange={handleFrontmatterChange}
+        showTitle={false}
+        showDescription={false}
         isSaving={isSaving}
         readOnly={readOnly}
         className={className}

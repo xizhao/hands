@@ -77,11 +77,14 @@ const tocSidebarButtonVariants = cva(
 interface TocSidebarProps {
   className?: string;
   maxShowCount?: number;
+  /** Position of the sidebar - affects expand direction */
+  position?: 'left' | 'right';
 }
 
 export function TocSidebar({
   className,
   maxShowCount = 20,
+  position = 'left',
 }: TocSidebarProps) {
   const editor = useEditorRef();
   // Use equality function to prevent re-renders when headings haven't changed
@@ -132,15 +135,17 @@ export function TocSidebar({
       <nav
         aria-label="Table of contents"
         className={cn(
-          'absolute top-0 left-0 z-50 transition-all duration-200',
+          'absolute top-0 z-50 transition-all duration-200',
           'pointer-events-none opacity-0',
           'group-hover:pointer-events-auto group-hover:opacity-100',
+          position === 'right' ? 'right-0' : 'left-0',
         )}
       >
         <div
           className={cn(
             popoverVariants(),
-            'max-h-80 w-[200px] overflow-auto rounded-lg p-1.5 shadow-lg'
+            'max-h-80 w-[200px] overflow-auto rounded-lg p-1.5 shadow-lg',
+            position === 'right' && '-translate-x-[calc(100%-32px)]',
           )}
         >
           {headingList.slice(0, maxShowCount).map((item, index) => {

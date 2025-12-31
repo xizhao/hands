@@ -61,14 +61,29 @@ const ELEMENT_INFO: Record<string, { icon: React.ReactNode; label: string }> = {
   [KEYS.columnGroup]: { icon: <SquaresFour weight="duotone" className="h-3.5 w-3.5" />, label: 'Columns' },
 };
 
+/** Editor mode type */
+export type EditorMode = 'visual' | 'markdown' | 'slides';
+
 interface EditorStatusBarProps {
   /** Whether the editor is currently saving */
   isSaving?: boolean;
+  /** Current editor mode */
+  mode?: EditorMode;
+  /** Callback when mode changes */
+  onModeChange?: (mode: EditorMode) => void;
+  /** Whether to show mode toggle */
+  showModeToggle?: boolean;
   /** Additional class name */
   className?: string;
 }
 
-export function EditorStatusBar({ isSaving, className }: EditorStatusBarProps) {
+export function EditorStatusBar({
+  isSaving,
+  mode = 'visual',
+  onModeChange,
+  showModeToggle = false,
+  className
+}: EditorStatusBarProps) {
   // Get DnD state
   const isDragging = usePluginOption(DndPlugin, 'isDragging');
 
@@ -163,6 +178,45 @@ export function EditorStatusBar({ isSaving, className }: EditorStatusBarProps) {
           </div>
         )}
       </div>
+
+      {/* Center - Mode toggle */}
+      {showModeToggle && onModeChange && (
+        <div className="flex items-center gap-0.5 px-1 py-0.5 rounded-md bg-background/50">
+          <button
+            onClick={() => onModeChange('visual')}
+            className={cn(
+              "px-2 py-0.5 rounded text-[10px] font-medium transition-colors",
+              mode === 'visual'
+                ? "bg-accent text-foreground"
+                : "text-muted-foreground hover:text-foreground"
+            )}
+          >
+            Visual
+          </button>
+          <button
+            onClick={() => onModeChange('markdown')}
+            className={cn(
+              "px-2 py-0.5 rounded text-[10px] font-medium transition-colors",
+              mode === 'markdown'
+                ? "bg-accent text-foreground"
+                : "text-muted-foreground hover:text-foreground"
+            )}
+          >
+            Markdown
+          </button>
+          <button
+            onClick={() => onModeChange('slides')}
+            className={cn(
+              "px-2 py-0.5 rounded text-[10px] font-medium transition-colors",
+              mode === 'slides'
+                ? "bg-accent text-foreground"
+                : "text-muted-foreground hover:text-foreground"
+            )}
+          >
+            Slides
+          </button>
+        </div>
+      )}
 
       {/* Right side - Save status */}
       <div className="flex items-center gap-1.5">

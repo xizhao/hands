@@ -1,8 +1,8 @@
 /**
  * Navigation state - Module-level state + server persistence
  *
- * Module state: panel, tab, session (persists across navigation)
- * Server persistence: sidebarWidth, rightPanel, activeTab
+ * Module state: tab, session (persists across navigation)
+ * Server persistence: sidebarWidth, activeTab
  *
  * Note: chatExpanded is managed by useChatState.ts
  *
@@ -15,35 +15,31 @@ import { useCallback, useEffect, useSyncExternalStore } from "react";
 import { trpc } from "@/lib/trpc";
 
 // Types
-export type RightPanelId = "sources" | "database" | "settings" | "alerts" | "blocks" | null;
 export type TabId = "sources" | "data" | "insights" | "preview";
 
-// Search params schema (kept for backwards compat, but not used for state)
+/** URL search params for navigation */
 export interface NavSearchParams {
-  panel?: RightPanelId;
-  tab?: TabId;
-  session?: string;
+  panel?: "chat" | undefined;
+  tab?: TabId | undefined;
+  session?: string | undefined;
 }
 
 // ============================================
 // Module-level state (persists across navigation)
 // ============================================
 
-let rightPanel: RightPanelId = null;
 let activeTab: TabId = "preview";
 let activeSession: string | null = null;
 let sidebarWidth = 280;
 let stateInitialized = false;
 
 interface NavStateSnapshot {
-  rightPanel: RightPanelId;
   activeTab: TabId;
   activeSession: string | null;
   sidebarWidth: number;
 }
 
 let snapshot: NavStateSnapshot = {
-  rightPanel,
   activeTab,
   activeSession,
   sidebarWidth,
@@ -64,7 +60,6 @@ function getSnapshot() {
 
 function emitChange() {
   snapshot = {
-    rightPanel,
     activeTab,
     activeSession,
     sidebarWidth,
@@ -89,11 +84,6 @@ function debouncedSync(fn: () => void, delay = 300) {
 }
 
 // Setters
-export function setRightPanelState(panel: RightPanelId) {
-  rightPanel = panel;
-  emitChange();
-}
-
 export function setActiveTabState(tab: TabId) {
   activeTab = tab;
   emitChange();
@@ -112,12 +102,10 @@ export function setSidebarWidthState(width: number) {
 /** Initialize from server state */
 export function initializeFromServer(serverState: {
   sidebarWidth: number;
-  rightPanel: string | null;
   activeTab: string;
 }) {
   if (stateInitialized) return;
   sidebarWidth = serverState.sidebarWidth;
-  rightPanel = (serverState.rightPanel as RightPanelId) ?? null;
   activeTab = (serverState.activeTab as TabId) ?? "preview";
   stateInitialized = true;
   emitChange();
@@ -125,7 +113,6 @@ export function initializeFromServer(serverState: {
 
 /** Reset navigation state (e.g., when switching workbooks) */
 export function resetNavState() {
-  rightPanel = null;
   activeTab = "preview";
   activeSession = null;
   stateInitialized = false;
@@ -158,29 +145,6 @@ export function useEditorStateSync() {
 
   // Return the mutation for other hooks to use
   return { updateMutation };
-}
-
-export function useRightPanel() {
-  const state = useSyncExternalStore(subscribe, getSnapshot, getSnapshot);
-  const updateMutation = trpc.editorState.updateUiState.useMutation();
-
-  const setPanel = useCallback((newPanel: RightPanelId) => {
-    setRightPanelState(newPanel);
-    // Debounce sync to server
-    debouncedSync(() => {
-      updateMutation.mutate({ rightPanel: newPanel });
-    });
-  }, [updateMutation]);
-
-  const togglePanel = useCallback((targetPanel: Exclude<RightPanelId, null>) => {
-    const newPanel = rightPanel === targetPanel ? null : targetPanel;
-    setRightPanelState(newPanel);
-    debouncedSync(() => {
-      updateMutation.mutate({ rightPanel: newPanel });
-    });
-  }, [updateMutation]);
-
-  return { panel: state.rightPanel, setPanel, togglePanel };
 }
 
 export function useActiveTab() {

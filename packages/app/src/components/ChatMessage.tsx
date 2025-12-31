@@ -1475,7 +1475,7 @@ export const ChatMessage = memo(
           <div
             className={cn(
               "max-w-full",
-              tailDown && "rounded-2xl rounded-bl-sm bg-zinc-800 shadow-sm",
+              tailDown && "rounded-2xl rounded-bl-sm bg-secondary dark:bg-muted shadow-sm",
               tailDown && (compact ? "px-2.5 py-1.5" : "px-3.5 py-2"),
             )}
           >

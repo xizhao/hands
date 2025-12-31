@@ -2,18 +2,16 @@
  * Sidebar Data Hook
  *
  * Extracts and filters data from runtime manifest for sidebar display.
+ * Domains come from tRPC, actions from manifest.
+ *
+ * Note: Legacy properties (pages, tables, plugins) are stubbed for backward
+ * compatibility but return empty values. Use domains instead.
  */
 
 import { useMemo } from "react";
 import { useRuntimeState } from "@/hooks/useRuntimeState";
-import { useSourceManagement } from "@/hooks/useSources";
-import type {
-  SidebarPage,
-  SidebarPlugin,
-  SidebarAction,
-  SidebarSource,
-  SidebarTable,
-} from "../types";
+import { trpc } from "@/lib/trpc";
+import type { SidebarAction, SidebarPage, SidebarPlugin, SidebarTable } from "../types";
 
 export interface SidebarDataOptions {
   /** Search query to filter items */
@@ -27,147 +25,79 @@ export function useSidebarData(options: SidebarDataOptions = {}) {
   const {
     workbookId: activeWorkbookId,
     manifest,
-    isStarting,
-    isDbBooting,
   } = useRuntimeState();
 
-  // Source management
-  const { sources } = useSourceManagement();
-
-  // Raw data from manifest
-  const tables: SidebarTable[] = manifest?.tables ?? [];
-  const allPages = manifest?.pages ?? [];
+  // Domains from tRPC (source of truth for tables)
+  // Poll every 2 seconds for live updates when schema changes
+  const { data: domainsData, isLoading: domainsLoading } = trpc.domains.list.useQuery(undefined, {
+    refetchInterval: 2000,
+  });
+  const domains = domainsData?.domains ?? [];
   const actions: SidebarAction[] = manifest?.actions ?? [];
-  const plugins: SidebarPlugin[] = manifest?.plugins ?? [];
 
-  // Filter out blocks - they show in BlocksPanel
-  const pages: SidebarPage[] = useMemo(
-    () => allPages.filter((p) => !p.isBlock),
-    [allPages],
-  );
+  // Legacy stubs - pages/tables/plugins are deprecated, use domains
+  const pages: SidebarPage[] = [];
+  const tables: SidebarTable[] = [];
+  const plugins: SidebarPlugin[] = [];
 
-  // Derived loading states
-  const isLoading = !manifest && !!activeWorkbookId;
-  const isDbLoading = isStarting || isDbBooting;
-
-  // Group pages by folder
-  const { rootPages, pageFolders } = useMemo(() => {
-    const root: SidebarPage[] = [];
-    const folders = new Map<string, SidebarPage[]>();
-
-    for (const page of pages) {
-      if (!page.parentDir) {
-        root.push(page);
-      } else {
-        if (!folders.has(page.parentDir)) {
-          folders.set(page.parentDir, []);
-        }
-        folders.get(page.parentDir)!.push(page);
-      }
-    }
-
-    return { rootPages: root, pageFolders: folders };
-  }, [pages]);
-
-  // Group tables by source
-  const { sourceTableMap, unassociatedTables } = useMemo(() => {
-    const tableMap = new Map<string, string[]>();
-    const unassociated: string[] = [];
-
-    if (tables.length === 0) return { sourceTableMap: tableMap, unassociatedTables: unassociated };
-
-    for (const table of tables) {
-      const tableName = table.name;
-      let matched = false;
-
-      for (const source of sources) {
-        const prefix = `${source.name.toLowerCase()}_`;
-        if (
-          tableName.toLowerCase().startsWith(prefix) ||
-          tableName.toLowerCase() === source.name.toLowerCase()
-        ) {
-          if (!tableMap.has(source.id)) {
-            tableMap.set(source.id, []);
-          }
-          tableMap.get(source.id)?.push(tableName);
-          matched = true;
-          break;
-        }
-      }
-
-      if (!matched) {
-        unassociated.push(tableName);
-      }
-    }
-
-    return { sourceTableMap: tableMap, unassociatedTables: unassociated };
-  }, [tables, sources]);
+  // Loading = waiting for manifest or domains
+  const isLoading = (!manifest && !!activeWorkbookId) || domainsLoading;
 
   // Filter helpers
   const matchesSearch = (text: string) =>
     !searchQuery || text.toLowerCase().includes(searchQuery.toLowerCase());
-
-  // Filtered data
-  const filteredRootPages = useMemo(
-    () => rootPages.filter((p) => matchesSearch(p.title) || matchesSearch(p.id)),
-    [rootPages, searchQuery],
-  );
-
-  const filteredPlugins = useMemo(
-    () => plugins.filter((p) => matchesSearch(p.name) || matchesSearch(p.id)),
-    [plugins, searchQuery],
-  );
 
   const filteredActions = useMemo(
     () => actions.filter((a) => matchesSearch(a.name ?? a.id) || matchesSearch(a.id)),
     [actions, searchQuery],
   );
 
-  const filteredUnassociatedTables = useMemo(
-    () => unassociatedTables.filter(matchesSearch),
-    [unassociatedTables, searchQuery],
+  const filteredDomains = useMemo(
+    () => domains.filter((d) => matchesSearch(d.name) || matchesSearch(d.id)),
+    [domains, searchQuery],
   );
 
-  // Filter pages within folders
-  const getFilteredFolderPages = (folderPages: SidebarPage[]) =>
-    searchQuery
-      ? folderPages.filter((p) => matchesSearch(p.title) || matchesSearch(p.id))
-      : folderPages;
-
-  // Filter tables within sources
-  const getFilteredSourceTables = (sourceTables: string[]) =>
-    searchQuery ? sourceTables.filter(matchesSearch) : sourceTables;
+  // Legacy stubs for backward compatibility
+  const rootPages: SidebarPage[] = [];
+  const pageFolders = new Map<string, SidebarPage[]>();
+  const sourceTableMap = new Map<string, string[]>();
+  const unassociatedTables: string[] = [];
+  const filteredPlugins: SidebarPlugin[] = [];
+  const getFilteredFolderPages = () => [] as SidebarPage[];
+  const getFilteredSourceTables = () => [] as string[];
 
   return {
-    // Raw data
-    pages,
+    // Raw data - domains are now the primary source
+    domains,
     actions,
-    plugins,
-    tables,
-    sources,
+    sources: [], // Legacy stub
 
-    // Grouped data
-    rootPages: filteredRootPages,
+    // Filtered data
+    filteredDomains,
+    filteredActions,
+
+    // Legacy stubs (deprecated - use domains)
+    pages,
+    tables,
+    plugins,
+    rootPages,
     pageFolders,
     sourceTableMap,
-    unassociatedTables: filteredUnassociatedTables,
-
-    // Filtered getters
+    unassociatedTables,
+    filteredPlugins,
     getFilteredFolderPages,
     getFilteredSourceTables,
-    filteredPlugins,
-    filteredActions,
 
     // Loading states
     isLoading,
-    isDbLoading,
     activeWorkbookId,
 
     // Counts
-    hasPages: pages.length > 0,
-    hasData: sources.length > 0 || tables.length > 0,
+    hasDomains: domains.length > 0,
+    hasData: domains.length > 0,
     hasActions: actions.length > 0,
-    hasPlugins: plugins.length > 0,
+    hasPages: false, // Legacy
+    hasPlugins: false, // Legacy
   };
 }
 

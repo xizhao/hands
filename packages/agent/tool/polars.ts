@@ -1,5 +1,16 @@
 import { tool } from "@opencode-ai/plugin";
-import pl from "nodejs-polars";
+
+// Use dynamic import for nodejs-polars since it's a native addon
+// that can't be bundled and must remain external
+let pl: typeof import("nodejs-polars");
+let polarsError: Error | null = null;
+const polarsPromise = import("nodejs-polars")
+  .then((m) => {
+    pl = m.default ?? m;
+  })
+  .catch((err) => {
+    polarsError = err;
+  });
 
 
 const DEFAULT_RUNTIME_PORT = 55000;
@@ -199,6 +210,12 @@ Return a value to see it in the output.`,
     const { code, timeout = 30000 } = args;
     const maxTimeout = 120000;
     const effectiveTimeout = Math.min(timeout, maxTimeout);
+
+    // Ensure polars is loaded (dynamic import for native addon)
+    await polarsPromise;
+    if (polarsError) {
+      return `Error: Failed to load nodejs-polars native module.\n${polarsError.message}\n\nMake sure the native polars binary is available.`;
+    }
 
     try {
       const context = createPolarsContext();

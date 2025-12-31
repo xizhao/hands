@@ -11,6 +11,7 @@
 import { EmptyWorkbookState } from "@/components/workbook/EmptyWorkbookState";
 import { useChatState } from "@/hooks/useChatState";
 import { useRuntimeState } from "@/hooks/useRuntimeState";
+import { trpc } from "@/lib/trpc";
 import { createFileRoute } from "@tanstack/react-router";
 
 export const Route = createFileRoute("/_notebook/")({
@@ -20,34 +21,31 @@ export const Route = createFileRoute("/_notebook/")({
 function IndexPage() {
   const {
     manifest,
-    schema: dbSchema,
     isFullyReady,
     isDbBooting,
     isStarting,
   } = useRuntimeState();
   const chatState = useChatState();
 
-  const tableCount = dbSchema?.length ?? 0;
-  const manifestTableCount = manifest?.tables?.length ?? 0;
+  // Domains come from tRPC (not manifest)
+  const { data: domainsData, isLoading: domainsLoading } = trpc.domains.list.useQuery(undefined, {
+    refetchInterval: 2000,
+  });
+
+  const domainCount = domainsData?.domains?.length ?? 0;
   const blockCount = manifest?.blocks?.length ?? 0;
-  const sourceCount = manifest?.sources?.length ?? 0;
-  const pages = manifest?.pages ?? [];
-  const pageCount = pages.length;
 
   // Still loading: no manifest yet OR db still booting (unless we have blocks to show)
   const isLoading = !manifest || isStarting || isDbBooting;
 
-  // Has content: blocks, sources, or pages exist
-  const hasContent = blockCount > 0 || sourceCount > 0 || pageCount > 0;
+  // Has content: blocks or domains exist
+  const hasContent = blockCount > 0 || domainCount > 0;
 
   // Show getting started ONLY when fully ready AND everything is empty
   const showGettingStarted =
     isFullyReady &&
-    manifestTableCount === 0 &&
-    tableCount === 0 &&
-    blockCount === 0 &&
-    sourceCount === 0 &&
-    pageCount === 0;
+    domainCount === 0 &&
+    blockCount === 0;
 
   const handleImportFile = () => {
     // File import is now handled via the sidebar chat

@@ -12,11 +12,14 @@ import type {
   DiscoveredAction,
   DiscoveredBlock,
   DiscoveredComponent,
+  DiscoveredDomain,
   DiscoveredPage,
   DiscoveredPlugin,
   DiscoveredTable,
   DiscoveryError,
   DiscoveryResult,
+  DomainColumn,
+  DomainForeignKey,
   ResolvedWorkbookConfig,
   WorkbookConfig,
   WorkbookManifest,
@@ -285,6 +288,322 @@ export function discoverTables(rootPath: string): DiscoveryResult<DiscoveredTabl
 }
 
 // ============================================================================
+// Domain Discovery (tables as first-class entities)
+// ============================================================================
+
+/** Common patterns in junction/relation table names */
+const JUNCTION_PATTERNS = [
+  /_to_/i,
+  /_x_/i,
+  /_rel_/i,
+  /_link_/i,
+  /_map_/i,
+  /_join_/i,
+  /_bridge_/i,
+  /_assoc_/i,
+];
+
+/**
+ * Generate a stable hash from schema components.
+ * Used for detecting schema changes.
+ */
+function generateSchemaHash(
+  tableName: string,
+  columns: DomainColumn[],
+  foreignKeys: DomainForeignKey[]
+): string {
+  const normalized = {
+    table: tableName,
+    columns: columns
+      .map((c) => `${c.name}:${c.type}:${c.nullable}:${c.isPrimary}`)
+      .sort()
+      .join("|"),
+    fks: foreignKeys
+      .map((fk) => `${fk.column}->${fk.referencedTable}.${fk.referencedColumn}`)
+      .sort()
+      .join("|"),
+  };
+
+  const str = JSON.stringify(normalized);
+
+  // Simple hash function (djb2)
+  let hash = 5381;
+  for (let i = 0; i < str.length; i++) {
+    hash = (hash * 33) ^ str.charCodeAt(i);
+  }
+  return (hash >>> 0).toString(16);
+}
+
+/**
+ * Detect if a table is a relation/junction table.
+ * These are excluded from domains.
+ */
+function detectRelationTable(
+  tableName: string,
+  columns: DomainColumn[],
+  foreignKeys: DomainForeignKey[],
+  allTableNames: string[]
+): { isRelation: boolean; reason?: string } {
+  // Check for junction naming patterns
+  for (const pattern of JUNCTION_PATTERNS) {
+    if (pattern.test(tableName)) {
+      return {
+        isRelation: true,
+        reason: `Table name matches junction pattern: ${pattern}`,
+      };
+    }
+  }
+
+  // Check if table name is combination of two other tables
+  for (const table1 of allTableNames) {
+    for (const table2 of allTableNames) {
+      if (table1 === table2 || table1 === tableName || table2 === tableName) {
+        continue;
+      }
+
+      const combo1 = `${table1}_${table2}`;
+      const combo2 = `${table2}_${table1}`;
+
+      if (tableName === combo1 || tableName === combo2) {
+        return {
+          isRelation: true,
+          reason: `Table name is combination of ${table1} and ${table2}`,
+        };
+      }
+    }
+  }
+
+  // Check if table has exactly 2 FKs and minimal other columns
+  if (foreignKeys.length === 2) {
+    const nonFkColumns = columns.filter(
+      (col) =>
+        !foreignKeys.some((fk) => fk.column === col.name) && !col.isPrimary
+    );
+
+    // If only has FK columns + optional timestamps/id, likely a junction
+    const isMinimalJunction =
+      nonFkColumns.length <= 2 &&
+      nonFkColumns.every((col) =>
+        ["created_at", "updated_at", "id", "created", "modified"].includes(
+          col.name.toLowerCase()
+        )
+      );
+
+    if (isMinimalJunction) {
+      return {
+        isRelation: true,
+        reason: "Table has 2 foreign keys with minimal other columns",
+      };
+    }
+  }
+
+  return { isRelation: false };
+}
+
+/**
+ * Convert table name to display name.
+ */
+function toDisplayName(tableName: string): string {
+  return tableName
+    .split("_")
+    .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+    .join(" ");
+}
+
+/**
+ * Discover domains from the SQLite database.
+ * Domains are non-relation tables treated as first-class entities.
+ */
+export function discoverDomains(
+  rootPath: string,
+  pages: DiscoveredPage[]
+): DiscoveryResult<DiscoveredDomain> {
+  const items: DiscoveredDomain[] = [];
+  const errors: DiscoveryError[] = [];
+
+  // Import database functions
+  let getWorkbookDb: (workbookDir: string) => import("bun:sqlite").Database;
+  try {
+    const dbModule = require("../db/workbook-db.js");
+    getWorkbookDb = dbModule.getWorkbookDb;
+  } catch (err) {
+    errors.push({
+      file: "workbook-db",
+      error: `Failed to load database module: ${err instanceof Error ? err.message : String(err)}`,
+    });
+    return { items, errors };
+  }
+
+  let db: import("bun:sqlite").Database;
+  try {
+    db = getWorkbookDb(rootPath);
+  } catch (err) {
+    // Database doesn't exist yet - that's ok, just return empty
+    return { items, errors };
+  }
+
+  // Get all user tables
+  const tables = db.query<{ name: string }, []>(`
+    SELECT name FROM sqlite_master
+    WHERE type = 'table'
+      AND name NOT LIKE 'sqlite_%'
+      AND name NOT GLOB '__*'
+    ORDER BY name
+  `).all();
+
+  const allTableNames = tables.map((t) => t.name);
+
+  // First pass: collect all table schemas and foreign keys
+  const tableSchemas = new Map<
+    string,
+    { columns: DomainColumn[]; foreignKeys: DomainForeignKey[] }
+  >();
+
+  for (const table of tables) {
+    try {
+      // Get columns
+      const columnsRaw = db.query<{
+        name: string;
+        type: string;
+        notnull: number;
+        pk: number;
+        dflt_value: string | null;
+      }, []>(`PRAGMA table_info("${table.name}")`).all();
+
+      const columns: DomainColumn[] = columnsRaw.map((c) => ({
+        name: c.name,
+        type: c.type,
+        nullable: c.notnull === 0,
+        isPrimary: c.pk === 1,
+        defaultValue: c.dflt_value ?? undefined,
+      }));
+
+      // Get foreign keys
+      const fksRaw = db.query<{
+        from: string;
+        table: string;
+        to: string;
+      }, []>(`PRAGMA foreign_key_list("${table.name}")`).all();
+
+      const foreignKeys: DomainForeignKey[] = fksRaw.map((fk) => ({
+        column: fk.from,
+        referencedTable: fk.table,
+        referencedColumn: fk.to,
+      }));
+
+      tableSchemas.set(table.name, { columns, foreignKeys });
+    } catch (err) {
+      errors.push({
+        file: table.name,
+        error: `Failed to get schema: ${err instanceof Error ? err.message : String(err)}`,
+      });
+    }
+  }
+
+  // Second pass: filter relation tables and build domains
+  for (const table of tables) {
+    const schema = tableSchemas.get(table.name);
+    if (!schema) continue;
+
+    // Check if this is a relation table
+    const relationCheck = detectRelationTable(
+      table.name,
+      schema.columns,
+      schema.foreignKeys,
+      allTableNames
+    );
+
+    if (relationCheck.isRelation) {
+      continue; // Skip relation tables
+    }
+
+    // Find related domains (tables that have FKs pointing to this table)
+    const relatedDomains: string[] = [];
+    for (const [otherTable, otherSchema] of tableSchemas) {
+      if (otherTable === table.name) continue;
+
+      // Check if other table has FK pointing to this table
+      if (otherSchema.foreignKeys.some((fk) => fk.referencedTable === table.name)) {
+        relatedDomains.push(otherTable);
+      }
+    }
+
+    // Also add tables this domain references
+    for (const fk of schema.foreignKeys) {
+      if (!relatedDomains.includes(fk.referencedTable)) {
+        relatedDomains.push(fk.referencedTable);
+      }
+    }
+
+    // Generate schema hash
+    const schemaHash = generateSchemaHash(
+      table.name,
+      schema.columns,
+      schema.foreignKeys
+    );
+
+    // Find matching page
+    const matchedPage = findMatchingPage(table.name, pages);
+
+    // Create domain
+    const domain: DiscoveredDomain = {
+      id: table.name,
+      name: toDisplayName(table.name),
+      columns: schema.columns,
+      schemaHash,
+      foreignKeys: schema.foreignKeys,
+      relatedDomains,
+      hasPage: !!matchedPage,
+      pagePath: matchedPage?.path,
+      pageId: matchedPage?.id,
+      syncStatus: {
+        isSynced: !matchedPage, // If no page, consider it synced (nothing to sync)
+        currentHash: schemaHash,
+        pageHash: undefined, // TODO: read from page frontmatter
+      },
+    };
+
+    items.push(domain);
+  }
+
+  return { items, errors };
+}
+
+/**
+ * Find a page that matches a domain by table name.
+ */
+function findMatchingPage(
+  tableName: string,
+  pages: DiscoveredPage[]
+): { path: string; id: string } | null {
+  // Normalize table name for comparison
+  const normalizedTable = tableName.toLowerCase();
+
+  // Try to match by page route/id
+  for (const page of pages) {
+    // Skip block pages
+    if (page.isBlock) continue;
+
+    // Get page ID from route (e.g., "/products" -> "products")
+    const pageId = page.route.replace(/^\//, "").replace(/\//g, "-") || "index";
+    const normalizedPageId = pageId.toLowerCase().replace(/-/g, "_");
+
+    // Match by page ID
+    if (normalizedPageId === normalizedTable) {
+      return { path: page.path, id: pageId };
+    }
+
+    // Also try matching by filename
+    const filename = basename(page.path, page.ext).toLowerCase().replace(/-/g, "_");
+    if (filename === normalizedTable) {
+      return { path: page.path, id: pageId };
+    }
+  }
+
+  return null;
+}
+
+// ============================================================================
 // Plugin Discovery
 // ============================================================================
 
@@ -485,30 +804,17 @@ export function discoverActions(
 export async function discoverWorkbook(config: WorkbookConfig): Promise<WorkbookManifest> {
   const resolved = resolveConfig(config);
 
-  const [blocksResult, pagesResult, pluginsResult, componentsResult] = await Promise.all([
-    discoverBlocks(resolved.pagesDir), // Blocks are in pages/blocks/
-    discoverPages(resolved.pagesDir),
-    discoverPlugins(resolved.pluginsDir),
-    discoverComponents(resolved.uiDir),
-  ]);
+  // Discover blocks
+  const blocksResult = await discoverBlocks(resolved.pagesDir);
 
-  // Sync discoveries (no module imports)
+  // Discover actions
   const actionsResult = discoverActions(resolved.actionsDir, resolved.rootPath);
-  const tablesResult = discoverTables(resolved.rootPath);
 
   return {
     blocks: blocksResult.items,
-    pages: pagesResult.items,
-    plugins: pluginsResult.items,
-    components: componentsResult.items,
-    tables: tablesResult.items,
     actions: actionsResult.items,
     errors: [
       ...blocksResult.errors,
-      ...pagesResult.errors,
-      ...pluginsResult.errors,
-      ...componentsResult.errors,
-      ...tablesResult.errors,
       ...actionsResult.errors,
     ],
     timestamp: Date.now(),

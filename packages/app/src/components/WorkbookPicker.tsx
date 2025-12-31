@@ -113,7 +113,7 @@ export function WorkbookPicker() {
         onSuccess: (workbook) => {
           openWorkbook.mutate(workbook, {
             onSuccess: () => {
-              navigate({ to: "/pages/$pageId", params: { pageId: "welcome" } });
+              navigate({ to: "/" });
             },
           });
         },

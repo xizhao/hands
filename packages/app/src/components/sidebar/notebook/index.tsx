@@ -10,7 +10,6 @@
 import { Search, X } from "lucide-react";
 import { useState } from "react";
 import { TooltipProvider } from "@/components/ui/tooltip";
-import { useSourceManagement } from "@/hooks/useSources";
 import { cn } from "@/lib/utils";
 
 import { useSidebarState } from "./hooks/useSidebarState";
@@ -50,7 +49,6 @@ export function NotebookSidebar({
   const state = useSidebarState();
   const data = useSidebarData({ searchQuery });
   const actions = useSidebarActions({ preventNavigation, onSelectItem });
-  const { availableSources } = useSourceManagement();
 
   return (
     <TooltipProvider delayDuration={0}>
@@ -95,10 +93,10 @@ export function NotebookSidebar({
           />
 
           <DataSection
-            expanded={state.sections.data.expanded || (!!searchQuery && (data.sources.length > 0 || data.unassociatedTables.length > 0))}
+            expanded={state.sections.data.expanded || (!!searchQuery && data.unassociatedTables.length > 0)}
             onToggle={state.sections.data.toggle}
             sources={data.sources}
-            availableSources={availableSources}
+            availableSources={[]}
             sourceTableMap={data.sourceTableMap}
             unassociatedTables={data.unassociatedTables}
             getFilteredSourceTables={data.getFilteredSourceTables}

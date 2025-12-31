@@ -10,6 +10,7 @@
 
 import type { AgentConfig } from "@opencode-ai/sdk";
 import { HANDS_CHARTS_QUICK_REF } from "../docs/charts-guide.js";
+import { DOMAIN_ARCHITECTURE } from "../docs/domain-guide.js";
 import { HANDS_ARCHITECTURE } from "../docs/hands-guide.js";
 import {
   ALL_ELEMENTS_DOCS,
@@ -65,6 +66,8 @@ You have direct access to:
 ## Hands architecture
 
 ${HANDS_ARCHITECTURE}
+
+${DOMAIN_ARCHITECTURE}
 
 ## Pages & MDX (Your Primary Domain)
 

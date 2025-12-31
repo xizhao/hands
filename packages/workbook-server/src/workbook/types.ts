@@ -148,6 +148,70 @@ export interface DiscoveredAction {
 }
 
 // ============================================================================
+// Domains (tables as first-class entities)
+// ============================================================================
+
+/** Foreign key relationship for a domain */
+export interface DomainForeignKey {
+  /** Column in this table */
+  column: string;
+  /** Referenced table */
+  referencedTable: string;
+  /** Referenced column */
+  referencedColumn: string;
+}
+
+/** Column in a domain's table */
+export interface DomainColumn {
+  /** Column name */
+  name: string;
+  /** SQLite type */
+  type: string;
+  /** Whether column can be null */
+  nullable: boolean;
+  /** Whether this is the primary key */
+  isPrimary: boolean;
+  /** Default value if any */
+  defaultValue?: string;
+}
+
+/** Schema sync status */
+export interface DomainSyncStatus {
+  /** Whether page schema matches current table schema */
+  isSynced: boolean;
+  /** Current table schema hash */
+  currentHash: string;
+  /** Schema hash stored in page frontmatter */
+  pageHash?: string;
+}
+
+/** A discovered domain (table as first-class entity) */
+export interface DiscoveredDomain {
+  /** Table name (serves as unique identifier) */
+  id: string;
+  /** Display name derived from table name or page metadata */
+  name: string;
+  /** Column definitions */
+  columns: DomainColumn[];
+  /** Schema hash for change detection */
+  schemaHash: string;
+  /** Foreign key relationships */
+  foreignKeys: DomainForeignKey[];
+  /** Related domain IDs (tables that reference this one) */
+  relatedDomains: string[];
+  /** Whether this domain has an associated page */
+  hasPage: boolean;
+  /** Page path if exists */
+  pagePath?: string;
+  /** Page ID if exists */
+  pageId?: string;
+  /** Icon from page frontmatter */
+  icon?: string;
+  /** Sync status with associated page */
+  syncStatus: DomainSyncStatus;
+}
+
+// ============================================================================
 // Discovery Results
 // ============================================================================
 
@@ -162,16 +226,8 @@ export interface DiscoveryResult<T> {
 }
 
 export interface WorkbookManifest {
-  /** Discovered blocks */
+  /** Discovered blocks (reusable components) */
   blocks: DiscoveredBlock[];
-  /** Discovered pages */
-  pages: DiscoveredPage[];
-  /** Discovered plugins */
-  plugins: DiscoveredPlugin[];
-  /** Discovered UI components */
-  components: DiscoveredComponent[];
-  /** Discovered database tables */
-  tables: DiscoveredTable[];
   /** Discovered actions */
   actions: DiscoveredAction[];
   /** Discovery errors */

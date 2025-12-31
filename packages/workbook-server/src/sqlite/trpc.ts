@@ -152,6 +152,7 @@ export const sqliteTRPCRouter = t.router({
         type: c.type,
         nullable: c.nullable,
       })),
+      foreignKeys: t.foreignKeys,
     }));
   }),
 

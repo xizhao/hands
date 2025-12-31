@@ -23,3 +23,6 @@ export * from "./actions";
 
 // Sheet primitives (smart SQLite table abstraction)
 export * from "./sheet";
+
+// Domain primitives (table-as-first-class-entity abstraction)
+export * from "./domain";

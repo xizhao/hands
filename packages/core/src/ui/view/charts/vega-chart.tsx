@@ -173,8 +173,8 @@ export function VegaChart({
 
     return {
       ...spec,
-      // Use measured container width
-      width: containerWidth,
+      // Use measured container width (subtract small buffer to prevent overflow)
+      width: Math.max(100, containerWidth - 1),
       height,
       // Use named data source for dynamic updates
       data: { name: DATA_SOURCE_NAME },
@@ -183,10 +183,11 @@ export function VegaChart({
         ...vegaTheme,
         ...((spec.config as Record<string, unknown>) ?? {}),
       },
-      // Autosize: "pad" grows chart to fit content including axes/labels
+      // Autosize: "fit" constrains chart to specified dimensions
+      // "contains: padding" ensures padding/axes fit within width
       autosize: {
-        type: "pad",
-        resize: true,
+        type: "fit",
+        contains: "padding",
       },
     };
   }, [spec, height, vegaTheme, containerWidth]);

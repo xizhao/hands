@@ -111,7 +111,7 @@ function generateDefaultBlockSource(blockName: string): string {
 // ============================================================================
 
 export const workbookTRPCRouter = t.router({
-  /** Get workbook manifest (blocks, pages, plugins, components) */
+  /** Get workbook manifest (blocks, actions) - domains come from separate endpoint */
   manifest: publicProcedure.query(async ({ ctx }) => {
     const manifest = await discoverWorkbook({ rootPath: ctx.workbookDir });
     return {
@@ -126,28 +126,9 @@ export const workbookTRPCRouter = t.router({
         uninitialized: b.uninitialized,
         refreshable: b.meta.refreshable,
       })),
-      pages: manifest.pages.map((p) => ({
-        id: p.route.replace(/^\//, "") || "index",
-        route: p.route,
-        path: p.path,
-        parentDir: p.parentDir,
-        isBlock: p.isBlock,
-        title: p.route === "/" ? "Home" : p.route.split("/").pop() || p.route,
-      })),
-      plugins: manifest.plugins.map((p) => ({
-        id: p.id,
-        name: p.name,
-        path: p.path,
-        description: p.description,
-      })),
-      components: manifest.components.map((c) => ({
-        name: c.name,
-        path: c.path,
-        isClient: c.isClientComponent,
-      })),
       actions: manifest.actions,
-      tables: manifest.tables,
       errors: manifest.errors,
+      isEmpty: manifest.blocks.length === 0,
       timestamp: manifest.timestamp,
     };
   }),
@@ -397,31 +378,6 @@ export const workbookTRPCRouter = t.router({
     }),
   }),
 
-  /** Page operations */
-  pages: t.router({
-    /** List all pages */
-    list: publicProcedure.query(async ({ ctx }) => {
-      const manifest = await discoverWorkbook({ rootPath: ctx.workbookDir });
-      return manifest.pages.map((p) => ({
-        route: p.route,
-        path: p.path,
-        ext: p.ext,
-      }));
-    }),
-  }),
-
-  /** UI component operations */
-  components: t.router({
-    /** List all UI components */
-    list: publicProcedure.query(async ({ ctx }) => {
-      const manifest = await discoverWorkbook({ rootPath: ctx.workbookDir });
-      return manifest.components.map((c) => ({
-        name: c.name,
-        path: c.path,
-        isClient: c.isClientComponent,
-      }));
-    }),
-  }),
 });
 
 export type WorkbookTRPCRouter = typeof workbookTRPCRouter;

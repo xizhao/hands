@@ -48,7 +48,6 @@ export {
 } from "./useWorkbook";
 
 export * from "./useSession";
-export * from "./useSources";
 
 // Server and settings
 export { useServerHealth, useServer } from "./useServer";
@@ -71,9 +70,6 @@ export * from "./useGit";
 
 // Background tasks
 export * from "./useBackgroundTask";
-
-// Source sync
-export * from "./useSourceSync";
 
 // Thumbnails
 export * from "./useThumbnails";

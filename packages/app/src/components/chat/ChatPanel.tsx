@@ -244,7 +244,7 @@ export function ChatPanel({
                     initial={{ opacity: 0, y: 10 }}
                     animate={{ opacity: 1, y: 0 }}
                     exit={{ opacity: 0, y: 10 }}
-                    className="rounded-2xl rounded-bl-sm bg-zinc-800 shadow-sm px-2.5 py-1.5 w-fit"
+                    className="rounded-2xl rounded-bl-sm bg-secondary dark:bg-muted shadow-sm px-2.5 py-1.5 w-fit"
                   >
                     <ThinkingIndicator />
                   </motion.div>
@@ -286,7 +286,7 @@ export function ChatPanel({
           >
             <button
               onClick={handleBack}
-              className="flex items-center gap-1.5 px-2 h-7 text-xs text-zinc-400 hover:text-zinc-200 bg-zinc-800 hover:bg-zinc-700 rounded-md transition-colors"
+              className="flex items-center gap-1.5 px-2 h-7 text-xs text-muted-foreground hover:text-foreground bg-secondary dark:bg-muted hover:bg-secondary/80 dark:hover:bg-muted/80 rounded-md transition-colors"
             >
               <ChevronLeft className="h-3.5 w-3.5" />
               <span className="max-w-[120px] truncate">
@@ -298,7 +298,7 @@ export function ChatPanel({
             {backgroundSessions.length > 0 && (
               <button
                 onClick={handleBack}
-                className="flex items-center gap-1.5 px-2 h-7 text-xs text-zinc-400 hover:text-zinc-200 bg-zinc-800 hover:bg-zinc-700 rounded-md transition-colors"
+                className="flex items-center gap-1.5 px-2 h-7 text-xs text-muted-foreground hover:text-foreground bg-secondary dark:bg-muted hover:bg-secondary/80 dark:hover:bg-muted/80 rounded-md transition-colors"
               >
                 <Layers className="h-3.5 w-3.5" />
                 <span>
@@ -319,7 +319,7 @@ export function ChatPanel({
 
       {/* Input bar */}
       <div className="shrink-0 px-3 pb-3">
-        <div className="bg-zinc-900 border border-zinc-700/50 rounded-xl px-2 py-1.5">
+        <div className="bg-secondary dark:bg-card border border-border rounded-xl px-2 py-1.5">
           <ChatInput
             ref={inputRef}
             value={inputValue}

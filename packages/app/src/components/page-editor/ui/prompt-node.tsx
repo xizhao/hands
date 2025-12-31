@@ -22,7 +22,7 @@ import { Sparkle } from '@phosphor-icons/react';
 
 import { api, subscribeToEvents } from '@/lib/api';
 import { useActiveRuntime } from '@/hooks/useWorkbook';
-import { useManifest } from '@/hooks/useRuntimeState';
+import { trpc } from '@/lib/trpc';
 import { HandsLogo } from '@/components/ui/hands-logo';
 import { type TPromptElement } from '../plugins/prompt-kit';
 import { PageContextPlugin } from '@hands/editor';
@@ -31,7 +31,7 @@ export function PromptElement(props: PlateElementProps) {
   const element = props.element as TPromptElement;
   const editor = useEditorRef();
   const readOnly = useReadOnly();
-  const { data: manifest } = useManifest();
+  const { data: domainsData } = trpc.domains.list.useQuery();
   const { data: runtime } = useActiveRuntime();
   const pageId = usePluginOption(PageContextPlugin, 'pageId');
   const hasStartedRef = useRef(false);
@@ -94,9 +94,10 @@ export function PromptElement(props: PlateElementProps) {
           );
         }
 
-        // Build context about the schema
-        const schemaContext = manifest?.tables?.length
-          ? `Available tables:\n${manifest.tables.map(t => `- ${t.name}(${t.columns.join(', ')})`).join('\n')}`
+        // Build context about the schema from domains
+        const domains = domainsData?.domains ?? [];
+        const schemaContext = domains.length
+          ? `Available tables:\n${domains.map(d => `- ${d.name}(${d.columns.map(c => c.name).join(', ')})`).join('\n')}`
           : '';
 
         // System prompt for MDX generation - includes file path and clear edit instructions
@@ -132,7 +133,7 @@ ${schemaContext}
     };
 
     startAgent();
-  }, [readOnly, isPending, promptText, editor, element, directory, manifest?.tables, pageId]);
+  }, [readOnly, isPending, promptText, editor, element, directory, domainsData?.domains, pageId]);
 
   return (
     <PlateElement

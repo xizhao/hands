@@ -15,6 +15,7 @@ import { sqliteTRPCRouter, type SQLiteTRPCContext } from "../sqlite/trpc.js";
 import { actionRunsRouter, type ActionRunsContext } from "./routers/action-runs.js";
 import { aiRouter, type AIContext } from "./routers/ai.js";
 import { deployRouter, type DeployContext } from "./routers/deploy.js";
+import { domainsRouter, type DomainsContext } from "./routers/domains.js";
 import { editorStateRouter, type EditorStateContext } from "./routers/editor-state.js";
 import { pagesRouter, type PagesContext } from "./routers/pages.js";
 import { secretsRouter, type SecretsContext } from "./routers/secrets.js";
@@ -56,7 +57,8 @@ interface CombinedContext
     ActionsContext,
     EditorStateContext,
     ActionRunsContext,
-    DeployContext {}
+    DeployContext,
+    DomainsContext {}
 
 // Create a merged router that includes all routes
 const t = initTRPC.context<CombinedContext>().create();
@@ -70,6 +72,8 @@ const appRouter = t.router({
   secrets: secretsRouter,
   // Workbook manifest & blocks
   workbook: workbookRouter,
+  // Domain CRUD (tables as first-class entities)
+  domains: domainsRouter,
   // Pages routes
   pages: pagesRouter,
   // Thumbnails routes
@@ -154,13 +158,14 @@ export type { GitRouter } from "../git/trpc.js";
 export type { SQLiteTRPCRouter as DbRouter } from "../sqlite/trpc.js";
 export type { ActionRunsRouter } from "./routers/action-runs.js";
 export type { AIRouter } from "./routers/ai.js";
+export type { DeployRouter } from "./routers/deploy.js";
+export type { DomainsRouter } from "./routers/domains.js";
 export type { EditorStateRouter } from "./routers/editor-state.js";
 export type { PagesRouter } from "./routers/pages.js";
 export type { SecretsRouter } from "./routers/secrets.js";
 export type { StatusRouter } from "./routers/status.js";
 export type { ThumbnailsRouter } from "./routers/thumbnails.js";
 export type { WorkbookRouter } from "./routers/workbook.js";
-export type { DeployRouter } from "./routers/deploy.js";
 
 // Re-export model types for client usage
 export type {

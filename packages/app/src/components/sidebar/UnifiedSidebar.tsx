@@ -59,7 +59,7 @@ import {
   Search,
 } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { NotebookSidebar } from "./NotebookSidebar";
+import { DomainSidebar } from "./domain/DomainSidebar";
 import { ChatPanel } from "@/components/chat/ChatPanel";
 
 interface UnifiedSidebarProps {
@@ -92,7 +92,7 @@ export function UnifiedSidebar({
   const { data: activeWorkbook } = useWorkbook(activeWorkbookId);
   const titleInputRef = useRef<HTMLSpanElement>(null);
 
-  // Mode: browse (NotebookSidebar) or chat (ChatPanel)
+  // Mode: browse or chat
   const [mode, setMode] = useState<SidebarMode>("browse");
 
   // Session state for chat mode
@@ -206,10 +206,7 @@ export function UnifiedSidebar({
           resetSidebarState();
           openWorkbook.mutate(newWorkbook, {
             onSuccess: () => {
-              router.navigate({
-                to: "/pages/$pageId",
-                params: { pageId: "welcome" },
-              });
+              router.navigate({ to: "/" });
             },
           });
         },
@@ -512,10 +509,18 @@ export function UnifiedSidebar({
     </div>
   );
 
-  // Browse content (NotebookSidebar)
+  // Add source dialog state
+  const [addSourceOpen, setAddSourceOpen] = useState(false);
+
+  const handleAddSource = useCallback(() => {
+    // Sources deprecated - navigate to home
+    router.navigate({ to: "/" });
+  }, [router]);
+
+  // Browse content
   const browseContent = (
     <div className={cn(compact ? "p-2" : "p-3")}>
-      <NotebookSidebar filterQuery={filterQuery} onSelectItem={onSelectItem} />
+      <DomainSidebar filterQuery={filterQuery} onAddSource={handleAddSource} />
     </div>
   );
 

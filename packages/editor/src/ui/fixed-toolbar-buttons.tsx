@@ -1,5 +1,12 @@
 "use client";
 
+/**
+ * Fixed toolbar buttons for the editor.
+ *
+ * This toolbar contains block-level and insert controls only.
+ * Text formatting (bold, italic, colors, etc.) is in the floating selection toolbar.
+ */
+
 import {
   Code,
   CursorClick,
@@ -11,10 +18,6 @@ import {
   Quotes,
   Square,
   Table,
-  TextB,
-  TextItalic,
-  TextStrikethrough,
-  TextUnderline,
 } from "@phosphor-icons/react";
 import { insertCallout } from "@platejs/callout";
 import { insertTable } from "@platejs/table";
@@ -39,9 +42,7 @@ import {
   DropdownMenuLabel,
   DropdownMenuTrigger,
 } from "./dropdown-menu";
-import { FontColorToolbarButton } from "./font-color-toolbar-button";
-import { LinkToolbarButton } from "./link-toolbar-button";
-import { MarkToolbarButton } from "./mark-toolbar-button";
+import { PageSyncStatus } from "./page-sync-status";
 import { ToolbarButton, ToolbarGroup } from "./toolbar";
 import { TurnIntoToolbarButton } from "./turn-into-toolbar-button";
 
@@ -257,46 +258,8 @@ export function FixedToolbarButtons() {
         <TurnIntoToolbarButton />
       </ToolbarGroup>
 
-      {/* Text Formatting - core items always visible */}
-      <ToolbarGroup>
-        <MarkToolbarButton nodeType={KEYS.bold} shortcut="⌘+B" tooltip="Bold">
-          <TextB size={16} weight="bold" />
-        </MarkToolbarButton>
-
-        <MarkToolbarButton nodeType={KEYS.italic} shortcut="⌘+I" tooltip="Italic">
-          <TextItalic size={16} />
-        </MarkToolbarButton>
-
-        {/* Hidden on small screens */}
-        <div className="hidden sm:flex items-center gap-0.5">
-          <MarkToolbarButton nodeType={KEYS.underline} shortcut="⌘+U" tooltip="Underline">
-            <TextUnderline size={16} />
-          </MarkToolbarButton>
-
-          <MarkToolbarButton
-            nodeType={KEYS.strikethrough}
-            shortcut="⌘+Shift+X"
-            tooltip="Strikethrough"
-          >
-            <TextStrikethrough size={16} />
-          </MarkToolbarButton>
-
-          <MarkToolbarButton nodeType={KEYS.code} shortcut="⌘+E" tooltip="Inline Code">
-            <Code size={16} />
-          </MarkToolbarButton>
-        </div>
-      </ToolbarGroup>
-
-      {/* Color & Link - hidden on small screens */}
-      <div className="hidden md:block">
-        <ToolbarGroup>
-          <FontColorToolbarButton />
-          <LinkToolbarButton />
-        </ToolbarGroup>
-      </div>
-
-      {/* Lists - hidden on medium and below */}
-      <div className="hidden lg:block">
+      {/* Lists - hidden on small screens */}
+      <div className="hidden sm:block">
         <ToolbarGroup>
           <BlockTypeButton
             type={KEYS.ul}
@@ -316,8 +279,8 @@ export function FixedToolbarButtons() {
         </ToolbarGroup>
       </div>
 
-      {/* Block Formatting - hidden on medium and below */}
-      <div className="hidden lg:block">
+      {/* Block Formatting - hidden on small screens */}
+      <div className="hidden md:block">
         <ToolbarGroup>
           <BlockTypeButton
             type={KEYS.blockquote}
@@ -333,7 +296,7 @@ export function FixedToolbarButtons() {
       </div>
 
       {/* Insert Elements - hidden on medium and below */}
-      <div className="hidden xl:block">
+      <div className="hidden lg:block">
         <ToolbarGroup>
           <InsertTableButton />
           <InsertCalloutButton />
@@ -347,11 +310,17 @@ export function FixedToolbarButtons() {
       </ToolbarGroup>
 
       {/* More dropdown - visible on smaller screens */}
-      <div className="xl:hidden">
+      <div className="lg:hidden">
         <ToolbarGroup>
           <MoreDropdown />
         </ToolbarGroup>
       </div>
+
+      {/* Spacer to push sync status to the right */}
+      <div className="flex-1" />
+
+      {/* Page sync status - always visible on the right */}
+      <PageSyncStatus />
     </div>
   );
 }

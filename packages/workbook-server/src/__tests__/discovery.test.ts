@@ -106,19 +106,14 @@ describe("discoverWorkbook", () => {
     }
   });
 
-  test("discovers blocks, pages, and components", async () => {
+  test("discovers blocks and actions", async () => {
     const manifest = await discoverWorkbook({ rootPath: TEMP_WORKBOOK });
 
+    // Manifest now only contains blocks and actions (domains are via tRPC)
     expect(manifest.blocks).toHaveLength(1);
     expect(manifest.blocks[0].id).toBe("test-block");
-
-    expect(manifest.pages).toHaveLength(1);
-    expect(manifest.pages[0].route).toBe("/");
-
-    expect(manifest.components).toHaveLength(2);
-    const button = manifest.components.find((c) => c.name === "button");
-    const card = manifest.components.find((c) => c.name === "card");
-    expect(button?.isClientComponent).toBe(true);
-    expect(card?.isClientComponent).toBe(false);
+    expect(manifest.actions).toBeDefined();
+    expect(manifest.errors).toBeDefined();
+    expect(manifest.timestamp).toBeDefined();
   });
 });

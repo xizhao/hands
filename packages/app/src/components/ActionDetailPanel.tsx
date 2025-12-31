@@ -658,7 +658,7 @@ export function ActionDetailPanel({ actionId }: ActionDetailPanelProps) {
               name={action.name || action.id}
               source={sourceData.source}
               className="h-full"
-              onTableClick={(table) => navigate({ to: "/tables/$tableId", params: { tableId: table } })}
+              onTableClick={(table) => navigate({ to: "/domains/$domainId", params: { domainId: table }, search: { tab: "sheet" } } as any)}
             />
           ) : (
             <div className="flex-1 flex items-center justify-center text-muted-foreground">

@@ -35,6 +35,9 @@ export * from "./editor-base-kit";
 // Frontmatter support
 export * from "./frontmatter";
 
+// SpecBar (description as spec with push/pull sync)
+export { SpecBar, type SpecBarProps } from "./ui/spec-bar";
+
 // Transforms
 export * from "./transforms";
 

@@ -22,7 +22,6 @@ import {
 import { trpc } from "@/lib/trpc";
 import { useLiveQuery as useDesktopLiveQuery } from "@/lib/live-query";
 import { useActiveRuntime } from "@/hooks/useWorkbook";
-import { useManifest } from "@/hooks/useRuntimeState";
 
 interface DesktopEditorProviderProps {
   children: ReactNode;
@@ -32,7 +31,9 @@ export function DesktopEditorProvider({ children }: DesktopEditorProviderProps) 
   const navigate = useNavigate();
   const { data: runtime } = useActiveRuntime();
   const runtimePort = runtime?.runtime_port ?? null;
-  const { data: manifest } = useManifest();
+
+  // Get domains from tRPC (source of truth for tables)
+  const { data: domainsData } = trpc.domains.list.useQuery();
 
   // Navigation callback for LiveValue "View in Tables" button
   const handleNavigateToTable = useCallback((tableName: string) => {
@@ -42,13 +43,13 @@ export function DesktopEditorProvider({ children }: DesktopEditorProviderProps) 
     } as any);
   }, [navigate]);
 
-  // Get tables for AI context
+  // Get tables for AI context (from domains)
   const tables = useMemo(() => {
-    return (manifest?.tables ?? []).map((t) => ({
-      name: t.name,
-      columns: t.columns,
+    return (domainsData?.domains ?? []).map((d) => ({
+      name: d.id,
+      columns: d.columns.map((c) => c.name),
     }));
-  }, [manifest?.tables]);
+  }, [domainsData?.domains]);
 
   // Create tRPC adapter for EditorProvider (AI features)
   const generateMdx = trpc.ai.generateMdx.useMutation();

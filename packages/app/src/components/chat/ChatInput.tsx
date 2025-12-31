@@ -109,7 +109,7 @@ export const ChatInput = forwardRef<ChatInputRef, ChatInputProps>(function ChatI
         placeholder={isRecording ? "Listening..." : placeholder}
         rows={1}
         readOnly={isRecording}
-        className={`flex-1 bg-transparent py-2 text-sm text-zinc-100 placeholder:text-zinc-500 focus:outline-none min-w-0 resize-none overflow-y-auto ${
+        className={`flex-1 bg-transparent py-2 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none min-w-0 resize-none overflow-y-auto ${
           isRecording ? "placeholder:text-red-400 text-red-300" : ""
         }`}
         style={{ maxHeight: "120px" }}
@@ -122,7 +122,7 @@ export const ChatInput = forwardRef<ChatInputRef, ChatInputProps>(function ChatI
         onPickFolder={handlePickFolder}
         pendingFiles={pendingFiles}
         onRemoveFile={handleRemoveFile}
-        triggerClassName="h-8 w-8 rounded-lg flex items-center justify-center text-zinc-400 hover:text-zinc-200 transition-colors shrink-0 self-center relative"
+        triggerClassName="h-8 w-8 rounded-lg flex items-center justify-center text-muted-foreground hover:text-foreground transition-colors shrink-0 self-center relative"
       />
 
       {/* Submit/Abort button */}
@@ -148,8 +148,8 @@ export const ChatInput = forwardRef<ChatInputRef, ChatInputProps>(function ChatI
             disabled={!hasContent}
             className={`h-8 w-8 rounded-lg flex items-center justify-center shrink-0 self-center transition-colors ${
               hasContent
-                ? "text-zinc-100 hover:text-white"
-                : "text-zinc-500"
+                ? "bg-primary text-primary-foreground hover:bg-primary/90"
+                : "text-muted-foreground"
             }`}
           >
             {isSending ? (

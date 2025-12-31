@@ -375,11 +375,6 @@ export function FloatingChat() {
     };
   }, []);
 
-  // Signal to Rust that we're ready (shows window, avoids black flash)
-  useEffect(() => {
-    emit("floating-chat-ready");
-  }, []);
-
   // Workbook directory - starts from URL params, updates on active workbook change
   const [workbookDir, setWorkbookDir] = useState(() => {
     const params = new URLSearchParams(window.location.search);
@@ -413,6 +408,7 @@ export function FloatingChat() {
   }, [workbookDir, queryClient]);
 
   // Visibility coordination: Hide when workbook opens, show when all workbooks close
+  // Also checks initial state on mount and signals ready AFTER listeners are set up
   useEffect(() => {
     const unlisteners: (() => void)[] = [];
 
@@ -444,6 +440,22 @@ export function FloatingChat() {
           }
         })
       );
+
+      // Check initial state AFTER listeners are set up (prevents race condition)
+      // If a workbook window is already open, we should be hidden
+      try {
+        const hasWindows = await invoke<boolean>("has_open_workbook_windows");
+        if (hasWindows) {
+          console.log("[FloatingChat] Workbook already open on mount - hiding");
+          isWorkbookOpenRef.current = true;
+          await invoke("hide_floating_chat");
+        }
+      } catch (err) {
+        console.error("[FloatingChat] Failed to check initial state:", err);
+      }
+
+      // Signal ready AFTER listeners and initial state check (avoids black flash + race)
+      emit("floating-chat-ready");
     };
 
     setup();

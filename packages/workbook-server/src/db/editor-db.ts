@@ -283,7 +283,6 @@ export function closeAllEditorDbs() {
 export interface UiState {
   sidebarWidth: number;
   chatExpanded: boolean;
-  rightPanel: string | null;
   activeTab: string;
   pagesExpanded: boolean;
   dataExpanded: boolean;
@@ -295,14 +294,13 @@ export function getUiState(db: Database): UiState {
   const row = db.query<{
     sidebar_width: number;
     chat_expanded: number;
-    right_panel: string | null;
     active_tab: string;
     pages_expanded: number;
     data_expanded: number;
     actions_expanded: number;
     plugins_expanded: number;
   }, []>(
-    `SELECT sidebar_width, chat_expanded, right_panel, active_tab,
+    `SELECT sidebar_width, chat_expanded, active_tab,
             pages_expanded, data_expanded, actions_expanded, plugins_expanded
      FROM ui_state WHERE id = 1`
   ).get();
@@ -312,7 +310,6 @@ export function getUiState(db: Database): UiState {
     return {
       sidebarWidth: 280,
       chatExpanded: false,
-      rightPanel: null,
       activeTab: "preview",
       pagesExpanded: true,
       dataExpanded: true,
@@ -324,7 +321,6 @@ export function getUiState(db: Database): UiState {
   return {
     sidebarWidth: row.sidebar_width,
     chatExpanded: row.chat_expanded === 1,
-    rightPanel: row.right_panel,
     activeTab: row.active_tab,
     pagesExpanded: row.pages_expanded === 1,
     dataExpanded: row.data_expanded === 1,
@@ -344,10 +340,6 @@ export function updateUiState(db: Database, updates: Partial<UiState>) {
   if (updates.chatExpanded !== undefined) {
     setClauses.push("chat_expanded = ?");
     params.push(updates.chatExpanded ? 1 : 0);
-  }
-  if (updates.rightPanel !== undefined) {
-    setClauses.push("right_panel = ?");
-    params.push(updates.rightPanel);
   }
   if (updates.activeTab !== undefined) {
     setClauses.push("active_tab = ?");

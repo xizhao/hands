@@ -183,7 +183,7 @@ export function executeQuery(
 }
 
 /**
- * Get database schema (all tables and their columns)
+ * Get database schema (all tables, columns, and foreign keys)
  */
 export function getSchema(db: Database): {
   tables: Array<{
@@ -193,6 +193,11 @@ export function getSchema(db: Database): {
       type: string;
       nullable: boolean;
       isPrimary: boolean;
+    }>;
+    foreignKeys: Array<{
+      column: string;
+      referencesTable: string;
+      referencesColumn: string;
     }>;
   }>;
 } {
@@ -213,6 +218,15 @@ export function getSchema(db: Database): {
       pk: number;
     }, []>(`PRAGMA table_info("${t.name}")`).all();
 
+    // Get foreign key info
+    const foreignKeys = db.query<{
+      id: number;
+      seq: number;
+      table: string;
+      from: string;
+      to: string;
+    }, []>(`PRAGMA foreign_key_list("${t.name}")`).all();
+
     return {
       name: t.name,
       columns: columns.map((c) => ({
@@ -220,6 +234,11 @@ export function getSchema(db: Database): {
         type: c.type,
         nullable: c.notnull === 0,
         isPrimary: c.pk === 1,
+      })),
+      foreignKeys: foreignKeys.map((fk) => ({
+        column: fk.from,
+        referencesTable: fk.table,
+        referencesColumn: fk.to,
       })),
     };
   });

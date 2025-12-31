@@ -1307,8 +1307,43 @@ async fn save_api_key_and_launch(
         let _ = setup_window.close();
     }
 
+    // Get the workbook to open (for both workbook window and floating chat)
+    let workbook = {
+        let workbooks = list_workbooks().await.unwrap_or_default();
+        if let Some(last_id) = window_manager::get_last_workbook(&app) {
+            workbooks.into_iter().find(|w| w.id == last_id)
+        } else {
+            workbooks.into_iter().next()
+        }
+    };
+
+    // If no workbook exists, create a default one
+    let workbook = match workbook {
+        Some(wb) => wb,
+        None => {
+            create_workbook(CreateWorkbookRequest {
+                name: "My Notebook".to_string(),
+                description: None,
+            }).await?
+        }
+    };
+
+    // Start the workbook runtime first
+    let state_arc = state.inner().clone();
+    if let Err(e) = start_workbook_server_internal(&app, &state_arc, &workbook.id, &workbook.directory).await {
+        eprintln!("[setup] Failed to start runtime: {}", e);
+    }
+
+    // Set as active workbook
+    if let Err(e) = set_active_workbook_internal(&app, &workbook.id).await {
+        eprintln!("[setup] Failed to set active workbook: {}", e);
+    }
+
     // Open the main workbook window
-    let _ = window_manager::open_startup_workbook(&app, &state).await;
+    let _ = window_manager::open_workbook(&app, &state_arc, &workbook.id).await;
+
+    // FloatingChat is NOT created here - it's created lazily when
+    // the workbook editor closes (see on_window_event handler)
 
     // Restart opencode server with new API key
     let env_vars = get_api_keys_from_store(&app);
@@ -1338,6 +1373,9 @@ async fn save_api_key_and_launch(
             }
         }
     });
+
+    // Play startup sound
+    sfx::play("startup");
 
     Ok(())
 }
@@ -2072,11 +2110,13 @@ pub fn run() {
                         eprintln!("[startup] Failed to update tray menu: {}", e);
                     }
 
-                    // 4. Open floating chat
-                    let _ = floating_chat::open_floating_chat(
-                        startup_app,
-                        workbook.directory.clone()
-                    ).await;
+                    // 4. Open workbook editor window (main UI on boot)
+                    if let Err(e) = window_manager::open_workbook(&startup_app, &startup_state, &workbook.id).await {
+                        eprintln!("[startup] Failed to open workbook window: {}", e);
+                    }
+
+                    // FloatingChat is NOT created on boot - it's created lazily when
+                    // the workbook editor closes (see on_window_event handler)
 
                     // Play startup sound after windows are ready
                     sfx::play("startup");
@@ -2229,10 +2269,8 @@ pub fn run() {
                         } else {
                             println!("[window] Hidden {} (app still running in tray)", label);
 
-                            // Emit workbook-window-closed event to ALL windows so FloatingChat can show
-                            if label.starts_with("workbook_") {
-                                let _ = window.app_handle().emit("workbook-window-closed", label);
-                            }
+                            // Floating chat disabled - workbook editor is the primary UI
+                            // Users can reopen via tray menu → "Show Hands"
                         }
                     }
                     // Other windows (preview, docs, chat widgets, capture overlay) can close normally

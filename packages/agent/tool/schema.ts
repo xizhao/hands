@@ -30,15 +30,23 @@ function getTRPCClient() {
 }
 
 
+interface ForeignKey {
+  column: string;
+  referencesTable: string;
+  referencesColumn: string;
+}
+
 interface TableInfo {
   table_name: string;
   columns: { name: string; type: string; nullable: boolean }[];
+  foreignKeys: ForeignKey[];
 }
 
 const schema = tool({
-  description: `View the SQLite database schema - all tables with their columns and types.
+  description: `View the SQLite database schema - all tables with their columns, types, and relationships.
 
 Use this tool BEFORE writing SQL queries to understand what data is available.
+Use this tool to understand the domain model - how tables relate to each other.
 After viewing the schema, use the sql tool to query the data.`,
 
   args: {},
@@ -63,6 +71,7 @@ The database is empty. Use the sql tool to create tables, or import data via the
             type: col.type,
             nullable: col.nullable,
           })),
+          foreignKeys: row.foreignKeys || [],
         });
       }
 
@@ -79,6 +88,30 @@ The database is empty. Use the sql tool to create tables, or import data via the
           output += `| ${col.name} | ${col.type} | ${nullable} |\n`;
         }
         output += "\n";
+
+        // Show foreign key relationships
+        if (tableInfo.foreignKeys.length > 0) {
+          output += "**Relationships:**\n";
+          for (const fk of tableInfo.foreignKeys) {
+            output += `- \`${fk.column}\` → \`${fk.referencesTable}.${fk.referencesColumn}\`\n`;
+          }
+          output += "\n";
+        }
+      }
+
+      // Show relationship summary at the end
+      const allForeignKeys: Array<{ from: string; fk: ForeignKey }> = [];
+      for (const [tableName, tableInfo] of tables) {
+        for (const fk of tableInfo.foreignKeys) {
+          allForeignKeys.push({ from: tableName, fk });
+        }
+      }
+
+      if (allForeignKeys.length > 0) {
+        output += "## Domain Relationships\n\n";
+        for (const { from, fk } of allForeignKeys) {
+          output += `- ${from} → ${fk.referencesTable} (via ${fk.column})\n`;
+        }
       }
 
       return output;

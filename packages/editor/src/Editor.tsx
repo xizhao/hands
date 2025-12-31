@@ -41,9 +41,9 @@ import { useMarkdownWorker, useMarkdownWorkerDebounced, getDeserializeCache, set
 import { createCopilotKit, type CopilotConfig } from "./plugins/copilot-kit";
 import { createMarkdownKit, type MarkdownRule } from "./plugins/markdown-kit";
 import { EditorCorePlugins } from "./plugins/presets";
-import { EditorStatusBar, FixedToolbar, FixedToolbarButtons, TooltipProvider, TocSidebar, SlidesView } from "./ui";
+import { EditorStatusBar, TooltipProvider, TocSidebar, SlidesView } from "./ui";
 import { MarkdownCodeEditor, type Diagnostic } from "./ui/markdown-code-editor";
-import { ModeToggle, type EditorMode } from "./ui/mode-toggle";
+import type { EditorMode } from "./ui/editor-status-bar";
 import { serializeFrontmatter, parseFrontmatter, stripFrontmatter } from "./frontmatter";
 
 // ============================================================================
@@ -131,6 +131,10 @@ export interface EditorProps {
   frontmatter?: Frontmatter;
   /** Callback when frontmatter changes */
   onFrontmatterChange?: (frontmatter: Frontmatter) => void;
+  /** Show title in frontmatter header (default: true, set false when title is shown elsewhere like tabs) */
+  showTitle?: boolean;
+  /** Show description in frontmatter header (default: true, set false when using SpecBar) */
+  showDescription?: boolean;
 
   // ---- Toolbar ----
   /** Whether to show default toolbar (default: true) */
@@ -220,6 +224,8 @@ export const Editor = forwardRef<EditorHandle, EditorProps>(function Editor(
     // Frontmatter
     frontmatter,
     onFrontmatterChange,
+    showTitle = true,
+    showDescription = true,
     // Toolbar
     showToolbar = true,
     toolbar,
@@ -588,31 +594,9 @@ export const Editor = forwardRef<EditorHandle, EditorProps>(function Editor(
     [editor, onChange, onFrontmatterChange, workerDeserialize]
   );
 
-  // Determine which toolbar to render
-  const toolbarElement =
-    toolbar ??
-    (showToolbar && !readOnly ? (
-      <FixedToolbar>
-        <div className="flex items-center justify-between w-full">
-          {/* Left side - only show formatting buttons in visual mode */}
-          {mode === "visual" && <FixedToolbarButtons />}
-          {mode === "markdown" && (
-            <div className="text-xs text-muted-foreground px-2">
-              Markdown Mode
-            </div>
-          )}
-          {mode === "slides" && (
-            <div className="text-xs text-muted-foreground px-2">
-              Slides
-            </div>
-          )}
-          {/* Right side - mode toggle */}
-          {showModeToggle && (
-            <ModeToggle mode={mode} onModeChange={handleModeChange} />
-          )}
-        </div>
-      </FixedToolbar>
-    ) : null);
+  // Toolbar is now removed - mode toggle moved to status bar
+  // Custom toolbar can still be passed via props
+  const toolbarElement = toolbar ?? null;
 
   const content = (
     <TooltipProvider>
@@ -623,50 +607,57 @@ export const Editor = forwardRef<EditorHandle, EditorProps>(function Editor(
 
           {/* View content - each mode has its own container */}
           {mode === "visual" && (
-            <div className="relative flex-1 min-h-0 overflow-y-auto pl-8 pr-6 cursor-text flex flex-col">
-              {/* Loading overlay */}
-              {isLoading && (
-                <div className="absolute inset-0 z-10 flex items-center justify-center bg-background/80 backdrop-blur-sm">
-                  <div className="flex items-center gap-2 text-muted-foreground text-sm">
-                    <div className="h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent" />
-                    Loading...
+            <div className="relative flex-1 min-h-0 overflow-y-auto cursor-text flex">
+              {/* Main content column */}
+              <div className="flex-1 px-6 flex flex-col">
+                {/* Loading overlay */}
+                {isLoading && (
+                  <div className="absolute inset-0 z-10 flex items-center justify-center bg-background/80 backdrop-blur-sm">
+                    <div className="flex items-center gap-2 text-muted-foreground text-sm">
+                      <div className="h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent" />
+                      Loading...
+                    </div>
                   </div>
+                )}
+
+                {/* Frontmatter header */}
+                {frontmatter && onFrontmatterChange && (
+                  <FrontmatterHeader
+                    frontmatter={frontmatter}
+                    onFrontmatterChange={onFrontmatterChange}
+                    onFocusEditor={handleFocusEditor}
+                    subtitleRef={subtitleRef}
+                    showTitle={showTitle}
+                    showDescription={showDescription}
+                    compact
+                  />
+                )}
+
+                {/* Custom header slot */}
+                {header}
+
+                {/* Editor content */}
+                <PlateContent
+                  className={cn(
+                    "pt-4 pb-32 min-h-[200px] outline-none",
+                    DEFAULT_PROSE_CLASSES,
+                    contentClassName,
+                    isLoading && "opacity-50 pointer-events-none"
+                  )}
+                  placeholder={placeholder}
+                  readOnly={readOnly}
+                  onKeyDown={handleEditorKeyDown}
+                />
+
+                {footer}
+              </div>
+
+              {/* Table of contents - sticky in right gutter */}
+              {(frontmatter?.toc ?? tocProp) && (
+                <div className="w-10 shrink-0 pr-2">
+                  <TocSidebar className="sticky top-4" position="right" />
                 </div>
               )}
-
-              {/* Table of contents - in left gutter */}
-              {(frontmatter?.toc ?? tocProp) && (
-                <TocSidebar className="absolute top-4 left-0 w-8" />
-              )}
-
-              {/* Frontmatter header */}
-              {frontmatter && onFrontmatterChange && (
-                <FrontmatterHeader
-                  frontmatter={frontmatter}
-                  onFrontmatterChange={onFrontmatterChange}
-                  onFocusEditor={handleFocusEditor}
-                  subtitleRef={subtitleRef}
-                  compact
-                />
-              )}
-
-              {/* Custom header slot */}
-              {header}
-
-              {/* Editor content */}
-              <PlateContent
-                className={cn(
-                  "pt-4 pb-32 min-h-[200px] outline-none",
-                  DEFAULT_PROSE_CLASSES,
-                  contentClassName,
-                  isLoading && "opacity-50 pointer-events-none"
-                )}
-                placeholder={placeholder}
-                readOnly={readOnly}
-                onKeyDown={handleEditorKeyDown}
-              />
-
-              {footer}
             </div>
           )}
 
@@ -688,8 +679,15 @@ export const Editor = forwardRef<EditorHandle, EditorProps>(function Editor(
             <SlidesView className="flex-1 min-h-0" frontmatter={frontmatter} />
           )}
 
-          {/* Status bar - doc mode only */}
-          {!readOnly && mode === "visual" && <EditorStatusBar isSaving={isSaving} />}
+          {/* Status bar - all modes, includes mode toggle */}
+          {!readOnly && (
+            <EditorStatusBar
+              isSaving={isSaving}
+              mode={mode}
+              onModeChange={handleModeChange}
+              showModeToggle={showModeToggle}
+            />
+          )}
         </Plate>
       </div>
     </TooltipProvider>

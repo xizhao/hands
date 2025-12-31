@@ -43,6 +43,10 @@ export interface FrontmatterHeaderProps {
   subtitleRef?: React.RefObject<HTMLDivElement | null>;
   /** Use compact styling (smaller text, less padding) */
   compact?: boolean;
+  /** Show title field (default: true, set false when title is shown elsewhere like tabs) */
+  showTitle?: boolean;
+  /** Show description field (default: true, set false when using SpecBar) */
+  showDescription?: boolean;
   /** CSS class name */
   className?: string;
 }
@@ -134,6 +138,8 @@ export function FrontmatterHeader({
   onFocusEditor,
   subtitleRef: externalSubtitleRef,
   compact = false,
+  showTitle = true,
+  showDescription = true,
   className,
 }: FrontmatterHeaderProps) {
   const titleRef = useRef<HTMLDivElement>(null);
@@ -172,21 +178,22 @@ export function FrontmatterHeader({
     (e: React.KeyboardEvent) => {
       if (e.key === "Enter" || e.key === "ArrowDown") {
         e.preventDefault();
-        subtitleRef.current?.focus();
-        // Move cursor to start
-        if (subtitleRef.current) {
+        if (showDescription && subtitleRef.current) {
+          subtitleRef.current.focus();
+          // Move cursor to start
           const range = document.createRange();
           const sel = window.getSelection();
           range.selectNodeContents(subtitleRef.current);
           range.collapse(true);
           sel?.removeAllRanges();
           sel?.addRange(range);
+        } else {
+          // No description - go directly to editor
+          onFocusEditor();
         }
       }
     },
-    // subtitleRef is stable (ref object), no need to include in deps
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [],
+    [showDescription, onFocusEditor],
   );
 
   // Subtitle keyboard handler
@@ -225,39 +232,48 @@ export function FrontmatterHeader({
     }
   }, []);
 
+  // If neither title nor description is shown, render nothing
+  if (!showTitle && !showDescription) {
+    return null;
+  }
+
   return (
     <div className={cn(compact ? "pt-4" : "pt-8", className)}>
-      {/* Title */}
-      <div
-        ref={titleRef}
-        contentEditable
-        suppressContentEditableWarning
-        className={cn(
-          "font-semibold outline-none",
-          compact ? "text-2xl" : "text-4xl font-bold",
-          "empty:before:content-[attr(data-placeholder)] empty:before:text-muted-foreground/40",
-        )}
-        data-placeholder="Untitled"
-        onKeyDown={handleTitleKeyDown}
-        onBlur={(e) => handleFieldChange("title", e.currentTarget.textContent ?? "")}
-        onPaste={handlePaste}
-      />
+      {/* Title - hidden when title is shown elsewhere (e.g., in tabs) */}
+      {showTitle && (
+        <div
+          ref={titleRef}
+          contentEditable
+          suppressContentEditableWarning
+          className={cn(
+            "font-semibold outline-none",
+            compact ? "text-2xl" : "text-4xl font-bold",
+            "empty:before:content-[attr(data-placeholder)] empty:before:text-muted-foreground/40",
+          )}
+          data-placeholder="Untitled"
+          onKeyDown={handleTitleKeyDown}
+          onBlur={(e) => handleFieldChange("title", e.currentTarget.textContent ?? "")}
+          onPaste={handlePaste}
+        />
+      )}
 
-      {/* Description */}
-      <div
-        ref={subtitleRef}
-        contentEditable
-        suppressContentEditableWarning
-        className={cn(
-          "text-muted-foreground/70 outline-none",
-          compact ? "text-sm mt-0.5" : "text-lg mt-1",
-          "empty:before:content-[attr(data-placeholder)] empty:before:text-muted-foreground/30",
-        )}
-        data-placeholder="Add a description..."
-        onKeyDown={handleSubtitleKeyDown}
-        onBlur={(e) => handleFieldChange("description", e.currentTarget.textContent ?? "")}
-        onPaste={handlePaste}
-      />
+      {/* Description - hidden when SpecBar is used */}
+      {showDescription && (
+        <div
+          ref={subtitleRef}
+          contentEditable
+          suppressContentEditableWarning
+          className={cn(
+            "text-muted-foreground/70 outline-none",
+            compact ? "text-sm mt-0.5" : "text-lg mt-1",
+            "empty:before:content-[attr(data-placeholder)] empty:before:text-muted-foreground/30",
+          )}
+          data-placeholder="Add a description..."
+          onKeyDown={handleSubtitleKeyDown}
+          onBlur={(e) => handleFieldChange("description", e.currentTarget.textContent ?? "")}
+          onPaste={handlePaste}
+        />
+      )}
     </div>
   );
 }

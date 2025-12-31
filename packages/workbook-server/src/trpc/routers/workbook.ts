@@ -92,9 +92,8 @@ function findBlockFile(blocksDir: string, blockId: string): string | null {
 // ============================================================================
 
 export const workbookRouter = t.router({
-  /** Get workbook manifest (blocks, pages, components, actions, config) */
+  /** Get workbook manifest (blocks, actions, config) */
   manifest: publicProcedure.query(async ({ ctx }) => {
-    // Use unified discovery for blocks, pages, components, actions
     const discovery = await discoverWorkbook({ rootPath: ctx.workbookDir });
 
     // Get external config if available
@@ -108,37 +107,14 @@ export const workbookRouter = t.router({
       uninitialized: b.uninitialized,
     }));
 
-    const pages = discovery.pages.map((p) => ({
-      id: p.route.replace(/^\//, "") || "index",
-      route: p.route,
-      path: p.path,
-      parentDir: p.parentDir,
-      isBlock: p.isBlock,
-      title: p.route === "/" ? "Home" : p.route.split("/").pop() || p.route,
-    }));
-
-    const plugins = discovery.plugins.map((p) => ({
-      id: p.id,
-      name: p.name,
-      path: p.path,
-      description: p.description,
-    }));
-
     return {
       workbookId: ctx.workbookId,
       workbookDir: ctx.workbookDir,
+      // Domains come from trpc.domains.list endpoint
       blocks,
-      pages,
-      plugins,
-      components: discovery.components.map((c) => ({
-        name: c.name,
-        path: c.path,
-        isClient: c.isClientComponent,
-      })),
       actions: discovery.actions,
-      tables: discovery.tables,
       config,
-      isEmpty: blocks.length === 0 && pages.length === 0,
+      isEmpty: blocks.length === 0,
       errors: discovery.errors,
     };
   }),
