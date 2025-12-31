@@ -41,6 +41,9 @@ export function DomainSidebar({ filterQuery }: DomainSidebarProps) {
   const params = useParams({ strict: false });
   const currentDomainId = (params as { domainId?: string }).domainId;
 
+  // Track newly created domain for auto-rename
+  const [newlyCreatedId, setNewlyCreatedId] = useState<string | null>(null);
+
   // Domain data via tRPC (poll for live updates)
   const { data, isLoading } = trpc.domains.list.useQuery(undefined, {
     refetchInterval: 2000,
@@ -63,6 +66,8 @@ export function DomainSidebar({ filterQuery }: DomainSidebarProps) {
     onSuccess: (result) => {
       utils.domains.list.invalidate();
       utils.workbook.manifest.invalidate();
+      // Set newly created ID for auto-rename mode
+      setNewlyCreatedId(result.domainId);
       // Navigate to the new domain
       navigate({
         to: "/domains/$domainId",
@@ -203,6 +208,8 @@ export function DomainSidebar({ filterQuery }: DomainSidebarProps) {
               domainId={domain.id}
               domainName={domain.name}
               isActive={currentDomainId === domain.id}
+              autoEdit={newlyCreatedId === domain.id}
+              onClearAutoEdit={() => setNewlyCreatedId(null)}
               onClick={() => handleDomainClick(domain.id)}
               onRename={handleRename}
               onDelete={handleDelete}
@@ -218,15 +225,28 @@ interface DomainItemProps {
   domainId: string;
   domainName: string;
   isActive: boolean;
+  autoEdit?: boolean;
+  onClearAutoEdit?: () => void;
   onClick: () => void;
   onRename: (domainId: string, newName: string) => Promise<void>;
   onDelete: (domainId: string) => Promise<void>;
+}
+
+/** Sanitize input to valid identifier: lowercase, underscores, no spaces */
+function sanitizeIdentifier(input: string): string {
+  return input
+    .toLowerCase()
+    .replace(/\s+/g, "_") // spaces to underscores
+    .replace(/[^a-z0-9_]/g, "") // remove invalid chars
+    .replace(/^[^a-z]+/, ""); // must start with letter
 }
 
 function DomainItem({
   domainId,
   domainName,
   isActive,
+  autoEdit,
+  onClearAutoEdit,
   onClick,
   onRename,
   onDelete,
@@ -236,6 +256,15 @@ function DomainItem({
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
+
+  // Auto-enter edit mode for newly created domains
+  useEffect(() => {
+    if (autoEdit && !isEditing) {
+      setEditValue(domainId);
+      setIsEditing(true);
+      onClearAutoEdit?.();
+    }
+  }, [autoEdit, isEditing, domainId, onClearAutoEdit]);
 
   // Focus input when editing starts
   useEffect(() => {
@@ -257,8 +286,9 @@ function DomainItem({
   }, [domainId]);
 
   const handleSubmitEdit = useCallback(async () => {
-    if (editValue.trim() && editValue.trim() !== domainId) {
-      await onRename(domainId, editValue.trim());
+    const sanitized = sanitizeIdentifier(editValue);
+    if (sanitized && sanitized !== domainId) {
+      await onRename(domainId, sanitized);
     }
     setIsEditing(false);
   }, [editValue, domainId, onRename]);
@@ -282,22 +312,32 @@ function DomainItem({
   }, [domainId, onDelete]);
 
   if (isEditing) {
+    const sanitized = sanitizeIdentifier(editValue);
+    const showPreview = editValue !== sanitized && sanitized.length > 0;
+
     return (
-      <div className="flex items-center gap-2 px-2 py-1">
+      <div className="flex items-center gap-2 px-2 py-1.5">
         <FileText className="h-4 w-4 flex-shrink-0 text-muted-foreground" />
-        <input
-          ref={inputRef}
-          type="text"
-          value={editValue}
-          onChange={(e) => setEditValue(e.target.value)}
-          onKeyDown={handleKeyDown}
-          onBlur={handleSubmitEdit}
-          className={cn(
-            "flex-1 bg-transparent text-sm outline-none",
-            "border-b border-primary focus:border-primary",
+        <div className="flex-1 min-w-0">
+          <input
+            ref={inputRef}
+            type="text"
+            value={editValue}
+            onChange={(e) => setEditValue(e.target.value)}
+            onKeyDown={handleKeyDown}
+            onBlur={handleSubmitEdit}
+            className={cn(
+              "w-full bg-transparent text-sm outline-none",
+              "border-b border-primary focus:border-primary",
+            )}
+            placeholder="page_name"
+          />
+          {showPreview && (
+            <div className="text-[10px] text-muted-foreground mt-0.5">
+              → {sanitized}
+            </div>
           )}
-          placeholder="domain_name"
-        />
+        </div>
       </div>
     );
   }

@@ -56,10 +56,33 @@ export function NotebookShell({ children }: NotebookShellProps) {
   const { mode: sidebarMode } = useSidebarMode();
   const [isResizing, setIsResizing] = useState(false);
   const [isFloatingHovered, setIsFloatingHovered] = useState(false);
+  const [hasFocusWithin, setHasFocusWithin] = useState(false);
+  const sidebarRef = useRef<HTMLDivElement>(null);
   const resizeStartX = useRef(0);
   const resizeStartWidth = useRef(0);
 
   const isFloating = sidebarMode === "floating";
+
+  // Check if sidebar contains focused element (for keeping floating sidebar visible while editing)
+  useEffect(() => {
+    if (!isFloating || isFullscreenSidebar) return;
+
+    const checkFocus = () => {
+      const hasFocus =
+        sidebarRef.current?.contains(document.activeElement) &&
+        document.activeElement !== document.body;
+      setHasFocusWithin(!!hasFocus);
+    };
+
+    // Check on focus changes anywhere in the document
+    document.addEventListener("focusin", checkFocus);
+    document.addEventListener("focusout", checkFocus);
+
+    return () => {
+      document.removeEventListener("focusin", checkFocus);
+      document.removeEventListener("focusout", checkFocus);
+    };
+  }, [isFloating, isFullscreenSidebar]);
 
   // Hidden file input ref for import
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -167,9 +190,11 @@ export function NotebookShell({ children }: NotebookShellProps) {
                 "rounded-xl border border-border/60 bg-surface",
                 "shadow-xl shadow-black/10 dark:shadow-black/30",
                 "transition-transform duration-200 ease-out",
-                !isFloatingHovered && "-translate-x-[calc(100%+8px)]",
+                // Stay visible if hovered OR has focus within (e.g., editing a name)
+                !isFloatingHovered && !hasFocusWithin && "-translate-x-[calc(100%+8px)]",
               ],
             )}
+            ref={sidebarRef}
             onMouseEnter={() => isFloating && setIsFloatingHovered(true)}
             onMouseLeave={() => isFloating && setIsFloatingHovered(false)}
           >
