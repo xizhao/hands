@@ -306,9 +306,13 @@ function DomainItem({
     <>
       <div
         className={cn(
-          "group w-full flex items-center gap-2 px-2 py-1 rounded-md text-left transition-colors",
+          "group w-full flex items-center gap-2 px-2 py-1.5 rounded-lg text-left transition-all",
           "hover:bg-accent/50",
-          isActive && "bg-accent text-accent-foreground",
+          isActive && [
+            "bg-background text-foreground",
+            "shadow-sm shadow-black/5 dark:shadow-black/20",
+            "ring-1 ring-border/50",
+          ],
         )}
       >
         <button onClick={onClick} className="flex-1 flex items-center gap-2 min-w-0">
