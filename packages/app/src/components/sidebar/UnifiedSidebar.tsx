@@ -1,10 +1,11 @@
 /**
- * UnifiedSidebar - Workbook browser with search/prompt bar
+ * UnifiedSidebar - Workbook browser with embedded chat
  *
  * Features:
  * - Workbook dropdown header with traffic light offset
  * - Search/prompt input that filters NotebookSidebar content
- * - On submit, forwards prompt to FloatingChat to start new thread
+ * - On submit, switches to chat mode with inline ChatPanel
+ * - Two modes: "browse" (NotebookSidebar) and "chat" (ChatPanel)
  */
 
 import { SaveStatusIndicator } from "@/components/SaveStatusIndicator";
@@ -33,10 +34,15 @@ import {
   useWorkbooks,
 } from "@/hooks/useWorkbook";
 import { useFilePicker } from "@/hooks/useFilePicker";
+import { useActiveSession } from "@/hooks/useNavState";
+import {
+  useCreateSession,
+  useSendMessage,
+} from "@/hooks/useSession";
 import type { Workbook } from "@/lib/workbook";
 import { cn } from "@/lib/utils";
-import { invoke } from "@tauri-apps/api/core";
 import { useRouter } from "@tanstack/react-router";
+// Note: invoke is no longer needed - we handle chat locally now
 import {
   ArrowUp,
   Camera,
@@ -47,12 +53,14 @@ import {
   File,
   Folder,
   Loader2,
+  MessageSquare,
   Paperclip,
   Plus,
   Search,
 } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { NotebookSidebar } from "./NotebookSidebar";
+import { ChatPanel } from "@/components/chat/ChatPanel";
 
 interface UnifiedSidebarProps {
   compact?: boolean;
@@ -61,6 +69,8 @@ interface UnifiedSidebarProps {
     id: string
   ) => void;
 }
+
+type SidebarMode = "browse" | "chat";
 
 export function UnifiedSidebar({
   compact = false,
@@ -81,6 +91,14 @@ export function UnifiedSidebar({
   const currentWorkbook = workbooks?.find((w) => w.id === activeWorkbookId);
   const { data: activeWorkbook } = useWorkbook(activeWorkbookId);
   const titleInputRef = useRef<HTMLSpanElement>(null);
+
+  // Mode: browse (NotebookSidebar) or chat (ChatPanel)
+  const [mode, setMode] = useState<SidebarMode>("browse");
+
+  // Session state for chat mode
+  const { sessionId: activeSessionId, setSession: setActiveSessionId } = useActiveSession();
+  const createSession = useCreateSession();
+  const sendMessage = useSendMessage();
 
   const [input, setInput] = useState("");
   const [isInputExpanded, setIsInputExpanded] = useState(false);
@@ -111,35 +129,36 @@ export function UnifiedSidebar({
   // Filter query for NotebookSidebar
   const filterQuery = input.trim();
 
-  // Submit handler - forwards to FloatingChat
+  // Submit handler - switches to chat mode and sends message locally
   const handleSubmit = useCallback(async () => {
     const prompt = input.trim();
-    if (!prompt || !activeWorkbook?.directory) return;
+    if (!prompt) return;
 
     setIsSubmitting(true);
     setInput("");
     setIsInputExpanded(false);
 
     try {
-      // Open floating chat with the prompt
-      await invoke("open_floating_chat_with_prompt", {
-        workbookDir: activeWorkbook.directory,
-        prompt,
-      });
-    } catch (err) {
-      console.error("[UnifiedSidebar] Failed to forward to floating chat:", err);
-      // Fallback: just open floating chat without prompt
-      try {
-        await invoke("open_floating_chat", {
-          workbookDir: activeWorkbook.directory,
+      // Switch to chat mode
+      setMode("chat");
+
+      // Create new session and send message
+      if (!activeSessionId) {
+        createSession.mutate(undefined, {
+          onSuccess: (newSession) => {
+            setActiveSessionId(newSession.id);
+            sendMessage.mutate({ sessionId: newSession.id, content: prompt });
+          },
         });
-      } catch (e) {
-        console.error("[UnifiedSidebar] Failed to open floating chat:", e);
+      } else {
+        sendMessage.mutate({ sessionId: activeSessionId, content: prompt });
       }
+    } catch (err) {
+      console.error("[UnifiedSidebar] Failed to send message:", err);
     } finally {
       setIsSubmitting(false);
     }
-  }, [input, activeWorkbook?.directory]);
+  }, [input, activeSessionId, createSession, sendMessage, setActiveSessionId]);
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === "Enter" && !e.shiftKey) {
@@ -500,6 +519,25 @@ export function UnifiedSidebar({
     </div>
   );
 
+  // Chat content (ChatPanel)
+  // Note: Don't pass onBack - we want back to show threads, not switch to browse mode
+  const chatContent = (
+    <ChatPanel
+      sessionId={activeSessionId}
+      onSessionSelect={setActiveSessionId}
+      compact={true}
+      showBackButton={true}
+    />
+  );
+
+  // Handle session selection - switch to chat mode when a session is selected
+  const handleSessionSelect = useCallback((id: string | null) => {
+    setActiveSessionId(id);
+    if (id) {
+      setMode("chat");
+    }
+  }, [setActiveSessionId]);
+
   // ============================================================================
   // Render
   // ============================================================================
@@ -509,14 +547,48 @@ export function UnifiedSidebar({
       {/* Workbook header with traffic light offset */}
       {workbookHeader}
 
-      {/* Input bar */}
-      <div className={cn("shrink-0 py-2", compact ? "px-2" : "px-3")}>
-        {attachmentPreview}
-        {inputElement}
+      {/* Mode switcher - always visible */}
+      <div className={cn("shrink-0 flex items-center gap-1 py-2", compact ? "px-2" : "px-3")}>
+        <div className="flex items-center gap-0.5 p-0.5 bg-accent/30 rounded-lg">
+          <button
+            onClick={() => setMode("browse")}
+            className={cn(
+              "flex items-center gap-1.5 px-2.5 py-1 text-xs rounded-md transition-all",
+              mode === "browse"
+                ? "bg-background text-foreground shadow-sm"
+                : "text-muted-foreground hover:text-foreground"
+            )}
+          >
+            <Search className="h-3 w-3" />
+            <span>Browse</span>
+          </button>
+          <button
+            onClick={() => setMode("chat")}
+            className={cn(
+              "flex items-center gap-1.5 px-2.5 py-1 text-xs rounded-md transition-all",
+              mode === "chat"
+                ? "bg-background text-foreground shadow-sm"
+                : "text-muted-foreground hover:text-foreground"
+            )}
+          >
+            <MessageSquare className="h-3 w-3" />
+            <span>Chat</span>
+          </button>
+        </div>
       </div>
 
-      {/* Content: Browse */}
-      <div className="flex-1 overflow-y-auto">{browseContent}</div>
+      {/* Input bar - only show in browse mode */}
+      {mode === "browse" && (
+        <div className={cn("shrink-0 py-2", compact ? "px-2" : "px-3")}>
+          {attachmentPreview}
+          {inputElement}
+        </div>
+      )}
+
+      {/* Content: Browse or Chat based on mode */}
+      <div className="flex-1 overflow-y-auto min-h-0">
+        {mode === "browse" ? browseContent : chatContent}
+      </div>
     </div>
   );
 }

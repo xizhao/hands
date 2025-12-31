@@ -39,7 +39,7 @@ function setupNodePath() {
 setupNodePath();
 import type { Config } from "@opencode-ai/sdk";
 import { createOpencode } from "@opencode-ai/sdk";
-import { coderAgent, handsAgent, importAgent } from "../agents";
+import { coderAgent, handsAgent, importAgent, researcherAgent } from "../agents";
 // Generated at build time by scripts/bundle-tools.ts
 // eslint-disable-next-line @typescript-eslint/ban-ts-comment
 // @ts-ignore - file may not exist in dev mode
@@ -138,6 +138,7 @@ const config: Config = {
     hands: handsAgent,
     coder: coderAgent,
     import: importAgent,
+    researcher: researcherAgent,
   },
 };
 

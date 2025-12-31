@@ -391,6 +391,44 @@ export function FloatingChat() {
     };
   }, [workbookDir, queryClient]);
 
+  // Visibility coordination: Hide when workbook opens, show when all workbooks close
+  useEffect(() => {
+    const unlisteners: (() => void)[] = [];
+
+    const setup = async () => {
+      // When a workbook window opens, hide this floating chat
+      unlisteners.push(
+        await listen("workbook-opened", () => {
+          console.log("[FloatingChat] Workbook opened - hiding");
+          invoke("hide_floating_chat").catch((err) => {
+            console.error("[FloatingChat] Failed to hide:", err);
+          });
+        })
+      );
+
+      // When a workbook window closes, check if any remain - show if none left
+      unlisteners.push(
+        await listen<string>("workbook-window-closed", async (event) => {
+          console.log("[FloatingChat] Workbook window closed:", event.payload);
+          try {
+            const hasWindows = await invoke<boolean>("has_open_workbook_windows");
+            if (!hasWindows) {
+              console.log("[FloatingChat] No workbook windows left - showing");
+              await invoke("show_floating_chat");
+            }
+          } catch (err) {
+            console.error("[FloatingChat] Failed to check/show:", err);
+          }
+        })
+      );
+    };
+
+    setup();
+    return () => {
+      unlisteners.forEach((fn) => fn());
+    };
+  }, []);
+
   // Focus input on mount
   useEffect(() => {
     setTimeout(() => inputRef.current?.focus(), 200);

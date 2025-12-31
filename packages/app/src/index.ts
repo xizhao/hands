@@ -27,3 +27,9 @@ export { initTheme, getTheme, setTheme, getThemeList } from "./lib/theme";
 export { SaveStatusIndicator } from "./components/SaveStatusIndicator";
 export { WorkbookDropdown, type WorkbookDropdownProps } from "./components/WorkbookDropdown";
 export { AttachmentMenu, type AttachmentMenuProps } from "./components/AttachmentMenu";
+
+// Chat components
+export { ChatPanel, type ChatPanelProps } from "./components/chat/ChatPanel";
+export { ChatInput, type ChatInputRef } from "./components/chat/ChatInput";
+export { ThreadList } from "./components/chat/ThreadList";
+export { StatusDot, type SessionStatus } from "./components/chat/StatusDot";

@@ -38,6 +38,8 @@ pub async fn open_workbook(
     if let Some(window) = app.get_webview_window(&label) {
         window.show().map_err(|e| e.to_string())?;
         window.set_focus().map_err(|e| e.to_string())?;
+        // Emit event so FloatingChat hides (even when showing existing window)
+        let _ = app.emit("workbook-opened", workbook_id);
         return Ok(label);
     }
 
@@ -103,6 +105,8 @@ pub fn focus_workbook(app: &AppHandle, workbook_id: &str) -> bool {
     if let Some(window) = app.get_webview_window(&label) {
         let _ = window.show();
         let _ = window.set_focus();
+        // Emit event so FloatingChat hides
+        let _ = app.emit("workbook-opened", workbook_id);
         true
     } else {
         false

@@ -25,6 +25,7 @@ pub mod floating_chat;
 pub mod stt;
 pub mod keyboard;
 pub mod sfx;
+pub mod websearch;
 
 use runtime_manager::RuntimeManager;
 use jobs::{JobRegistry, SessionEvent};
@@ -1967,9 +1968,11 @@ pub fn run() {
             floating_chat::open_floating_chat_with_prompt,
             floating_chat::hide_floating_chat,
             floating_chat::show_floating_chat,
+            floating_chat::focus_floating_chat,
             floating_chat::toggle_floating_chat,
             floating_chat::expand_floating_chat,
             floating_chat::collapse_floating_chat,
+            floating_chat::has_open_workbook_windows,
             stt::stt_model_available,
             stt::stt_model_path,
             stt::stt_download_model,
@@ -1977,7 +1980,9 @@ pub fn run() {
             stt::stt_stop_recording,
             stt::stt_cancel_recording,
             stt::stt_is_recording,
-            sfx::play_sfx
+            sfx::play_sfx,
+            websearch::websearch_query,
+            websearch::websearch_batch
         ])
         .setup(|app| {
             let state = Arc::new(Mutex::new(AppState {
@@ -2202,6 +2207,11 @@ pub fn run() {
                             eprintln!("[window] Failed to hide {}: {}", label, e);
                         } else {
                             println!("[window] Hidden {} (app still running in tray)", label);
+
+                            // Emit workbook-window-closed event so FloatingChat can show if no workbooks are open
+                            if label.starts_with("workbook_") {
+                                let _ = window.emit("workbook-window-closed", label);
+                            }
                         }
                     }
                     // Other windows (preview, docs, chat widgets, capture overlay) can close normally

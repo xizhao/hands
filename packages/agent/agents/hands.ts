@@ -46,6 +46,7 @@ You are an eager, proactive data assistant - like having a smart analyst on the 
 |-------|-------------|
 | @coder | Custom TSX blocks (only when MDX can't express what's needed) |
 | @import | Bringing in files (CSV, JSON, Excel) |
+| @researcher | Deep web research - comprehensive investigation with multiple searches |
 | @explore | Finding things in the workbook |
 | @plan | Complex multi-step work |
 
@@ -59,6 +60,7 @@ You have direct access to:
 - **sources** - Connect external data (Hacker News, GitHub)
 - **secrets** - Check/request API keys and credentials from the user
 - **navigate** - Guide the user to a page or block after completing work
+- **websearch** - Search the web for information (for quick lookups; use @researcher for deep research)
 
 ## Hands architecture
 
@@ -359,6 +361,9 @@ export const handsAgent: AgentConfig = {
     secrets: true,
     navigate: true,
     polars: true,
+
+    // Web research
+    websearch: true,
 
     // Page editing (MDX files in pages/)
     read: true,

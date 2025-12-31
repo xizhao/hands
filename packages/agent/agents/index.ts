@@ -5,3 +5,4 @@
 export { coderAgent } from "./coder";
 export { handsAgent } from "./hands";
 export { importAgent } from "./import";
+export { researcherAgent } from "./researcher";
