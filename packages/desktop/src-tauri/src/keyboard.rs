@@ -9,7 +9,7 @@
 use device_query::{DeviceQuery, DeviceState, Keycode};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::thread;
-use std::time::{Duration, Instant};
+use std::time::Duration;
 use tauri::{AppHandle, Emitter, Manager};
 
 /// Tracks whether Option is currently held
@@ -35,7 +35,6 @@ pub fn start_keyboard_listener(app: AppHandle) {
 
     thread::spawn(move || {
         let device_state = DeviceState::new();
-        let mut option_press_time: Option<Instant> = None;
         let mut prev_option_held = false;
         let mut prev_space_held = false;
         let mut stt_started = false;
@@ -54,7 +53,6 @@ pub fn start_keyboard_listener(app: AppHandle) {
             // Option key pressed (transition from not held to held)
             if option_held && !prev_option_held {
                 OPTION_HELD.store(true, Ordering::SeqCst);
-                option_press_time = Some(Instant::now());
                 SPACE_PRESSED_WITH_OPTION.store(false, Ordering::SeqCst);
                 OTHER_KEY_WITH_OPTION.store(false, Ordering::SeqCst);
                 stt_started = false;
@@ -98,27 +96,10 @@ pub fn start_keyboard_listener(app: AppHandle) {
             if !option_held && prev_option_held {
                 OPTION_HELD.store(false, Ordering::SeqCst);
 
-                // Check if this was a quick tap vs hold
-                let was_quick_tap = option_press_time
-                    .map(|t| t.elapsed() < Duration::from_millis(200))
-                    .unwrap_or(false);
+                // Always emit release event to stop STT recording
+                // The frontend will handle whether to transcribe or cancel
+                let _ = app_handle.emit("option-key-released", ());
 
-                // Only trigger STT completion if:
-                // - Space wasn't pressed
-                // - No other key was pressed with Option (not a combo like Option+C)
-                // - STT was actually started
-                let space_pressed = SPACE_PRESSED_WITH_OPTION.load(Ordering::SeqCst);
-                let other_key_pressed = OTHER_KEY_WITH_OPTION.load(Ordering::SeqCst);
-
-                if !space_pressed && !other_key_pressed && stt_started {
-                    if was_quick_tap {
-                        let _ = app_handle.emit("option-key-tapped", ());
-                    } else {
-                        let _ = app_handle.emit("option-key-released", ());
-                    }
-                }
-
-                option_press_time = None;
                 stt_started = false;
                 SPACE_PRESSED_WITH_OPTION.store(false, Ordering::SeqCst);
                 OTHER_KEY_WITH_OPTION.store(false, Ordering::SeqCst);

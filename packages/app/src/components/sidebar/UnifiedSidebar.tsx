@@ -53,8 +53,6 @@ import {
 } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { NotebookSidebar } from "./NotebookSidebar";
-import { useOptionKeyRecording } from "@/hooks/useStt";
-import { Mic } from "lucide-react";
 
 interface UnifiedSidebarProps {
   compact?: boolean;
@@ -92,16 +90,6 @@ export function UnifiedSidebar({
   const expandedInputRef = useRef<HTMLTextAreaElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
 
-  // Speech-to-text: hold Option key to record
-  const stt = useOptionKeyRecording({
-    onTranscription: (text) => {
-      setInput((prev) => prev + (prev ? " " : "") + text);
-      inputRef.current?.focus();
-    },
-    onError: (err) => {
-      console.error("[stt] Error:", err);
-    },
-  });
 
   // Track container width for responsive layout
   const POPOVER_WIDTH = 400;
@@ -215,9 +203,7 @@ export function UnifiedSidebar({
   const hasContent = input.trim() || pendingAttachment;
 
   // Placeholder text
-  const placeholder = stt.isRecording
-    ? "Listening... (release Option to finish)"
-    : "Search or ask anything...";
+  const placeholder = "Search or ask anything...";
 
   // ============================================================================
   // Render Helpers
@@ -335,21 +321,9 @@ export function UnifiedSidebar({
     <Popover open={isInputExpanded} onOpenChange={setIsInputExpanded}>
       <PopoverAnchor asChild>
         <div
-          className={cn(
-            "flex items-center gap-1.5 bg-background rounded-xl px-2 py-1.5 border cursor-text transition-all hover:border-border/60 hover:shadow-sm",
-            stt.isRecording
-              ? "border-red-500/50 bg-red-500/5"
-              : "border-border/40"
-          )}
+          className="flex items-center gap-1.5 bg-background rounded-xl px-2 py-1.5 border border-border/40 cursor-text transition-all hover:border-border/60 hover:shadow-sm"
           onClick={() => setIsInputExpanded(true)}
         >
-          {/* Recording indicator */}
-          {stt.isRecording && (
-            <div className="flex items-center gap-1 text-red-500 animate-pulse">
-              <Mic className="h-4 w-4" />
-            </div>
-          )}
-
           <Search className="h-4 w-4 text-muted-foreground/50 shrink-0" />
 
           <div
@@ -463,19 +437,7 @@ export function UnifiedSidebar({
     </Popover>
   ) : (
     /* Wide mode - inline input, no popover */
-    <div
-      className={cn(
-        "flex items-center gap-1.5 bg-background rounded-xl px-2 py-1.5 border",
-        stt.isRecording ? "border-red-500/50 bg-red-500/5" : "border-border/40"
-      )}
-    >
-      {/* Recording indicator */}
-      {stt.isRecording && (
-        <div className="flex items-center gap-1 text-red-500 animate-pulse">
-          <Mic className="h-4 w-4" />
-        </div>
-      )}
-
+    <div className="flex items-center gap-1.5 bg-background rounded-xl px-2 py-1.5 border border-border/40">
       <Search className="h-4 w-4 text-muted-foreground/50 shrink-0" />
 
       <input

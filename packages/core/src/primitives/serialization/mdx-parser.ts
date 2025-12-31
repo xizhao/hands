@@ -132,6 +132,79 @@ const deserializeOptions = {
 };
 
 // =============================================================================
+// Preprocessing: Collapse Multi-line JSX Expressions
+// =============================================================================
+
+/**
+ * Pre-process MDX to collapse multi-line JSX attribute expressions.
+ *
+ * remark-mdx with acorn cannot parse multi-line JavaScript expressions
+ * in JSX attributes. This function collapses them to single-line.
+ *
+ * Example:
+ * ```
+ * <Select options={[
+ *   { value: "1", label: "A" },
+ *   { value: "2", label: "B" }
+ * ]}>
+ * ```
+ * Becomes:
+ * ```
+ * <Select options={[{ value: "1", label: "A" }, { value: "2", label: "B" }]}>
+ * ```
+ */
+function collapseMultilineJsxExpressions(source: string): string {
+  // Match JSX attribute expressions: name={...content...}
+  // This regex finds attributes where the expression spans multiple lines
+  // Pattern: word={  followed by content  followed by }
+  // We need to handle nested braces correctly
+
+  let result = source;
+  let match: RegExpExecArray | null;
+
+  // Find all attribute expressions: name={...}
+  // This regex matches the start of an expression attribute
+  const attrStartRegex = /(\w+)=\{/g;
+
+  while ((match = attrStartRegex.exec(result)) !== null) {
+    const startIndex = match.index + match[0].length - 1; // Position of opening {
+
+    // Find matching closing brace, accounting for nesting
+    let depth = 1;
+    let endIndex = startIndex + 1;
+    let hasNewline = false;
+
+    while (depth > 0 && endIndex < result.length) {
+      const char = result[endIndex];
+      if (char === "{") depth++;
+      else if (char === "}") depth--;
+      else if (char === "\n") hasNewline = true;
+      endIndex++;
+    }
+
+    // If we found a multi-line expression, collapse it
+    if (hasNewline && depth === 0) {
+      const exprContent = result.slice(startIndex + 1, endIndex - 1);
+      // Collapse to single line: remove newlines and normalize whitespace
+      const collapsed = exprContent
+        .replace(/\n\s*/g, " ") // Replace newlines and following whitespace with single space
+        .replace(/\s+/g, " ") // Collapse multiple spaces
+        .trim();
+
+      // Replace in result
+      const before = result.slice(0, startIndex + 1);
+      const after = result.slice(endIndex - 1);
+      result = before + collapsed + after;
+
+      // Reset regex lastIndex since we modified the string
+      attrStartRegex.lastIndex = startIndex + collapsed.length + 2;
+    }
+  }
+
+  return result;
+}
+
+// =============================================================================
 // Frontmatter Extraction
 // =============================================================================
 
@@ -202,12 +275,16 @@ export function parseMdxToPlate(source: string): ParseMdxResult {
   const { frontmatter, content } = extractFrontmatter(source);
 
   try {
+    // Pre-process: collapse multi-line JSX expressions
+    // This fixes remark-mdx/acorn failing on multi-line attribute values
+    const preprocessed = collapseMultilineJsxExpressions(content);
+
     // Parse MDX to mdast
     const mdast = unified()
       .use(remarkParse)
       .use(remarkGfm)
       .use(remarkMdx)
-      .parse(content);
+      .parse(preprocessed);
 
     // Convert mdast to Plate Value using @platejs/markdown
     const value = convertNodesDeserialize(
@@ -231,11 +308,15 @@ export function parseMdxToPlate(source: string): ParseMdxResult {
  * Parse markdown/MDX content to Plate Value (without frontmatter extraction)
  */
 export function parseMarkdownToPlate(markdown: string): Value {
+  // Pre-process: collapse multi-line JSX expressions
+  // This fixes remark-mdx/acorn failing on multi-line attribute values
+  const preprocessed = collapseMultilineJsxExpressions(markdown);
+
   const mdast = unified()
     .use(remarkParse)
     .use(remarkGfm)
     .use(remarkMdx)
-    .parse(markdown);
+    .parse(preprocessed);
 
   return convertNodesDeserialize(
     (mdast as any).children || [],

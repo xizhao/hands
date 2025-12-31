@@ -155,7 +155,7 @@ export function NotebookShell({ children }: NotebookShellProps) {
           style={{ width: isFullscreenSidebar ? "100%" : sidebarWidth }}
           className="shrink-0 flex flex-col h-full relative"
         >
-          <UnifiedSidebar hideChat />
+          <UnifiedSidebar />
 
           {/* Resize handle - only when not in empty state */}
           {!isFullscreenSidebar && (

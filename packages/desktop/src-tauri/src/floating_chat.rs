@@ -11,6 +11,7 @@ use tauri::{AppHandle, Emitter, Listener, Manager, WebviewUrl, WebviewWindowBuil
 const FLOATING_CHAT_LABEL: &str = "floating_chat";
 const COLLAPSED_WIDTH: f64 = 64.0;  // Just the icon
 const EXPANDED_WIDTH: f64 = 400.0;  // Full chat width
+const VERTICAL_MARGIN: f64 = 48.0;  // Equal margin from top and bottom of screen
 
 /// Open or focus the floating chat window (anchored to left edge)
 #[tauri::command]
@@ -46,13 +47,13 @@ pub async fn open_floating_chat(
     // Convert physical to logical for consistent positioning
     let screen_height = primary.size().height as f64 / scale;
 
-    // Start COLLAPSED on the left edge
+    // Start COLLAPSED on the left edge with equal top/bottom margins
     let x = 0.0;
-    let y = 0.0;
-    let height = screen_height;
+    let y = VERTICAL_MARGIN;
+    let height = screen_height - (2.0 * VERTICAL_MARGIN);
 
-    println!("[floating_chat] Creating window: x={}, y={}, width={}, height={}, scale={}",
-             x, y, COLLAPSED_WIDTH, height, scale);
+    println!("[floating_chat] Creating window: x={}, y={}, width={}, height={}, margin={}, scale={}",
+             x, y, COLLAPSED_WIDTH, height, VERTICAL_MARGIN, scale);
 
     let window = WebviewWindowBuilder::new(&app, FLOATING_CHAT_LABEL, WebviewUrl::App(url.into()))
         .title("Hands")
@@ -89,22 +90,20 @@ pub async fn open_floating_chat(
 #[tauri::command]
 pub async fn expand_floating_chat(app: AppHandle) -> Result<(), String> {
     if let Some(window) = app.get_webview_window(FLOATING_CHAT_LABEL) {
-        // Get current position and size
-        let pos = window.outer_position().map_err(|e| format!("{}", e))?;
-        let current_size = window.outer_size().map_err(|e| format!("{}", e))?;
+        // Get screen dimensions to calculate proper height with margins
         let monitors = app.available_monitors().map_err(|e| format!("{}", e))?;
         let primary = monitors.into_iter().next().ok_or("No monitor")?;
         let scale = primary.scale_factor();
-        let height = current_size.height as f64 / scale;
-        let y = pos.y as f64 / scale;
+        let screen_height = primary.size().height as f64 / scale;
+        let height = screen_height - (2.0 * VERTICAL_MARGIN);
 
-        // Expand width from left edge (x stays at 0)
-        window.set_position(LogicalPosition::new(0.0, y))
+        // Expand width from left edge (x stays at 0, y at margin)
+        window.set_position(LogicalPosition::new(0.0, VERTICAL_MARGIN))
             .map_err(|e| format!("{}", e))?;
         window.set_size(LogicalSize::new(EXPANDED_WIDTH, height))
             .map_err(|e| format!("{}", e))?;
 
-        let _ = window.set_focus();
+        // Don't steal focus - user is just hovering to expand
         let _ = app.emit("floating-chat-expanded", ());
     }
     Ok(())
@@ -114,17 +113,15 @@ pub async fn expand_floating_chat(app: AppHandle) -> Result<(), String> {
 #[tauri::command]
 pub async fn collapse_floating_chat(app: AppHandle) -> Result<(), String> {
     if let Some(window) = app.get_webview_window(FLOATING_CHAT_LABEL) {
-        // Get current position and size
-        let pos = window.outer_position().map_err(|e| format!("{}", e))?;
-        let current_size = window.outer_size().map_err(|e| format!("{}", e))?;
+        // Get screen dimensions to calculate proper height with margins
         let monitors = app.available_monitors().map_err(|e| format!("{}", e))?;
         let primary = monitors.into_iter().next().ok_or("No monitor")?;
         let scale = primary.scale_factor();
-        let height = current_size.height as f64 / scale;
-        let y = pos.y as f64 / scale;
+        let screen_height = primary.size().height as f64 / scale;
+        let height = screen_height - (2.0 * VERTICAL_MARGIN);
 
-        // Collapse width to left edge (x stays at 0)
-        window.set_position(LogicalPosition::new(0.0, y))
+        // Collapse width to left edge (x stays at 0, y at margin)
+        window.set_position(LogicalPosition::new(0.0, VERTICAL_MARGIN))
             .map_err(|e| format!("{}", e))?;
         window.set_size(LogicalSize::new(COLLAPSED_WIDTH, height))
             .map_err(|e| format!("{}", e))?;
@@ -152,6 +149,17 @@ pub async fn show_floating_chat(app: AppHandle) -> Result<(), String> {
         window
             .show()
             .map_err(|e| format!("Failed to show window: {}", e))?;
+        window
+            .set_focus()
+            .map_err(|e| format!("Failed to focus window: {}", e))?;
+    }
+    Ok(())
+}
+
+/// Focus the floating chat window (for receiving input after click)
+#[tauri::command]
+pub async fn focus_floating_chat(app: AppHandle) -> Result<(), String> {
+    if let Some(window) = app.get_webview_window(FLOATING_CHAT_LABEL) {
         window
             .set_focus()
             .map_err(|e| format!("Failed to focus window: {}", e))?;

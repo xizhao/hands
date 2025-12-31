@@ -19,7 +19,6 @@ import {
   Hand,
   Layers,
   Loader2,
-  MessageSquare,
   Mic,
   Plus,
   Square,
@@ -39,6 +38,7 @@ import {
   useFilePicker,
   WorkbookDropdown,
   AttachmentMenu,
+  useActiveSession,
   type Workbook,
 } from "@hands/app";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -80,7 +80,7 @@ function StatusDot({ status }: { status: "busy" | "error" | null }) {
 
 export function FloatingChat() {
   const [inputValue, setInputValue] = useState("");
-  const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
+  const [activeSessionId, setActiveSessionIdLocal] = useState<string | null>(null);
   const [isExpanded, setIsExpanded] = useState(false); // Start collapsed
   const [isDragging, setIsDragging] = useState(false);
   const [showThreadsDropdown, setShowThreadsDropdown] = useState(false);
@@ -95,12 +95,55 @@ export function FloatingChat() {
   const queryClient = useQueryClient();
   const lastIgnoreState = useRef<boolean | null>(null);
 
-  // Click-through for transparent background (only when expanded)
-  // When collapsed, we need all mouse events for hover-to-expand
-  // When expanded, pass clicks on transparent areas through to windows behind
+  // Sync with global session state (for TaskToolSummary "open in thread" links)
+  const { sessionId: globalSessionId, setSession: setGlobalSession } = useActiveSession();
+
+  // When global session changes (e.g., from TaskToolSummary), update local state
+  // Don't auto-expand - user can hover to expand if they want to see the session
   useEffect(() => {
-    // When collapsed, always capture events (for hover detection)
+    if (globalSessionId && globalSessionId !== activeSessionId) {
+      setActiveSessionIdLocal(globalSessionId);
+    }
+  }, [globalSessionId, activeSessionId]);
+
+  // Wrapper to update both local and global state
+  const setActiveSessionId = useCallback((sessionId: string | null) => {
+    setActiveSessionIdLocal(sessionId);
+    setGlobalSession(sessionId);
+  }, [setGlobalSession]);
+
+  // Expand/collapse handlers - call Rust backend to resize window
+  const handleExpand = useCallback(async () => {
+    if (isExpanded) return;
+    try {
+      await invoke("expand_floating_chat");
+      setIsExpanded(true);
+    } catch (err) {
+      console.error("[FloatingChat] Failed to expand:", err);
+    }
+  }, [isExpanded]);
+
+  // Collapse: animate content out first, then resize window after animation completes
+  const handleCollapse = useCallback(async () => {
+    if (!isExpanded) return;
+    // First trigger content animation out
+    setIsExpanded(false);
+    // Wait for animation to complete (matches duration-200)
+    await new Promise((resolve) => setTimeout(resolve, 250));
+    // Then resize window
+    try {
+      await invoke("collapse_floating_chat");
+    } catch (err) {
+      console.error("[FloatingChat] Failed to collapse:", err);
+    }
+  }, [isExpanded]);
+
+  // Click-through for transparent background
+  // When collapsed: always capture events (hover to expand is handled by container onMouseEnter)
+  // When expanded: pass clicks on transparent areas through to windows behind
+  useEffect(() => {
     if (!isExpanded) {
+      // When collapsed, always capture events so hover detection works
       if (lastIgnoreState.current !== false) {
         lastIgnoreState.current = false;
         invoke("set_ignore_cursor_events", { ignore: false }).catch(() => {});
@@ -141,32 +184,6 @@ export function FloatingChat() {
     };
   }, [isExpanded]);
 
-  // Expand/collapse handlers - call Rust backend to resize window
-  const handleExpand = useCallback(async () => {
-    if (isExpanded) return;
-    try {
-      await invoke("expand_floating_chat");
-      setIsExpanded(true);
-    } catch (err) {
-      console.error("[FloatingChat] Failed to expand:", err);
-    }
-  }, [isExpanded]);
-
-  // Collapse: animate content out first, then resize window after animation completes
-  const handleCollapse = useCallback(async () => {
-    if (!isExpanded) return;
-    // First trigger content animation out
-    setIsExpanded(false);
-    // Wait for animation to complete (matches duration-200)
-    await new Promise((resolve) => setTimeout(resolve, 250));
-    // Then resize window
-    try {
-      await invoke("collapse_floating_chat");
-    } catch (err) {
-      console.error("[FloatingChat] Failed to collapse:", err);
-    }
-  }, [isExpanded]);
-
   // Listen for expand/collapse events from backend
   useEffect(() => {
     const unlisteners: (() => void)[] = [];
@@ -187,6 +204,23 @@ export function FloatingChat() {
     setup();
     return () => {
       unlisteners.forEach((fn) => fn());
+    };
+  }, []);
+
+  // Handle window blur for collapse behavior
+  useEffect(() => {
+    const setup = async () => {
+      // Blur input when window loses focus (clicking outside Tauri window)
+      const unlisten = await listen("tauri://blur", () => {
+        inputRef.current?.blur();
+        isHoveringRef.current = false;
+      });
+      return unlisten;
+    };
+
+    const unlistenPromise = setup();
+    return () => {
+      unlistenPromise.then((fn) => fn());
     };
   }, []);
 
@@ -545,6 +579,8 @@ export function FloatingChat() {
     if (collapseTimeoutRef.current) {
       clearTimeout(collapseTimeoutRef.current);
     }
+    // Ensure window has focus so keyboard input works
+    invoke("focus_floating_chat").catch(() => {});
     if (!isExpanded) {
       handleExpand();
     }
@@ -707,15 +743,8 @@ export function FloatingChat() {
             exit={{ opacity: 0, y: 20 }}
             className="flex-1 flex flex-col justify-end min-h-0"
           >
-            {/* Empty state */}
-            {foregroundSessions.length === 0 && backgroundSessions.length === 0 ? (
-              <div className="flex-1 flex flex-col items-center justify-center px-1 py-8">
-                <MessageSquare className="h-8 w-8 text-zinc-700 mb-2" />
-                <p className="text-xs text-zinc-500">No threads yet</p>
-                <p className="text-[10px] text-zinc-600 mt-1">Start typing to create one</p>
-              </div>
-            ) : (
-              /* Thread list - vertically stacked, compact pills */
+            {/* Thread list - vertically stacked, compact pills */}
+            {(foregroundSessions.length > 0 || backgroundSessions.length > 0) && (
               <div className="flex flex-col gap-1 mt-auto items-start">
                 {foregroundSessions.slice(0, 6).map((session) => {
                   const status = getSessionStatus(session.id);
