@@ -185,12 +185,14 @@ pub async fn toggle_floating_chat(app: AppHandle) -> Result<bool, String> {
     }
 }
 
-/// Check if any workbook windows are open
+/// Check if any workbook windows are open (visible)
 #[tauri::command]
 pub fn has_open_workbook_windows(app: AppHandle) -> bool {
     app.webview_windows()
         .iter()
-        .any(|(label, _)| label.starts_with("workbook_"))
+        .any(|(label, window)| {
+            label.starts_with("workbook_") && window.is_visible().unwrap_or(false)
+        })
 }
 
 /// Open floating chat and start a new thread with the given prompt

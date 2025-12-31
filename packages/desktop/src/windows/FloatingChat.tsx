@@ -95,6 +95,9 @@ export function FloatingChat() {
   const queryClient = useQueryClient();
   const lastIgnoreState = useRef<boolean | null>(null);
 
+  // Track if workbook is open - when true, FloatingChat is disabled
+  const isWorkbookOpenRef = useRef(false);
+
   // Sync with global session state (for TaskToolSummary "open in thread" links)
   const { sessionId: globalSessionId, setSession: setGlobalSession } = useActiveSession();
 
@@ -225,6 +228,7 @@ export function FloatingChat() {
   }, []);
 
   // Speech-to-text: Option key triggers recording via global keyboard listener
+  // All handlers are disabled when a workbook is open (isWorkbookOpenRef)
   useEffect(() => {
     const unlisteners: (() => void)[] = [];
 
@@ -232,6 +236,9 @@ export function FloatingChat() {
       // Option pressed - expand and start recording
       unlisteners.push(
         await listen("option-key-pressed", async () => {
+          // Ignore when workbook is open - STT handled by workbook sidebar
+          if (isWorkbookOpenRef.current) return;
+
           console.log("[FloatingChat] Option pressed - starting STT");
           handleExpand();
           setIsRecording(true);
@@ -263,6 +270,7 @@ export function FloatingChat() {
       // Real-time STT partial transcription
       unlisteners.push(
         await listen<string>("stt:partial", (event) => {
+          if (isWorkbookOpenRef.current) return;
           setSttPreview(event.payload);
         })
       );
@@ -270,6 +278,7 @@ export function FloatingChat() {
       // STT download progress
       unlisteners.push(
         await listen<number>("stt:download-progress", (event) => {
+          if (isWorkbookOpenRef.current) return;
           setSttDownloadProgress(event.payload);
           if (event.payload >= 1) {
             // Download complete, reset after a moment
@@ -284,6 +293,9 @@ export function FloatingChat() {
       // Option released - stop recording and get transcription
       unlisteners.push(
         await listen("option-key-released", async () => {
+          // Ignore when workbook is open
+          if (isWorkbookOpenRef.current) return;
+
           console.log("[FloatingChat] Option released - stopping STT");
           setIsRecording(false);
           setSttPreview(""); // Clear preview
@@ -303,6 +315,9 @@ export function FloatingChat() {
       // Option tapped quickly - just expand and focus input
       unlisteners.push(
         await listen("option-key-tapped", () => {
+          // Ignore when workbook is open
+          if (isWorkbookOpenRef.current) return;
+
           console.log("[FloatingChat] Option tapped - expanding + focusing input");
           handleExpand();
           setTimeout(() => inputRef.current?.focus(), 100);
@@ -312,6 +327,9 @@ export function FloatingChat() {
       // Option+other key pressed - cancel STT (allows Option+C, Option+V, etc.)
       unlisteners.push(
         await listen("option-key-cancelled", async () => {
+          // Ignore when workbook is open
+          if (isWorkbookOpenRef.current) return;
+
           console.log("[FloatingChat] Option combo detected - cancelling STT");
           if (isRecording) {
             setIsRecording(false);
@@ -328,6 +346,9 @@ export function FloatingChat() {
       // Option+Space - toggle expand/collapse
       unlisteners.push(
         await listen("option-space-pressed", async () => {
+          // Ignore when workbook is open
+          if (isWorkbookOpenRef.current) return;
+
           console.log("[FloatingChat] Option+Space - toggle expand/collapse");
           if (isExpanded) {
             handleCollapse();
@@ -396,10 +417,11 @@ export function FloatingChat() {
     const unlisteners: (() => void)[] = [];
 
     const setup = async () => {
-      // When a workbook window opens, hide this floating chat
+      // When a workbook window opens, hide this floating chat and disable it
       unlisteners.push(
         await listen("workbook-opened", () => {
-          console.log("[FloatingChat] Workbook opened - hiding");
+          console.log("[FloatingChat] Workbook opened - hiding and disabling");
+          isWorkbookOpenRef.current = true;
           invoke("hide_floating_chat").catch((err) => {
             console.error("[FloatingChat] Failed to hide:", err);
           });
@@ -413,7 +435,8 @@ export function FloatingChat() {
           try {
             const hasWindows = await invoke<boolean>("has_open_workbook_windows");
             if (!hasWindows) {
-              console.log("[FloatingChat] No workbook windows left - showing");
+              console.log("[FloatingChat] No workbook windows left - showing and enabling");
+              isWorkbookOpenRef.current = false;
               await invoke("show_floating_chat");
             }
           } catch (err) {

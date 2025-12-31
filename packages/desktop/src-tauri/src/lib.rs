@@ -2024,41 +2024,62 @@ pub fn run() {
                 tauri::async_runtime::spawn(async move {
                     tokio::time::sleep(std::time::Duration::from_millis(100)).await;
 
-                    // Get first workbook
-                    if let Ok(workbooks) = list_workbooks().await {
-                        if let Some(workbook) = workbooks.first() {
-                            // 1. Start the workbook runtime (tRPC/Vite server)
-                            println!("[startup] Starting runtime for workbook: {}", workbook.id);
-                            if let Err(e) = start_workbook_server_internal(
-                                &startup_app,
-                                &startup_state,
-                                &workbook.id,
-                                &workbook.directory,
-                            ).await {
-                                eprintln!("[startup] Failed to start runtime: {}", e);
+                    // Get first workbook, or create one if none exist
+                    let workbook = match list_workbooks().await {
+                        Ok(workbooks) => {
+                            if let Some(wb) = workbooks.into_iter().next() {
+                                wb
+                            } else {
+                                // No workbooks exist - create a default one
+                                println!("[startup] No workbooks found, creating default");
+                                match create_workbook(CreateWorkbookRequest {
+                                    name: "My Notebook".to_string(),
+                                    description: None,
+                                }).await {
+                                    Ok(wb) => wb,
+                                    Err(e) => {
+                                        eprintln!("[startup] Failed to create default workbook: {}", e);
+                                        return;
+                                    }
+                                }
                             }
-
-                            // 2. Set as active workbook (restarts OpenCode with workbook context)
-                            println!("[startup] Setting active workbook: {}", workbook.id);
-                            if let Err(e) = set_active_workbook_internal(&startup_app, &workbook.id).await {
-                                eprintln!("[startup] Failed to set active workbook: {}", e);
-                            }
-
-                            // 3. Update tray menu with workbook list
-                            if let Err(e) = tray::update_tray_menu(&startup_app).await {
-                                eprintln!("[startup] Failed to update tray menu: {}", e);
-                            }
-
-                            // 4. Open floating chat
-                            let _ = floating_chat::open_floating_chat(
-                                startup_app,
-                                workbook.directory.clone()
-                            ).await;
-
-                            // Play startup sound after windows are ready
-                            sfx::play("startup");
                         }
+                        Err(e) => {
+                            eprintln!("[startup] Failed to list workbooks: {}", e);
+                            return;
+                        }
+                    };
+
+                    // 1. Start the workbook runtime (tRPC/Vite server)
+                    println!("[startup] Starting runtime for workbook: {}", workbook.id);
+                    if let Err(e) = start_workbook_server_internal(
+                        &startup_app,
+                        &startup_state,
+                        &workbook.id,
+                        &workbook.directory,
+                    ).await {
+                        eprintln!("[startup] Failed to start runtime: {}", e);
                     }
+
+                    // 2. Set as active workbook (restarts OpenCode with workbook context)
+                    println!("[startup] Setting active workbook: {}", workbook.id);
+                    if let Err(e) = set_active_workbook_internal(&startup_app, &workbook.id).await {
+                        eprintln!("[startup] Failed to set active workbook: {}", e);
+                    }
+
+                    // 3. Update tray menu with workbook list
+                    if let Err(e) = tray::update_tray_menu(&startup_app).await {
+                        eprintln!("[startup] Failed to update tray menu: {}", e);
+                    }
+
+                    // 4. Open floating chat
+                    let _ = floating_chat::open_floating_chat(
+                        startup_app,
+                        workbook.directory.clone()
+                    ).await;
+
+                    // Play startup sound after windows are ready
+                    sfx::play("startup");
                 });
             } else {
                 // No API key - show setup window
@@ -2208,9 +2229,9 @@ pub fn run() {
                         } else {
                             println!("[window] Hidden {} (app still running in tray)", label);
 
-                            // Emit workbook-window-closed event so FloatingChat can show if no workbooks are open
+                            // Emit workbook-window-closed event to ALL windows so FloatingChat can show
                             if label.starts_with("workbook_") {
-                                let _ = window.emit("workbook-window-closed", label);
+                                let _ = window.app_handle().emit("workbook-window-closed", label);
                             }
                         }
                     }

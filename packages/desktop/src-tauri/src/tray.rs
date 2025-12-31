@@ -10,7 +10,7 @@ use tauri::{
 use std::sync::Arc;
 use tokio::sync::Mutex;
 
-use crate::{Workbook, list_workbooks, AppState, window_manager};
+use crate::{Workbook, list_workbooks, create_workbook, CreateWorkbookRequest, AppState, window_manager};
 
 /// Configure the system tray (created from tauri.conf.json)
 pub fn create_tray(app: &AppHandle) -> Result<(), Box<dyn std::error::Error>> {
@@ -131,8 +131,8 @@ fn handle_menu_event(app: &AppHandle, menu_id: &str) {
             show_or_open_workbook(app, Some("open-settings"));
         }
         "new_workbook" => {
-            // Open workbook and emit new-workbook event
-            show_or_open_workbook(app, Some("new-workbook"));
+            // Create a new workbook and open it
+            create_and_open_workbook(app);
         }
         id if id.starts_with("workbook:") => {
             let workbook_id = id.strip_prefix("workbook:").unwrap();
@@ -191,6 +191,37 @@ fn show_or_open_workbook(app: &AppHandle, event: Option<&'static str>) {
                 }
             }
             _ => {}
+        }
+    });
+}
+
+/// Create a new workbook and open it
+fn create_and_open_workbook(app: &AppHandle) {
+    let app = app.clone();
+    tauri::async_runtime::spawn(async move {
+        // Create a new workbook
+        let workbook = match create_workbook(CreateWorkbookRequest {
+            name: "Untitled Notebook".to_string(),
+            description: None,
+        }).await {
+            Ok(wb) => wb,
+            Err(e) => {
+                eprintln!("[tray] Failed to create workbook: {}", e);
+                return;
+            }
+        };
+
+        println!("[tray] Created new workbook: {}", workbook.id);
+
+        // Open the workbook window
+        let Some(state) = app.try_state::<Arc<Mutex<AppState>>>() else { return };
+        if let Err(e) = window_manager::open_workbook(&app, &state, &workbook.id).await {
+            eprintln!("[tray] Failed to open workbook: {}", e);
+        }
+
+        // Update tray menu to include new workbook
+        if let Err(e) = update_tray_menu(&app).await {
+            eprintln!("[tray] Failed to update tray menu: {}", e);
         }
     });
 }

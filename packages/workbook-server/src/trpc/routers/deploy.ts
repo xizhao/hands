@@ -389,8 +389,9 @@ export const deployRouter = t.router({
       console.log(`[deploy] Starting deployment for ${workerName}...`);
 
       // Step 1: Run Vite build
+      // Use npx instead of bun since workbook-server runs as compiled sidecar without bun in PATH
       console.log("[deploy] Building workbook...");
-      const buildResult = await runCommand("bun", ["run", "build"], {
+      const buildResult = await runCommand("npx", ["vite", "build"], {
         cwd: runtimePath,
         env: {
           HANDS_WORKBOOK_PATH: workbookDir,
