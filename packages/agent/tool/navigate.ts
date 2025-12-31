@@ -33,12 +33,23 @@ Use this tool after completing work to show the user the result. For example:
 - Show table with data: navigate routeType="table" id="orders" title="Orders" description="500 rows imported" refresh=true`,
 
   args: {
-    routeType: tool.schema.enum(["block", "table", "action"]).describe('Type of page: "block", "table", or "action"'),
+    routeType: tool.schema
+      .enum(["block", "table", "action"])
+      .describe('Type of page: "block", "table", or "action"'),
     id: tool.schema.string().describe("ID of the item (e.g., 'dashboard', 'orders', 'sync-data')"),
     title: tool.schema.string().optional().describe("Display title for the navigation card"),
-    description: tool.schema.string().optional().describe("Brief description of what the user will see"),
-    autoNavigate: tool.schema.boolean().optional().describe("Auto-navigate the user (default: true)"),
-    refresh: tool.schema.boolean().optional().describe("Refresh the data on the page (use after inserting/updating data)"),
+    description: tool.schema
+      .string()
+      .optional()
+      .describe("Brief description of what the user will see"),
+    autoNavigate: tool.schema
+      .boolean()
+      .optional()
+      .describe("Auto-navigate the user (default: true)"),
+    refresh: tool.schema
+      .boolean()
+      .optional()
+      .describe("Refresh the data on the page (use after inserting/updating data)"),
   },
 
   async execute(args, ctx) {

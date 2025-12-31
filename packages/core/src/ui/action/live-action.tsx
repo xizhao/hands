@@ -13,12 +13,25 @@
  * </LiveAction>
  */
 
-import { createPlatePlugin, PlateElement, type PlateElementProps, useEditorRef, useElement, useReadOnly, useSelected } from "platejs/react";
+import {
+  createPlatePlugin,
+  PlateElement,
+  type PlateElementProps,
+  useEditorRef,
+  useElement,
+  useReadOnly,
+  useSelected,
+} from "platejs/react";
 import { createContext, memo, useCallback, useContext, useMemo, useRef, useState } from "react";
 
-import { LIVE_ACTION_KEY, type LiveActionContextValue, type TLiveActionElement, type ComponentMeta } from "../../types";
+import {
+  type ComponentMeta,
+  LIVE_ACTION_KEY,
+  type LiveActionContextValue,
+  type TLiveActionElement,
+} from "../../types";
+import { extractTableName, LiveControlsMenu, LiveQueryEditor } from "../livecontrol";
 import { useLiveMutation } from "../query-provider";
-import { LiveControlsMenu, LiveQueryEditor, extractTableName } from "../livecontrol";
 
 // ============================================================================
 // Context
@@ -140,11 +153,7 @@ export function LiveAction({ sql, onExecute, children, className }: LiveActionPr
   );
 
   // Invisible container - no added styling/padding
-  return (
-    <LiveActionContext.Provider value={contextValue}>
-      {children}
-    </LiveActionContext.Provider>
-  );
+  return <LiveActionContext.Provider value={contextValue}>{children}</LiveActionContext.Provider>;
 }
 
 // ============================================================================
@@ -206,16 +215,19 @@ function LiveActionElement(props: PlateElementProps) {
     setEditorOpen(true);
   };
 
-  const handleApplySql = useCallback((newSql: string) => {
-    try {
-      const path = editor.api.findPath(element);
-      if (path) {
-        editor.tf.setNodes({ sql: newSql } as Partial<TLiveActionElement>, { at: path });
+  const handleApplySql = useCallback(
+    (newSql: string) => {
+      try {
+        const path = editor.api.findPath(element);
+        if (path) {
+          editor.tf.setNodes({ sql: newSql } as Partial<TLiveActionElement>, { at: path });
+        }
+      } catch (e) {
+        console.error("Failed to update action SQL:", e);
       }
-    } catch (e) {
-      console.error("Failed to update action SQL:", e);
-    }
-  }, [editor, element]);
+    },
+    [editor, element],
+  );
 
   return (
     <PlateElement {...props}>

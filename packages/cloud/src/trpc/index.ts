@@ -14,18 +14,17 @@
  *   cloud.usage.summary()
  */
 
-import { router } from "./base";
-
 // Import service routers
 import { authRouter } from "../services/auth";
-import { paymentsRouter } from "../services/payments";
 import { emailRouter } from "../services/email";
-import { notificationsRouter } from "../services/notifications";
 import { integrationsRouter } from "../services/integrations";
+import { notificationsRouter } from "../services/notifications";
+import { paymentsRouter } from "../services/payments";
 import { usageRouter } from "../services/usage";
+import { router } from "./base";
 
 // Re-export base utilities
-export { router, publicProcedure, protectedProcedure } from "./base";
+export { protectedProcedure, publicProcedure, router } from "./base";
 
 // Combined router with service namespaces
 export const appRouter = router({

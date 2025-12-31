@@ -4,9 +4,9 @@
  * Creates a type-safe tRPC client that connects to the @hands/cloud backend.
  */
 
-import { createTRPCReact } from "@trpc/react-query";
-import { httpBatchLink } from "@trpc/client";
 import type { AppRouter } from "@hands/cloud/trpc";
+import { httpBatchLink } from "@trpc/client";
+import { createTRPCReact } from "@trpc/react-query";
 
 // Create the tRPC React hooks
 export const cloud = createTRPCReact<AppRouter>();
@@ -14,10 +14,7 @@ export const cloud = createTRPCReact<AppRouter>();
 /**
  * Create a tRPC client for the cloud API
  */
-export function createCloudTrpcClient(
-  apiUrl: string,
-  getToken: () => string | null,
-) {
+export function createCloudTrpcClient(apiUrl: string, getToken: () => string | null) {
   return cloud.createClient({
     links: [
       httpBatchLink({

@@ -5,7 +5,7 @@
  * Uses module-level state for instant reactivity + server persistence.
  */
 
-import { useSyncExternalStore, useCallback, useEffect } from "react";
+import { useCallback, useEffect, useSyncExternalStore } from "react";
 import { trpc } from "@/lib/trpc";
 
 // ============================================================================
@@ -229,17 +229,23 @@ export function useSidebarState(_options: SidebarStateOptions = {}) {
     updateUiMutation.mutate({ pluginsExpanded: !state.pluginsExpanded });
   }, [state.pluginsExpanded, updateUiMutation]);
 
-  const toggleFolderWithSync = useCallback((folderId: string) => {
-    const isCurrentlyExpanded = state.expandedFolders.has(folderId);
-    toggleFolder(folderId);
-    setFolderMutation.mutate({ path: folderId, expanded: !isCurrentlyExpanded });
-  }, [state.expandedFolders, setFolderMutation]);
+  const toggleFolderWithSync = useCallback(
+    (folderId: string) => {
+      const isCurrentlyExpanded = state.expandedFolders.has(folderId);
+      toggleFolder(folderId);
+      setFolderMutation.mutate({ path: folderId, expanded: !isCurrentlyExpanded });
+    },
+    [state.expandedFolders, setFolderMutation],
+  );
 
-  const toggleSourceWithSync = useCallback((sourceId: string) => {
-    const isCurrentlyExpanded = state.expandedSources.has(sourceId);
-    toggleSource(sourceId);
-    setSourceMutation.mutate({ sourceId, expanded: !isCurrentlyExpanded });
-  }, [state.expandedSources, setSourceMutation]);
+  const toggleSourceWithSync = useCallback(
+    (sourceId: string) => {
+      const isCurrentlyExpanded = state.expandedSources.has(sourceId);
+      toggleSource(sourceId);
+      setSourceMutation.mutate({ sourceId, expanded: !isCurrentlyExpanded });
+    },
+    [state.expandedSources, setSourceMutation],
+  );
 
   const isFolderExpanded = useCallback(
     (folderId: string) => state.expandedFolders.has(folderId),

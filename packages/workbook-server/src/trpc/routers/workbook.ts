@@ -307,7 +307,10 @@ export const workbookRouter = t.router({
 
         const sourceFile = project.getSourceFile(sourcePath);
         if (!sourceFile) {
-          throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Could not parse source file" });
+          throw new TRPCError({
+            code: "INTERNAL_SERVER_ERROR",
+            message: "Could not parse source file",
+          });
         }
 
         const { mkdirSync } = await import("node:fs");

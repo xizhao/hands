@@ -1,12 +1,12 @@
-'use client';
+"use client";
 
 import {
   FontBackgroundColorPlugin,
   FontColorPlugin,
   FontFamilyPlugin,
   FontSizePlugin,
-} from '@platejs/basic-styles/react';
-import { KEYS } from 'platejs';
+} from "@platejs/basic-styles/react";
+import { KEYS } from "platejs";
 
 // Target all text-containing elements
 const targetPlugins = [
@@ -29,8 +29,8 @@ export const FontKit = [
     inject: {
       targetPlugins,
       nodeProps: {
-        defaultNodeValue: 'black',
-        nodeKey: 'color',
+        defaultNodeValue: "black",
+        nodeKey: "color",
       },
     },
   }),
@@ -39,8 +39,8 @@ export const FontKit = [
     inject: {
       targetPlugins,
       nodeProps: {
-        defaultNodeValue: 'transparent',
-        nodeKey: 'backgroundColor',
+        defaultNodeValue: "transparent",
+        nodeKey: "backgroundColor",
       },
     },
   }),
@@ -49,7 +49,7 @@ export const FontKit = [
     inject: {
       targetPlugins,
       nodeProps: {
-        nodeKey: 'fontSize',
+        nodeKey: "fontSize",
       },
     },
   }),
@@ -58,7 +58,7 @@ export const FontKit = [
     inject: {
       targetPlugins,
       nodeProps: {
-        nodeKey: 'fontFamily',
+        nodeKey: "fontFamily",
       },
     },
   }),

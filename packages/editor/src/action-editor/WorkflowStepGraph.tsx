@@ -11,30 +11,28 @@
  */
 
 import {
+  Background,
+  type Edge,
+  Handle,
+  type Node,
+  Position,
   ReactFlow,
   ReactFlowProvider,
-  Background,
-  type Node,
-  type Edge,
-  Position,
-  Handle,
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
-import dagre from "dagre";
 import {
   CheckCircle,
-  XCircle,
   CircleNotch,
   Clock,
   Hourglass,
+  Lightning,
   Play,
-  Pause,
   Timer,
   UserCircle,
-  Lightning,
-  CaretRight,
+  XCircle,
 } from "@phosphor-icons/react";
-import { useMemo, createContext, useContext } from "react";
+import dagre from "dagre";
+import { useMemo } from "react";
 import { cn } from "../lib/utils";
 
 // =============================================================================
@@ -188,9 +186,10 @@ function StepNode({ data }: { data: StepNodeData }) {
   const StatusIcon = status.icon;
   const TypeIcon = typeConfig.icon;
 
-  const duration = step.startedAt && step.finishedAt
-    ? new Date(step.finishedAt).getTime() - new Date(step.startedAt).getTime()
-    : null;
+  const duration =
+    step.startedAt && step.finishedAt
+      ? new Date(step.finishedAt).getTime() - new Date(step.startedAt).getTime()
+      : null;
 
   return (
     <div
@@ -199,7 +198,7 @@ function StepNode({ data }: { data: StepNodeData }) {
         "rounded-lg border px-3 py-2 min-w-[160px] cursor-pointer transition-all hover:shadow-md",
         status.bg,
         status.border,
-        onClick && "hover:scale-[1.02]"
+        onClick && "hover:scale-[1.02]",
       )}
     >
       <Handle
@@ -258,7 +257,11 @@ function StepNode({ data }: { data: StepNodeData }) {
               <div key={i} className="flex items-center gap-1.5 text-[10px]">
                 <ChildIcon
                   weight={child.status === "success" ? "fill" : "bold"}
-                  className={cn("h-3 w-3", childStatus.color, childStatus.animate && "animate-spin")}
+                  className={cn(
+                    "h-3 w-3",
+                    childStatus.color,
+                    childStatus.animate && "animate-spin",
+                  )}
                 />
                 <span className="truncate">{child.name}</span>
               </div>
@@ -280,11 +283,7 @@ function StartNode() {
   return (
     <div className="rounded-full bg-green-500/20 border border-green-500/40 p-2">
       <Play weight="fill" className="h-4 w-4 text-green-500" />
-      <Handle
-        type="source"
-        position={Position.Right}
-        className="!w-2 !h-2 !bg-green-500"
-      />
+      <Handle type="source" position={Position.Right} className="!w-2 !h-2 !bg-green-500" />
     </div>
   );
 }
@@ -295,9 +294,7 @@ function EndNode({ data }: { data: { status: "success" | "failed" } }) {
     <div
       className={cn(
         "rounded-full p-2 border",
-        isSuccess
-          ? "bg-green-500/20 border-green-500/40"
-          : "bg-red-500/20 border-red-500/40"
+        isSuccess ? "bg-green-500/20 border-green-500/40" : "bg-red-500/20 border-red-500/40",
       )}
     >
       {isSuccess ? (
@@ -326,7 +323,7 @@ const nodeTypes = {
 
 function buildGraph(
   steps: StepRecord[],
-  onStepClick?: (step: StepRecord) => void
+  onStepClick?: (step: StepRecord) => void,
 ): { nodes: Node[]; edges: Edge[] } {
   const nodes: Node[] = [];
   const edges: Edge[] = [];
@@ -361,8 +358,8 @@ function buildGraph(
           step.status === "failed"
             ? "hsl(0 84% 60%)"
             : step.status === "success"
-            ? "hsl(142 76% 36%)"
-            : "hsl(var(--muted-foreground))",
+              ? "hsl(142 76% 36%)"
+              : "hsl(var(--muted-foreground))",
         strokeWidth: 2,
       },
     });
@@ -385,10 +382,7 @@ function buildGraph(
       source: prevId,
       target: "end",
       style: {
-        stroke:
-          lastStep.status === "failed"
-            ? "hsl(0 84% 60%)"
-            : "hsl(142 76% 36%)",
+        stroke: lastStep.status === "failed" ? "hsl(0 84% 60%)" : "hsl(142 76% 36%)",
         strokeWidth: 2,
       },
     });

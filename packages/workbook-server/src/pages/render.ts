@@ -7,10 +7,9 @@
 
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
-import type { Value } from "platejs";
-import { renderPlateToHtml } from "@hands/editor/lib/plate-static-render-node";
 import { parseMdxToPlate } from "@hands/core/primitives/serialization/mdx-parser";
-import { compilePage, type CompiledPage, type PageMeta } from "./mdx.js";
+import { renderPlateToHtml } from "@hands/editor/lib/plate-static-render-node";
+import type { CompiledPage, PageMeta } from "./mdx.js";
 
 // ============================================================================
 // Types
@@ -90,9 +89,7 @@ export async function renderPage(options: RenderPageOptions): Promise<PageRender
     const html = renderPlateToHtml(parseResult.value);
 
     // Apply wrapper or default
-    const fullHtml = wrapper
-      ? wrapper(html, meta)
-      : wrapPageHtml(html, meta);
+    const fullHtml = wrapper ? wrapper(html, meta) : wrapPageHtml(html, meta);
 
     return {
       html: fullHtml,
@@ -110,7 +107,6 @@ export async function renderPage(options: RenderPageOptions): Promise<PageRender
     };
   }
 }
-
 
 /**
  * Render a compiled page (when source is already parsed)
@@ -135,14 +131,12 @@ export async function renderCompiledPage(
     const parseResult = parseMdxToPlate(compiled.source);
     const html = renderPlateToHtml(parseResult.value);
 
-    const fullHtml = wrapper
-      ? wrapper(html, compiled.meta)
-      : wrapPageHtml(html, compiled.meta);
+    const fullHtml = wrapper ? wrapper(html, compiled.meta) : wrapPageHtml(html, compiled.meta);
 
     return {
       html: fullHtml,
       meta: compiled.meta,
-      blockIds: compiled.blocks.map(b => b.id),
+      blockIds: compiled.blocks.map((b) => b.id),
     };
   } catch (err) {
     const error = err instanceof Error ? err.message : String(err);
@@ -162,7 +156,7 @@ export async function renderCompiledPage(
 /**
  * Render a block within a page context
  */
-async function renderBlockInPage(
+async function _renderBlockInPage(
   blockId: string,
   props: Record<string, unknown>,
   context: PageRenderContext,
@@ -223,7 +217,9 @@ async function fetchBlockViaRsc(
 
     return response.text();
   } catch (err) {
-    throw new Error(`Failed to fetch block ${blockId}: ${err instanceof Error ? err.message : String(err)}`);
+    throw new Error(
+      `Failed to fetch block ${blockId}: ${err instanceof Error ? err.message : String(err)}`,
+    );
   }
 }
 
@@ -249,7 +245,7 @@ function renderBlockPlaceholder(blockId: string): string {
 /**
  * Render a block error
  */
-function renderBlockError(blockId: string, error: string): string {
+function _renderBlockError(blockId: string, error: string): string {
   return `<div class="block-error bg-red-50 border border-red-200 rounded p-3 text-red-600 text-sm">
     <strong>Block Error (${escapeHtml(blockId)}):</strong> ${escapeHtml(error)}
   </div>`;
@@ -264,7 +260,7 @@ function renderBlockError(blockId: string, error: string): string {
  *
  * Simple markdown rendering. For production, consider using remark-html.
  */
-function renderMarkdown(content: string): string {
+function _renderMarkdown(content: string): string {
   let html = content;
 
   // Preserve Block elements (don't wrap in paragraphs)
@@ -422,6 +418,6 @@ function escapeHtml(text: string): string {
 /**
  * Escape special regex characters
  */
-function escapeRegex(str: string): string {
+function _escapeRegex(str: string): string {
   return str.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }

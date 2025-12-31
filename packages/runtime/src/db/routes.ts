@@ -9,10 +9,12 @@ import { route } from "rwsdk/router";
 import { getDb, getUserTables, kyselySql, runWithDbMode } from "./dev";
 
 export const dbRoutes = [
-  route("/db/health", () =>
-    new Response(JSON.stringify({ ready: true }), {
-      headers: { "Content-Type": "application/json" },
-    })
+  route(
+    "/db/health",
+    () =>
+      new Response(JSON.stringify({ ready: true }), {
+        headers: { "Content-Type": "application/json" },
+      }),
   ),
 
   route("/db/schema", async () => {
@@ -38,7 +40,7 @@ export const dbRoutes = [
               isPrimary: c.pk === 1,
             })),
           };
-        })
+        }),
       );
 
       return new Response(JSON.stringify({ tables }), {
@@ -72,7 +74,7 @@ export const dbRoutes = [
               ? Number((result as { insertId: bigint }).insertId)
               : undefined,
           }),
-          { headers: { "Content-Type": "application/json" } }
+          { headers: { "Content-Type": "application/json" } },
         );
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);

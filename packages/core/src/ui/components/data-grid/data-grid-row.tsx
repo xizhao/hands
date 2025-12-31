@@ -1,14 +1,9 @@
 "use client";
 
-import type {
-  ColumnPinningState,
-  Row,
-  TableMeta,
-  VisibilityState,
-} from "@tanstack/react-table";
+import type { ColumnPinningState, Row, TableMeta, VisibilityState } from "@tanstack/react-table";
 import type { VirtualItem } from "@tanstack/react-virtual";
 import * as React from "react";
-import { DataGridCell } from "./data-grid-cell";
+import type { CellPosition, Direction, RowHeightValue } from "../../../types/data-grid";
 import { useComposedRefs } from "../../lib/compose-refs";
 import {
   flexRender,
@@ -17,11 +12,7 @@ import {
   getRowHeightValue,
 } from "../../lib/data-grid";
 import { cn } from "../../lib/utils";
-import type {
-  CellPosition,
-  Direction,
-  RowHeightValue,
-} from "../../../types/data-grid";
+import { DataGridCell } from "./data-grid-cell";
 
 interface DataGridRowProps<TData> extends React.ComponentProps<"div"> {
   row: Row<TData>;
@@ -192,10 +183,7 @@ function DataGridRowImpl<TData>({
       tabIndex={-1}
       {...props}
       ref={rowRef}
-      className={cn(
-        "absolute flex w-full border-b will-change-transform",
-        className,
-      )}
+      className={cn("absolute flex w-full border-b will-change-transform", className)}
       style={{
         height: `${getRowHeightValue(rowHeight)}px`,
         transform: `translateY(${virtualItem.start}px)`,
@@ -206,14 +194,11 @@ function DataGridRowImpl<TData>({
         const columnId = cell.column.id;
 
         const isCellFocused =
-          focusedCell?.rowIndex === virtualRowIndex &&
-          focusedCell?.columnId === columnId;
+          focusedCell?.rowIndex === virtualRowIndex && focusedCell?.columnId === columnId;
         const isCellEditing =
-          editingCell?.rowIndex === virtualRowIndex &&
-          editingCell?.columnId === columnId;
+          editingCell?.rowIndex === virtualRowIndex && editingCell?.columnId === columnId;
         const isCellSelected =
-          cellSelectionKeys?.has(getCellKey(virtualRowIndex, columnId)) ??
-          false;
+          cellSelectionKeys?.has(getCellKey(virtualRowIndex, columnId)) ?? false;
 
         const isSearchMatch = searchMatchColumns?.has(columnId) ?? false;
         const isActiveSearchMatch = activeSearchMatch?.columnId === columnId;

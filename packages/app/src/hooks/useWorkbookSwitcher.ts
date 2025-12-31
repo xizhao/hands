@@ -6,7 +6,7 @@
  */
 
 import { useCallback } from "react";
-import { useOpenWorkbook, useCreateWorkbook, type Workbook } from "./useWorkbook";
+import { useCreateWorkbook, useOpenWorkbook, type Workbook } from "./useWorkbook";
 
 export interface WorkbookSwitcherOptions {
   /** Called before switching workbooks - use to reset state */
@@ -47,9 +47,7 @@ export interface WorkbookSwitcherResult {
  * });
  * ```
  */
-export function useWorkbookSwitcher(
-  options: WorkbookSwitcherOptions = {}
-): WorkbookSwitcherResult {
+export function useWorkbookSwitcher(options: WorkbookSwitcherOptions = {}): WorkbookSwitcherResult {
   const { onBeforeSwitch, onAfterSwitch, onAfterCreate, onError } = options;
 
   const openWorkbookMutation = useOpenWorkbook();
@@ -75,7 +73,7 @@ export function useWorkbookSwitcher(
         },
       });
     },
-    [openWorkbookMutation, onBeforeSwitch, onAfterSwitch, onError]
+    [openWorkbookMutation, onBeforeSwitch, onAfterSwitch, onError],
   );
 
   const createWorkbook = useCallback(
@@ -94,10 +92,10 @@ export function useWorkbookSwitcher(
             console.error("[useWorkbookSwitcher] Failed to create workbook:", err);
             onError?.(err, "create workbook");
           },
-        }
+        },
       );
     },
-    [createWorkbookMutation, switchWorkbook, onAfterCreate, onError]
+    [createWorkbookMutation, switchWorkbook, onAfterCreate, onError],
   );
 
   return {

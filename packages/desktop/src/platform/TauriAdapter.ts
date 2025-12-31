@@ -5,16 +5,16 @@
  * Wraps all Tauri-specific functionality (IPC, window management, file system, etc.)
  */
 
-import { invoke } from "@tauri-apps/api/core";
-import { open } from "@tauri-apps/plugin-dialog";
-import { getCurrentWindow } from "@tauri-apps/api/window";
-import { load, type Store } from "@tauri-apps/plugin-store";
 import type {
   PlatformAdapter,
-  Workbook,
   RuntimeConnection,
   RuntimeStatus,
+  Workbook,
 } from "@hands/app/platform";
+import { invoke } from "@tauri-apps/api/core";
+import { getCurrentWindow } from "@tauri-apps/api/window";
+import { open } from "@tauri-apps/plugin-dialog";
+import { load, type Store } from "@tauri-apps/plugin-store";
 
 // ============================================================================
 // Tauri-specific types
@@ -172,11 +172,13 @@ export const TauriPlatformAdapter: PlatformAdapter = {
     onResize: (callback: () => void): (() => void) => {
       let unlisten: (() => void) | null = null;
 
-      appWindow.onResized(() => {
-        callback();
-      }).then((fn) => {
-        unlisten = fn;
-      });
+      appWindow
+        .onResized(() => {
+          callback();
+        })
+        .then((fn) => {
+          unlisten = fn;
+        });
 
       return () => {
         unlisten?.();

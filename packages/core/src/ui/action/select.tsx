@@ -28,7 +28,7 @@ import {
 } from "platejs/react";
 import { memo, useContext, useEffect, useRef, useState } from "react";
 
-import { SELECT_KEY, type TSelectElement, type ComponentMeta } from "../../types";
+import { type ComponentMeta, SELECT_KEY, type TSelectElement } from "../../types";
 import { LiveActionContext } from "./live-action";
 
 // ============================================================================
@@ -127,7 +127,7 @@ export function Select({
 
 function SelectElement(props: PlateElementProps) {
   const element = useElement<TSelectElement>();
-  const selected = useSelected();
+  const _selected = useSelected();
   const actionCtx = useContext(LiveActionContext);
 
   const { name, options: rawOptions, placeholder = "Select...", defaultValue, required } = element;
@@ -158,11 +158,7 @@ function SelectElement(props: PlateElementProps) {
   );
 
   return (
-    <PlateElement
-      {...props}
-      as="div"
-      className="my-2"
-    >
+    <PlateElement {...props} as="div" className="my-2">
       <div className="flex flex-col gap-1.5">
         {hasLabel && <label className="text-sm font-medium">{props.children}</label>}
         <select
@@ -241,4 +237,3 @@ export const SelectMeta: ComponentMeta = {
     requireParent: ["LiveAction"],
   },
 };
-

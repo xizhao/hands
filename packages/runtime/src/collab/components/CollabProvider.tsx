@@ -1,12 +1,12 @@
 "use client";
 
-import { createContext, useContext, type ReactNode } from "react";
-import { useUserIdentity } from "../hooks/useUserIdentity";
-import { usePresence } from "../hooks/usePresence";
-import { useComments } from "../hooks/useComments";
-import { useBlockPositions, type BlockPosition } from "../hooks/useBlockPositions";
-import type { CollabUser, UserPresence, CommentThread } from "../types";
+import { createContext, type ReactNode, useContext } from "react";
 import type { PageMetadata } from "../CollabRoot";
+import { type BlockPosition, useBlockPositions } from "../hooks/useBlockPositions";
+import { useComments } from "../hooks/useComments";
+import { usePresence } from "../hooks/usePresence";
+import { useUserIdentity } from "../hooks/useUserIdentity";
+import type { CollabUser, CommentThread, UserPresence } from "../types";
 
 interface CollabContextValue {
   user: CollabUser | null;
@@ -36,7 +36,10 @@ interface CollabProviderProps {
 export function CollabProvider({ pageId, pageMetadata, children }: CollabProviderProps) {
   const user = useUserIdentity();
   const { otherUsers } = usePresence(pageId, user);
-  const { threadsByElementId, addComment, resolveThread, deleteComment } = useComments(pageId, user);
+  const { threadsByElementId, addComment, resolveThread, deleteComment } = useComments(
+    pageId,
+    user,
+  );
   const blockPositions = useBlockPositions();
 
   return (

@@ -83,7 +83,7 @@ export function useThumbnail(type: "page", contentId: string | undefined) {
 
   // Return theme-specific thumbnail, fallback to other theme if not available
   const thumbnail = query.data
-    ? query.data[theme] ?? query.data[theme === "dark" ? "light" : "dark"] ?? null
+    ? (query.data[theme] ?? query.data[theme === "dark" ? "light" : "dark"] ?? null)
     : null;
 
   return {
@@ -144,9 +144,6 @@ export function usePrefetchThumbnail() {
   return (type: "page", contentId: string) => {
     if (!contentId) return;
 
-    utils.thumbnails.get.prefetch(
-      { type, contentId },
-      { staleTime: Infinity },
-    );
+    utils.thumbnails.get.prefetch({ type, contentId }, { staleTime: Infinity });
   };
 }

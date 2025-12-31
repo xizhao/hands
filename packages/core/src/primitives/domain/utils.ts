@@ -4,12 +4,7 @@
  * Helpers for schema hashing, relation table detection, and name formatting.
  */
 
-import type {
-  DomainColumn,
-  DomainForeignKey,
-  DomainSchema,
-  RelationTableDetection,
-} from "./types";
+import type { DomainColumn, DomainForeignKey, DomainSchema, RelationTableDetection } from "./types";
 
 // =============================================================================
 // Schema Hashing
@@ -67,7 +62,7 @@ export function detectRelationTable(
   tableName: string,
   columns: DomainColumn[],
   foreignKeys: DomainForeignKey[],
-  allTableNames: string[]
+  allTableNames: string[],
 ): RelationTableDetection {
   // Check for junction naming patterns
   for (const pattern of JUNCTION_PATTERNS) {
@@ -105,27 +100,21 @@ export function detectRelationTable(
   // (typical junction table pattern)
   if (foreignKeys.length === 2) {
     const nonFkColumns = columns.filter(
-      (col) =>
-        !foreignKeys.some((fk) => fk.column === col.name) && !col.isPrimary
+      (col) => !foreignKeys.some((fk) => fk.column === col.name) && !col.isPrimary,
     );
 
     // If only has FK columns + optional timestamps/id, likely a junction
     const isMinimalJunction =
       nonFkColumns.length <= 2 &&
       nonFkColumns.every((col) =>
-        ["created_at", "updated_at", "id", "created", "modified"].includes(
-          col.name.toLowerCase()
-        )
+        ["created_at", "updated_at", "id", "created", "modified"].includes(col.name.toLowerCase()),
       );
 
     if (isMinimalJunction) {
       return {
         isRelation: true,
         reason: "Table has 2 foreign keys with minimal other columns",
-        connectsTables: [
-          foreignKeys[0].referencedTable,
-          foreignKeys[1].referencedTable,
-        ],
+        connectsTables: [foreignKeys[0].referencedTable, foreignKeys[1].referencedTable],
       };
     }
   }
@@ -171,11 +160,11 @@ export function toTableName(displayName: string): string {
  */
 export function matchPageToDomain(
   tableName: string,
-  pages: Array<{ id: string; path: string; frontmatter?: { domain?: string } }>
+  pages: Array<{ id: string; path: string; frontmatter?: { domain?: string } }>,
 ): { path: string; id: string } | null {
   // First, try to match by frontmatter domain field
   const byFrontmatter = pages.find(
-    (p) => p.frontmatter?.domain?.toLowerCase() === tableName.toLowerCase()
+    (p) => p.frontmatter?.domain?.toLowerCase() === tableName.toLowerCase(),
   );
   if (byFrontmatter) {
     return { path: byFrontmatter.path, id: byFrontmatter.id };
@@ -185,7 +174,7 @@ export function matchPageToDomain(
   const byFilename = pages.find(
     (p) =>
       p.id.toLowerCase() === tableName.toLowerCase() ||
-      p.id.toLowerCase().replace(/-/g, "_") === tableName.toLowerCase()
+      p.id.toLowerCase().replace(/-/g, "_") === tableName.toLowerCase(),
   );
   if (byFilename) {
     return { path: byFilename.path, id: byFilename.id };
@@ -203,7 +192,7 @@ export function matchPageToDomain(
  */
 export function compareSchemas(
   current: DomainSchema,
-  stored: DomainSchema
+  stored: DomainSchema,
 ): Array<{
   type: "column_added" | "column_removed" | "column_modified" | "type_changed";
   column: string;

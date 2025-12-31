@@ -8,8 +8,8 @@
  */
 
 import MonacoReact, { type Monaco } from "@monaco-editor/react";
-import { useCallback, useEffect, useRef, useState } from "react";
 import type { editor } from "monaco-editor";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 import { cn } from "../lib/utils";
 import { registerMdxLanguage } from "./mdx-language";
@@ -22,10 +22,7 @@ let monacoInitialized = false;
 /**
  * Convert our severity to Monaco severity.
  */
-function severityToMonaco(
-  monaco: Monaco,
-  severity: Diagnostic["severity"]
-): number {
+function severityToMonaco(monaco: Monaco, severity: Diagnostic["severity"]): number {
   switch (severity) {
     case "error":
       return monaco.MarkerSeverity.Error;
@@ -102,7 +99,7 @@ export function MonacoEditor({
       // Call external onMount if provided
       onMount?.(editor);
     },
-    [theme, isDarkMode, onMount]
+    [theme, isDarkMode, onMount],
   );
 
   // Handle content changes
@@ -112,7 +109,7 @@ export function MonacoEditor({
         onChange(newValue);
       }
     },
-    [onChange]
+    [onChange],
   );
 
   // Apply diagnostics as markers

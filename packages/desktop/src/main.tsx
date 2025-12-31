@@ -5,22 +5,28 @@
  * wrapped in the Tauri platform adapter.
  */
 
+import { App, PlatformProvider } from "@hands/app";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import React from "react";
 import ReactDOM from "react-dom/client";
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { App, PlatformProvider } from "@hands/app";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { TauriPlatformAdapter } from "./platform/TauriAdapter";
 import PreviewWindow from "./preview";
-import { CaptureOverlay } from "./windows/CaptureOverlay";
 import { CaptureActionPanel } from "./windows/CaptureActionPanel";
+import { CaptureOverlay } from "./windows/CaptureOverlay";
 import { FloatingChat } from "./windows/FloatingChat";
 import "./index.css";
 import startupSfx from "./assets/sfx/hands-startup.mp3";
 
 // Play startup sound for main window
 const windowType = new URLSearchParams(window.location.search);
-if (!windowType.has("floating-chat") && !windowType.has("capture-overlay") && !windowType.has("capture-action") && !windowType.has("preview") && !windowType.has("workbook")) {
+if (
+  !windowType.has("floating-chat") &&
+  !windowType.has("capture-overlay") &&
+  !windowType.has("capture-action") &&
+  !windowType.has("preview") &&
+  !windowType.has("workbook")
+) {
   new Audio(startupSfx).play().catch(() => {});
 }
 
@@ -35,7 +41,13 @@ const floatingChatQueryClient = new QueryClient({
 });
 
 // Determine window type from URL params
-function getWindowType(): "main" | "preview" | "capture-overlay" | "capture-action" | "floating-chat" | "workbook" {
+function getWindowType():
+  | "main"
+  | "preview"
+  | "capture-overlay"
+  | "capture-action"
+  | "floating-chat"
+  | "workbook" {
   const params = new URLSearchParams(window.location.search);
 
   if (params.has("floating-chat")) return "floating-chat";
@@ -68,7 +80,6 @@ function getComponent() {
           </PlatformProvider>
         </QueryClientProvider>
       );
-    case "workbook":
     default:
       // Main app and workbook windows use PlatformProvider
       return (

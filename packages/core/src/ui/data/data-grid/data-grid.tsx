@@ -21,15 +21,10 @@ import {
   useSelected,
 } from "platejs/react";
 import { memo, useMemo } from "react";
-
+import { DATA_GRID_KEY, type DataGridColumnConfig, type TDataGridElement } from "../../../types";
+import type { CellOpts } from "../../../types/data-grid";
 import { DataGrid as DiceDataGrid } from "../../components/data-grid/data-grid";
 import { useDataGrid } from "../../hooks/use-data-grid";
-import type { CellOpts } from "../../../types/data-grid";
-import {
-  DATA_GRID_KEY,
-  type DataGridColumnConfig,
-  type TDataGridElement,
-} from "../../../types";
 import { detectFormat } from "../../lib/format";
 import { useLiveValueData } from "../../view/charts/context";
 
@@ -209,11 +204,7 @@ export function DataGrid<TData extends Record<string, unknown> = Record<string, 
 
   // Handle error state
   if (error) {
-    return (
-      <div className="p-4 text-destructive text-sm">
-        Error loading data: {error.message}
-      </div>
-    );
+    return <div className="p-4 text-destructive text-sm">Error loading data: {error.message}</div>;
   }
 
   // Handle empty state
@@ -225,13 +216,7 @@ export function DataGrid<TData extends Record<string, unknown> = Record<string, 
     );
   }
 
-  return (
-    <DiceDataGrid
-      {...dataGrid}
-      height={height}
-      className={className}
-    />
-  );
+  return <DiceDataGrid {...dataGrid} height={height} className={className} />;
 }
 
 // ============================================================================
@@ -240,7 +225,7 @@ export function DataGrid<TData extends Record<string, unknown> = Record<string, 
 
 function DataGridElement(props: PlateElementProps) {
   const element = useElement<TDataGridElement>();
-  const selected = useSelected();
+  const _selected = useSelected();
 
   const columns = element.columns as DataGridColumnConfig[] | "auto" | undefined;
   const height = element.height as number | undefined;
@@ -249,11 +234,7 @@ function DataGridElement(props: PlateElementProps) {
   const enablePaste = element.enablePaste as boolean | undefined;
 
   return (
-    <PlateElement
-      {...props}
-      as="div"
-      className="my-2"
-    >
+    <PlateElement {...props} as="div" className="my-2">
       <DataGrid
         columns={columns}
         height={height ?? 400}
@@ -294,9 +275,7 @@ export interface CreateDataGridOptions {
 /**
  * Create a DataGrid element for insertion into editor.
  */
-export function createDataGridElement(
-  options?: CreateDataGridOptions,
-): TDataGridElement {
+export function createDataGridElement(options?: CreateDataGridOptions): TDataGridElement {
   return {
     type: DATA_GRID_KEY,
     columns: options?.columns,

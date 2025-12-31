@@ -5,8 +5,8 @@
  * Manages database subscription and collection registry.
  */
 
-import { createContext, useContext, useEffect, useMemo, useRef, type ReactNode } from "react";
-import { useDbSubscription, type DbChangeEvent } from "../db-subscription";
+import { createContext, type ReactNode, useContext, useMemo, useRef } from "react";
+import { type DbChangeEvent, useDbSubscription } from "../db-subscription";
 import { trpc } from "../trpc";
 
 export interface LiveQueryConfig {
@@ -18,10 +18,7 @@ interface LiveQueryContextValue {
   /** Version number that increments on each db change */
   dataVersion: number;
   /** Execute a SQL query */
-  executeQuery: <T = Record<string, unknown>>(
-    sql: string,
-    params?: unknown[]
-  ) => Promise<T[]>;
+  executeQuery: <T = Record<string, unknown>>(sql: string, params?: unknown[]) => Promise<T[]>;
 }
 
 const LiveQueryContext = createContext<LiveQueryContextValue | null>(null);
@@ -59,10 +56,7 @@ export function LiveQueryProvider({ config, children }: LiveQueryProviderProps) 
   });
 
   const executeQuery = useMemo(() => {
-    return async <T = Record<string, unknown>>(
-      sql: string,
-      params?: unknown[]
-    ): Promise<T[]> => {
+    return async <T = Record<string, unknown>>(sql: string, params?: unknown[]): Promise<T[]> => {
       const result = await queryMutation.mutateAsync({ sql, params });
       return result.rows as T[];
     };
@@ -74,12 +68,8 @@ export function LiveQueryProvider({ config, children }: LiveQueryProviderProps) 
       dataVersion: dataVersionRef.current,
       executeQuery,
     }),
-    [runtimePort, executeQuery]
+    [runtimePort, executeQuery],
   );
 
-  return (
-    <LiveQueryContext.Provider value={value}>
-      {children}
-    </LiveQueryContext.Provider>
-  );
+  return <LiveQueryContext.Provider value={value}>{children}</LiveQueryContext.Provider>;
 }

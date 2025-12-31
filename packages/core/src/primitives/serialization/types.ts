@@ -4,7 +4,7 @@
  * Type definitions for the serialization rule system.
  */
 
-import type { TElement, TText, SlateEditor } from "platejs";
+import type { SlateEditor, TElement, TText } from "platejs";
 
 // ============================================================================
 // MDX AST Types (from mdast-util-mdx-jsx)
@@ -53,7 +53,7 @@ export interface DeserializeOptions {
   convertChildren?: (
     children: unknown[],
     deco: unknown,
-    options: DeserializeOptions
+    options: DeserializeOptions,
   ) => (TElement | TText)[];
 }
 
@@ -110,11 +110,7 @@ export interface MdxSerializationRule<T extends TElement = TElement> {
    * @param options - Contains convertChildren helper
    * @returns Plate element
    */
-  deserialize: (
-    node: MdxDeserializeNode,
-    deco?: unknown,
-    options?: DeserializeOptions
-  ) => T;
+  deserialize: (node: MdxDeserializeNode, deco?: unknown, options?: DeserializeOptions) => T;
 
   /**
    * Convert Plate element → MDX JSX element.
@@ -137,7 +133,7 @@ export interface PlateMarkdownRule {
   deserialize?: (
     node: MdxDeserializeNode,
     deco?: unknown,
-    options?: DeserializeOptions
+    options?: DeserializeOptions,
   ) => TElement;
   serialize?: (element: TElement, options?: SerializeOptions) => MdxJsxElement;
 }

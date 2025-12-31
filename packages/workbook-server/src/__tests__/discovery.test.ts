@@ -82,10 +82,7 @@ describe("discoverWorkbook", () => {
     );
 
     // Add a page
-    writeFileSync(
-      join(TEMP_WORKBOOK, "pages/index.md"),
-      `# Home Page`,
-    );
+    writeFileSync(join(TEMP_WORKBOOK, "pages/index.md"), `# Home Page`);
 
     // Add a client component
     writeFileSync(

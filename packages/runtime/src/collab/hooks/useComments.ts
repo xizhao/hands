@@ -1,6 +1,6 @@
 import { useCallback } from "react";
 import { useSyncedState } from "rwsdk/use-synced-state/client";
-import type { CollabUser, Comment, CommentThread, CommentsMap } from "../types";
+import type { CollabUser, Comment, CommentsMap, CommentThread } from "../types";
 
 /**
  * Manage comment threads synced across users.
@@ -9,10 +9,7 @@ import type { CollabUser, Comment, CommentThread, CommentsMap } from "../types";
  */
 export function useComments(pageId: string, user: CollabUser | null) {
   // Use compound key for page-scoped state (rwsdk doesn't support room param yet)
-  const [commentsMap, setCommentsMap] = useSyncedState<CommentsMap>(
-    {},
-    `comments:${pageId}`
-  );
+  const [commentsMap, setCommentsMap] = useSyncedState<CommentsMap>({}, `comments:${pageId}`);
 
   const addComment = useCallback(
     (elementId: string, content: string, threadId?: string) => {
@@ -58,7 +55,7 @@ export function useComments(pageId: string, user: CollabUser | null) {
         };
       });
     },
-    [user, setCommentsMap]
+    [user, setCommentsMap],
   );
 
   const resolveThread = useCallback(
@@ -73,13 +70,13 @@ export function useComments(pageId: string, user: CollabUser | null) {
             ...thread,
             isResolved: true,
             comments: thread.comments.map((c, i) =>
-              i === 0 ? { ...c, resolvedAt: new Date().toISOString() } : c
+              i === 0 ? { ...c, resolvedAt: new Date().toISOString() } : c,
             ),
           },
         };
       });
     },
-    [setCommentsMap]
+    [setCommentsMap],
   );
 
   const deleteComment = useCallback(
@@ -105,7 +102,7 @@ export function useComments(pageId: string, user: CollabUser | null) {
         };
       });
     },
-    [setCommentsMap]
+    [setCommentsMap],
   );
 
   // Group threads by element ID (only unresolved)
@@ -117,7 +114,7 @@ export function useComments(pageId: string, user: CollabUser | null) {
       acc[key].push(thread);
       return acc;
     },
-    {} as Record<string, CommentThread[]>
+    {} as Record<string, CommentThread[]>,
   );
 
   return {

@@ -7,9 +7,24 @@
  * - Expands on hover, click, or Option key press
  */
 
-import { emit, listen } from "@tauri-apps/api/event";
+import {
+  AttachmentMenu,
+  LinkClickHandler,
+  LinkNavigationProvider,
+  TRPCProvider,
+  useActiveRuntime,
+  useActiveSession,
+  useCreateWorkbook,
+  useFilePicker,
+  useOpenWorkbook,
+  useWorkbooks,
+  type Workbook,
+  WorkbookDropdown,
+} from "@hands/app";
+import { useQueryClient } from "@tanstack/react-query";
 import { invoke } from "@tauri-apps/api/core";
-import { motion, AnimatePresence } from "framer-motion";
+import { emit, listen } from "@tauri-apps/api/event";
+import { AnimatePresence, motion } from "framer-motion";
 import {
   ArrowUp,
   Book,
@@ -24,38 +39,22 @@ import {
   Square,
   X,
 } from "lucide-react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ChatMessage } from "@/components/ChatMessage";
 import { ChatSettings } from "@/components/ChatSettings";
 import { ThinkingIndicator } from "@/components/ui/thinking-indicator";
 import {
-  TRPCProvider,
-  useActiveRuntime,
-  LinkNavigationProvider,
-  LinkClickHandler,
-  useWorkbooks,
-  useOpenWorkbook,
-  useCreateWorkbook,
-  useFilePicker,
-  WorkbookDropdown,
-  AttachmentMenu,
-  useActiveSession,
-  type Workbook,
-} from "@hands/app";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useQueryClient } from "@tanstack/react-query";
-
-// Use shared api and hooks - same as workbook editor
-import { type Session } from "@/lib/api";
-import { startSSESync } from "@/lib/sse";
-import {
-  useMessages,
-  useSendMessage,
-  useSessions,
-  useSessionStatuses,
+  useAbortSession,
   useCreateSession,
   useDeleteSession,
-  useAbortSession,
+  useMessages,
+  useSendMessage,
+  useSessionStatuses,
+  useSessions,
 } from "@/hooks/useSession";
+// Use shared api and hooks - same as workbook editor
+import type { Session } from "@/lib/api";
+import { startSSESync } from "@/lib/sse";
 
 // ============================================================================
 // Status Dot Component
@@ -110,10 +109,13 @@ export function FloatingChat() {
   }, [globalSessionId, activeSessionId]);
 
   // Wrapper to update both local and global state
-  const setActiveSessionId = useCallback((sessionId: string | null) => {
-    setActiveSessionIdLocal(sessionId);
-    setGlobalSession(sessionId);
-  }, [setGlobalSession]);
+  const setActiveSessionId = useCallback(
+    (sessionId: string | null) => {
+      setActiveSessionIdLocal(sessionId);
+      setGlobalSession(sessionId);
+    },
+    [setGlobalSession],
+  );
 
   // Expand/collapse handlers - call Rust backend to resize window
   const handleExpand = useCallback(async () => {
@@ -195,12 +197,12 @@ export function FloatingChat() {
       unlisteners.push(
         await listen("floating-chat-expanded", () => {
           setIsExpanded(true);
-        })
+        }),
       );
       unlisteners.push(
         await listen("floating-chat-collapsed", () => {
           setIsExpanded(false);
-        })
+        }),
       );
     };
 
@@ -250,7 +252,14 @@ export function FloatingChat() {
             setIsRecording(false);
             // Auto-download model in background if missing
             const errMsg = String(err).toLowerCase();
-            if (errMsg.includes("model") || errMsg.includes("missing") || errMsg.includes("download") || errMsg.includes("tokenizer") || errMsg.includes("load") || errMsg.includes("failed")) {
+            if (
+              errMsg.includes("model") ||
+              errMsg.includes("missing") ||
+              errMsg.includes("download") ||
+              errMsg.includes("tokenizer") ||
+              errMsg.includes("load") ||
+              errMsg.includes("failed")
+            ) {
               console.log("[FloatingChat] Model missing - auto-downloading in background");
               setSttDownloading(true);
               invoke("stt_download_model")
@@ -264,7 +273,7 @@ export function FloatingChat() {
                 });
             }
           }
-        })
+        }),
       );
 
       // Real-time STT partial transcription
@@ -272,7 +281,7 @@ export function FloatingChat() {
         await listen<string>("stt:partial", (event) => {
           if (isWorkbookOpenRef.current) return;
           setSttPreview(event.payload);
-        })
+        }),
       );
 
       // STT download progress
@@ -287,7 +296,7 @@ export function FloatingChat() {
               setSttDownloadProgress(0);
             }, 500);
           }
-        })
+        }),
       );
 
       // Option released - stop recording and get transcription
@@ -309,7 +318,7 @@ export function FloatingChat() {
           } catch (err) {
             console.error("[FloatingChat] Failed to stop recording:", err);
           }
-        })
+        }),
       );
 
       // Option tapped quickly - just expand and focus input
@@ -321,7 +330,7 @@ export function FloatingChat() {
           console.log("[FloatingChat] Option tapped - expanding + focusing input");
           handleExpand();
           setTimeout(() => inputRef.current?.focus(), 100);
-        })
+        }),
       );
 
       // Option+other key pressed - cancel STT (allows Option+C, Option+V, etc.)
@@ -336,11 +345,11 @@ export function FloatingChat() {
             setSttPreview("");
             try {
               await invoke("stt_cancel_recording");
-            } catch (err) {
+            } catch (_err) {
               // Ignore errors - recording might not have started
             }
           }
-        })
+        }),
       );
 
       // Option+Space - toggle expand/collapse
@@ -356,7 +365,7 @@ export function FloatingChat() {
             handleExpand();
             setTimeout(() => inputRef.current?.focus(), 100);
           }
-        })
+        }),
       );
     };
 
@@ -364,7 +373,7 @@ export function FloatingChat() {
     return () => {
       unlisteners.forEach((fn) => fn());
     };
-  }, [handleExpand, handleCollapse, isExpanded]);
+  }, [handleExpand, handleCollapse, isExpanded, isRecording]);
 
   // Add transparent-overlay class for window transparency
   // Note: dark/light class is handled by initTheme() in overlay.tsx
@@ -400,12 +409,12 @@ export function FloatingChat() {
           queryClient.invalidateQueries({ queryKey: ["messages"] });
           queryClient.invalidateQueries({ queryKey: ["session-statuses"] });
         }
-      }
+      },
     );
     return () => {
       unlisten.then((fn) => fn());
     };
-  }, [workbookDir, queryClient]);
+  }, [workbookDir, queryClient, setActiveSessionId]);
 
   // Visibility coordination: Hide when workbook opens, show when all workbooks close
   // Also checks initial state on mount and signals ready AFTER listeners are set up
@@ -421,7 +430,7 @@ export function FloatingChat() {
           invoke("hide_floating_chat").catch((err) => {
             console.error("[FloatingChat] Failed to hide:", err);
           });
-        })
+        }),
       );
 
       // When a workbook window closes, check if any remain - show if none left
@@ -438,7 +447,7 @@ export function FloatingChat() {
           } catch (err) {
             console.error("[FloatingChat] Failed to check/show:", err);
           }
-        })
+        }),
       );
 
       // Check initial state AFTER listeners are set up (prevents race condition)
@@ -484,7 +493,9 @@ export function FloatingChat() {
       const unlistenDrop = await listen<{ paths: string[] }>("tauri://drag-drop", async (event) => {
         if (hasHandledDrop.current) return;
         hasHandledDrop.current = true;
-        setTimeout(() => { hasHandledDrop.current = false; }, 500);
+        setTimeout(() => {
+          hasHandledDrop.current = false;
+        }, 500);
         if (event.payload.paths.length === 0) return;
         setIsDragging(false);
         setPendingFiles(event.payload.paths);
@@ -495,7 +506,9 @@ export function FloatingChat() {
       unlisteners.push(await listen("tauri://drag-leave", () => setIsDragging(false)));
     };
     setupListeners();
-    return () => { unlisteners.forEach((fn) => fn()); };
+    return () => {
+      unlisteners.forEach((fn) => fn());
+    };
   }, [handleExpand]);
 
   // Listen for external session focus
@@ -504,8 +517,10 @@ export function FloatingChat() {
       setActiveSessionId(event.payload.sessionId);
       handleExpand();
     });
-    return () => { unlisten.then((fn) => fn()); };
-  }, [handleExpand]);
+    return () => {
+      unlisten.then((fn) => fn());
+    };
+  }, [handleExpand, setActiveSessionId]);
 
   // Use shared hooks - same as workbook editor (UnifiedSidebar)
   const { data: allSessions = [] } = useSessions();
@@ -566,7 +581,7 @@ export function FloatingChat() {
       // Also trigger runtime to open this workbook
       openWorkbook.mutate(workbook);
     },
-    [openWorkbook, queryClient]
+    [openWorkbook, queryClient, setActiveSessionId],
   );
 
   const handleCreateWorkbook = useCallback(() => {
@@ -576,7 +591,7 @@ export function FloatingChat() {
         onSuccess: (newWorkbook) => {
           handleSwitchWorkbook(newWorkbook);
         },
-      }
+      },
     );
   }, [createWorkbook, handleSwitchWorkbook]);
 
@@ -599,7 +614,7 @@ export function FloatingChat() {
     return () => {
       unlisten.then((fn) => fn());
     };
-  }, [createSessionMutation, sendMessageMutation, handleExpand]);
+  }, [createSessionMutation, sendMessageMutation, handleExpand, setActiveSessionId]);
 
   // Wrapper for createSession to also expand and set active
   const handleCreateSession = useCallback(() => {
@@ -609,7 +624,7 @@ export function FloatingChat() {
         handleExpand();
       },
     });
-  }, [createSessionMutation, handleExpand]);
+  }, [createSessionMutation, handleExpand, setActiveSessionId]);
 
   // Track hover and focus state with refs (avoids stale closure issues)
   const isHoveringRef = useRef(false);
@@ -672,7 +687,12 @@ export function FloatingChat() {
 
   // Message handlers
   const handleSend = useCallback(() => {
-    console.log("[FloatingChat] handleSend called, inputValue:", inputValue, "activeSessionId:", activeSessionId);
+    console.log(
+      "[FloatingChat] handleSend called, inputValue:",
+      inputValue,
+      "activeSessionId:",
+      activeSessionId,
+    );
     let content = inputValue.trim();
     if (!content && pendingFiles.length === 0) {
       console.log("[FloatingChat] No content, returning");
@@ -703,10 +723,21 @@ export function FloatingChat() {
     if (inputRef.current) {
       inputRef.current.style.height = "auto";
     }
-  }, [inputValue, pendingFiles, isBusy, activeSessionId, createSessionMutation, sendMessageMutation]);
+  }, [
+    inputValue,
+    pendingFiles,
+    isBusy,
+    activeSessionId,
+    createSessionMutation,
+    sendMessageMutation,
+    setActiveSessionId,
+  ]);
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); handleSend(); }
+    if (e.key === "Enter" && !e.shiftKey) {
+      e.preventDefault();
+      handleSend();
+    }
     if (e.key === "Escape") {
       if (pendingFiles.length > 0) setPendingFiles([]);
       else if (isExpanded) handleCollapse();
@@ -727,13 +758,12 @@ export function FloatingChat() {
     if (activeSessionId) abortSessionMutation.mutate();
   }, [activeSessionId, abortSessionMutation]);
 
-
   // Scroll to bottom when new messages arrive
   useEffect(() => {
     if (scrollRef.current) {
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
     }
-  }, [messages, isExpanded]);
+  }, []);
 
   const activeSession = sessions.find((s) => s.id === activeSessionId);
 
@@ -743,7 +773,7 @@ export function FloatingChat() {
     return s.title && !sp.parentID;
   });
   const backgroundSessions = sessions.filter(
-    (s) => (s as Session & { parentID?: string }).parentID
+    (s) => (s as Session & { parentID?: string }).parentID,
   );
 
   // Check if any session is busy (for collapsed indicator)
@@ -764,7 +794,9 @@ export function FloatingChat() {
         {isDragging && (
           <motion.div
             data-interactive
-            initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
             className="absolute inset-0 border-2 border-dashed border-blue-500 bg-blue-500/10 backdrop-blur-sm flex items-center justify-center z-50"
           >
             <div className="flex flex-col items-center gap-2 text-blue-400">
@@ -909,7 +941,7 @@ export function FloatingChat() {
                         >
                           <Layers className="h-3.5 w-3.5" />
                           <span>{backgroundSessions.length}</span>
-                          {backgroundSessions.some(s => getSessionStatus(s.id) === "busy") && (
+                          {backgroundSessions.some((s) => getSessionStatus(s.id) === "busy") && (
                             <span className="relative flex h-1.5 w-1.5">
                               <span className="animate-ping absolute h-full w-full rounded-full bg-emerald-400 opacity-75" />
                               <span className="relative rounded-full h-1.5 w-1.5 bg-emerald-500" />
@@ -1025,8 +1057,11 @@ export function FloatingChat() {
                 className="flex items-center gap-1.5 px-2 h-7 text-xs text-zinc-400 hover:text-zinc-200 bg-zinc-800 hover:bg-zinc-700 rounded-md transition-colors"
               >
                 <Layers className="h-3.5 w-3.5" />
-                <span>{backgroundSessions.filter(s => getSessionStatus(s.id) === "busy").length || backgroundSessions.length}</span>
-                {backgroundSessions.some(s => getSessionStatus(s.id) === "busy") && (
+                <span>
+                  {backgroundSessions.filter((s) => getSessionStatus(s.id) === "busy").length ||
+                    backgroundSessions.length}
+                </span>
+                {backgroundSessions.some((s) => getSessionStatus(s.id) === "busy") && (
                   <span className="relative flex h-1.5 w-1.5">
                     <span className="animate-ping absolute h-full w-full rounded-full bg-green-400 opacity-75" />
                     <span className="relative rounded-full h-1.5 w-1.5 bg-green-500" />
@@ -1071,9 +1106,7 @@ export function FloatingChat() {
               );
             })}
             {foregroundSessions.length > 6 && (
-              <span className="text-[8px] text-zinc-600">
-                +{foregroundSessions.length - 6}
-              </span>
+              <span className="text-[8px] text-zinc-600">+{foregroundSessions.length - 6}</span>
             )}
             {/* Background jobs indicator */}
             {backgroundSessions.length > 0 && (
@@ -1082,7 +1115,7 @@ export function FloatingChat() {
                 onClick={handleExpand}
               >
                 <Layers className="h-2.5 w-2.5 text-zinc-500" />
-                {backgroundSessions.some(s => getSessionStatus(s.id) === "busy") && (
+                {backgroundSessions.some((s) => getSessionStatus(s.id) === "busy") && (
                   <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
                 )}
               </div>
@@ -1102,130 +1135,134 @@ export function FloatingChat() {
               : "w-[52px] rounded-r-2xl rounded-l-none border-l-0 px-1.5"
           }`}
         >
-        {/* Hand icon button with ChatSettings popover */}
-        <ChatSettings>
-          <motion.button
-            whileHover={{ scale: 1.05 }}
-            whileTap={{ scale: 0.95 }}
-            className={`h-9 w-9 rounded-xl flex items-center justify-center transition-colors relative shrink-0 self-center ${
-              isRecording ? "text-red-400" : sttDownloading ? "text-blue-400" : "text-zinc-300 hover:text-zinc-100"
-            }`}
-          >
-            {sttDownloading ? (
-              <div className="relative h-5 w-5">
-                {/* Background circle */}
-                <svg className="h-5 w-5 -rotate-90" viewBox="0 0 20 20">
-                  <circle
-                    cx="10"
-                    cy="10"
-                    r="8"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="2"
-                    className="text-zinc-700"
-                  />
-                  <circle
-                    cx="10"
-                    cy="10"
-                    r="8"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="2"
-                    strokeDasharray={2 * Math.PI * 8}
-                    strokeDashoffset={2 * Math.PI * 8 * (1 - sttDownloadProgress)}
-                    strokeLinecap="round"
-                    className="text-blue-400 transition-all duration-300"
-                  />
-                </svg>
-                {/* Percentage text */}
-                <span className="absolute inset-0 flex items-center justify-center text-[8px] font-medium text-blue-400">
-                  {Math.round(sttDownloadProgress * 100)}
-                </span>
-              </div>
-            ) : isRecording ? (
-              <Mic className="h-5 w-5 animate-pulse" />
-            ) : (
-              <Hand className="h-5 w-5" />
-            )}
-            {/* Activity indicator when collapsed */}
-            {!isExpanded && hasActiveSessions && !sttDownloading && (
-              <span className="absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full bg-green-500 animate-pulse" />
-            )}
-          </motion.button>
-        </ChatSettings>
-
-        {/* Input section - only when expanded: [text][attach][submit] */}
-        <AnimatePresence>
-          {isExpanded && (
-            <motion.div
-              initial={{ opacity: 0, width: 0 }}
-              animate={{ opacity: 1, width: "auto" }}
-              exit={{ opacity: 0, width: 0 }}
-              className="flex-1 flex items-end overflow-hidden"
+          {/* Hand icon button with ChatSettings popover */}
+          <ChatSettings>
+            <motion.button
+              whileHover={{ scale: 1.05 }}
+              whileTap={{ scale: 0.95 }}
+              className={`h-9 w-9 rounded-xl flex items-center justify-center transition-colors relative shrink-0 self-center ${
+                isRecording
+                  ? "text-red-400"
+                  : sttDownloading
+                    ? "text-blue-400"
+                    : "text-zinc-300 hover:text-zinc-100"
+              }`}
             >
-              {/* Text input - auto-resizing textarea */}
-              <textarea
-                ref={inputRef}
-                value={isRecording && sttPreview ? sttPreview : inputValue}
-                onChange={handleInputChange}
-                onKeyDown={handleKeyDown}
-                onFocus={handleInputFocus}
-                onBlur={handleInputBlur}
-                placeholder={isRecording ? "Listening..." : "Ask anything..."}
-                rows={1}
-                readOnly={isRecording}
-                className={`flex-1 bg-transparent py-2 text-sm text-zinc-100 placeholder:text-zinc-500 focus:outline-none min-w-0 resize-none overflow-y-auto ${isRecording ? "placeholder:text-red-400 text-red-300" : ""}`}
-                style={{ maxHeight: "120px" }}
-              />
+              {sttDownloading ? (
+                <div className="relative h-5 w-5">
+                  {/* Background circle */}
+                  <svg className="h-5 w-5 -rotate-90" viewBox="0 0 20 20">
+                    <circle
+                      cx="10"
+                      cy="10"
+                      r="8"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2"
+                      className="text-zinc-700"
+                    />
+                    <circle
+                      cx="10"
+                      cy="10"
+                      r="8"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2"
+                      strokeDasharray={2 * Math.PI * 8}
+                      strokeDashoffset={2 * Math.PI * 8 * (1 - sttDownloadProgress)}
+                      strokeLinecap="round"
+                      className="text-blue-400 transition-all duration-300"
+                    />
+                  </svg>
+                  {/* Percentage text */}
+                  <span className="absolute inset-0 flex items-center justify-center text-[8px] font-medium text-blue-400">
+                    {Math.round(sttDownloadProgress * 100)}
+                  </span>
+                </div>
+              ) : isRecording ? (
+                <Mic className="h-5 w-5 animate-pulse" />
+              ) : (
+                <Hand className="h-5 w-5" />
+              )}
+              {/* Activity indicator when collapsed */}
+              {!isExpanded && hasActiveSessions && !sttDownloading && (
+                <span className="absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full bg-green-500 animate-pulse" />
+              )}
+            </motion.button>
+          </ChatSettings>
 
-              {/* Attachment dropdown - shared component */}
-              <AttachmentMenu
-                onSnapshot={handleSnapshot}
-                onPickFile={handlePickFile}
-                onPickFolder={handlePickFolder}
-                pendingFiles={pendingFiles}
-                onRemoveFile={(i) => setPendingFiles((prev) => prev.filter((_, j) => j !== i))}
-                triggerClassName="h-8 w-8 rounded-lg flex items-center justify-center text-zinc-400 hover:text-zinc-200 transition-colors shrink-0 self-center relative"
-              />
+          {/* Input section - only when expanded: [text][attach][submit] */}
+          <AnimatePresence>
+            {isExpanded && (
+              <motion.div
+                initial={{ opacity: 0, width: 0 }}
+                animate={{ opacity: 1, width: "auto" }}
+                exit={{ opacity: 0, width: 0 }}
+                className="flex-1 flex items-end overflow-hidden"
+              >
+                {/* Text input - auto-resizing textarea */}
+                <textarea
+                  ref={inputRef}
+                  value={isRecording && sttPreview ? sttPreview : inputValue}
+                  onChange={handleInputChange}
+                  onKeyDown={handleKeyDown}
+                  onFocus={handleInputFocus}
+                  onBlur={handleInputBlur}
+                  placeholder={isRecording ? "Listening..." : "Ask anything..."}
+                  rows={1}
+                  readOnly={isRecording}
+                  className={`flex-1 bg-transparent py-2 text-sm text-zinc-100 placeholder:text-zinc-500 focus:outline-none min-w-0 resize-none overflow-y-auto ${isRecording ? "placeholder:text-red-400 text-red-300" : ""}`}
+                  style={{ maxHeight: "120px" }}
+                />
 
-              {/* Submit/Abort button - no bg */}
-              <AnimatePresence mode="wait">
-                {isBusy ? (
-                  <motion.button
-                    key="abort"
-                    initial={{ scale: 0.8, opacity: 0 }}
-                    animate={{ scale: 1, opacity: 1 }}
-                    exit={{ scale: 0.8, opacity: 0 }}
-                    onClick={handleAbort}
-                    className="h-8 w-8 rounded-lg flex items-center justify-center text-red-400 hover:text-red-300 shrink-0 self-center"
-                  >
-                    <Square className="h-4 w-4" />
-                  </motion.button>
-                ) : (
-                  <motion.button
-                    key="send"
-                    initial={{ scale: 0.8, opacity: 0 }}
-                    animate={{ scale: 1, opacity: 1 }}
-                    exit={{ scale: 0.8, opacity: 0 }}
-                    onClick={handleSend}
-                    disabled={!inputValue.trim() && pendingFiles.length === 0}
-                    className={`h-8 w-8 rounded-lg flex items-center justify-center shrink-0 self-center transition-colors ${
-                      inputValue.trim() || pendingFiles.length > 0
-                        ? "text-zinc-100 hover:text-white"
-                        : "text-zinc-500"
-                    }`}
-                  >
-                    {sendMessageMutation.isPending || createSessionMutation.isPending ? (
-                      <Loader2 className="h-4 w-4 animate-spin" />
-                    ) : (
-                      <ArrowUp className="h-4 w-4" />
-                    )}
-                  </motion.button>
-                )}
-              </AnimatePresence>
-            </motion.div>
-          )}
-        </AnimatePresence>
+                {/* Attachment dropdown - shared component */}
+                <AttachmentMenu
+                  onSnapshot={handleSnapshot}
+                  onPickFile={handlePickFile}
+                  onPickFolder={handlePickFolder}
+                  pendingFiles={pendingFiles}
+                  onRemoveFile={(i) => setPendingFiles((prev) => prev.filter((_, j) => j !== i))}
+                  triggerClassName="h-8 w-8 rounded-lg flex items-center justify-center text-zinc-400 hover:text-zinc-200 transition-colors shrink-0 self-center relative"
+                />
+
+                {/* Submit/Abort button - no bg */}
+                <AnimatePresence mode="wait">
+                  {isBusy ? (
+                    <motion.button
+                      key="abort"
+                      initial={{ scale: 0.8, opacity: 0 }}
+                      animate={{ scale: 1, opacity: 1 }}
+                      exit={{ scale: 0.8, opacity: 0 }}
+                      onClick={handleAbort}
+                      className="h-8 w-8 rounded-lg flex items-center justify-center text-red-400 hover:text-red-300 shrink-0 self-center"
+                    >
+                      <Square className="h-4 w-4" />
+                    </motion.button>
+                  ) : (
+                    <motion.button
+                      key="send"
+                      initial={{ scale: 0.8, opacity: 0 }}
+                      animate={{ scale: 1, opacity: 1 }}
+                      exit={{ scale: 0.8, opacity: 0 }}
+                      onClick={handleSend}
+                      disabled={!inputValue.trim() && pendingFiles.length === 0}
+                      className={`h-8 w-8 rounded-lg flex items-center justify-center shrink-0 self-center transition-colors ${
+                        inputValue.trim() || pendingFiles.length > 0
+                          ? "text-zinc-100 hover:text-white"
+                          : "text-zinc-500"
+                      }`}
+                    >
+                      {sendMessageMutation.isPending || createSessionMutation.isPending ? (
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                      ) : (
+                        <ArrowUp className="h-4 w-4" />
+                      )}
+                    </motion.button>
+                  )}
+                </AnimatePresence>
+              </motion.div>
+            )}
+          </AnimatePresence>
         </div>
 
         {/* Workbook bar - below chat input when expanded */}

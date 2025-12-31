@@ -10,11 +10,11 @@
  */
 
 import { Code, GitBranch } from "@phosphor-icons/react";
-import { useState, useMemo } from "react";
-import { cn } from "../lib/utils";
-import { ActionFlowGraph } from "./ActionFlowGraph";
-import { ActionCodeView } from "./ActionCodeView";
+import { useMemo, useState } from "react";
 import { extractActionFlow, parseSqlToFlow, type SqlFlow } from "../action-flow";
+import { cn } from "../lib/utils";
+import { ActionCodeView } from "./ActionCodeView";
+import { ActionFlowGraph } from "./ActionFlowGraph";
 
 export interface ActionEditorProps {
   /** Action ID */
@@ -146,7 +146,15 @@ export function ActionEditor({
     actionCalls: ActionCall[];
     chains: ChainedAction[];
   }>(() => {
-    if (!source) return { sources: [], sqlQueries: [], sinks: [], cloudCalls: [], actionCalls: [], chains: [] };
+    if (!source)
+      return {
+        sources: [],
+        sqlQueries: [],
+        sinks: [],
+        cloudCalls: [],
+        actionCalls: [],
+        chains: [],
+      };
 
     try {
       const actionFlow = extractActionFlow(source);
@@ -162,7 +170,7 @@ export function ActionEditor({
         type: s.type as SourceType,
       }));
 
-      let returnFields: string[] = [];
+      let _returnFields: string[] = [];
 
       // Walk through steps to collect SQL queries and sinks
       function processSteps(steps: typeof actionFlow.steps) {
@@ -204,7 +212,7 @@ export function ActionEditor({
 
           // Capture return statement references
           if (step.returnValue) {
-            returnFields = step.returnValue.references;
+            _returnFields = step.returnValue.references;
           }
 
           // Process nested steps
@@ -287,10 +295,24 @@ export function ActionEditor({
       }
       // If has side effects, those are already added as sinks (DB writes shown as table nodes, HTTP as sink nodes)
 
-      return { sources, sqlQueries: queries, sinks, cloudCalls, actionCalls: actionCallsList, chains };
+      return {
+        sources,
+        sqlQueries: queries,
+        sinks,
+        cloudCalls,
+        actionCalls: actionCallsList,
+        chains,
+      };
     } catch (err) {
       console.warn("Failed to extract action flow:", err);
-      return { sources: [], sqlQueries: [], sinks: [], cloudCalls: [], actionCalls: [], chains: [] };
+      return {
+        sources: [],
+        sqlQueries: [],
+        sinks: [],
+        cloudCalls: [],
+        actionCalls: [],
+        chains: [],
+      };
     }
   }, [source]);
 
@@ -304,7 +326,7 @@ export function ActionEditor({
             "flex items-center gap-1.5 px-3 py-1.5 text-sm rounded-md transition-colors",
             mode === "visual"
               ? "bg-primary text-primary-foreground"
-              : "text-muted-foreground hover:text-foreground hover:bg-muted"
+              : "text-muted-foreground hover:text-foreground hover:bg-muted",
           )}
         >
           <GitBranch weight="bold" className="h-4 w-4" />
@@ -316,7 +338,7 @@ export function ActionEditor({
             "flex items-center gap-1.5 px-3 py-1.5 text-sm rounded-md transition-colors",
             mode === "code"
               ? "bg-primary text-primary-foreground"
-              : "text-muted-foreground hover:text-foreground hover:bg-muted"
+              : "text-muted-foreground hover:text-foreground hover:bg-muted",
           )}
         >
           <Code weight="bold" className="h-4 w-4" />

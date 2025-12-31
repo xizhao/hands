@@ -4,11 +4,11 @@
  * CRUD operations and navigation handlers for sidebar items.
  */
 
-import { useCallback, useRef, useState } from "react";
 import { useNavigate } from "@tanstack/react-router";
+import { useCallback, useRef, useState } from "react";
 import { useRuntimePort } from "@/hooks/useRuntimeState";
-import { useCreatePage } from "@/hooks/useWorkbook";
 import { usePrefetchThumbnail } from "@/hooks/useThumbnails";
+import { useCreatePage } from "@/hooks/useWorkbook";
 import { trpc } from "@/lib/trpc";
 import type { SidebarPage } from "../types";
 
@@ -57,7 +57,11 @@ export function useSidebarActions(options: SidebarActionsOptions = {}) {
       }
       // Pages are now domain page tabs
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      navigate({ to: "/domains/$domainId", params: { domainId: pageId }, search: { tab: "page" } } as any);
+      navigate({
+        to: "/domains/$domainId",
+        params: { domainId: pageId },
+        search: { tab: "page" },
+      } as any);
     },
     [navigate, preventNavigation, onSelectItem],
   );
@@ -70,7 +74,11 @@ export function useSidebarActions(options: SidebarActionsOptions = {}) {
       }
       // Sources deprecated - navigate to domain sheet tab
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      navigate({ to: "/domains/$domainId", params: { domainId: sourceId }, search: { tab: "sheet" } } as any);
+      navigate({
+        to: "/domains/$domainId",
+        params: { domainId: sourceId },
+        search: { tab: "sheet" },
+      } as any);
     },
     [navigate, preventNavigation, onSelectItem],
   );
@@ -83,7 +91,11 @@ export function useSidebarActions(options: SidebarActionsOptions = {}) {
       }
       // Tables are now domain sheet tabs
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      navigate({ to: "/domains/$domainId", params: { domainId: tableId }, search: { tab: "sheet" } } as any);
+      navigate({
+        to: "/domains/$domainId",
+        params: { domainId: tableId },
+        search: { tab: "sheet" },
+      } as any);
     },
     [navigate, preventNavigation, onSelectItem],
   );
@@ -138,7 +150,11 @@ export function useSidebarActions(options: SidebarActionsOptions = {}) {
         setNewPageName("");
         isConfirmingPageRef.current = false;
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        navigate({ to: "/domains/$domainId", params: { domainId: pageId }, search: { tab: "page" } } as any);
+        navigate({
+          to: "/domains/$domainId",
+          params: { domainId: pageId },
+          search: { tab: "page" },
+        } as any);
         return;
       }
 
@@ -147,14 +163,22 @@ export function useSidebarActions(options: SidebarActionsOptions = {}) {
         setIsCreatingNewPage(false);
         setNewPageName("");
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        navigate({ to: "/domains/$domainId", params: { domainId: pageId }, search: { tab: "page" } } as any);
+        navigate({
+          to: "/domains/$domainId",
+          params: { domainId: pageId },
+          search: { tab: "page" },
+        } as any);
       } catch (err: unknown) {
         const message = err instanceof Error ? err.message : "Failed to create page";
         if (message.includes("already exists")) {
           setIsCreatingNewPage(false);
           setNewPageName("");
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          navigate({ to: "/domains/$domainId", params: { domainId: pageId }, search: { tab: "page" } } as any);
+          navigate({
+            to: "/domains/$domainId",
+            params: { domainId: pageId },
+            search: { tab: "page" },
+          } as any);
         } else {
           console.error("[sidebar] failed to create page:", err);
         }
@@ -175,7 +199,11 @@ export function useSidebarActions(options: SidebarActionsOptions = {}) {
         if (result.newRoute) {
           const newPageId = result.newRoute.replace(/^\//, "");
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          navigate({ to: "/domains/$domainId", params: { domainId: newPageId }, search: { tab: "page" } } as any);
+          navigate({
+            to: "/domains/$domainId",
+            params: { domainId: newPageId },
+            search: { tab: "page" },
+          } as any);
         }
       } catch (err) {
         console.error("[sidebar] failed to duplicate page:", err);
@@ -261,7 +289,11 @@ export function useSidebarActions(options: SidebarActionsOptions = {}) {
         console.log("[sidebar] converted table to source:", tableName, data);
         // Navigate to the domain sheet tab
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        navigate({ to: "/domains/$domainId", params: { domainId: tableName }, search: { tab: "sheet" } } as any);
+        navigate({
+          to: "/domains/$domainId",
+          params: { domainId: tableName },
+          search: { tab: "sheet" },
+        } as any);
       } catch (err) {
         console.error("[sidebar] failed to convert table to source:", err);
       }

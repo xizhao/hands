@@ -6,11 +6,7 @@
  */
 
 // Import stdlib documentation from @hands/core (single source of truth)
-import {
-  STDLIB_DOCS,
-  STDLIB_QUICK_REF,
-  STDLIB_COMPONENTS,
-} from "@hands/core/docs";
+import { STDLIB_COMPONENTS, STDLIB_DOCS, STDLIB_QUICK_REF } from "@hands/core/docs";
 
 // Re-export for consumers
 export { STDLIB_DOCS, STDLIB_QUICK_REF, STDLIB_COMPONENTS };
@@ -756,7 +752,7 @@ Callouts are highlighted boxes for tips, warnings, or important notes.
 - Links: \`[text](url)\`
 - Emoji: Type \`:smile:\` or use emoji picker
 - Mentions: \`@user\` or \`@block\`
-- Equations: \`\$x^2\$\` (inline math)
+- Equations: \`$x^2$\` (inline math)
 
 ### Special Features
 - **Slash commands**: Type \`/\` to insert blocks

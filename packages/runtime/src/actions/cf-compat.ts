@@ -9,18 +9,13 @@
  */
 
 import type {
-  WorkflowStep as CFWorkflowStep,
-  WorkflowStepConfig as CFWorkflowStepConfig,
   WorkflowEntrypoint as CFWorkflowEntrypoint,
   WorkflowEvent as CFWorkflowEvent,
+  WorkflowStep as CFWorkflowStep,
+  WorkflowStepConfig as CFWorkflowStepConfig,
 } from "cloudflare:workers";
 
-import type {
-  WorkflowStep,
-  WorkflowStepConfig,
-  WorkflowBackoff,
-  Serializable,
-} from "@hands/core/primitives";
+import type { Serializable, WorkflowStep, WorkflowStepConfig } from "@hands/core/primitives";
 
 // =============================================================================
 // Type Compatibility Assertions
@@ -41,17 +36,15 @@ const _configCompat: AssertStepConfigCompat = true;
  * Assert that our WorkflowStep methods are compatible with CF's.
  * We check method signatures individually since we may have a superset.
  */
-type AssertDoMethodCompat = Parameters<WorkflowStep["do"]> extends Parameters<
-  CFWorkflowStep["do"]
->
-  ? true
-  : "WorkflowStep.do is not compatible with CF";
+type AssertDoMethodCompat =
+  Parameters<WorkflowStep["do"]> extends Parameters<CFWorkflowStep["do"]>
+    ? true
+    : "WorkflowStep.do is not compatible with CF";
 
-type AssertSleepMethodCompat = Parameters<WorkflowStep["sleep"]> extends Parameters<
-  CFWorkflowStep["sleep"]
->
-  ? true
-  : "WorkflowStep.sleep is not compatible with CF";
+type AssertSleepMethodCompat =
+  Parameters<WorkflowStep["sleep"]> extends Parameters<CFWorkflowStep["sleep"]>
+    ? true
+    : "WorkflowStep.sleep is not compatible with CF";
 
 // =============================================================================
 // CF Workflow Wrapper
@@ -71,22 +64,17 @@ type AssertSleepMethodCompat = Parameters<WorkflowStep["sleep"]> extends Paramet
  * ```
  */
 export function createCFWorkflowClass<Env, TInput extends Serializable>(
-  actionWorkflow: (
-    step: WorkflowStep,
-    ctx: unknown,
-    input: TInput
-  ) => Promise<Serializable>
+  actionWorkflow: (step: WorkflowStep, ctx: unknown, input: TInput) => Promise<Serializable>,
 ): new (
   ctx: ExecutionContext,
-  env: Env
+  env: Env,
 ) => CFWorkflowEntrypoint<Env, TInput> & {
   run(event: CFWorkflowEvent<TInput>, step: CFWorkflowStep): Promise<unknown>;
 } {
   // This is a factory that returns a class extending WorkflowEntrypoint
   // The actual implementation would need to bridge contexts
   throw new Error(
-    "CF Workflow compilation not yet implemented. " +
-      "Use executeWorkflow for local execution."
+    "CF Workflow compilation not yet implemented. " + "Use executeWorkflow for local execution.",
   );
 }
 
@@ -130,9 +118,7 @@ export function isSerializable(value: unknown): boolean {
  */
 export function assertSerializable<T>(value: T, context?: string): T {
   if (!isSerializable(value)) {
-    const msg = context
-      ? `Value at ${context} is not serializable`
-      : "Value is not serializable";
+    const msg = context ? `Value at ${context} is not serializable` : "Value is not serializable";
     throw new Error(msg);
   }
   return value;

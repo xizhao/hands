@@ -1,4 +1,4 @@
-'use client';
+"use client";
 
 import type {
   EmptyText,
@@ -20,7 +20,7 @@ import type {
   TTableElement,
   TText,
   TTextAlignProps,
-} from 'platejs';
+} from "platejs";
 
 export interface EditorBlockElement extends TElement, TListProps {
   id?: string;
@@ -93,7 +93,7 @@ export interface EditorMediaEmbedElement
  */
 export interface EditorSandboxedBlockElement extends EditorBlockElement {
   children: [EmptyText];
-  type: 'sandboxed_block';
+  type: "sandboxed_block";
   /** Block source ID - used to fetch from /preview/{src} */
   src?: string;
   /** Whether this block is being created */
@@ -110,7 +110,7 @@ export interface EditorSandboxedBlockElement extends EditorBlockElement {
  */
 export interface EditorEmbedBlockElement extends TElement {
   children: [EmptyText];
-  type: 'block';
+  type: "block";
   /** Path to block MDX (e.g., "blocks/header") */
   src?: string;
   /** Parameters to pass to the embedded block */
@@ -126,7 +126,7 @@ export interface EditorEmbedBlockElement extends TElement {
 }
 
 export interface EditorLiveActionElement extends EditorBlockElement {
-  type: 'live_action';
+  type: "live_action";
   /** SQL statement to execute (UPDATE, INSERT, DELETE) */
   sql?: string;
   /** Alternative: action ID reference */
@@ -171,16 +171,8 @@ export interface EditorTableRowElement extends TElement {
   type: typeof KEYS.tr;
 }
 
-export interface EditorTextBlockElement
-  extends TElement,
-    TLineHeightProps,
-    TTextAlignProps {
-  children: (
-    | EditorLinkElement
-    | EditorMentionElement
-    | EditorMentionInputElement
-    | RichText
-  )[];
+export interface EditorTextBlockElement extends TElement, TLineHeightProps, TTextAlignProps {
+  children: (EditorLinkElement | EditorMentionElement | EditorMentionInputElement | RichText)[];
 }
 
 export interface EditorToggleElement extends EditorTextBlockElement {

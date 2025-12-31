@@ -8,34 +8,27 @@
  */
 
 import {
-  createContext,
-  useCallback,
-  useContext,
-  useMemo,
-  useState,
-  type ReactNode,
-} from "react";
-import {
-  DndContext,
-  DragOverlay,
-  KeyboardSensor,
-  PointerSensor,
   closestCorners,
-  useSensor,
-  useSensors,
+  DndContext,
   type DragEndEvent,
   type DragOverEvent,
+  DragOverlay,
   type DragStartEvent,
+  KeyboardSensor,
+  PointerSensor,
+  useSensor,
+  useSensors,
 } from "@dnd-kit/core";
 import {
-  SortableContext,
   arrayMove,
+  horizontalListSortingStrategy,
+  SortableContext,
   sortableKeyboardCoordinates,
   useSortable,
-  horizontalListSortingStrategy,
   verticalListSortingStrategy,
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
+import { createContext, type ReactNode, useCallback, useContext, useMemo, useState } from "react";
 import { cn } from "../../lib/utils";
 
 // ============================================================================
@@ -68,13 +61,13 @@ interface KanbanColumnContextValue {
 const KanbanContext = createContext<KanbanContextValue | null>(null);
 const KanbanColumnContext = createContext<KanbanColumnContextValue | null>(null);
 
-function useKanbanContext() {
+function _useKanbanContext() {
   const ctx = useContext(KanbanContext);
   if (!ctx) throw new Error("useKanbanContext must be used within KanbanBoard");
   return ctx;
 }
 
-function useKanbanColumnContext() {
+function _useKanbanColumnContext() {
   const ctx = useContext(KanbanColumnContext);
   if (!ctx) throw new Error("useKanbanColumnContext must be used within KanbanColumn");
   return ctx;
@@ -124,10 +117,7 @@ export function KanbanBoard({
   );
 
   // Column IDs use a prefix to distinguish from item IDs
-  const columnIds = useMemo(
-    () => columns.map((col) => `column:${col}`),
-    [columns],
-  );
+  const columnIds = useMemo(() => columns.map((col) => `column:${col}`), [columns]);
 
   const isColumnId = useCallback(
     (id: string | number): boolean => String(id).startsWith("column:"),
@@ -337,17 +327,16 @@ interface KanbanColumnProps {
   isDraggable?: boolean;
 }
 
-function KanbanColumn({ columnId, items, renderHeader, renderCard, isDraggable }: KanbanColumnProps) {
+function KanbanColumn({
+  columnId,
+  items,
+  renderHeader,
+  renderCard,
+  isDraggable,
+}: KanbanColumnProps) {
   const itemIds = useMemo(() => items.map((item) => item.id), [items]);
 
-  const {
-    attributes,
-    listeners,
-    setNodeRef,
-    transform,
-    transition,
-    isDragging,
-  } = useSortable({
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: `column:${columnId}`,
     disabled: !isDraggable,
   });
@@ -357,10 +346,7 @@ function KanbanColumn({ columnId, items, renderHeader, renderCard, isDraggable }
     transition,
   };
 
-  const contextValue = useMemo<KanbanColumnContextValue>(
-    () => ({ columnId }),
-    [columnId],
-  );
+  const contextValue = useMemo<KanbanColumnContextValue>(() => ({ columnId }), [columnId]);
 
   return (
     <KanbanColumnContext.Provider value={contextValue}>
@@ -406,14 +392,9 @@ interface KanbanCardProps {
 }
 
 function KanbanCard({ item, renderCard }: KanbanCardProps) {
-  const {
-    attributes,
-    listeners,
-    setNodeRef,
-    transform,
-    transition,
-    isDragging,
-  } = useSortable({ id: item.id });
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
+    id: item.id,
+  });
 
   const style = {
     transform: CSS.Transform.toString(transform),

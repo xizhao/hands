@@ -23,58 +23,57 @@
  * ```
  */
 
+// SQL Schemas
+export {
+  CREATE_SHEET_CELLS_TABLE,
+  CREATE_SHEET_COLUMNS_TABLE,
+  CREATE_SHEET_DEPENDENCIES_TABLE,
+  CREATE_SHEET_INDEXES,
+  // Individual table schemas
+  CREATE_SHEETS_TABLE,
+  GET_COLUMN_DEPENDENCIES_SQL,
+  GET_DEPENDENT_FORMULAS_SQL,
+  GET_SHEET_BY_TABLE_NAME_SQL,
+  GET_SHEET_CELLS_SQL,
+  GET_SHEET_COLUMNS_SQL,
+  GET_STALE_CELLS_SQL,
+  GET_TABLE_COLUMNS_SQL,
+  // Query templates
+  GET_USER_TABLES_SQL,
+  // Combined schema
+  SHEET_SCHEMA_SQL,
+} from "./schema";
 // Types
 export type {
-  // Core types
-  Sheet,
-  SheetColumn,
+  BinaryOperator,
+  BinaryOpNode,
+  BooleanNode,
+  CellNode,
   // Note: ColumnType is already exported from ../schema, don't re-export to avoid conflicts
   // Cell references
   CellRef,
-  RangeRef,
-  // Formula AST
-  FormulaNode,
-  NumberNode,
-  StringNode,
-  BooleanNode,
-  CellNode,
-  RangeNode,
-  FunctionNode,
-  BinaryOpNode,
-  UnaryOpNode,
-  ParenthesesNode,
-  BinaryOperator,
-  UnaryOperator,
   // Compilation
   CompiledFormula,
   FormulaDependency,
   FormulaError,
-  // Cell-level formulas
-  SheetCell,
+  // Formula AST
+  FormulaNode,
+  FunctionNode,
+  NumberNode,
+  ParenthesesNode,
+  RangeNode,
+  RangeRef,
+  // Core types
+  Sheet,
   // Future expansion
   SheetACL,
-  SheetVersionConfig,
-  SheetValidationRules,
+  // Cell-level formulas
+  SheetCell,
+  SheetColumn,
   SheetMeta,
+  SheetValidationRules,
+  SheetVersionConfig,
+  StringNode,
+  UnaryOperator,
+  UnaryOpNode,
 } from "./types";
-
-// SQL Schemas
-export {
-  // Individual table schemas
-  CREATE_SHEETS_TABLE,
-  CREATE_SHEET_COLUMNS_TABLE,
-  CREATE_SHEET_DEPENDENCIES_TABLE,
-  CREATE_SHEET_CELLS_TABLE,
-  CREATE_SHEET_INDEXES,
-  // Combined schema
-  SHEET_SCHEMA_SQL,
-  // Query templates
-  GET_USER_TABLES_SQL,
-  GET_TABLE_COLUMNS_SQL,
-  GET_SHEET_BY_TABLE_NAME_SQL,
-  GET_SHEET_COLUMNS_SQL,
-  GET_COLUMN_DEPENDENCIES_SQL,
-  GET_DEPENDENT_FORMULAS_SQL,
-  GET_SHEET_CELLS_SQL,
-  GET_STALE_CELLS_SQL,
-} from "./schema";

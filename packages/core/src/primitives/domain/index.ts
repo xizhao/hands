@@ -8,23 +8,23 @@
 // Types
 export type {
   Domain,
-  DomainSchema,
   DomainColumn,
   DomainForeignKey,
-  DomainMeta,
-  DomainSyncStatus,
-  SchemaChange,
-  RelationTableDetection,
-  DomainTab,
   DomainListItem,
+  DomainMeta,
+  DomainSchema,
+  DomainSyncStatus,
+  DomainTab,
+  RelationTableDetection,
+  SchemaChange,
 } from "./types";
 
 // Utilities
 export {
-  generateSchemaHash,
+  compareSchemas,
   detectRelationTable,
+  generateSchemaHash,
+  matchPageToDomain,
   toDisplayName,
   toTableName,
-  matchPageToDomain,
-  compareSchemas,
 } from "./utils";

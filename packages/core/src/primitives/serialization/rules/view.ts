@@ -10,19 +10,24 @@
  */
 
 import {
-  METRIC_KEY,
-  BADGE_KEY,
-  PROGRESS_KEY,
   ALERT_KEY,
+  BADGE_KEY,
   LOADER_KEY,
-  type TMetricElement,
-  type TBadgeElement,
-  type TProgressElement,
+  METRIC_KEY,
+  PROGRESS_KEY,
   type TAlertElement,
+  type TBadgeElement,
   type TLoaderElement,
+  type TMetricElement,
+  type TProgressElement,
 } from "../../../types";
+import {
+  createVoidElement,
+  parseAttributes,
+  serializeAttributes,
+  serializeChildren,
+} from "../helpers";
 import type { MdxSerializationRule } from "../types";
-import { parseAttributes, serializeAttributes, createVoidElement, serializeChildren } from "../helpers";
 
 // ============================================================================
 // Metric
@@ -77,7 +82,7 @@ export const metricRule: MdxSerializationRule<TMetricElement> = {
         defaults: {
           size: "md",
         },
-      }
+      },
     );
 
     return {
@@ -110,7 +115,7 @@ export const badgeRule: MdxSerializationRule<TBadgeElement> = {
   deserialize: (node, deco, options) => {
     const props = parseAttributes(node);
     const children = options?.convertChildren
-      ? options.convertChildren(node.children as any || [], deco as any, options as any)
+      ? options.convertChildren((node.children as any) || [], deco as any, options as any)
       : [{ text: "" }];
 
     return {
@@ -130,7 +135,7 @@ export const badgeRule: MdxSerializationRule<TBadgeElement> = {
         defaults: {
           variant: "default",
         },
-      }
+      },
     );
 
     const children = serializeChildren(element.children, options);
@@ -197,7 +202,7 @@ export const progressRule: MdxSerializationRule<TProgressElement> = {
           variant: "default",
           size: "md",
         },
-      }
+      },
     );
 
     return {
@@ -230,7 +235,7 @@ export const alertRule: MdxSerializationRule<TAlertElement> = {
   deserialize: (node, deco, options) => {
     const props = parseAttributes(node);
     const children = options?.convertChildren
-      ? options.convertChildren(node.children as any || [], deco as any, options as any)
+      ? options.convertChildren((node.children as any) || [], deco as any, options as any)
       : [{ text: "" }];
 
     return {
@@ -252,7 +257,7 @@ export const alertRule: MdxSerializationRule<TAlertElement> = {
         defaults: {
           variant: "default",
         },
-      }
+      },
     );
 
     const children = serializeChildren(element.children, options);
@@ -314,7 +319,7 @@ export const loaderRule: MdxSerializationRule<TLoaderElement> = {
           color: "default",
           speed: "normal",
         },
-      }
+      },
     );
 
     return {

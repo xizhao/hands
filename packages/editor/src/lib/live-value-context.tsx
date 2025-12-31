@@ -7,7 +7,7 @@
  * Child text nodes check this context to replace {{field}} bindings.
  */
 
-import { createContext, useContext, type ReactNode } from "react";
+import { createContext, type ReactNode, useContext } from "react";
 
 export interface LiveValueData {
   /** Current row data for bindings */
@@ -27,9 +27,7 @@ export function LiveValueProvider({
   children,
 }: LiveValueData & { children: ReactNode }) {
   return (
-    <LiveValueContext.Provider value={{ row, rows, index }}>
-      {children}
-    </LiveValueContext.Provider>
+    <LiveValueContext.Provider value={{ row, rows, index }}>{children}</LiveValueContext.Provider>
   );
 }
 
@@ -47,7 +45,7 @@ export function useLiveValueContext(): LiveValueData | null {
 export function replaceTextBindings(
   text: string,
   data: Record<string, unknown>,
-  index?: number
+  index?: number,
 ): string {
   const keys = Object.keys(data);
   const firstKey = keys[0];

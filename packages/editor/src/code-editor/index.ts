@@ -18,15 +18,11 @@
 
 // Main component
 export { MonacoEditor } from "./MonacoEditor";
-
-// Hook for programmatic control
-export { useMonaco, type UseMonacoOptions, type UseMonacoReturn } from "./use-monaco";
-
-// Types
-export type { Diagnostic, MonacoEditorProps } from "./types";
-
-// Theme utilities (for advanced customization)
-export { defineEditorThemes, getThemeName, updateEditorThemes } from "./themes";
-
 // Language registration (for advanced customization)
 export { registerMdxLanguage } from "./mdx-language";
+// Theme utilities (for advanced customization)
+export { defineEditorThemes, getThemeName, updateEditorThemes } from "./themes";
+// Types
+export type { Diagnostic, MonacoEditorProps } from "./types";
+// Hook for programmatic control
+export { type UseMonacoOptions, type UseMonacoReturn, useMonaco } from "./use-monaco";

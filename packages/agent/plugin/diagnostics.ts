@@ -14,12 +14,11 @@ const MAX_DIAGNOSTICS = 5;
 /**
  * Run `hands check --fix` and return the output
  */
-async function runCheck(
-  cwd: string
-): Promise<{ output: string; code: number }> {
+async function runCheck(cwd: string): Promise<{ output: string; code: number }> {
   const result = await runCli(["check", "--fix"], { cwd });
   const output = result.stdout + result.stderr;
   // Strip ANSI codes for cleaner output
+  // biome-ignore lint/suspicious/noControlCharactersInRegex: intentionally matching ANSI escape sequences
   const cleaned = output.replace(/\x1b\[[0-9;]*[a-zA-Z]/g, "");
   return { output: cleaned, code: result.code };
 }
@@ -35,11 +34,7 @@ function extractErrors(output: string): string[] {
     // Match TypeScript errors: file.ts(line,col): error TS1234: message
     // Match Biome errors: file.ts:line:col error message
     // Match generic errors
-    if (
-      /error/i.test(line) &&
-      !line.includes("0 errors") &&
-      !line.includes("found 0")
-    ) {
+    if (/error/i.test(line) && !line.includes("0 errors") && !line.includes("found 0")) {
       errors.push(line.trim());
     }
   }

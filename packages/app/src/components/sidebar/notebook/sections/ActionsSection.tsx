@@ -5,14 +5,14 @@
  */
 
 import { CircleNotch, Clock, Globe, Play } from "@phosphor-icons/react";
-import { useState, useCallback } from "react";
+import { useCallback, useState } from "react";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
-import { SidebarSection, SidebarEmptyState } from "../components/SidebarSection";
-import { listItemStyles } from "../components/SidebarItem";
 import { ActionIcon } from "../components/icons";
-import type { SidebarAction } from "../types";
+import { listItemStyles } from "../components/SidebarItem";
+import { SidebarEmptyState, SidebarSection } from "../components/SidebarSection";
 import type { SidebarActions } from "../hooks/useSidebarActions";
+import type { SidebarAction } from "../types";
 
 interface ActionsSectionProps {
   /** Section expanded state */

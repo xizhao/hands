@@ -328,7 +328,7 @@ export function getDatabase(): Database {
  */
 export function executeQuery<T = Record<string, unknown>>(
   sql: string,
-  params?: Record<string, unknown>
+  params?: Record<string, unknown>,
 ): T[] {
   const database = getDatabase();
 
@@ -370,10 +370,7 @@ export function executeQuery<T = Record<string, unknown>>(
 /**
  * Execute a mutation (INSERT, UPDATE, DELETE).
  */
-export function executeMutation(
-  sql: string,
-  params?: Record<string, unknown>
-): void {
+export function executeMutation(sql: string, params?: Record<string, unknown>): void {
   const database = getDatabase();
 
   let processedSql = sql;

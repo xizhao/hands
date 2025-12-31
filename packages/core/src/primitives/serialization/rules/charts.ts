@@ -8,30 +8,30 @@
  */
 
 import {
-  LINE_CHART_KEY,
-  BAR_CHART_KEY,
   AREA_CHART_KEY,
-  PIE_CHART_KEY,
-  CHART_KEY,
-  SCATTER_CHART_KEY,
-  HISTOGRAM_CHART_KEY,
-  HEATMAP_CHART_KEY,
+  BAR_CHART_KEY,
   BOXPLOT_CHART_KEY,
+  CHART_KEY,
+  HEATMAP_CHART_KEY,
+  HISTOGRAM_CHART_KEY,
+  LINE_CHART_KEY,
   MAP_CHART_KEY,
-  type TLineChartElement,
-  type TBarChartElement,
+  PIE_CHART_KEY,
+  SCATTER_CHART_KEY,
   type TAreaChartElement,
-  type TPieChartElement,
-  type TChartElement,
-  type TScatterChartElement,
-  type THistogramChartElement,
-  type THeatmapChartElement,
+  type TBarChartElement,
   type TBoxPlotChartElement,
+  type TChartElement,
+  type THeatmapChartElement,
+  type THistogramChartElement,
+  type TLineChartElement,
   type TMapChartElement,
+  type TPieChartElement,
+  type TScatterChartElement,
   type VegaLiteSpec,
 } from "../../../types";
+import { createVoidElement, parseAttributes, serializeAttributes } from "../helpers";
 import type { MdxSerializationRule } from "../types";
-import { parseAttributes, serializeAttributes, createVoidElement } from "../helpers";
 
 // ============================================================================
 // LineChart
@@ -97,7 +97,7 @@ export const lineChartRule: MdxSerializationRule<TLineChartElement> = {
           showTooltip: true,
           showGrid: true,
         },
-      }
+      },
     );
 
     return {
@@ -173,7 +173,7 @@ export const barChartRule: MdxSerializationRule<TBarChartElement> = {
           showTooltip: true,
           showGrid: true,
         },
-      }
+      },
     );
 
     return {
@@ -253,7 +253,7 @@ export const areaChartRule: MdxSerializationRule<TAreaChartElement> = {
           showTooltip: true,
           showGrid: true,
         },
-      }
+      },
     );
 
     return {
@@ -322,7 +322,7 @@ export const pieChartRule: MdxSerializationRule<TPieChartElement> = {
           showLegend: true,
           showLabels: false,
         },
-      }
+      },
     );
 
     return {
@@ -372,7 +372,7 @@ export const chartRule: MdxSerializationRule<TChartElement> = {
         defaults: {
           height: 300,
         },
-      }
+      },
     );
 
     return {
@@ -429,12 +429,21 @@ export const scatterChartRule: MdxSerializationRule<TScatterChartElement> = {
         opacity: element.opacity,
       },
       {
-        include: ["xKey", "yKey", "colorKey", "sizeKey", "height", "showTooltip", "colors", "opacity"],
+        include: [
+          "xKey",
+          "yKey",
+          "colorKey",
+          "sizeKey",
+          "height",
+          "showTooltip",
+          "colors",
+          "opacity",
+        ],
         defaults: {
           showTooltip: true,
           opacity: 0.7,
         },
-      }
+      },
     );
 
     return {
@@ -489,7 +498,7 @@ export const histogramChartRule: MdxSerializationRule<THistogramChartElement> = 
         defaults: {
           showTooltip: true,
         },
-      }
+      },
     );
 
     return {
@@ -547,7 +556,7 @@ export const heatmapChartRule: MdxSerializationRule<THeatmapChartElement> = {
           colorScheme: "blues",
           showTooltip: true,
         },
-      }
+      },
     );
 
     return {
@@ -605,7 +614,7 @@ export const boxPlotChartRule: MdxSerializationRule<TBoxPlotChartElement> = {
           orientation: "vertical",
           showTooltip: true,
         },
-      }
+      },
     );
 
     return {
@@ -688,7 +697,7 @@ export const mapChartRule: MdxSerializationRule<TMapChartElement> = {
           colorScheme: "blues",
           showTooltip: true,
         },
-      }
+      },
     );
 
     return {

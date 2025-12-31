@@ -1,16 +1,16 @@
-import { z } from "zod";
 import { TRPCError } from "@trpc/server";
-import { router, publicProcedure, protectedProcedure } from "../../trpc/base";
-import { users } from "../../schema/users";
-import { subscriptions, PLANS } from "../../schema/subscriptions";
+import { and, eq, gt } from "drizzle-orm";
+import { z } from "zod";
+import { generateToken, hash } from "../../lib/crypto";
 import { refreshTokens } from "../../schema/refresh-tokens";
-import { hash, generateToken } from "../../lib/crypto";
-import { eq, and, gt } from "drizzle-orm";
+import { PLANS, subscriptions } from "../../schema/subscriptions";
+import { users } from "../../schema/users";
+import { protectedProcedure, publicProcedure, router } from "../../trpc/base";
 import {
-  signToken,
-  getGoogleAuthUrl,
   exchangeGoogleCode,
+  getGoogleAuthUrl,
   getGoogleUserInfo,
+  signToken,
   verifyCodeChallenge,
 } from "./client";
 import type { AuthState } from "./types";
@@ -25,7 +25,7 @@ export const authRouter = router({
       z.object({
         codeChallenge: z.string(),
         redirectUri: z.string().url(),
-      })
+      }),
     )
     .mutation(async ({ ctx, input }) => {
       const state = crypto.randomUUID();
@@ -36,19 +36,13 @@ export const authRouter = router({
         createdAt: Date.now(),
       };
 
-      await ctx.env.AUTH_STATE.put(
-        `oauth:${state}`,
-        JSON.stringify(authState),
-        { expirationTtl: AUTH_STATE_TTL }
-      );
+      await ctx.env.AUTH_STATE.put(`oauth:${state}`, JSON.stringify(authState), {
+        expirationTtl: AUTH_STATE_TTL,
+      });
 
       const callbackUri = `${ctx.env.API_URL}/auth/callback`;
 
-      const authUrl = getGoogleAuthUrl(
-        ctx.env.GOOGLE_CLIENT_ID,
-        callbackUri,
-        state
-      );
+      const authUrl = getGoogleAuthUrl(ctx.env.GOOGLE_CLIENT_ID, callbackUri, state);
 
       return { authUrl, state };
     }),
@@ -60,7 +54,7 @@ export const authRouter = router({
         code: z.string(),
         state: z.string(),
         codeVerifier: z.string(),
-      })
+      }),
     )
     .mutation(async ({ ctx, input }) => {
       const stateKey = `oauth:${input.state}`;
@@ -75,10 +69,7 @@ export const authRouter = router({
 
       const storedState: AuthState = JSON.parse(storedStateJson);
 
-      const isValid = await verifyCodeChallenge(
-        input.codeVerifier,
-        storedState.codeChallenge
-      );
+      const isValid = await verifyCodeChallenge(input.codeVerifier, storedState.codeChallenge);
       if (!isValid) {
         throw new TRPCError({
           code: "BAD_REQUEST",
@@ -93,7 +84,7 @@ export const authRouter = router({
         input.code,
         ctx.env.GOOGLE_CLIENT_ID,
         ctx.env.GOOGLE_CLIENT_SECRET,
-        callbackUri
+        callbackUri,
       );
 
       const userInfo = await getGoogleUserInfo(tokens.access_token);
@@ -146,7 +137,7 @@ export const authRouter = router({
       const accessToken = await signToken(
         { sub: userId, email: userInfo.email, name: userInfo.name },
         ctx.env.AUTH_SECRET,
-        "7d"
+        "7d",
       );
 
       const refreshTokenValue = generateToken(64);
@@ -186,8 +177,8 @@ export const authRouter = router({
           and(
             eq(refreshTokens.tokenHash, tokenHash),
             eq(refreshTokens.isRevoked, false),
-            gt(refreshTokens.expiresAt, new Date())
-          )
+            gt(refreshTokens.expiresAt, new Date()),
+          ),
         )
         .limit(1)
         .then((rows) => rows[0]);
@@ -213,7 +204,7 @@ export const authRouter = router({
       const accessToken = await signToken(
         { sub: user.id, email: user.email, name: user.name ?? undefined },
         ctx.env.AUTH_SECRET,
-        "7d"
+        "7d",
       );
 
       return {
@@ -234,12 +225,7 @@ export const authRouter = router({
           isRevoked: true,
           revokedAt: new Date(),
         })
-        .where(
-          and(
-            eq(refreshTokens.tokenHash, tokenHash),
-            eq(refreshTokens.userId, ctx.user.id)
-          )
-        );
+        .where(and(eq(refreshTokens.tokenHash, tokenHash), eq(refreshTokens.userId, ctx.user.id)));
 
       return { success: true };
     }),
@@ -272,8 +258,8 @@ export const authRouter = router({
         and(
           eq(refreshTokens.userId, ctx.user.id),
           eq(refreshTokens.isRevoked, false),
-          gt(refreshTokens.expiresAt, new Date())
-        )
+          gt(refreshTokens.expiresAt, new Date()),
+        ),
       );
 
     return tokens;
@@ -302,10 +288,7 @@ export const authRouter = router({
             revokedAt: new Date(),
           })
           .where(
-            and(
-              eq(refreshTokens.tokenHash, tokenHash),
-              eq(refreshTokens.userId, ctx.user.id)
-            )
+            and(eq(refreshTokens.tokenHash, tokenHash), eq(refreshTokens.userId, ctx.user.id)),
           );
       }
       return { success: true };

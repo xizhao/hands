@@ -6,8 +6,8 @@
  * 2. Block insertion without selection corruption
  */
 
-import { describe, it, expect } from "vitest";
 import { createPlateEditor } from "platejs/react";
+import { describe, expect, it } from "vitest";
 import { createTestEditor, testDeserialize } from "./create-test-editor";
 
 describe("at-kit ghost preview", () => {
@@ -64,9 +64,7 @@ describe("at-kit block insertion", () => {
   it("inserting block content should not corrupt selection", () => {
     // Create editor with initial content including a paragraph
     const editor = createTestEditor({
-      value: [
-        { type: "p", children: [{ text: "Hello " }] },
-      ],
+      value: [{ type: "p", children: [{ text: "Hello " }] }],
     });
 
     // Set selection at end of paragraph
@@ -95,9 +93,7 @@ describe("at-kit block insertion", () => {
 
   it("inserting block content then calling insertText should not crash", () => {
     const editor = createTestEditor({
-      value: [
-        { type: "p", children: [{ text: "Test" }] },
-      ],
+      value: [{ type: "p", children: [{ text: "Test" }] }],
     });
 
     editor.tf.select({ path: [0, 0], offset: 4 });
@@ -129,9 +125,7 @@ describe("at-kit block insertion", () => {
 
   it("inserting inline content should allow trailing space", () => {
     const editor = createTestEditor({
-      value: [
-        { type: "p", children: [{ text: "Hello " }] },
-      ],
+      value: [{ type: "p", children: [{ text: "Hello " }] }],
     });
 
     editor.tf.select({ path: [0, 0], offset: 6 });
@@ -155,21 +149,15 @@ describe("at-kit block insertion", () => {
 
   it("isInline check correctly identifies block vs inline content", () => {
     // Block content - should NOT get trailing space
-    const chartNodes = testDeserialize(
-      `<BarChart data={[]} xKey="x" yKeys={["y"]} />`
-    );
+    const chartNodes = testDeserialize(`<BarChart data={[]} xKey="x" yKeys={["y"]} />`);
     const isChartInline = chartNodes.length === 1 && !("type" in chartNodes[0]);
     expect(isChartInline).toBe(false);
 
     // Inline content from single paragraph - should get trailing space
     const inlineNodes = testDeserialize("hello world");
     // If it's a single paragraph, we unwrap to get inline children
-    let finalNodes: (typeof inlineNodes[0] | { text: string })[] = inlineNodes;
-    if (
-      inlineNodes.length === 1 &&
-      inlineNodes[0].type === "p" &&
-      inlineNodes[0].children
-    ) {
+    let finalNodes: ((typeof inlineNodes)[0] | { text: string })[] = inlineNodes;
+    if (inlineNodes.length === 1 && inlineNodes[0].type === "p" && inlineNodes[0].children) {
       finalNodes = inlineNodes[0].children as typeof finalNodes;
     }
     const isTextInline = finalNodes.length === 1 && !("type" in finalNodes[0]);

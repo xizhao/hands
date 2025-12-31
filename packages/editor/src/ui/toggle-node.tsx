@@ -1,12 +1,8 @@
-import { useToggleButton, useToggleButtonState } from '@platejs/toggle/react';
-import { CaretRight } from '@phosphor-icons/react';
-import {
-  PlateElement,
-  type PlateElementProps,
-  useElement,
-} from 'platejs/react';
+import { CaretRight } from "@phosphor-icons/react";
+import { useToggleButton, useToggleButtonState } from "@platejs/toggle/react";
+import { PlateElement, type PlateElementProps, useElement } from "platejs/react";
 
-import { cn } from '../lib/utils';
+import { cn } from "../lib/utils";
 
 export function ToggleElement(props: PlateElementProps) {
   const element = useElement();
@@ -23,8 +19,8 @@ export function ToggleElement(props: PlateElementProps) {
         >
           <CaretRight
             className={cn(
-              'size-4 transition-transform duration-75',
-              open ? 'rotate-90' : 'rotate-0'
+              "size-4 transition-transform duration-75",
+              open ? "rotate-90" : "rotate-0",
             )}
             weight="bold"
           />

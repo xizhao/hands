@@ -1,4 +1,4 @@
-import { LiveQueryProvider, type QueryResult, type MutationResult } from "@hands/core/stdlib";
+import { LiveQueryProvider, type MutationResult, type QueryResult } from "@hands/core/stdlib";
 import { PreviewEditor } from "@hands/editor";
 import { AnimatePresence, motion } from "framer-motion";
 import {
@@ -25,11 +25,8 @@ import {
   Search,
   Terminal,
 } from "lucide-react";
-import { memo, useMemo, useState, useCallback, type ReactNode } from "react";
+import { memo, type ReactNode, useMemo, useState } from "react";
 import { useInView } from "react-intersection-observer";
-import { useLiveQuery as useDesktopLiveQuery } from "@/lib/live-query";
-import { useActiveRuntime } from "@/hooks/useWorkbook";
-import ReactMarkdown from "react-markdown";
 import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
 import { oneDark } from "react-syntax-highlighter/dist/esm/styles/prism";
 import { NavigateCard, parseNavigateOutput } from "@/components/NavigateCard";
@@ -39,6 +36,7 @@ import { TaskToolSummary } from "@/components/TaskToolSummary";
 import { Button } from "@/components/ui/button";
 import { ShimmerText, Skeleton } from "@/components/ui/thinking-indicator";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { useActiveRuntime } from "@/hooks/useWorkbook";
 import type {
   AgentPart,
   AssistantMessage,
@@ -48,6 +46,7 @@ import type {
   TextPart,
   ToolPart,
 } from "@/lib/api";
+import { useLiveQuery as useDesktopLiveQuery } from "@/lib/live-query";
 import { matchPrompt, type PromptMatch } from "@/lib/prompts";
 import { cn, MSG_FONT } from "@/lib/utils";
 
@@ -847,7 +846,11 @@ ToolInvocation.displayName = "ToolInvocation";
  * Returns { complete: string, incomplete: string | null }
  * where 'complete' is renderable content and 'incomplete' is the partial block.
  */
-function splitIncompleteBlock(text: string): { complete: string; incomplete: string | null; blockType: string | null } {
+function splitIncompleteBlock(text: string): {
+  complete: string;
+  incomplete: string | null;
+  blockType: string | null;
+} {
   // Check for unclosed code fence (```mdx or ``` without closing)
   const codeFenceMatch = text.match(/```(\w*)\n?[^`]*$/);
   if (codeFenceMatch) {
@@ -867,7 +870,7 @@ function splitIncompleteBlock(text: string): { complete: string; incomplete: str
   // e.g., <LiveValue query="SELECT
   const unclosedTagMatch = text.match(/<([A-Z][a-zA-Z]*)[^>]*$/);
   if (unclosedTagMatch) {
-    const tagStart = text.lastIndexOf("<" + unclosedTagMatch[1]);
+    const tagStart = text.lastIndexOf(`<${unclosedTagMatch[1]}`);
     return {
       complete: text.slice(0, tagStart).trimEnd(),
       incomplete: text.slice(tagStart),
@@ -879,16 +882,28 @@ function splitIncompleteBlock(text: string): { complete: string; incomplete: str
   // e.g., <LiveValue query="..."> without </LiveValue>
   // Check common MDX components that need closing tags
   const mdxComponents = [
-    'LiveValue', 'LiveAction', 'LiveQuery',
-    'BarChart', 'LineChart', 'PieChart', 'AreaChart', 'ScatterChart', 'HeatmapChart', 'HistogramChart', 'BoxPlotChart', 'Chart',
-    'Page', 'Card', 'Table',
+    "LiveValue",
+    "LiveAction",
+    "LiveQuery",
+    "BarChart",
+    "LineChart",
+    "PieChart",
+    "AreaChart",
+    "ScatterChart",
+    "HeatmapChart",
+    "HistogramChart",
+    "BoxPlotChart",
+    "Chart",
+    "Page",
+    "Card",
+    "Table",
   ];
 
   for (const name of mdxComponents) {
     // Count non-self-closing opens vs closes
-    const openRegex = new RegExp(`<${name}(?:\\s[^>]*)?>`, 'g');
-    const selfCloseRegex = new RegExp(`<${name}[^>]*/>`, 'g');
-    const closeRegex = new RegExp(`</${name}>`, 'g');
+    const openRegex = new RegExp(`<${name}(?:\\s[^>]*)?>`, "g");
+    const selfCloseRegex = new RegExp(`<${name}[^>]*/>`, "g");
+    const closeRegex = new RegExp(`</${name}>`, "g");
 
     const allOpens = text.match(openRegex) || [];
     const selfCloses = text.match(selfCloseRegex) || [];
@@ -902,8 +917,8 @@ function splitIncompleteBlock(text: string): { complete: string; incomplete: str
       const lastOpenIdx = text.lastIndexOf(`<${name}`);
       if (lastOpenIdx !== -1) {
         // Make sure it's not self-closing
-        const tagEnd = text.indexOf('>', lastOpenIdx);
-        if (tagEnd !== -1 && text[tagEnd - 1] !== '/') {
+        const tagEnd = text.indexOf(">", lastOpenIdx);
+        if (tagEnd !== -1 && text[tagEnd - 1] !== "/") {
           return {
             complete: text.slice(0, lastOpenIdx).trimEnd(),
             incomplete: text.slice(lastOpenIdx),
@@ -918,43 +933,44 @@ function splitIncompleteBlock(text: string): { complete: string; incomplete: str
 }
 
 // Shimmer loader for incomplete MDX blocks - matches LiveValue loading style
-const MdxShimmerBlock = memo(({ blockType, compact = false }: { blockType: string; compact?: boolean }) => {
-  const metaFont = compact ? MSG_FONT.metaCompact : MSG_FONT.meta;
+const MdxShimmerBlock = memo(
+  ({ blockType, compact = false }: { blockType: string; compact?: boolean }) => {
+    const metaFont = compact ? MSG_FONT.metaCompact : MSG_FONT.meta;
 
-  return (
-    <motion.div
-      className={cn(
-        "relative inline-flex items-center gap-2 px-3 py-1.5 rounded-lg overflow-hidden",
-        "bg-purple-500/10 border border-purple-500/20",
-      )}
-      initial={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
-    >
-      {/* Shimmer overlay */}
+    return (
       <motion.div
-        className="absolute inset-0"
-        style={{
-          background: "linear-gradient(90deg, transparent, rgba(168, 85, 247, 0.15), transparent)",
-        }}
-        animate={{ x: ["-100%", "100%"] }}
-        transition={{ duration: 1.5, repeat: Infinity, ease: "linear" }}
-      />
-      <span className={cn("relative font-mono text-purple-400", metaFont)}>
-        {blockType}
-      </span>
-      <span className="relative flex gap-0.5">
-        {[0, 1, 2].map((i) => (
-          <motion.span
-            key={i}
-            className="w-1 h-1 rounded-full bg-purple-400"
-            animate={{ opacity: [0.3, 1, 0.3], scale: [0.8, 1.2, 0.8] }}
-            transition={{ duration: 0.8, repeat: Infinity, delay: i * 0.15 }}
-          />
-        ))}
-      </span>
-    </motion.div>
-  );
-});
+        className={cn(
+          "relative inline-flex items-center gap-2 px-3 py-1.5 rounded-lg overflow-hidden",
+          "bg-purple-500/10 border border-purple-500/20",
+        )}
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+      >
+        {/* Shimmer overlay */}
+        <motion.div
+          className="absolute inset-0"
+          style={{
+            background:
+              "linear-gradient(90deg, transparent, rgba(168, 85, 247, 0.15), transparent)",
+          }}
+          animate={{ x: ["-100%", "100%"] }}
+          transition={{ duration: 1.5, repeat: Infinity, ease: "linear" }}
+        />
+        <span className={cn("relative font-mono text-purple-400", metaFont)}>{blockType}</span>
+        <span className="relative flex gap-0.5">
+          {[0, 1, 2].map((i) => (
+            <motion.span
+              key={i}
+              className="w-1 h-1 rounded-full bg-purple-400"
+              animate={{ opacity: [0.3, 1, 0.3], scale: [0.8, 1.2, 0.8] }}
+              transition={{ duration: 0.8, repeat: Infinity, delay: i * 0.15 }}
+            />
+          ))}
+        </span>
+      </motion.div>
+    );
+  },
+);
 
 MdxShimmerBlock.displayName = "MdxShimmerBlock";
 
@@ -973,13 +989,16 @@ const noopMutationAdapter = (): MutationResult => ({
 });
 
 // Inner wrapper that uses live query (only rendered when runtime connected)
-function LiveChatQueryWrapper({ children, runtimePort }: { children: ReactNode; runtimePort: number }) {
+function LiveChatQueryWrapper({
+  children,
+  runtimePort,
+}: {
+  children: ReactNode;
+  runtimePort: number;
+}) {
   // Query adapter for LiveQueryProvider - NOT wrapped in useCallback
   // because it needs to be called as a hook during render
-  const useQueryAdapter = (
-    sql: string,
-    params?: Record<string, unknown>
-  ): QueryResult => {
+  const useQueryAdapter = (sql: string, params?: Record<string, unknown>): QueryResult => {
     const paramsArray = params ? Object.values(params) : undefined;
 
     // eslint-disable-next-line react-hooks/rules-of-hooks
@@ -1028,11 +1047,7 @@ function ChatQueryWrapper({ children }: { children: ReactNode }) {
     );
   }
 
-  return (
-    <LiveChatQueryWrapper runtimePort={runtimePort}>
-      {children}
-    </LiveChatQueryWrapper>
-  );
+  return <LiveChatQueryWrapper runtimePort={runtimePort}>{children}</LiveChatQueryWrapper>;
 }
 
 // Lightweight placeholder for off-screen text content
@@ -1041,11 +1056,7 @@ const TextPlaceholder = memo(({ text, compact = false }: { text: string; compact
   // Show first 100 chars as plain text placeholder
   const preview = text.slice(0, 100) + (text.length > 100 ? "..." : "");
 
-  return (
-    <div className={cn("text-muted-foreground/50 min-h-[1.5em]", fontSize)}>
-      {preview}
-    </div>
-  );
+  return <div className={cn("text-muted-foreground/50 min-h-[1.5em]", fontSize)}>{preview}</div>;
 });
 
 TextPlaceholder.displayName = "TextPlaceholder";
@@ -1075,8 +1086,11 @@ const TextContent = memo(
 
     // During streaming, detect incomplete MDX blocks and show loader chip
     const { complete, incomplete, blockType } = useMemo(
-      () => (isStreaming ? splitIncompleteBlock(text) : { complete: text, incomplete: null, blockType: null }),
-      [text, isStreaming]
+      () =>
+        isStreaming
+          ? splitIncompleteBlock(text)
+          : { complete: text, incomplete: null, blockType: null },
+      [text, isStreaming],
     );
 
     const shouldRenderMdx = isStreaming || inView;
@@ -1094,10 +1108,7 @@ const TextContent = memo(
           <PreviewEditor
             value={complete}
             wrapper={ChatQueryWrapper}
-            contentClassName={cn(
-              "!p-0 !min-h-0",
-              fontSize,
-            )}
+            contentClassName={cn("!p-0 !min-h-0", fontSize)}
           />
         ) : complete && !shouldRenderMdx ? (
           <TextPlaceholder text={complete} compact={compact} />
@@ -1117,7 +1128,10 @@ const TextContent = memo(
         {/* Copy markdown overlay */}
         {!isStreaming && text.length > 0 && (
           <div className="absolute top-0 right-0 opacity-0 group-hover/preview:opacity-100 transition-opacity">
-            <CopyButton text={text} className="opacity-100 h-5 w-5 text-muted-foreground hover:text-foreground hover:bg-muted/50" />
+            <CopyButton
+              text={text}
+              className="opacity-100 h-5 w-5 text-muted-foreground hover:text-foreground hover:bg-muted/50"
+            />
           </div>
         )}
       </div>
@@ -1139,13 +1153,12 @@ const ReasoningContent = memo(
     }
 
     // Calculate duration from time.start and time.end
-    const duration = part.time?.end && part.time?.start
-      ? Math.round((part.time.end - part.time.start) / 1000)
-      : null;
+    const duration =
+      part.time?.end && part.time?.start
+        ? Math.round((part.time.end - part.time.start) / 1000)
+        : null;
 
-    const durationText = duration !== null
-      ? `Reasoned for ${duration}s`
-      : "Reasoning...";
+    const durationText = duration !== null ? `Reasoned for ${duration}s` : "Reasoning...";
 
     return (
       <div

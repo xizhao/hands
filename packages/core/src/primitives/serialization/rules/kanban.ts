@@ -5,8 +5,8 @@
  */
 
 import { KANBAN_KEY, type TKanbanElement } from "../../../types";
+import { createVoidElement, parseAttributes, serializeAttributes } from "../helpers";
 import type { MdxSerializationRule } from "../types";
-import { parseAttributes, serializeAttributes, createVoidElement } from "../helpers";
 
 // ============================================================================
 // Kanban
@@ -79,7 +79,7 @@ export const kanbanRule: MdxSerializationRule<TKanbanElement> = {
         defaults: {
           idField: "id",
         },
-      }
+      },
     );
 
     return {

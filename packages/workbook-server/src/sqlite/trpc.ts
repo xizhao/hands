@@ -8,9 +8,9 @@
 import { initTRPC, TRPCError } from "@trpc/server";
 import { z } from "zod";
 import {
-  getWorkbookDb,
   executeQuery as execSqlite,
   getSchema as getSchemaDirect,
+  getWorkbookDb,
 } from "../db/workbook-db.js";
 
 // ============================================================================
@@ -63,11 +63,7 @@ interface QueryResult {
 /**
  * Execute SQL directly via bun:sqlite
  */
-function executeQuery(
-  workbookDir: string,
-  sql: string,
-  params?: unknown[]
-): QueryResult {
+function executeQuery(workbookDir: string, sql: string, params?: unknown[]): QueryResult {
   try {
     const db = getWorkbookDb(workbookDir);
     return execSqlite(db, sql, params);

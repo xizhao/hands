@@ -54,9 +54,10 @@ export const templates = {
       <h1 style="font-size: 24px; margin-bottom: 20px;">Usage Alert</h1>
       <p>Hey ${data.name},</p>
       <p>You've used <strong>${data.percentage}%</strong> of your monthly token quota on the <strong>${data.plan}</strong> plan.</p>
-      ${data.percentage >= 100
-        ? `<p style="color: #dc2626;">You've hit your limit. Upgrade to continue using Hands.</p>`
-        : `<p>Consider upgrading if you need more capacity.</p>`
+      ${
+        data.percentage >= 100
+          ? `<p style="color: #dc2626;">You've hit your limit. Upgrade to continue using Hands.</p>`
+          : `<p>Consider upgrading if you need more capacity.</p>`
       }
       <p style="margin-top: 24px;">
         <a href="https://hands.app/settings/billing" style="${buttonStyles}">Manage Plan</a>

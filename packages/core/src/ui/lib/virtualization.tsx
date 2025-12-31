@@ -38,14 +38,12 @@
 
 import {
   createContext,
+  type ReactNode,
+  type RefObject,
   useContext,
   useEffect,
   useRef,
   useState,
-  useCallback,
-  useMemo,
-  type ReactNode,
-  type RefObject,
 } from "react";
 
 // ============================================================================
@@ -77,14 +75,14 @@ class ViewportObserverManager {
           callback?.(entry.isIntersecting);
         }
       },
-      { rootMargin: this.rootMargin }
+      { rootMargin: this.rootMargin },
     );
   }
 
   observe(element: Element, callback: ObserverCallback) {
     this.ensureObserver();
     this.callbacks.set(element, callback);
-    this.observer!.observe(element);
+    this.observer?.observe(element);
   }
 
   unobserve(element: Element) {
@@ -136,7 +134,7 @@ export interface UseViewportVisibilityResult {
  * Uses a shared IntersectionObserver for efficiency.
  */
 export function useViewportVisibility(
-  options: UseViewportVisibilityOptions = {}
+  options: UseViewportVisibilityOptions = {},
 ): UseViewportVisibilityResult {
   const { margin = "200px", sticky = true, initialVisible = false } = options;
 
@@ -346,23 +344,15 @@ export interface VirtualizedComponentOptions {
  */
 export function createVirtualized<P extends { height?: number }>(
   Component: React.ComponentType<P>,
-  options: VirtualizedComponentOptions = {}
+  options: VirtualizedComponentOptions = {},
 ) {
-  const {
-    defaultHeight = 200,
-    placeholderType = "generic",
-    margin = "200px",
-  } = options;
+  const { defaultHeight = 200, placeholderType = "generic", margin = "200px" } = options;
 
   function VirtualizedComponent(props: P) {
     const height = props.height ?? defaultHeight;
 
     return (
-      <Virtualized
-        height={height}
-        placeholder={placeholderType}
-        margin={margin}
-      >
+      <Virtualized height={height} placeholder={placeholderType} margin={margin}>
         {() => <Component {...props} />}
       </Virtualized>
     );

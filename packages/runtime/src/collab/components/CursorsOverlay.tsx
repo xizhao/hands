@@ -15,12 +15,12 @@ export function CursorsOverlay({ users }: CursorsOverlayProps) {
     <div
       className="pointer-events-none z-[9999]"
       style={{
-        position: 'absolute',
+        position: "absolute",
         top: 0,
         left: 0,
-        width: '100%',
-        height: '1px', // Minimal height, cursors position absolutely
-        overflow: 'visible',
+        width: "100%",
+        height: "1px", // Minimal height, cursors position absolutely
+        overflow: "visible",
       }}
     >
       {users.map((presence) => (
@@ -36,7 +36,10 @@ function Cursor({ presence }: { presence: UserPresence }) {
   // x, y are absolute pixel positions on the document
   const { x, y } = presence.cursor;
   const { name, color } = presence.user;
-  const initials = name.split(" ").map(n => n[0]).join("");
+  const initials = name
+    .split(" ")
+    .map((n) => n[0])
+    .join("");
 
   return (
     <div
@@ -48,13 +51,7 @@ function Cursor({ presence }: { presence: UserPresence }) {
       }}
     >
       {/* Cursor pointer */}
-      <svg
-        width="16"
-        height="16"
-        viewBox="0 0 16 16"
-        fill="none"
-        className="drop-shadow-md"
-      >
+      <svg width="16" height="16" viewBox="0 0 16 16" fill="none" className="drop-shadow-md">
         <path
           d="M1 1v14l4.5-4.5H14L1 1z"
           fill={color}
@@ -72,9 +69,7 @@ function Cursor({ presence }: { presence: UserPresence }) {
         <span className="w-4 h-4 rounded-full bg-white/20 flex items-center justify-center text-[8px] font-bold text-white">
           {initials}
         </span>
-        <span className="text-[10px] font-medium text-white whitespace-nowrap">
-          {name}
-        </span>
+        <span className="text-[10px] font-medium text-white whitespace-nowrap">{name}</span>
       </div>
     </div>
   );

@@ -1,75 +1,70 @@
-import type { TElement, Value } from "platejs";
-import { createSlateEditor, createSlatePlugin } from "platejs";
-import { Suspense } from "react";
-import { PlateStatic } from "platejs/static";
-
 // Types from core
 import type {
-  TLiveValueElement,
-  TBarChartElement,
-  TLineChartElement,
-  TAreaChartElement,
-  TPieChartElement,
-  TChartElement,
-  TScatterChartElement,
-  THistogramChartElement,
-  THeatmapChartElement,
-  TBoxPlotChartElement,
-  TMapChartElement,
   TAlertElement,
+  TAreaChartElement,
   TBadgeElement,
-  TMetricElement,
-  TProgressElement,
+  TBarChartElement,
+  TBoxPlotChartElement,
+  TChartElement,
+  THeatmapChartElement,
+  THistogramChartElement,
+  TLineChartElement,
+  TLiveValueElement,
   TLoaderElement,
-  TTabsElement,
+  TMapChartElement,
+  TMetricElement,
+  TPieChartElement,
+  TProgressElement,
+  TScatterChartElement,
   TTabElement,
+  TTabsElement,
 } from "@hands/core/types";
-
 // Helpers from core (re-exported in view)
-import { selectDisplayType, formatCellValue } from "@hands/core/ui/view";
-
+import { formatCellValue, selectDisplayType } from "@hands/core/ui/view";
 // Base plugins - import DIRECTLY to avoid pulling in React deps from index
 import { BaseBasicBlocksKit } from "@hands/editor/plugins/basic-blocks-base-kit";
 import { BaseBasicMarksKit } from "@hands/editor/plugins/basic-marks-base-kit";
-import { BaseLinkKit } from "@hands/editor/plugins/link-base-kit";
-import { BaseTableKit } from "@hands/editor/plugins/table-base-kit";
-import { BaseListKit } from "@hands/editor/plugins/list-base-kit";
-import { BaseCodeBlockKit } from "@hands/editor/plugins/code-block-base-kit";
 import { BaseCalloutKit } from "@hands/editor/plugins/callout-base-kit";
-import { BaseToggleKit } from "@hands/editor/plugins/toggle-base-kit";
+import { BaseCodeBlockKit } from "@hands/editor/plugins/code-block-base-kit";
 import { BaseColumnKit } from "@hands/editor/plugins/column-base-kit";
+import { BaseLinkKit } from "@hands/editor/plugins/link-base-kit";
+import { BaseListKit } from "@hands/editor/plugins/list-base-kit";
 import { BaseMediaKit } from "@hands/editor/plugins/media-base-kit";
 import { BaseMentionKit } from "@hands/editor/plugins/mention-base-kit";
+import { BaseTableKit } from "@hands/editor/plugins/table-base-kit";
 import { BaseTocKit } from "@hands/editor/plugins/toc-base-kit";
-
-// Chart and view components (use client - will be hydrated by rwsdk)
-import {
-  BarChart,
-  LineChart,
-  AreaChart,
-  PieChart,
-  Chart,
-  LiveValueProvider,
-  DataGrid,
-  TooltipProvider,
-  // Additional charts
-  ScatterChart,
-  HistogramChart,
-  HeatmapChart,
-  BoxPlotChart,
-  MapChart,
-  // View components
-  Alert,
-  Badge,
-  Metric,
-  Progress,
-  Loader,
-  Tabs,
-  Tab,
-} from "./charts-client";
-
+import { BaseToggleKit } from "@hands/editor/plugins/toggle-base-kit";
+import type { TElement, Value } from "platejs";
+import { createSlateEditor, createSlatePlugin } from "platejs";
+import { PlateStatic } from "platejs/static";
+import { Suspense } from "react";
 // Database access
 import { getDb, kyselySql, runWithDbMode } from "../db/dev";
+// Chart and view components (use client - will be hydrated by rwsdk)
+import {
+  // View components
+  Alert,
+  AreaChart,
+  Badge,
+  BarChart,
+  BoxPlotChart,
+  Chart,
+  DataGrid,
+  HeatmapChart,
+  HistogramChart,
+  LineChart,
+  LiveValueProvider,
+  Loader,
+  MapChart,
+  Metric,
+  PieChart,
+  Progress,
+  // Additional charts
+  ScatterChart,
+  Tab,
+  Tabs,
+  TooltipProvider,
+} from "./charts-client";
 
 /** RSC block element in Plate value */
 interface RscBlockElement extends TElement {
@@ -81,7 +76,11 @@ interface RscBlockElement extends TElement {
 // Simple display components for RSC
 function InlineDisplay({ data }: { data: Record<string, unknown>[] }) {
   if (!data || data.length === 0) {
-    return <span className="inline-flex items-center px-1.5 py-0.5 rounded bg-muted text-muted-foreground">—</span>;
+    return (
+      <span className="inline-flex items-center px-1.5 py-0.5 rounded bg-muted text-muted-foreground">
+        —
+      </span>
+    );
   }
   const value = Object.values(data[0])[0];
   return (
@@ -99,7 +98,9 @@ function ListDisplay({ data }: { data: Record<string, unknown>[] }) {
   return (
     <ul className="list-disc list-inside space-y-0.5">
       {data.map((row, i) => (
-        <li key={i} className="text-sm">{formatCellValue(row[key])}</li>
+        <li key={i} className="text-sm">
+          {formatCellValue(row[key])}
+        </li>
       ))}
     </ul>
   );
@@ -171,7 +172,13 @@ async function LiveValueDataFetcher({
   // If has children (charts), just provide context
   if (hasChildren) {
     return (
-      <LiveValueProvider data={data} tableName={tableName} query={query} isLoading={false} error={null}>
+      <LiveValueProvider
+        data={data}
+        tableName={tableName}
+        query={query}
+        isLoading={false}
+        error={null}
+      >
         {children}
       </LiveValueProvider>
     );
@@ -187,14 +194,19 @@ async function LiveValueDataFetcher({
     case "list":
       content = <ListDisplay data={data} />;
       break;
-    case "table":
     default:
       content = <TableDisplay data={data} />;
       break;
   }
 
   return (
-    <LiveValueProvider data={data} tableName={tableName} query={query} isLoading={false} error={null}>
+    <LiveValueProvider
+      data={data}
+      tableName={tableName}
+      query={query}
+      isLoading={false}
+      error={null}
+    >
       {content}
     </LiveValueProvider>
   );
@@ -238,7 +250,6 @@ function LiveValueRSC({
         case "list":
           content = <ListDisplay data={staticData} />;
           break;
-        case "table":
         default:
           content = <TableDisplay data={staticData} />;
           break;
@@ -247,7 +258,13 @@ function LiveValueRSC({
 
     return (
       <div className="my-2">
-        <LiveValueProvider data={staticData} tableName={tableName} query={query} isLoading={false} error={null}>
+        <LiveValueProvider
+          data={staticData}
+          tableName={tableName}
+          query={query}
+          isLoading={false}
+          error={null}
+        >
           {content}
         </LiveValueProvider>
       </div>
@@ -258,7 +275,13 @@ function LiveValueRSC({
   if (!query) {
     return (
       <div className="my-2">
-        <LiveValueProvider data={[]} tableName={null} query={undefined} isLoading={false} error={null}>
+        <LiveValueProvider
+          data={[]}
+          tableName={null}
+          query={undefined}
+          isLoading={false}
+          error={null}
+        >
           {hasChildren ? children : <div className="text-muted-foreground text-sm">No data</div>}
         </LiveValueProvider>
       </div>
@@ -268,11 +291,7 @@ function LiveValueRSC({
   // Async fetch with Suspense
   return (
     <div className="my-2">
-      <Suspense
-        fallback={
-          <div className="w-full h-48 animate-pulse bg-muted/30 rounded-lg" />
-        }
-      >
+      <Suspense fallback={<div className="w-full h-48 animate-pulse bg-muted/30 rounded-lg" />}>
         <LiveValueDataFetcher
           query={query}
           params={element.params}
@@ -721,18 +740,10 @@ export function PageStatic({ value, blocks }: PageStaticProps) {
         if (!element.blockId) return null;
         const BlockComponent = blocks[element.blockId];
         if (!BlockComponent) {
-          return (
-            <div className="text-red-500">
-              Block not found: {element.blockId}
-            </div>
-          );
+          return <div className="text-red-500">Block not found: {element.blockId}</div>;
         }
         return (
-          <Suspense
-            fallback={
-              <div className="animate-pulse bg-muted h-32 rounded-lg" />
-            }
-          >
+          <Suspense fallback={<div className="animate-pulse bg-muted h-32 rounded-lg" />}>
             <BlockComponent {...(element.blockProps || {})} />
           </Suspense>
         );

@@ -8,20 +8,13 @@
  * - LiveQueryProvider (SQL queries: LiveValue, LiveAction)
  */
 
-import { useCallback, useMemo, type ReactNode } from "react";
+import { LiveQueryProvider, type MutationResult, type QueryResult } from "@hands/core/stdlib";
+import { EditorProvider, type EditorTrpcClient } from "@hands/editor";
 import { useNavigate } from "@tanstack/react-router";
-import {
-  EditorProvider,
-  type EditorTrpcClient,
-} from "@hands/editor";
-import {
-  LiveQueryProvider,
-  type QueryResult,
-  type MutationResult,
-} from "@hands/core/stdlib";
-import { trpc } from "@/lib/trpc";
-import { useLiveQuery as useDesktopLiveQuery } from "@/lib/live-query";
+import { type ReactNode, useCallback, useMemo } from "react";
 import { useActiveRuntime } from "@/hooks/useWorkbook";
+import { useLiveQuery as useDesktopLiveQuery } from "@/lib/live-query";
+import { trpc } from "@/lib/trpc";
 
 interface DesktopEditorProviderProps {
   children: ReactNode;
@@ -36,12 +29,15 @@ export function DesktopEditorProvider({ children }: DesktopEditorProviderProps) 
   const { data: domainsData } = trpc.domains.list.useQuery();
 
   // Navigation callback for LiveValue "View in Tables" button
-  const handleNavigateToTable = useCallback((tableName: string) => {
-    navigate({
-      to: "/tables/$tableId",
-      params: { tableId: tableName },
-    } as any);
-  }, [navigate]);
+  const handleNavigateToTable = useCallback(
+    (tableName: string) => {
+      navigate({
+        to: "/tables/$tableId",
+        params: { tableId: tableName },
+      } as any);
+    },
+    [navigate],
+  );
 
   // Get tables for AI context (from domains)
   const tables = useMemo(() => {
@@ -57,21 +53,32 @@ export function DesktopEditorProvider({ children }: DesktopEditorProviderProps) 
   const generateHint = trpc.ai.generateHint.useMutation();
   const generateHintsBatch = trpc.ai.generateHintsBatch.useMutation();
 
-  const editorTrpc = useMemo<EditorTrpcClient>(() => ({
-    ai: {
-      generateMdx: { mutate: (input) => generateMdx.mutateAsync({ ...input, tables: input.tables ?? tables }) },
-      generateMdxBlock: { mutate: (input) => generateMdxBlock.mutateAsync({ ...input, tables: input.tables ?? tables }) },
-      generateHint: { mutate: (input) => generateHint.mutateAsync(input) },
-      generateHintsBatch: { mutate: (input) => generateHintsBatch.mutateAsync(input) },
-    },
-  }), [generateMdx.mutateAsync, generateMdxBlock.mutateAsync, generateHint.mutateAsync, generateHintsBatch.mutateAsync, tables]);
+  const editorTrpc = useMemo<EditorTrpcClient>(
+    () => ({
+      ai: {
+        generateMdx: {
+          mutate: (input) => generateMdx.mutateAsync({ ...input, tables: input.tables ?? tables }),
+        },
+        generateMdxBlock: {
+          mutate: (input) =>
+            generateMdxBlock.mutateAsync({ ...input, tables: input.tables ?? tables }),
+        },
+        generateHint: { mutate: (input) => generateHint.mutateAsync(input) },
+        generateHintsBatch: { mutate: (input) => generateHintsBatch.mutateAsync(input) },
+      },
+    }),
+    [
+      generateMdx.mutateAsync,
+      generateMdxBlock.mutateAsync,
+      generateHint.mutateAsync,
+      generateHintsBatch.mutateAsync,
+      tables,
+    ],
+  );
 
   // Query adapter for LiveQueryProvider (SQL queries)
   // This is a hook that wraps useDesktopLiveQuery
-  const useQueryAdapter = (
-    sql: string,
-    params?: Record<string, unknown>,
-  ): QueryResult => {
+  const useQueryAdapter = (sql: string, params?: Record<string, unknown>): QueryResult => {
     const paramsArray = params ? Object.values(params) : undefined;
 
     // eslint-disable-next-line react-hooks/rules-of-hooks

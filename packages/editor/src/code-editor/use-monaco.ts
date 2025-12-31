@@ -4,8 +4,8 @@
  * A hook for accessing the Monaco editor instance programmatically.
  */
 
-import { useCallback, useRef, useState } from "react";
 import type { editor as MonacoEditor } from "monaco-editor";
+import { useCallback, useRef, useState } from "react";
 
 export interface UseMonacoOptions {
   /** Called when the editor is ready */
@@ -55,7 +55,7 @@ export function useMonaco(options: UseMonacoOptions = {}): UseMonacoReturn {
       setIsReady(true);
       options.onReady?.(editor);
     },
-    [options.onReady]
+    [options.onReady],
   );
 
   const focus = useCallback(() => {

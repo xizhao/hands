@@ -43,7 +43,7 @@ export function dbTypesPlugin(options: DbTypesPluginOptions): Plugin {
       // Warm up the Durable Object on server start to initialize the SQLite database
       server.httpServer?.once("listening", async () => {
         const address = server.httpServer?.address();
-        const port = typeof address === "object" ? address?.port ?? 5173 : 5173;
+        const port = typeof address === "object" ? (address?.port ?? 5173) : 5173;
 
         try {
           // Hit the schema endpoint to trigger DO initialization
@@ -79,7 +79,7 @@ function getSchemaHash(sqliteFile: string): string | null {
     const db = new BetterSqlite3(sqliteFile, { readonly: true });
     const schema = db
       .prepare(
-        "SELECT type, name, tbl_name, sql FROM sqlite_master WHERE sql IS NOT NULL ORDER BY name"
+        "SELECT type, name, tbl_name, sql FROM sqlite_master WHERE sql IS NOT NULL ORDER BY name",
       )
       .all();
     db.close();
@@ -105,7 +105,7 @@ async function generateDbTypesIfChanged(workbookPath: string): Promise<void> {
     // Only write placeholder if the file doesn't exist
     if (!fs.existsSync(outputPath)) {
       console.log(
-        "[db-types] No SQLite database found yet. Types will be generated after first request."
+        "[db-types] No SQLite database found yet. Types will be generated after first request.",
       );
       const placeholder = `// Database types will be generated after the first request initializes the database
 export interface DB {}
@@ -138,7 +138,7 @@ export interface DB {}
       {
         stdio: "pipe",
         cwd: runtimeDir,
-      }
+      },
     );
     console.log(`[db-types] Types written to ${outputPath}`);
   } catch (error) {

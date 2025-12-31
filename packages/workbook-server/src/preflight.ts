@@ -31,8 +31,12 @@ import {
   generateWranglerConfig,
   type HandsConfig,
 } from "./build/index.js";
-import { ensureStdlibSymlink, generateWorkbookTsConfig, getStdlibSourcePath } from "./config/index.js";
-import { killProcessOnPort, PORTS, waitForPortFree } from "./ports.js";
+import {
+  ensureStdlibSymlink,
+  generateWorkbookTsConfig,
+  getStdlibSourcePath,
+} from "./config/index.js";
+import { PORTS, waitForPortFree } from "./ports.js";
 
 // ============================================================================
 // Types
@@ -409,7 +413,10 @@ async function checkPortAvailable(port: number, autoFix: boolean): Promise<Prefl
   };
 }
 
-async function checkHandsOutputDir(workbookDir: string, autoFix: boolean): Promise<PreflightCheck> {
+async function _checkHandsOutputDir(
+  workbookDir: string,
+  autoFix: boolean,
+): Promise<PreflightCheck> {
   const handsDir = join(workbookDir, ".hands");
 
   if (!existsSync(handsDir)) {
@@ -484,7 +491,7 @@ const EXPECTED_HANDS_TSCONFIG = `{
 }
 `;
 
-async function checkHandsTsConfig(workbookDir: string, autoFix: boolean): Promise<PreflightCheck> {
+async function _checkHandsTsConfig(workbookDir: string, autoFix: boolean): Promise<PreflightCheck> {
   const handsDir = join(workbookDir, ".hands");
   const tsconfigPath = join(handsDir, "tsconfig.json");
 
@@ -555,12 +562,12 @@ async function checkHandsTsConfig(workbookDir: string, autoFix: boolean): Promis
 const REQUIRED_WORKBOOK_DEPS_BASE = {
   dependencies: {
     // React (required for RSC)
-    "react": "^19.0.0",
+    react: "^19.0.0",
     "react-dom": "^19.0.0",
     "react-server-dom-webpack": "^19.0.0",
     // Runtime deps for Vite worker
-    "rwsdk": "1.0.0-beta.39",
-    "hono": "^4.7.0",
+    rwsdk: "1.0.0-beta.39",
+    hono: "^4.7.0",
     "@trpc/client": "^11.0.0",
   },
   devDependencies: {
@@ -568,8 +575,8 @@ const REQUIRED_WORKBOOK_DEPS_BASE = {
     "@types/react-dom": "^19.0.0",
     "@cloudflare/vite-plugin": "^1.16.1",
     "@cloudflare/workers-types": "^4.20251202.0",
-    "typescript": "^5.8.0",
-    "vite": "^7.2.0",
+    typescript: "^5.8.0",
+    vite: "^7.2.0",
   },
 };
 
@@ -590,7 +597,10 @@ function getRequiredWorkbookDeps() {
   };
 }
 
-async function checkWorkbookDependencies(workbookDir: string, autoFix: boolean): Promise<PreflightCheck> {
+async function checkWorkbookDependencies(
+  workbookDir: string,
+  autoFix: boolean,
+): Promise<PreflightCheck> {
   const packageJsonPath = join(workbookDir, "package.json");
 
   if (!existsSync(packageJsonPath)) {
@@ -719,7 +729,10 @@ async function checkWorkbookDependencies(workbookDir: string, autoFix: boolean):
  * Tracking: https://github.com/xizhao/sdk (forked with fix)
  */
 async function patchRwsdk(workbookDir: string): Promise<PreflightCheck> {
-  const targetPath = join(workbookDir, "node_modules/rwsdk/dist/vite/directiveModulesDevPlugin.mjs");
+  const targetPath = join(
+    workbookDir,
+    "node_modules/rwsdk/dist/vite/directiveModulesDevPlugin.mjs",
+  );
 
   // Check if rwsdk is installed
   if (!existsSync(targetPath)) {
@@ -818,7 +831,10 @@ async function clearViteCache(workbookDir: string): Promise<PreflightCheck> {
  * Ensure workbook's tsconfig.json has proper paths to the runtime.
  * This is required for TypeScript diagnostics to work correctly.
  */
-async function checkWorkbookTsConfig(workbookDir: string, autoFix: boolean): Promise<PreflightCheck> {
+async function checkWorkbookTsConfig(
+  workbookDir: string,
+  autoFix: boolean,
+): Promise<PreflightCheck> {
   const tsconfigPath = join(workbookDir, "tsconfig.json");
 
   // Generate expected tsconfig content
@@ -937,7 +953,10 @@ function writeFileIfChanged(filePath: string, content: string): boolean {
  *
  * Files are only written if their content has changed.
  */
-export async function scaffoldHandsDir(workbookDir: string, autoFix: boolean): Promise<PreflightCheck> {
+export async function scaffoldHandsDir(
+  workbookDir: string,
+  autoFix: boolean,
+): Promise<PreflightCheck> {
   const handsDir = join(workbookDir, ".hands");
   const srcDir = join(handsDir, "src");
   const pkgJsonPath = join(workbookDir, "package.json");
@@ -964,7 +983,7 @@ export async function scaffoldHandsDir(workbookDir: string, autoFix: boolean): P
       return {
         name: ".hands scaffold",
         ok: false,
-        message: `Missing files: ${missing.map((f) => f.replace(handsDir + "/", "")).join(", ")}`,
+        message: `Missing files: ${missing.map((f) => f.replace(`${handsDir}/`, "")).join(", ")}`,
         required: true,
       };
     }
@@ -1039,11 +1058,15 @@ export async function scaffoldHandsDir(workbookDir: string, autoFix: boolean): P
 
     // Generate and write config files (only if changed)
     // Note: vite.config.mts is NOT generated here - it lives in @hands/runtime
-    const handsPackageJson = JSON.stringify({
-      name: `${config.name}-hands`,
-      private: true,
-      type: "module",
-    }, null, 2);
+    const handsPackageJson = JSON.stringify(
+      {
+        name: `${config.name}-hands`,
+        private: true,
+        type: "module",
+      },
+      null,
+      2,
+    );
     if (writeFileIfChanged(join(handsDir, "package.json"), handsPackageJson)) {
       filesWritten.push("package.json");
     }
@@ -1062,34 +1085,41 @@ export async function scaffoldHandsDir(workbookDir: string, autoFix: boolean): P
     // Create empty types.ts if it doesn't exist (pgtyped will populate it)
     const typesPath = join(handsDir, "types.ts");
     if (!existsSync(typesPath)) {
-      writeFileSync(typesPath, "// Auto-generated by pgtyped. Will be populated on first run.\nexport {};\n");
+      writeFileSync(
+        typesPath,
+        "// Auto-generated by pgtyped. Will be populated on first run.\nexport {};\n",
+      );
       filesWritten.push("types.ts");
     }
 
     // Create components.json for shadcn if it doesn't exist
     const componentsJsonPath = join(workbookDir, "components.json");
     if (!existsSync(componentsJsonPath)) {
-      const componentsJson = JSON.stringify({
-        "$schema": "https://ui.shadcn.com/schema.json",
-        "style": "new-york",
-        "rsc": true,
-        "tsx": true,
-        "tailwind": {
-          "config": "",
-          "css": "styles.css",
-          "baseColor": "neutral",
-          "cssVariables": true,
-          "prefix": ""
+      const componentsJson = JSON.stringify(
+        {
+          $schema: "https://ui.shadcn.com/schema.json",
+          style: "new-york",
+          rsc: true,
+          tsx: true,
+          tailwind: {
+            config: "",
+            css: "styles.css",
+            baseColor: "neutral",
+            cssVariables: true,
+            prefix: "",
+          },
+          iconLibrary: "lucide",
+          aliases: {
+            components: "@ui",
+            utils: "@ui/lib/utils",
+            ui: "@ui",
+            lib: "@ui/lib",
+            hooks: "@ui/hooks",
+          },
         },
-        "iconLibrary": "lucide",
-        "aliases": {
-          "components": "@ui",
-          "utils": "@ui/lib/utils",
-          "ui": "@ui",
-          "lib": "@ui/lib",
-          "hooks": "@ui/hooks"
-        }
-      }, null, 2);
+        null,
+        2,
+      );
       writeFileSync(componentsJsonPath, componentsJson);
       filesWritten.push("components.json");
     }

@@ -117,16 +117,12 @@ export function Alert({ children, title, variant = "default", className }: Alert
 
 function AlertElement(props: PlateElementProps) {
   const element = useElement<TAlertElement>();
-  const selected = useSelected();
+  const _selected = useSelected();
 
   const { title, variant = "default" } = element;
 
   return (
-    <PlateElement
-      {...props}
-      as="div"
-      className="my-2"
-    >
+    <PlateElement {...props} as="div" className="my-2">
       <Alert title={title} variant={variant}>
         {props.children}
       </Alert>

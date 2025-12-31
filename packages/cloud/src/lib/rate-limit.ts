@@ -77,7 +77,7 @@ export function rateLimit(config: Partial<RateLimitConfig> = {}) {
             error: "Rate limit exceeded",
             retryAfter,
           },
-          429
+          429,
         );
       } else {
         // Increment counter

@@ -1,21 +1,21 @@
-import { BlockSelectionPlugin } from '@platejs/selection/react';
-import { useTocElement, useTocElementState } from '@platejs/toc/react';
-import { cva } from 'class-variance-authority';
-import { PlateElement, type PlateElementProps } from 'platejs/react';
+import { BlockSelectionPlugin } from "@platejs/selection/react";
+import { useTocElement, useTocElementState } from "@platejs/toc/react";
+import { cva } from "class-variance-authority";
+import { PlateElement, type PlateElementProps } from "platejs/react";
 
-import { Button } from './button';
+import { Button } from "./button";
 
 const headingItemVariants = cva(
-  'block h-auto w-full cursor-pointer truncate rounded-none px-0.5 py-1.5 text-left font-medium text-muted-foreground underline decoration-[0.5px] underline-offset-4 hover:bg-accent hover:text-muted-foreground',
+  "block h-auto w-full cursor-pointer truncate rounded-none px-0.5 py-1.5 text-left font-medium text-muted-foreground underline decoration-[0.5px] underline-offset-4 hover:bg-accent hover:text-muted-foreground",
   {
     variants: {
       depth: {
-        1: 'pl-0.5',
-        2: 'pl-[26px]',
-        3: 'pl-[50px]',
+        1: "pl-0.5",
+        2: "pl-[26px]",
+        3: "pl-[50px]",
       },
     },
-  }
+  },
 );
 
 export function TocElement(props: PlateElementProps) {
@@ -33,7 +33,7 @@ export function TocElement(props: PlateElementProps) {
               aria-current
               className={headingItemVariants({ depth: item.depth as any })}
               key={item.id}
-              onClick={(e) => btnProps.onClick(e, item, 'smooth')}
+              onClick={(e) => btnProps.onClick(e, item, "smooth")}
               variant="ghost"
             >
               {item.title}
@@ -43,9 +43,7 @@ export function TocElement(props: PlateElementProps) {
           <div
             className="cursor-text select-none px-1 py-[3px] text-muted-foreground/80 text-sm"
             onClick={() => {
-              editor
-                .getApi(BlockSelectionPlugin)
-                .blockSelection.set(element.id as string);
+              editor.getApi(BlockSelectionPlugin).blockSelection.set(element.id as string);
             }}
             role="button"
           >

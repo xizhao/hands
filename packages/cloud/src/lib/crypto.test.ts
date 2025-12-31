@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { encrypt, decrypt, hash, generateToken } from "./crypto";
+import { decrypt, encrypt, generateToken, hash } from "./crypto";
 
 describe("crypto utilities", () => {
   const TEST_SECRET = "test-encryption-secret-key-12345";
@@ -60,7 +60,7 @@ describe("crypto utilities", () => {
 
     test("should fail to decrypt corrupted data", async () => {
       const encrypted = await encrypt("test", TEST_SECRET);
-      const corrupted = encrypted.slice(0, -5) + "XXXXX";
+      const corrupted = `${encrypted.slice(0, -5)}XXXXX`;
 
       await expect(decrypt(corrupted, TEST_SECRET)).rejects.toThrow();
     });

@@ -11,17 +11,17 @@
  * - card: 1 row, M columns → single card with multiple fields
  */
 
-import type { TElement } from "platejs";
-import type { ReactNode } from "react";
 import {
+  Cards,
+  Hash,
   Lightning,
   ListBullets,
   NumberCircleOne,
-  Table,
-  Cards,
   Rows,
-  Hash,
+  Table,
 } from "@phosphor-icons/react";
+import type { TElement } from "platejs";
+import type { ReactNode } from "react";
 import { createElement } from "react";
 
 // ============================================================================
@@ -68,7 +68,7 @@ export function detectDataShape(data: Record<string, unknown>[]): DataShapeInfo 
  */
 export function inferShapeFromSQL(sql: string | undefined): DataShape | null {
   if (!sql) return null;
-  const upper = sql.toUpperCase().trim();
+  const _upper = sql.toUpperCase().trim();
 
   // COUNT/SUM/AVG/MAX/MIN without GROUP BY → single value
   const hasAggregate = /\b(COUNT|SUM|AVG|MAX|MIN)\s*\(/i.test(sql);
@@ -108,7 +108,14 @@ export function inferShapeFromSQL(sql: string | undefined): DataShape | null {
 // Format Definitions
 // ============================================================================
 
-export type FormatKey = "inline" | "metric" | "bullet-list" | "numbered-list" | "table" | "card" | "row";
+export type FormatKey =
+  | "inline"
+  | "metric"
+  | "bullet-list"
+  | "numbered-list"
+  | "table"
+  | "card"
+  | "row";
 
 export interface FormatOption {
   key: FormatKey;
@@ -196,7 +203,6 @@ export function getDefaultFormat(shape: DataShape): FormatKey {
       return "bullet-list";
     case "card":
       return "card";
-    case "table":
     default:
       return "table";
   }
@@ -222,17 +228,11 @@ export const TEMPLATES: Record<FormatKey, TElement[]> = {
   // Inline doesn't use template (rendered specially)
   inline: [],
 
-  metric: [
-    { type: "h1", children: [{ text: "{{value}}" }] },
-  ],
+  metric: [{ type: "h1", children: [{ text: "{{value}}" }] }],
 
-  "bullet-list": [
-    { type: "p", children: [{ text: "• {{name}}" }] },
-  ],
+  "bullet-list": [{ type: "p", children: [{ text: "• {{name}}" }] }],
 
-  "numbered-list": [
-    { type: "p", children: [{ text: "{{_index}}. {{name}}" }] },
-  ],
+  "numbered-list": [{ type: "p", children: [{ text: "{{_index}}. {{name}}" }] }],
 
   table: [], // Empty = table mode (columns: "auto")
 
@@ -244,11 +244,7 @@ export const TEMPLATES: Record<FormatKey, TElement[]> = {
   row: [
     {
       type: "p",
-      children: [
-        { text: "{{name}}", bold: true },
-        { text: " — " },
-        { text: "{{value}}" },
-      ],
+      children: [{ text: "{{name}}", bold: true }, { text: " — " }, { text: "{{value}}" }],
     },
   ],
 };

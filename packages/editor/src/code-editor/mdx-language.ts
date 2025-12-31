@@ -26,8 +26,8 @@ export function registerMdxLanguage(monaco: Monaco) {
     tokenPostfix: ".mdx",
 
     // Control characters
-    control: /[\\`*_\[\]{}()#+\-\.!]/,
-    noncontrol: /[^\\`*_\[\]{}()#+\-\.!]/,
+    control: /[\\`*_[\]{}()#+\-.!]/,
+    noncontrol: /[^\\`*_[\]{}()#+\-.!]/,
     escapes: /\\(?:@control)/,
 
     // JSX patterns
@@ -42,28 +42,17 @@ export function registerMdxLanguage(monaco: Monaco) {
         // JSX Components (PascalCase)
         [
           /(<)([A-Z][a-zA-Z0-9]*)/,
-          [
-            { token: "delimiter.tag" },
-            { token: "tag.component", next: "@jsxTag" },
-          ],
+          [{ token: "delimiter.tag" }, { token: "tag.component", next: "@jsxTag" }],
         ],
         [
           /(<\/)([A-Z][a-zA-Z0-9]*)(>)/,
-          [
-            { token: "delimiter.tag" },
-            { token: "tag.component" },
-            { token: "delimiter.tag" },
-          ],
+          [{ token: "delimiter.tag" }, { token: "tag.component" }, { token: "delimiter.tag" }],
         ],
 
         // Self-closing JSX component
         [
           /(<)([A-Z][a-zA-Z0-9]*)(\s*\/>)/,
-          [
-            { token: "delimiter.tag" },
-            { token: "tag.component" },
-            { token: "delimiter.tag" },
-          ],
+          [{ token: "delimiter.tag" }, { token: "tag.component" }, { token: "delimiter.tag" }],
         ],
 
         // JSX expressions {expression}
@@ -83,7 +72,7 @@ export function registerMdxLanguage(monaco: Monaco) {
         [/^\s*>+/, "comment.quote"],
 
         // Lists
-        [/^\s*([\*\-+]|\d+\.)\s/, "keyword.list"],
+        [/^\s*([*\-+]|\d+\.)\s/, "keyword.list"],
 
         // Links and images
         [/!?\[/, { token: "string.link", next: "@linkText" }],
@@ -97,13 +86,10 @@ export function registerMdxLanguage(monaco: Monaco) {
         [/_([^_]|__)+_/, "emphasis"],
 
         // Horizontal rule
-        [/^\s*([\*\-_])\s*\1\s*\1(\s*\1)*\s*$/, "keyword.hr"],
+        [/^\s*([*\-_])\s*\1\s*\1(\s*\1)*\s*$/, "keyword.hr"],
 
         // HTML tags (lowercase)
-        [
-          /<(\w+)/,
-          { token: "tag", next: "@htmlTag" },
-        ],
+        [/<(\w+)/, { token: "tag", next: "@htmlTag" }],
         [/<\/\w+>/, "tag"],
       ],
 
@@ -123,10 +109,7 @@ export function registerMdxLanguage(monaco: Monaco) {
       // JSX tag attributes
       jsxTag: [
         [/\s+/, ""],
-        [
-          /([a-zA-Z_][a-zA-Z0-9_-]*)(=)/,
-          [{ token: "attribute.name" }, { token: "delimiter" }],
-        ],
+        [/([a-zA-Z_][a-zA-Z0-9_-]*)(=)/, [{ token: "attribute.name" }, { token: "delimiter" }]],
         [/"[^"]*"/, "attribute.value"],
         [/'[^']*'/, "attribute.value"],
         [/{/, { token: "delimiter.bracket", next: "@jsxExpression" }],
@@ -146,10 +129,7 @@ export function registerMdxLanguage(monaco: Monaco) {
         ],
         [
           /(<)([A-Z][a-zA-Z0-9]*)/,
-          [
-            { token: "delimiter.tag" },
-            { token: "tag.component", next: "@jsxTag" },
-          ],
+          [{ token: "delimiter.tag" }, { token: "tag.component", next: "@jsxTag" }],
         ],
         [/{/, { token: "delimiter.bracket", next: "@jsxExpression" }],
         [/[^<{]+/, ""],

@@ -5,8 +5,8 @@
  * Protected by HANDS_SEED_SECRET environment variable.
  */
 
-import { route } from "rwsdk/router";
 import { env } from "cloudflare:workers";
+import { route } from "rwsdk/router";
 import { getDb, getUserTables, kyselySql, runWithDbMode } from "./dev";
 
 function getSecret(): string | undefined {
@@ -62,7 +62,7 @@ export const seedRoutes = [
             executed: results.filter((r) => r.success).length,
             failures,
           }),
-          { headers: { "Content-Type": "application/json" } }
+          { headers: { "Content-Type": "application/json" } },
         );
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
@@ -118,16 +118,15 @@ export const seedRoutes = [
               });
 
               statements.push(
-                `INSERT OR REPLACE INTO "${table.name}" (${columns.map(c => `"${c}"`).join(", ")}) VALUES (${values.join(", ")})`
+                `INSERT OR REPLACE INTO "${table.name}" (${columns.map((c) => `"${c}"`).join(", ")}) VALUES (${values.join(", ")})`,
               );
             }
           }
         });
 
-        return new Response(
-          JSON.stringify({ success: true, statements }),
-          { headers: { "Content-Type": "application/json" } }
-        );
+        return new Response(JSON.stringify({ success: true, statements }), {
+          headers: { "Content-Type": "application/json" },
+        });
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
         return new Response(JSON.stringify({ error: message }), {

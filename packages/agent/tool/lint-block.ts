@@ -5,7 +5,7 @@
  * All issues are WARNINGS - we guide, not block.
  */
 
-import { readFileSync, existsSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { basename } from "node:path";
 
 export interface LintResult {
@@ -31,7 +31,8 @@ const RULES: Rule[] = [
   // Write operations in blocks - this is the main architectural rule
   {
     id: "block-writes-data",
-    pattern: /\b(INSERT\s+INTO|UPDATE\s+\w+\s+SET|DELETE\s+FROM|CREATE\s+TABLE|DROP\s+TABLE|ALTER\s+TABLE)\b/gi,
+    pattern:
+      /\b(INSERT\s+INTO|UPDATE\s+\w+\s+SET|DELETE\s+FROM|CREATE\s+TABLE|DROP\s+TABLE|ALTER\s+TABLE)\b/gi,
     message: "Blocks should be read-only. Consider using an Action for write operations.",
   },
 

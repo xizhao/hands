@@ -8,50 +8,47 @@
  * - Alert with nested markdown
  */
 
-import { describe, expect, it, vi } from "vitest";
 import type { TElement, TText } from "platejs";
-import type { DeserializeOptions, SerializeOptions, MdxJsxElement, MdxNode } from "./types";
+import { describe, expect, it, vi } from "vitest";
+// Import keys from types (only those not exported from rules)
+import {
+  ALERT_KEY,
+  BAR_CHART_KEY,
+  BUTTON_KEY,
+  CHECKBOX_KEY,
+  INPUT_KEY,
+  LINE_CHART_KEY,
+  LIVE_ACTION_KEY,
+  LIVE_VALUE_KEY,
+  SELECT_KEY,
+} from "../../types";
 
 // Import rules
 import {
-  cardRule,
-  cardHeaderRule,
-  cardTitleRule,
-  cardDescriptionRule,
-  cardContentRule,
-  cardFooterRule,
-  CARD_KEY,
-  CARD_HEADER_KEY,
-  CARD_TITLE_KEY,
-  CARD_DESCRIPTION_KEY,
   CARD_CONTENT_KEY,
+  CARD_DESCRIPTION_KEY,
   CARD_FOOTER_KEY,
+  CARD_HEADER_KEY,
+  CARD_KEY,
+  CARD_TITLE_KEY,
+  cardContentRule,
+  cardDescriptionRule,
+  cardFooterRule,
+  cardHeaderRule,
+  cardRule,
+  cardTitleRule,
 } from "./rules/card";
-
+import { barChartRule, lineChartRule } from "./rules/charts";
 import {
-  liveActionRule,
   buttonRule,
-  inputRule,
-  selectRule,
   checkboxRule,
+  inputRule,
+  liveActionRule,
+  selectRule,
 } from "./rules/live-action";
-
 import { liveValueRule } from "./rules/live-value";
 import { alertRule } from "./rules/view";
-import { barChartRule, lineChartRule } from "./rules/charts";
-
-// Import keys from types (only those not exported from rules)
-import {
-  LIVE_ACTION_KEY,
-  BUTTON_KEY,
-  INPUT_KEY,
-  SELECT_KEY,
-  CHECKBOX_KEY,
-  LIVE_VALUE_KEY,
-  ALERT_KEY,
-  BAR_CHART_KEY,
-  LINE_CHART_KEY,
-} from "../../types";
+import type { DeserializeOptions, MdxJsxElement, SerializeOptions } from "./types";
 
 // ============================================================================
 // Test Helpers
@@ -82,50 +79,60 @@ const allRules = [
  * Mock convertChildren for deserialization.
  * Simulates Plate's recursive conversion of MDX nodes to Plate elements.
  */
-function createMockConvertChildren(): (children: unknown[], deco: unknown, options: DeserializeOptions) => TElement[] {
-  const convertChildren = vi.fn((children: unknown[], _deco: unknown, options: DeserializeOptions): TElement[] => {
-    return (children as any[]).map((child: any): TElement => {
-      // Handle MDX JSX elements
-      if (child.type === "mdxJsxFlowElement" || child.type === "mdxJsxTextElement") {
-        const rule = allRules.find((r) => r.tagName === child.name);
-        if (rule) {
-          return rule.deserialize({ attributes: child.attributes, children: child.children }, _deco, options);
+function createMockConvertChildren(): (
+  children: unknown[],
+  deco: unknown,
+  options: DeserializeOptions,
+) => TElement[] {
+  const convertChildren = vi.fn(
+    (children: unknown[], _deco: unknown, options: DeserializeOptions): TElement[] => {
+      return (children as any[]).map((child: any): TElement => {
+        // Handle MDX JSX elements
+        if (child.type === "mdxJsxFlowElement" || child.type === "mdxJsxTextElement") {
+          const rule = allRules.find((r) => r.tagName === child.name);
+          if (rule) {
+            return rule.deserialize(
+              { attributes: child.attributes, children: child.children },
+              _deco,
+              options,
+            );
+          }
         }
-      }
 
-      // Handle text nodes
-      if (child.type === "text") {
-        return { text: child.value } as any;
-      }
+        // Handle text nodes
+        if (child.type === "text") {
+          return { text: child.value } as any;
+        }
 
-      // Handle paragraph nodes
-      if (child.type === "paragraph") {
-        return {
-          type: "p",
-          children: convertChildren(child.children, _deco, options),
-        };
-      }
+        // Handle paragraph nodes
+        if (child.type === "paragraph") {
+          return {
+            type: "p",
+            children: convertChildren(child.children, _deco, options),
+          };
+        }
 
-      // Handle heading nodes
-      if (child.type === "heading") {
-        return {
-          type: `h${child.depth}`,
-          children: convertChildren(child.children, _deco, options),
-        };
-      }
+        // Handle heading nodes
+        if (child.type === "heading") {
+          return {
+            type: `h${child.depth}`,
+            children: convertChildren(child.children, _deco, options),
+          };
+        }
 
-      // Handle strong/bold
-      if (child.type === "strong") {
-        return {
-          type: "strong",
-          children: convertChildren(child.children, _deco, options),
-        };
-      }
+        // Handle strong/bold
+        if (child.type === "strong") {
+          return {
+            type: "strong",
+            children: convertChildren(child.children, _deco, options),
+          };
+        }
 
-      // Fallback: return as-is
-      return child;
-    });
-  });
+        // Fallback: return as-is
+        return child;
+      });
+    },
+  );
 
   return convertChildren;
 }
@@ -134,7 +141,10 @@ function createMockConvertChildren(): (children: unknown[], deco: unknown, optio
  * Build serialization rules for testing.
  * Maps element type keys to their serialize functions.
  */
-function buildSerializeRules(): Record<string, { serialize: (node: any, opts: SerializeOptions) => unknown }> {
+function buildSerializeRules(): Record<
+  string,
+  { serialize: (node: any, opts: SerializeOptions) => unknown }
+> {
   const rules: Record<string, { serialize: (node: any, opts: SerializeOptions) => unknown }> = {};
 
   // Add all stdlib rules
@@ -143,7 +153,7 @@ function buildSerializeRules(): Record<string, { serialize: (node: any, opts: Se
   }
 
   // Add standard markdown element handlers that recursively serialize children
-  rules["p"] = {
+  rules.p = {
     serialize: (node: TElement, opts: SerializeOptions) => ({
       type: "paragraph",
       children: serializeNodes(node.children, opts),
@@ -160,7 +170,7 @@ function buildSerializeRules(): Record<string, { serialize: (node: any, opts: Se
     };
   }
 
-  rules["strong"] = {
+  rules.strong = {
     serialize: (node: TElement, opts: SerializeOptions) => ({
       type: "strong",
       children: serializeNodes(node.children, opts),
@@ -206,7 +216,10 @@ function createSerializeOptions(): SerializeOptions {
 /**
  * Helper to create properly typed MDX attribute.
  */
-function attr(name: string, value: string | { type: "mdxJsxAttributeValueExpression"; value: string } | null = null) {
+function attr(
+  name: string,
+  value: string | { type: "mdxJsxAttributeValueExpression"; value: string } | null = null,
+) {
   return { type: "mdxJsxAttribute" as const, name, value };
 }
 
@@ -582,7 +595,7 @@ describe("LiveAction with form controls", () => {
     expect(result.type).toBe("mdxJsxFlowElement");
     expect(result.name).toBe("LiveAction");
     expect(result.attributes.find((a) => a.name === "sql")?.value).toBe(
-      "UPDATE users SET name = {{name}} WHERE id = {{id}}"
+      "UPDATE users SET name = {{name}} WHERE id = {{id}}",
     );
     expect(result.children).toHaveLength(4);
 
@@ -660,7 +673,9 @@ describe("LiveAction with form controls", () => {
     const plateElement = liveActionRule.deserialize(mdxNode as any, undefined, deserializeOptions);
 
     expect(plateElement.type).toBe(LIVE_ACTION_KEY);
-    expect(plateElement.sql).toBe("INSERT INTO tasks (title, priority) VALUES ({{title}}, {{priority}})");
+    expect(plateElement.sql).toBe(
+      "INSERT INTO tasks (title, priority) VALUES ({{title}}, {{priority}})",
+    );
 
     // Serialize
     const serialized = liveActionRule.serialize(plateElement, serializeOptions);
@@ -1099,9 +1114,7 @@ describe("Complex nesting scenarios", () => {
             {
               type: "mdxJsxFlowElement",
               name: "Alert",
-              attributes: [
-                { type: "mdxJsxAttribute", name: "variant", value: "success" },
-              ],
+              attributes: [{ type: "mdxJsxAttribute", name: "variant", value: "success" }],
               children: [
                 {
                   type: "paragraph",
@@ -1112,9 +1125,7 @@ describe("Complex nesting scenarios", () => {
             {
               type: "mdxJsxFlowElement",
               name: "Alert",
-              attributes: [
-                { type: "mdxJsxAttribute", name: "variant", value: "warning" },
-              ],
+              attributes: [{ type: "mdxJsxAttribute", name: "variant", value: "warning" }],
               children: [
                 {
                   type: "paragraph",
@@ -1269,7 +1280,11 @@ describe("LiveValue with chart children", () => {
     };
 
     // Deserialize: MDX → Plate
-    const plateElement = liveValueRule.deserialize(originalMdx as any, undefined, deserializeOptions);
+    const plateElement = liveValueRule.deserialize(
+      originalMdx as any,
+      undefined,
+      deserializeOptions,
+    );
 
     expect(plateElement.type).toBe(LIVE_VALUE_KEY);
     expect(plateElement.children).toHaveLength(1);

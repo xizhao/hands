@@ -11,11 +11,12 @@
  */
 
 import { useNavigate } from "@tanstack/react-router";
-import { useCallback, useEffect, useSyncExternalStore } from "react";
+import { useCallback, useEffect, useState, useSyncExternalStore } from "react";
 import { trpc } from "@/lib/trpc";
 
 // Types
 export type TabId = "sources" | "data" | "insights" | "preview";
+export type SidebarMode = "expanded" | "floating";
 
 /** URL search params for navigation */
 export interface NavSearchParams {
@@ -31,18 +32,21 @@ export interface NavSearchParams {
 let activeTab: TabId = "preview";
 let activeSession: string | null = null;
 let sidebarWidth = 280;
+let sidebarMode: SidebarMode = "expanded";
 let stateInitialized = false;
 
 interface NavStateSnapshot {
   activeTab: TabId;
   activeSession: string | null;
   sidebarWidth: number;
+  sidebarMode: SidebarMode;
 }
 
 let snapshot: NavStateSnapshot = {
   activeTab,
   activeSession,
   sidebarWidth,
+  sidebarMode,
 };
 
 let listeners: Array<() => void> = [];
@@ -63,6 +67,7 @@ function emitChange() {
     activeTab,
     activeSession,
     sidebarWidth,
+    sidebarMode,
   };
   for (const listener of listeners) {
     listener();
@@ -99,11 +104,18 @@ export function setSidebarWidthState(width: number) {
   emitChange();
 }
 
+export function setSidebarModeState(mode: SidebarMode) {
+  sidebarMode = mode;
+  emitChange();
+}
+
+export function toggleSidebarModeState() {
+  sidebarMode = sidebarMode === "expanded" ? "floating" : "expanded";
+  emitChange();
+}
+
 /** Initialize from server state */
-export function initializeFromServer(serverState: {
-  sidebarWidth: number;
-  activeTab: string;
-}) {
+export function initializeFromServer(serverState: { sidebarWidth: number; activeTab: string }) {
   if (stateInitialized) return;
   sidebarWidth = serverState.sidebarWidth;
   activeTab = (serverState.activeTab as TabId) ?? "preview";
@@ -151,12 +163,15 @@ export function useActiveTab() {
   const state = useSyncExternalStore(subscribe, getSnapshot, getSnapshot);
   const updateMutation = trpc.editorState.updateUiState.useMutation();
 
-  const setTab = useCallback((newTab: TabId) => {
-    setActiveTabState(newTab);
-    debouncedSync(() => {
-      updateMutation.mutate({ activeTab: newTab });
-    });
-  }, [updateMutation]);
+  const setTab = useCallback(
+    (newTab: TabId) => {
+      setActiveTabState(newTab);
+      debouncedSync(() => {
+        updateMutation.mutate({ activeTab: newTab });
+      });
+    },
+    [updateMutation],
+  );
 
   return { tab: state.activeTab, setTab };
 }
@@ -176,15 +191,33 @@ export function useSidebarWidth() {
   const state = useSyncExternalStore(subscribe, getSnapshot, getSnapshot);
   const updateMutation = trpc.editorState.updateUiState.useMutation();
 
-  const setWidth = useCallback((width: number) => {
-    setSidebarWidthState(width);
-    // Debounce sync to server (sidebar resizing is frequent)
-    debouncedSync(() => {
-      updateMutation.mutate({ sidebarWidth: width });
-    }, 500);
-  }, [updateMutation]);
+  const setWidth = useCallback(
+    (width: number) => {
+      setSidebarWidthState(width);
+      // Debounce sync to server (sidebar resizing is frequent)
+      debouncedSync(() => {
+        updateMutation.mutate({ sidebarWidth: width });
+      }, 500);
+    },
+    [updateMutation],
+  );
 
   return { width: state.sidebarWidth, setWidth };
+}
+
+export function useSidebarMode() {
+  const state = useSyncExternalStore(subscribe, getSnapshot, getSnapshot);
+
+  const setMode = useCallback((mode: SidebarMode) => {
+    setSidebarModeState(mode);
+    // Ephemeral UI state, no server sync needed
+  }, []);
+
+  const toggle = useCallback(() => {
+    toggleSidebarModeState();
+  }, []);
+
+  return { mode: state.sidebarMode, setMode, toggle };
 }
 
 // ============================================

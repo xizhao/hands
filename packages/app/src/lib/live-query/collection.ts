@@ -30,7 +30,7 @@ export type SqlCollection<T = any> = {
  * TODO: Integrate with TanStack DB when API stabilizes
  */
 export function createSqlCollection<T extends { id: string | number }>(
-  config: SqlCollectionConfig<T>
+  config: SqlCollectionConfig<T>,
 ): SqlCollection<T> {
   const { id, sql, params = [], executeQuery } = config;
 
@@ -61,7 +61,7 @@ export class CollectionRegistry {
    */
   getCollection<T extends { id: string | number }>(
     sql: string,
-    params?: unknown[]
+    params?: unknown[],
   ): SqlCollection<T> {
     // Use SQL + params as cache key
     const key = `${sql}:${JSON.stringify(params ?? [])}`;

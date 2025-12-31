@@ -79,10 +79,7 @@ export function escapeValue(value: unknown): string {
 /**
  * Generate an INSERT SQL statement.
  */
-export function generateInsertSql(
-  table: string,
-  data: Record<string, unknown>
-): string {
+export function generateInsertSql(table: string, data: Record<string, unknown>): string {
   const columns = Object.keys(data);
 
   if (columns.length === 0) {
@@ -102,7 +99,7 @@ export function generateUpdateSql(
   table: string,
   primaryKey: string,
   id: string,
-  data: Record<string, unknown>
+  data: Record<string, unknown>,
 ): string {
   const columns = Object.keys(data);
 
@@ -120,22 +117,14 @@ export function generateUpdateSql(
 /**
  * Generate a DELETE SQL statement for a single row.
  */
-export function generateDeleteSql(
-  table: string,
-  primaryKey: string,
-  id: string
-): string {
+export function generateDeleteSql(table: string, primaryKey: string, id: string): string {
   return `DELETE FROM ${escapeIdentifier(table)} WHERE ${escapeIdentifier(primaryKey)} = ${escapeValue(id)}`;
 }
 
 /**
  * Generate a DELETE SQL statement for multiple rows using IN clause.
  */
-export function generateBulkDeleteSql(
-  table: string,
-  primaryKey: string,
-  ids: string[]
-): string {
+export function generateBulkDeleteSql(table: string, primaryKey: string, ids: string[]): string {
   if (ids.length === 0) {
     throw new Error("Cannot generate bulk DELETE with no IDs");
   }
@@ -149,13 +138,10 @@ export function generateBulkDeleteSql(
  * Generate a SELECT SQL statement with optional clauses.
  */
 export function generateSelectSql(options: SelectOptions): string {
-  const { table, columns, where, orderBy, orderDirection, limit, offset } =
-    options;
+  const { table, columns, where, orderBy, orderDirection, limit, offset } = options;
 
   // Column list or *
-  const columnList = columns?.length
-    ? columns.map(escapeIdentifier).join(", ")
-    : "*";
+  const columnList = columns?.length ? columns.map(escapeIdentifier).join(", ") : "*";
 
   let sql = `SELECT ${columnList} FROM ${escapeIdentifier(table)}`;
 
@@ -240,7 +226,7 @@ export function generateAddColumnSql(
   table: string,
   columnName: string,
   columnType: string,
-  options?: { nullable?: boolean; defaultValue?: unknown }
+  options?: { nullable?: boolean; defaultValue?: unknown },
 ): string {
   if (!isValidSqlType(columnType)) {
     throw new Error(`Invalid SQL type: ${columnType}`);
@@ -262,21 +248,14 @@ export function generateAddColumnSql(
 /**
  * Generate an ALTER TABLE statement for dropping a column.
  */
-export function generateDropColumnSql(
-  table: string,
-  columnName: string
-): string {
+export function generateDropColumnSql(table: string, columnName: string): string {
   return `ALTER TABLE ${escapeIdentifier(table)} DROP COLUMN ${escapeIdentifier(columnName)}`;
 }
 
 /**
  * Generate an ALTER TABLE statement for renaming a column.
  */
-export function generateRenameColumnSql(
-  table: string,
-  oldName: string,
-  newName: string
-): string {
+export function generateRenameColumnSql(table: string, oldName: string, newName: string): string {
   return `ALTER TABLE ${escapeIdentifier(table)} RENAME COLUMN ${escapeIdentifier(oldName)} TO ${escapeIdentifier(newName)}`;
 }
 
@@ -287,7 +266,7 @@ export function generateRenameColumnSql(
 export function generateAlterColumnTypeSql(
   table: string,
   columnName: string,
-  newType: string
+  newType: string,
 ): string {
   if (!isValidSqlType(newType)) {
     throw new Error(`Invalid SQL type: ${newType}`);

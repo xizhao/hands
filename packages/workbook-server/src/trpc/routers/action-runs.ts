@@ -8,12 +8,12 @@
 import { initTRPC } from "@trpc/server";
 import { z } from "zod";
 import {
-  getEditorDb,
-  getActionRuns,
+  type ActionRunLog,
+  type ActionRunRecord,
   getActionRun,
   getActionRunLogs,
-  type ActionRunRecord,
-  type ActionRunLog,
+  getActionRuns,
+  getEditorDb,
 } from "../../db/editor-db.js";
 
 // ============================================================================
@@ -56,32 +56,26 @@ export const actionRunsRouter = t.router({
   /**
    * List runs for an action
    */
-  list: publicProcedure
-    .input(listRunsInput)
-    .query(({ ctx, input }): ActionRunRecord[] => {
-      const db = getEditorDb(ctx.workbookDir);
-      return getActionRuns(db, input.actionId, input.limit ?? 20);
-    }),
+  list: publicProcedure.input(listRunsInput).query(({ ctx, input }): ActionRunRecord[] => {
+    const db = getEditorDb(ctx.workbookDir);
+    return getActionRuns(db, input.actionId, input.limit ?? 20);
+  }),
 
   /**
    * Get a specific run by ID
    */
-  get: publicProcedure
-    .input(getRunInput)
-    .query(({ ctx, input }): ActionRunRecord | null => {
-      const db = getEditorDb(ctx.workbookDir);
-      return getActionRun(db, input.runId);
-    }),
+  get: publicProcedure.input(getRunInput).query(({ ctx, input }): ActionRunRecord | null => {
+    const db = getEditorDb(ctx.workbookDir);
+    return getActionRun(db, input.runId);
+  }),
 
   /**
    * Get logs for a run
    */
-  getLogs: publicProcedure
-    .input(getLogsInput)
-    .query(({ ctx, input }): ActionRunLog[] => {
-      const db = getEditorDb(ctx.workbookDir);
-      return getActionRunLogs(db, input.runId);
-    }),
+  getLogs: publicProcedure.input(getLogsInput).query(({ ctx, input }): ActionRunLog[] => {
+    const db = getEditorDb(ctx.workbookDir);
+    return getActionRunLogs(db, input.runId);
+  }),
 });
 
 export type ActionRunsRouter = typeof actionRunsRouter;

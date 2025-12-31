@@ -11,17 +11,14 @@ const SALT_LENGTH = 16;
 /**
  * Derive a CryptoKey from a password/secret using PBKDF2
  */
-async function deriveKey(
-  secret: string,
-  salt: Uint8Array
-): Promise<CryptoKey> {
+async function deriveKey(secret: string, salt: Uint8Array): Promise<CryptoKey> {
   const encoder = new TextEncoder();
   const keyMaterial = await crypto.subtle.importKey(
     "raw",
     encoder.encode(secret),
     "PBKDF2",
     false,
-    ["deriveKey"]
+    ["deriveKey"],
   );
 
   return crypto.subtle.deriveKey(
@@ -34,7 +31,7 @@ async function deriveKey(
     keyMaterial,
     { name: ALGORITHM, length: KEY_LENGTH },
     false,
-    ["encrypt", "decrypt"]
+    ["encrypt", "decrypt"],
   );
 }
 
@@ -51,13 +48,11 @@ export async function encrypt(plaintext: string, secret: string): Promise<string
   const ciphertext = await crypto.subtle.encrypt(
     { name: ALGORITHM, iv },
     key,
-    encoder.encode(plaintext)
+    encoder.encode(plaintext),
   );
 
   // Combine salt + iv + ciphertext
-  const combined = new Uint8Array(
-    salt.length + iv.length + ciphertext.byteLength
-  );
+  const combined = new Uint8Array(salt.length + iv.length + ciphertext.byteLength);
   combined.set(salt, 0);
   combined.set(iv, salt.length);
   combined.set(new Uint8Array(ciphertext), salt.length + iv.length);
@@ -79,11 +74,7 @@ export async function decrypt(encrypted: string, secret: string): Promise<string
 
   const key = await deriveKey(secret, salt);
 
-  const plaintext = await crypto.subtle.decrypt(
-    { name: ALGORITHM, iv },
-    key,
-    ciphertext
-  );
+  const plaintext = await crypto.subtle.decrypt({ name: ALGORITHM, iv }, key, ciphertext);
 
   return decoder.decode(plaintext);
 }

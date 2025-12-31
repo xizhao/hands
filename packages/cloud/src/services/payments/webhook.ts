@@ -1,9 +1,9 @@
-import type { Context } from "hono";
-import type { Env } from "../../types";
-import { getDb } from "../../lib/db";
-import { users } from "../../schema/users";
-import { subscriptions, PLANS, type PlanType } from "../../schema/subscriptions";
 import { eq } from "drizzle-orm";
+import type { Context } from "hono";
+import { getDb } from "../../lib/db";
+import { PLANS, type PlanType, subscriptions } from "../../schema/subscriptions";
+import { users } from "../../schema/users";
+import type { Env } from "../../types";
 
 const TIMESTAMP_TOLERANCE = 300; // 5 minutes
 
@@ -15,11 +15,7 @@ export async function handleWebhook(c: Context<{ Bindings: Env }>) {
 
   const rawBody = await c.req.text();
 
-  const verification = await verifyStripeSignature(
-    rawBody,
-    signature,
-    c.env.STRIPE_WEBHOOK_SECRET
-  );
+  const verification = await verifyStripeSignature(rawBody, signature, c.env.STRIPE_WEBHOOK_SECRET);
 
   if (!verification.valid) {
     console.error(`Webhook signature verification failed: ${verification.error}`);
@@ -135,7 +131,7 @@ interface SignatureVerificationResult {
 async function verifyStripeSignature(
   payload: string,
   signature: string,
-  secret: string
+  secret: string,
 ): Promise<SignatureVerificationResult> {
   const parts: Record<string, string> = {};
   for (const part of signature.split(",")) {
@@ -145,8 +141,8 @@ async function verifyStripeSignature(
     }
   }
 
-  const timestamp = parts["t"];
-  const expectedSig = parts["v1"];
+  const timestamp = parts.t;
+  const expectedSig = parts.v1;
 
   if (!timestamp || !expectedSig) {
     return { valid: false, error: "Missing timestamp or signature" };
@@ -155,7 +151,7 @@ async function verifyStripeSignature(
   const now = Math.floor(Date.now() / 1000);
   const timestampNum = parseInt(timestamp, 10);
 
-  if (isNaN(timestampNum)) {
+  if (Number.isNaN(timestampNum)) {
     return { valid: false, error: "Invalid timestamp" };
   }
 
@@ -169,14 +165,10 @@ async function verifyStripeSignature(
     new TextEncoder().encode(secret),
     { name: "HMAC", hash: "SHA-256" },
     false,
-    ["sign"]
+    ["sign"],
   );
 
-  const sig = await crypto.subtle.sign(
-    "HMAC",
-    key,
-    new TextEncoder().encode(signedPayload)
-  );
+  const sig = await crypto.subtle.sign("HMAC", key, new TextEncoder().encode(signedPayload));
 
   const computedHex = Array.from(new Uint8Array(sig))
     .map((b) => b.toString(16).padStart(2, "0"))

@@ -8,6 +8,11 @@
  */
 
 import {
+  createButtonElement,
+  createLiveActionElement,
+  createLiveValueElement,
+} from "@hands/core/stdlib";
+import {
   Code,
   CursorClick,
   DotsThree,
@@ -24,12 +29,6 @@ import { insertTable } from "@platejs/table";
 import { KEYS } from "platejs";
 import { useEditorReadOnly, useEditorRef, useSelectionFragmentProp } from "platejs/react";
 import { useCallback } from "react";
-
-import {
-  createLiveValueElement,
-  createLiveActionElement,
-  createButtonElement,
-} from "@hands/core/stdlib";
 
 import { cn } from "../lib/utils";
 import { getBlockType, setBlockType } from "../transforms";
@@ -144,9 +143,7 @@ function InsertLiveActionButton() {
   const handleClick = useCallback(() => {
     // Create a LiveAction with a Button child
     const button = createButtonElement("Click me");
-    const element = createLiveActionElement(
-      "-- UPDATE table SET column = value WHERE id = 1"
-    );
+    const element = createLiveActionElement("-- UPDATE table SET column = value WHERE id = 1");
     // Add the button as a child
     (element as any).children = [{ type: "p", children: [button] }];
     editor.tf.insertNodes(element);
@@ -172,11 +169,14 @@ function MoreDropdown() {
     getProp: (node) => getBlockType(node as any),
   });
 
-  const handleSetBlockType = useCallback((type: string) => {
-    const isActive = currentType === type;
-    setBlockType(editor, isActive ? KEYS.p : type);
-    editor.tf.focus();
-  }, [editor, currentType]);
+  const handleSetBlockType = useCallback(
+    (type: string) => {
+      const isActive = currentType === type;
+      setBlockType(editor, isActive ? KEYS.p : type);
+      editor.tf.focus();
+    },
+    [editor, currentType],
+  );
 
   const handleInsertTable = useCallback(() => {
     insertTable(editor, { rowCount: 3, colCount: 3 }, { select: true });
@@ -261,32 +261,20 @@ export function FixedToolbarButtons() {
       {/* Lists - hidden on small screens */}
       <div className="hidden sm:block">
         <ToolbarGroup>
-          <BlockTypeButton
-            type={KEYS.ul}
-            icon={<List size={16} />}
-            tooltip="Bulleted List"
-          />
+          <BlockTypeButton type={KEYS.ul} icon={<List size={16} />} tooltip="Bulleted List" />
           <BlockTypeButton
             type={KEYS.ol}
             icon={<ListNumbers size={16} />}
             tooltip="Numbered List"
           />
-          <BlockTypeButton
-            type={KEYS.listTodo}
-            icon={<Square size={16} />}
-            tooltip="To-do List"
-          />
+          <BlockTypeButton type={KEYS.listTodo} icon={<Square size={16} />} tooltip="To-do List" />
         </ToolbarGroup>
       </div>
 
       {/* Block Formatting - hidden on small screens */}
       <div className="hidden md:block">
         <ToolbarGroup>
-          <BlockTypeButton
-            type={KEYS.blockquote}
-            icon={<Quotes size={16} />}
-            tooltip="Quote"
-          />
+          <BlockTypeButton type={KEYS.blockquote} icon={<Quotes size={16} />} tooltip="Quote" />
           <BlockTypeButton
             type={KEYS.codeBlock}
             icon={<Code size={16} weight="bold" />}

@@ -1,9 +1,7 @@
-import { tool } from "@opencode-ai/plugin";
-
-
-import { spawn, execSync } from "node:child_process";
+import { execSync, spawn } from "node:child_process";
 import { existsSync } from "node:fs";
 import { dirname, resolve } from "node:path";
+import { tool } from "@opencode-ai/plugin";
 
 let cachedCliPath: string | null = null;
 
@@ -28,10 +26,15 @@ function findCli(): string {
       return cachedCliPath;
     }
   }
-  throw new Error(`Could not find hands-cli binary. Searched:\n${candidates.map(c => `  - ${c}`).join("\n")}`);
+  throw new Error(
+    `Could not find hands-cli binary. Searched:\n${candidates.map((c) => `  - ${c}`).join("\n")}`,
+  );
 }
 
-function runCli(args: string[], options: { cwd?: string; timeout?: number } = {}): Promise<{ stdout: string; stderr: string; code: number }> {
+function _runCli(
+  args: string[],
+  options: { cwd?: string; timeout?: number } = {},
+): Promise<{ stdout: string; stderr: string; code: number }> {
   const cliPath = findCli();
   const { cwd = process.cwd(), timeout } = options;
   return new Promise((resolve) => {
@@ -42,11 +45,15 @@ function runCli(args: string[], options: { cwd?: string; timeout?: number } = {}
     if (timeout) {
       timeoutId = setTimeout(() => {
         proc.kill("SIGTERM");
-        resolve({ stdout, stderr: stderr + "\nCommand timed out", code: 124 });
+        resolve({ stdout, stderr: `${stderr}\nCommand timed out`, code: 124 });
       }, timeout);
     }
-    proc.stdout?.on("data", (data) => { stdout += data.toString(); });
-    proc.stderr?.on("data", (data) => { stderr += data.toString(); });
+    proc.stdout?.on("data", (data) => {
+      stdout += data.toString();
+    });
+    proc.stderr?.on("data", (data) => {
+      stderr += data.toString();
+    });
     proc.on("close", (code) => {
       if (timeoutId) clearTimeout(timeoutId);
       resolve({ stdout, stderr, code: code ?? 0 });
@@ -58,7 +65,10 @@ function runCli(args: string[], options: { cwd?: string; timeout?: number } = {}
   });
 }
 
-function runCliSync(args: string[], options: { cwd?: string; timeout?: number } = {}): { stdout: string; stderr: string; code: number } {
+function runCliSync(
+  args: string[],
+  options: { cwd?: string; timeout?: number } = {},
+): { stdout: string; stderr: string; code: number } {
   const cliPath = findCli();
   const { cwd = process.cwd(), timeout = 30000 } = options;
   try {
@@ -74,7 +84,6 @@ function runCliSync(args: string[], options: { cwd?: string; timeout?: number } 
     return { stdout: err.stdout ?? "", stderr: err.stderr ?? err.message, code: err.status ?? 1 };
   }
 }
-
 
 const ui = tool({
   description: `Search and add UI components from shadcn and other registries.
@@ -95,7 +104,10 @@ Examples:
     action: tool.schema.enum(["search", "add"]).describe("Action to perform"),
     query: tool.schema.string().optional().describe("Search query for 'search' action"),
     registry: tool.schema.string().optional().describe("Registry to search (default: @shadcn)"),
-    component: tool.schema.string().optional().describe("Component to add (e.g., '@shadcn/button')"),
+    component: tool.schema
+      .string()
+      .optional()
+      .describe("Component to add (e.g., '@shadcn/button')"),
   },
 
   async execute(args) {
@@ -104,7 +116,9 @@ Examples:
     try {
       if (action === "search") {
         const searchQuery = query ?? "";
-        const result = runCliSync(["ui", "search", registry, "-q", searchQuery], { timeout: 30000 });
+        const result = runCliSync(["ui", "search", registry, "-q", searchQuery], {
+          timeout: 30000,
+        });
         if (result.code !== 0) return `Error: ${result.stderr || result.stdout}`;
 
         const data = JSON.parse(result.stdout.split("\n").slice(1).join("\n"));
@@ -127,7 +141,8 @@ Examples:
       }
 
       if (action === "add") {
-        if (!component) return "Error: component required for 'add' action. Example: component='@shadcn/button'";
+        if (!component)
+          return "Error: component required for 'add' action. Example: component='@shadcn/button'";
         const workbookDir = process.cwd();
         const result = runCliSync(["ui", "add", component], { cwd: workbookDir, timeout: 60000 });
         if (result.code !== 0) return `Error: ${result.stderr || result.stdout}`;

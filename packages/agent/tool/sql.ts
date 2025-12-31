@@ -1,13 +1,11 @@
 import { tool } from "@opencode-ai/plugin";
 
-
 const DEFAULT_RUNTIME_PORT = 55000;
 function getRuntimePort(): number {
   const envPort = process.env.HANDS_RUNTIME_PORT;
   if (envPort) return parseInt(envPort, 10);
   return DEFAULT_RUNTIME_PORT;
 }
-
 
 import { createTRPCClient, httpBatchLink } from "@trpc/client";
 
@@ -29,8 +27,9 @@ function getTRPCClient() {
   return client;
 }
 
-
-async function executeQuery(sql: string): Promise<{ rows: unknown[]; rowCount: number; changes?: number }> {
+async function executeQuery(
+  sql: string,
+): Promise<{ rows: unknown[]; rowCount: number; changes?: number }> {
   const trpc = getTRPCClient();
   return trpc.db.query.mutate({ sql });
 }
@@ -39,12 +38,12 @@ function formatTable(rows: Record<string, unknown>[]): string {
   if (rows.length === 0) return "(no rows)";
   const headers = Object.keys(rows[0]);
   const widths = headers.map((h) =>
-    Math.max(h.length, ...rows.map((r) => String(r[h] ?? "").length))
+    Math.max(h.length, ...rows.map((r) => String(r[h] ?? "").length)),
   );
   const separator = widths.map((w) => "-".repeat(w)).join("-+-");
   const headerRow = headers.map((h, i) => h.padEnd(widths[i])).join(" | ");
   const dataRows = rows.map((r) =>
-    headers.map((h, i) => String(r[h] ?? "").padEnd(widths[i])).join(" | ")
+    headers.map((h, i) => String(r[h] ?? "").padEnd(widths[i])).join(" | "),
   );
   return [headerRow, separator, ...dataRows].join("\n");
 }
@@ -54,10 +53,12 @@ function formatCsv(rows: Record<string, unknown>[]): string {
   const headers = Object.keys(rows[0]);
   const headerRow = headers.join(",");
   const dataRows = rows.map((r) =>
-    headers.map((h) => {
-      const val = String(r[h] ?? "");
-      return val.includes(",") ? `"${val}"` : val;
-    }).join(",")
+    headers
+      .map((h) => {
+        const val = String(r[h] ?? "");
+        return val.includes(",") ? `"${val}"` : val;
+      })
+      .join(","),
   );
   return [headerRow, ...dataRows].join("\n");
 }
@@ -82,8 +83,14 @@ SQLite-specific notes:
 
   args: {
     query: tool.schema.string().describe("SQL query to execute"),
-    format: tool.schema.enum(["table", "json", "csv"]).optional().describe("Output format. Defaults to table."),
-    confirm_destructive: tool.schema.boolean().optional().describe("Set to true to confirm destructive operations (DROP, TRUNCATE, DELETE)"),
+    format: tool.schema
+      .enum(["table", "json", "csv"])
+      .optional()
+      .describe("Output format. Defaults to table."),
+    confirm_destructive: tool.schema
+      .boolean()
+      .optional()
+      .describe("Set to true to confirm destructive operations (DROP, TRUNCATE, DELETE)"),
   },
 
   async execute(args, _ctx) {

@@ -32,16 +32,16 @@
  * - `Kanban` - Drag-and-drop board for grouped data
  */
 
-// Re-export view components
-export * from "./view";
 // Re-export action components
 export * from "./action";
 // Re-export data components
 export * from "./data";
-// Re-export query provider (for apps to implement data fetching)
-export * from "./query-provider";
 // Re-export virtualization utilities (for performance optimization)
 export * from "./lib/virtualization";
+// Re-export query provider (for apps to implement data fetching)
+export * from "./query-provider";
+// Re-export view components
+export * from "./view";
 
 // Import kits
 import { ActionKit } from "./action";
@@ -52,21 +52,21 @@ import {
   BadgePlugin,
   BarChartPlugin,
   BlockPlugin,
+  BoxPlotChartPlugin,
+  ChartPlugin,
+  HeatmapChartPlugin,
+  HistogramChartPlugin,
   LineChartPlugin,
-  LiveValuePlugin,
   LiveValueInlinePlugin,
+  LiveValuePlugin,
   LoaderPlugin,
+  MapChartPlugin,
   MetricPlugin,
   PieChartPlugin,
   ProgressPlugin,
-  TabsPlugin,
-  TabPlugin,
-  ChartPlugin,
   ScatterChartPlugin,
-  HistogramChartPlugin,
-  HeatmapChartPlugin,
-  BoxPlotChartPlugin,
-  MapChartPlugin,
+  TabPlugin,
+  TabsPlugin,
 } from "./view";
 
 /**

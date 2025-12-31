@@ -1,10 +1,7 @@
 // Auto-generated actions manifest - DO NOT EDIT
 import type { ActionDefinition } from "@hands/runtime";
 
-
-export const actions: Record<string, ActionDefinition> = {
-
-};
+export const actions: Record<string, ActionDefinition> = {};
 
 export type ActionId = keyof typeof actions;
 

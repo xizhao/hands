@@ -98,7 +98,7 @@ export async function getGitStatus(workbookDir: string): Promise<GitStatus> {
 
   try {
     // Get current branch
-    const branch = await git.currentBranch({ fs, dir: workbookDir }) || null;
+    const branch = (await git.currentBranch({ fs, dir: workbookDir })) || null;
 
     // Get status matrix
     // Format: [filepath, HEAD, WORKDIR, STAGE]
@@ -325,15 +325,20 @@ export async function getHistory(workbookDir: string, limit = 50): Promise<GitCo
   try {
     const commits = await git.log({ fs, dir: workbookDir, depth: limit });
 
-    return commits.map((entry: { oid: string; commit: { message: string; author: { name: string; email: string; timestamp: number } } }) => ({
-      hash: entry.oid,
-      shortHash: entry.oid.substring(0, 7),
-      message: entry.commit.message,
-      author: entry.commit.author.name,
-      email: entry.commit.author.email,
-      date: new Date(entry.commit.author.timestamp * 1000).toISOString(),
-      timestamp: entry.commit.author.timestamp * 1000,
-    }));
+    return commits.map(
+      (entry: {
+        oid: string;
+        commit: { message: string; author: { name: string; email: string; timestamp: number } };
+      }) => ({
+        hash: entry.oid,
+        shortHash: entry.oid.substring(0, 7),
+        message: entry.commit.message,
+        author: entry.commit.author.name,
+        email: entry.commit.author.email,
+        date: new Date(entry.commit.author.timestamp * 1000).toISOString(),
+        timestamp: entry.commit.author.timestamp * 1000,
+      }),
+    );
   } catch {
     // No commits yet
     return [];

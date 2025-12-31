@@ -45,10 +45,23 @@ export function tailwindSourcePlugin({ workbookPath }: TailwindSourcePluginOptio
       // Runtime components
       const runtimeRelative = path.relative(cssDir, path.resolve(__dirname, "../src"));
       // Editor UI components only (not workers which have problematic imports)
-      const editorUiRelative = path.relative(cssDir, path.resolve(__dirname, "../../editor/src/ui"));
+      const editorUiRelative = path.relative(
+        cssDir,
+        path.resolve(__dirname, "../../editor/src/ui"),
+      );
 
-      console.log("[tailwind-source] Injecting @source for workbook:", blocksRelative, uiRelative, pagesRelative);
-      console.log("[tailwind-source] Injecting @source for packages:", coreUiRelative, editorUiRelative, runtimeRelative);
+      console.log(
+        "[tailwind-source] Injecting @source for workbook:",
+        blocksRelative,
+        uiRelative,
+        pagesRelative,
+      );
+      console.log(
+        "[tailwind-source] Injecting @source for packages:",
+        coreUiRelative,
+        editorUiRelative,
+        runtimeRelative,
+      );
 
       // Inject @source directives after @import/@plugin lines
       const sourceDirectives = `

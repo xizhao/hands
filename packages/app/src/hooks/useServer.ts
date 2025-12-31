@@ -6,8 +6,8 @@
  */
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { usePlatform } from "../platform";
 import { api } from "@/lib/api";
+import { usePlatform } from "../platform";
 
 export function useServerHealth() {
   const platform = usePlatform();

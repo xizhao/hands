@@ -191,9 +191,7 @@ export function getEditorDb(workbookDir: string): Database {
   db.run("PRAGMA foreign_keys = ON");
 
   // Run integrity check
-  const integrityResult = db.query<{ integrity_check: string }, []>(
-    "PRAGMA integrity_check"
-  ).get();
+  const integrityResult = db.query<{ integrity_check: string }, []>("PRAGMA integrity_check").get();
 
   if (integrityResult?.integrity_check !== "ok") {
     console.error(`Editor database corrupted: ${integrityResult?.integrity_check}`);
@@ -225,9 +223,11 @@ export function getEditorDb(workbookDir: string): Database {
  */
 function runMigrations(db: Database) {
   // Check if schema_migrations table exists
-  const tableExists = db.query<{ name: string }, []>(
-    "SELECT name FROM sqlite_master WHERE type='table' AND name='schema_migrations'"
-  ).get();
+  const tableExists = db
+    .query<{ name: string }, []>(
+      "SELECT name FROM sqlite_master WHERE type='table' AND name='schema_migrations'",
+    )
+    .get();
 
   if (!tableExists) {
     // Fresh database - run initial migration
@@ -236,9 +236,9 @@ function runMigrations(db: Database) {
   }
 
   // Check current version
-  const versionRow = db.query<{ version: number }, []>(
-    "SELECT MAX(version) as version FROM schema_migrations"
-  ).get();
+  const versionRow = db
+    .query<{ version: number }, []>("SELECT MAX(version) as version FROM schema_migrations")
+    .get();
 
   const currentVersion = versionRow?.version ?? 0;
 
@@ -291,19 +291,24 @@ export interface UiState {
 }
 
 export function getUiState(db: Database): UiState {
-  const row = db.query<{
-    sidebar_width: number;
-    chat_expanded: number;
-    active_tab: string;
-    pages_expanded: number;
-    data_expanded: number;
-    actions_expanded: number;
-    plugins_expanded: number;
-  }, []>(
-    `SELECT sidebar_width, chat_expanded, active_tab,
+  const row = db
+    .query<
+      {
+        sidebar_width: number;
+        chat_expanded: number;
+        active_tab: string;
+        pages_expanded: number;
+        data_expanded: number;
+        actions_expanded: number;
+        plugins_expanded: number;
+      },
+      []
+    >(
+      `SELECT sidebar_width, chat_expanded, active_tab,
             pages_expanded, data_expanded, actions_expanded, plugins_expanded
-     FROM ui_state WHERE id = 1`
-  ).get();
+     FROM ui_state WHERE id = 1`,
+    )
+    .get();
 
   if (!row) {
     // Return defaults if somehow missing
@@ -375,9 +380,7 @@ export function updateUiState(db: Database, updates: Partial<UiState>) {
 // ============================================================================
 
 export function getExpandedFolders(db: Database): string[] {
-  const rows = db.query<{ path: string }, []>(
-    "SELECT path FROM expanded_folders"
-  ).all();
+  const rows = db.query<{ path: string }, []>("SELECT path FROM expanded_folders").all();
   return rows.map((r) => r.path);
 }
 
@@ -390,9 +393,7 @@ export function setFolderExpanded(db: Database, path: string, expanded: boolean)
 }
 
 export function getExpandedSources(db: Database): string[] {
-  const rows = db.query<{ source_id: string }, []>(
-    "SELECT source_id FROM expanded_sources"
-  ).all();
+  const rows = db.query<{ source_id: string }, []>("SELECT source_id FROM expanded_sources").all();
   return rows.map((r) => r.source_id);
 }
 
@@ -416,17 +417,22 @@ export interface RecentItem {
 }
 
 export function getRecentItems(db: Database, limit = 10): RecentItem[] {
-  const rows = db.query<{
-    id: number;
-    item_type: string;
-    item_id: string;
-    opened_at: string;
-  }, [number]>(
-    `SELECT id, item_type, item_id, opened_at
+  const rows = db
+    .query<
+      {
+        id: number;
+        item_type: string;
+        item_id: string;
+        opened_at: string;
+      },
+      [number]
+    >(
+      `SELECT id, item_type, item_id, opened_at
      FROM recent_items
      ORDER BY opened_at DESC
-     LIMIT ?`
-  ).all(limit);
+     LIMIT ?`,
+    )
+    .all(limit);
 
   return rows.map((r) => ({
     id: r.id,
@@ -441,7 +447,7 @@ export function addRecentItem(db: Database, itemType: string, itemId: string) {
     `INSERT INTO recent_items (item_type, item_id, opened_at)
      VALUES (?, ?, datetime('now'))
      ON CONFLICT(item_type, item_id) DO UPDATE SET opened_at = datetime('now')`,
-    [itemType, itemId]
+    [itemType, itemId],
   );
 
   // Keep only last 50 recent items
@@ -449,7 +455,7 @@ export function addRecentItem(db: Database, itemType: string, itemId: string) {
     `DELETE FROM recent_items
      WHERE id NOT IN (
        SELECT id FROM recent_items ORDER BY opened_at DESC LIMIT 50
-     )`
+     )`,
   );
 }
 
@@ -489,32 +495,33 @@ export interface ActionRunRecord {
   steps: StepRecord[] | null;
 }
 
-export function getActionRuns(
-  db: Database,
-  actionId: string,
-  limit = 20
-): ActionRunRecord[] {
-  const rows = db.query<{
-    id: string;
-    action_id: string;
-    trigger: string;
-    status: string;
-    input: string | null;
-    output: string | null;
-    error: string | null;
-    started_at: string;
-    finished_at: string | null;
-    duration_ms: number | null;
-    created_at: string;
-    steps: string | null;
-  }, [string, number]>(
-    `SELECT id, action_id, trigger, status, input, output, error,
+export function getActionRuns(db: Database, actionId: string, limit = 20): ActionRunRecord[] {
+  const rows = db
+    .query<
+      {
+        id: string;
+        action_id: string;
+        trigger: string;
+        status: string;
+        input: string | null;
+        output: string | null;
+        error: string | null;
+        started_at: string;
+        finished_at: string | null;
+        duration_ms: number | null;
+        created_at: string;
+        steps: string | null;
+      },
+      [string, number]
+    >(
+      `SELECT id, action_id, trigger, status, input, output, error,
             started_at, finished_at, duration_ms, created_at, steps
      FROM action_runs
      WHERE action_id = ?
      ORDER BY started_at DESC
-     LIMIT ?`
-  ).all(actionId, limit);
+     LIMIT ?`,
+    )
+    .all(actionId, limit);
 
   return rows.map((r) => ({
     id: r.id,
@@ -533,25 +540,30 @@ export function getActionRuns(
 }
 
 export function getActionRun(db: Database, runId: string): ActionRunRecord | null {
-  const row = db.query<{
-    id: string;
-    action_id: string;
-    trigger: string;
-    status: string;
-    input: string | null;
-    output: string | null;
-    error: string | null;
-    started_at: string;
-    finished_at: string | null;
-    duration_ms: number | null;
-    created_at: string;
-    steps: string | null;
-  }, [string]>(
-    `SELECT id, action_id, trigger, status, input, output, error,
+  const row = db
+    .query<
+      {
+        id: string;
+        action_id: string;
+        trigger: string;
+        status: string;
+        input: string | null;
+        output: string | null;
+        error: string | null;
+        started_at: string;
+        finished_at: string | null;
+        duration_ms: number | null;
+        created_at: string;
+        steps: string | null;
+      },
+      [string]
+    >(
+      `SELECT id, action_id, trigger, status, input, output, error,
             started_at, finished_at, duration_ms, created_at, steps
      FROM action_runs
-     WHERE id = ?`
-  ).get(runId);
+     WHERE id = ?`,
+    )
+    .get(runId);
 
   if (!row) return null;
 
@@ -585,7 +597,7 @@ export function insertActionRun(
     finishedAt?: string;
     durationMs?: number;
     steps?: StepRecord[];
-  }
+  },
 ) {
   db.run(
     `INSERT INTO action_runs (id, action_id, trigger, status, input, output, error, started_at, finished_at, duration_ms, steps)
@@ -602,7 +614,7 @@ export function insertActionRun(
       run.finishedAt ?? null,
       run.durationMs ?? null,
       run.steps !== undefined ? JSON.stringify(run.steps) : null,
-    ]
+    ],
   );
 
   // Enforce retention: keep last 100 runs per action
@@ -615,7 +627,7 @@ export function insertActionRun(
        ORDER BY started_at DESC
        LIMIT 100
      )`,
-    [run.actionId, run.actionId]
+    [run.actionId, run.actionId],
   );
 }
 
@@ -629,7 +641,7 @@ export function updateActionRun(
     finishedAt?: string;
     durationMs?: number;
     steps?: StepRecord[];
-  }
+  },
 ) {
   const setClauses: string[] = [];
   const params: (string | number | null)[] = [];
@@ -679,18 +691,23 @@ export interface ActionRunLog {
 }
 
 export function getActionRunLogs(db: Database, runId: string): ActionRunLog[] {
-  const rows = db.query<{
-    id: number;
-    run_id: string;
-    stream: string;
-    content: string;
-    timestamp: string;
-  }, [string]>(
-    `SELECT id, run_id, stream, content, timestamp
+  const rows = db
+    .query<
+      {
+        id: number;
+        run_id: string;
+        stream: string;
+        content: string;
+        timestamp: string;
+      },
+      [string]
+    >(
+      `SELECT id, run_id, stream, content, timestamp
      FROM action_run_logs
      WHERE run_id = ?
-     ORDER BY timestamp ASC, id ASC`
-  ).all(runId);
+     ORDER BY timestamp ASC, id ASC`,
+    )
+    .all(runId);
 
   return rows.map((r) => ({
     id: r.id,
@@ -705,11 +722,11 @@ export function appendActionRunLog(
   db: Database,
   runId: string,
   stream: "stdout" | "stderr",
-  content: string
+  content: string,
 ) {
   db.run(
     `INSERT INTO action_run_logs (run_id, stream, content)
      VALUES (?, ?, ?)`,
-    [runId, stream, content]
+    [runId, stream, content],
   );
 }

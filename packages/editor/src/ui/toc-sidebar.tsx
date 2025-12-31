@@ -1,14 +1,14 @@
-'use client';
+"use client";
 
-import { cva } from 'class-variance-authority';
-import { NodeApi } from 'platejs';
-import { useEditorRef, useEditorSelector } from 'platejs/react';
-import * as React from 'react';
+import { cva } from "class-variance-authority";
+import { NodeApi } from "platejs";
+import { useEditorRef, useEditorSelector } from "platejs/react";
+import * as React from "react";
 
-import { cn } from '../lib/utils';
+import { cn } from "../lib/utils";
 
-import { Button } from './button';
-import { popoverVariants } from './popover';
+import { Button } from "./button";
+import { popoverVariants } from "./popover";
 
 // Types from @platejs/toc
 interface Heading {
@@ -26,16 +26,16 @@ function getHeadingList(editor: any): Heading[] {
 
   for (let i = 0; i < len; i++) {
     const node = children[i];
-    if (!node || typeof node !== 'object') continue;
+    if (!node || typeof node !== "object") continue;
 
     const type = node.type as string;
     // Early exit check - only process heading types
-    if (type !== 'h1' && type !== 'h2' && type !== 'h3') continue;
+    if (type !== "h1" && type !== "h2" && type !== "h3") continue;
 
     const id = node.id as string;
     if (!id) continue;
 
-    const depth = type === 'h1' ? 1 : type === 'h2' ? 2 : 3;
+    const depth = type === "h1" ? 1 : type === "h2" ? 2 : 3;
     const title = NodeApi.string(node);
 
     if (title) {
@@ -57,39 +57,32 @@ function headingsEqual(a: Heading[], b: Heading[]): boolean {
   return true;
 }
 
-const tocSidebarButtonVariants = cva(
-  'block h-auto w-full rounded-sm p-0 text-left',
-  {
-    variants: {
-      active: {
-        false: 'text-muted-foreground hover:text-foreground',
-        true: 'text-primary hover:text-primary',
-      },
-      depth: {
-        1: 'pl-0',
-        2: 'pl-3',
-        3: 'pl-6',
-      },
+const tocSidebarButtonVariants = cva("block h-auto w-full rounded-sm p-0 text-left", {
+  variants: {
+    active: {
+      false: "text-muted-foreground hover:text-foreground",
+      true: "text-primary hover:text-primary",
     },
-  }
-);
+    depth: {
+      1: "pl-0",
+      2: "pl-3",
+      3: "pl-6",
+    },
+  },
+});
 
 interface TocSidebarProps {
   className?: string;
   maxShowCount?: number;
   /** Position of the sidebar - affects expand direction */
-  position?: 'left' | 'right';
+  position?: "left" | "right";
 }
 
-export function TocSidebar({
-  className,
-  maxShowCount = 20,
-  position = 'left',
-}: TocSidebarProps) {
+export function TocSidebar({ className, maxShowCount = 20, position = "left" }: TocSidebarProps) {
   const editor = useEditorRef();
   // Use equality function to prevent re-renders when headings haven't changed
   const headingList = useEditorSelector(getHeadingList, [], { equalityFn: headingsEqual });
-  const [activeId, setActiveId] = React.useState<string>('');
+  const [activeId, setActiveId] = React.useState<string>("");
 
   // Scrollspy - track visible headings with IntersectionObserver
   React.useEffect(() => {
@@ -132,7 +125,7 @@ export function TocSidebar({
           }
         }
       },
-      { rootMargin: '-10% 0px -80% 0px' } // Trigger when heading is in top 20% of viewport
+      { rootMargin: "-10% 0px -80% 0px" }, // Trigger when heading is in top 20% of viewport
     );
 
     for (const el of elements) {
@@ -143,36 +136,39 @@ export function TocSidebar({
   }, [editor, headingList]);
 
   // Handle click - scroll to heading using scrollIntoView
-  const handleClick = React.useCallback((e: React.MouseEvent, item: Heading) => {
-    e.preventDefault();
+  const handleClick = React.useCallback(
+    (e: React.MouseEvent, item: Heading) => {
+      e.preventDefault();
 
-    const node = NodeApi.get(editor, item.path);
-    if (!node) return;
+      const node = NodeApi.get(editor, item.path);
+      if (!node) return;
 
-    const el = editor.api.toDOMNode(node);
-    if (!el) return;
+      const el = editor.api.toDOMNode(node);
+      if (!el) return;
 
-    // Use scrollIntoView - works with nested scroll containers
-    el.scrollIntoView({ behavior: 'smooth', block: 'start' });
-    setActiveId(item.id);
-  }, [editor]);
+      // Use scrollIntoView - works with nested scroll containers
+      el.scrollIntoView({ behavior: "smooth", block: "start" });
+      setActiveId(item.id);
+    },
+    [editor],
+  );
 
   if (headingList.length === 0) {
     return null;
   }
 
   return (
-    <div className={cn('group z-50', className)}>
+    <div className={cn("group z-50", className)}>
       {/* Depth indicator bars - fit in gutter */}
       <div className="flex flex-col gap-1.5 items-center pt-1">
         {headingList.slice(0, maxShowCount).map((item) => (
           <div
             key={item.id}
             className={cn(
-              'h-[3px] rounded-full transition-colors cursor-pointer',
+              "h-[3px] rounded-full transition-colors cursor-pointer",
               activeId === item.id
-                ? 'bg-primary'
-                : 'bg-muted-foreground/20 hover:bg-muted-foreground/40'
+                ? "bg-primary"
+                : "bg-muted-foreground/20 hover:bg-muted-foreground/40",
             )}
             style={{
               width: `${14 - 4 * (item.depth - 1)}px`,
@@ -186,16 +182,16 @@ export function TocSidebar({
       <nav
         aria-label="Table of contents"
         className={cn(
-          'absolute top-0 z-50 transition-all duration-200',
-          'pointer-events-none opacity-0',
-          'group-hover:pointer-events-auto group-hover:opacity-100',
-          position === 'right' ? 'right-0' : 'left-0',
+          "absolute top-0 z-50 transition-all duration-200",
+          "pointer-events-none opacity-0",
+          "group-hover:pointer-events-auto group-hover:opacity-100",
+          position === "right" ? "right-0" : "left-0",
         )}
       >
         <div
           className={cn(
             popoverVariants(),
-            'max-h-80 w-[200px] overflow-auto rounded-lg p-1.5 shadow-lg',
+            "max-h-80 w-[200px] overflow-auto rounded-lg p-1.5 shadow-lg",
           )}
         >
           {headingList.slice(0, maxShowCount).map((item, index) => {
@@ -209,7 +205,7 @@ export function TocSidebar({
                     active: isActive,
                     depth: item.depth as any,
                   }),
-                  'text-xs'
+                  "text-xs",
                 )}
                 key={item.id}
                 onClick={(e) => handleClick(e, item)}

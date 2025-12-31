@@ -6,28 +6,27 @@
  * Shows ChatGPT-style prompt input for empty pages.
  */
 
-import { cn } from "@/lib/utils";
 import {
+  type AdvancedCustomBlock,
   Editor,
   type EditorHandle,
   type EditorProps,
-  type AdvancedCustomBlock,
-  parseFrontmatter,
-  serializeFrontmatter,
   type Frontmatter,
   PageContextPlugin,
+  parseFrontmatter,
   SpecBar,
+  serializeFrontmatter,
 } from "@hands/editor";
-import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
-
-import { usePageSource } from "./hooks/usePageSource";
-import { DesktopEditorProvider } from "./DesktopEditorProvider";
-import { PromptPlugin, PromptMarkdownRules } from "./plugins/prompt-kit";
-import { useSendMessage, useCreateSession, useSessionStatus } from "@/hooks/useSession";
-import { setActiveSessionState } from "@/hooks/useNavState";
-import { setChatExpanded } from "@/hooks/useChatState";
-import { SpecBarPortal, SyncStatusPortal } from "@/components/workbook/HeaderActionsContext";
 import { RefreshCw } from "lucide-react";
+import { type ReactNode, useCallback, useEffect, useRef, useState } from "react";
+import { SpecBarPortal, SyncStatusPortal } from "@/components/workbook/HeaderActionsContext";
+import { setChatExpanded } from "@/hooks/useChatState";
+import { setActiveSessionState } from "@/hooks/useNavState";
+import { useCreateSession, useSendMessage, useSessionStatus } from "@/hooks/useSession";
+import { cn } from "@/lib/utils";
+import { DesktopEditorProvider } from "./DesktopEditorProvider";
+import { usePageSource } from "./hooks/usePageSource";
+import { PromptMarkdownRules, PromptPlugin } from "./plugins/prompt-kit";
 
 // ============================================================================
 // Custom Blocks for Desktop
@@ -49,18 +48,9 @@ const PromptBlock: AdvancedCustomBlock = {
  * Must wrap Editor to ensure LiveQueryProvider is mounted BEFORE
  * any LiveValue components render and call useLiveQuery hooks.
  */
-function EditorWithProviders({
-  children,
-}: {
-  children: ReactNode;
-}) {
-  return (
-    <DesktopEditorProvider>
-      {children}
-    </DesktopEditorProvider>
-  );
+function EditorWithProviders({ children }: { children: ReactNode }) {
+  return <DesktopEditorProvider>{children}</DesktopEditorProvider>;
 }
-
 
 // ============================================================================
 // Types
@@ -79,11 +69,7 @@ export interface PageEditorProps {
 // Main Component
 // ============================================================================
 
-export function PageEditor({
-  pageId,
-  className,
-  readOnly = false,
-}: PageEditorProps) {
+export function PageEditor({ pageId, className, readOnly = false }: PageEditorProps) {
   const editorRef = useRef<EditorHandle>(null);
   const lastSourceRef = useRef<string | null>(null);
 
@@ -106,7 +92,8 @@ export function PageEditor({
   // Track sync session - derive isSyncing from session status
   const [syncSessionId, setSyncSessionId] = useState<string | null>(null);
   const { data: syncStatus } = useSessionStatus(syncSessionId);
-  const isSyncing = syncSessionId !== null && (syncStatus?.type === "busy" || syncStatus?.type === "running");
+  const isSyncing =
+    syncSessionId !== null && (syncStatus?.type === "busy" || syncStatus?.type === "running");
 
   // Extract content (body without frontmatter)
   const content = source ? source.slice(parseFrontmatter(source).contentStart) : "";
@@ -130,7 +117,7 @@ export function PageEditor({
         setSource(newSource);
       }
     },
-    [frontmatter, setSource]
+    [frontmatter, setSource],
   );
 
   // Handle frontmatter changes
@@ -138,7 +125,7 @@ export function PageEditor({
     (newFrontmatter: Frontmatter) => {
       setFrontmatter(newFrontmatter);
     },
-    [setFrontmatter]
+    [setFrontmatter],
   );
 
   // Handle description changes from SpecBar
@@ -146,7 +133,7 @@ export function PageEditor({
     (description: string) => {
       setFrontmatter({ ...frontmatter, description: description || undefined });
     },
-    [frontmatter, setFrontmatter]
+    [frontmatter, setFrontmatter],
   );
 
   // Handle Sync: Dispatch to @hands to generate/regenerate page from spec + schema
@@ -157,7 +144,7 @@ export function PageEditor({
     try {
       // Create a new session for this sync task
       const newSession = await createSession.mutateAsync({
-        title: `Sync: ${frontmatter.title || pageId}`
+        title: `Sync: ${frontmatter.title || pageId}`,
       });
       const sessionId = newSession.id;
 
@@ -181,10 +168,14 @@ export function PageEditor({
 **Page:** ${frontmatter.title || pageId}
 ${spec}
 
-${currentContent ? `**Current content (preserve user sections where appropriate):**
+${
+  currentContent
+    ? `**Current content (preserve user sections where appropriate):**
 \`\`\`mdx
 ${currentContent}
-\`\`\`` : "This is a new page - generate initial content."}
+\`\`\``
+    : "This is a new page - generate initial content."
+}
 
 Write the content directly to the page file. Use the schema tool to understand available data. Use LiveValue for data display and LiveAction for interactions where appropriate.`;
 
@@ -243,9 +234,7 @@ Write the content directly to the page file. Use the schema tool to understand a
     <EditorWithProviders>
       {/* Sync status indicator in tab */}
       <SyncStatusPortal>
-        {isSyncing && (
-          <RefreshCw className="h-3 w-3 ml-1 text-primary animate-spin" />
-        )}
+        {isSyncing && <RefreshCw className="h-3 w-3 ml-1 text-primary animate-spin" />}
       </SyncStatusPortal>
 
       {/* SpecBar portaled into header tab dropdown */}

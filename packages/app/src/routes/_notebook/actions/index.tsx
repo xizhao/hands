@@ -6,7 +6,7 @@
  */
 
 import { CircleNotch, Clock, Database, Globe, Play, Warning } from "@phosphor-icons/react";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { formatDistanceToNow } from "date-fns";
 import { useState } from "react";
@@ -130,13 +130,21 @@ function ActionsIndexPage() {
                       className="flex-1 min-w-0"
                     >
                       <div className="flex items-center gap-2">
-                        <span className={cn("font-medium truncate", !action.valid && "text-destructive")}>
+                        <span
+                          className={cn(
+                            "font-medium truncate",
+                            !action.valid && "text-destructive",
+                          )}
+                        >
                           {action.name || action.id}
                         </span>
                         {!action.valid && (
                           <Tooltip>
                             <TooltipTrigger asChild>
-                              <Warning weight="fill" className="h-4 w-4 text-destructive shrink-0" />
+                              <Warning
+                                weight="fill"
+                                className="h-4 w-4 text-destructive shrink-0"
+                              />
                             </TooltipTrigger>
                             <TooltipContent>
                               Error: {action.error || "Invalid action"}
@@ -156,7 +164,10 @@ function ActionsIndexPage() {
                         {action.hasSchema && (
                           <Tooltip>
                             <TooltipTrigger asChild>
-                              <Database weight="duotone" className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                              <Database
+                                weight="duotone"
+                                className="h-3.5 w-3.5 text-muted-foreground shrink-0"
+                              />
                             </TooltipTrigger>
                             <TooltipContent>Has schema requirements</TooltipContent>
                           </Tooltip>
@@ -223,7 +234,10 @@ function ActionsIndexPage() {
                       disabled={isRunning || hasMissingSecrets}
                     >
                       {isRunning ? (
-                        <CircleNotch weight="bold" className="h-4 w-4 animate-spin text-green-500" />
+                        <CircleNotch
+                          weight="bold"
+                          className="h-4 w-4 animate-spin text-green-500"
+                        />
                       ) : (
                         <Play weight="fill" className="h-4 w-4 text-green-500" />
                       )}

@@ -11,16 +11,21 @@ import path from "node:path";
 import {
   extractMdxComponents,
   type MdxComponent,
-  type ValidationSchemaTable,
   type ValidationContext,
   type ValidationError,
+  type ValidationSchemaTable,
   validateComponent,
   validateMdxContent,
 } from "@hands/core/validation";
 import pc from "picocolors";
 
 // Re-export types for convenience
-export type { MdxComponent, ValidationSchemaTable as SchemaTable, ValidationContext, ValidationError };
+export type {
+  MdxComponent,
+  ValidationSchemaTable as SchemaTable,
+  ValidationContext,
+  ValidationError,
+};
 
 // Re-export core validation functions
 export { extractMdxComponents, validateComponent, validateMdxContent };
@@ -75,7 +80,10 @@ export function validateMdxFile(
 /**
  * Validate all MDX pages in a workbook.
  */
-export function validateMdxPages(workbookPath: string, schema: ValidationSchemaTable[]): ValidationError[] {
+export function validateMdxPages(
+  workbookPath: string,
+  schema: ValidationSchemaTable[],
+): ValidationError[] {
   const pagesDir = path.join(workbookPath, "pages");
   if (!existsSync(pagesDir)) return [];
 

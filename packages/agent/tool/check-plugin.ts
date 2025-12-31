@@ -25,7 +25,9 @@ Unlike the 'check' tool (TypeScript validation), this actually runs the plugin v
 Use this after creating or modifying a plugin in plugins/ to verify it works end-to-end.`,
 
   args: {
-    pluginId: tool.schema.string().describe("The plugin ID to test (e.g., 'revenue-chart' or 'charts/bar-chart')"),
+    pluginId: tool.schema
+      .string()
+      .describe("The plugin ID to test (e.g., 'revenue-chart' or 'charts/bar-chart')"),
   },
 
   async execute(args, _ctx) {

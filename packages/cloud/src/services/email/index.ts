@@ -14,7 +14,7 @@
  *   - subscription_canceled: Cancellation confirmation
  */
 
-export { emailRouter } from "./router";
 export { createEmailSender, createSESClient, sendEmail } from "./client";
+export { emailRouter } from "./router";
 export { templates } from "./templates";
 export * from "./types";

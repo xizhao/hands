@@ -10,7 +10,7 @@
  *   cloud.payments.plans()
  */
 
-export { paymentsRouter } from "./router";
-export { handleWebhook as paymentsWebhook } from "./webhook";
 export * from "./client";
+export { paymentsRouter } from "./router";
 export * from "./types";
+export { handleWebhook as paymentsWebhook } from "./webhook";

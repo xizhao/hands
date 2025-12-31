@@ -5,9 +5,9 @@
  */
 
 import { cn } from "@/lib/utils";
-import { SidebarSection, SidebarEmptyState } from "../components/SidebarSection";
-import { listItemStyles } from "../components/SidebarItem";
 import { PluginIcon } from "../components/icons";
+import { listItemStyles } from "../components/SidebarItem";
+import { SidebarEmptyState, SidebarSection } from "../components/SidebarSection";
 import type { SidebarPlugin } from "../types";
 
 interface PluginsSectionProps {
@@ -21,12 +21,7 @@ interface PluginsSectionProps {
   size?: "default" | "lg";
 }
 
-export function PluginsSection({
-  expanded,
-  onToggle,
-  plugins,
-  size,
-}: PluginsSectionProps) {
+export function PluginsSection({ expanded, onToggle, plugins, size }: PluginsSectionProps) {
   const handlePluginClick = (pluginId: string) => {
     // TODO: Navigate to plugin source in editor
     console.log("[sidebar] plugin clicked:", pluginId);

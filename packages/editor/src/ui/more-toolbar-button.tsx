@@ -1,11 +1,11 @@
-'use client';
+"use client";
 
-import { BlockMenuPlugin } from '@platejs/selection/react';
-import { DotsThree } from '@phosphor-icons/react';
-import { useEditorRef } from 'platejs/react';
+import { DotsThree } from "@phosphor-icons/react";
+import { BlockMenuPlugin } from "@platejs/selection/react";
+import { useEditorRef } from "platejs/react";
 
-import { useOpenState } from './dropdown-menu';
-import { ToolbarButton } from './toolbar';
+import { useOpenState } from "./dropdown-menu";
+import { ToolbarButton } from "./toolbar";
 
 export function MoreToolbarButton() {
   const editor = useEditorRef();
@@ -19,12 +19,10 @@ export function MoreToolbarButton() {
 
         if (!blockAbove) return;
 
-        editor
-          .getApi(BlockMenuPlugin)
-          .blockMenu.showContextMenu(blockAbove.id as string, {
-            x: e.clientX,
-            y: e.clientY,
-          });
+        editor.getApi(BlockMenuPlugin).blockMenu.showContextMenu(blockAbove.id as string, {
+          x: e.clientX,
+          y: e.clientY,
+        });
       }}
       pressed={openState.open}
       tooltip="More"

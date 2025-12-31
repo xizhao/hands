@@ -1,9 +1,9 @@
 import fs from "node:fs";
 import path from "node:path";
+import alias from "@rollup/plugin-alias";
 import { TanStackRouterVite } from "@tanstack/router-plugin/vite";
 import react from "@vitejs/plugin-react-swc";
 import { defineConfig, type Plugin } from "vite";
-import alias from "@rollup/plugin-alias";
 
 const host = process.env.TAURI_DEV_HOST;
 
@@ -57,7 +57,10 @@ export default defineConfig({
     plugins: () => [
       alias({
         entries: [
-          { find: "@hands/core/primitives/serialization", replacement: path.resolve(__dirname, "../core/src/primitives/serialization") },
+          {
+            find: "@hands/core/primitives/serialization",
+            replacement: path.resolve(__dirname, "../core/src/primitives/serialization"),
+          },
           { find: "@hands/core/types", replacement: path.resolve(__dirname, "../core/src/types") },
           { find: "@hands/core", replacement: path.resolve(__dirname, "../core/src") },
         ],
@@ -67,7 +70,7 @@ export default defineConfig({
   resolve: {
     // Prefer 'worker' condition for packages like decode-named-character-reference
     // that have worker-specific exports without DOM dependencies
-    conditions: ['worker', 'import', 'module', 'browser', 'default'],
+    conditions: ["worker", "import", "module", "browser", "default"],
     alias: {
       // Point @/ to the app package where all components/hooks/routes live
       "@": path.resolve(__dirname, "../app/src"),
@@ -83,7 +86,10 @@ export default defineConfig({
       "@hands/core/ui/data": path.resolve(__dirname, "../core/src/ui/data"),
       "@hands/core/ui/components": path.resolve(__dirname, "../core/src/ui/components"),
       "@hands/core/ui": path.resolve(__dirname, "../core/src/ui"),
-      "@hands/core/primitives/serialization": path.resolve(__dirname, "../core/src/primitives/serialization"),
+      "@hands/core/primitives/serialization": path.resolve(
+        __dirname,
+        "../core/src/primitives/serialization",
+      ),
       "@hands/core/primitives/plugin": path.resolve(__dirname, "../core/src/primitives/plugin.tsx"),
       "@hands/core/primitives": path.resolve(__dirname, "../core/src/primitives"),
       "@hands/core/plugin": path.resolve(__dirname, "../core/src/primitives/plugin.tsx"),

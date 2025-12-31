@@ -171,7 +171,7 @@ export function ensureStdlibSymlink(): string {
  * Get the path to use for @hands/stdlib in workbook package.json
  * Uses the ~/.hands/stdlib symlink for portability
  */
-function getStdlibPath(): string {
+function _getStdlibPath(): string {
   // Ensure symlink exists and is correct
   ensureStdlibSymlink();
   return getStdlibSymlinkPath();
@@ -267,9 +267,7 @@ export function loadConfig(workbookDir: string): HandsConfig & { name: string } 
 export function saveConfig(workbookDir: string, config: Partial<HandsConfig>): void {
   const pkgPath = join(workbookDir, "package.json");
 
-  const pkg = existsSync(pkgPath)
-    ? JSON.parse(readFileSync(pkgPath, "utf-8"))
-    : {};
+  const pkg = existsSync(pkgPath) ? JSON.parse(readFileSync(pkgPath, "utf-8")) : {};
 
   pkg.hands = { ...pkg.hands, ...config };
   writeFileSync(pkgPath, `${JSON.stringify(pkg, null, 2)}\n`);

@@ -5,7 +5,7 @@
  * and renders the expected components.
  */
 
-import { test, expect } from "@playwright/test";
+import { expect, test } from "@playwright/test";
 
 test.describe("MDX Integration", () => {
   test.describe("LiveValue with BarChart", () => {
@@ -40,7 +40,9 @@ test.describe("MDX Integration", () => {
 
       // The rendered output should contain a recharts BarChart, not a DataGrid/table
       // Recharts uses SVG for charts
-      const hasChart = await page.locator('[data-testid="plate-harness"] svg .recharts-bar').count();
+      const _hasChart = await page
+        .locator('[data-testid="plate-harness"] svg .recharts-bar')
+        .count();
       const hasTable = await page.locator('[data-testid="plate-harness"] [role="grid"]').count();
 
       // Should have chart elements (or at least no table since data is empty)

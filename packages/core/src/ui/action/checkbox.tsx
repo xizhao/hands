@@ -21,10 +21,9 @@ import {
   useSelected,
 } from "platejs/react";
 import { memo, useContext, useEffect, useRef, useState } from "react";
-
+import { CHECKBOX_KEY, type ComponentMeta, type TCheckboxElement } from "../../types";
 import { Checkbox as BaseCheckbox } from "../components/checkbox";
 import { Label } from "../components/label";
-import { CHECKBOX_KEY, type TCheckboxElement, type ComponentMeta } from "../../types";
 import { LiveActionContext } from "./live-action";
 
 // ============================================================================
@@ -101,7 +100,7 @@ export function Checkbox({
 
 function CheckboxElement(props: PlateElementProps) {
   const element = useElement<TCheckboxElement>();
-  const selected = useSelected();
+  const _selected = useSelected();
   const actionCtx = useContext(LiveActionContext);
 
   const { name, defaultChecked, required } = element;
@@ -122,11 +121,7 @@ function CheckboxElement(props: PlateElementProps) {
   const isPending = actionCtx?.isPending ?? false;
 
   return (
-    <PlateElement
-      {...props}
-      as="div"
-      className="my-2"
-    >
+    <PlateElement {...props} as="div" className="my-2">
       <div className="flex items-center gap-2">
         <BaseCheckbox
           checked={checked}
@@ -190,4 +185,3 @@ export const CheckboxMeta: ComponentMeta = {
     requireParent: ["LiveAction"],
   },
 };
-

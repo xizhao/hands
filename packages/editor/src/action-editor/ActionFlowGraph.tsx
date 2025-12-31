@@ -8,45 +8,45 @@
  */
 
 import {
+  Background,
+  type Edge,
+  Handle,
+  type Node,
+  Position,
   ReactFlow,
   ReactFlowProvider,
   useReactFlow,
-  Background,
-  type Node,
-  type Edge,
-  Position,
-  Handle,
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
-import dagre from "dagre";
 import {
-  Cloud,
-  Clock,
-  Globe,
-  FileText,
-  Database,
-  Table,
-  Funnel,
-  GitMerge,
-  Function,
-  ArrowSquareOut,
-  Envelope,
-  Terminal,
-  CloudArrowUp,
   ArrowRight,
-  PencilSimple,
-  Plus,
-  Trash,
+  ArrowSquareOut,
   ChatCircle,
+  Clock,
+  Cloud,
+  CloudArrowUp,
+  Database,
+  Envelope,
+  FileText,
+  Function,
+  Funnel,
   GithubLogo,
+  GitMerge,
+  Globe,
   Lightning,
   Link,
+  PencilSimple,
+  Plus,
+  Table,
+  Terminal,
   Timer,
+  Trash,
 } from "@phosphor-icons/react";
-import { useMemo, createContext, useContext, useState, useEffect, useRef } from "react";
-import { cn } from "../lib/utils";
-import { usePrefetchHints } from "../hooks/use-hint";
+import dagre from "dagre";
+import { createContext, useContext, useEffect, useMemo, useRef, useState } from "react";
 import type { SqlFlow } from "../action-flow";
+import { usePrefetchHints } from "../hooks/use-hint";
+import { cn } from "../lib/utils";
 
 // Node dimensions for dagre layout
 const NODE_WIDTH = 160;
@@ -58,7 +58,7 @@ const NODE_HEIGHT = 60;
 function applyDagreLayout(
   nodes: Node[],
   edges: Edge[],
-  direction: "horizontal" | "vertical"
+  direction: "horizontal" | "vertical",
 ): Node[] {
   const g = new dagre.graphlib.Graph();
   g.setDefaultEdgeLabel(() => ({}));
@@ -564,7 +564,7 @@ function SinkNode({ data }: { data: SinkNodeData }) {
           "px-3 py-2 rounded-lg w-[130px] shadow-sm overflow-hidden",
           isDashed
             ? "border border-dashed border-border bg-muted/30"
-            : "border border-border bg-card"
+            : "border border-border bg-card",
         )}
       >
         <div className="flex items-center gap-2">
@@ -616,9 +616,7 @@ function CloudNode({ data }: { data: CloudNodeData }) {
         </span>
       </div>
 
-      <div className="text-[11px] font-medium truncate">
-        {data.method}()
-      </div>
+      <div className="text-[11px] font-medium truncate">{data.method}()</div>
 
       {data.assignedTo && (
         <div className="text-[9px] text-muted-foreground mt-1 truncate font-mono">
@@ -643,16 +641,17 @@ function ActionCallNode({ data }: { data: ActionCallNodeData }) {
 
       <div className="flex items-center gap-2 mb-1">
         <div className="p-1 rounded bg-purple-500/20 shrink-0">
-          <Lightning weight="duotone" className="h-3.5 w-3.5 text-purple-600 dark:text-purple-400" />
+          <Lightning
+            weight="duotone"
+            className="h-3.5 w-3.5 text-purple-600 dark:text-purple-400"
+          />
         </div>
         <span className="text-[10px] font-medium uppercase text-purple-600 dark:text-purple-400">
           Action
         </span>
       </div>
 
-      <div className="text-[11px] font-medium truncate font-mono">
-        {data.actionId}
-      </div>
+      <div className="text-[11px] font-medium truncate font-mono">{data.actionId}</div>
 
       {data.assignedTo && (
         <div className="text-[9px] text-muted-foreground mt-1 truncate font-mono">
@@ -683,9 +682,7 @@ function ChainNode({ data }: { data: ChainNodeData }) {
         </span>
       </div>
 
-      <div className="text-[11px] font-medium truncate font-mono">
-        {data.actionId}
-      </div>
+      <div className="text-[11px] font-medium truncate font-mono">{data.actionId}</div>
 
       <div className="flex items-center gap-2 mt-1">
         {data.delay && (
@@ -727,7 +724,7 @@ function buildGraph(
   chains: ActionFlowGraphProps["chains"],
   onTableClick?: (table: string) => void,
   onActionClick?: (actionId: string) => void,
-  direction: LayoutDirection = "horizontal"
+  direction: LayoutDirection = "horizontal",
 ): { nodes: Node[]; edges: Edge[] } {
   const nodes: Node[] = [];
   const edges: Edge[] = [];
@@ -853,10 +850,13 @@ function buildGraph(
     sqlGroupIds.push(groupId);
 
     const allTables = [...new Set(writeQueries.flatMap((q) => q.tables.map((t) => t.table)))];
-    const opCounts = writeQueries.reduce((acc, q) => {
-      acc[q.operation] = (acc[q.operation] || 0) + 1;
-      return acc;
-    }, {} as Record<string, number>);
+    const opCounts = writeQueries.reduce(
+      (acc, q) => {
+        acc[q.operation] = (acc[q.operation] || 0) + 1;
+        return acc;
+      },
+      {} as Record<string, number>,
+    );
     const primaryOp = Object.entries(opCounts).sort((a, b) => b[1] - a[1])[0]?.[0] || "insert";
 
     if (writeQueries.length === 1) {
@@ -976,11 +976,8 @@ function buildGraph(
   }
 
   // Track last node for chaining
-  let lastFlowNodeId = writeQueries.length > 0
-    ? "sql-writes"
-    : readQueries.length > 0
-      ? "sql-reads"
-      : null;
+  let lastFlowNodeId =
+    writeQueries.length > 0 ? "sql-writes" : readQueries.length > 0 ? "sql-reads" : null;
 
   // Cloud calls - add after SQL operations
   for (const cloud of cloudCalls || []) {
@@ -1039,9 +1036,9 @@ function buildGraph(
   // Chained actions - from return { data, chain }
   if (chains && chains.length > 0) {
     // Find the last SQL or action node to connect from
-    const chainSource = lastFlowNodeId ||
-      (writeQueries.length > 0 ? "sql-writes" :
-       readQueries.length > 0 ? "sql-reads" : null);
+    const chainSource =
+      lastFlowNodeId ||
+      (writeQueries.length > 0 ? "sql-writes" : readQueries.length > 0 ? "sql-reads" : null);
 
     for (let i = 0; i < chains.length; i++) {
       const chain = chains[i];
@@ -1129,21 +1126,43 @@ export function ActionFlowGraph({
   }, []);
 
   const { nodes, edges } = useMemo(
-    () => buildGraph(sources, sqlQueries, sinks, cloudCalls, actionCalls, chains, onTableClick, onActionClick, direction),
-    [sources, sqlQueries, sinks, cloudCalls, actionCalls, chains, onTableClick, onActionClick, direction]
+    () =>
+      buildGraph(
+        sources,
+        sqlQueries,
+        sinks,
+        cloudCalls,
+        actionCalls,
+        chains,
+        onTableClick,
+        onActionClick,
+        direction,
+      ),
+    [
+      sources,
+      sqlQueries,
+      sinks,
+      cloudCalls,
+      actionCalls,
+      chains,
+      onTableClick,
+      onActionClick,
+      direction,
+    ],
   );
 
   // Collect raw SQL for hint prefetching
   const sqlContents = useMemo(
     () => sqlQueries.map((q) => q.rawSql).filter((sql): sql is string => !!sql),
-    [sqlQueries]
+    [sqlQueries],
   );
 
   // Prefetch hints for all SQL operations
   const { getHint, isLoading } = usePrefetchHints(sqlContents);
 
   // Empty state - show if no operations detected
-  const hasFlow = sqlQueries.length > 0 ||
+  const hasFlow =
+    sqlQueries.length > 0 ||
     (sources && sources.length > 0) ||
     (cloudCalls && cloudCalls.length > 0) ||
     (actionCalls && actionCalls.length > 0) ||
@@ -1155,8 +1174,7 @@ export function ActionFlowGraph({
         <Database weight="duotone" className="h-12 w-12 mb-4 opacity-50" />
         <p className="text-sm font-medium">No data flow detected</p>
         <p className="text-xs mt-1 text-center max-w-[300px]">
-          This action doesn't appear to have any operations.
-          Switch to Code view to see the source.
+          This action doesn't appear to have any operations. Switch to Code view to see the source.
         </p>
       </div>
     );
@@ -1191,7 +1209,12 @@ export function ActionFlowGraph({
               preventScrolling={false}
             >
               <AutoFitView />
-              <Background color="hsl(var(--muted-foreground))" gap={16} size={1} className="opacity-20" />
+              <Background
+                color="hsl(var(--muted-foreground))"
+                gap={16}
+                size={1}
+                className="opacity-20"
+              />
             </ReactFlow>
           </ReactFlowProvider>
         </div>

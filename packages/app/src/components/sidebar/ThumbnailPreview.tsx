@@ -6,8 +6,8 @@
  * - Loading states as LQIP placeholder
  */
 
-import { cn } from "@/lib/utils";
 import { useThumbnail } from "@/hooks/useThumbnails";
+import { cn } from "@/lib/utils";
 
 interface ThumbnailPreviewProps {
   type: "page";

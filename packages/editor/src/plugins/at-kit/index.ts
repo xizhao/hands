@@ -13,8 +13,8 @@
  */
 
 import { MentionInputPlugin, MentionPlugin } from "@platejs/mention/react";
+import type { TElement } from "platejs";
 import { createPlatePlugin } from "platejs/react";
-import { type TElement } from "platejs";
 
 import { AtGhostInputElement } from "./at-ghost-input";
 import { AtLoaderElement } from "./at-loader";

@@ -17,19 +17,21 @@ function parseSearchResults(html: string): SearchResult[] {
   // and "result__snippet" for descriptions
 
   // Match result blocks - DuckDuckGo uses data-testid="result" or class="result"
-  const resultPattern =
+  const _resultPattern =
     /<a[^>]*class="[^"]*result__a[^"]*"[^>]*href="([^"]+)"[^>]*>([^<]+)<\/a>/gi;
-  const snippetPattern = /<a[^>]*class="[^"]*result__snippet[^"]*"[^>]*>([^<]+)/gi;
+  const _snippetPattern = /<a[^>]*class="[^"]*result__snippet[^"]*"[^>]*>([^<]+)/gi;
 
   // Simpler approach: look for the actual result structure
   // DuckDuckGo Lite (lite.duckduckgo.com) has a cleaner structure
-  const linkMatches = [...html.matchAll(/<a[^>]*rel="nofollow"[^>]*href="([^"]+)"[^>]*>([^<]+)<\/a>/gi)];
-  const snippetMatches = [...html.matchAll(/<td[^>]*class="result-snippet"[^>]*>([^<]+)/gi)];
+  const _linkMatches = [
+    ...html.matchAll(/<a[^>]*rel="nofollow"[^>]*href="([^"]+)"[^>]*>([^<]+)<\/a>/gi),
+  ];
+  const _snippetMatches = [...html.matchAll(/<td[^>]*class="result-snippet"[^>]*>([^<]+)/gi)];
 
   // Alternative: Match the standard DuckDuckGo result format
-  const altPattern =
+  const _altPattern =
     /<a[^>]*class="[^"]*result__url[^"]*"[^>]*href="\/\/duckduckgo\.com\/l\/\?uddg=([^&"]+)[^"]*"[^>]*>/gi;
-  const titlePattern = /<a[^>]*class="[^"]*result__a[^"]*"[^>]*>([^<]+)<\/a>/gi;
+  const _titlePattern = /<a[^>]*class="[^"]*result__a[^"]*"[^>]*>([^<]+)<\/a>/gi;
 
   // Most reliable: extract from JSON data if present
   const jsonMatch = html.match(/DDG\.pageLayout\.load\('d',(\[.*?\])\)/);
@@ -65,11 +67,9 @@ function parseSearchResults(html: string): SearchResult[] {
     const altTitleMatch = block.match(/<h2[^>]*>([^<]+)<\/h2>/i);
 
     // Extract snippet
-    const snippetMatch = block.match(
-      /<a[^>]*class="[^"]*result__snippet[^"]*"[^>]*>([^<]+)/i
-    );
+    const snippetMatch = block.match(/<a[^>]*class="[^"]*result__snippet[^"]*"[^>]*>([^<]+)/i);
     const altSnippetMatch = block.match(
-      /<span[^>]*class="[^"]*result__snippet[^"]*"[^>]*>([^<]+)/i
+      /<span[^>]*class="[^"]*result__snippet[^"]*"[^>]*>([^<]+)/i,
     );
 
     const url = urlMatch
@@ -118,8 +118,7 @@ async function search(query: string, maxResults = 10): Promise<SearchResult[]> {
     headers: {
       "User-Agent":
         "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-      Accept:
-        "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8",
+      Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8",
       "Accept-Language": "en-US,en;q=0.5",
     },
   });
@@ -162,11 +161,16 @@ Tips:
 - For deep research, use 5-10 query variations in parallel`,
 
   args: {
-    query: tool.schema.string().optional().describe("Single search query (use this OR queries, not both)"),
+    query: tool.schema
+      .string()
+      .optional()
+      .describe("Single search query (use this OR queries, not both)"),
     queries: tool.schema
       .array(tool.schema.string())
       .optional()
-      .describe("Multiple search queries to run in parallel (max 10). Use for deep research with query variations."),
+      .describe(
+        "Multiple search queries to run in parallel (max 10). Use for deep research with query variations.",
+      ),
     max_results: tool.schema
       .number()
       .optional()
@@ -206,7 +210,7 @@ Try:
             (r, i) =>
               `${i + 1}. **${r.title}**
    ${r.url}
-   ${r.snippet || "(no description)"}`
+   ${r.snippet || "(no description)"}`,
           )
           .join("\n\n");
 
@@ -218,7 +222,7 @@ Try:
     }
 
     // Batch parallel query mode
-    const queryList = queries!.slice(0, 10); // Max 10 parallel queries
+    const queryList = queries?.slice(0, 10); // Max 10 parallel queries
     const maxResultsPerQuery = Math.min(max_results ?? 5, 15);
 
     // Execute all searches in parallel
@@ -249,7 +253,7 @@ Try:
           (r, i) =>
             `${i + 1}. **${r.title}**
    ${r.url}
-   ${r.snippet || "(no description)"}`
+   ${r.snippet || "(no description)"}`,
         )
         .join("\n\n");
 

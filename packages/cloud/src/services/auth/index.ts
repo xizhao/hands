@@ -12,15 +12,15 @@
  *   cloud.auth.sessions()
  */
 
-export { authRouter } from "./router";
 export {
-  signToken,
-  verifyToken,
-  generateCodeVerifier,
-  generateCodeChallenge,
-  verifyCodeChallenge,
-  getGoogleAuthUrl,
   exchangeGoogleCode,
+  generateCodeChallenge,
+  generateCodeVerifier,
+  getGoogleAuthUrl,
   getGoogleUserInfo,
+  signToken,
+  verifyCodeChallenge,
+  verifyToken,
 } from "./client";
+export { authRouter } from "./router";
 export * from "./types";

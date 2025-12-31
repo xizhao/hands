@@ -22,7 +22,7 @@ async function loadWorker() {
     } catch (err) {
       if (isPreBundleError(err) && attempt < MAX_RETRIES) {
         console.log(
-          `[worker] Pre-bundle invalidated at startup, retrying... (attempt ${attempt}/${MAX_RETRIES})`
+          `[worker] Pre-bundle invalidated at startup, retrying... (attempt ${attempt}/${MAX_RETRIES})`,
         );
         await sleep(RETRY_DELAY_MS);
         continue;

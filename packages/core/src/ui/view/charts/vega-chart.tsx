@@ -25,8 +25,8 @@
  */
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import embed, { type EmbedOptions, type Result } from "vega-embed";
 import type { View } from "vega";
+import embed, { type EmbedOptions, type Result } from "vega-embed";
 
 import type { VegaLiteSpec } from "../../../types";
 import { useLiveValueData } from "./context";
@@ -193,7 +193,7 @@ export function VegaChart({
   }, [spec, height, vegaTheme, containerWidth]);
 
   // Stable spec key for re-embedding only when spec structure changes
-  const specKey = useMemo(() => {
+  const _specKey = useMemo(() => {
     // Hash based on spec structure (excluding data)
     const { data: _, ...specWithoutData } = spec;
     return JSON.stringify(specWithoutData);
@@ -253,7 +253,7 @@ export function VegaChart({
         viewRef.current = null;
       }
     };
-  }, [specKey, baseSpec, renderer, actions]); // Note: data not in deps - handled separately
+  }, [baseSpec, renderer, actions, data]); // Note: data not in deps - handled separately
 
   // Update data efficiently via View API (no re-embed)
   useEffect(() => {
@@ -282,7 +282,7 @@ export function VegaChart({
         // Use same -1 buffer as initial embed to prevent overflow triggering resize loop
         view.width(Math.max(100, containerWidth - 1));
         await view.runAsync();
-      } catch (err) {
+      } catch (_err) {
         // Ignore resize errors
       }
     };
@@ -325,10 +325,7 @@ export function VegaChart({
   // Use two separate divs: one for React-managed content, one for Vega
   // This prevents React from trying to reconcile Vega's DOM manipulations
   return (
-    <div
-      className={`w-full relative ${className ?? ""}`}
-      style={{ minHeight: height }}
-    >
+    <div className={`w-full relative ${className ?? ""}`} style={{ minHeight: height }}>
       {/* Vega container - React never modifies children, only Vega does */}
       <div
         ref={containerRef}

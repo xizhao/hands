@@ -1,6 +1,6 @@
 import type { Story } from "@ladle/react";
-import { DataGrid } from "./data-grid";
 import { LiveValueProvider } from "../../view/charts/context";
+import { DataGrid } from "./data-grid";
 
 export default {
   title: "Data/DataGrid",
@@ -23,13 +23,9 @@ const largeData = Array.from({ length: 100 }, (_, i) => ({
   startDate: new Date(2020 + (i % 5), i % 12, (i % 28) + 1).toISOString().split("T")[0],
 }));
 
-export const Default: Story = () => (
-  <DataGrid data={sampleData} height={300} />
-);
+export const Default: Story = () => <DataGrid data={sampleData} height={300} />;
 
-export const LargeDataset: Story = () => (
-  <DataGrid data={largeData} height={400} enableSearch />
-);
+export const LargeDataset: Story = () => <DataGrid data={largeData} height={400} enableSearch />;
 
 export const CustomColumns: Story = () => (
   <DataGrid
@@ -44,9 +40,7 @@ export const CustomColumns: Story = () => (
   />
 );
 
-export const ReadOnly: Story = () => (
-  <DataGrid data={sampleData} height={300} readOnly />
-);
+export const ReadOnly: Story = () => <DataGrid data={sampleData} height={300} readOnly />;
 
 export const WithContext: Story = () => (
   <LiveValueProvider data={sampleData} isLoading={false} error={null}>
@@ -70,10 +64,6 @@ export const ErrorState: Story = () => (
 
 export const Empty: Story = () => <DataGrid data={[]} height={300} />;
 
-export const WithSearch: Story = () => (
-  <DataGrid data={largeData} height={400} enableSearch />
-);
+export const WithSearch: Story = () => <DataGrid data={largeData} height={400} enableSearch />;
 
-export const NoPaste: Story = () => (
-  <DataGrid data={sampleData} height={300} enablePaste={false} />
-);
+export const NoPaste: Story = () => <DataGrid data={sampleData} height={300} enablePaste={false} />;

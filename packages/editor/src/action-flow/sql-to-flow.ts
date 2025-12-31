@@ -8,24 +8,24 @@
 
 import { Parser } from "node-sql-parser";
 import type {
-  SqlFlow,
-  SqlFlowNode,
-  NodeId,
-  SourceNode,
-  FilterNode,
-  JoinNode,
+  AggregateFunction,
   AggregateNode,
+  CteNode,
+  DeleteNode,
+  FilterNode,
+  InsertNode,
+  JoinNode,
+  LimitNode,
+  NodeId,
+  OutputNode,
+  ProjectColumn,
   ProjectNode,
   SortNode,
-  LimitNode,
-  OutputNode,
-  InsertNode,
-  UpdateNode,
-  DeleteNode,
-  CteNode,
-  AggregateFunction,
-  ProjectColumn,
   SortSpec,
+  SourceNode,
+  SqlFlow,
+  SqlFlowNode,
+  UpdateNode,
 } from "./sql-flow-types";
 
 const parser = new Parser();
@@ -82,7 +82,7 @@ export function parseSqlToFlow(sql: string, assignedTo?: string): ParseResult {
 function convertStatement(
   stmt: Record<string, unknown>,
   rawSql: string,
-  assignedTo?: string
+  assignedTo?: string,
 ): SqlFlow {
   const type = stmt.type as string;
 
@@ -114,7 +114,7 @@ function convertStatement(
 function convertSelect(
   stmt: Record<string, unknown>,
   rawSql: string,
-  assignedTo?: string
+  assignedTo?: string,
 ): SqlFlow {
   const nodes: SqlFlowNode[] = [];
   let currentInputs: NodeId[] = [];
@@ -177,7 +177,10 @@ function convertSelect(
 
   // 4. Handle GROUP BY and aggregates
   const columns = stmt.columns as Array<Record<string, unknown>> | undefined;
-  const groupByRaw = stmt.groupby as { columns?: Array<Record<string, unknown>> } | Array<Record<string, unknown>> | undefined;
+  const groupByRaw = stmt.groupby as
+    | { columns?: Array<Record<string, unknown>> }
+    | Array<Record<string, unknown>>
+    | undefined;
   // groupby can be an object with columns array or just an array
   const groupBy = Array.isArray(groupByRaw) ? groupByRaw : groupByRaw?.columns;
   const hasAggregates = columns?.some((col) => hasAggregateFunction(col));
@@ -296,14 +299,18 @@ function convertSelect(
 function convertInsert(
   stmt: Record<string, unknown>,
   rawSql: string,
-  assignedTo?: string
+  assignedTo?: string,
 ): SqlFlow {
   const nodes: SqlFlowNode[] = [];
   let currentInputs: NodeId[] = [];
 
   // Handle VALUES or SELECT source
   const values = stmt.values as unknown;
-  if (values && typeof values === "object" && (values as Record<string, unknown>).type === "select") {
+  if (
+    values &&
+    typeof values === "object" &&
+    (values as Record<string, unknown>).type === "select"
+  ) {
     // INSERT ... SELECT
     const selectFlow = convertSelect(values as Record<string, unknown>, "", undefined);
     nodes.push(...selectFlow.nodes);
@@ -315,16 +322,21 @@ function convertInsert(
   const tableName = tableList?.[0]?.table ?? "unknown";
 
   // Get columns
-  const columns = stmt.columns as Array<string | { column?: string; type?: string; value?: string }> | undefined;
-  const columnNames = columns?.map((c) => {
-    if (typeof c === "string") return c;
-    if (c.column) return c.column;
-    if (c.value) return c.value;
-    if (c.type === "default" && typeof (c as Record<string, unknown>).value === "string") {
-      return (c as Record<string, unknown>).value as string;
-    }
-    return expressionToString(c);
-  }).filter(Boolean) ?? undefined;
+  const columns = stmt.columns as
+    | Array<string | { column?: string; type?: string; value?: string }>
+    | undefined;
+  const columnNames =
+    columns
+      ?.map((c) => {
+        if (typeof c === "string") return c;
+        if (c.column) return c.column;
+        if (c.value) return c.value;
+        if (c.type === "default" && typeof (c as Record<string, unknown>).value === "string") {
+          return (c as Record<string, unknown>).value as string;
+        }
+        return expressionToString(c);
+      })
+      .filter(Boolean) ?? undefined;
 
   // Check for ON CONFLICT (upsert)
   const onConflict = stmt.on_duplicate_update || stmt.on_conflict;
@@ -370,7 +382,7 @@ function convertInsert(
 function convertUpdate(
   stmt: Record<string, unknown>,
   rawSql: string,
-  assignedTo?: string
+  assignedTo?: string,
 ): SqlFlow {
   const nodes: SqlFlowNode[] = [];
   let currentInputs: NodeId[] = [];
@@ -403,7 +415,9 @@ function convertUpdate(
   const tableName = tableList?.[0]?.table ?? "unknown";
 
   // Get SET clauses
-  const setClauses = stmt.set as Array<{ column?: string | { type?: string; value?: string }; value?: unknown }> | undefined;
+  const setClauses = stmt.set as
+    | Array<{ column?: string | { type?: string; value?: string }; value?: unknown }>
+    | undefined;
   const setColumns =
     setClauses?.map((s) => {
       let colName = "";
@@ -443,7 +457,7 @@ function convertUpdate(
 function convertDelete(
   stmt: Record<string, unknown>,
   rawSql: string,
-  assignedTo?: string
+  assignedTo?: string,
 ): SqlFlow {
   const nodes: SqlFlowNode[] = [];
   let currentInputs: NodeId[] = [];
@@ -498,7 +512,7 @@ function convertDelete(
  */
 function processFromClause(
   fromItems: Array<Record<string, unknown>>,
-  cteMap: Map<string, NodeId>
+  cteMap: Map<string, NodeId>,
 ): { sourceNodes: SourceNode[]; joinNodes: JoinNode[] } {
   const sourceNodes: SourceNode[] = [];
   const joinNodes: JoinNode[] = [];
@@ -718,7 +732,7 @@ function expressionToString(expr: unknown): string {
   switch (type) {
     case "column_ref": {
       const column = e.column as string | { expr?: { value?: string } };
-      const colName = typeof column === "string" ? column : column?.expr?.value ?? String(column);
+      const colName = typeof column === "string" ? column : (column?.expr?.value ?? String(column));
       const table = e.table as string | undefined;
       return table ? `${table}.${colName}` : colName;
     }
@@ -746,16 +760,18 @@ function expressionToString(expr: unknown): string {
     case "null":
       return "NULL";
 
-    case "function":
+    case "function": {
       const funcName = e.name as string;
       const funcArgs = e.args as { value?: Array<{ expr?: unknown }> } | undefined;
       const argsStr = funcArgs?.value?.map((a) => expressionToString(a.expr)).join(", ") ?? "";
       return `${funcName}(${argsStr})`;
+    }
 
-    case "aggr_func":
+    case "aggr_func": {
       const aggrName = e.name as string;
       const aggrArgs = e.args as { expr?: unknown } | undefined;
       return `${aggrName}(${expressionToString(aggrArgs?.expr)})`;
+    }
 
     case "case":
       return "CASE...END";
@@ -763,9 +779,10 @@ function expressionToString(expr: unknown): string {
     case "cast":
       return `CAST(${expressionToString(e.expr)} AS ${expressionToString(e.target)})`;
 
-    case "expr_list":
+    case "expr_list": {
       const list = e.value as Array<{ expr?: unknown }> | undefined;
       return `(${list?.map((v) => expressionToString(v.expr)).join(", ") ?? ""})`;
+    }
 
     case "star":
       return "*";
@@ -775,7 +792,7 @@ function expressionToString(expr: unknown): string {
       if (e.value !== undefined) return String(e.value);
       if (e.column) {
         const col = e.column as string | { expr?: { value?: string } };
-        const colStr = typeof col === "string" ? col : col?.expr?.value ?? String(col);
+        const colStr = typeof col === "string" ? col : (col?.expr?.value ?? String(col));
         return e.table ? `${e.table}.${colStr}` : colStr;
       }
       if (e.expr) return expressionToString(e.expr);
@@ -834,7 +851,7 @@ function generateSelectDescription(nodes: SqlFlowNode[], assignedTo?: string): s
 function generateInsertDescription(
   table: string,
   onConflict: InsertNode["onConflict"] | undefined,
-  assignedTo?: string
+  assignedTo?: string,
 ): string {
   if (assignedTo) {
     const readable = assignedTo
@@ -857,7 +874,7 @@ function generateInsertDescription(
 function generateUpdateDescription(
   table: string,
   columnCount: number,
-  assignedTo?: string
+  assignedTo?: string,
 ): string {
   if (assignedTo) {
     const readable = assignedTo

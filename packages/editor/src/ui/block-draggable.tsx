@@ -1,17 +1,10 @@
-'use client';
+"use client";
 
-import { DndPlugin, useDraggable, useDropLine } from '@platejs/dnd';
-import { expandListItemsWithChildren } from '@platejs/list';
-import { BlockSelectionPlugin } from '@platejs/selection/react';
-import { DotsSixVertical } from '@phosphor-icons/react';
-import {
-  getPluginByType,
-  isType,
-  KEYS,
-  PathApi,
-  type Path,
-  type TElement,
-} from 'platejs';
+import { DotsSixVertical } from "@phosphor-icons/react";
+import { DndPlugin, useDraggable, useDropLine } from "@platejs/dnd";
+import { expandListItemsWithChildren } from "@platejs/list";
+import { BlockSelectionPlugin } from "@platejs/selection/react";
+import { getPluginByType, isType, KEYS, type Path, type TElement } from "platejs";
 import {
   MemoizedChildren,
   type PlateEditor,
@@ -21,13 +14,13 @@ import {
   useElement,
   usePluginOption,
   useSelected,
-} from 'platejs/react';
-import React, { useEffect, useCallback, useRef } from 'react';
+} from "platejs/react";
+import React, { useCallback, useEffect, useRef } from "react";
 
-import { cn } from '../lib/utils';
+import { cn } from "../lib/utils";
 
-import { BlockMenu } from './block-menu';
-import { Button } from './button';
+import { BlockMenu } from "./block-menu";
+import { Button } from "./button";
 
 // Edge detection threshold in pixels
 const EDGE_THRESHOLD = 40;
@@ -66,9 +59,9 @@ function rebalanceWidthsForNewColumn(currentWidths: string[]): string[] {
 // ============================================================================
 
 type DropTargetType =
-  | { type: 'root-block'; direction: 'left' | 'right' }
-  | { type: 'column-group-edge'; direction: 'left' | 'right'; columnGroupPath: Path }
-  | { type: 'column-inner'; direction: 'left' | 'right'; columnPath: Path; columnGroupPath: Path }
+  | { type: "root-block"; direction: "left" | "right" }
+  | { type: "column-group-edge"; direction: "left" | "right"; columnGroupPath: Path }
+  | { type: "column-inner"; direction: "left" | "right"; columnPath: Path; columnGroupPath: Path }
   | null;
 
 /**
@@ -79,7 +72,7 @@ function detectDropTarget(
   editor: PlateEditor,
   element: TElement,
   path: Path,
-  edgeDirection: 'left' | 'right'
+  edgeDirection: "left" | "right",
 ): DropTargetType {
   // Check if this element is inside a column
   const columnEntry = editor.api.above({
@@ -88,7 +81,7 @@ function detectDropTarget(
   });
 
   if (columnEntry) {
-    const [columnNode, columnPath] = columnEntry;
+    const [_columnNode, columnPath] = columnEntry;
     const columnGroupEntry = editor.api.parent(columnPath);
 
     if (columnGroupEntry && columnGroupEntry[0].type === editor.getType(KEYS.columnGroup)) {
@@ -100,25 +93,27 @@ function detectDropTarget(
       const isFirstColumn = columnIndex === 0;
       const isLastColumn = columnIndex === columns.length - 1;
 
-      if ((edgeDirection === 'left' && isFirstColumn) ||
-          (edgeDirection === 'right' && isLastColumn)) {
+      if (
+        (edgeDirection === "left" && isFirstColumn) ||
+        (edgeDirection === "right" && isLastColumn)
+      ) {
         // Outer edge of column group - append new column
-        return { type: 'column-group-edge', direction: edgeDirection, columnGroupPath };
+        return { type: "column-group-edge", direction: edgeDirection, columnGroupPath };
       }
 
       // Inner edge - could add to adjacent column or insert between
       return {
-        type: 'column-inner',
+        type: "column-inner",
         direction: edgeDirection,
         columnPath,
-        columnGroupPath
+        columnGroupPath,
       };
     }
   }
 
   // Root level block - create new column group
   if (path.length === 1) {
-    return { type: 'root-block', direction: edgeDirection };
+    return { type: "root-block", direction: edgeDirection };
   }
 
   return null;
@@ -205,7 +200,7 @@ export const BlockDraggable: RenderNodeWrapper = (props) => {
 };
 
 // Track which edge the cursor is near during drag (for column creation)
-type EdgeDirection = 'left' | 'right' | null;
+type EdgeDirection = "left" | "right" | null;
 
 // Global state for edge detection during drag
 let globalDropTarget: DropTargetType = null;
@@ -223,39 +218,42 @@ function Draggable(props: PlateElementProps) {
     const rect = containerRef.current.getBoundingClientRect();
 
     if (clientX - rect.left < EDGE_THRESHOLD) {
-      return 'left';
+      return "left";
     }
     if (rect.right - clientX < EDGE_THRESHOLD) {
-      return 'right';
+      return "right";
     }
     return null;
   }, []);
 
   // Handle drag over to detect edges
-  const handleDragOver = useCallback((e: React.DragEvent) => {
-    const draggingId = editor.getOption(DndPlugin, 'draggingId');
-    if (!draggingId) return;
+  const handleDragOver = useCallback(
+    (e: React.DragEvent) => {
+      const draggingId = editor.getOption(DndPlugin, "draggingId");
+      if (!draggingId) return;
 
-    // Don't allow dropping on self
-    const dragIds = Array.isArray(draggingId) ? draggingId : [draggingId];
-    if (dragIds.includes(element.id as string)) {
-      setEdgeDirection(null);
-      return;
-    }
+      // Don't allow dropping on self
+      const dragIds = Array.isArray(draggingId) ? draggingId : [draggingId];
+      if (dragIds.includes(element.id as string)) {
+        setEdgeDirection(null);
+        return;
+      }
 
-    const edge = detectEdge(e.clientX);
-    setEdgeDirection(edge);
+      const edge = detectEdge(e.clientX);
+      setEdgeDirection(edge);
 
-    // Update global state for drop handler
-    if (edge) {
-      const dropTarget = detectDropTarget(editor, element, path, edge);
-      globalDropTarget = dropTarget;
-      globalEdgeTargetId = element.id as string;
-    } else if (globalEdgeTargetId === element.id) {
-      globalDropTarget = null;
-      globalEdgeTargetId = null;
-    }
-  }, [detectEdge, editor, element, path]);
+      // Update global state for drop handler
+      if (edge) {
+        const dropTarget = detectDropTarget(editor, element, path, edge);
+        globalDropTarget = dropTarget;
+        globalEdgeTargetId = element.id as string;
+      } else if (globalEdgeTargetId === element.id) {
+        globalDropTarget = null;
+        globalEdgeTargetId = null;
+      }
+    },
+    [detectEdge, editor, element, path],
+  );
 
   const handleDragLeave = useCallback(() => {
     setEdgeDirection(null);
@@ -266,168 +264,173 @@ function Draggable(props: PlateElementProps) {
   }, [element.id]);
 
   const draggableResult = useDraggable({
-      element,
-      onDropHandler: (targetEditor, { dragItem }) => {
-        const id = (dragItem as { id: string[] | string }).id;
-        const dragIds = Array.isArray(id) ? id : [id];
+    element,
+    onDropHandler: (targetEditor, { dragItem }) => {
+      const id = (dragItem as { id: string[] | string }).id;
+      const dragIds = Array.isArray(id) ? id : [id];
 
-        // Check if this is a horizontal drop for column operations
-        if (globalDropTarget && globalEdgeTargetId === element.id) {
-          // Get the dragged element (only support single element for column ops)
-          const draggedElement = dragIds.length === 1
-            ? editor.api.node({ id: dragIds[0] })?.[0] as TElement | undefined
+      // Check if this is a horizontal drop for column operations
+      if (globalDropTarget && globalEdgeTargetId === element.id) {
+        // Get the dragged element (only support single element for column ops)
+        const draggedElement =
+          dragIds.length === 1
+            ? (editor.api.node({ id: dragIds[0] })?.[0] as TElement | undefined)
             : undefined;
 
-          if (draggedElement && draggedElement.id !== element.id) {
-            const dragPath = editor.api.findPath(draggedElement);
-            if (!dragPath) return;
+        if (draggedElement && draggedElement.id !== element.id) {
+          const dragPath = editor.api.findPath(draggedElement);
+          if (!dragPath) return;
 
-            const dropTarget = globalDropTarget;
+          const dropTarget = globalDropTarget;
 
-            // Handle different drop target types
-            if (dropTarget.type === 'root-block') {
-              // Create new column group from two root-level blocks
-              const targetPath = editor.api.findPath(element);
-              if (!targetPath) return;
+          // Handle different drop target types
+          if (dropTarget.type === "root-block") {
+            // Create new column group from two root-level blocks
+            const targetPath = editor.api.findPath(element);
+            if (!targetPath) return;
 
-              editor.tf.withoutNormalizing(() => {
-                // Remove the dragged element first
-                editor.tf.removeNodes({ at: dragPath });
+            editor.tf.withoutNormalizing(() => {
+              // Remove the dragged element first
+              editor.tf.removeNodes({ at: dragPath });
 
-                // Recalculate target path after removal
-                const newTargetPath = editor.api.findPath(element);
-                if (!newTargetPath) return;
+              // Recalculate target path after removal
+              const newTargetPath = editor.api.findPath(element);
+              if (!newTargetPath) return;
 
-                // Create column group with both elements
-                const leftElement = dropTarget.direction === 'left' ? draggedElement : element;
-                const rightElement = dropTarget.direction === 'left' ? element : draggedElement;
+              // Create column group with both elements
+              const leftElement = dropTarget.direction === "left" ? draggedElement : element;
+              const rightElement = dropTarget.direction === "left" ? element : draggedElement;
 
-                // Replace target with column group containing both
-                editor.tf.removeNodes({ at: newTargetPath });
-                editor.tf.insertNodes(
-                  {
-                    type: KEYS.columnGroup,
-                    children: [
-                      {
-                        type: KEYS.column,
-                        width: '50%',
-                        children: [{ ...leftElement }],
-                      },
-                      {
-                        type: KEYS.column,
-                        width: '50%',
-                        children: [{ ...rightElement }],
-                      },
-                    ],
-                  },
-                  { at: newTargetPath, select: true }
-                );
+              // Replace target with column group containing both
+              editor.tf.removeNodes({ at: newTargetPath });
+              editor.tf.insertNodes(
+                {
+                  type: KEYS.columnGroup,
+                  children: [
+                    {
+                      type: KEYS.column,
+                      width: "50%",
+                      children: [{ ...leftElement }],
+                    },
+                    {
+                      type: KEYS.column,
+                      width: "50%",
+                      children: [{ ...rightElement }],
+                    },
+                  ],
+                },
+                { at: newTargetPath, select: true },
+              );
+            });
+          } else if (dropTarget.type === "column-group-edge") {
+            // Append new column to existing column group
+            const columnGroupEntry = editor.api.node(dropTarget.columnGroupPath);
+            if (!columnGroupEntry) return;
+
+            const [columnGroup] = columnGroupEntry;
+            const columns = (columnGroup as TElement).children as TElement[];
+            const currentWidths = columns.map(
+              (col) => (col.width as string) || `${100 / columns.length}%`,
+            );
+            const newWidths = rebalanceWidthsForNewColumn(currentWidths);
+
+            editor.tf.withoutNormalizing(() => {
+              // Remove the dragged element first
+              editor.tf.removeNodes({ at: dragPath });
+
+              // Recalculate column group path after removal
+              const newColumnGroupPath = editor.api.findPath(columnGroup);
+              if (!newColumnGroupPath) return;
+
+              // Update existing column widths
+              const updatedColumnGroup = editor.api.node(newColumnGroupPath);
+              if (!updatedColumnGroup) return;
+
+              const updatedColumns = (updatedColumnGroup[0] as TElement).children as TElement[];
+              updatedColumns.forEach((col, index) => {
+                const colPath = [...newColumnGroupPath, index];
+                editor.tf.setNodes({ width: newWidths[index] }, { at: colPath });
               });
-            } else if (dropTarget.type === 'column-group-edge') {
-              // Append new column to existing column group
-              const columnGroupEntry = editor.api.node(dropTarget.columnGroupPath);
-              if (!columnGroupEntry) return;
 
-              const [columnGroup] = columnGroupEntry;
-              const columns = (columnGroup as TElement).children as TElement[];
-              const currentWidths = columns.map(col => col.width as string || `${100 / columns.length}%`);
-              const newWidths = rebalanceWidthsForNewColumn(currentWidths);
-
-              editor.tf.withoutNormalizing(() => {
-                // Remove the dragged element first
-                editor.tf.removeNodes({ at: dragPath });
-
-                // Recalculate column group path after removal
-                const newColumnGroupPath = editor.api.findPath(columnGroup);
-                if (!newColumnGroupPath) return;
-
-                // Update existing column widths
-                const updatedColumnGroup = editor.api.node(newColumnGroupPath);
-                if (!updatedColumnGroup) return;
-
-                const updatedColumns = (updatedColumnGroup[0] as TElement).children as TElement[];
-                updatedColumns.forEach((col, index) => {
-                  const colPath = [...newColumnGroupPath, index];
-                  editor.tf.setNodes({ width: newWidths[index] }, { at: colPath });
-                });
-
-                // Insert new column at the appropriate position
-                const newColumnPath = dropTarget.direction === 'left'
+              // Insert new column at the appropriate position
+              const newColumnPath =
+                dropTarget.direction === "left"
                   ? [...newColumnGroupPath, 0]
                   : [...newColumnGroupPath, updatedColumns.length];
 
-                editor.tf.insertNodes(
-                  {
-                    type: KEYS.column,
-                    width: newWidths[newWidths.length - 1],
-                    children: [{ ...draggedElement }],
-                  },
-                  { at: newColumnPath, select: true }
-                );
+              editor.tf.insertNodes(
+                {
+                  type: KEYS.column,
+                  width: newWidths[newWidths.length - 1],
+                  children: [{ ...draggedElement }],
+                },
+                { at: newColumnPath, select: true },
+              );
+            });
+          } else if (dropTarget.type === "column-inner") {
+            // Insert column between existing columns
+            const columnGroupEntry = editor.api.node(dropTarget.columnGroupPath);
+            if (!columnGroupEntry) return;
+
+            const [columnGroup] = columnGroupEntry;
+            const columns = (columnGroup as TElement).children as TElement[];
+            const currentColumnIndex = dropTarget.columnPath[dropTarget.columnPath.length - 1];
+            const currentWidths = columns.map(
+              (col) => (col.width as string) || `${100 / columns.length}%`,
+            );
+            const newWidths = rebalanceWidthsForNewColumn(currentWidths);
+
+            editor.tf.withoutNormalizing(() => {
+              // Remove the dragged element first
+              editor.tf.removeNodes({ at: dragPath });
+
+              // Recalculate column group path after removal
+              const newColumnGroupPath = editor.api.findPath(columnGroup);
+              if (!newColumnGroupPath) return;
+
+              // Update existing column widths
+              const updatedColumnGroup = editor.api.node(newColumnGroupPath);
+              if (!updatedColumnGroup) return;
+
+              const updatedColumns = (updatedColumnGroup[0] as TElement).children as TElement[];
+              updatedColumns.forEach((col, index) => {
+                const colPath = [...newColumnGroupPath, index];
+                editor.tf.setNodes({ width: newWidths[index] }, { at: colPath });
               });
-            } else if (dropTarget.type === 'column-inner') {
-              // Insert column between existing columns
-              const columnGroupEntry = editor.api.node(dropTarget.columnGroupPath);
-              if (!columnGroupEntry) return;
 
-              const [columnGroup] = columnGroupEntry;
-              const columns = (columnGroup as TElement).children as TElement[];
-              const currentColumnIndex = dropTarget.columnPath[dropTarget.columnPath.length - 1];
-              const currentWidths = columns.map(col => col.width as string || `${100 / columns.length}%`);
-              const newWidths = rebalanceWidthsForNewColumn(currentWidths);
+              // Calculate insert position
+              const insertIndex =
+                dropTarget.direction === "right" ? currentColumnIndex + 1 : currentColumnIndex;
+              const newColumnPath = [...newColumnGroupPath, insertIndex];
 
-              editor.tf.withoutNormalizing(() => {
-                // Remove the dragged element first
-                editor.tf.removeNodes({ at: dragPath });
-
-                // Recalculate column group path after removal
-                const newColumnGroupPath = editor.api.findPath(columnGroup);
-                if (!newColumnGroupPath) return;
-
-                // Update existing column widths
-                const updatedColumnGroup = editor.api.node(newColumnGroupPath);
-                if (!updatedColumnGroup) return;
-
-                const updatedColumns = (updatedColumnGroup[0] as TElement).children as TElement[];
-                updatedColumns.forEach((col, index) => {
-                  const colPath = [...newColumnGroupPath, index];
-                  editor.tf.setNodes({ width: newWidths[index] }, { at: colPath });
-                });
-
-                // Calculate insert position
-                const insertIndex = dropTarget.direction === 'right'
-                  ? currentColumnIndex + 1
-                  : currentColumnIndex;
-                const newColumnPath = [...newColumnGroupPath, insertIndex];
-
-                editor.tf.insertNodes(
-                  {
-                    type: KEYS.column,
-                    width: newWidths[newWidths.length - 1],
-                    children: [{ ...draggedElement }],
-                  },
-                  { at: newColumnPath, select: true }
-                );
-              });
-            }
-
-            // Clear edge state
-            globalDropTarget = null;
-            globalEdgeTargetId = null;
-            setEdgeDirection(null);
-            resetPreview();
-            return;
+              editor.tf.insertNodes(
+                {
+                  type: KEYS.column,
+                  width: newWidths[newWidths.length - 1],
+                  children: [{ ...draggedElement }],
+                },
+                { at: newColumnPath, select: true },
+              );
+            });
           }
-        }
 
-        // Default behavior - add to selection
-        if (blockSelectionApi) {
-          blockSelectionApi.add(id);
+          // Clear edge state
+          globalDropTarget = null;
+          globalEdgeTargetId = null;
+          setEdgeDirection(null);
+          resetPreview();
+          return;
         }
+      }
 
-        resetPreview();
-      },
-    });
+      // Default behavior - add to selection
+      if (blockSelectionApi) {
+        blockSelectionApi.add(id);
+      }
+
+      resetPreview();
+    },
+  });
 
   const { isAboutToDrag, isDragging, nodeRef, previewRef, handleRef } = draggableResult;
 
@@ -439,7 +442,7 @@ function Draggable(props: PlateElementProps) {
   const resetPreview = () => {
     if (previewRef.current) {
       previewRef.current.replaceChildren();
-      previewRef.current?.classList.add('hidden');
+      previewRef.current?.classList.add("hidden");
     }
   };
 
@@ -450,24 +453,22 @@ function Draggable(props: PlateElementProps) {
       setEdgeDirection(null);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isDragging]);
+  }, [isDragging, resetPreview]);
 
   useEffect(() => {
     if (isAboutToDrag) {
-      previewRef.current?.classList.remove('opacity-0');
+      previewRef.current?.classList.remove("opacity-0");
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isAboutToDrag]);
+  }, [isAboutToDrag, previewRef.current?.classList.remove]);
 
   return (
     <div
       ref={containerRef}
       className={cn(
-        'relative',
-        isDragging && 'opacity-50',
-        getPluginByType(editor, element.type)?.node.isContainer
-          ? 'group/container'
-          : 'group'
+        "relative",
+        isDragging && "opacity-50",
+        getPluginByType(editor, element.type)?.node.isContainer ? "group/container" : "group",
       )}
       onDragOver={handleDragOver}
       onDragLeave={handleDragLeave}
@@ -476,17 +477,17 @@ function Draggable(props: PlateElementProps) {
         <Gutter>
           <div
             className={cn(
-              'slate-blockToolbarWrapper',
-              'flex h-[1.5em]',
-              isInColumn && 'h-4',
-              isInTable && 'mt-1 size-4'
+              "slate-blockToolbarWrapper",
+              "flex h-[1.5em]",
+              isInColumn && "h-4",
+              isInTable && "mt-1 size-4",
             )}
           >
             <div
               className={cn(
-                'slate-blockToolbar',
-                'pointer-events-auto mr-1 flex items-center gap-0.5',
-                isInColumn && 'mr-1.5'
+                "slate-blockToolbar",
+                "pointer-events-auto mr-1 flex items-center gap-0.5",
+                isInColumn && "mr-1.5",
               )}
             >
               <Button
@@ -508,7 +509,7 @@ function Draggable(props: PlateElementProps) {
       )}
 
       <div
-        className={cn('-left-0 absolute hidden w-full')}
+        className={cn("-left-0 absolute hidden w-full")}
         contentEditable={false}
         ref={previewRef}
         style={{ top: `${-previewTop}px` }}
@@ -517,9 +518,7 @@ function Draggable(props: PlateElementProps) {
       <div
         className="slate-blockWrapper my-px flow-root"
         onContextMenu={(event) =>
-          editor
-            .getApi(BlockSelectionPlugin)
-            .blockSelection.addOnContextMenu({ element, event })
+          editor.getApi(BlockSelectionPlugin).blockSelection.addOnContextMenu({ element, event })
         }
         ref={nodeRef}
       >
@@ -531,31 +530,24 @@ function Draggable(props: PlateElementProps) {
   );
 }
 
-function Gutter({
-  children,
-  className,
-  ...props
-}: React.ComponentProps<'div'>) {
+function Gutter({ children, className, ...props }: React.ComponentProps<"div">) {
   const editor = useEditorRef();
   const element = useElement();
-  const isSelectionAreaVisible = usePluginOption(
-    BlockSelectionPlugin,
-    'isSelectionAreaVisible'
-  );
+  const isSelectionAreaVisible = usePluginOption(BlockSelectionPlugin, "isSelectionAreaVisible");
   const selected = useSelected();
 
   return (
     <div
       {...props}
       className={cn(
-        'slate-gutterLeft',
-        '-translate-x-full absolute top-1/2 -translate-y-1/2 z-50 flex cursor-text hover:opacity-100 sm:opacity-0',
+        "slate-gutterLeft",
+        "-translate-x-full absolute top-1/2 -translate-y-1/2 z-50 flex cursor-text hover:opacity-100 sm:opacity-0",
         getPluginByType(editor, element.type)?.node.isContainer
-          ? 'group-hover/container:opacity-100'
-          : 'group-hover:opacity-100',
-        isSelectionAreaVisible && 'hidden',
-        !selected && 'opacity-0',
-        className
+          ? "group-hover/container:opacity-100"
+          : "group-hover:opacity-100",
+        isSelectionAreaVisible && "hidden",
+        !selected && "opacity-0",
+        className,
       )}
       contentEditable={false}
     >
@@ -593,9 +585,7 @@ const DragHandle = React.memo(function DragHandle({
             .blockSelection.getNodes({ sort: true });
 
           let selectionNodes =
-            blockSelection.length > 0
-              ? blockSelection
-              : editor.api.blocks({ mode: 'highest' });
+            blockSelection.length > 0 ? blockSelection : editor.api.blocks({ mode: "highest" });
 
           // If current block is not in selection, use it as the starting point
           if (!selectionNodes.some(([node]) => node.id === element.id)) {
@@ -603,10 +593,7 @@ const DragHandle = React.memo(function DragHandle({
           }
 
           // Process selection nodes to include list children
-          const blocks = expandListItemsWithChildren(
-            editor,
-            selectionNodes
-          ).map(([node]) => node);
+          const blocks = expandListItemsWithChildren(editor, selectionNodes).map(([node]) => node);
 
           if (blockSelection.length === 0) {
             editor.tf.blur();
@@ -615,9 +602,9 @@ const DragHandle = React.memo(function DragHandle({
 
           const elements = createDragPreviewElements(editor, blocks);
           previewRef.current?.append(...elements);
-          previewRef.current?.classList.remove('hidden');
-          previewRef.current?.classList.add('opacity-0');
-          editor.setOption(DndPlugin, 'multiplePreviewRef', previewRef);
+          previewRef.current?.classList.remove("hidden");
+          previewRef.current?.classList.add("opacity-0");
+          editor.setOption(DndPlugin, "multiplePreviewRef", previewRef);
 
           editor
             .getApi(BlockSelectionPlugin)
@@ -631,9 +618,7 @@ const DragHandle = React.memo(function DragHandle({
             .blockSelection.getNodes({ sort: true });
 
           let selectedBlocks =
-            blockSelection.length > 0
-              ? blockSelection
-              : editor.api.blocks({ mode: 'highest' });
+            blockSelection.length > 0 ? blockSelection : editor.api.blocks({ mode: "highest" });
 
           // If current block is not in selection, use it as the starting point
           if (!selectedBlocks.some(([node]) => node.id === element.id)) {
@@ -641,10 +626,7 @@ const DragHandle = React.memo(function DragHandle({
           }
 
           // Process selection to include list children
-          const processedBlocks = expandListItemsWithChildren(
-            editor,
-            selectedBlocks
-          );
+          const processedBlocks = expandListItemsWithChildren(editor, selectedBlocks);
 
           const ids = processedBlocks.map((block) => block[0].id as string);
 
@@ -674,7 +656,7 @@ const DropLine = React.memo(function DropLine({
   hidden,
   id,
   ...props
-}: React.ComponentProps<'div'> & { hidden?: boolean; id?: string }) {
+}: React.ComponentProps<"div"> & { hidden?: boolean; id?: string }) {
   const { dropLine } = useDropLine({ id });
 
   if (!dropLine || hidden) return null;
@@ -683,12 +665,12 @@ const DropLine = React.memo(function DropLine({
     <div
       {...props}
       className={cn(
-        'slate-dropLine',
-        'absolute inset-x-0 h-0.5 opacity-100 transition-opacity',
-        'bg-primary/50',
-        dropLine === 'top' && '-top-px',
-        dropLine === 'bottom' && '-bottom-px',
-        className
+        "slate-dropLine",
+        "absolute inset-x-0 h-0.5 opacity-100 transition-opacity",
+        "bg-primary/50",
+        dropLine === "top" && "-top-px",
+        dropLine === "bottom" && "-bottom-px",
+        className,
       )}
     />
   );
@@ -702,28 +684,25 @@ const VerticalDropLine = React.memo(function VerticalDropLine({
   direction,
   className,
   ...props
-}: React.ComponentProps<'div'> & { direction: EdgeDirection }) {
+}: React.ComponentProps<"div"> & { direction: EdgeDirection }) {
   if (!direction) return null;
 
   return (
     <div
       {...props}
       className={cn(
-        'slate-dropLine-vertical',
-        'absolute inset-y-0 w-0.5 opacity-100 transition-opacity',
-        'bg-primary',
-        direction === 'left' && 'left-0',
-        direction === 'right' && 'right-0',
-        className
+        "slate-dropLine-vertical",
+        "absolute inset-y-0 w-0.5 opacity-100 transition-opacity",
+        "bg-primary",
+        direction === "left" && "left-0",
+        direction === "right" && "right-0",
+        className,
       )}
     />
   );
 });
 
-const createDragPreviewElements = (
-  editor: PlateEditor,
-  blocks: TElement[]
-): HTMLElement[] => {
+const createDragPreviewElements = (editor: PlateEditor, blocks: TElement[]): HTMLElement[] => {
   const elements: HTMLElement[] = [];
   const ids: string[] = [];
 
@@ -733,10 +712,7 @@ const createDragPreviewElements = (
    */
   const removeDataAttributes = (element: HTMLElement) => {
     Array.from(element.attributes).forEach((attr) => {
-      if (
-        attr.name.startsWith('data-slate') ||
-        attr.name.startsWith('data-block-id')
-      ) {
+      if (attr.name.startsWith("data-slate") || attr.name.startsWith("data-block-id")) {
         element.removeAttribute(attr.name);
       }
     });
@@ -751,20 +727,17 @@ const createDragPreviewElements = (
     const newDomNode = domNode.cloneNode(true) as HTMLElement;
 
     // Apply visual compensation for horizontal scroll
-    const applyScrollCompensation = (
-      original: Element,
-      cloned: HTMLElement
-    ) => {
+    const applyScrollCompensation = (original: Element, cloned: HTMLElement) => {
       const scrollLeft = original.scrollLeft;
 
       if (scrollLeft > 0) {
         // Create a wrapper to handle the scroll offset
-        const scrollWrapper = document.createElement('div');
-        scrollWrapper.style.overflow = 'hidden';
+        const scrollWrapper = document.createElement("div");
+        scrollWrapper.style.overflow = "hidden";
         scrollWrapper.style.width = `${original.clientWidth}px`;
 
         // Create inner container with the full content
-        const innerContainer = document.createElement('div');
+        const innerContainer = document.createElement("div");
         innerContainer.style.transform = `translateX(-${scrollLeft}px)`;
         innerContainer.style.width = `${original.scrollWidth}px`;
 
@@ -775,7 +748,7 @@ const createDragPreviewElements = (
 
         // Apply the original element's styles to maintain appearance
         const originalStyles = window.getComputedStyle(original);
-        cloned.style.padding = '0';
+        cloned.style.padding = "0";
         innerContainer.style.padding = originalStyles.padding;
 
         scrollWrapper.append(innerContainer);
@@ -786,18 +759,20 @@ const createDragPreviewElements = (
     applyScrollCompensation(domNode, newDomNode);
 
     ids.push(node.id as string);
-    const wrapper = document.createElement('div');
+    const wrapper = document.createElement("div");
     wrapper.append(newDomNode);
-    wrapper.style.display = 'flow-root';
+    wrapper.style.display = "flow-root";
 
     const lastDomNode = blocks[index - 1];
 
     if (lastDomNode) {
       const lastDomNodeRect = editor.api
-        .toDOMNode(lastDomNode)!
-        .parentElement!.getBoundingClientRect();
+        .toDOMNode(lastDomNode)
+        ?.parentElement?.getBoundingClientRect();
 
-      const domNodeRect = domNode.parentElement!.getBoundingClientRect();
+      const domNodeRect = domNode.parentElement?.getBoundingClientRect();
+
+      if (!domNodeRect || !lastDomNodeRect) return;
 
       const distance = domNodeRect.top - lastDomNodeRect.bottom;
 
@@ -806,7 +781,7 @@ const createDragPreviewElements = (
         wrapper.style.marginTop = `${distance}px`;
       } else {
         // DIFF with plate
-        wrapper.style.marginTop = '1px';
+        wrapper.style.marginTop = "1px";
       }
     }
 
@@ -818,7 +793,7 @@ const createDragPreviewElements = (
     resolveElement(blocks[index], index);
   }
 
-  editor.setOption(DndPlugin, 'draggingId', ids);
+  editor.setOption(DndPlugin, "draggingId", ids);
 
   return elements;
 };
@@ -831,7 +806,7 @@ const calculatePreviewTop = (
   }: {
     blocks: TElement[];
     element: TElement;
-  }
+  },
 ): number => {
   const child = editor.api.toDOMNode(element)!;
   const editable = editor.api.toDOMNode(editor)!;
@@ -839,9 +814,7 @@ const calculatePreviewTop = (
 
   const firstDomNode = editor.api.toDOMNode(firstSelectedChild)!;
   // Get editor's top padding
-  const editorPaddingTop = Number(
-    window.getComputedStyle(editable).paddingTop.replace('px', '')
-  );
+  const editorPaddingTop = Number(window.getComputedStyle(editable).paddingTop.replace("px", ""));
 
   // Calculate distance from first selected node to editor top
   const firstNodeToEditorDistance =
@@ -851,23 +824,17 @@ const calculatePreviewTop = (
 
   // Get margin top of first selected node
   const firstMarginTopString = window.getComputedStyle(firstDomNode).marginTop;
-  const marginTop = Number(firstMarginTopString.replace('px', ''));
+  const marginTop = Number(firstMarginTopString.replace("px", ""));
 
   // Calculate distance from current node to editor top
   const currentToEditorDistance =
-    child.getBoundingClientRect().top -
-    editable.getBoundingClientRect().top -
-    editorPaddingTop;
+    child.getBoundingClientRect().top - editable.getBoundingClientRect().top - editorPaddingTop;
 
   const currentMarginTopString = window.getComputedStyle(child).marginTop;
-  const currentMarginTop = Number(currentMarginTopString.replace('px', ''));
+  const currentMarginTop = Number(currentMarginTopString.replace("px", ""));
 
   const previewElementsTopDistance =
-    currentToEditorDistance -
-    firstNodeToEditorDistance +
-    marginTop -
-    currentMarginTop;
+    currentToEditorDistance - firstNodeToEditorDistance + marginTop - currentMarginTop;
 
   return previewElementsTopDistance;
 };
-

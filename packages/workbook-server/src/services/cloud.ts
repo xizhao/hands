@@ -60,7 +60,7 @@ async function trpcFetch<T>(
   config: CloudConfig,
   path: string,
   type: "query" | "mutation",
-  input?: unknown
+  input?: unknown,
 ): Promise<T> {
   const url = new URL(`/trpc/${path}`, config.baseUrl);
 
@@ -88,7 +88,11 @@ async function trpcFetch<T>(
     throw new Error(result.error.message);
   }
 
-  return result.result!.data;
+  if (!result.result) {
+    throw new Error("Cloud service returned no result");
+  }
+
+  return result.result.data;
 }
 
 /**
@@ -130,7 +134,7 @@ export function createCloudClient(config: CloudConfig) {
           config,
           "services.email.send",
           "mutation",
-          input
+          input,
         ),
     },
 
@@ -146,7 +150,7 @@ export function createCloudClient(config: CloudConfig) {
           config,
           "services.slack.send",
           "mutation",
-          input
+          input,
         ),
 
       /**
@@ -156,7 +160,7 @@ export function createCloudClient(config: CloudConfig) {
         trpcFetch<Array<{ id: string; name: string; is_private: boolean }>>(
           config,
           "services.slack.channels",
-          "query"
+          "query",
         ),
     },
 
@@ -173,7 +177,12 @@ export function createCloudClient(config: CloudConfig) {
       /**
        * List issues for a repo
        */
-      issues: (input: { owner: string; repo: string; state?: "open" | "closed" | "all"; per_page?: number }) =>
+      issues: (input: {
+        owner: string;
+        repo: string;
+        state?: "open" | "closed" | "all";
+        per_page?: number;
+      }) =>
         trpcFetch<
           Array<{
             id: number;
@@ -201,13 +210,16 @@ export function createCloudClient(config: CloudConfig) {
           config,
           "services.github.createIssue",
           "mutation",
-          input
+          input,
         ),
 
       /**
        * List user's repos
        */
-      repos: (input?: { per_page?: number; sort?: "created" | "updated" | "pushed" | "full_name" }) =>
+      repos: (input?: {
+        per_page?: number;
+        sort?: "created" | "updated" | "pushed" | "full_name";
+      }) =>
         trpcFetch<
           Array<{
             id: number;
@@ -232,7 +244,7 @@ export function createCloudClient(config: CloudConfig) {
           config,
           "services.salesforce.query",
           "query",
-          input
+          input,
         ),
     },
 
@@ -244,7 +256,7 @@ export function createCloudClient(config: CloudConfig) {
         config,
         "services.fetch.request",
         "mutation",
-        input
+        input,
       ),
 
     /**

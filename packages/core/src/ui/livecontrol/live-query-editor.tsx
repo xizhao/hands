@@ -11,20 +11,9 @@
  * - Future: Visual mode with table/column pickers
  */
 
-import { useState, useCallback, useEffect, useRef, useMemo } from "react";
-import { Database, Zap, AlertCircle, Check, Table2, Columns } from "lucide-react";
-
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogDescription,
-  DialogFooter,
-} from "../components/dialog";
+import { AlertCircle, Check, Columns, Database, Table2, Zap } from "lucide-react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Button } from "../components/button";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "../components/tabs";
-import { Textarea } from "../components/textarea";
 import {
   Command,
   CommandEmpty,
@@ -32,10 +21,20 @@ import {
   CommandItem,
   CommandList,
 } from "../components/command";
-import { Popover, PopoverContent, PopoverAnchor } from "../components/popover";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "../components/dialog";
+import { Popover, PopoverAnchor, PopoverContent } from "../components/popover";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "../components/tabs";
+import { Textarea } from "../components/textarea";
 import { cn } from "../lib/utils";
-import { useSchema, type TableSchema } from "../query-provider";
-import type { LiveQueryEditorProps, LiveControlType, TableInfo } from "./types";
+import { type TableSchema, useSchema } from "../query-provider";
+import type { LiveControlType, LiveQueryEditorProps } from "./types";
 
 // ============================================================================
 // SQL Validation
@@ -103,7 +102,10 @@ interface Suggestion {
 /**
  * Get the current word being typed at cursor position
  */
-function getCurrentWord(text: string, cursorPos: number): { word: string; start: number; end: number } {
+function getCurrentWord(
+  text: string,
+  cursorPos: number,
+): { word: string; start: number; end: number } {
   // Find word boundaries
   let start = cursorPos;
   let end = cursorPos;
@@ -155,7 +157,7 @@ function detectContext(text: string, cursorPos: number): "table" | "column" | "a
 function getSuggestions(
   schema: TableSchema[],
   currentWord: string,
-  context: "table" | "column" | "any"
+  context: "table" | "column" | "any",
 ): Suggestion[] {
   const suggestions: Suggestion[] = [];
   const searchTerm = currentWord.toLowerCase();
@@ -167,7 +169,7 @@ function getSuggestions(
 
   if (tablePrefix) {
     // Suggesting columns from specific table
-    const table = schema.find(t => t.table_name.toLowerCase() === tablePrefix);
+    const table = schema.find((t) => t.table_name.toLowerCase() === tablePrefix);
     if (table) {
       for (const col of table.columns) {
         if (!columnSearch || col.name.toLowerCase().includes(columnSearch)) {
@@ -238,19 +240,17 @@ function SqlTextEditor({ value, onChange, type, validation, schema }: SqlTextEdi
   const [cursorPos, setCursorPos] = useState(0);
   const [selectedIndex, setSelectedIndex] = useState(0);
 
-  const { word: currentWord, start: wordStart, end: wordEnd } = useMemo(
-    () => getCurrentWord(value, cursorPos),
-    [value, cursorPos]
-  );
+  const {
+    word: currentWord,
+    start: wordStart,
+    end: wordEnd,
+  } = useMemo(() => getCurrentWord(value, cursorPos), [value, cursorPos]);
 
-  const context = useMemo(
-    () => detectContext(value, cursorPos),
-    [value, cursorPos]
-  );
+  const context = useMemo(() => detectContext(value, cursorPos), [value, cursorPos]);
 
   const suggestions = useMemo(
-    () => schema.length > 0 ? getSuggestions(schema, currentWord, context) : [],
-    [schema, currentWord, context]
+    () => (schema.length > 0 ? getSuggestions(schema, currentWord, context) : []),
+    [schema, currentWord, context],
   );
 
   // Show suggestions when we have a word and matches
@@ -259,55 +259,64 @@ function SqlTextEditor({ value, onChange, type, validation, schema }: SqlTextEdi
     setSelectedIndex(0);
   }, [currentWord, suggestions.length]);
 
-  const applySuggestion = useCallback((suggestion: Suggestion) => {
-    // Check if we're completing after a dot (table.column)
-    const dotIndex = currentWord.lastIndexOf(".");
-    const insertStart = dotIndex > 0 ? wordStart + dotIndex + 1 : wordStart;
+  const applySuggestion = useCallback(
+    (suggestion: Suggestion) => {
+      // Check if we're completing after a dot (table.column)
+      const dotIndex = currentWord.lastIndexOf(".");
+      const insertStart = dotIndex > 0 ? wordStart + dotIndex + 1 : wordStart;
 
-    const newValue = value.slice(0, insertStart) + suggestion.value + value.slice(wordEnd);
-    onChange(newValue);
-    setShowSuggestions(false);
+      const newValue = value.slice(0, insertStart) + suggestion.value + value.slice(wordEnd);
+      onChange(newValue);
+      setShowSuggestions(false);
 
-    // Set cursor after inserted text
-    setTimeout(() => {
-      if (textareaRef.current) {
-        const newPos = insertStart + suggestion.value.length;
-        textareaRef.current.selectionStart = newPos;
-        textareaRef.current.selectionEnd = newPos;
-        textareaRef.current.focus();
-      }
-    }, 0);
-  }, [value, currentWord, wordStart, wordEnd, onChange]);
-
-  const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
-    if (!showSuggestions || suggestions.length === 0) return;
-
-    switch (e.key) {
-      case "ArrowDown":
-        e.preventDefault();
-        setSelectedIndex(i => (i + 1) % suggestions.length);
-        break;
-      case "ArrowUp":
-        e.preventDefault();
-        setSelectedIndex(i => (i - 1 + suggestions.length) % suggestions.length);
-        break;
-      case "Tab":
-      case "Enter":
-        if (suggestions[selectedIndex]) {
-          e.preventDefault();
-          applySuggestion(suggestions[selectedIndex]);
+      // Set cursor after inserted text
+      setTimeout(() => {
+        if (textareaRef.current) {
+          const newPos = insertStart + suggestion.value.length;
+          textareaRef.current.selectionStart = newPos;
+          textareaRef.current.selectionEnd = newPos;
+          textareaRef.current.focus();
         }
-        break;
-      case "Escape":
-        setShowSuggestions(false);
-        break;
-    }
-  }, [showSuggestions, suggestions, selectedIndex, applySuggestion]);
+      }, 0);
+    },
+    [value, currentWord, wordStart, wordEnd, onChange],
+  );
 
-  const handleInput = useCallback((e: React.ChangeEvent<HTMLTextAreaElement>) => {
-    onChange(e.target.value);
-    setCursorPos(e.target.selectionStart);
-  }, [onChange]);
+  const handleKeyDown = useCallback(
+    (e: React.KeyboardEvent) => {
+      if (!showSuggestions || suggestions.length === 0) return;
+
+      switch (e.key) {
+        case "ArrowDown":
+          e.preventDefault();
+          setSelectedIndex((i) => (i + 1) % suggestions.length);
+          break;
+        case "ArrowUp":
+          e.preventDefault();
+          setSelectedIndex((i) => (i - 1 + suggestions.length) % suggestions.length);
+          break;
+        case "Tab":
+        case "Enter":
+          if (suggestions[selectedIndex]) {
+            e.preventDefault();
+            applySuggestion(suggestions[selectedIndex]);
+          }
+          break;
+        case "Escape":
+          setShowSuggestions(false);
+          break;
+      }
+    },
+    [showSuggestions, suggestions, selectedIndex, applySuggestion],
+  );
+
+  const handleInput = useCallback(
+    (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+      onChange(e.target.value);
+      setCursorPos(e.target.selectionStart);
+    },
+    [onChange],
+  );
 
   const handleSelect = useCallback((e: React.SyntheticEvent<HTMLTextAreaElement>) => {
     setCursorPos((e.target as HTMLTextAreaElement).selectionStart);
@@ -331,7 +340,9 @@ function SqlTextEditor({ value, onChange, type, validation, schema }: SqlTextEdi
             }
             className={cn(
               "font-mono text-sm min-h-[200px] resize-y",
-              !validation.valid && value.trim() && "border-destructive focus-visible:ring-destructive"
+              !validation.valid &&
+                value.trim() &&
+                "border-destructive focus-visible:ring-destructive",
             )}
             spellCheck={false}
           />
@@ -353,7 +364,7 @@ function SqlTextEditor({ value, onChange, type, validation, schema }: SqlTextEdi
                     onSelect={() => applySuggestion(suggestion)}
                     className={cn(
                       "flex items-center gap-2 cursor-pointer",
-                      index === selectedIndex && "bg-accent"
+                      index === selectedIndex && "bg-accent",
                     )}
                   >
                     {suggestion.type === "table" ? (
@@ -422,10 +433,11 @@ export function LiveQueryEditor({
 
   // Get schema from context or prop
   const schemaFromContext = useSchema();
-  const schema: TableSchema[] = schemaProp?.map(t => ({
-    table_name: t.table_name,
-    columns: t.columns,
-  })) ?? schemaFromContext;
+  const schema: TableSchema[] =
+    schemaProp?.map((t) => ({
+      table_name: t.table_name,
+      columns: t.columns,
+    })) ?? schemaFromContext;
 
   // Reset SQL when dialog opens with new initial value
   useEffect(() => {

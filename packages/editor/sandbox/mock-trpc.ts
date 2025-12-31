@@ -14,7 +14,12 @@
  * ```
  */
 
-import type { EditorTrpcClient, GenerateMdxInput, GenerateMdxBlockInput, GenerateMdxOutput } from "@hands/editor";
+import type {
+  EditorTrpcClient,
+  GenerateMdxBlockInput,
+  GenerateMdxInput,
+  GenerateMdxOutput,
+} from "@hands/editor";
 
 // SQL queries that match MOCK_DATA in main.tsx
 const QUERIES = {
@@ -107,7 +112,7 @@ export const mockTrpc: EditorTrpcClient = {
         await new Promise((resolve) => setTimeout(resolve, 200 + Math.random() * 300));
 
         const mdx = findMockResponse(input.prompt);
-        console.log('[mock-trpc] generateMdx prompt:', input.prompt, '-> mdx:', mdx);
+        console.log("[mock-trpc] generateMdx prompt:", input.prompt, "-> mdx:", mdx);
         return { mdx };
       },
     },
@@ -118,7 +123,7 @@ export const mockTrpc: EditorTrpcClient = {
         await new Promise((resolve) => setTimeout(resolve, delay + Math.random() * 300));
 
         const mdx = findMockResponse(input.prompt);
-        console.log('[mock-trpc] generateMdxBlock prompt:', input.prompt, '-> mdx:', mdx);
+        console.log("[mock-trpc] generateMdxBlock prompt:", input.prompt, "-> mdx:", mdx);
         return { mdx };
       },
     },
@@ -130,7 +135,7 @@ export const mockTrpc: EditorTrpcClient = {
  */
 export function createMockTrpc(
   customResponses?: Record<string, string>,
-  delay = 200
+  delay = 200,
 ): EditorTrpcClient {
   const responses = { ...MOCK_RESPONSES, ...customResponses };
 
@@ -155,7 +160,9 @@ export function createMockTrpc(
       generateMdxBlock: {
         mutate: async (input: GenerateMdxBlockInput): Promise<GenerateMdxOutput> => {
           const extraDelay = input.reasoning === "high" ? 800 : input.reasoning === "mid" ? 400 : 0;
-          await new Promise((resolve) => setTimeout(resolve, delay + extraDelay + Math.random() * 100));
+          await new Promise((resolve) =>
+            setTimeout(resolve, delay + extraDelay + Math.random() * 100),
+          );
           return { mdx: findResponse(input.prompt) };
         },
       },

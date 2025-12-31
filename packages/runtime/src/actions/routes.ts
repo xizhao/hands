@@ -6,13 +6,13 @@
  * Uses same @hands/db as blocks (Durable Objects SQLite).
  */
 
-import { route } from "rwsdk/router";
-import type { ActionDefinition, ActionRun, ActionTriggerType } from "../types/action";
+import { actions, listActions } from "@hands/actions";
 import { isWorkflowAction, type StepRecord } from "@hands/core/primitives";
+import { route } from "rwsdk/router";
+import { getUserTables } from "../db/dev";
+import type { ActionDefinition, ActionRun, ActionTriggerType } from "../types/action";
 import { buildActionContext, createRunMeta } from "./context";
 import { executeWorkflow } from "./workflow-executor";
-import { getUserTables } from "../db/dev";
-import { actions, listActions } from "@hands/actions";
 
 /** Extended ActionRun with workflow steps */
 export interface WorkflowActionRun extends ActionRun {
@@ -49,7 +49,7 @@ async function executeAction(
   trigger: ActionTriggerType,
   input: unknown,
   secrets: Record<string, string>,
-  authToken?: string
+  authToken?: string,
 ): Promise<WorkflowActionRun> {
   const runId = generateRunId();
   const startTime = Date.now();

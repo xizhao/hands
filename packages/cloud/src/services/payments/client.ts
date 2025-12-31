@@ -1,5 +1,5 @@
 import Stripe from "stripe";
-import type { PaymentsEnv, CheckoutOptions, PortalOptions } from "./types";
+import type { CheckoutOptions, PaymentsEnv, PortalOptions } from "./types";
 
 export function createStripeClient(env: PaymentsEnv): Stripe {
   return new Stripe(env.STRIPE_SECRET_KEY);
@@ -7,7 +7,7 @@ export function createStripeClient(env: PaymentsEnv): Stripe {
 
 export async function createCheckoutSession(
   stripe: Stripe,
-  options: CheckoutOptions & { priceId: string; appUrl: string }
+  options: CheckoutOptions & { priceId: string; appUrl: string },
 ): Promise<{ url: string | null; sessionId: string }> {
   let customerId = options.customerId;
 
@@ -37,7 +37,7 @@ export async function createCheckoutSession(
 
 export async function createPortalSession(
   stripe: Stripe,
-  options: PortalOptions
+  options: PortalOptions,
 ): Promise<{ url: string }> {
   const session = await stripe.billingPortal.sessions.create({
     customer: options.customerId,
@@ -47,16 +47,13 @@ export async function createPortalSession(
   return { url: session.url };
 }
 
-export async function cancelSubscription(
-  stripe: Stripe,
-  subscriptionId: string
-): Promise<void> {
+export async function cancelSubscription(stripe: Stripe, subscriptionId: string): Promise<void> {
   await stripe.subscriptions.cancel(subscriptionId);
 }
 
 export async function listActiveSubscriptions(
   stripe: Stripe,
-  customerId: string
+  customerId: string,
 ): Promise<Stripe.Subscription[]> {
   const active = await stripe.subscriptions.list({
     customer: customerId,

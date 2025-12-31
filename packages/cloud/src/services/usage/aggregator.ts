@@ -1,7 +1,7 @@
-import type { Env } from "../../types";
+import { sql } from "drizzle-orm";
 import { getDb } from "../../lib/db";
 import { usageDaily } from "../../schema/usage";
-import { sql } from "drizzle-orm";
+import type { Env } from "../../types";
 import type { AIGatewayLogEntry } from "./types";
 
 interface AIGatewayLogsResponse {
@@ -26,7 +26,7 @@ const MODEL_COSTS: Record<string, { input: number; output: number }> = {
 function estimateCost(
   model: string | undefined,
   inputTokens: number,
-  outputTokens: number
+  outputTokens: number,
 ): number {
   const costs = MODEL_COSTS[model ?? "default"] ?? MODEL_COSTS.default;
   const inputCost = (inputTokens / 1000) * costs.input;
@@ -37,7 +37,7 @@ function estimateCost(
 async function fetchAIGatewayLogs(
   env: Env,
   startTime: Date,
-  endTime: Date
+  endTime: Date,
 ): Promise<AIGatewayLogEntry[]> {
   if (!env.CF_ACCOUNT_ID || !env.CF_API_TOKEN) {
     console.warn("CF_ACCOUNT_ID or CF_API_TOKEN not configured, skipping usage aggregation");
@@ -45,7 +45,7 @@ async function fetchAIGatewayLogs(
   }
 
   const url = new URL(
-    `https://api.cloudflare.com/client/v4/accounts/${env.CF_ACCOUNT_ID}/ai-gateway/gateways/${env.AI_GATEWAY_ID}/logs`
+    `https://api.cloudflare.com/client/v4/accounts/${env.CF_ACCOUNT_ID}/ai-gateway/gateways/${env.AI_GATEWAY_ID}/logs`,
   );
 
   url.searchParams.set("start", startTime.toISOString());
@@ -139,10 +139,7 @@ function aggregateLogs(logs: AIGatewayLogEntry[]): Map<string, AggregatedUsage> 
   return aggregates;
 }
 
-async function upsertUsageData(
-  env: Env,
-  aggregates: Map<string, AggregatedUsage>
-): Promise<void> {
+async function upsertUsageData(env: Env, aggregates: Map<string, AggregatedUsage>): Promise<void> {
   const db = getDb(env.DB);
 
   for (const data of aggregates.values()) {

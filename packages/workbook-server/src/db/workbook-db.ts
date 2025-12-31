@@ -34,7 +34,7 @@ function findRuntimeDbPath(workbookDir: string): string | null {
       if (entry.endsWith("-Database")) {
         const dbDir = join(doDir, entry);
         const files = readdirSync(dbDir);
-        const sqliteFile = files.find(f => f.endsWith(".sqlite"));
+        const sqliteFile = files.find((f) => f.endsWith(".sqlite"));
         if (sqliteFile) {
           return join(dbDir, sqliteFile);
         }
@@ -80,9 +80,7 @@ export function getWorkbookDb(workbookDir: string): Database {
   db.run("PRAGMA journal_mode = WAL");
 
   // Run integrity check
-  const integrityResult = db.query<{ integrity_check: string }, []>(
-    "PRAGMA integrity_check"
-  ).get();
+  const integrityResult = db.query<{ integrity_check: string }, []>("PRAGMA integrity_check").get();
 
   if (integrityResult?.integrity_check !== "ok") {
     console.error(`Workbook database corrupted: ${integrityResult?.integrity_check}`);
@@ -142,16 +140,13 @@ type SQLQueryBindings = string | number | bigint | boolean | null | Uint8Array;
 /**
  * Execute a SQL query with parameters
  */
-export function executeQuery(
-  db: Database,
-  sql: string,
-  params?: unknown[]
-): QueryResult {
+export function executeQuery(db: Database, sql: string, params?: unknown[]): QueryResult {
   const trimmedSql = sql.trim().toUpperCase();
-  const isSelect = trimmedSql.startsWith("SELECT") ||
-                   trimmedSql.startsWith("PRAGMA") ||
-                   trimmedSql.startsWith("WITH") ||
-                   trimmedSql.startsWith("EXPLAIN");
+  const isSelect =
+    trimmedSql.startsWith("SELECT") ||
+    trimmedSql.startsWith("PRAGMA") ||
+    trimmedSql.startsWith("WITH") ||
+    trimmedSql.startsWith("EXPLAIN");
 
   // Cast params to SQLite binding types
   const safeParams = (params || []) as SQLQueryBindings[];
@@ -172,7 +167,9 @@ export function executeQuery(
 
     // Get changes and last insert rowid
     const changesResult = db.query<{ changes: number }, []>("SELECT changes() as changes").get();
-    const rowidResult = db.query<{ rowid: number }, []>("SELECT last_insert_rowid() as rowid").get();
+    const rowidResult = db
+      .query<{ rowid: number }, []>("SELECT last_insert_rowid() as rowid")
+      .get();
 
     return {
       rows: [],
@@ -202,30 +199,42 @@ export function getSchema(db: Database): {
   }>;
 } {
   // Get all user tables (excluding sqlite internal and double-underscore prefixed)
-  const tables = db.query<{ name: string }, []>(`
+  const tables = db
+    .query<{ name: string }, []>(`
     SELECT name FROM sqlite_master
     WHERE type = 'table'
       AND name NOT LIKE 'sqlite_%'
       AND name NOT GLOB '__*'
     ORDER BY name
-  `).all();
+  `)
+    .all();
 
   const result = tables.map((t) => {
-    const columns = db.query<{
-      name: string;
-      type: string;
-      notnull: number;
-      pk: number;
-    }, []>(`PRAGMA table_info("${t.name}")`).all();
+    const columns = db
+      .query<
+        {
+          name: string;
+          type: string;
+          notnull: number;
+          pk: number;
+        },
+        []
+      >(`PRAGMA table_info("${t.name}")`)
+      .all();
 
     // Get foreign key info
-    const foreignKeys = db.query<{
-      id: number;
-      seq: number;
-      table: string;
-      from: string;
-      to: string;
-    }, []>(`PRAGMA foreign_key_list("${t.name}")`).all();
+    const foreignKeys = db
+      .query<
+        {
+          id: number;
+          seq: number;
+          table: string;
+          from: string;
+          to: string;
+        },
+        []
+      >(`PRAGMA foreign_key_list("${t.name}")`)
+      .all();
 
     return {
       name: t.name,

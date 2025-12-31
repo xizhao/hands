@@ -6,7 +6,7 @@
  */
 
 import { Database, Table as TableIcon, X } from "@phosphor-icons/react";
-import { useState, useEffect, useCallback } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { cn } from "../lib/utils";
 
 export interface TableSchema {
@@ -39,12 +39,7 @@ export interface TablePreviewProps {
 /**
  * Popover-based table preview
  */
-export function TablePreview({
-  table,
-  fetchTableData,
-  children,
-  className,
-}: TablePreviewProps) {
+export function TablePreview({ table, fetchTableData, children, className }: TablePreviewProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [data, setData] = useState<TablePreviewData | null>(null);
   const [loading, setLoading] = useState(false);
@@ -169,10 +164,7 @@ function TablePreviewContent({
           )}
         </div>
         {expanded && (
-          <button
-            onClick={onClose}
-            className="p-1 rounded hover:bg-accent transition-colors"
-          >
+          <button onClick={onClose} className="p-1 rounded hover:bg-accent transition-colors">
             <X weight="bold" className="h-4 w-4" />
           </button>
         )}
@@ -186,11 +178,7 @@ function TablePreviewContent({
           </div>
         )}
 
-        {error && (
-          <div className="p-4 text-sm text-destructive">
-            {error}
-          </div>
-        )}
+        {error && <div className="p-4 text-sm text-destructive">{error}</div>}
 
         {!loading && !error && !data && (
           <div className="flex flex-col items-center justify-center p-8 text-muted-foreground">
@@ -212,7 +200,7 @@ function TablePreviewContent({
                       "inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-mono",
                       col.primaryKey
                         ? "bg-primary/10 text-primary border border-primary/20"
-                        : "bg-muted text-muted-foreground"
+                        : "bg-muted text-muted-foreground",
                     )}
                   >
                     {col.name}
@@ -242,9 +230,7 @@ function TablePreviewContent({
                           </th>
                         ))}
                         {data.schema.columns.length > 5 && (
-                          <th className="text-left font-medium text-muted-foreground p-1.5">
-                            ...
-                          </th>
+                          <th className="text-left font-medium text-muted-foreground p-1.5">...</th>
                         )}
                       </tr>
                     </thead>
@@ -252,10 +238,7 @@ function TablePreviewContent({
                       {data.rows.slice(0, 5).map((row, i) => (
                         <tr key={i} className="border-b border-border/50">
                           {data.schema.columns.slice(0, 5).map((col) => (
-                            <td
-                              key={col.name}
-                              className="p-1.5 font-mono truncate max-w-[120px]"
-                            >
+                            <td key={col.name} className="p-1.5 font-mono truncate max-w-[120px]">
                               {formatValue(row[col.name])}
                             </td>
                           ))}
@@ -287,7 +270,7 @@ function formatValue(value: unknown): string {
     return JSON.stringify(value).slice(0, 50);
   }
   if (typeof value === "string" && value.length > 50) {
-    return value.slice(0, 47) + "...";
+    return `${value.slice(0, 47)}...`;
   }
   return String(value);
 }
@@ -300,10 +283,17 @@ export function useTablePreview(
   table: string,
   trpc?: {
     db?: {
-      schema: { query: () => Promise<Array<{ table_name: string; columns: Array<{ name: string; type: string; nullable?: boolean }> }>> };
+      schema: {
+        query: () => Promise<
+          Array<{
+            table_name: string;
+            columns: Array<{ name: string; type: string; nullable?: boolean }>;
+          }>
+        >;
+      };
       select: { query: (input: { sql: string }) => Promise<{ rows: unknown[] }> };
-    }
-  } | null
+    };
+  } | null,
 ): {
   data: TablePreviewData | null;
   loading: boolean;
@@ -324,30 +314,31 @@ export function useTablePreview(
       // Fetch schema via tRPC
       const schemaResult = await trpc.db.schema.query();
       const tableSchema = schemaResult?.find(
-        (t) => t.table_name.toLowerCase() === table.toLowerCase()
+        (t) => t.table_name.toLowerCase() === table.toLowerCase(),
       );
 
       // Fetch sample rows via tRPC
       const rowsResult = await trpc.db.select.query({
-        sql: `SELECT * FROM "${table}" LIMIT 5`
+        sql: `SELECT * FROM "${table}" LIMIT 5`,
       });
       const rows = (rowsResult?.rows ?? []) as Record<string, unknown>[];
 
       // Fetch total count via tRPC
       const countResult = await trpc.db.select.query({
-        sql: `SELECT COUNT(*) as count FROM "${table}"`
+        sql: `SELECT COUNT(*) as count FROM "${table}"`,
       });
       const totalRows = (countResult?.rows?.[0] as { count?: number })?.count;
 
       setData({
         schema: {
           name: table,
-          columns: tableSchema?.columns?.map((c) => ({
-            name: c.name,
-            type: c.type,
-            primaryKey: false, // Schema doesn't include primary key info currently
-            nullable: c.nullable,
-          })) ?? [],
+          columns:
+            tableSchema?.columns?.map((c) => ({
+              name: c.name,
+              type: c.type,
+              primaryKey: false, // Schema doesn't include primary key info currently
+              nullable: c.nullable,
+            })) ?? [],
         },
         rows,
         totalRows,

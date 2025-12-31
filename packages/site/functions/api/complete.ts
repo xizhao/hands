@@ -24,9 +24,7 @@ interface GenerateMdxOutput {
   mdx: string;
 }
 
-export async function onRequest(
-  context: EventContext<Env, string, unknown>
-): Promise<Response> {
+export async function onRequest(context: EventContext<Env, string, unknown>): Promise<Response> {
   // Handle CORS preflight
   if (context.request.method === "OPTIONS") {
     return new Response(null, {
@@ -58,7 +56,7 @@ export async function onRequest(
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        "Authorization": `Bearer ${apiKey}`,
+        Authorization: `Bearer ${apiKey}`,
         "HTTP-Referer": "https://hands.dev",
         "X-Title": "Hands",
       },

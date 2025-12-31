@@ -5,7 +5,7 @@
  * Finds the CLI binary next to the agent binary.
  */
 
-import { spawn, execSync, type SpawnOptions } from "node:child_process";
+import { execSync, type SpawnOptions, spawn } from "node:child_process";
 import { existsSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 
@@ -54,7 +54,7 @@ function findCli(): string {
 
   // If nothing found, throw an error
   throw new Error(
-    `Could not find hands-cli binary. Searched:\n${candidates.map(c => `  - ${c}`).join("\n")}`
+    `Could not find hands-cli binary. Searched:\n${candidates.map((c) => `  - ${c}`).join("\n")}`,
   );
 }
 
@@ -72,7 +72,7 @@ export interface CliResult {
  */
 export function runCli(
   args: string[],
-  options: { cwd?: string; timeout?: number } = {}
+  options: { cwd?: string; timeout?: number } = {},
 ): Promise<CliResult> {
   const cliPath = findCli();
   const { cwd = process.cwd(), timeout } = options;
@@ -92,7 +92,7 @@ export function runCli(
     if (timeout) {
       timeoutId = setTimeout(() => {
         proc.kill("SIGTERM");
-        resolve({ stdout, stderr: stderr + "\nCommand timed out", code: 124 });
+        resolve({ stdout, stderr: `${stderr}\nCommand timed out`, code: 124 });
       }, timeout);
     }
 
@@ -121,7 +121,7 @@ export function runCli(
  */
 export function runCliSync(
   args: string[],
-  options: { cwd?: string; timeout?: number } = {}
+  options: { cwd?: string; timeout?: number } = {},
 ): CliResult {
   const cliPath = findCli();
   const { cwd = process.cwd(), timeout = 30000 } = options;

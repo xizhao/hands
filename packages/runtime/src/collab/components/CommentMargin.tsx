@@ -1,9 +1,9 @@
 "use client";
 
-import { useState, useRef, useEffect } from "react";
-import type { CommentThread as CommentThreadType, CollabUser } from "../types";
-import { CommentThread } from "./CommentThread";
+import { useEffect, useRef, useState } from "react";
+import type { CollabUser, CommentThread as CommentThreadType } from "../types";
 import { CommentInput } from "./CommentInput";
+import { CommentThread } from "./CommentThread";
 
 interface CommentMarginProps {
   elementId: string;
@@ -69,12 +69,20 @@ export function CommentMargin({
               : "bg-background/80 backdrop-blur-sm text-muted-foreground border-border/50 opacity-0 group-hover:opacity-100 hover:bg-muted hover:text-foreground"
           }
         `}
-        title={hasComments ? `${totalComments} comment${totalComments !== 1 ? "s" : ""}` : "Add comment"}
+        title={
+          hasComments ? `${totalComments} comment${totalComments !== 1 ? "s" : ""}` : "Add comment"
+        }
       >
         {hasComments ? (
           <span className="text-[10px] font-semibold">{totalComments}</span>
         ) : (
-          <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
+          <svg
+            className="w-3 h-3"
+            fill="none"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
+            strokeWidth={2}
+          >
             <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
           </svg>
         )}
@@ -94,7 +102,13 @@ export function CommentMargin({
                 onClick={() => setIsOpen(false)}
                 className="w-5 h-5 rounded flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
               >
-                <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
+                <svg
+                  className="w-3 h-3"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                  strokeWidth={2}
+                >
                   <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
                 </svg>
               </button>
@@ -128,7 +142,13 @@ export function CommentMargin({
                 onClick={() => setShowNewThread(true)}
                 className="w-full mt-3 pt-3 border-t border-border/50 text-xs text-muted-foreground hover:text-foreground flex items-center gap-1.5 transition-colors"
               >
-                <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
+                <svg
+                  className="w-3 h-3"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                  strokeWidth={2}
+                >
                   <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
                 </svg>
                 New thread

@@ -178,7 +178,7 @@ class ServiceError extends Error {
   constructor(
     message: string,
     public readonly provider: string,
-    public readonly statusCode?: number
+    public readonly statusCode?: number,
   ) {
     super(message);
     this.name = "ServiceError";
@@ -188,12 +188,9 @@ class ServiceError extends Error {
 /**
  * Get an access token for a provider from the cloud API
  */
-async function getProviderToken(
-  config: ServicesConfig,
-  provider: OAuthProvider
-): Promise<string> {
+async function getProviderToken(config: ServicesConfig, provider: OAuthProvider): Promise<string> {
   const url = `${config.cloudUrl}/trpc/integrations.getToken?input=${encodeURIComponent(
-    JSON.stringify({ provider })
+    JSON.stringify({ provider }),
   )}`;
 
   const res = await fetch(url, {
@@ -204,7 +201,11 @@ async function getProviderToken(
 
   if (!res.ok) {
     if (res.status === 404) {
-      throw new ServiceError(`${provider} is not connected. Connect it in Settings > Integrations.`, provider, 404);
+      throw new ServiceError(
+        `${provider} is not connected. Connect it in Settings > Integrations.`,
+        provider,
+        404,
+      );
     }
     throw new ServiceError(`Failed to get ${provider} token: ${res.status}`, provider, res.status);
   }
@@ -229,7 +230,7 @@ export function createServices(config: ServicesConfig): Services {
   async function providerFetch<T>(
     provider: OAuthProvider,
     url: string,
-    options: RequestInit = {}
+    options: RequestInit = {},
   ): Promise<T> {
     const token = await getProviderToken(config, provider);
 
@@ -245,7 +246,11 @@ export function createServices(config: ServicesConfig): Services {
 
     if (!res.ok) {
       const text = await res.text();
-      throw new ServiceError(`${provider} API error: ${res.status} - ${text}`, provider, res.status);
+      throw new ServiceError(
+        `${provider} API error: ${res.status} - ${text}`,
+        provider,
+        res.status,
+      );
     }
 
     return res.json() as Promise<T>;
@@ -259,17 +264,14 @@ export function createServices(config: ServicesConfig): Services {
         // Use Gmail API to send email
         const rawMessage = createRawEmail(input);
 
-        const res = await fetch(
-          "https://www.googleapis.com/gmail/v1/users/me/messages/send",
-          {
-            method: "POST",
-            headers: {
-              Authorization: `Bearer ${token}`,
-              "Content-Type": "application/json",
-            },
-            body: JSON.stringify({ raw: rawMessage }),
-          }
-        );
+        const res = await fetch("https://www.googleapis.com/gmail/v1/users/me/messages/send", {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${token}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ raw: rawMessage }),
+        });
 
         if (!res.ok) {
           const text = await res.text();
@@ -320,7 +322,7 @@ export function createServices(config: ServicesConfig): Services {
           "https://slack.com/api/conversations.list?types=public_channel,private_channel",
           {
             headers: { Authorization: `Bearer ${token}` },
-          }
+          },
         );
 
         const data = (await res.json()) as {
@@ -417,7 +419,11 @@ export function createServices(config: ServicesConfig): Services {
 
         if (!res.ok) {
           const text = await res.text();
-          throw new ServiceError(`Salesforce API error: ${res.status} - ${text}`, "salesforce", res.status);
+          throw new ServiceError(
+            `Salesforce API error: ${res.status} - ${text}`,
+            "salesforce",
+            res.status,
+          );
         }
 
         return res.json() as Promise<SalesforceQueryResult>;
@@ -497,13 +503,9 @@ export function createServices(config: ServicesConfig): Services {
  * Create a raw RFC 2822 email for Gmail API
  */
 function createRawEmail(input: EmailInput): string {
-  const boundary = `----=_Part_${Date.now()}_${Math.random().toString(36).substring(2)}`;
+  const _boundary = `----=_Part_${Date.now()}_${Math.random().toString(36).substring(2)}`;
 
-  let headers = [
-    `To: ${input.to}`,
-    `Subject: ${input.subject}`,
-    `MIME-Version: 1.0`,
-  ];
+  const headers = [`To: ${input.to}`, `Subject: ${input.subject}`, `MIME-Version: 1.0`];
 
   if (input.cc?.length) {
     headers.push(`Cc: ${input.cc.join(", ")}`);

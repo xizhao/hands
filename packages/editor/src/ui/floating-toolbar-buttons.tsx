@@ -1,4 +1,4 @@
-'use client';
+"use client";
 
 /**
  * Floating toolbar buttons for the editor.
@@ -8,21 +8,15 @@
  * code, colors, and links.
  */
 
-import {
-  Code,
-  TextB,
-  TextItalic,
-  TextStrikethrough,
-  TextUnderline,
-} from "@phosphor-icons/react";
-import { KEYS } from 'platejs';
-import { useEditorReadOnly } from 'platejs/react';
+import { Code, TextB, TextItalic, TextStrikethrough, TextUnderline } from "@phosphor-icons/react";
+import { KEYS } from "platejs";
+import { useEditorReadOnly } from "platejs/react";
 
-import { FontColorToolbarButton } from './font-color-toolbar-button';
-import { LinkToolbarButton } from './link-toolbar-button';
-import { MarkToolbarButton } from './mark-toolbar-button';
-import { ToolbarSeparator } from './toolbar';
-import { TurnIntoToolbarButton } from './turn-into-toolbar-button';
+import { FontColorToolbarButton } from "./font-color-toolbar-button";
+import { LinkToolbarButton } from "./link-toolbar-button";
+import { MarkToolbarButton } from "./mark-toolbar-button";
+import { ToolbarSeparator } from "./toolbar";
+import { TurnIntoToolbarButton } from "./turn-into-toolbar-button";
 
 export function FloatingToolbarButtons() {
   const readOnly = useEditorReadOnly();

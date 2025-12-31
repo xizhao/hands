@@ -4,14 +4,14 @@
  * Separate entry for transparent overlay windows (capture overlay, capture action panel, floating chat).
  */
 
+import { initTheme, PlatformProvider } from "@hands/app";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import React from "react";
 import ReactDOM from "react-dom/client";
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { PlatformProvider, initTheme } from "@hands/app";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { TauriPlatformAdapter } from "./platform/TauriAdapter";
-import { CaptureOverlay } from "./windows/CaptureOverlay";
 import { CaptureActionPanel } from "./windows/CaptureActionPanel";
+import { CaptureOverlay } from "./windows/CaptureOverlay";
 import { FloatingChat } from "./windows/FloatingChat";
 import "./index.css";
 
@@ -50,5 +50,5 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
     <QueryClientProvider client={queryClient}>
       <App />
     </QueryClientProvider>
-  </React.StrictMode>
+  </React.StrictMode>,
 );

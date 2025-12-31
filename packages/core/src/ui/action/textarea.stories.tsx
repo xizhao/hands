@@ -5,16 +5,10 @@ export default {
   title: "Active/Textarea",
 };
 
-export const Default: Story = () => (
-  <Textarea name="content" placeholder="Enter your message..." />
-);
+export const Default: Story = () => <Textarea name="content" placeholder="Enter your message..." />;
 
 export const WithLabel: Story = () => (
-  <Textarea
-    name="description"
-    label="Description"
-    placeholder="Enter a detailed description..."
-  />
+  <Textarea name="description" label="Description" placeholder="Enter a detailed description..." />
 );
 
 export const CustomRows: Story = () => (

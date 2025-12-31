@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { router, protectedProcedure } from "../../trpc/base";
+import { protectedProcedure, router } from "../../trpc/base";
 import { createEmailSender } from "./client";
 import type { EmailTemplate } from "./types";
 
@@ -11,7 +11,7 @@ export const emailRouter = router({
         template: z.enum(["welcome", "usage_alert", "payment_failed", "subscription_canceled"]),
         to: z.string().email(),
         data: z.record(z.unknown()),
-      })
+      }),
     )
     .mutation(async ({ ctx, input }) => {
       const sender = createEmailSender(ctx.env);
@@ -20,7 +20,7 @@ export const emailRouter = router({
       const result = await sender.sendTemplate(
         input.template as EmailTemplate,
         input.to,
-        input.data as never
+        input.data as never,
       );
 
       return { messageId: result.messageId, success: result.success };
@@ -34,7 +34,7 @@ export const emailRouter = router({
         subject: z.string().min(1).max(200),
         html: z.string().min(1),
         text: z.string().optional(),
-      })
+      }),
     )
     .mutation(async ({ ctx, input }) => {
       const sender = createEmailSender(ctx.env);

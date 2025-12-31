@@ -25,11 +25,11 @@ export interface WorkbookEvents {
 /** Floating chat events */
 export interface FloatingChatEvents {
   /** Emitted when floating chat is ready to show */
-  "floating-chat-ready": void;
+  "floating-chat-ready": undefined;
   /** Emitted when floating chat expands */
-  "floating-chat-expanded": void;
+  "floating-chat-expanded": undefined;
   /** Emitted when floating chat collapses */
-  "floating-chat-collapsed": void;
+  "floating-chat-collapsed": undefined;
   /** Emitted to send a prompt to floating chat */
   "floating-chat-prompt": string;
 }
@@ -37,15 +37,15 @@ export interface FloatingChatEvents {
 /** Keyboard/hotkey events */
 export interface KeyboardEvents {
   /** Option key was pressed (start recording) */
-  "option-key-pressed": void;
+  "option-key-pressed": undefined;
   /** Option key was released (stop recording) */
-  "option-key-released": void;
+  "option-key-released": undefined;
   /** Option key was tapped without combo (expand + focus) */
-  "option-key-tapped": void;
+  "option-key-tapped": undefined;
   /** Option was pressed with another key (cancel STT) */
-  "option-key-cancelled": void;
+  "option-key-cancelled": undefined;
   /** Option+Space was pressed (toggle expand/collapse) */
-  "option-space-pressed": void;
+  "option-space-pressed": undefined;
 }
 
 /** Speech-to-text events */
@@ -69,9 +69,9 @@ export interface JobEvents {
 /** Navigation events */
 export interface NavigationEvents {
   /** Navigate to a route */
-  "navigate": string;
+  navigate: string;
   /** Open settings panel */
-  "open-settings": void;
+  "open-settings": undefined;
 }
 
 /** All application events */
@@ -98,10 +98,7 @@ export type AppEventName = keyof AppEvents;
  * emitEvent("floating-chat-ready"); // void payload
  * ```
  */
-export function emitEvent<K extends AppEventName>(
-  event: K,
-  payload?: AppEvents[K]
-): Promise<void> {
+export function emitEvent<K extends AppEventName>(event: K, payload?: AppEvents[K]): Promise<void> {
   return tauriEmit(event, payload);
 }
 
@@ -117,7 +114,7 @@ export function emitEvent<K extends AppEventName>(
  */
 export function listenEvent<K extends AppEventName>(
   event: K,
-  handler: (event: { payload: AppEvents[K] }) => void
+  handler: (event: { payload: AppEvents[K] }) => void,
 ): Promise<UnlistenFn> {
   return tauriListen(event, handler as any);
 }
@@ -127,7 +124,7 @@ export function listenEvent<K extends AppEventName>(
  */
 export function listenEventOnce<K extends AppEventName>(
   event: K,
-  handler: (event: { payload: AppEvents[K] }) => void
+  handler: (event: { payload: AppEvents[K] }) => void,
 ): Promise<UnlistenFn> {
   return tauriListen(event, (e) => {
     handler(e as any);

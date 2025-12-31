@@ -14,11 +14,10 @@
  * - `@hands/core/validation` - MDX validation utilities
  */
 
-// Re-export types (source of truth for type definitions and keys)
-export * from "./types";
-
 // Re-export primitives (serialization, block factory, etc.)
 export * from "./primitives";
+// Re-export types (source of truth for type definitions and keys)
+export * from "./types";
 
 // Re-export UI components
 // Note: DATA_GRID_KEY and KANBAN_KEY are also exported from ./types,

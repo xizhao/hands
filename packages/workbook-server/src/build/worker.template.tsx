@@ -2,15 +2,15 @@
 // Regenerate with: hands build --rsc
 // All-in-one worker with RSC blocks + API routes
 
-import { defineApp, runWithRequestInfo } from "rwsdk/worker";
-import { route } from "rwsdk/router";
+import { AsyncLocalStorage } from "node:async_hooks";
+import { mkdir, readdir, readFile, writeFile } from "node:fs/promises";
+import { join } from "node:path";
+import { createTRPCClient, httpBatchLink } from "@trpc/client";
 import * as React from "react";
 // @ts-expect-error - no types for react-server-dom-webpack
 import { renderToReadableStream } from "react-server-dom-webpack/server.edge";
-import { readFile, writeFile, readdir, mkdir } from "node:fs/promises";
-import { join } from "node:path";
-import { createTRPCClient, httpBatchLink } from "@trpc/client";
-import { AsyncLocalStorage } from "node:async_hooks";
+import { route } from "rwsdk/router";
+import { defineApp, runWithRequestInfo } from "rwsdk/worker";
 
 // ============================================================================
 // INJECTED CONFIG - replaced at build time
@@ -33,7 +33,7 @@ interface DbContext {
   sql<T>(strings: TemplateStringsArray, ...values: unknown[]): Promise<T[]>;
   query<TParams, TResult>(
     preparedQuery: { run(params: TParams, client: unknown): Promise<TResult[]> },
-    params: TParams
+    params: TParams,
   ): Promise<TResult[]>;
 }
 
@@ -53,7 +53,7 @@ function getContext(): RequestContext {
   const ctx = requestContext.getStore();
   if (!ctx) {
     throw new Error(
-      "[hands] Database can only be accessed during request handling, not at module load time."
+      "[hands] Database can only be accessed during request handling, not at module load time.",
     );
   }
   return ctx;
@@ -81,7 +81,7 @@ export function sql<T = Record<string, unknown>>(
  */
 export function query<TParams, TResult>(
   preparedQuery: { run(params: TParams, client: unknown): Promise<TResult[]> },
-  params: TParams
+  params: TParams,
 ): Promise<TResult[]> {
   return getContext().db.query(preparedQuery, params);
 }
@@ -184,7 +184,7 @@ const createClientManifest = () =>
       get(_, key) {
         return { id: key, name: key, chunks: [] };
       },
-    }
+    },
   );
 
 // Create RSC request context for "use client" serialization
@@ -279,8 +279,8 @@ async function handleBlockGet({ request, ctx, params }: any) {
     const rscContext = createRscRequestContext(request);
     const stream = runWithContext(requestCtx, () =>
       runWithRequestInfo(rscContext, () =>
-        renderToReadableStream(React.createElement(Block, props), createClientManifest())
-      )
+        renderToReadableStream(React.createElement(Block, props), createClientManifest()),
+      ),
     );
 
     return new Response(stream, {
@@ -325,8 +325,8 @@ async function handleBlockRscPost({ request, ctx, params }: any) {
     const rscContext = createRscRequestContext(request);
     const stream = runWithContext(requestCtx, () =>
       runWithRequestInfo(rscContext, () =>
-        renderToReadableStream(React.createElement(Block, props), createClientManifest())
-      )
+        renderToReadableStream(React.createElement(Block, props), createClientManifest()),
+      ),
     );
 
     return new Response(stream, {
@@ -472,7 +472,7 @@ function createDbProxy(runtimePort: number) {
     // Build parameterized query: "SELECT * FROM users WHERE id = $1"
     let queryText = strings[0];
     for (let i = 0; i < values.length; i++) {
-      queryText += `$${i + 1}` + strings[i + 1];
+      queryText += `$${i + 1}${strings[i + 1]}`;
     }
 
     const result = await trpc.db.query.mutate({ query: queryText, params: values });
@@ -486,7 +486,7 @@ function createDbProxy(runtimePort: number) {
     // We pass a fake client that routes queries through our tRPC proxy
     query: async <TParams, TResult>(
       preparedQuery: { run(params: TParams, client: unknown): Promise<TResult[]> },
-      params: TParams
+      params: TParams,
     ): Promise<TResult[]> => {
       // Create a fake pg client that routes queries through tRPC
       const fakeClient = {
@@ -506,7 +506,7 @@ function createDbProxy(runtimePort: number) {
 async function buildManifest(workbookDir: string, workbookId: string, db: any) {
   // Discover pages
   const pagesDir = join(workbookDir, "pages");
-  let pages: any[] = [];
+  const pages: any[] = [];
   try {
     const files = await readdir(pagesDir);
     for (const file of files) {
@@ -549,8 +549,7 @@ async function buildManifest(workbookDir: string, workbookId: string, db: any) {
     // DB not available yet (still booting)
   }
 
-  const isEmpty =
-    pages.length === 0 && blocks.length === 0 && tables.length === 0;
+  const isEmpty = pages.length === 0 && blocks.length === 0 && tables.length === 0;
 
   return {
     workbookId,
@@ -590,7 +589,7 @@ async function getPageContent(workbookDir: string, pageId: string): Promise<stri
 async function savePageContent(
   workbookDir: string,
   pageId: string,
-  content: string
+  content: string,
 ): Promise<void> {
   const pagesDir = join(workbookDir, "pages");
   await mkdir(pagesDir, { recursive: true });
@@ -603,7 +602,11 @@ async function createPage(workbookDir: string, title: string) {
   const pagesDir = join(workbookDir, "pages");
   await mkdir(pagesDir, { recursive: true });
 
-  const slug = title.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "untitled";
+  const slug =
+    title
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/^-|-$/g, "") || "untitled";
   let filename = `${slug}.mdx`;
   let counter = 1;
 

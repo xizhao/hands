@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, useEffect } from "react";
+import { useEffect, useRef, useState } from "react";
 
 interface CommentInputProps {
   placeholder?: string;
@@ -53,9 +53,7 @@ export function CommentInput({
         rows={2}
       />
       <div className="flex justify-between items-center">
-        <span className="text-[10px] text-muted-foreground">
-          ⌘↵ to send
-        </span>
+        <span className="text-[10px] text-muted-foreground">⌘↵ to send</span>
         <div className="flex gap-2">
           {onCancel && (
             <button

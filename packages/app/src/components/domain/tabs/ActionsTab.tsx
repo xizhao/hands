@@ -5,10 +5,10 @@
  * Actions can be triggered manually or scheduled.
  */
 
-import { Zap, Play, Clock, Plus, AlertCircle, CheckCircle2 } from "lucide-react";
+import { AlertCircle, Clock, Play, Plus, Zap } from "lucide-react";
+import { useRuntimeState } from "@/hooks/useRuntimeState";
 import { cn } from "@/lib/utils";
 import type { Domain } from "../../sidebar/domain/types";
-import { useRuntimeState } from "@/hooks/useRuntimeState";
 
 interface ActionsTabProps {
   domain: Domain;
@@ -19,8 +19,8 @@ export function ActionsTab({ domain }: ActionsTabProps) {
   const allActions = manifest?.actions ?? [];
 
   // Filter actions related to this domain
-  const domainActions = allActions.filter(
-    (a) => a.id.toLowerCase().includes(domain.id.toLowerCase())
+  const domainActions = allActions.filter((a) =>
+    a.id.toLowerCase().includes(domain.id.toLowerCase()),
   );
 
   const hasActions = domainActions.length > 0;
@@ -39,7 +39,7 @@ export function ActionsTab({ domain }: ActionsTabProps) {
           <button
             className={cn(
               "flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-xs font-medium",
-              "bg-muted hover:bg-accent transition-colors"
+              "bg-muted hover:bg-accent transition-colors",
             )}
           >
             <Plus className="h-3.5 w-3.5" />
@@ -81,9 +81,7 @@ function ActionCard({ action }: ActionCardProps) {
     <div
       className={cn(
         "rounded-lg border p-3 transition-colors",
-        action.valid
-          ? "border-border hover:border-border/80"
-          : "border-red-500/30 bg-red-500/5"
+        action.valid ? "border-border hover:border-border/80" : "border-red-500/30 bg-red-500/5",
       )}
     >
       <div className="flex items-start gap-3">
@@ -91,7 +89,7 @@ function ActionCard({ action }: ActionCardProps) {
         <div
           className={cn(
             "flex-shrink-0 w-8 h-8 rounded flex items-center justify-center",
-            action.valid ? "bg-orange-500/10" : "bg-red-500/10"
+            action.valid ? "bg-orange-500/10" : "bg-red-500/10",
           )}
         >
           {action.valid ? (
@@ -104,9 +102,7 @@ function ActionCard({ action }: ActionCardProps) {
         {/* Content */}
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2">
-            <span className="text-sm font-medium truncate">
-              {action.name || action.id}
-            </span>
+            <span className="text-sm font-medium truncate">{action.name || action.id}</span>
             {action.schedule && (
               <span className="flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded bg-muted text-muted-foreground">
                 <Clock className="h-3 w-3" />
@@ -129,7 +125,7 @@ function ActionCard({ action }: ActionCardProps) {
           <button
             className={cn(
               "flex-shrink-0 flex items-center gap-1 px-2 py-1 rounded text-xs font-medium",
-              "bg-orange-500/10 text-orange-500 hover:bg-orange-500/20 transition-colors"
+              "bg-orange-500/10 text-orange-500 hover:bg-orange-500/20 transition-colors",
             )}
           >
             <Play className="h-3 w-3" />
@@ -156,7 +152,7 @@ function EmptyActions({ domain }: EmptyActionsProps) {
       <button
         className={cn(
           "mt-4 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium",
-          "bg-orange-500/10 text-orange-500 hover:bg-orange-500/20 transition-colors"
+          "bg-orange-500/10 text-orange-500 hover:bg-orange-500/20 transition-colors",
         )}
       >
         <Plus className="h-3.5 w-3.5" />
@@ -191,16 +187,14 @@ function SuggestedActions({ domain }: SuggestedActionsProps) {
 
   return (
     <div className="pt-6 border-t border-border">
-      <h4 className="text-xs font-medium text-muted-foreground mb-3">
-        Suggested Actions
-      </h4>
+      <h4 className="text-xs font-medium text-muted-foreground mb-3">Suggested Actions</h4>
       <div className="grid gap-2">
         {suggestions.map((suggestion) => (
           <button
             key={suggestion.id}
             className={cn(
               "flex items-center gap-3 p-2 rounded-md text-left",
-              "bg-muted/50 hover:bg-muted transition-colors"
+              "bg-muted/50 hover:bg-muted transition-colors",
             )}
           >
             <div className="w-6 h-6 rounded bg-muted flex items-center justify-center">
@@ -208,9 +202,7 @@ function SuggestedActions({ domain }: SuggestedActionsProps) {
             </div>
             <div>
               <div className="text-sm font-medium">{suggestion.name}</div>
-              <div className="text-xs text-muted-foreground">
-                {suggestion.description}
-              </div>
+              <div className="text-xs text-muted-foreground">{suggestion.description}</div>
             </div>
           </button>
         ))}

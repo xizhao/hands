@@ -105,11 +105,7 @@ export function AttachmentMenu({
               Pending ({pendingFiles.length})
             </div>
             {pendingFiles.map((file, i) => (
-              <DropdownMenuItem
-                key={i}
-                onClick={() => onRemoveFile(i)}
-                className="gap-2 text-xs"
-              >
+              <DropdownMenuItem key={i} onClick={() => onRemoveFile(i)} className="gap-2 text-xs">
                 <X className="h-3 w-3 text-red-400" />
                 <span className="truncate">{file.split("/").pop()}</span>
               </DropdownMenuItem>

@@ -5,10 +5,10 @@
  * Only import this from Node.js server code (workbook-server, build scripts).
  */
 
-import { renderToString } from "react-dom/server";
-import * as React from "react";
-import { PlateStatic } from "platejs/static";
 import type { Value } from "platejs";
+import { PlateStatic } from "platejs/static";
+import * as React from "react";
+import { renderToString } from "react-dom/server";
 
 import { createStaticEditor } from "./plate-static-render";
 

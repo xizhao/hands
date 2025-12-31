@@ -7,7 +7,7 @@
 
 import { existsSync, mkdirSync, readFileSync, unlinkSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { initTRPC, TRPCError } from "@trpc/server";
+import { initTRPC } from "@trpc/server";
 import { z } from "zod";
 
 // ============================================================================
@@ -58,7 +58,12 @@ function getThumbnailDir(workbookDir: string, type: string, contentId: string): 
   return join(workbookDir, ".hands", "thumbnails", type, contentId);
 }
 
-function getThumbnailPath(workbookDir: string, type: string, contentId: string, theme: string): string {
+function getThumbnailPath(
+  workbookDir: string,
+  type: string,
+  contentId: string,
+  theme: string,
+): string {
   return join(getThumbnailDir(workbookDir, type, contentId), `${theme}.json`);
 }
 
@@ -72,7 +77,12 @@ interface StoredThumbnail {
   createdAt: string;
 }
 
-function readThumbnail(workbookDir: string, type: string, contentId: string, theme: string): StoredThumbnail | undefined {
+function readThumbnail(
+  workbookDir: string,
+  type: string,
+  contentId: string,
+  theme: string,
+): StoredThumbnail | undefined {
   const path = getThumbnailPath(workbookDir, type, contentId, theme);
   if (!existsSync(path)) return undefined;
 
@@ -99,51 +109,47 @@ export const thumbnailsRouter = t.router({
     }),
 
   /** Save a thumbnail */
-  save: t.procedure
-    .input(saveThumbnailInput)
-    .mutation(({ ctx, input }) => {
-      const dir = getThumbnailDir(ctx.workbookDir, input.type, input.contentId);
-      const path = getThumbnailPath(ctx.workbookDir, input.type, input.contentId, input.theme);
+  save: t.procedure.input(saveThumbnailInput).mutation(({ ctx, input }) => {
+    const dir = getThumbnailDir(ctx.workbookDir, input.type, input.contentId);
+    const path = getThumbnailPath(ctx.workbookDir, input.type, input.contentId, input.theme);
 
-      // Ensure directory exists
-      if (!existsSync(dir)) {
-        mkdirSync(dir, { recursive: true });
-      }
+    // Ensure directory exists
+    if (!existsSync(dir)) {
+      mkdirSync(dir, { recursive: true });
+    }
 
-      const data: StoredThumbnail = {
-        type: input.type,
-        contentId: input.contentId,
-        theme: input.theme,
-        thumbnail: input.thumbnail,
-        lqip: input.lqip,
-        contentHash: input.contentHash,
-        createdAt: new Date().toISOString(),
-      };
+    const data: StoredThumbnail = {
+      type: input.type,
+      contentId: input.contentId,
+      theme: input.theme,
+      thumbnail: input.thumbnail,
+      lqip: input.lqip,
+      contentHash: input.contentHash,
+      createdAt: new Date().toISOString(),
+    };
 
-      writeFileSync(path, JSON.stringify(data));
-      return { success: true };
-    }),
+    writeFileSync(path, JSON.stringify(data));
+    return { success: true };
+  }),
 
   /** Delete thumbnails for a page/block (all themes) */
-  delete: t.procedure
-    .input(deleteThumbnailInput)
-    .mutation(({ ctx, input }) => {
-      const dir = getThumbnailDir(ctx.workbookDir, input.type, input.contentId);
+  delete: t.procedure.input(deleteThumbnailInput).mutation(({ ctx, input }) => {
+    const dir = getThumbnailDir(ctx.workbookDir, input.type, input.contentId);
 
-      // Delete both theme files if they exist
-      for (const theme of ["light", "dark"]) {
-        const path = join(dir, `${theme}.json`);
-        if (existsSync(path)) {
-          try {
-            unlinkSync(path);
-          } catch {
-            // Ignore errors
-          }
+    // Delete both theme files if they exist
+    for (const theme of ["light", "dark"]) {
+      const path = join(dir, `${theme}.json`);
+      if (existsSync(path)) {
+        try {
+          unlinkSync(path);
+        } catch {
+          // Ignore errors
         }
       }
+    }
 
-      return { success: true };
-    }),
+    return { success: true };
+  }),
 });
 
 export type ThumbnailsRouter = typeof thumbnailsRouter;

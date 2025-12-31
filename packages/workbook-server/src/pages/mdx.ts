@@ -5,12 +5,12 @@
  * Uses the same remark-based parsing as the editor for consistency.
  */
 
+import type { Root } from "mdast";
+import type { MdxJsxAttribute, MdxJsxFlowElement, MdxJsxTextElement } from "mdast-util-mdx-jsx";
 import remarkFrontmatter from "remark-frontmatter";
 import remarkMdx from "remark-mdx";
 import remarkParse from "remark-parse";
 import { unified } from "unified";
-import type { Root } from "mdast";
-import type { MdxJsxFlowElement, MdxJsxTextElement, MdxJsxAttribute } from "mdast-util-mdx-jsx";
 
 // ============================================================================
 // Types
@@ -52,10 +52,7 @@ export interface CompiledPage {
 // Parser Setup
 // ============================================================================
 
-const mdxProcessor = unified()
-  .use(remarkParse)
-  .use(remarkFrontmatter, ["yaml"])
-  .use(remarkMdx);
+const mdxProcessor = unified().use(remarkParse).use(remarkFrontmatter, ["yaml"]).use(remarkMdx);
 
 // ============================================================================
 // Main Compiler

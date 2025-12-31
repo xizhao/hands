@@ -5,19 +5,19 @@
  */
 
 export {
-  Kanban,
-  KanbanPlugin,
+  type CreateKanbanElementOptions,
   createKanbanElement,
   KANBAN_KEY,
+  Kanban,
+  KanbanPlugin,
   type KanbanProps,
-  type CreateKanbanElementOptions,
 } from "./kanban";
 
 export {
-  KanbanBoard,
   findMovedItem,
-  groupByColumn,
   getColumnOrder,
+  groupByColumn,
+  KanbanBoard,
   type KanbanBoardProps,
   type KanbanBoardValue,
   type KanbanItem,

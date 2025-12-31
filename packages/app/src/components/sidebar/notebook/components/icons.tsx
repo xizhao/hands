@@ -68,11 +68,7 @@ export function PluginIcon({ className, empty }: IconProps) {
   );
 }
 
-export function ActionIcon({
-  className,
-  empty,
-  readonly,
-}: IconProps & { readonly?: boolean }) {
+export function ActionIcon({ className, empty, readonly }: IconProps & { readonly?: boolean }) {
   const Icon = readonly ? Square : ArrowSquareRight;
   return (
     <Icon
@@ -80,9 +76,7 @@ export function ActionIcon({
       className={cn(
         "h-3.5 w-3.5",
         iconStyles,
-        empty
-          ? "opacity-30"
-          : "text-orange-400/70 group-hover:text-orange-400",
+        empty ? "opacity-30" : "text-orange-400/70 group-hover:text-orange-400",
         className,
       )}
     />
@@ -99,7 +93,9 @@ export function SourceIcon({ className, empty }: IconProps) {
         "border-r-[4px] border-r-transparent",
         "border-b-[6px]",
         iconStyles,
-        empty ? "border-b-muted-foreground/30" : "border-b-purple-400/70 group-hover:border-b-purple-400",
+        empty
+          ? "border-b-muted-foreground/30"
+          : "border-b-purple-400/70 group-hover:border-b-purple-400",
         className,
       )}
     />
@@ -112,13 +108,7 @@ const sourceIconMap: Record<string, React.ElementType> = {
   code: Code,
 };
 
-export function SourceTypeIcon({
-  icon,
-  className,
-}: {
-  icon?: string;
-  className?: string;
-}) {
+export function SourceTypeIcon({ icon, className }: { icon?: string; className?: string }) {
   const Icon = icon && sourceIconMap[icon] ? sourceIconMap[icon] : Database;
   return <Icon weight="duotone" className={className} />;
 }

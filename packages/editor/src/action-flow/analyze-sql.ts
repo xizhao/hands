@@ -9,12 +9,7 @@
  */
 
 import { Parser } from "node-sql-parser";
-import type {
-  SqlOperation,
-  TableReference,
-  CteDefinition,
-  ColumnReference,
-} from "./types";
+import type { ColumnReference, CteDefinition, SqlOperation, TableReference } from "./types";
 
 const sqlParser = new Parser();
 
@@ -94,7 +89,7 @@ function analyzeStatement(
   stmt: unknown,
   tables: TableReference[],
   ctes: CteDefinition[],
-  columns: ColumnReference[]
+  columns: ColumnReference[],
 ): void {
   if (!stmt || typeof stmt !== "object") return;
 
@@ -160,7 +155,11 @@ function analyzeStatement(
     }
 
     // Check for SELECT in INSERT (INSERT INTO ... SELECT)
-    if (s.values && typeof s.values === "object" && (s.values as Record<string, unknown>).type === "select") {
+    if (
+      s.values &&
+      typeof s.values === "object" &&
+      (s.values as Record<string, unknown>).type === "select"
+    ) {
       analyzeStatement(s.values, tables, ctes, columns);
     }
   }
@@ -199,11 +198,7 @@ function analyzeStatement(
 /**
  * Extract tables from FROM clause
  */
-function extractFromClause(
-  from: unknown,
-  tables: TableReference[],
-  usage: "read" | "write"
-): void {
+function extractFromClause(from: unknown, tables: TableReference[], usage: "read" | "write"): void {
   if (!from || !Array.isArray(from)) return;
 
   for (const item of from) {
@@ -239,7 +234,7 @@ function extractFromClause(
 function extractTableList(
   tableList: unknown,
   tables: TableReference[],
-  usage: "read" | "write"
+  usage: "read" | "write",
 ): void {
   if (!tableList) return;
 
@@ -248,14 +243,26 @@ function extractTableList(
       if (t && typeof t === "object") {
         const table = t as Record<string, unknown>;
         if (table.table && typeof table.table === "string") {
-          addTable(tables, table.table, table.as as string | undefined, usage, table.db as string | undefined);
+          addTable(
+            tables,
+            table.table,
+            table.as as string | undefined,
+            usage,
+            table.db as string | undefined,
+          );
         }
       }
     }
   } else if (typeof tableList === "object") {
     const table = tableList as Record<string, unknown>;
     if (table.table && typeof table.table === "string") {
-      addTable(tables, table.table, table.as as string | undefined, usage, table.db as string | undefined);
+      addTable(
+        tables,
+        table.table,
+        table.as as string | undefined,
+        usage,
+        table.db as string | undefined,
+      );
     }
   }
 }
@@ -268,7 +275,7 @@ function addTable(
   name: string,
   alias: string | undefined,
   usage: "read" | "write",
-  schema?: string
+  schema?: string,
 ): void {
   const tableName = name.toLowerCase();
 
@@ -296,7 +303,7 @@ function addTable(
 function extractColumns(
   columnsClause: unknown,
   columns: ColumnReference[],
-  usage: "read" | "write"
+  usage: "read" | "write",
 ): void {
   if (!columnsClause || !Array.isArray(columnsClause)) return;
 
@@ -326,7 +333,7 @@ function extractSubqueries(
   expr: unknown,
   tables: TableReference[],
   ctes: CteDefinition[],
-  columns: ColumnReference[]
+  columns: ColumnReference[],
 ): void {
   if (!expr || typeof expr !== "object") return;
 
@@ -415,14 +422,69 @@ function analyzeWithRegex(sql: string): SqlAnalysis {
  */
 function isReservedWord(word: string): boolean {
   const reserved = new Set([
-    "select", "from", "where", "and", "or", "not", "in", "like", "between",
-    "is", "null", "true", "false", "as", "on", "join", "left", "right",
-    "inner", "outer", "cross", "group", "by", "having", "order", "asc",
-    "desc", "limit", "offset", "union", "all", "distinct", "case", "when",
-    "then", "else", "end", "values", "set", "default", "insert", "update",
-    "delete", "into", "create", "table", "drop", "alter", "index", "primary",
-    "key", "foreign", "references", "constraint", "unique", "check", "exists",
-    "with", "recursive", "returning", "conflict", "do", "nothing",
+    "select",
+    "from",
+    "where",
+    "and",
+    "or",
+    "not",
+    "in",
+    "like",
+    "between",
+    "is",
+    "null",
+    "true",
+    "false",
+    "as",
+    "on",
+    "join",
+    "left",
+    "right",
+    "inner",
+    "outer",
+    "cross",
+    "group",
+    "by",
+    "having",
+    "order",
+    "asc",
+    "desc",
+    "limit",
+    "offset",
+    "union",
+    "all",
+    "distinct",
+    "case",
+    "when",
+    "then",
+    "else",
+    "end",
+    "values",
+    "set",
+    "default",
+    "insert",
+    "update",
+    "delete",
+    "into",
+    "create",
+    "table",
+    "drop",
+    "alter",
+    "index",
+    "primary",
+    "key",
+    "foreign",
+    "references",
+    "constraint",
+    "unique",
+    "check",
+    "exists",
+    "with",
+    "recursive",
+    "returning",
+    "conflict",
+    "do",
+    "nothing",
   ]);
   return reserved.has(word.toLowerCase());
 }

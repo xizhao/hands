@@ -11,7 +11,7 @@
  *   { type: 'p', listStyleType: 'disc', indent: 1, children: [{ text: 'Item' }] }
  */
 
-import type { TElement, Value } from "platejs";
+import type { Value } from "platejs";
 
 interface PlateNode {
   type?: string;
@@ -36,7 +36,11 @@ export function convertClassicListsToIndent(nodes: Value, baseIndent = 0): Value
     if (node.type === "ul" || node.type === "ol") {
       // Convert list container to flat paragraph list
       const listStyleType = node.type === "ol" ? "decimal" : "disc";
-      const listItems = convertListItems(node.children as PlateNode[], listStyleType, baseIndent + 1);
+      const listItems = convertListItems(
+        node.children as PlateNode[],
+        listStyleType,
+        baseIndent + 1,
+      );
       result.push(...listItems);
     } else if (node.children && Array.isArray(node.children)) {
       // Recursively process non-list elements
@@ -55,11 +59,7 @@ export function convertClassicListsToIndent(nodes: Value, baseIndent = 0): Value
 /**
  * Convert list item children to indent-based paragraphs.
  */
-function convertListItems(
-  items: PlateNode[],
-  listStyleType: string,
-  indent: number
-): PlateNode[] {
+function convertListItems(items: PlateNode[], listStyleType: string, indent: number): PlateNode[] {
   const result: PlateNode[] = [];
   let isFirst = true;
 
@@ -89,7 +89,7 @@ function convertListItems(
         const nestedItems = convertListItems(
           child.children as PlateNode[],
           nestedStyleType,
-          indent + 1
+          indent + 1,
         );
         result.push(...nestedItems);
       } else if (child.type === "p") {
@@ -161,7 +161,7 @@ interface ListItemNode {
  */
 function collectListItems(
   nodes: Value,
-  startIndex: number
+  startIndex: number,
 ): { listNodes: ListItemNode[]; endIndex: number } {
   const listNodes: ListItemNode[] = [];
   let i = startIndex;
@@ -214,9 +214,7 @@ function buildClassicList(items: ListItemNode[]): PlateNode[] {
           nestedEnd++;
         }
 
-        const liChildren: PlateNode[] = [
-          { type: "lic", children: content as PlateNode[] },
-        ];
+        const liChildren: PlateNode[] = [{ type: "lic", children: content as PlateNode[] }];
 
         // Add nested lists if any
         if (nestedEnd > nestedStart) {

@@ -4,20 +4,19 @@
  * Validation and DDL generation for action schema requirements.
  */
 
-// Validation
-export { validateSchema, assertSchemaValid } from "./validate";
-
-// DDL generation
-export { generateCreateTable, generateCreateTables } from "./ddl";
-
 // Re-export types from core
 export type {
   ActionSchema,
-  SchemaTable,
-  SchemaColumn,
   ColumnType,
+  DbColumn,
   DbSchema,
   DbTable,
-  DbColumn,
+  SchemaColumn,
+  SchemaTable,
   SchemaValidationResult,
 } from "@hands/core/primitives";
+
+// DDL generation
+export { generateCreateTable, generateCreateTables } from "./ddl";
+// Validation
+export { assertSchemaValid, validateSchema } from "./validate";

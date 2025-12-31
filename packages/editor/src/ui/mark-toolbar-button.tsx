@@ -1,15 +1,15 @@
-'use client';
+"use client";
 
+import { RangeApi } from "platejs";
 import {
   useEditorRef,
   useEditorSelection,
   useMarkToolbarButton,
   useMarkToolbarButtonState,
-} from 'platejs/react';
-import { RangeApi } from 'platejs';
-import * as React from 'react';
+} from "platejs/react";
+import type * as React from "react";
 
-import { ToolbarButton } from './toolbar';
+import { ToolbarButton } from "./toolbar";
 
 export function MarkToolbarButton({
   clear,

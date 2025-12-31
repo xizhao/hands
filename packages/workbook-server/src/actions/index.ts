@@ -13,16 +13,14 @@
 
 // Filesystem discovery (lists action files, no module loading)
 export { discoverActions } from "../workbook/discovery.js";
-
-// Runtime client (fetches metadata from runtime's /actions endpoint)
-export { fetchActionsFromRuntime, isRuntimeReady } from "./runtime-client.js";
-
 // Executor (HTTP - delegates to runtime)
 export {
   type ExecuteActionHttpOptions,
-  executeActionHttp,
   executeActionByIdHttp,
+  executeActionHttp,
 } from "./executor-http.js";
+// Runtime client (fetches metadata from runtime's /actions endpoint)
+export { fetchActionsFromRuntime, isRuntimeReady } from "./runtime-client.js";
 
 // Scheduler
 export {

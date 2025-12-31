@@ -127,7 +127,8 @@ A good deep research pass typically involves:
 Don't be afraid to do MANY searches. The goal is comprehensive understanding, not quick answers.`;
 
 export const researcherAgent: AgentConfig = {
-  description: "Deep research specialist - comprehensive web research with multiple searches and source synthesis",
+  description:
+    "Deep research specialist - comprehensive web research with multiple searches and source synthesis",
   mode: "subagent",
   model: "openrouter/google/gemini-2.5-flash",
   prompt: RESEARCHER_PROMPT,

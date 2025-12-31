@@ -57,11 +57,11 @@ export function CaptureOverlay() {
                 endX: e.clientX,
                 endY: e.clientY,
               }
-            : null
+            : null,
         );
       }
     },
-    [isSelecting, selection]
+    [isSelecting, selection],
   );
 
   const handleMouseUp = useCallback(async () => {
@@ -175,7 +175,8 @@ export function CaptureOverlay() {
 
       {/* Instructions */}
       <div className="absolute bottom-8 left-1/2 transform -translate-x-1/2 bg-black/80 text-white px-4 py-2 rounded-lg text-sm">
-        Drag to select a region • Press <kbd className="px-1.5 py-0.5 bg-white/20 rounded">Esc</kbd> to cancel
+        Drag to select a region • Press <kbd className="px-1.5 py-0.5 bg-white/20 rounded">Esc</kbd>{" "}
+        to cancel
       </div>
     </div>
   );

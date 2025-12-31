@@ -30,15 +30,7 @@ export type Serializable =
 // Duration Types (CF-compatible template literals)
 // =============================================================================
 
-type TimeUnit =
-  | "second"
-  | "seconds"
-  | "minute"
-  | "minutes"
-  | "hour"
-  | "hours"
-  | "day"
-  | "days";
+type TimeUnit = "second" | "seconds" | "minute" | "minutes" | "hour" | "hours" | "day" | "days";
 
 /**
  * CF-compatible duration string.
@@ -98,7 +90,7 @@ export interface WorkflowStep {
   do<T extends Serializable>(
     name: string,
     config: WorkflowStepConfig,
-    callback: () => Promise<T> | T
+    callback: () => Promise<T> | T,
   ): Promise<T>;
 
   /**
@@ -134,7 +126,7 @@ export interface WorkflowStep {
    */
   waitForEvent<T extends Serializable = Serializable>(
     name: string,
-    opts: { type: string; timeout?: WorkflowDuration }
+    opts: { type: string; timeout?: WorkflowDuration },
   ): Promise<T>;
 }
 
@@ -182,7 +174,7 @@ import type { ActionContext } from "./types.js";
  */
 export type WorkflowFn<
   TInput extends Serializable = Serializable,
-  TOutput extends Serializable = Serializable
+  TOutput extends Serializable = Serializable,
 > = (step: WorkflowStep, ctx: ActionContext, input: TInput) => Promise<TOutput>;
 
 // =============================================================================
@@ -193,13 +185,14 @@ export type WorkflowFn<
  * Helper type to validate workflow can compile to CF Worker.
  * Returns the workflow type if valid, `never` if invalid.
  */
-export type ValidCFWorkflow<T> = T extends WorkflowFn<infer I, infer O>
-  ? I extends Serializable
-    ? O extends Serializable
-      ? T
-      : never // Output not serializable
-    : never // Input not serializable
-  : never; // Not a workflow function
+export type ValidCFWorkflow<T> =
+  T extends WorkflowFn<infer I, infer O>
+    ? I extends Serializable
+      ? O extends Serializable
+        ? T
+        : never // Output not serializable
+      : never // Input not serializable
+    : never; // Not a workflow function
 
 /**
  * Extract input type from a workflow function.

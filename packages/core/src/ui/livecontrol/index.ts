@@ -4,6 +4,6 @@
  * @module livecontrol
  */
 
-export * from "./types";
 export * from "./live-controls-menu";
 export * from "./live-query-editor";
+export * from "./types";

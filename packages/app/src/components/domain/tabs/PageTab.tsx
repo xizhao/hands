@@ -5,11 +5,11 @@
  * Empty pages show a ChatGPT-style prompt input using the description field.
  */
 
-import { useState, useEffect, useRef } from "react";
 import { Loader2 } from "lucide-react";
-import type { Domain } from "../../sidebar/domain/types";
-import { PageEditor } from "../../page-editor/PageEditor";
+import { useEffect, useRef, useState } from "react";
 import { trpc } from "@/lib/trpc";
+import { PageEditor } from "../../page-editor/PageEditor";
+import type { Domain } from "../../sidebar/domain/types";
 
 interface PageTabProps {
   domain: Domain;
@@ -17,12 +17,14 @@ interface PageTabProps {
 
 /** Convert domain name to valid pageId (lowercase, hyphens only) */
 function toPageId(name: string): string {
-  return name
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "-") // Replace non-alphanumeric with hyphens
-    .replace(/^-+|-+$/g, "")     // Trim leading/trailing hyphens
-    .replace(/-+/g, "-")         // Collapse multiple hyphens
-    || "untitled";
+  return (
+    name
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "-") // Replace non-alphanumeric with hyphens
+      .replace(/^-+|-+$/g, "") // Trim leading/trailing hyphens
+      .replace(/-+/g, "-") || // Collapse multiple hyphens
+    "untitled"
+  );
 }
 
 export function PageTab({ domain }: PageTabProps) {
@@ -58,9 +60,7 @@ export function PageTab({ domain }: PageTabProps) {
     return (
       <div className="h-full flex flex-col items-center justify-center p-8">
         <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
-        <p className="mt-3 text-sm text-muted-foreground">
-          Creating page...
-        </p>
+        <p className="mt-3 text-sm text-muted-foreground">Creating page...</p>
       </div>
     );
   }

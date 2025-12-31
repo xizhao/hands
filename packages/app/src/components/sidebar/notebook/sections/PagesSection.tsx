@@ -4,19 +4,18 @@
  * Displays pages with folder grouping and inline creation.
  */
 
-import { CircleNotch } from "@phosphor-icons/react";
-import { Folder, FolderOpen } from "@phosphor-icons/react";
+import { CircleNotch, Folder, FolderOpen } from "@phosphor-icons/react";
 import { ChevronDown, ChevronRight } from "lucide-react";
 import { useCallback } from "react";
 import { cn } from "@/lib/utils";
-import { SidebarSection, SidebarEmptyState } from "../components/SidebarSection";
-import { listItemStyles, SidebarFolder } from "../components/SidebarItem";
-import { ItemActions } from "../components/ItemActions";
 import { ThumbnailHoverCard } from "../components/HoverCards";
+import { ItemActions } from "../components/ItemActions";
 import { PageIcon } from "../components/icons";
-import type { SidebarPage } from "../types";
-import type { SidebarState } from "../hooks/useSidebarState";
+import { listItemStyles, SidebarFolder } from "../components/SidebarItem";
+import { SidebarEmptyState, SidebarSection } from "../components/SidebarSection";
 import type { SidebarActions } from "../hooks/useSidebarActions";
+import type { SidebarState } from "../hooks/useSidebarState";
+import type { SidebarPage } from "../types";
 
 interface PagesSectionProps {
   /** Section expanded state */
@@ -182,33 +181,31 @@ export function PagesSection({
                 onToggle={() => folders.toggle(folderName)}
               >
                 {/* Folder contents */}
-                {(isFolderExpanded || searchQuery) && filteredFolderPages.length > 0 && (
-                  <>
-                    {filteredFolderPages.map((page) => (
-                      <ThumbnailHoverCard
-                        key={page.id}
-                        type="page"
-                        contentId={page.id}
-                        onMouseEnter={() => prefetchThumbnail("page", page.id)}
-                      >
-                        <div className={cn(listItemStyles, "group")}>
-                          <PageIcon />
-                          <button
-                            onClick={() => handlePageClick(page.id)}
-                            className="flex-1 truncate text-left hover:underline"
-                          >
-                            {page.title}
-                          </button>
-                          <ItemActions
-                            onCopy={() => handleDuplicatePage(page.id)}
-                            onDelete={() => handleDeletePage(page.id)}
-                            onOpenChange={onMenuOpenChange}
-                          />
-                        </div>
-                      </ThumbnailHoverCard>
-                    ))}
-                  </>
-                )}
+                {(isFolderExpanded || searchQuery) &&
+                  filteredFolderPages.length > 0 &&
+                  filteredFolderPages.map((page) => (
+                    <ThumbnailHoverCard
+                      key={page.id}
+                      type="page"
+                      contentId={page.id}
+                      onMouseEnter={() => prefetchThumbnail("page", page.id)}
+                    >
+                      <div className={cn(listItemStyles, "group")}>
+                        <PageIcon />
+                        <button
+                          onClick={() => handlePageClick(page.id)}
+                          className="flex-1 truncate text-left hover:underline"
+                        >
+                          {page.title}
+                        </button>
+                        <ItemActions
+                          onCopy={() => handleDuplicatePage(page.id)}
+                          onDelete={() => handleDeletePage(page.id)}
+                          onOpenChange={onMenuOpenChange}
+                        />
+                      </div>
+                    </ThumbnailHoverCard>
+                  ))}
               </SidebarFolder>
             );
           })}

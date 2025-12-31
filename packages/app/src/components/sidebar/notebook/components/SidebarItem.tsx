@@ -72,14 +72,10 @@ export function SidebarFolder({
         <button onClick={onToggle} className="flex-1 truncate text-left hover:underline">
           {label}
         </button>
-        {count !== undefined && (
-          <span className="text-xs text-muted-foreground/60">{count}</span>
-        )}
+        {count !== undefined && <span className="text-xs text-muted-foreground/60">{count}</span>}
       </div>
 
-      {children && (
-        <div className="ml-4 border-l border-border/50 pl-1">{children}</div>
-      )}
+      {children && <div className="ml-4 border-l border-border/50 pl-1">{children}</div>}
     </div>
   );
 }
@@ -91,7 +87,5 @@ interface NestedItemsProps {
 }
 
 export function NestedItems({ children, className }: NestedItemsProps) {
-  return (
-    <div className={cn("ml-4 border-l border-border/50 pl-1", className)}>{children}</div>
-  );
+  return <div className={cn("ml-4 border-l border-border/50 pl-1", className)}>{children}</div>;
 }

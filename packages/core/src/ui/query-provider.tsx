@@ -30,7 +30,7 @@
  * ```
  */
 
-import { createContext, useContext, type ReactNode } from "react";
+import { createContext, type ReactNode, useContext } from "react";
 
 // ============================================================================
 // Types
@@ -65,10 +65,7 @@ export interface MutationResult {
 /**
  * Query hook type - returns reactive query result.
  */
-export type UseQueryHook = (
-  sql: string,
-  params?: Record<string, unknown>,
-) => QueryResult;
+export type UseQueryHook = (sql: string, params?: Record<string, unknown>) => QueryResult;
 
 /**
  * Mutation hook type - returns mutation function and state.
@@ -173,10 +170,7 @@ export function useLiveQueryContext(): LiveQueryContextValue | null {
  * }
  * ```
  */
-export function useLiveQuery(
-  sql: string,
-  params?: Record<string, unknown>,
-): QueryResult {
+export function useLiveQuery(sql: string, params?: Record<string, unknown>): QueryResult {
   const ctx = useContext(LiveQueryContext);
 
   // Context MUST be present. The LiveQueryProvider must wrap all components that use useLiveQuery.
@@ -185,8 +179,8 @@ export function useLiveQuery(
   if (!ctx) {
     throw new Error(
       `[useLiveQuery] No LiveQueryProvider found. ` +
-      `Components using useLiveQuery must be wrapped in LiveQueryProvider. ` +
-      `SQL: ${sql?.slice(0, 50) ?? "(none)"}`
+        `Components using useLiveQuery must be wrapped in LiveQueryProvider. ` +
+        `SQL: ${sql?.slice(0, 50) ?? "(none)"}`,
     );
   }
 
@@ -220,7 +214,7 @@ export function useLiveMutation(): MutationResult {
   if (!ctx) {
     throw new Error(
       `[useLiveMutation] No LiveQueryProvider found. ` +
-      `Components using useLiveMutation must be wrapped in LiveQueryProvider.`
+        `Components using useLiveMutation must be wrapped in LiveQueryProvider.`,
     );
   }
 

@@ -11,14 +11,9 @@
  * ```
  */
 
-import {
-  TABS_KEY,
-  TAB_KEY,
-  type TTabsElement,
-  type TTabElement,
-} from "../../../types";
-import type { MdxSerializationRule } from "../types";
+import { TAB_KEY, TABS_KEY, type TTabElement, type TTabsElement } from "../../../types";
 import { parseAttributes, serializeAttributes, serializeChildren } from "../helpers";
+import type { MdxSerializationRule } from "../types";
 
 // ============================================================================
 // Tab (Individual Panel)
@@ -58,7 +53,7 @@ export const tabRule: MdxSerializationRule<TTabElement> = {
       },
       {
         include: ["value", "label"],
-      }
+      },
     );
 
     const children = serializeChildren(element.children, options);
@@ -99,7 +94,7 @@ export const tabsRule: MdxSerializationRule<TTabsElement> = {
 
     // Filter to only Tab elements
     const tabChildren = (children || []).filter(
-      (child: any) => child.type === TAB_KEY
+      (child: any) => child.type === TAB_KEY,
     ) as TTabElement[];
 
     // Ensure we have at least one tab
@@ -126,7 +121,7 @@ export const tabsRule: MdxSerializationRule<TTabsElement> = {
       },
       {
         include: ["defaultValue"],
-      }
+      },
     );
 
     // Serialize child Tab elements

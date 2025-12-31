@@ -1,14 +1,15 @@
 #!/usr/bin/env npx tsx
+
 /**
  * Generate all app icons from the HandsLogo SVG.
  * Uses the exact SVG paths from the HandsLogo React component.
  */
 
+import { execSync } from "node:child_process";
+import { mkdir } from "node:fs/promises";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 import sharp from "sharp";
-import { mkdir, writeFile } from "fs/promises";
-import { join, dirname } from "path";
-import { fileURLToPath } from "url";
-import { execSync } from "child_process";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const ICONS_DIR = join(__dirname, "..", "src-tauri", "icons");
@@ -71,7 +72,10 @@ async function generateAllIcons(): Promise<void> {
   await mkdir(ICONS_DIR, { recursive: true });
 
   console.log("Generating tray icons...");
-  for (const [size, suffix] of [[22, ""], [44, "@2x"]] as const) {
+  for (const [size, suffix] of [
+    [22, ""],
+    [44, "@2x"],
+  ] as const) {
     const svg = createTraySvg(size);
     const output = join(ICONS_DIR, `tray-icon${suffix}.png`);
     await svgToPng(svg, output);
@@ -148,7 +152,7 @@ async function generateIcns(): Promise<void> {
       stdio: "pipe",
     });
     console.log("  Created icon.icns");
-  } catch (e) {
+  } catch (_e) {
     console.log("  Warning: Could not create icon.icns");
   }
 

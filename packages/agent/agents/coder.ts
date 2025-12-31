@@ -6,12 +6,29 @@
  */
 
 import type { AgentConfig } from "@opencode-ai/sdk";
-import { ACTION_API_DOCS, ACTION_CONTEXT_DOCS, ACTION_TRIGGERS_DOCS, ACTION_ANTI_PATTERNS } from "../docs/actions-guide.js";
+import {
+  ACTION_ANTI_PATTERNS,
+  ACTION_API_DOCS,
+  ACTION_CONTEXT_DOCS,
+  ACTION_TRIGGERS_DOCS,
+} from "../docs/actions-guide.js";
 import { BLOCK_API_DOCS } from "../docs/blocks-guide.js";
-import { CHARTS_OVERVIEW, SIMPLE_CHARTS_DOCS, GENERIC_CHART_DOCS, CHARTS_WITH_LIVEVALUE_DOCS, VEGA_FIELD_TYPES_DOCS, CHART_SELECTION_GUIDE } from "../docs/charts-guide.js";
+import {
+  CHART_SELECTION_GUIDE,
+  CHARTS_OVERVIEW,
+  CHARTS_WITH_LIVEVALUE_DOCS,
+  GENERIC_CHART_DOCS,
+  SIMPLE_CHARTS_DOCS,
+  VEGA_FIELD_TYPES_DOCS,
+} from "../docs/charts-guide.js";
 import { DATA_GUIDE } from "../docs/data-guide.js";
 import { HANDS_ARCHITECTURE } from "../docs/hands-guide.js";
-import { ALL_ELEMENTS_DOCS, LIVEQUERY_DOCS, LIVEACTION_DOCS, FORM_CONTROLS_DOCS } from "../docs/pages-guide.js";
+import {
+  ALL_ELEMENTS_DOCS,
+  FORM_CONTROLS_DOCS,
+  LIVEACTION_DOCS,
+  LIVEQUERY_DOCS,
+} from "../docs/pages-guide.js";
 
 const CODER_PROMPT = `You are the technical implementation specialist for Hands. You create pages (MDX) and occasionally plugins (TSX) when delegated by the primary agent.
 

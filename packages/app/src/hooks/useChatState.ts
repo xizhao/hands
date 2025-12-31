@@ -181,13 +181,16 @@ export function useChatState() {
   const state = useSyncExternalStore(subscribe, getSnapshot, getSnapshot);
   const updateMutation = trpc.editorState.updateUiState.useMutation();
 
-  const setChatExpandedWithSync = useCallback((expanded: boolean) => {
-    setChatExpanded(expanded);
-    // Debounce sync to server
-    debouncedChatSync(() => {
-      updateMutation.mutate({ chatExpanded: expanded });
-    });
-  }, [updateMutation]);
+  const setChatExpandedWithSync = useCallback(
+    (expanded: boolean) => {
+      setChatExpanded(expanded);
+      // Debounce sync to server
+      debouncedChatSync(() => {
+        updateMutation.mutate({ chatExpanded: expanded });
+      });
+    },
+    [updateMutation],
+  );
 
   return {
     ...state,

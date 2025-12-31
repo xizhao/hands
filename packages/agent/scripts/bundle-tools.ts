@@ -11,8 +11,8 @@
  *   - src/embedded-tools.generated.ts (tool content map)
  */
 
-import { readdirSync, mkdirSync, existsSync, readFileSync, writeFileSync } from "node:fs";
-import { join, basename } from "node:path";
+import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
+import { join } from "node:path";
 
 const AGENT_DIR = join(import.meta.dir, "..");
 const TOOLS_DIR = join(AGENT_DIR, "tool");
@@ -22,8 +22,7 @@ const GENERATED_FILE = join(AGENT_DIR, "src", "embedded-tools.generated.ts");
 // Get all tool files
 // Skip: lint-block.ts (not a tool)
 // Note: polars.ts is included but bundled with nodejs-polars as external (native addon)
-const TOOL_FILES = readdirSync(TOOLS_DIR)
-  .filter((f) => f.endsWith(".ts") && f !== "lint-block.ts");
+const TOOL_FILES = readdirSync(TOOLS_DIR).filter((f) => f.endsWith(".ts") && f !== "lint-block.ts");
 
 async function main() {
   console.log(`Bundling ${TOOL_FILES.length} tools...`);
@@ -90,10 +89,7 @@ async function main() {
 
   for (const [filename, content] of Object.entries(toolContents)) {
     // Escape backticks and ${} in the content
-    const escaped = content
-      .replace(/\\/g, "\\\\")
-      .replace(/`/g, "\\`")
-      .replace(/\$\{/g, "\\${");
+    const escaped = content.replace(/\\/g, "\\\\").replace(/`/g, "\\`").replace(/\$\{/g, "\\${");
     lines.push(`  "${filename}": \`${escaped}\`,`);
   }
 

@@ -1,4 +1,4 @@
-import { pgTable, text, timestamp, uuid, boolean, unique } from "drizzle-orm/pg-core";
+import { boolean, pgTable, text, timestamp, unique, uuid } from "drizzle-orm/pg-core";
 import { users } from "./users";
 
 // Workbook registry
@@ -24,20 +24,22 @@ export const workbooks = pgTable("workbooks", {
 });
 
 // Collaborators with Google Docs-style roles
-export const workbookCollaborators = pgTable("workbook_collaborators", {
-  id: uuid("id").primaryKey().defaultRandom(),
-  workbookId: uuid("workbook_id")
-    .notNull()
-    .references(() => workbooks.id, { onDelete: "cascade" }),
-  userId: uuid("user_id")
-    .notNull()
-    .references(() => users.id, { onDelete: "cascade" }),
-  role: text("role").notNull(), // viewer, editor, developer, owner
-  invitedBy: uuid("invited_by").references(() => users.id),
-  invitedAt: timestamp("invited_at", { withTimezone: true }).notNull().defaultNow(),
-}, (table) => [
-  unique("workbook_collaborators_unique").on(table.workbookId, table.userId),
-]);
+export const workbookCollaborators = pgTable(
+  "workbook_collaborators",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    workbookId: uuid("workbook_id")
+      .notNull()
+      .references(() => workbooks.id, { onDelete: "cascade" }),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    role: text("role").notNull(), // viewer, editor, developer, owner
+    invitedBy: uuid("invited_by").references(() => users.id),
+    invitedAt: timestamp("invited_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [unique("workbook_collaborators_unique").on(table.workbookId, table.userId)],
+);
 
 // Git repositories for workbook source
 export const workbookRepos = pgTable("workbook_repos", {

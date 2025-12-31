@@ -22,14 +22,9 @@ import {
   useSelected,
 } from "platejs/react";
 import { memo, useContext, useEffect, useRef, useState } from "react";
-
-import {
-  MaskInput,
-  type MaskInputProps,
-  type MaskPattern,
-} from "../components/mask-input";
+import { type ComponentMeta, INPUT_KEY, type TInputElement } from "../../types";
 import { Label } from "../components/label";
-import { INPUT_KEY, type TInputElement, type ComponentMeta } from "../../types";
+import { MaskInput, type MaskPattern } from "../components/mask-input";
 import { LiveActionContext } from "./live-action";
 
 /** Built-in mask pattern names */
@@ -159,7 +154,7 @@ export function Input({
 
 function InputElement(props: PlateElementProps) {
   const element = useElement<TInputElement>();
-  const selected = useSelected();
+  const _selected = useSelected();
   const actionCtx = useContext(LiveActionContext);
 
   const {
@@ -207,11 +202,7 @@ function InputElement(props: PlateElementProps) {
   const showInvalid = isValid === false;
 
   return (
-    <PlateElement
-      {...props}
-      as="div"
-      className="my-2"
-    >
+    <PlateElement {...props} as="div" className="my-2">
       <div className="flex flex-col gap-1.5">
         {hasLabel && <Label>{props.children}</Label>}
         <MaskInput
@@ -227,7 +218,9 @@ function InputElement(props: PlateElementProps) {
           currency={currency}
           locale={locale}
           invalid={showInvalid}
-          className={showInvalid ? "border-destructive focus-visible:ring-destructive/20" : undefined}
+          className={
+            showInvalid ? "border-destructive focus-visible:ring-destructive/20" : undefined
+          }
           contentEditable={false}
         />
         {!hasLabel && <span className="hidden">{props.children}</span>}

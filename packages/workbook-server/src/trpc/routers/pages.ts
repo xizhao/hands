@@ -8,8 +8,7 @@ import { existsSync } from "node:fs";
 import { join } from "node:path";
 import { initTRPC, TRPCError } from "@trpc/server";
 import { z } from "zod";
-import type { PageRegistry, RegisteredPage } from "../../pages/index.js";
-import { ensureBlocksDir, BLOCKS_SUBDIR } from "../../pages/discovery.js";
+import type { PageRegistry } from "../../pages/index.js";
 
 // ============================================================================
 // Context
@@ -53,15 +52,22 @@ const saveSourceInput = z.object({
 
 const renameInput = z.object({
   route: z.string().min(1),
-  newSlug: z.string().min(1).regex(/^[a-z0-9][a-z0-9-]*$/, {
-    message: "Invalid slug - use lowercase, numbers, hyphens only",
-  }),
+  newSlug: z
+    .string()
+    .min(1)
+    .regex(/^[a-z0-9][a-z0-9-]*$/, {
+      message: "Invalid slug - use lowercase, numbers, hyphens only",
+    }),
 });
 
 const createPageInput = z.object({
-  pageId: z.string().min(1).regex(/^[a-z0-9][a-z0-9-]*$/, {
-    message: "Invalid pageId - use lowercase, numbers, hyphens only",
-  }).optional(),
+  pageId: z
+    .string()
+    .min(1)
+    .regex(/^[a-z0-9][a-z0-9-]*$/, {
+      message: "Invalid pageId - use lowercase, numbers, hyphens only",
+    })
+    .optional(),
 });
 
 // ============================================================================
@@ -100,63 +106,59 @@ export const pagesRouter = t.router({
   }),
 
   /** Get page source code */
-  getSource: registryReadyProcedure
-    .input(pageRouteInput)
-    .query(async ({ ctx, input }) => {
-      const route = input.route.startsWith("/") ? input.route : `/${input.route}`;
-      const page = ctx.pageRegistry.match(route);
+  getSource: registryReadyProcedure.input(pageRouteInput).query(async ({ ctx, input }) => {
+    const route = input.route.startsWith("/") ? input.route : `/${input.route}`;
+    const page = ctx.pageRegistry.match(route);
 
-      if (!page) {
-        throw new TRPCError({ code: "NOT_FOUND", message: `Page not found: ${route}` });
-      }
+    if (!page) {
+      throw new TRPCError({ code: "NOT_FOUND", message: `Page not found: ${route}` });
+    }
 
-      const source = await ctx.pageRegistry.getSource(page.route);
-      if (!source) {
-        throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Failed to read page source" });
-      }
+    const source = await ctx.pageRegistry.getSource(page.route);
+    if (!source) {
+      throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Failed to read page source" });
+    }
+
+    return {
+      route: page.route,
+      path: page.path,
+      source,
+    };
+  }),
+
+  /** Save page source code */
+  saveSource: registryReadyProcedure.input(saveSourceInput).mutation(async ({ ctx, input }) => {
+    const route = input.route.startsWith("/") ? input.route : `/${input.route}`;
+    const page = ctx.pageRegistry.match(route);
+
+    if (!page) {
+      throw new TRPCError({ code: "NOT_FOUND", message: `Page not found: ${route}` });
+    }
+
+    const pagesDir = ctx.pageRegistry.getPagesDir();
+    const filePath = join(pagesDir, page.path);
+
+    try {
+      const { openSync, writeSync, fsyncSync, closeSync } = await import("node:fs");
+      const fd = openSync(filePath, "w");
+      writeSync(fd, input.source, 0, "utf-8");
+      fsyncSync(fd);
+      closeSync(fd);
+
+      // Invalidate cached compilation
+      ctx.pageRegistry.invalidate(page.route);
 
       return {
         route: page.route,
         path: page.path,
-        source,
       };
-    }),
-
-  /** Save page source code */
-  saveSource: registryReadyProcedure
-    .input(saveSourceInput)
-    .mutation(async ({ ctx, input }) => {
-      const route = input.route.startsWith("/") ? input.route : `/${input.route}`;
-      const page = ctx.pageRegistry.match(route);
-
-      if (!page) {
-        throw new TRPCError({ code: "NOT_FOUND", message: `Page not found: ${route}` });
-      }
-
-      const pagesDir = ctx.pageRegistry.getPagesDir();
-      const filePath = join(pagesDir, page.path);
-
-      try {
-        const { openSync, writeSync, fsyncSync, closeSync } = await import("node:fs");
-        const fd = openSync(filePath, "w");
-        writeSync(fd, input.source, 0, "utf-8");
-        fsyncSync(fd);
-        closeSync(fd);
-
-        // Invalidate cached compilation
-        ctx.pageRegistry.invalidate(page.route);
-
-        return {
-          route: page.route,
-          path: page.path,
-        };
-      } catch (err) {
-        throw new TRPCError({
-          code: "INTERNAL_SERVER_ERROR",
-          message: `Failed to write page: ${err instanceof Error ? err.message : String(err)}`,
-        });
-      }
-    }),
+    } catch (err) {
+      throw new TRPCError({
+        code: "INTERNAL_SERVER_ERROR",
+        message: `Failed to write page: ${err instanceof Error ? err.message : String(err)}`,
+      });
+    }
+  }),
 
   /** Create a new page */
   create: t.procedure.input(createPageInput).mutation(async ({ ctx, input }) => {
@@ -242,139 +244,133 @@ title: "${title}"
   }),
 
   /** Delete a page */
-  delete: registryReadyProcedure
-    .input(pageRouteInput)
-    .mutation(async ({ ctx, input }) => {
-      const route = input.route.startsWith("/") ? input.route : `/${input.route}`;
-      const page = ctx.pageRegistry.match(route);
+  delete: registryReadyProcedure.input(pageRouteInput).mutation(async ({ ctx, input }) => {
+    const route = input.route.startsWith("/") ? input.route : `/${input.route}`;
+    const page = ctx.pageRegistry.match(route);
 
-      if (!page) {
-        throw new TRPCError({ code: "NOT_FOUND", message: `Page not found: ${route}` });
-      }
+    if (!page) {
+      throw new TRPCError({ code: "NOT_FOUND", message: `Page not found: ${route}` });
+    }
 
-      const pagesDir = ctx.pageRegistry.getPagesDir();
-      const filePath = join(pagesDir, page.path);
+    const pagesDir = ctx.pageRegistry.getPagesDir();
+    const filePath = join(pagesDir, page.path);
 
-      try {
-        const { unlinkSync } = await import("node:fs");
-        unlinkSync(filePath);
+    try {
+      const { unlinkSync } = await import("node:fs");
+      unlinkSync(filePath);
 
-        // Reload page registry
-        await ctx.pageRegistry.load();
+      // Reload page registry
+      await ctx.pageRegistry.load();
 
-        return {
-          deletedRoute: route,
-          deletedPath: page.path,
-        };
-      } catch (err) {
-        throw new TRPCError({
-          code: "INTERNAL_SERVER_ERROR",
-          message: `Failed to delete: ${err instanceof Error ? err.message : String(err)}`,
-        });
-      }
-    }),
+      return {
+        deletedRoute: route,
+        deletedPath: page.path,
+      };
+    } catch (err) {
+      throw new TRPCError({
+        code: "INTERNAL_SERVER_ERROR",
+        message: `Failed to delete: ${err instanceof Error ? err.message : String(err)}`,
+      });
+    }
+  }),
 
   /** Rename a page */
-  rename: registryReadyProcedure
-    .input(renameInput)
-    .mutation(async ({ ctx, input }) => {
-      const route = input.route.startsWith("/") ? input.route : `/${input.route}`;
-      const page = ctx.pageRegistry.match(route);
+  rename: registryReadyProcedure.input(renameInput).mutation(async ({ ctx, input }) => {
+    const route = input.route.startsWith("/") ? input.route : `/${input.route}`;
+    const page = ctx.pageRegistry.match(route);
 
-      if (!page) {
-        throw new TRPCError({ code: "NOT_FOUND", message: `Page not found: ${route}` });
-      }
+    if (!page) {
+      throw new TRPCError({ code: "NOT_FOUND", message: `Page not found: ${route}` });
+    }
 
-      const pagesDir = ctx.pageRegistry.getPagesDir();
-      const oldFilePath = join(pagesDir, page.path);
-      const newFileName = `${input.newSlug}${page.ext}`;
-      const newFilePath = join(pagesDir, newFileName);
+    const pagesDir = ctx.pageRegistry.getPagesDir();
+    const oldFilePath = join(pagesDir, page.path);
+    const newFileName = `${input.newSlug}${page.ext}`;
+    const newFilePath = join(pagesDir, newFileName);
 
-      // Check if target already exists (and isn't the same file)
-      if (oldFilePath !== newFilePath && existsSync(newFilePath)) {
-        throw new TRPCError({ code: "CONFLICT", message: `Page already exists: ${input.newSlug}` });
-      }
+    // Check if target already exists (and isn't the same file)
+    if (oldFilePath !== newFilePath && existsSync(newFilePath)) {
+      throw new TRPCError({ code: "CONFLICT", message: `Page already exists: ${input.newSlug}` });
+    }
 
-      // Skip if same file
-      if (oldFilePath === newFilePath) {
-        return { newRoute: route, noChange: true };
-      }
+    // Skip if same file
+    if (oldFilePath === newFilePath) {
+      return { newRoute: route, noChange: true };
+    }
 
-      try {
-        const { renameSync } = await import("node:fs");
-        renameSync(oldFilePath, newFilePath);
+    try {
+      const { renameSync } = await import("node:fs");
+      renameSync(oldFilePath, newFilePath);
 
-        // Reload page registry
-        await ctx.pageRegistry.load();
+      // Reload page registry
+      await ctx.pageRegistry.load();
 
-        // Calculate new route
-        const newRoute = input.newSlug === "index" ? "/" : `/${input.newSlug}`;
+      // Calculate new route
+      const newRoute = input.newSlug === "index" ? "/" : `/${input.newSlug}`;
 
-        return {
-          oldRoute: route,
-          newRoute,
-          newPath: newFileName,
-        };
-      } catch (err) {
-        throw new TRPCError({
-          code: "INTERNAL_SERVER_ERROR",
-          message: `Failed to rename: ${err instanceof Error ? err.message : String(err)}`,
-        });
-      }
-    }),
+      return {
+        oldRoute: route,
+        newRoute,
+        newPath: newFileName,
+      };
+    } catch (err) {
+      throw new TRPCError({
+        code: "INTERNAL_SERVER_ERROR",
+        message: `Failed to rename: ${err instanceof Error ? err.message : String(err)}`,
+      });
+    }
+  }),
 
   /** Duplicate a page */
-  duplicate: registryReadyProcedure
-    .input(pageRouteInput)
-    .mutation(async ({ ctx, input }) => {
-      const route = input.route.startsWith("/") ? input.route : `/${input.route}`;
-      const page = ctx.pageRegistry.match(route);
+  duplicate: registryReadyProcedure.input(pageRouteInput).mutation(async ({ ctx, input }) => {
+    const route = input.route.startsWith("/") ? input.route : `/${input.route}`;
+    const page = ctx.pageRegistry.match(route);
 
-      if (!page) {
-        throw new TRPCError({ code: "NOT_FOUND", message: `Page not found: ${route}` });
-      }
+    if (!page) {
+      throw new TRPCError({ code: "NOT_FOUND", message: `Page not found: ${route}` });
+    }
 
-      const pagesDir = ctx.pageRegistry.getPagesDir();
+    const pagesDir = ctx.pageRegistry.getPagesDir();
 
-      // Read original source
-      const source = await ctx.pageRegistry.getSource(page.route);
-      if (!source) {
-        throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Failed to read page source" });
-      }
+    // Read original source
+    const source = await ctx.pageRegistry.getSource(page.route);
+    if (!source) {
+      throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Failed to read page source" });
+    }
 
-      // Generate unique name: original-copy, original-copy-1, etc.
-      const baseName = page.path.replace(page.ext, "");
-      let newName = `${baseName}-copy`;
-      let counter = 0;
-      while (existsSync(join(pagesDir, `${newName}${page.ext}`))) {
-        counter++;
-        newName = `${baseName}-copy-${counter}`;
-      }
+    // Generate unique name: original-copy, original-copy-1, etc.
+    const baseName = page.path.replace(page.ext, "");
+    let newName = `${baseName}-copy`;
+    let counter = 0;
+    while (existsSync(join(pagesDir, `${newName}${page.ext}`))) {
+      counter++;
+      newName = `${baseName}-copy-${counter}`;
+    }
 
-      const newPath = `${newName}${page.ext}`;
-      const newFilePath = join(pagesDir, newPath);
+    const newPath = `${newName}${page.ext}`;
+    const newFilePath = join(pagesDir, newPath);
 
-      try {
-        const { writeFileSync } = await import("node:fs");
-        writeFileSync(newFilePath, source, "utf-8");
+    try {
+      const { writeFileSync } = await import("node:fs");
+      writeFileSync(newFilePath, source, "utf-8");
 
-        // Reload page registry
-        await ctx.pageRegistry.load();
+      // Reload page registry
+      await ctx.pageRegistry.load();
 
-        const newRoute = newName === "index" ? "/" : `/${newName}`;
+      const newRoute = newName === "index" ? "/" : `/${newName}`;
 
-        return {
-          originalRoute: route,
-          newRoute,
-          newPath,
-        };
-      } catch (err) {
-        throw new TRPCError({
-          code: "INTERNAL_SERVER_ERROR",
-          message: `Failed to duplicate: ${err instanceof Error ? err.message : String(err)}`,
-        });
-      }
-    }),
+      return {
+        originalRoute: route,
+        newRoute,
+        newPath,
+      };
+    } catch (err) {
+      throw new TRPCError({
+        code: "INTERNAL_SERVER_ERROR",
+        message: `Failed to duplicate: ${err instanceof Error ? err.message : String(err)}`,
+      });
+    }
+  }),
 
   /** Reload page registry */
   reload: registryReadyProcedure.mutation(async ({ ctx }) => {

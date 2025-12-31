@@ -1,7 +1,7 @@
-import { useEffect, useCallback, useRef } from "react";
+import { useCallback, useEffect, useRef } from "react";
 import { useSyncedState } from "rwsdk/use-synced-state/client";
-import type { CollabUser, UserPresence, PresenceMap } from "../types";
 import { PRESENCE_STALE_MS, PRESENCE_UPDATE_MS } from "../constants";
+import type { CollabUser, PresenceMap, UserPresence } from "../types";
 
 /**
  * Sync cursor presence with other users on the same page.
@@ -9,11 +9,7 @@ import { PRESENCE_STALE_MS, PRESENCE_UPDATE_MS } from "../constants";
  */
 export function usePresence(pageId: string, user: CollabUser | null) {
   // Use compound key for page-scoped state (rwsdk doesn't support room param yet)
-  const [presenceMap, setPresenceMap] = useSyncedState<PresenceMap>(
-    {},
-    `presence:${pageId}`
-  );
-
+  const [presenceMap, setPresenceMap] = useSyncedState<PresenceMap>({}, `presence:${pageId}`);
 
   const lastUpdateRef = useRef(0);
   const rafIdRef = useRef<number | undefined>(undefined);
@@ -35,7 +31,7 @@ export function usePresence(pageId: string, user: CollabUser | null) {
         },
       }));
     },
-    [user, setPresenceMap]
+    [user, setPresenceMap],
   );
 
   // Clear cursor when leaving

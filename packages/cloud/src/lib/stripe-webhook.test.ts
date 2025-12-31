@@ -29,7 +29,7 @@ interface SignatureVerificationResult {
 async function verifyStripeSignature(
   payload: string,
   signature: string,
-  secret: string
+  secret: string,
 ): Promise<SignatureVerificationResult> {
   // Parse signature header
   const parts: Record<string, string> = {};
@@ -40,8 +40,8 @@ async function verifyStripeSignature(
     }
   }
 
-  const timestamp = parts["t"];
-  const expectedSig = parts["v1"];
+  const timestamp = parts.t;
+  const expectedSig = parts.v1;
 
   if (!timestamp || !expectedSig) {
     return { valid: false, error: "Missing timestamp or signature" };
@@ -51,7 +51,7 @@ async function verifyStripeSignature(
   const now = Math.floor(Date.now() / 1000);
   const timestampNum = parseInt(timestamp, 10);
 
-  if (isNaN(timestampNum)) {
+  if (Number.isNaN(timestampNum)) {
     return { valid: false, error: "Invalid timestamp" };
   }
 
@@ -66,14 +66,10 @@ async function verifyStripeSignature(
     new TextEncoder().encode(secret),
     { name: "HMAC", hash: "SHA-256" },
     false,
-    ["sign"]
+    ["sign"],
   );
 
-  const sig = await crypto.subtle.sign(
-    "HMAC",
-    key,
-    new TextEncoder().encode(signedPayload)
-  );
+  const sig = await crypto.subtle.sign("HMAC", key, new TextEncoder().encode(signedPayload));
 
   const computedHex = Array.from(new Uint8Array(sig))
     .map((b) => b.toString(16).padStart(2, "0"))
@@ -91,7 +87,7 @@ async function verifyStripeSignature(
 async function generateStripeSignature(
   payload: string,
   secret: string,
-  timestamp?: number
+  timestamp?: number,
 ): Promise<string> {
   const t = timestamp ?? Math.floor(Date.now() / 1000);
   const signedPayload = `${t}.${payload}`;
@@ -101,14 +97,10 @@ async function generateStripeSignature(
     new TextEncoder().encode(secret),
     { name: "HMAC", hash: "SHA-256" },
     false,
-    ["sign"]
+    ["sign"],
   );
 
-  const sig = await crypto.subtle.sign(
-    "HMAC",
-    key,
-    new TextEncoder().encode(signedPayload)
-  );
+  const sig = await crypto.subtle.sign("HMAC", key, new TextEncoder().encode(signedPayload));
 
   const hexSig = Array.from(new Uint8Array(sig))
     .map((b) => b.toString(16).padStart(2, "0"))
@@ -150,11 +142,7 @@ describe("Stripe webhook verification", () => {
   describe("verifyStripeSignature", () => {
     test("should verify a valid signature", async () => {
       const signature = await generateStripeSignature(TEST_PAYLOAD, TEST_SECRET);
-      const result = await verifyStripeSignature(
-        TEST_PAYLOAD,
-        signature,
-        TEST_SECRET
-      );
+      const result = await verifyStripeSignature(TEST_PAYLOAD, signature, TEST_SECRET);
 
       expect(result.valid).toBe(true);
       expect(result.error).toBeUndefined();
@@ -164,26 +152,15 @@ describe("Stripe webhook verification", () => {
       const timestamp = Math.floor(Date.now() / 1000);
       const signature = `t=${timestamp},v1=invalid_signature_hex`;
 
-      const result = await verifyStripeSignature(
-        TEST_PAYLOAD,
-        signature,
-        TEST_SECRET
-      );
+      const result = await verifyStripeSignature(TEST_PAYLOAD, signature, TEST_SECRET);
 
       expect(result.valid).toBe(false);
       expect(result.error).toBe("Signature mismatch");
     });
 
     test("should reject signature with wrong secret", async () => {
-      const signature = await generateStripeSignature(
-        TEST_PAYLOAD,
-        "wrong_secret"
-      );
-      const result = await verifyStripeSignature(
-        TEST_PAYLOAD,
-        signature,
-        TEST_SECRET
-      );
+      const signature = await generateStripeSignature(TEST_PAYLOAD, "wrong_secret");
+      const result = await verifyStripeSignature(TEST_PAYLOAD, signature, TEST_SECRET);
 
       expect(result.valid).toBe(false);
       expect(result.error).toBe("Signature mismatch");
@@ -191,17 +168,9 @@ describe("Stripe webhook verification", () => {
 
     test("should reject expired timestamp", async () => {
       const oldTimestamp = Math.floor(Date.now() / 1000) - 400; // 400 seconds ago
-      const signature = await generateStripeSignature(
-        TEST_PAYLOAD,
-        TEST_SECRET,
-        oldTimestamp
-      );
+      const signature = await generateStripeSignature(TEST_PAYLOAD, TEST_SECRET, oldTimestamp);
 
-      const result = await verifyStripeSignature(
-        TEST_PAYLOAD,
-        signature,
-        TEST_SECRET
-      );
+      const result = await verifyStripeSignature(TEST_PAYLOAD, signature, TEST_SECRET);
 
       expect(result.valid).toBe(false);
       expect(result.error).toBe("Timestamp outside tolerance window");
@@ -209,17 +178,9 @@ describe("Stripe webhook verification", () => {
 
     test("should reject future timestamp", async () => {
       const futureTimestamp = Math.floor(Date.now() / 1000) + 400; // 400 seconds in future
-      const signature = await generateStripeSignature(
-        TEST_PAYLOAD,
-        TEST_SECRET,
-        futureTimestamp
-      );
+      const signature = await generateStripeSignature(TEST_PAYLOAD, TEST_SECRET, futureTimestamp);
 
-      const result = await verifyStripeSignature(
-        TEST_PAYLOAD,
-        signature,
-        TEST_SECRET
-      );
+      const result = await verifyStripeSignature(TEST_PAYLOAD, signature, TEST_SECRET);
 
       expect(result.valid).toBe(false);
       expect(result.error).toBe("Timestamp outside tolerance window");
@@ -228,28 +189,16 @@ describe("Stripe webhook verification", () => {
     test("should accept timestamp within tolerance", async () => {
       // 2 minutes ago (within 5 minute tolerance)
       const recentTimestamp = Math.floor(Date.now() / 1000) - 120;
-      const signature = await generateStripeSignature(
-        TEST_PAYLOAD,
-        TEST_SECRET,
-        recentTimestamp
-      );
+      const signature = await generateStripeSignature(TEST_PAYLOAD, TEST_SECRET, recentTimestamp);
 
-      const result = await verifyStripeSignature(
-        TEST_PAYLOAD,
-        signature,
-        TEST_SECRET
-      );
+      const result = await verifyStripeSignature(TEST_PAYLOAD, signature, TEST_SECRET);
 
       expect(result.valid).toBe(true);
     });
 
     test("should reject missing timestamp", async () => {
       const signature = "v1=somehex";
-      const result = await verifyStripeSignature(
-        TEST_PAYLOAD,
-        signature,
-        TEST_SECRET
-      );
+      const result = await verifyStripeSignature(TEST_PAYLOAD, signature, TEST_SECRET);
 
       expect(result.valid).toBe(false);
       expect(result.error).toBe("Missing timestamp or signature");
@@ -257,11 +206,7 @@ describe("Stripe webhook verification", () => {
 
     test("should reject missing signature", async () => {
       const signature = `t=${Math.floor(Date.now() / 1000)}`;
-      const result = await verifyStripeSignature(
-        TEST_PAYLOAD,
-        signature,
-        TEST_SECRET
-      );
+      const result = await verifyStripeSignature(TEST_PAYLOAD, signature, TEST_SECRET);
 
       expect(result.valid).toBe(false);
       expect(result.error).toBe("Missing timestamp or signature");
@@ -269,11 +214,7 @@ describe("Stripe webhook verification", () => {
 
     test("should reject invalid timestamp format", async () => {
       const signature = "t=notanumber,v1=abc123";
-      const result = await verifyStripeSignature(
-        TEST_PAYLOAD,
-        signature,
-        TEST_SECRET
-      );
+      const result = await verifyStripeSignature(TEST_PAYLOAD, signature, TEST_SECRET);
 
       expect(result.valid).toBe(false);
       expect(result.error).toBe("Invalid timestamp");
@@ -283,11 +224,7 @@ describe("Stripe webhook verification", () => {
       const specialPayload = '{"name":"Test","emoji":"🔥","unicode":"日本語"}';
       const signature = await generateStripeSignature(specialPayload, TEST_SECRET);
 
-      const result = await verifyStripeSignature(
-        specialPayload,
-        signature,
-        TEST_SECRET
-      );
+      const result = await verifyStripeSignature(specialPayload, signature, TEST_SECRET);
 
       expect(result.valid).toBe(true);
     });
@@ -296,11 +233,7 @@ describe("Stripe webhook verification", () => {
       const signature = await generateStripeSignature(TEST_PAYLOAD, TEST_SECRET);
       const tamperedPayload = TEST_PAYLOAD.replace("completed", "failed");
 
-      const result = await verifyStripeSignature(
-        tamperedPayload,
-        signature,
-        TEST_SECRET
-      );
+      const result = await verifyStripeSignature(tamperedPayload, signature, TEST_SECRET);
 
       expect(result.valid).toBe(false);
       expect(result.error).toBe("Signature mismatch");

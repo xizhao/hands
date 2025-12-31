@@ -7,9 +7,9 @@
 
 import { createFileRoute } from "@tanstack/react-router";
 import { DomainView } from "@/components/domain/DomainView";
+import { ActionsTab } from "@/components/domain/tabs/ActionsTab";
 import { PageTab } from "@/components/domain/tabs/PageTab";
 import { SheetTab } from "@/components/domain/tabs/SheetTab";
-import { ActionsTab } from "@/components/domain/tabs/ActionsTab";
 import { useDomainData } from "@/components/sidebar/domain/hooks/useDomainData";
 import type { DomainTab } from "@/components/sidebar/domain/types";
 
@@ -62,11 +62,7 @@ function DomainPage() {
   }
 
   return (
-    <DomainView
-      domain={domain}
-      activeTab={tab}
-      onTabChange={handleTabChange}
-    >
+    <DomainView domain={domain} activeTab={tab} onTabChange={handleTabChange}>
       {tabContent}
     </DomainView>
   );

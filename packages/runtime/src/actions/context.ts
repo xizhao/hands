@@ -5,6 +5,8 @@
  * Used when runtime executes actions (not HTTP proxying).
  */
 
+import { createServices } from "@hands/core/services";
+import { getDb, kyselySql, runWithDbMode } from "../db/dev";
 import type {
   ActionContext,
   ActionLogger,
@@ -14,8 +16,6 @@ import type {
   SelectOptions,
   TableClient,
 } from "../types/action";
-import { getDb, kyselySql, runWithDbMode } from "../db/dev";
-import { createServices, type Services } from "@hands/core/services";
 
 interface CloudConfig {
   cloudUrl: string;
@@ -68,7 +68,7 @@ export function buildActionContext(options: BuildContextOptions): ActionContext 
  * Groups tables by source name (default: "main")
  */
 function buildSourcesProxy(
-  tables: Array<{ name: string; source?: string }>
+  tables: Array<{ name: string; source?: string }>,
 ): Record<string, Record<string, TableClient>> {
   const proxy: Record<string, Record<string, TableClient>> = {};
 
@@ -86,9 +86,7 @@ function buildSourcesProxy(
 /**
  * Build a TableClient with direct DB access
  */
-function buildTableClient<T = Record<string, unknown>>(
-  tableName: string
-): TableClient<T> {
+function buildTableClient<T = Record<string, unknown>>(tableName: string): TableClient<T> {
   const db = getDb();
   const escapedTable = escapeIdentifier(tableName);
 
@@ -151,7 +149,7 @@ function buildTableClient<T = Record<string, unknown>>(
       if (entries.length === 0) return [];
 
       const setClauses = entries.map(
-        ([col, val]) => `${escapeIdentifier(col)} = ${escapeValue(val)}`
+        ([col, val]) => `${escapeIdentifier(col)} = ${escapeValue(val)}`,
       );
 
       const query = `UPDATE ${escapedTable} SET ${setClauses.join(", ")} WHERE ${where} RETURNING *`;
@@ -193,7 +191,7 @@ function buildTableClient<T = Record<string, unknown>>(
       // Build the UPDATE SET clause excluding conflict keys
       const updateColumns = columns.filter((col) => !conflictKeys.includes(col));
       const updateClauses = updateColumns.map(
-        (col) => `${escapeIdentifier(col)} = EXCLUDED.${escapeIdentifier(col)}`
+        (col) => `${escapeIdentifier(col)} = EXCLUDED.${escapeIdentifier(col)}`,
       );
 
       const query = `
@@ -327,7 +325,7 @@ function escapeValue(value: unknown): string {
 export function createRunMeta(
   runId: string,
   trigger: ActionTriggerType,
-  input: unknown
+  input: unknown,
 ): ActionRunMeta {
   return {
     id: runId,

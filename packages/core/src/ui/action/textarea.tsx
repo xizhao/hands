@@ -22,7 +22,7 @@ import {
 } from "platejs/react";
 import { memo, useContext, useEffect, useRef, useState } from "react";
 
-import { TEXTAREA_KEY, type TTextareaElement, type ComponentMeta } from "../../types";
+import { type ComponentMeta, TEXTAREA_KEY, type TTextareaElement } from "../../types";
 import { LiveActionContext } from "./live-action";
 
 // ============================================================================
@@ -105,7 +105,7 @@ export function Textarea({
 
 function TextareaElement(props: PlateElementProps) {
   const element = useElement<TTextareaElement>();
-  const selected = useSelected();
+  const _selected = useSelected();
   const actionCtx = useContext(LiveActionContext);
 
   const { name, placeholder, defaultValue, rows = 3, required } = element;
@@ -131,11 +131,7 @@ function TextareaElement(props: PlateElementProps) {
   );
 
   return (
-    <PlateElement
-      {...props}
-      as="div"
-      className="my-2"
-    >
+    <PlateElement {...props} as="div" className="my-2">
       <div className="flex flex-col gap-1.5">
         {hasLabel && <label className="text-sm font-medium">{props.children}</label>}
         <textarea
@@ -208,4 +204,3 @@ export const TextareaMeta: ComponentMeta = {
     requireParent: ["LiveAction"],
   },
 };
-

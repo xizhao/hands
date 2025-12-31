@@ -16,7 +16,7 @@ const MODEL_COSTS: Record<string, { input: number; output: number }> = {
 function estimateCost(
   model: string | undefined,
   inputTokens: number,
-  outputTokens: number
+  outputTokens: number,
 ): number {
   const costs = MODEL_COSTS[model ?? "default"] ?? MODEL_COSTS.default;
   const inputCost = (inputTokens / 1000) * costs.input;
@@ -163,9 +163,9 @@ describe("usage aggregator", () => {
       expect(result.size).toBe(1);
       const aggregate = result.get("user-1:2025-01-15");
       expect(aggregate).toBeDefined();
-      expect(aggregate!.tokensInput).toBe(250);
-      expect(aggregate!.tokensOutput).toBe(450);
-      expect(aggregate!.requests).toBe(2);
+      expect(aggregate?.tokensInput).toBe(250);
+      expect(aggregate?.tokensOutput).toBe(450);
+      expect(aggregate?.requests).toBe(2);
     });
 
     test("should separate different dates", () => {
@@ -212,8 +212,8 @@ describe("usage aggregator", () => {
       const user1 = result.get("user-1:2025-01-15");
       const user2 = result.get("user-2:2025-01-15");
 
-      expect(user1!.tokensInput).toBe(100);
-      expect(user2!.tokensInput).toBe(200);
+      expect(user1?.tokensInput).toBe(100);
+      expect(user2?.tokensInput).toBe(200);
     });
 
     test("should skip logs without userId", () => {
@@ -254,9 +254,9 @@ describe("usage aggregator", () => {
       const result = aggregateLogs(logs);
       const aggregate = result.get("user-1:2025-01-15");
 
-      expect(aggregate!.tokensInput).toBe(0);
-      expect(aggregate!.tokensOutput).toBe(0);
-      expect(aggregate!.requests).toBe(1);
+      expect(aggregate?.tokensInput).toBe(0);
+      expect(aggregate?.tokensOutput).toBe(0);
+      expect(aggregate?.requests).toBe(1);
     });
 
     test("should calculate cumulative cost", () => {
@@ -281,7 +281,7 @@ describe("usage aggregator", () => {
       const aggregate = result.get("user-1:2025-01-15");
 
       // 2 requests x 9 cents each = 18 cents
-      expect(aggregate!.costCents).toBe(18);
+      expect(aggregate?.costCents).toBe(18);
     });
 
     test("should handle empty logs array", () => {

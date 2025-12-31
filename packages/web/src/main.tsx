@@ -4,9 +4,9 @@
  * Bootstraps the web version of Hands using the Cloud platform adapter.
  */
 
+import { App, PlatformProvider } from "@hands/app";
 import React from "react";
 import ReactDOM from "react-dom/client";
-import { App, PlatformProvider } from "@hands/app";
 import { createCloudPlatformAdapter } from "./platform/CloudAdapter";
 import "./index.css";
 

@@ -43,12 +43,14 @@ export function validateImports(code: string, filePath: string): ImportWarning[]
     const lineNum = i + 1;
 
     // Check for @hands/* imports
-    const handsImportMatch = line.match(/from\s+["'](@hands\/[^"']+)["']|import\s*\(\s*["'](@hands\/[^"']+)["']\s*\)/);
+    const handsImportMatch = line.match(
+      /from\s+["'](@hands\/[^"']+)["']|import\s*\(\s*["'](@hands\/[^"']+)["']\s*\)/,
+    );
     if (handsImportMatch) {
       const importPath = handsImportMatch[1] || handsImportMatch[2];
       // Check if it's a known alias or starts with a known alias
       const isKnown = KNOWN_HANDS_ALIASES.some(
-        (alias) => importPath === alias || importPath.startsWith(alias + "/")
+        (alias) => importPath === alias || importPath.startsWith(`${alias}/`),
       );
       if (!isKnown) {
         warnings.push({
@@ -193,7 +195,7 @@ export function parseDbTypes(dbTypesContent: string): Map<string, string[]> {
  */
 function extractTablesFromSql(sql: string): string[] {
   const tables: string[] = [];
-  const upperSql = sql.toUpperCase();
+  const _upperSql = sql.toUpperCase();
 
   // Match FROM table, JOIN table, INTO table, UPDATE table
   const patterns = [
@@ -219,7 +221,7 @@ function extractTablesFromSql(sql: string): string[] {
  */
 export function validateSqlQueries(
   queries: Array<{ sql: string; line: number }>,
-  knownTables: Map<string, string[]>
+  knownTables: Map<string, string[]>,
 ): SqlWarning[] {
   const warnings: SqlWarning[] = [];
 

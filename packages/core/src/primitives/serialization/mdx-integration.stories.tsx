@@ -6,7 +6,7 @@
  */
 
 import type { Story } from "@ladle/react";
-import { PlateHarness, PlateHarnessDebug } from "../../test-utils/plate-harness";
+import { PlateHarnessDebug } from "../../test-utils/plate-harness";
 
 export default {
   title: "Integration/MDX",
@@ -17,16 +17,12 @@ export default {
 // ============================================================================
 
 export const LiveValueInline: Story = () => (
-  <PlateHarnessDebug
-    mdx={`<LiveValue query="SELECT COUNT(*) FROM users" />`}
-  />
+  <PlateHarnessDebug mdx={`<LiveValue query="SELECT COUNT(*) FROM users" />`} />
 );
 LiveValueInline.storyName = "LiveValue - Inline";
 
 export const LiveValueTable: Story = () => (
-  <PlateHarnessDebug
-    mdx={`<LiveValue query="SELECT * FROM users" display="table" />`}
-  />
+  <PlateHarnessDebug mdx={`<LiveValue query="SELECT * FROM users" display="table" />`} />
 );
 LiveValueTable.storyName = "LiveValue - Table";
 
@@ -109,9 +105,7 @@ LiveValueWithPieChart.storyName = "LiveValue + PieChart";
 // ============================================================================
 
 export const StandaloneBarChart: Story = () => (
-  <PlateHarnessDebug
-    mdx={`<BarChart xKey="category" yKey="value" height={300} />`}
-  />
+  <PlateHarnessDebug mdx={`<BarChart xKey="category" yKey="value" height={300} />`} />
 );
 StandaloneBarChart.storyName = "Standalone BarChart";
 
@@ -145,9 +139,7 @@ LiveActionWithSelect.storyName = "LiveAction + Select";
 // ============================================================================
 
 export const MetricComponent: Story = () => (
-  <PlateHarnessDebug
-    mdx={`<Metric value={1234} label="Total Users" prefix="+" change={12.5} />`}
-  />
+  <PlateHarnessDebug mdx={`<Metric value={1234} label="Total Users" prefix="+" change={12.5} />`} />
 );
 MetricComponent.storyName = "Metric";
 
@@ -163,16 +155,12 @@ Please review before continuing.
 AlertComponent.storyName = "Alert";
 
 export const BadgeComponent: Story = () => (
-  <PlateHarnessDebug
-    mdx={`<Badge variant="success">Completed</Badge>`}
-  />
+  <PlateHarnessDebug mdx={`<Badge variant="success">Completed</Badge>`} />
 );
 BadgeComponent.storyName = "Badge";
 
 export const ProgressComponent: Story = () => (
-  <PlateHarnessDebug
-    mdx={`<Progress value={75} max={100} showValue />`}
-  />
+  <PlateHarnessDebug mdx={`<Progress value={75} max={100} showValue />`} />
 );
 ProgressComponent.storyName = "Progress";
 

@@ -174,19 +174,47 @@ export interface ActionCloud {
 
   /** GitHub service */
   github: {
-    fetch: (input: { path: string; method?: "GET" | "POST" | "PUT" | "PATCH" | "DELETE"; body?: unknown }) => Promise<unknown>;
-    issues: (input: { owner: string; repo: string; state?: "open" | "closed" | "all"; per_page?: number }) => Promise<CloudGitHubIssue[]>;
-    createIssue: (input: { owner: string; repo: string; title: string; body?: string; labels?: string[]; assignees?: string[] }) => Promise<{ id: number; number: number; html_url: string }>;
-    repos: (input?: { per_page?: number; sort?: "created" | "updated" | "pushed" | "full_name" }) => Promise<CloudGitHubRepo[]>;
+    fetch: (input: {
+      path: string;
+      method?: "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
+      body?: unknown;
+    }) => Promise<unknown>;
+    issues: (input: {
+      owner: string;
+      repo: string;
+      state?: "open" | "closed" | "all";
+      per_page?: number;
+    }) => Promise<CloudGitHubIssue[]>;
+    createIssue: (input: {
+      owner: string;
+      repo: string;
+      title: string;
+      body?: string;
+      labels?: string[];
+      assignees?: string[];
+    }) => Promise<{ id: number; number: number; html_url: string }>;
+    repos: (input?: {
+      per_page?: number;
+      sort?: "created" | "updated" | "pushed" | "full_name";
+    }) => Promise<CloudGitHubRepo[]>;
   };
 
   /** Salesforce service */
   salesforce: {
-    query: (input: { soql: string; instanceUrl: string }) => Promise<{ totalSize: number; done: boolean; records: unknown[] }>;
+    query: (input: {
+      soql: string;
+      instanceUrl: string;
+    }) => Promise<{ totalSize: number; done: boolean; records: unknown[] }>;
   };
 
   /** Generic authenticated fetch for any connected provider */
-  fetch: (input: { provider: "google" | "slack" | "github" | "salesforce" | "quickbooks" | "shopify"; url: string; method?: "GET" | "POST" | "PUT" | "PATCH" | "DELETE"; headers?: Record<string, string>; body?: unknown }) => Promise<{ ok: boolean; status: number; data: unknown }>;
+  fetch: (input: {
+    provider: "google" | "slack" | "github" | "salesforce" | "quickbooks" | "shopify";
+    url: string;
+    method?: "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
+    headers?: Record<string, string>;
+    body?: unknown;
+  }) => Promise<{ ok: boolean; status: number; data: unknown }>;
 
   /** Check which services are connected */
   status: () => Promise<CloudServiceStatus>;
@@ -314,7 +342,7 @@ export interface RunActionDefinition<TInput = unknown, TOutput = unknown>
  */
 export interface WorkflowActionDefinition<
   TInput extends Serializable = Serializable,
-  TOutput extends Serializable = Serializable
+  TOutput extends Serializable = Serializable,
 > extends ActionDefinitionBase<TInput> {
   /**
    * CF-style workflow function with step primitives.
@@ -441,10 +469,7 @@ export function defineAction<TInput, TOutput>(
  * });
  * ```
  */
-export function defineAction<
-  TInput extends Serializable,
-  TOutput extends Serializable
->(
+export function defineAction<TInput extends Serializable, TOutput extends Serializable>(
   config: WorkflowActionDefinition<TInput, TOutput>,
 ): WorkflowActionDefinition<TInput, TOutput>;
 
@@ -462,17 +487,13 @@ export function defineAction<TInput, TOutput>(
 /**
  * Check if action uses workflow (vs run)
  */
-export function isWorkflowAction(
-  action: ActionDefinition
-): action is WorkflowActionDefinition {
+export function isWorkflowAction(action: ActionDefinition): action is WorkflowActionDefinition {
   return "workflow" in action && typeof action.workflow === "function";
 }
 
 /**
  * Check if action uses run (vs workflow)
  */
-export function isRunAction(
-  action: ActionDefinition
-): action is RunActionDefinition {
+export function isRunAction(action: ActionDefinition): action is RunActionDefinition {
   return "run" in action && typeof action.run === "function";
 }

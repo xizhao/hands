@@ -113,16 +113,12 @@ export function Progress({
 
 function ProgressElement(props: PlateElementProps) {
   const element = useElement<TProgressElement>();
-  const selected = useSelected();
+  const _selected = useSelected();
 
   const { value, max, indeterminate, label, showValue, variant, size } = element;
 
   return (
-    <PlateElement
-      {...props}
-      as="div"
-      className="my-2"
-    >
+    <PlateElement {...props} as="div" className="my-2">
       <Progress
         value={value}
         max={max}

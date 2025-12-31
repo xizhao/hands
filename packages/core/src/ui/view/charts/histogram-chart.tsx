@@ -113,7 +113,7 @@ export const HistogramChartPlugin = createPlatePlugin({
 });
 
 export function createHistogramChartElement(
-  options: Partial<Omit<THistogramChartElement, "type" | "children">> = {}
+  options: Partial<Omit<THistogramChartElement, "type" | "children">> = {},
 ): THistogramChartElement {
   return {
     type: HISTOGRAM_CHART_KEY,

@@ -1,4 +1,4 @@
-'use client';
+"use client";
 
 /**
  * EditorStatusBar - Minimal status bar showing selection context
@@ -7,62 +7,76 @@
  * During drag operations, shows drag feedback.
  */
 
-import { DndPlugin } from '@platejs/dnd';
-import { BlockSelectionPlugin } from '@platejs/selection/react';
 import {
-  Paragraph,
-  TextH,
-  TextHOne,
-  TextHTwo,
-  TextHThree,
+  CaretDown,
+  CaretRight,
+  Check,
+  CheckSquare,
+  CircleNotch,
+  Code,
+  DotsSixVertical,
+  Image,
+  Lightbulb,
   ListBullets,
   ListNumbers,
+  Paragraph,
   Quotes,
-  Code,
-  Table,
-  Image,
-  CheckSquare,
-  CaretRight,
-  DotsSixVertical,
-  Check,
-  CircleNotch,
-  Lightbulb,
-  CaretDown,
   SquaresFour,
-} from '@phosphor-icons/react';
-import { KEYS } from 'platejs';
-import {
-  useEditorSelector,
-  usePluginOption,
-  useSelectionFragmentProp,
-} from 'platejs/react';
-import * as React from 'react';
-import { cn } from '../lib/utils';
-import { getBlockType } from '../transforms';
+  Table,
+  TextH,
+  TextHOne,
+  TextHThree,
+  TextHTwo,
+} from "@phosphor-icons/react";
+import { DndPlugin } from "@platejs/dnd";
+import { BlockSelectionPlugin } from "@platejs/selection/react";
+import { KEYS } from "platejs";
+import { useEditorSelector, usePluginOption, useSelectionFragmentProp } from "platejs/react";
+import type * as React from "react";
+import { cn } from "../lib/utils";
+import { getBlockType } from "../transforms";
 
 // Element type display info - uses KEYS constants to match Plate
 const ELEMENT_INFO: Record<string, { icon: React.ReactNode; label: string }> = {
-  [KEYS.p]: { icon: <Paragraph weight="duotone" className="h-3.5 w-3.5" />, label: 'Paragraph' },
-  [KEYS.h1]: { icon: <TextHOne weight="duotone" className="h-3.5 w-3.5" />, label: 'Heading 1' },
-  [KEYS.h2]: { icon: <TextHTwo weight="duotone" className="h-3.5 w-3.5" />, label: 'Heading 2' },
-  [KEYS.h3]: { icon: <TextHThree weight="duotone" className="h-3.5 w-3.5" />, label: 'Heading 3' },
-  [KEYS.h4]: { icon: <TextH weight="duotone" className="h-3.5 w-3.5" />, label: 'Heading 4' },
-  [KEYS.h5]: { icon: <TextH weight="duotone" className="h-3.5 w-3.5" />, label: 'Heading 5' },
-  [KEYS.h6]: { icon: <TextH weight="duotone" className="h-3.5 w-3.5" />, label: 'Heading 6' },
-  [KEYS.ul]: { icon: <ListBullets weight="duotone" className="h-3.5 w-3.5" />, label: 'Bullet List' },
-  [KEYS.ol]: { icon: <ListNumbers weight="duotone" className="h-3.5 w-3.5" />, label: 'Numbered List' },
-  [KEYS.listTodo]: { icon: <CheckSquare weight="duotone" className="h-3.5 w-3.5" />, label: 'To-do List' },
-  [KEYS.blockquote]: { icon: <Quotes weight="duotone" className="h-3.5 w-3.5" />, label: 'Quote' },
-  [KEYS.codeBlock]: { icon: <Code weight="duotone" className="h-3.5 w-3.5" />, label: 'Code Block' },
-  [KEYS.table]: { icon: <Table weight="duotone" className="h-3.5 w-3.5" />, label: 'Table' },
-  [KEYS.img]: { icon: <Image weight="duotone" className="h-3.5 w-3.5" />, label: 'Image' },
-  [KEYS.callout]: { icon: <Lightbulb weight="duotone" className="h-3.5 w-3.5" />, label: 'Callout' },
-  [KEYS.toggle]: { icon: <CaretDown weight="duotone" className="h-3.5 w-3.5" />, label: 'Toggle' },
-  [KEYS.columnGroup]: { icon: <SquaresFour weight="duotone" className="h-3.5 w-3.5" />, label: 'Columns' },
+  [KEYS.p]: { icon: <Paragraph weight="duotone" className="h-3.5 w-3.5" />, label: "Paragraph" },
+  [KEYS.h1]: { icon: <TextHOne weight="duotone" className="h-3.5 w-3.5" />, label: "Heading 1" },
+  [KEYS.h2]: { icon: <TextHTwo weight="duotone" className="h-3.5 w-3.5" />, label: "Heading 2" },
+  [KEYS.h3]: { icon: <TextHThree weight="duotone" className="h-3.5 w-3.5" />, label: "Heading 3" },
+  [KEYS.h4]: { icon: <TextH weight="duotone" className="h-3.5 w-3.5" />, label: "Heading 4" },
+  [KEYS.h5]: { icon: <TextH weight="duotone" className="h-3.5 w-3.5" />, label: "Heading 5" },
+  [KEYS.h6]: { icon: <TextH weight="duotone" className="h-3.5 w-3.5" />, label: "Heading 6" },
+  [KEYS.ul]: {
+    icon: <ListBullets weight="duotone" className="h-3.5 w-3.5" />,
+    label: "Bullet List",
+  },
+  [KEYS.ol]: {
+    icon: <ListNumbers weight="duotone" className="h-3.5 w-3.5" />,
+    label: "Numbered List",
+  },
+  [KEYS.listTodo]: {
+    icon: <CheckSquare weight="duotone" className="h-3.5 w-3.5" />,
+    label: "To-do List",
+  },
+  [KEYS.blockquote]: { icon: <Quotes weight="duotone" className="h-3.5 w-3.5" />, label: "Quote" },
+  [KEYS.codeBlock]: {
+    icon: <Code weight="duotone" className="h-3.5 w-3.5" />,
+    label: "Code Block",
+  },
+  [KEYS.table]: { icon: <Table weight="duotone" className="h-3.5 w-3.5" />, label: "Table" },
+  [KEYS.img]: { icon: <Image weight="duotone" className="h-3.5 w-3.5" />, label: "Image" },
+  [KEYS.callout]: {
+    icon: <Lightbulb weight="duotone" className="h-3.5 w-3.5" />,
+    label: "Callout",
+  },
+  [KEYS.toggle]: { icon: <CaretDown weight="duotone" className="h-3.5 w-3.5" />, label: "Toggle" },
+  [KEYS.columnGroup]: {
+    icon: <SquaresFour weight="duotone" className="h-3.5 w-3.5" />,
+    label: "Columns",
+  },
 };
 
 /** Editor mode type */
-export type EditorMode = 'visual' | 'markdown' | 'slides';
+export type EditorMode = "visual" | "markdown" | "slides";
 
 interface EditorStatusBarProps {
   /** Whether the editor is currently saving */
@@ -79,18 +93,18 @@ interface EditorStatusBarProps {
 
 export function EditorStatusBar({
   isSaving,
-  mode = 'visual',
+  mode = "visual",
   onModeChange,
   showModeToggle = false,
-  className
+  className,
 }: EditorStatusBarProps) {
   // Get DnD state
-  const isDragging = usePluginOption(DndPlugin, 'isDragging');
+  const isDragging = usePluginOption(DndPlugin, "isDragging");
 
   // Get block selection state
   let selectedIds: Set<string> | undefined;
   try {
-    selectedIds = usePluginOption(BlockSelectionPlugin, 'selectedIds');
+    selectedIds = usePluginOption(BlockSelectionPlugin, "selectedIds");
   } catch {
     // BlockSelectionPlugin not available
   }
@@ -107,19 +121,20 @@ export function EditorStatusBar({
     if (!selection) return { words: 0, chars: 0, hasSelection: false };
 
     try {
-      const isCollapsed = selection.anchor.path.toString() === selection.focus.path.toString() &&
+      const isCollapsed =
+        selection.anchor.path.toString() === selection.focus.path.toString() &&
         selection.anchor.offset === selection.focus.offset;
 
-      let text = '';
+      let text = "";
       if (isCollapsed) {
         // No selection - count current block
         const block = editor.api.block();
         if (block) {
-          text = editor.api.string(block[1]) || '';
+          text = editor.api.string(block[1]) || "";
         }
       } else {
         // Has selection - count selected text
-        text = editor.api.string(selection) || '';
+        text = editor.api.string(selection) || "";
       }
 
       const words = text.trim() ? text.trim().split(/\s+/).length : 0;
@@ -137,13 +152,13 @@ export function EditorStatusBar({
   return (
     <div
       className={cn(
-        'h-6 px-3',
-        'flex items-center justify-between',
-        'border-t border-border/30',
-        'bg-muted/30',
-        'text-[11px] text-muted-foreground/70',
-        'select-none',
-        className
+        "h-6 px-3",
+        "flex items-center justify-between",
+        "border-t border-border/30",
+        "bg-muted/30",
+        "text-[11px] text-muted-foreground/70",
+        "select-none",
+        className,
       )}
     >
       {/* Left side - Element info */}
@@ -171,7 +186,7 @@ export function EditorStatusBar({
                 <span className="tabular-nums opacity-60">
                   {wordInfo.hasSelection
                     ? `${wordInfo.chars} chars`
-                    : `${wordInfo.words} word${wordInfo.words !== 1 ? 's' : ''}`}
+                    : `${wordInfo.words} word${wordInfo.words !== 1 ? "s" : ""}`}
                 </span>
               </>
             )}
@@ -183,34 +198,34 @@ export function EditorStatusBar({
       {showModeToggle && onModeChange && (
         <div className="flex items-center gap-0.5 px-1 py-0.5 rounded-md bg-background/50">
           <button
-            onClick={() => onModeChange('visual')}
+            onClick={() => onModeChange("visual")}
             className={cn(
               "px-2 py-0.5 rounded text-[10px] font-medium transition-colors",
-              mode === 'visual'
+              mode === "visual"
                 ? "bg-accent text-foreground"
-                : "text-muted-foreground hover:text-foreground"
+                : "text-muted-foreground hover:text-foreground",
             )}
           >
             Visual
           </button>
           <button
-            onClick={() => onModeChange('markdown')}
+            onClick={() => onModeChange("markdown")}
             className={cn(
               "px-2 py-0.5 rounded text-[10px] font-medium transition-colors",
-              mode === 'markdown'
+              mode === "markdown"
                 ? "bg-accent text-foreground"
-                : "text-muted-foreground hover:text-foreground"
+                : "text-muted-foreground hover:text-foreground",
             )}
           >
             Markdown
           </button>
           <button
-            onClick={() => onModeChange('slides')}
+            onClick={() => onModeChange("slides")}
             className={cn(
               "px-2 py-0.5 rounded text-[10px] font-medium transition-colors",
-              mode === 'slides'
+              mode === "slides"
                 ? "bg-accent text-foreground"
-                : "text-muted-foreground hover:text-foreground"
+                : "text-muted-foreground hover:text-foreground",
             )}
           >
             Slides

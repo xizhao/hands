@@ -148,10 +148,7 @@ export function registerWebhookRoutes(app: Hono, config: WebhookConfig): void {
     // Fall back to just action ID (only valid actions)
     if (!action) {
       action = actions.find(
-        (a) =>
-          a.id === actionId &&
-          a.valid &&
-          (a.triggers ?? ["manual"]).includes("webhook"),
+        (a) => a.id === actionId && a.valid && (a.triggers ?? ["manual"]).includes("webhook"),
       );
     }
 

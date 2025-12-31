@@ -1,4 +1,4 @@
-'use client';
+"use client";
 
 /**
  * Prompt Element
@@ -10,22 +10,21 @@
  * When agent finishes, it edits the MDX file directly. Hot reload updates the editor.
  */
 
+import { PageContextPlugin } from "@hands/editor";
+import { Sparkle } from "@phosphor-icons/react";
 import {
   PlateElement,
   type PlateElementProps,
   useEditorRef,
   usePluginOption,
   useReadOnly,
-} from 'platejs/react';
-import { useEffect, useRef, useState } from 'react';
-import { Sparkle } from '@phosphor-icons/react';
-
-import { api, subscribeToEvents } from '@/lib/api';
-import { useActiveRuntime } from '@/hooks/useWorkbook';
-import { trpc } from '@/lib/trpc';
-import { HandsLogo } from '@/components/ui/hands-logo';
-import { type TPromptElement } from '../plugins/prompt-kit';
-import { PageContextPlugin } from '@hands/editor';
+} from "platejs/react";
+import { useEffect, useRef, useState } from "react";
+import { HandsLogo } from "@/components/ui/hands-logo";
+import { useActiveRuntime } from "@/hooks/useWorkbook";
+import { api, subscribeToEvents } from "@/lib/api";
+import { trpc } from "@/lib/trpc";
+import type { TPromptElement } from "../plugins/prompt-kit";
 
 export function PromptElement(props: PlateElementProps) {
   const element = props.element as TPromptElement;
@@ -33,7 +32,7 @@ export function PromptElement(props: PlateElementProps) {
   const readOnly = useReadOnly();
   const { data: domainsData } = trpc.domains.list.useQuery();
   const { data: runtime } = useActiveRuntime();
-  const pageId = usePluginOption(PageContextPlugin, 'pageId');
+  const pageId = usePluginOption(PageContextPlugin, "pageId");
   const hasStartedRef = useRef(false);
 
   const { promptText, threadId } = element;
@@ -49,21 +48,24 @@ export function PromptElement(props: PlateElementProps) {
     if (!isProcessing || !threadId) return;
 
     // Fetch initial messages
-    api.messages.list(threadId, directory).then((messages) => {
-      const lastAssistant = [...messages].reverse().find(m => m.info.role === 'assistant');
-      if (lastAssistant) {
-        const textPart = lastAssistant.parts.find(p => p.type === 'text');
-        if (textPart && 'text' in textPart) {
-          setStatusText(textPart.text.slice(0, 100));
+    api.messages
+      .list(threadId, directory)
+      .then((messages) => {
+        const lastAssistant = [...messages].reverse().find((m) => m.info.role === "assistant");
+        if (lastAssistant) {
+          const textPart = lastAssistant.parts.find((p) => p.type === "text");
+          if (textPart && "text" in textPart) {
+            setStatusText(textPart.text.slice(0, 100));
+          }
         }
-      }
-    }).catch(() => {});
+      })
+      .catch(() => {});
 
     // Subscribe to live updates
     const unsubscribe = subscribeToEvents((event) => {
-      if (event.type === 'message.part.updated') {
+      if (event.type === "message.part.updated") {
         const { part } = event.properties;
-        if (part.sessionID === threadId && part.type === 'text' && 'text' in part) {
+        if (part.sessionID === threadId && part.type === "text" && "text" in part) {
           setStatusText(part.text.slice(0, 100));
         }
       }
@@ -78,27 +80,27 @@ export function PromptElement(props: PlateElementProps) {
     hasStartedRef.current = true;
 
     const startAgent = async () => {
-      console.log('[prompt-node] Starting agent for:', promptText);
+      console.log("[prompt-node] Starting agent for:", promptText);
 
       try {
         // Create a new session
-        const session = await api.sessions.create({ title: promptText!.slice(0, 50) }, directory);
-        console.log('[prompt-node] Created session:', session.id);
+        const session = await api.sessions.create({ title: promptText?.slice(0, 50) }, directory);
+        console.log("[prompt-node] Created session:", session.id);
 
         // Update element: remove promptText, add threadId
         const path = editor.api.findPath(element);
         if (path) {
           editor.tf.setNodes(
             { promptText: undefined, threadId: session.id } as Partial<TPromptElement>,
-            { at: path }
+            { at: path },
           );
         }
 
         // Build context about the schema from domains
         const domains = domainsData?.domains ?? [];
         const schemaContext = domains.length
-          ? `Available tables:\n${domains.map(d => `- ${d.name}(${d.columns.map(c => c.name).join(', ')})`).join('\n')}`
-          : '';
+          ? `Available tables:\n${domains.map((d) => `- ${d.name}(${d.columns.map((c) => c.name).join(", ")})`).join("\n")}`
+          : "";
 
         // System prompt for MDX generation - includes file path and clear edit instructions
         const systemPrompt = `You are editing an MDX page file. Your task is to replace the <Prompt> element with appropriate MDX content.
@@ -125,10 +127,9 @@ ${schemaContext}
           system: systemPrompt,
           directory,
         });
-        console.log('[prompt-node] Prompt sent to session:', session.id);
-
+        console.log("[prompt-node] Prompt sent to session:", session.id);
       } catch (err) {
-        console.error('[prompt-node] Failed to start agent:', err);
+        console.error("[prompt-node] Failed to start agent:", err);
       }
     };
 
@@ -155,9 +156,9 @@ ${schemaContext}
         )}
         <span className="text-muted-foreground truncate max-w-[300px]">
           {isPending ? (
-            <>{promptText}</>
+            promptText
           ) : (
-            <span className="text-foreground">{statusText || 'Thinking...'}</span>
+            <span className="text-foreground">{statusText || "Thinking..."}</span>
           )}
         </span>
       </div>

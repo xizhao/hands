@@ -12,24 +12,17 @@
  * Uses EditorContext for tRPC access. Gracefully degrades without backend.
  */
 
+import { MagnifyingGlass } from "@phosphor-icons/react";
+import type { Descendant, TElement } from "platejs";
 import type { PlateElementProps } from "platejs/react";
 import { PlateElement, useEditorRef } from "platejs/react";
-import {
-  useCallback,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-  type KeyboardEvent,
-} from "react";
-import type { Descendant, TElement } from "platejs";
-import { MagnifyingGlass } from "@phosphor-icons/react";
+import { type KeyboardEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { useEditorApi, useHasBackend } from "../../context";
 import { useMarkdownWorker } from "../../hooks/use-markdown-worker";
-import { pendingMdxQueries, createAtLoaderElement } from "./index";
 import { PreviewEditor } from "../../PreviewEditor";
 import { groups as slashMenuGroups } from "../../ui/slash-menu-items";
+import { createAtLoaderElement, pendingMdxQueries } from "./index";
 
 // ============================================================================
 // Shimmer Styles (used for text and loading indicators)
@@ -100,7 +93,7 @@ function ThinkingShimmer() {
  * Returns null if not a routing prompt.
  */
 function parseRoutingPrompt(
-  mdx: string
+  mdx: string,
 ): { reasoning: "low" | "mid" | "high"; text: string } | null {
   const reasoningMatch = mdx.match(/reasoning=["']?(low|mid|high)["']?/);
   if (!reasoningMatch) return null;
@@ -120,7 +113,7 @@ function parseRoutingPrompt(
 
 async function getDocumentContext(
   editor: ReturnType<typeof useEditorRef>,
-  serialize: (value: TElement[]) => Promise<string>
+  serialize: (value: TElement[]) => Promise<string>,
 ) {
   try {
     const fullDoc = await serialize(editor.children as TElement[]);
@@ -134,11 +127,8 @@ async function getDocumentContext(
 
     const blockIndex = fullDoc.indexOf(currentBlock);
     const prefix =
-      blockIndex >= 0
-        ? fullDoc.slice(0, blockIndex + currentBlock.length)
-        : currentBlock;
-    const suffix =
-      blockIndex >= 0 ? fullDoc.slice(blockIndex + currentBlock.length) : "";
+      blockIndex >= 0 ? fullDoc.slice(0, blockIndex + currentBlock.length) : currentBlock;
+    const suffix = blockIndex >= 0 ? fullDoc.slice(blockIndex + currentBlock.length) : "";
 
     return { prefix, suffix };
   } catch {
@@ -313,7 +303,7 @@ function BlockPicker({
       if (!groupMap.has(item.group)) {
         groupMap.set(item.group, []);
       }
-      groupMap.get(item.group)!.push(item);
+      groupMap.get(item.group)?.push(item);
     }
 
     for (const [group, items] of groupMap) {
@@ -353,9 +343,7 @@ function BlockPicker({
           onBuildWithHands(searchQuery);
         }}
         className={`w-full flex items-center gap-2 px-2 py-2 text-left text-sm transition-colors border-b ${
-          selectedIndex === 0
-            ? "bg-accent text-accent-foreground"
-            : "hover:bg-accent/50"
+          selectedIndex === 0 ? "bg-accent text-accent-foreground" : "hover:bg-accent/50"
         }`}
       >
         <span className="flex-shrink-0 w-5 h-5 flex items-center justify-center text-violet-500">
@@ -363,9 +351,7 @@ function BlockPicker({
         </span>
         <div className="flex-1 min-w-0">
           <div className="font-medium">Build with Hands</div>
-          <div className="text-xs text-muted-foreground truncate">
-            {buildDescription}
-          </div>
+          <div className="text-xs text-muted-foreground truncate">{buildDescription}</div>
         </div>
       </button>
 
@@ -400,9 +386,7 @@ function BlockPicker({
                 <div className="flex-1 min-w-0">
                   <div className="font-medium truncate">{item.label}</div>
                   {item.description && (
-                    <div className="text-xs text-muted-foreground truncate">
-                      {item.description}
-                    </div>
+                    <div className="text-xs text-muted-foreground truncate">{item.description}</div>
                   )}
                 </div>
               </button>
@@ -438,7 +422,11 @@ function getBlockPickerItemCount(allItems: BlockItem[], searchQuery: string): nu
 }
 
 /** Get the block item at a given index (0 = Build with Hands, 1+ = filtered items) */
-function getBlockItemAtIndex(allItems: BlockItem[], searchQuery: string, index: number): BlockItem | null {
+function getBlockItemAtIndex(
+  allItems: BlockItem[],
+  searchQuery: string,
+  index: number,
+): BlockItem | null {
   if (index === 0) return null; // Index 0 is "Build with Hands" - handled separately
 
   const adjustedIndex = index - 1; // Account for "Build with Hands" at index 0
@@ -495,11 +483,7 @@ function InitialMenu({
 // Basic Mention (fallback when no backend)
 // ============================================================================
 
-function BasicMentionInput({
-  element,
-  children,
-  ...props
-}: PlateElementProps) {
+function BasicMentionInput({ element, children, ...props }: PlateElementProps) {
   const editor = useEditorRef();
   const inputRef = useRef<HTMLInputElement>(null);
   const [inputValue, setInputValue] = useState("");
@@ -521,14 +505,14 @@ function BasicMentionInput({
         e.preventDefault();
         removeInput();
         if (inputValue) {
-          editor.tf.insertText("@" + inputValue + " ");
+          editor.tf.insertText(`@${inputValue} `);
         }
       } else if (e.key === "Backspace" && inputValue === "") {
         e.preventDefault();
         removeInput();
       }
     },
-    [inputValue, removeInput, editor]
+    [inputValue, removeInput, editor],
   );
 
   return (
@@ -546,7 +530,7 @@ function BasicMentionInput({
             onBlur={() => {
               removeInput();
               if (inputValue) {
-                editor.tf.insertText("@" + inputValue + " ");
+                editor.tf.insertText(`@${inputValue} `);
               }
             }}
             className="inline-block bg-transparent outline-none shimmer-text placeholder:opacity-50"
@@ -667,7 +651,7 @@ export function AtGhostInputElement(props: PlateElementProps) {
 
       queryPromise
         .then((result) => {
-          console.log('[at-ghost] received mdx:', result.mdx, 'errors:', result.errors);
+          console.log("[at-ghost] received mdx:", result.mdx, "errors:", result.errors);
 
           // If validation errors, retry automatically (up to 2 times)
           if (result.errors?.length && retryCountRef.current < 2) {
@@ -690,7 +674,7 @@ export function AtGhostInputElement(props: PlateElementProps) {
           }
         });
     },
-    [api, editor, serialize]
+    [api, editor, serialize],
   );
 
   // Debounced prefetch while typing (AI mode only)
@@ -748,7 +732,7 @@ export function AtGhostInputElement(props: PlateElementProps) {
     if (mode === "search") {
       setBlockPickerIndex(0);
     }
-  }, [inputValue, mode]);
+  }, [mode]);
 
   // Remove the mention input element
   const removeInput = useCallback(() => {
@@ -761,10 +745,13 @@ export function AtGhostInputElement(props: PlateElementProps) {
   // Insert deserialized content
   const insertContent = useCallback(
     async (mdx: string, promptText: string) => {
-      console.log('[at-ghost] insertContent mdx:', mdx);
+      console.log("[at-ghost] insertContent mdx:", mdx);
       try {
         const deserialized = await deserialize(mdx);
-        console.log('[at-ghost] insertContent deserialized:', JSON.stringify(deserialized, null, 2));
+        console.log(
+          "[at-ghost] insertContent deserialized:",
+          JSON.stringify(deserialized, null, 2),
+        );
 
         if (!deserialized || deserialized.length === 0) {
           throw new Error("Deserialization produced empty result");
@@ -772,15 +759,10 @@ export function AtGhostInputElement(props: PlateElementProps) {
 
         // Determine if content is block-level or inline
         const isBlockContent =
-          deserialized.length > 1 ||
-          (deserialized.length === 1 && deserialized[0].type !== "p");
+          deserialized.length > 1 || (deserialized.length === 1 && deserialized[0].type !== "p");
 
         let nodes: Descendant[];
-        if (
-          deserialized.length === 1 &&
-          deserialized[0].type === "p" &&
-          deserialized[0].children
-        ) {
+        if (deserialized.length === 1 && deserialized[0].type === "p" && deserialized[0].children) {
           // Single paragraph - extract inline children for inline insertion
           nodes = deserialized[0].children;
         } else {
@@ -810,8 +792,8 @@ export function AtGhostInputElement(props: PlateElementProps) {
             // Check if the parent paragraph is now empty (just empty text nodes)
             const parentNode = editor.api.node(parentPath);
             const parentChildren = parentNode?.[0]?.children as Descendant[] | undefined;
-            const isParentEmpty = parentChildren?.every((child) =>
-              !('type' in child) && (!('text' in child) || child.text === '')
+            const isParentEmpty = parentChildren?.every(
+              (child) => !("type" in child) && (!("text" in child) || child.text === ""),
             );
 
             if (isParentEmpty) {
@@ -848,11 +830,11 @@ export function AtGhostInputElement(props: PlateElementProps) {
           retryCountRef.current = 0;
           errorsRef.current = [];
           removeInput();
-          editor.tf.insertText(mdx + " ");
+          editor.tf.insertText(`${mdx} `);
         }
       }
     },
-    [editor, removeInput, fetchMdx, deserialize]
+    [editor, removeInput, fetchMdx, deserialize, element],
   );
 
   // Insert loader element for lazy swap
@@ -887,12 +869,22 @@ export function AtGhostInputElement(props: PlateElementProps) {
         case "reject":
           removeInput();
           if (inputValue) {
-            editor.tf.insertText("@" + inputValue);
+            editor.tf.insertText(`@${inputValue}`);
           }
           break;
       }
     },
-    [hasResult, prefetchedMdx, prompt, inputValue, insertContent, insertLoader, fetchMdx, removeInput, editor]
+    [
+      hasResult,
+      prefetchedMdx,
+      prompt,
+      inputValue,
+      insertContent,
+      insertLoader,
+      fetchMdx,
+      removeInput,
+      editor,
+    ],
   );
 
   // Select a block from the picker
@@ -902,7 +894,7 @@ export function AtGhostInputElement(props: PlateElementProps) {
       removeInput();
       item.onSelect(editor);
     },
-    [editor, removeInput]
+    [editor, removeInput],
   );
 
   // Build with Hands - switch to AI mode with the search query
@@ -917,7 +909,7 @@ export function AtGhostInputElement(props: PlateElementProps) {
         fetchMdx(query);
       }
     },
-    [fetchMdx]
+    [fetchMdx],
   );
 
   // Handle key events based on mode
@@ -1022,7 +1014,17 @@ export function AtGhostInputElement(props: PlateElementProps) {
         removeInput();
       }
     },
-    [mode, selectedAction, inputValue, allBlockItems, blockPickerIndex, executeAction, selectBlock, buildWithHands, removeInput]
+    [
+      mode,
+      selectedAction,
+      inputValue,
+      allBlockItems,
+      blockPickerIndex,
+      executeAction,
+      selectBlock,
+      buildWithHands,
+      removeInput,
+    ],
   );
 
   // Dynamic placeholder based on mode
@@ -1045,7 +1047,7 @@ export function AtGhostInputElement(props: PlateElementProps) {
                 if (isHandlingKeyRef.current) return;
                 if (inputValue) {
                   removeInput();
-                  editor.tf.insertText("@" + inputValue + " ");
+                  editor.tf.insertText(`@${inputValue} `);
                 } else {
                   removeInput();
                 }
@@ -1062,10 +1064,7 @@ export function AtGhostInputElement(props: PlateElementProps) {
 
           {/* Initial menu - shown when no input */}
           {mode === "initial" && !prompt && (
-            <InitialMenu
-              selectedIndex={0}
-              onSelectSearch={() => setMode("search")}
-            />
+            <InitialMenu selectedIndex={0} onSelectSearch={() => setMode("search")} />
           )}
 
           {/* Block picker - shown in search mode */}

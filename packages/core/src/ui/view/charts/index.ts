@@ -24,6 +24,14 @@ export {
   type CreateBarChartOptions,
   createBarChartElement,
 } from "./bar-chart";
+// BoxPlotChart
+export {
+  BOXPLOT_CHART_KEY,
+  BoxPlotChart,
+  BoxPlotChartPlugin,
+  type BoxPlotChartProps,
+  createBoxPlotChartElement,
+} from "./boxplot-chart";
 // Context and hooks
 export {
   type LiveValueContextData,
@@ -32,7 +40,6 @@ export {
   useLiveValueData,
   useRequiredLiveValueData,
 } from "./context";
-
 // Generic Chart (full Vega-Lite specs)
 export {
   CHART_KEY,
@@ -42,6 +49,22 @@ export {
   type CreateChartOptions,
   createChartElement,
 } from "./generic-chart";
+// HeatmapChart
+export {
+  createHeatmapChartElement,
+  HEATMAP_CHART_KEY,
+  HeatmapChart,
+  HeatmapChartPlugin,
+  type HeatmapChartProps,
+} from "./heatmap-chart";
+// HistogramChart
+export {
+  createHistogramChartElement,
+  HISTOGRAM_CHART_KEY,
+  HistogramChart,
+  HistogramChartPlugin,
+  type HistogramChartProps,
+} from "./histogram-chart";
 // LineChart
 export {
   type CreateLineChartOptions,
@@ -51,6 +74,14 @@ export {
   LineChartPlugin,
   type LineChartProps,
 } from "./line-chart";
+// MapChart
+export {
+  createMapChartElement,
+  MAP_CHART_KEY,
+  MapChart,
+  MapChartPlugin,
+  type MapChartProps,
+} from "./map-chart";
 // PieChart
 export {
   type CreatePieChartOptions,
@@ -60,51 +91,14 @@ export {
   PieChartPlugin,
   type PieChartProps,
 } from "./pie-chart";
-
 // ScatterChart
 export {
+  createScatterChartElement,
   SCATTER_CHART_KEY,
   ScatterChart,
   ScatterChartPlugin,
   type ScatterChartProps,
-  createScatterChartElement,
 } from "./scatter-chart";
-
-// HistogramChart
-export {
-  HISTOGRAM_CHART_KEY,
-  HistogramChart,
-  HistogramChartPlugin,
-  type HistogramChartProps,
-  createHistogramChartElement,
-} from "./histogram-chart";
-
-// HeatmapChart
-export {
-  HEATMAP_CHART_KEY,
-  HeatmapChart,
-  HeatmapChartPlugin,
-  type HeatmapChartProps,
-  createHeatmapChartElement,
-} from "./heatmap-chart";
-
-// BoxPlotChart
-export {
-  BOXPLOT_CHART_KEY,
-  BoxPlotChart,
-  BoxPlotChartPlugin,
-  type BoxPlotChartProps,
-  createBoxPlotChartElement,
-} from "./boxplot-chart";
-
-// MapChart
-export {
-  MAP_CHART_KEY,
-  MapChart,
-  MapChartPlugin,
-  type MapChartProps,
-  createMapChartElement,
-} from "./map-chart";
 
 // Vega-Lite core renderer
 export {

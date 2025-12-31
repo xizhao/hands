@@ -29,9 +29,7 @@ export function getColumnWidth(col: ColumnDefinition): number {
 export function getCssVar(name: string): string {
   if (typeof window === "undefined") return "#000";
 
-  const value = getComputedStyle(document.documentElement)
-    .getPropertyValue(name)
-    .trim();
+  const value = getComputedStyle(document.documentElement).getPropertyValue(name).trim();
 
   if (!value) return "#000";
 
@@ -42,11 +40,7 @@ export function getCssVar(name: string): string {
  * Blend a color with background at given opacity - returns SOLID color.
  * Canvas needs solid colors to avoid ghosting artifacts from transparency.
  */
-export function blendWithBackground(
-  colorVar: string,
-  bgVar: string,
-  opacity: number
-): string {
+export function blendWithBackground(colorVar: string, bgVar: string, opacity: number): string {
   if (typeof window === "undefined") return "#000";
 
   const style = getComputedStyle(document.documentElement);

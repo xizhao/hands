@@ -4,12 +4,12 @@
  * Tests for YAML frontmatter parsing and serialization.
  */
 
-import { describe, it, expect } from "vitest";
+import { describe, expect, it } from "vitest";
 import {
   parseFrontmatter,
   serializeFrontmatter,
-  updateFrontmatter,
   stripFrontmatter,
+  updateFrontmatter,
 } from "../frontmatter";
 
 describe("parseFrontmatter", () => {
@@ -228,7 +228,7 @@ describe("roundtrip", () => {
     };
 
     const serialized = serializeFrontmatter(original);
-    const parsed = parseFrontmatter(serialized + "content");
+    const parsed = parseFrontmatter(`${serialized}content`);
 
     expect(parsed.frontmatter.title).toBe(original.title);
     expect(parsed.frontmatter.description).toBe(original.description);

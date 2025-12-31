@@ -1,51 +1,42 @@
-'use client';
+"use client";
 
-import { filterWords } from '@platejs/combobox';
+import { filterWords } from "@platejs/combobox";
 import {
   type UseComboboxInputResult,
   useComboboxInput,
   useHTMLInputCursorState,
-} from '@platejs/combobox/react';
-import { cva, type VariantProps } from 'class-variance-authority';
-import type { Point, TElement } from 'platejs';
-import { useComposedRef, useEditorRef } from 'platejs/react';
-import type { HTMLAttributes, ReactNode, RefObject } from 'react';
-import React, { useEffect } from 'react';
+} from "@platejs/combobox/react";
+import { cva, type VariantProps } from "class-variance-authority";
+import type { Point, TElement } from "platejs";
+import { useComposedRef, useEditorRef } from "platejs/react";
+import type { HTMLAttributes, ReactNode, RefObject } from "react";
+import React, { useEffect } from "react";
 
-import { cn } from '../lib/utils';
+import { cn } from "../lib/utils";
 
-import { Ariakit } from './menu';
+import { Ariakit } from "./menu";
 
 type FilterFn = (
   item: { value: string; group?: string; keywords?: string[]; label?: string },
-  search: string
+  search: string,
 ) => boolean;
 
 type InlineComboboxContextValue = {
   filter: FilterFn | false;
-  inputProps: UseComboboxInputResult['props'];
+  inputProps: UseComboboxInputResult["props"];
   inputRef: RefObject<HTMLInputElement | null>;
-  removeInput: UseComboboxInputResult['removeInput'];
+  removeInput: UseComboboxInputResult["removeInput"];
   showTrigger: boolean;
   trigger: string;
   setHasEmpty: (hasEmpty: boolean) => void;
 };
 
-const InlineComboboxContext = React.createContext<InlineComboboxContextValue>(
-  null as any
-);
+const InlineComboboxContext = React.createContext<InlineComboboxContextValue>(null as any);
 
-const defaultFilter: FilterFn = (
-  { group, keywords = [], label, value },
-  search
-) => {
-  const uniqueTerms = new Set(
-    [value, ...keywords, group, label].filter(Boolean)
-  );
+const defaultFilter: FilterFn = ({ group, keywords = [], label, value }, search) => {
+  const uniqueTerms = new Set([value, ...keywords, group, label].filter(Boolean));
 
-  return Array.from(uniqueTerms).some((keyword) =>
-    filterWords(keyword!, search)
-  );
+  return Array.from(uniqueTerms).some((keyword) => filterWords(keyword!, search));
 };
 
 type InlineComboboxProps = {
@@ -73,7 +64,7 @@ function InlineCombobox({
   const inputRef = React.useRef<HTMLInputElement>(null);
   const cursorState = useHTMLInputCursorState(inputRef);
 
-  const [valueState, setValueState] = React.useState('');
+  const [valueState, setValueState] = React.useState("");
   const hasValueProp = valueProp !== undefined;
   const value = hasValueProp ? valueProp : valueState;
 
@@ -85,7 +76,7 @@ function InlineCombobox({
         setValueState(newValue);
       }
     },
-    [setValueProp, hasValueProp]
+    [setValueProp, hasValueProp],
   );
 
   const insertPoint = React.useRef<Point | null>(null);
@@ -112,15 +103,15 @@ function InlineCombobox({
     cursorState,
     ref: inputRef,
     onCancelInput: (cause) => {
-      if (cause !== 'backspace') {
+      if (cause !== "backspace") {
         editor.tf.insertText(trigger + value, {
           at: insertPoint?.current ?? undefined,
         });
       }
-      if (cause === 'arrowLeft' || cause === 'arrowRight') {
+      if (cause === "arrowLeft" || cause === "arrowRight") {
         editor.tf.move({
           distance: 1,
-          reverse: cause === 'arrowLeft',
+          reverse: cause === "arrowLeft",
         });
       }
     },
@@ -138,22 +129,14 @@ function InlineCombobox({
       showTrigger,
       trigger,
     }),
-    [
-      trigger,
-      showTrigger,
-      filter,
-      inputRef,
-      inputProps,
-      removeInput,
-      setHasEmpty,
-    ]
+    [trigger, showTrigger, filter, inputProps, removeInput],
   );
 
   const store = Ariakit.useComboboxStore({
     setValue: (newValue) => React.startTransition(() => setValue(newValue)),
   });
 
-  const items = store.useState('items');
+  const items = store.useState("items");
 
   // useEffect(() => {
   //   if (!store.getState().activeId) {
@@ -164,10 +147,7 @@ function InlineCombobox({
   return (
     <span contentEditable={false}>
       <Ariakit.ComboboxProvider
-        open={
-          (items.length > 0 || hasEmpty) &&
-          (!hideWhenNoValue || value.length > 0)
-        }
+        open={(items.length > 0 || hasEmpty) && (!hideWhenNoValue || value.length > 0)}
         store={store}
       >
         <InlineComboboxContext.Provider value={contextValue}>
@@ -178,11 +158,7 @@ function InlineCombobox({
   );
 }
 
-function InlineComboboxInput({
-  className,
-  ref: refProp,
-  ...props
-}: React.ComponentProps<'input'>) {
+function InlineComboboxInput({ className, ref: refProp, ...props }: React.ComponentProps<"input">) {
   const {
     inputProps,
     inputRef: contextRef,
@@ -191,7 +167,7 @@ function InlineComboboxInput({
   } = React.useContext(InlineComboboxContext);
 
   const store = Ariakit.useComboboxContext()!;
-  const value = store.useState('value');
+  const value = store.useState("value");
 
   const ref = useComposedRef(refProp, contextRef);
 
@@ -200,19 +176,13 @@ function InlineComboboxInput({
       {showTrigger && trigger}
 
       <span className="relative min-h-[1lh]">
-        <span
-          aria-hidden="true"
-          className="invisible overflow-hidden text-nowrap"
-        >
-          {value || props.placeholder || '\u200B'}
+        <span aria-hidden="true" className="invisible overflow-hidden text-nowrap">
+          {value || props.placeholder || "\u200B"}
         </span>
 
         <Ariakit.Combobox
           autoSelect
-          className={cn(
-            'absolute top-0 left-0 size-full bg-transparent outline-hidden',
-            className
-          )}
+          className={cn("absolute top-0 left-0 size-full bg-transparent outline-hidden", className)}
           ref={ref}
           value={value}
           {...inputProps}
@@ -224,49 +194,45 @@ function InlineComboboxInput({
 }
 
 const comboboxVariants = cva(
-  'z-500 mt-1 h-full max-h-[40vh] min-w-[180px] max-w-[calc(100vw-24px)] animate-popover overflow-y-auto rounded-lg border border-border bg-popover shadow-floating',
+  "z-500 mt-1 h-full max-h-[40vh] min-w-[180px] max-w-[calc(100vw-24px)] animate-popover overflow-y-auto rounded-lg border border-border bg-popover shadow-floating",
   {
     defaultVariants: {
-      variant: 'default',
+      variant: "default",
     },
     variants: {
       variant: {
-        default: '',
-        emoji: 'max-h-[270px] w-[408px]',
-        mention: 'w-[300px]',
-        slash: 'w-fit', // Natural width based on content
+        default: "",
+        emoji: "max-h-[270px] w-[408px]",
+        mention: "w-[300px]",
+        slash: "w-fit", // Natural width based on content
       },
     },
-  }
+  },
 );
 
 const comboboxItemVariants = cva(
-  'relative mx-1 flex select-none items-center rounded-sm px-2 py-1 text-foreground text-sm outline-hidden transition-bg-ease [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0',
+  "relative mx-1 flex select-none items-center rounded-sm px-2 py-1 text-foreground text-sm outline-hidden transition-bg-ease [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0",
   {
     defaultVariants: {
       interactive: true,
     },
     variants: {
       interactive: {
-        false: '',
-        true: 'cursor-pointer hover:bg-accent hover:text-accent-foreground data-[active-item=true]:bg-accent data-[active-item=true]:text-accent-foreground',
+        false: "",
+        true: "cursor-pointer hover:bg-accent hover:text-accent-foreground data-[active-item=true]:bg-accent data-[active-item=true]:text-accent-foreground",
       },
     },
-  }
+  },
 );
 
 function InlineComboboxContent({
   className,
   variant,
   ...props
-}: React.ComponentProps<typeof Ariakit.ComboboxPopover> &
-  VariantProps<typeof comboboxVariants>) {
+}: React.ComponentProps<typeof Ariakit.ComboboxPopover> & VariantProps<typeof comboboxVariants>) {
   return (
     <Ariakit.Portal>
-      <Ariakit.ComboboxPopover
-        className={cn(comboboxVariants({ variant }), className)}
-        {...props}
-      >
+      <Ariakit.ComboboxPopover className={cn(comboboxVariants({ variant }), className)} {...props}>
         {props.children}
       </Ariakit.ComboboxPopover>
     </Ariakit.Portal>
@@ -289,21 +255,18 @@ function InlineComboboxItem({
   keywords?: string[];
   label?: string;
 } & Ariakit.ComboboxItemProps &
-  Required<Pick<Ariakit.ComboboxItemProps, 'value'>>) {
+  Required<Pick<Ariakit.ComboboxItemProps, "value">>) {
   const { value } = props;
 
   const { filter, removeInput } = React.useContext(InlineComboboxContext);
 
   const store = Ariakit.useComboboxContext()!;
 
-  const search = filter && store.useState('value');
+  const search = filter && store.useState("value");
 
   const visible = React.useMemo(
-    () =>
-      alwaysShow ||
-      !filter ||
-      filter({ group, keywords, label, value }, search as string),
-    [alwaysShow, filter, group, keywords, value, label, search]
+    () => alwaysShow || !filter || filter({ group, keywords, label, value }, search as string),
+    [alwaysShow, filter, group, keywords, value, label, search],
   );
 
   if (!visible) return null;
@@ -320,13 +283,10 @@ function InlineComboboxItem({
   );
 }
 
-function InlineComboboxEmpty({
-  children,
-  className,
-}: HTMLAttributes<HTMLDivElement>) {
+function InlineComboboxEmpty({ children, className }: HTMLAttributes<HTMLDivElement>) {
   const { setHasEmpty } = React.useContext(InlineComboboxContext);
   const store = Ariakit.useComboboxContext()!;
-  const items = store.useState('items');
+  const items = store.useState("items");
 
   useEffect(() => {
     setHasEmpty(true);
@@ -342,8 +302,8 @@ function InlineComboboxEmpty({
     <div
       className={cn(
         comboboxItemVariants({ interactive: false }),
-        'my-1.5 text-muted-foreground',
-        className
+        "my-1.5 text-muted-foreground",
+        className,
       )}
     >
       {children}
@@ -357,10 +317,7 @@ function InlineComboboxGroup({
 }: React.ComponentProps<typeof Ariakit.ComboboxGroup>) {
   return (
     <Ariakit.ComboboxGroup
-      className={cn(
-        'hidden not-last:border-b py-1.5 [&:has([role=option])]:block',
-        className
-      )}
+      className={cn("hidden not-last:border-b py-1.5 [&:has([role=option])]:block", className)}
       {...props}
     />
   );
@@ -372,10 +329,7 @@ function InlineComboboxGroupLabel({
 }: React.ComponentProps<typeof Ariakit.ComboboxGroupLabel>) {
   return (
     <Ariakit.ComboboxGroupLabel
-      className={cn(
-        'mt-1.5 mb-2 px-3 font-medium text-muted-foreground text-xs',
-        className
-      )}
+      className={cn("mt-1.5 mb-2 px-3 font-medium text-muted-foreground text-xs", className)}
       {...props}
     />
   );
@@ -385,7 +339,7 @@ const InlineComboboxRow = Ariakit.ComboboxRow;
 
 function useInlineComboboxSearchValue() {
   const store = Ariakit.useComboboxContext();
-  return store?.useState('value') ?? '';
+  return store?.useState("value") ?? "";
 }
 
 /**

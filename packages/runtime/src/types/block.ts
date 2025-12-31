@@ -40,7 +40,7 @@ import type { ReactElement } from "react";
  * ```
  */
 export type BlockFn<TProps = Record<string, unknown>> = (
-  props: TProps
+  props: TProps,
 ) => ReactElement | Promise<ReactElement>;
 
 /**

@@ -13,11 +13,7 @@ interface ActionCodeViewProps {
 export function ActionCodeView({ source }: ActionCodeViewProps) {
   return (
     <div className="h-full">
-      <MonacoEditor
-        value={source}
-        language="typescript"
-        readOnly
-      />
+      <MonacoEditor value={source} language="typescript" readOnly />
     </div>
   );
 }

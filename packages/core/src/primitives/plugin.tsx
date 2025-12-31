@@ -28,6 +28,7 @@
  * ```
  */
 
+import type { TElement } from "platejs";
 import {
   createPlatePlugin,
   PlateElement,
@@ -35,15 +36,14 @@ import {
   useElement,
   useSelected,
 } from "platejs/react";
-import { memo, type ComponentType } from "react";
-import type { TElement } from "platejs";
+import { type ComponentType, memo } from "react";
 
 import {
+  createVoidElement,
+  type MdxJsxElement,
+  type MdxSerializationRule,
   parseAttributes,
   serializeAttributes,
-  createVoidElement,
-  type MdxSerializationRule,
-  type MdxJsxElement,
 } from "./serialization";
 
 // ============================================================================
@@ -79,9 +79,7 @@ export interface PluginResult<T extends TElement> {
 function toElementKey(tagName: string): string {
   // "CustomChart" → "custom_chart"
   // "Block" → "block"
-  return tagName
-    .replace(/([a-z])([A-Z])/g, "$1_$2")
-    .toLowerCase();
+  return tagName.replace(/([a-z])([A-Z])/g, "$1_$2").toLowerCase();
 }
 
 // ============================================================================
@@ -99,15 +97,9 @@ function toElementKey(tagName: string): string {
 export function createPlugin<P extends Record<string, unknown>>(
   tagName: string,
   Component: ComponentType<P>,
-  options: PluginOptions = {}
+  options: PluginOptions = {},
 ): PluginResult<TElement & P> {
-  const {
-    isVoid = true,
-    isInline = false,
-    defaults = {},
-    exclude = [],
-    className,
-  } = options;
+  const { isVoid = true, isInline = false, defaults = {}, exclude = [], className } = options;
 
   const key = toElementKey(tagName);
 
@@ -157,7 +149,10 @@ export function createPlugin<P extends Record<string, unknown>>(
       const props = parseAttributes(node);
 
       if (isVoid) {
-        return createVoidElement<TElement & P>(key, props as Omit<TElement & P, "type" | "children">);
+        return createVoidElement<TElement & P>(
+          key,
+          props as Omit<TElement & P, "type" | "children">,
+        );
       }
 
       return {
@@ -208,9 +203,7 @@ export interface PluginDefinition<P extends Record<string, unknown> = Record<str
  * @param definitions - Array of plugin definitions
  * @returns Array of plugins and rules
  */
-export function createPlugins(
-  definitions: PluginDefinition[]
-): {
+export function createPlugins(definitions: PluginDefinition[]): {
   plugins: any[];
   rules: MdxSerializationRule<TElement>[];
 } {
@@ -237,7 +230,8 @@ export type CustomBlockOptions = PluginOptions;
 export type CustomBlockResult<T extends TElement> = PluginResult<T>;
 
 /** @deprecated Use PluginDefinition instead */
-export type CustomBlockDefinition<P extends Record<string, unknown> = Record<string, unknown>> = PluginDefinition<P>;
+export type CustomBlockDefinition<P extends Record<string, unknown> = Record<string, unknown>> =
+  PluginDefinition<P>;
 
 /** @deprecated Use createPlugin instead */
 export const createCustomBlock = createPlugin;

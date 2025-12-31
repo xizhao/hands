@@ -35,31 +35,17 @@ export const CustomColumnOrder: Story = () => (
 );
 
 export const Loading: Story = () => (
-  <Kanban
-    data={[]}
-    isLoading={true}
-    groupByColumn="status"
-    cardTitleField="title"
-  />
+  <Kanban data={[]} isLoading={true} groupByColumn="status" cardTitleField="title" />
 );
 
 const errorInstance = new Error("Failed to load tasks");
 
 export const ErrorState: Story = () => (
-  <Kanban
-    data={[]}
-    error={errorInstance}
-    groupByColumn="status"
-    cardTitleField="title"
-  />
+  <Kanban data={[]} error={errorInstance} groupByColumn="status" cardTitleField="title" />
 );
 
 export const Empty: Story = () => (
-  <Kanban
-    data={[]}
-    groupByColumn="status"
-    cardTitleField="title"
-  />
+  <Kanban data={[]} groupByColumn="status" cardTitleField="title" />
 );
 
 const manyTasks = Array.from({ length: 30 }, (_, i) => ({

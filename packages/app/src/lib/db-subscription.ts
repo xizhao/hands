@@ -5,7 +5,7 @@
  * Used to trigger TanStack DB collection refetches.
  */
 
-import { useEffect, useRef, useCallback } from "react";
+import { useCallback, useEffect, useRef } from "react";
 
 export interface DbChangeEvent {
   type: "change" | "connected";
@@ -103,7 +103,7 @@ export function getDbSubscriptionClient(runtimePort: number) {
  */
 export function useDbSubscription(
   runtimePort: number | null,
-  onChange: (event: DbChangeEvent) => void
+  onChange: (event: DbChangeEvent) => void,
 ) {
   const onChangeRef = useRef(onChange);
   onChangeRef.current = onChange;
@@ -123,10 +123,7 @@ export function useDbSubscription(
 /**
  * Hook that returns a callback to invalidate queries on db changes
  */
-export function useDbChangeInvalidation(
-  runtimePort: number | null,
-  invalidate: () => void
-) {
+export function useDbChangeInvalidation(runtimePort: number | null, invalidate: () => void) {
   const invalidateRef = useRef(invalidate);
   invalidateRef.current = invalidate;
 

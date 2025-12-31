@@ -62,10 +62,7 @@ const COUNT_PATTERNS =
  * detectFormat("users", [1234, 5678])         // ",.0f" (integer with commas)
  * ```
  */
-export function detectFormat(
-  columnName: string,
-  values: unknown[],
-): string | null {
+export function detectFormat(columnName: string, values: unknown[]): string | null {
   const nums = values.filter((v): v is number => typeof v === "number");
   if (nums.length === 0) return null;
 
@@ -159,11 +156,7 @@ export function resolveFormat(formatOrPreset: string): string {
  * @param allValues - All values in the column (for magnitude detection)
  * @returns Formatted string
  */
-export function autoFormat(
-  value: number,
-  columnName: string,
-  allValues: unknown[],
-): string {
+export function autoFormat(value: number, columnName: string, allValues: unknown[]): string {
   const format = detectFormat(columnName, allValues);
   if (format) {
     return formatValue(value, format);

@@ -5,8 +5,8 @@
  */
 
 import { DATA_GRID_KEY, type TDataGridElement } from "../../../types";
+import { createVoidElement, parseAttributes, serializeAttributes } from "../helpers";
 import type { MdxSerializationRule } from "../types";
-import { parseAttributes, serializeAttributes, createVoidElement } from "../helpers";
 
 // ============================================================================
 // DataGrid
@@ -56,7 +56,7 @@ export const dataGridRule: MdxSerializationRule<TDataGridElement> = {
           enableSearch: false,
           enablePaste: false,
         },
-      }
+      },
     );
 
     return {

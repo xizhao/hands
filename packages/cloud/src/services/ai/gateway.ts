@@ -1,12 +1,12 @@
+import { and, eq, sql } from "drizzle-orm";
 import { Hono } from "hono";
-import type { Env, User } from "../../types";
-import { verifyToken } from "../auth/client";
 import { getDb } from "../../lib/db";
-import { users } from "../../schema/users";
+import { aiRateLimit } from "../../lib/rate-limit";
 import { subscriptions } from "../../schema/subscriptions";
 import { usageDaily } from "../../schema/usage";
-import { eq, and, sql } from "drizzle-orm";
-import { aiRateLimit } from "../../lib/rate-limit";
+import { users } from "../../schema/users";
+import type { Env, User } from "../../types";
+import { verifyToken } from "../auth/client";
 import { proxyToGateway } from "./client";
 
 /**
@@ -67,8 +67,8 @@ aiGateway.use("*", async (c, next) => {
       and(
         eq(usageDaily.userId, user.id),
         sql`${usageDaily.date} >= ${monthStart.toISOString().split("T")[0]}`,
-        sql`${usageDaily.date} <= ${monthEnd.toISOString().split("T")[0]}`
-      )
+        sql`${usageDaily.date} <= ${monthEnd.toISOString().split("T")[0]}`,
+      ),
     )
     .then((rows) => rows[0]);
 
@@ -86,7 +86,7 @@ aiGateway.use("*", async (c, next) => {
           usage: { current: currentTokens, limit: includedTokens },
           upgrade_url: `${c.env.APP_URL}/billing`,
         },
-        429
+        429,
       );
     } else {
       // Paid users: allow overage with warning headers

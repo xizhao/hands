@@ -7,13 +7,13 @@
  * transitive worker imports that break in vitest.
  */
 
-import { type TElement, type Value } from 'platejs';
-import { createPlateEditor } from 'platejs/react';
+import type { TElement, Value } from "platejs";
+import { createPlateEditor } from "platejs/react";
 
-import { BaseKit, RichTextKit, FullKit } from '../plugins/presets';
+import { BaseKit, FullKit, RichTextKit } from "../plugins/presets";
 
 // Re-export serialization utilities from the isolated module
-export { testSerialize, testDeserialize } from './test-serialization';
+export { testDeserialize, testSerialize } from "./test-serialization";
 
 // ============================================================================
 // Test Editor Factory
@@ -25,7 +25,7 @@ export interface CreateTestEditorOptions {
   /** Additional plugins to include */
   plugins?: any[];
   /** Preset to use: 'base', 'rich-text', 'full', or 'none' */
-  preset?: 'base' | 'rich-text' | 'full' | 'none';
+  preset?: "base" | "rich-text" | "full" | "none";
 }
 
 /**
@@ -35,20 +35,20 @@ export interface CreateTestEditorOptions {
  * editor.api.markdown - they use the same logic as the production worker.
  */
 export function createTestEditor(options: CreateTestEditorOptions = {}) {
-  const { value, plugins = [], preset = 'full' } = options;
+  const { value, plugins = [], preset = "full" } = options;
 
   let presetPlugins: any[] = [];
   switch (preset) {
-    case 'base':
+    case "base":
       presetPlugins = BaseKit;
       break;
-    case 'rich-text':
+    case "rich-text":
       presetPlugins = RichTextKit;
       break;
-    case 'full':
+    case "full":
       presetPlugins = FullKit;
       break;
-    case 'none':
+    case "none":
       presetPlugins = [];
       break;
   }

@@ -5,27 +5,27 @@
  * Use this to access platform-specific functionality in a cross-platform way.
  */
 
-// Types
-export type {
-  Workbook,
-  RuntimeConnection,
-  RuntimeStatus,
-  User,
-  FilePickerOptions,
-  PlatformCapabilities,
-  PlatformAdapter,
-} from "./types";
+export type { PlatformProviderProps } from "./context";
 
 // Context and hooks
 export {
   PlatformProvider,
-  usePlatform,
+  useAuth,
+  useCapabilities,
+  useCapability,
+  useFileSystem,
   useIsDesktop,
   useIsWeb,
-  useCapability,
-  useCapabilities,
-  useAuth,
+  usePlatform,
   useWindow,
-  useFileSystem,
 } from "./context";
-export type { PlatformProviderProps } from "./context";
+// Types
+export type {
+  FilePickerOptions,
+  PlatformAdapter,
+  PlatformCapabilities,
+  RuntimeConnection,
+  RuntimeStatus,
+  User,
+  Workbook,
+} from "./types";

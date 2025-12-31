@@ -1,3 +1,5 @@
+import { createFileRoute, Outlet, useNavigate } from "@tanstack/react-router";
+import { useCallback, useEffect, useRef } from "react";
 import { queryClient } from "@/App";
 import { NotebookShell } from "@/components/workbook/NotebookShell";
 import { useNeedsTrafficLightOffset } from "@/hooks/useFullscreen";
@@ -5,16 +7,10 @@ import type { NavSearchParams } from "@/hooks/useNavState";
 import { useActiveSession, useClearNavigation } from "@/hooks/useNavState";
 import { useRuntimeProcess } from "@/hooks/useRuntimeState";
 import { useSessions } from "@/hooks/useSession";
-import {
-  useCreateWorkbook,
-  useOpenWorkbook,
-  useWorkbooks,
-} from "@/hooks/useWorkbook";
+import { useCreateWorkbook, useOpenWorkbook, useWorkbooks } from "@/hooks/useWorkbook";
 import { setNavigateCallback, startSSESync } from "@/lib/sse";
 import { cn } from "@/lib/utils";
 import type { Workbook } from "@/lib/workbook";
-import { createFileRoute, Outlet, useNavigate } from "@tanstack/react-router";
-import { useCallback, useEffect, useRef } from "react";
 
 export const Route = createFileRoute("/_notebook")({
   component: NotebookLayout,
@@ -29,8 +25,7 @@ function NotebookLayout() {
   const navigate = useNavigate();
   // Use minimal Tauri-only hook (works without TRPCProvider)
   const { workbookId, port } = useRuntimeProcess();
-  const { sessionId: activeSessionId, setSession: setActiveSession } =
-    useActiveSession();
+  const { sessionId: activeSessionId, setSession: setActiveSession } = useActiveSession();
 
   // Set up navigate callback for SSE - routes to correct page based on path
   useEffect(() => {
@@ -47,22 +42,18 @@ function NotebookLayout() {
       switch (routeType) {
         case "pages":
         case "tables":
-        case "domains":
+        case "domains": {
           // All navigate to domain view - pages go to page tab, tables to sheet tab
           const tab = routeType === "tables" ? "sheet" : "page";
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
           navigate({ to: "/domains/$domainId", params: { domainId: id }, search: { tab } } as any);
           break;
+        }
         case "actions":
           navigate({ to: "/actions/$actionId", params: { actionId: id } });
           break;
         default:
-          console.warn(
-            "[navigate] Unknown route type:",
-            routeType,
-            "from path:",
-            path
-          );
+          console.warn("[navigate] Unknown route type:", routeType, "from path:", path);
       }
     });
   }, [navigate]);
@@ -142,10 +133,10 @@ function NotebookLayout() {
             initialized.current = true;
             initializingRef.current = false;
           },
-        }
+        },
       );
     }
-  }, [workbooks, workbooksLoading, workbookId, createWorkbook, openWorkbook]);
+  }, [workbooks, workbooksLoading, workbookId, createWorkbook, openWorkbook, port]);
 
   // Clear activeSessionId if it points to a deleted session
   useEffect(() => {
@@ -157,19 +148,17 @@ function NotebookLayout() {
 
   // Current workbook from Tauri data (available without runtime)
   // If no workbookId yet (runtime starting), show the most recent workbook (which will be opened)
-  const currentWorkbook = workbookId
-    ? workbooks?.find((w) => w.id === workbookId)
-    : workbooks?.[0];
+  const currentWorkbook = workbookId ? workbooks?.find((w) => w.id === workbookId) : workbooks?.[0];
   const needsTrafficLightOffset = useNeedsTrafficLightOffset();
   const clearNavigation = useClearNavigation();
 
   // Handle workbook switch - works without runtime
-  const handleSwitchWorkbook = useCallback(
+  const _handleSwitchWorkbook = useCallback(
     (workbook: Workbook) => {
       clearNavigation();
       openWorkbook.mutate(workbook);
     },
-    [clearNavigation, openWorkbook]
+    [clearNavigation, openWorkbook],
   );
 
   // When no port, show clean loading state that matches NotebookShell structure
@@ -182,7 +171,7 @@ function NotebookLayout() {
           data-tauri-drag-region
           className={cn(
             "h-10 flex items-center justify-between pr-4 pt-0.5 shrink-0",
-            needsTrafficLightOffset ? "pl-[80px]" : "pl-4"
+            needsTrafficLightOffset ? "pl-[80px]" : "pl-4",
           )}
         >
           <div className="flex items-center gap-1.5">

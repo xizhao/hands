@@ -1,8 +1,9 @@
 // Utility functions
-export * from "./utils";
+
 export * from "./download-file";
-export * from "./live-value-context";
 export * from "./live-query-formats";
-export * from "./text-to-sql";
+export * from "./live-value-context";
 // Static rendering
 export * from "./plate-static-render";
+export * from "./text-to-sql";
+export * from "./utils";

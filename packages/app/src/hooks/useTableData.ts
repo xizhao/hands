@@ -5,20 +5,20 @@
  * Supports infinite scroll with sparse data cache and ID-based selections.
  */
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { trpc } from "@/lib/trpc";
 import {
-  generateInsertSql,
-  generateUpdateSql,
-  generateDeleteSql,
-  generateBulkDeleteSql,
-  generateSelectSql,
-  generateCountSql,
   generateAddColumnSql,
-  generateDropColumnSql,
-  generateRenameColumnSql,
   generateAlterColumnTypeSql,
+  generateBulkDeleteSql,
+  generateCountSql,
+  generateDeleteSql,
+  generateDropColumnSql,
+  generateInsertSql,
+  generateRenameColumnSql,
+  generateSelectSql,
+  generateUpdateSql,
 } from "@hands/editor/sql";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { trpc } from "@/lib/trpc";
 
 export interface UseTableDataOptions {
   source?: string; // Kept for API compatibility (unused)
@@ -56,7 +56,9 @@ export function useTableData(options: UseTableDataOptions) {
   const mountedRef = useRef(true);
   useEffect(() => {
     mountedRef.current = true;
-    return () => { mountedRef.current = false; };
+    return () => {
+      mountedRef.current = false;
+    };
   }, []);
 
   // Schema from PRAGMA table_info (actual column types and primary key)
@@ -80,7 +82,7 @@ export function useTableData(options: UseTableDataOptions) {
     setSchemaInfo(null);
     setCache({ rows: new Map(), loadedRanges: [], totalRows: 0 });
     pendingRequests.current.clear();
-  }, [table]);
+  }, []);
 
   // Clear only row data when SORT changes (preserve totalRows and schema)
   useEffect(() => {
@@ -90,7 +92,7 @@ export function useTableData(options: UseTableDataOptions) {
       totalRows: prev.totalRows, // Keep the count - it doesn't change with sort
     }));
     pendingRequests.current.clear();
-  }, [sort, sortDirection]);
+  }, []);
 
   // Fetch schema from SQLite
   useEffect(() => {
@@ -125,9 +127,11 @@ export function useTableData(options: UseTableDataOptions) {
       })
       .catch(console.error);
 
-    return () => { cancelled = true; };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [table]);
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [table, dbQuery.mutateAsync]);
 
   // Fetch row count
   useEffect(() => {
@@ -144,9 +148,11 @@ export function useTableData(options: UseTableDataOptions) {
       })
       .catch(console.error);
 
-    return () => { cancelled = true; };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [table]);
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [table, dbQuery.mutateAsync]);
 
   // Use schema info or empty defaults while loading
   const columns = schemaInfo?.columns ?? [];
@@ -207,9 +213,15 @@ export function useTableData(options: UseTableDataOptions) {
     [table, pageSize, cache.totalRows, cache.loadedRanges, sort, sortDirection, dbQuery],
   );
 
-  const getRow = useCallback((index: number): TableRow | undefined => cache.rows.get(index), [cache.rows]);
+  const getRow = useCallback(
+    (index: number): TableRow | undefined => cache.rows.get(index),
+    [cache.rows],
+  );
   const isRowLoaded = useCallback((index: number): boolean => cache.rows.has(index), [cache.rows]);
-  const getRowId = useCallback((row: TableRow): string => String(row[primaryKeyColumn]), [primaryKeyColumn]);
+  const getRowId = useCallback(
+    (row: TableRow): string => String(row[primaryKeyColumn]),
+    [primaryKeyColumn],
+  );
 
   const getRowIndexById = useCallback(
     (id: string): number | undefined => {
@@ -227,7 +239,7 @@ export function useTableData(options: UseTableDataOptions) {
     setCache((prev) => ({
       rows: new Map(),
       loadedRanges: [],
-      totalRows: prev.totalRows  // Keep row count so grid doesn't show "no data"
+      totalRows: prev.totalRows, // Keep row count so grid doesn't show "no data"
     }));
   }, []);
 
@@ -311,7 +323,7 @@ export function useTableData(options: UseTableDataOptions) {
     async (
       columnName: string,
       columnType: string,
-      options?: { nullable?: boolean; defaultValue?: unknown }
+      options?: { nullable?: boolean; defaultValue?: unknown },
     ) => {
       await dbQuery.mutateAsync({
         sql: generateAddColumnSql(table, columnName, columnType, options),
@@ -397,4 +409,3 @@ function mergeRanges(
 
   return merged;
 }
-

@@ -51,8 +51,10 @@ function parseEnvFile(content: string): Map<string, string> {
     const key = trimmed.slice(0, eqIndex).trim();
     let value = trimmed.slice(eqIndex + 1).trim();
     // Remove quotes if present
-    if ((value.startsWith('"') && value.endsWith('"')) ||
-        (value.startsWith("'") && value.endsWith("'"))) {
+    if (
+      (value.startsWith('"') && value.endsWith('"')) ||
+      (value.startsWith("'") && value.endsWith("'"))
+    ) {
       value = value.slice(1, -1);
     }
     env.set(key, value);
@@ -68,7 +70,7 @@ function serializeEnvFile(env: Map<string, string>): string {
     const serialized = needsQuotes ? `"${value.replace(/"/g, '\\"')}"` : value;
     lines.push(`${key}=${serialized}`);
   }
-  return lines.join("\n") + "\n";
+  return `${lines.join("\n")}\n`;
 }
 
 // ============================================================================
@@ -77,42 +79,40 @@ function serializeEnvFile(env: Map<string, string>): string {
 
 export const secretsRouter = t.router({
   /** Save secrets to .env.local (merges with existing) */
-  save: publicProcedure
-    .input(saveSecretsInput)
-    .mutation(async ({ ctx, input }) => {
-      const envPath = getEnvLocalPath(ctx.workbookDir);
+  save: publicProcedure.input(saveSecretsInput).mutation(async ({ ctx, input }) => {
+    const envPath = getEnvLocalPath(ctx.workbookDir);
 
-      // Read existing secrets
-      let existing = new Map<string, string>();
-      if (existsSync(envPath)) {
-        try {
-          existing = parseEnvFile(readFileSync(envPath, "utf-8"));
-        } catch {
-          // Ignore parse errors, start fresh
-        }
-      }
-
-      // Merge new secrets
-      const saved: string[] = [];
-      for (const [key, value] of Object.entries(input.secrets)) {
-        if (value && value.trim()) {
-          existing.set(key, value.trim());
-          saved.push(key);
-        }
-      }
-
-      // Write back
+    // Read existing secrets
+    let existing = new Map<string, string>();
+    if (existsSync(envPath)) {
       try {
-        writeFileSync(envPath, serializeEnvFile(existing));
-      } catch (err) {
-        throw new TRPCError({
-          code: "INTERNAL_SERVER_ERROR",
-          message: `Failed to write .env.local: ${err instanceof Error ? err.message : String(err)}`,
-        });
+        existing = parseEnvFile(readFileSync(envPath, "utf-8"));
+      } catch {
+        // Ignore parse errors, start fresh
       }
+    }
 
-      return { success: true, saved };
-    }),
+    // Merge new secrets
+    const saved: string[] = [];
+    for (const [key, value] of Object.entries(input.secrets)) {
+      if (value?.trim()) {
+        existing.set(key, value.trim());
+        saved.push(key);
+      }
+    }
+
+    // Write back
+    try {
+      writeFileSync(envPath, serializeEnvFile(existing));
+    } catch (err) {
+      throw new TRPCError({
+        code: "INTERNAL_SERVER_ERROR",
+        message: `Failed to write .env.local: ${err instanceof Error ? err.message : String(err)}`,
+      });
+    }
+
+    return { success: true, saved };
+  }),
 
   /** List configured secret keys (not values) */
   list: publicProcedure.query(({ ctx }) => {

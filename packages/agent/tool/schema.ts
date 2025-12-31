@@ -1,13 +1,11 @@
 import { tool } from "@opencode-ai/plugin";
 
-
 const DEFAULT_RUNTIME_PORT = 55000;
 function getRuntimePort(): number {
   const envPort = process.env.HANDS_RUNTIME_PORT;
   if (envPort) return parseInt(envPort, 10);
   return DEFAULT_RUNTIME_PORT;
 }
-
 
 import { createTRPCClient, httpBatchLink } from "@trpc/client";
 
@@ -28,7 +26,6 @@ function getTRPCClient() {
   currentPort = port;
   return client;
 }
-
 
 interface ForeignKey {
   column: string;

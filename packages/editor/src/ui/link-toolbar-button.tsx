@@ -1,17 +1,15 @@
-'use client';
+"use client";
 
-import { Link } from '@phosphor-icons/react';
-import { useEditorPlugin, useEditorSelection } from 'platejs/react';
-import { RangeApi } from 'platejs';
-import * as React from 'react';
+import { Link } from "@phosphor-icons/react";
+import { RangeApi } from "platejs";
+import { useEditorPlugin, useEditorSelection } from "platejs/react";
+import type * as React from "react";
 
-import { linkPlugin } from '../plugins/link-kit';
+import { linkPlugin } from "../plugins/link-kit";
 
-import { ToolbarButton } from './toolbar';
+import { ToolbarButton } from "./toolbar";
 
-export function LinkToolbarButton(
-  props: React.ComponentProps<typeof ToolbarButton>
-) {
+export function LinkToolbarButton(props: React.ComponentProps<typeof ToolbarButton>) {
   const { api } = useEditorPlugin(linkPlugin);
   const selection = useEditorSelection();
 

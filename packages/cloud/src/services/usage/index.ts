@@ -12,6 +12,6 @@
  *   aggregateUsage(env) - runs hourly via CF cron trigger
  */
 
-export { usageRouter } from "./router";
 export { aggregateUsage } from "./aggregator";
+export { usageRouter } from "./router";
 export * from "./types";

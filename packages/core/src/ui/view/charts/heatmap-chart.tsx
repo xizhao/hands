@@ -9,11 +9,7 @@
 import { createPlatePlugin, PlateElement, type PlateElementProps, useElement } from "platejs/react";
 import { memo } from "react";
 
-import {
-  HEATMAP_CHART_KEY,
-  type THeatmapChartElement,
-  type VegaLiteSpec,
-} from "../../../types";
+import { HEATMAP_CHART_KEY, type THeatmapChartElement, type VegaLiteSpec } from "../../../types";
 import { VegaChart } from "./vega-chart";
 
 // ============================================================================
@@ -43,12 +39,7 @@ export interface HeatmapChartProps {
  * Build Vega-Lite spec for heatmap
  */
 function buildHeatmapSpec(props: HeatmapChartProps): VegaLiteSpec {
-  const {
-    xKey = "x",
-    yKey = "y",
-    valueKey = "value",
-    colorScheme = "blues",
-  } = props;
+  const { xKey = "x", yKey = "y", valueKey = "value", colorScheme = "blues" } = props;
 
   const encoding: Record<string, unknown> = {
     x: { field: xKey, type: "ordinal" },
@@ -119,7 +110,7 @@ export const HeatmapChartPlugin = createPlatePlugin({
 });
 
 export function createHeatmapChartElement(
-  options: Partial<Omit<THeatmapChartElement, "type" | "children">> = {}
+  options: Partial<Omit<THeatmapChartElement, "type" | "children">> = {},
 ): THeatmapChartElement {
   return {
     type: HEATMAP_CHART_KEY,

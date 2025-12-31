@@ -3,14 +3,13 @@
  */
 
 import { describe, expect, it } from "vitest";
+import { createKanbanElement } from "./kanban";
 import {
   findMovedItem,
   getColumnOrder,
   groupByColumn,
   type KanbanBoardValue,
-  type KanbanItem,
 } from "./kanban-board";
-import { createKanbanElement } from "./kanban";
 
 // ============================================================================
 // groupByColumn Tests
@@ -126,10 +125,7 @@ describe("getColumnOrder", () => {
   });
 
   it("handles missing column values", () => {
-    const items = [
-      { id: 1 },
-      { id: 2, status: "done" },
-    ];
+    const items = [{ id: 1 }, { id: 2, status: "done" }];
 
     const order = getColumnOrder(items, "status");
 
@@ -280,9 +276,7 @@ describe("createKanbanElement", () => {
       updateSql: "UPDATE tasks SET status = {{status}} WHERE id = {{id}}",
     });
 
-    expect(element.updateSql).toBe(
-      "UPDATE tasks SET status = {{status}} WHERE id = {{id}}"
-    );
+    expect(element.updateSql).toBe("UPDATE tasks SET status = {{status}} WHERE id = {{id}}");
   });
 
   it("creates element with all optional fields", () => {
@@ -296,9 +290,7 @@ describe("createKanbanElement", () => {
     expect(element.columnOrder).toEqual(["todo", "in_progress", "done"]);
     expect(element.cardFields).toEqual(["priority", "assignee"]);
     expect(element.idField).toBe("task_id");
-    expect(element.updateSql).toBe(
-      "UPDATE tasks SET status = {{status}} WHERE id = {{id}}"
-    );
+    expect(element.updateSql).toBe("UPDATE tasks SET status = {{status}} WHERE id = {{id}}");
   });
 
   it("creates valid kanban element type", () => {

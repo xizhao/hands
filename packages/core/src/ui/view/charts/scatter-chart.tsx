@@ -9,11 +9,7 @@
 import { createPlatePlugin, PlateElement, type PlateElementProps, useElement } from "platejs/react";
 import { memo } from "react";
 
-import {
-  SCATTER_CHART_KEY,
-  type TScatterChartElement,
-  type VegaLiteSpec,
-} from "../../../types";
+import { SCATTER_CHART_KEY, type TScatterChartElement, type VegaLiteSpec } from "../../../types";
 import { VegaChart } from "./vega-chart";
 
 // ============================================================================
@@ -122,7 +118,7 @@ export const ScatterChartPlugin = createPlatePlugin({
 });
 
 export function createScatterChartElement(
-  options: Partial<Omit<TScatterChartElement, "type" | "children">> = {}
+  options: Partial<Omit<TScatterChartElement, "type" | "children">> = {},
 ): TScatterChartElement {
   return {
     type: SCATTER_CHART_KEY,

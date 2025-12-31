@@ -7,8 +7,8 @@
  * Usage: bun run scripts/generate-registry.ts
  */
 
-import * as fs from "fs";
-import * as path from "path";
+import * as fs from "node:fs";
+import * as path from "node:path";
 
 // ============================================
 // Static Definitions (Categories)
@@ -127,9 +127,7 @@ function extractDependencies(filePath: string): string[] {
   while ((match = importRegex.exec(content)) !== null) {
     const pkg = match[1];
     // Get the package name (handle scoped packages)
-    const pkgName = pkg.startsWith("@")
-      ? pkg.split("/").slice(0, 2).join("/")
-      : pkg.split("/")[0];
+    const pkgName = pkg.startsWith("@") ? pkg.split("/").slice(0, 2).join("/") : pkg.split("/")[0];
 
     // Skip internal packages and common peer deps
     if (
@@ -179,7 +177,7 @@ function extractComponentNamesFromJSX(jsx: string): string[] {
 // Map component names to their source files
 function buildComponentImportMap(
   componentsDir: string,
-  files: string[]
+  files: string[],
 ): Map<string, { file: string; exports: string[] }> {
   const map = new Map<string, { file: string; exports: string[] }>();
 
@@ -190,9 +188,7 @@ function buildComponentImportMap(
     const exports: string[] = [];
 
     // Match export const X = or export function X
-    const directExports = content.matchAll(
-      /export\s+(?:const|function)\s+([A-Z][A-Za-z0-9]*)/g
-    );
+    const directExports = content.matchAll(/export\s+(?:const|function)\s+([A-Z][A-Za-z0-9]*)/g);
     for (const match of directExports) {
       exports.push(match[1]);
     }
@@ -209,7 +205,7 @@ function buildComponentImportMap(
 
     // Match const X = React.forwardRef (then exported later)
     const forwardRefMatches = content.matchAll(
-      /const\s+([A-Z][A-Za-z0-9]*)\s*=\s*React\.forwardRef/g
+      /const\s+([A-Z][A-Za-z0-9]*)\s*=\s*React\.forwardRef/g,
     );
     for (const match of forwardRefMatches) {
       if (!exports.includes(match[1])) {
@@ -218,9 +214,7 @@ function buildComponentImportMap(
     }
 
     // Match function X(...) { (local functions that might be exported)
-    const functionMatches = content.matchAll(
-      /^function\s+([A-Z][A-Za-z0-9]*)\s*\(/gm
-    );
+    const functionMatches = content.matchAll(/^function\s+([A-Z][A-Za-z0-9]*)\s*\(/gm);
     for (const match of functionMatches) {
       if (!exports.includes(match[1])) {
         exports.push(match[1]);
@@ -229,7 +223,7 @@ function buildComponentImportMap(
 
     // Match const X = SomePrimitive.Root (aliased components)
     const aliasMatches = content.matchAll(
-      /const\s+([A-Z][A-Za-z0-9]*)\s*=\s*[A-Z][A-Za-z0-9]*(?:Primitive)?\.(?:Root|Content|Trigger)/g
+      /const\s+([A-Z][A-Za-z0-9]*)\s*=\s*[A-Z][A-Za-z0-9]*(?:Primitive)?\.(?:Root|Content|Trigger)/g,
     );
     for (const match of aliasMatches) {
       if (!exports.includes(match[1])) {
@@ -248,7 +242,7 @@ function buildComponentImportMap(
 async function generateRegistry() {
   const stdlibRoot = path.resolve(__dirname, "..");
   const componentsDir = path.join(stdlibRoot, "src/registry/components");
-  const outputPath = path.join(stdlibRoot, "src/registry.generated.tsx");
+  const _outputPath = path.join(stdlibRoot, "src/registry.generated.tsx");
 
   console.log("Scanning components in:", componentsDir);
 
@@ -320,9 +314,7 @@ async function generateRegistry() {
   const importStatements: string[] = [];
   for (const [file, components] of importsByFile) {
     const names = Array.from(components).sort().join(", ");
-    importStatements.push(
-      `import { ${names} } from "./registry/components/${file}";`
-    );
+    importStatements.push(`import { ${names} } from "./registry/components/${file}";`);
   }
 
   // Generate preview components
@@ -331,7 +323,7 @@ async function generateRegistry() {
     // Indent the example properly
     const indentedExample = example
       .split("\n")
-      .map((line, i) => (i === 0 ? line : "    " + line))
+      .map((line, i) => (i === 0 ? line : `    ${line}`))
       .join("\n");
     previewEntries.push(`  "${key}": () => (\n    ${indentedExample}\n  )`);
   }

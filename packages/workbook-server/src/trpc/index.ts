@@ -8,20 +8,20 @@
 import { initTRPC } from "@trpc/server";
 import { fetchRequestHandler } from "@trpc/server/adapters/fetch";
 import type { Hono } from "hono";
-import { actionsRouter, type ActionsContext } from "../actions/trpc.js";
+import { type ActionsContext, actionsRouter } from "../actions/trpc.js";
 import { gitRouter } from "../git/trpc.js";
 import type { PageRegistry } from "../pages/index.js";
-import { sqliteTRPCRouter, type SQLiteTRPCContext } from "../sqlite/trpc.js";
-import { actionRunsRouter, type ActionRunsContext } from "./routers/action-runs.js";
-import { aiRouter, type AIContext } from "./routers/ai.js";
-import { deployRouter, type DeployContext } from "./routers/deploy.js";
-import { domainsRouter, type DomainsContext } from "./routers/domains.js";
-import { editorStateRouter, type EditorStateContext } from "./routers/editor-state.js";
-import { pagesRouter, type PagesContext } from "./routers/pages.js";
-import { secretsRouter, type SecretsContext } from "./routers/secrets.js";
-import { statusRouter, type StatusContext } from "./routers/status.js";
-import { thumbnailsRouter, type ThumbnailsContext } from "./routers/thumbnails.js";
-import { workbookRouter, type WorkbookContext } from "./routers/workbook.js";
+import { type SQLiteTRPCContext, sqliteTRPCRouter } from "../sqlite/trpc.js";
+import { type ActionRunsContext, actionRunsRouter } from "./routers/action-runs.js";
+import { type AIContext, aiRouter } from "./routers/ai.js";
+import { type DeployContext, deployRouter } from "./routers/deploy.js";
+import { type DomainsContext, domainsRouter } from "./routers/domains.js";
+import { type EditorStateContext, editorStateRouter } from "./routers/editor-state.js";
+import { type PagesContext, pagesRouter } from "./routers/pages.js";
+import { type SecretsContext, secretsRouter } from "./routers/secrets.js";
+import { type StatusContext, statusRouter } from "./routers/status.js";
+import { type ThumbnailsContext, thumbnailsRouter } from "./routers/thumbnails.js";
+import { type WorkbookContext, workbookRouter } from "./routers/workbook.js";
 
 export interface TRPCConfig {
   workbookId: string;
@@ -153,6 +153,14 @@ export function registerTRPCRoutes(app: Hono, config: TRPCConfig) {
 }
 
 export type { ActionsRouter } from "../actions/trpc.js";
+// Re-export model types for client usage
+export type {
+  ActionRunLog,
+  ActionRunRecord,
+  RecentItem,
+  StepRecord,
+  UiState,
+} from "../db/editor-db.js";
 export type { GitRouter } from "../git/trpc.js";
 // Re-export router types for client usage
 export type { SQLiteTRPCRouter as DbRouter } from "../sqlite/trpc.js";
@@ -166,12 +174,3 @@ export type { SecretsRouter } from "./routers/secrets.js";
 export type { StatusRouter } from "./routers/status.js";
 export type { ThumbnailsRouter } from "./routers/thumbnails.js";
 export type { WorkbookRouter } from "./routers/workbook.js";
-
-// Re-export model types for client usage
-export type {
-  ActionRunRecord,
-  ActionRunLog,
-  StepRecord,
-  UiState,
-  RecentItem,
-} from "../db/editor-db.js";

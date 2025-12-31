@@ -4,6 +4,9 @@ import type { ColumnDef, TableMeta } from "@tanstack/react-table";
 import { CopyIcon, EraserIcon, ScissorsIcon, Trash2Icon } from "lucide-react";
 import * as React from "react";
 import { toast } from "sonner";
+import type { ContextMenuState, UpdateCell } from "../../../types/data-grid";
+import { useAsRef } from "../../hooks/use-as-ref";
+import { parseCellKey } from "../../lib/data-grid";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -11,9 +14,6 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "../dropdown-menu";
-import { useAsRef } from "../../hooks/use-as-ref";
-import { parseCellKey } from "../../lib/data-grid";
-import type { ContextMenuState, UpdateCell } from "../../../types/data-grid";
 
 interface DataGridContextMenuProps<TData> {
   tableMeta: TableMeta<TData>;
@@ -142,11 +142,7 @@ function ContextMenuImpl<TData>({
   const onClear = React.useCallback(() => {
     const { selectionState, columns, onDataUpdate } = propsRef.current;
 
-    if (
-      !selectionState?.selectedCells ||
-      selectionState.selectedCells.size === 0
-    )
-      return;
+    if (!selectionState?.selectedCells || selectionState.selectedCells.size === 0) return;
 
     const updates: Array<UpdateCell> = [];
 
@@ -175,19 +171,13 @@ function ContextMenuImpl<TData>({
 
     onDataUpdate?.(updates);
 
-    toast.success(
-      `${updates.length} cell${updates.length !== 1 ? "s" : ""} cleared`,
-    );
+    toast.success(`${updates.length} cell${updates.length !== 1 ? "s" : ""} cleared`);
   }, [propsRef]);
 
   const onDelete = React.useCallback(async () => {
     const { selectionState, onRowsDelete } = propsRef.current;
 
-    if (
-      !selectionState?.selectedCells ||
-      selectionState.selectedCells.size === 0
-    )
-      return;
+    if (!selectionState?.selectedCells || selectionState.selectedCells.size === 0) return;
 
     const rowIndices = new Set<number>();
     for (const cellKey of selectionState.selectedCells) {
@@ -204,10 +194,7 @@ function ContextMenuImpl<TData>({
   }, [propsRef]);
 
   return (
-    <DropdownMenu
-      open={contextMenu.open}
-      onOpenChange={onContextMenuOpenChange}
-    >
+    <DropdownMenu open={contextMenu.open} onOpenChange={onContextMenuOpenChange}>
       <DropdownMenuTrigger style={triggerStyle} />
       <DropdownMenuContent
         data-grid-popover=""
@@ -230,7 +217,10 @@ function ContextMenuImpl<TData>({
         {onRowsDelete && (
           <>
             <DropdownMenuSeparator />
-            <DropdownMenuItem className="text-destructive focus:text-destructive" onSelect={onDelete}>
+            <DropdownMenuItem
+              className="text-destructive focus:text-destructive"
+              onSelect={onDelete}
+            >
               <Trash2Icon />
               Delete rows
             </DropdownMenuItem>

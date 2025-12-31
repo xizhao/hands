@@ -2,7 +2,15 @@
   "$schema": "https://schema.tauri.app/config/2/capability",
   "identifier": "default",
   "description": "Default capabilities for the app",
-  "windows": ["main", "webview_*", "preview_*", "workbook_*", "capture_action_*", "capture_overlay_*", "floating_chat"],
+  "windows": [
+    "main",
+    "webview_*",
+    "preview_*",
+    "workbook_*",
+    "capture_action_*",
+    "capture_overlay_*",
+    "floating_chat"
+  ],
   "permissions": [
     "core:tray:default",
     "core:menu:default",
@@ -47,9 +55,7 @@
     },
     {
       "identifier": "fs:allow-read-file",
-      "allow": [
-        { "path": "$TEMP/hands-captures/**" }
-      ]
+      "allow": [{ "path": "$TEMP/hands-captures/**" }]
     },
     "fs:default"
   ]

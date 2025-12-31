@@ -11,13 +11,12 @@ import { Search, X } from "lucide-react";
 import { useState } from "react";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
-
-import { useSidebarState } from "./hooks/useSidebarState";
-import { useSidebarData } from "./hooks/useSidebarData";
 import { useSidebarActions } from "./hooks/useSidebarActions";
-import { PagesSection } from "./sections/PagesSection";
-import { DataSection } from "./sections/DataSection";
+import { useSidebarData } from "./hooks/useSidebarData";
+import { useSidebarState } from "./hooks/useSidebarState";
 import { ActionsSection } from "./sections/ActionsSection";
+import { DataSection } from "./sections/DataSection";
+import { PagesSection } from "./sections/PagesSection";
 import { PluginsSection } from "./sections/PluginsSection";
 
 export interface NotebookSidebarProps {
@@ -43,7 +42,7 @@ export function NotebookSidebar({
   // Search state - use external if provided
   const hasExternalFilter = filterQuery !== undefined;
   const [internalQuery, setInternalQuery] = useState("");
-  const searchQuery = hasExternalFilter ? (filterQuery || "") : internalQuery;
+  const searchQuery = hasExternalFilter ? filterQuery || "" : internalQuery;
 
   // Hooks
   const state = useSidebarState();
@@ -78,7 +77,10 @@ export function NotebookSidebar({
         {/* Sections */}
         <div className={cn(fullWidth ? "grid grid-cols-1 md:grid-cols-2 gap-6" : "space-y-3")}>
           <PagesSection
-            expanded={state.sections.pages.expanded || (!!searchQuery && (data.rootPages.length > 0 || data.pageFolders.size > 0))}
+            expanded={
+              state.sections.pages.expanded ||
+              (!!searchQuery && (data.rootPages.length > 0 || data.pageFolders.size > 0))
+            }
             onToggle={state.sections.pages.toggle}
             rootPages={data.rootPages}
             pageFolders={data.pageFolders}
@@ -93,7 +95,9 @@ export function NotebookSidebar({
           />
 
           <DataSection
-            expanded={state.sections.data.expanded || (!!searchQuery && data.unassociatedTables.length > 0)}
+            expanded={
+              state.sections.data.expanded || (!!searchQuery && data.unassociatedTables.length > 0)
+            }
             onToggle={state.sections.data.toggle}
             sources={data.sources}
             availableSources={[]}
@@ -108,7 +112,9 @@ export function NotebookSidebar({
           />
 
           <ActionsSection
-            expanded={state.sections.actions.expanded || (!!searchQuery && data.filteredActions.length > 0)}
+            expanded={
+              state.sections.actions.expanded || (!!searchQuery && data.filteredActions.length > 0)
+            }
             onToggle={state.sections.actions.toggle}
             actions={data.filteredActions}
             handlers={actions}
@@ -116,7 +122,9 @@ export function NotebookSidebar({
           />
 
           <PluginsSection
-            expanded={state.sections.plugins.expanded || (!!searchQuery && data.filteredPlugins.length > 0)}
+            expanded={
+              state.sections.plugins.expanded || (!!searchQuery && data.filteredPlugins.length > 0)
+            }
             onToggle={state.sections.plugins.toggle}
             plugins={data.filteredPlugins}
             size={fullWidth ? "lg" : "default"}
@@ -127,8 +135,8 @@ export function NotebookSidebar({
   );
 }
 
+export { useSidebarActions } from "./hooks/useSidebarActions";
+export { useSidebarData } from "./hooks/useSidebarData";
+export { useSidebarState } from "./hooks/useSidebarState";
 // Re-exports
 export * from "./types";
-export { useSidebarState } from "./hooks/useSidebarState";
-export { useSidebarData } from "./hooks/useSidebarData";
-export { useSidebarActions } from "./hooks/useSidebarActions";

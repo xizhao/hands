@@ -7,18 +7,9 @@
  * Uses tRPC for domain data and provides CRUD actions via context menu.
  */
 
-import { useState, useRef, useEffect, useCallback, useMemo } from "react";
-import { FileText, Plus, MoreHorizontal, Pencil, Trash2 } from "lucide-react";
 import { useNavigate, useParams } from "@tanstack/react-router";
-import { cn } from "@/lib/utils";
-import { trpc } from "@/lib/trpc";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
+import { FileText, MoreHorizontal, Pencil, Plus, Trash2 } from "lucide-react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -29,15 +20,23 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { trpc } from "@/lib/trpc";
+import { cn } from "@/lib/utils";
 
 export interface DomainSidebarProps {
   /** External filter query */
   filterQuery?: string;
-  /** Callback to open add source dialog */
-  onAddSource?: () => void;
 }
 
-export function DomainSidebar({ filterQuery, onAddSource }: DomainSidebarProps) {
+export function DomainSidebar({ filterQuery }: DomainSidebarProps) {
   const navigate = useNavigate();
   const params = useParams({ strict: false });
   const currentDomainId = (params as { domainId?: string }).domainId;
@@ -55,13 +54,24 @@ export function DomainSidebar({ filterQuery, onAddSource }: DomainSidebarProps) 
 
     const query = filterQuery.toLowerCase();
     return data.domains.filter(
-      (d) =>
-        d.name.toLowerCase().includes(query) ||
-        d.id.toLowerCase().includes(query)
+      (d) => d.name.toLowerCase().includes(query) || d.id.toLowerCase().includes(query),
     );
   }, [data?.domains, filterQuery]);
 
   // Mutations
+  const createMutation = trpc.domains.create.useMutation({
+    onSuccess: (result) => {
+      utils.domains.list.invalidate();
+      utils.workbook.manifest.invalidate();
+      // Navigate to the new domain
+      navigate({
+        to: "/domains/$domainId",
+        params: { domainId: result.domainId },
+        search: { tab: "page" },
+      } as any);
+    },
+  });
+
   const renameMutation = trpc.domains.rename.useMutation({
     onSuccess: () => {
       utils.domains.list.invalidate();
@@ -80,6 +90,19 @@ export function DomainSidebar({ filterQuery, onAddSource }: DomainSidebarProps) 
     },
   });
 
+  const handleCreate = useCallback(() => {
+    // Generate a unique name
+    const baseName = "untitled";
+    let name = baseName;
+    let counter = 1;
+    const existingNames = new Set(domains.map((d) => d.id));
+    while (existingNames.has(name)) {
+      name = `${baseName}_${counter}`;
+      counter++;
+    }
+    createMutation.mutate({ name });
+  }, [domains, createMutation]);
+
   const handleDomainClick = useCallback(
     (domainId: string) => {
       navigate({
@@ -88,7 +111,7 @@ export function DomainSidebar({ filterQuery, onAddSource }: DomainSidebarProps) 
         search: { tab: "page" },
       } as any);
     },
-    [navigate]
+    [navigate],
   );
 
   const handleRename = useCallback(
@@ -104,66 +127,88 @@ export function DomainSidebar({ filterQuery, onAddSource }: DomainSidebarProps) 
         } as any);
       }
     },
-    [renameMutation, currentDomainId, navigate]
+    [renameMutation, currentDomainId, navigate],
   );
 
   const handleDelete = useCallback(
     async (domainId: string) => {
       await deleteMutation.mutateAsync({ domainId });
     },
-    [deleteMutation]
+    [deleteMutation],
   );
 
   return (
-    <div className="space-y-0.5">
+    <div className="space-y-1">
+      {/* Header with title and create button */}
+      <div className="flex items-center justify-between px-2 py-1">
+        <span className="text-[11px] font-medium text-muted-foreground uppercase tracking-wide">
+          Pages
+        </span>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <button
+              onClick={handleCreate}
+              disabled={createMutation.isPending}
+              className={cn(
+                "p-0.5 rounded transition-colors",
+                "text-muted-foreground/70 hover:text-foreground hover:bg-accent/50",
+                "disabled:opacity-50",
+              )}
+            >
+              <Plus className="h-3.5 w-3.5" />
+            </button>
+          </TooltipTrigger>
+          <TooltipContent side="right" className="text-[10px]">
+            New page
+          </TooltipContent>
+        </Tooltip>
+      </div>
+
+      {/* Content */}
       {isLoading ? (
-        <div className="px-2 py-8 text-center">
-          <div className="inline-flex items-center gap-2 text-sm text-muted-foreground">
+        <div className="px-2 py-6 text-center">
+          <div className="inline-flex items-center gap-2 text-xs text-muted-foreground">
             <div className="h-3 w-3 border-2 border-muted-foreground/30 border-t-muted-foreground rounded-full animate-spin" />
             Loading...
           </div>
         </div>
       ) : domains.length === 0 ? (
-        <div className="px-3 py-6">
+        <div className="px-2 py-4">
           {filterQuery ? (
-            <div className="text-center text-sm text-muted-foreground">
-              No domains matching "{filterQuery}"
+            <div className="text-center text-xs text-muted-foreground">
+              No pages matching "{filterQuery}"
             </div>
           ) : (
-            <div className="space-y-3">
-              <div className="text-center text-sm text-muted-foreground">
-                No data found. Add a source to get started.
-              </div>
-              {onAddSource && (
-                <button
-                  onClick={onAddSource}
-                  className={cn(
-                    "w-full flex items-center justify-center gap-2 px-3 py-2 rounded-lg",
-                    "border border-dashed border-border/60",
-                    "text-sm text-muted-foreground",
-                    "hover:bg-accent/50 hover:border-border hover:text-foreground",
-                    "transition-colors"
-                  )}
-                >
-                  <Plus className="h-4 w-4" />
-                  Add source
-                </button>
+            <button
+              onClick={handleCreate}
+              disabled={createMutation.isPending}
+              className={cn(
+                "w-full flex items-center justify-center gap-2 px-3 py-2 rounded-lg",
+                "border border-dashed border-border/60",
+                "text-xs text-muted-foreground",
+                "hover:bg-accent/50 hover:border-border hover:text-foreground",
+                "transition-colors",
               )}
-            </div>
+            >
+              <Plus className="h-3.5 w-3.5" />
+              Create your first page
+            </button>
           )}
         </div>
       ) : (
-        domains.map((domain) => (
-          <DomainItem
-            key={domain.id}
-            domainId={domain.id}
-            domainName={domain.name}
-            isActive={currentDomainId === domain.id}
-            onClick={() => handleDomainClick(domain.id)}
-            onRename={handleRename}
-            onDelete={handleDelete}
-          />
-        ))
+        <div className="space-y-0.5">
+          {domains.map((domain) => (
+            <DomainItem
+              key={domain.id}
+              domainId={domain.id}
+              domainName={domain.name}
+              isActive={currentDomainId === domain.id}
+              onClick={() => handleDomainClick(domain.id)}
+              onRename={handleRename}
+              onDelete={handleDelete}
+            />
+          ))}
+        </div>
       )}
     </div>
   );
@@ -228,7 +273,7 @@ function DomainItem({
         handleCancelEdit();
       }
     },
-    [handleSubmitEdit, handleCancelEdit]
+    [handleSubmitEdit, handleCancelEdit],
   );
 
   const handleConfirmDelete = useCallback(async () => {
@@ -249,7 +294,7 @@ function DomainItem({
           onBlur={handleSubmitEdit}
           className={cn(
             "flex-1 bg-transparent text-sm outline-none",
-            "border-b border-primary focus:border-primary"
+            "border-b border-primary focus:border-primary",
           )}
           placeholder="domain_name"
         />
@@ -263,14 +308,14 @@ function DomainItem({
         className={cn(
           "group w-full flex items-center gap-2 px-2 py-1 rounded-md text-left transition-colors",
           "hover:bg-accent/50",
-          isActive && "bg-accent text-accent-foreground"
+          isActive && "bg-accent text-accent-foreground",
         )}
       >
         <button onClick={onClick} className="flex-1 flex items-center gap-2 min-w-0">
           <FileText
             className={cn(
               "h-4 w-4 flex-shrink-0",
-              isActive ? "text-foreground" : "text-muted-foreground"
+              isActive ? "text-foreground" : "text-muted-foreground",
             )}
           />
           <span className="truncate text-sm">{domainName}</span>
@@ -283,7 +328,7 @@ function DomainItem({
               className={cn(
                 "p-0.5 rounded transition-all",
                 "opacity-0 group-hover:opacity-100",
-                "hover:bg-accent"
+                "hover:bg-accent",
               )}
             >
               <MoreHorizontal className="h-3.5 w-3.5" />
@@ -320,8 +365,8 @@ function DomainItem({
           <AlertDialogHeader>
             <AlertDialogTitle>Delete domain "{domainName}"?</AlertDialogTitle>
             <AlertDialogDescription>
-              This will permanently delete the "{domainId}" table and its associated page.
-              This action cannot be undone.
+              This will permanently delete the "{domainId}" table and its associated page. This
+              action cannot be undone.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>

@@ -1,6 +1,6 @@
-import { describe, it, expect } from "vitest";
-import { validateSchema } from "./validate";
 import type { ActionSchema, DbSchema } from "@hands/core/primitives";
+import { describe, expect, it } from "vitest";
+import { validateSchema } from "./validate";
 
 describe("validateSchema", () => {
   const dbSchema: DbSchema = {

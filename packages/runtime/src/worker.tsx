@@ -1,17 +1,14 @@
-import { route, render, RouteMiddleware } from "rwsdk/router";
-import { defineApp } from "rwsdk/worker";
 import { env } from "cloudflare:workers";
-import {
-  SyncedStateServer,
-  syncedStateRoutes,
-} from "rwsdk/use-synced-state/worker";
-import { pages, pageRoutes } from "@hands/pages";
-import { Document } from "./pages/Document";
+import { pageRoutes, pages } from "@hands/pages";
+import { type RouteMiddleware, render, route } from "rwsdk/router";
+import { SyncedStateServer, syncedStateRoutes } from "rwsdk/use-synced-state/worker";
+import { defineApp } from "rwsdk/worker";
+import { actionRoutes } from "./actions/routes";
+import { workflowRoutes } from "./actions/workflow-routes";
 import { Database } from "./db/dev";
 import { dbRoutes } from "./db/routes";
 import { seedRoutes } from "./db/seed-routes";
-import { actionRoutes } from "./actions/routes";
-import { workflowRoutes } from "./actions/workflow-routes";
+import { Document } from "./pages/Document";
 
 // Export Durable Objects for wrangler
 export { Database, SyncedStateServer };
@@ -28,7 +25,7 @@ export const setCommonHeaders =
       // Forces browsers to always use HTTPS for a specified time period (2 years)
       response.headers.set(
         "Strict-Transport-Security",
-        "max-age=63072000; includeSubDomains; preload"
+        "max-age=63072000; includeSubDomains; preload",
       );
     }
 
@@ -39,10 +36,7 @@ export const setCommonHeaders =
     response.headers.set("Referrer-Policy", "no-referrer");
 
     // Explicitly disables access to specific browser features/APIs
-    response.headers.set(
-      "Permissions-Policy",
-      "geolocation=(), microphone=(), camera=()"
-    );
+    response.headers.set("Permissions-Policy", "geolocation=(), microphone=(), camera=()");
 
     // Defines trusted sources for content loading and script execution:
     // In dev mode, allow framing from editor sandbox (localhost:5167)
@@ -51,7 +45,7 @@ export const setCommonHeaders =
       : "frame-ancestors 'self'";
     response.headers.set(
       "Content-Security-Policy",
-      `default-src 'self'; script-src 'self' 'unsafe-eval' 'nonce-${nonce}' https://challenges.cloudflare.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; connect-src 'self' https://www.react-grab.com; ${frameAncestors}; frame-src 'self' https://challenges.cloudflare.com; object-src 'none';`
+      `default-src 'self'; script-src 'self' 'unsafe-eval' 'nonce-${nonce}' https://challenges.cloudflare.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; connect-src 'self' https://www.react-grab.com; ${frameAncestors}; frame-src 'self' https://challenges.cloudflare.com; object-src 'none';`,
     );
   };
 
@@ -63,10 +57,12 @@ export default defineApp([
   // Synced state routes for real-time collaboration
   ...syncedStateRoutes(() => env.SYNCED_STATE_SERVER),
   // Health check endpoint for workbook-server polling
-  route("/health", () =>
-    new Response(JSON.stringify({ status: "ok" }), {
-      headers: { "Content-Type": "application/json" },
-    })
+  route(
+    "/health",
+    () =>
+      new Response(JSON.stringify({ status: "ok" }), {
+        headers: { "Content-Type": "application/json" },
+      }),
   ),
   // Database routes (dev only - for AI agent access)
   ...(import.meta.env.VITE_IS_DEV_SERVER ? dbRoutes : []),
@@ -90,7 +86,5 @@ export default defineApp([
     });
   }),
   // Pages wrapped in Document for proper hydration
-  render(Document, [
-    ...pageRoutes,
-  ]),
+  render(Document, [...pageRoutes]),
 ]);

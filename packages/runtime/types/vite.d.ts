@@ -10,6 +10,6 @@ interface ImportMeta {
       eager?: boolean;
       import?: string;
       query?: Record<string, string | string[]>;
-    }
+    },
   ): Record<string, () => Promise<M>>;
 }

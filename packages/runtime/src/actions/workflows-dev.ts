@@ -17,7 +17,7 @@ export const workflowBindings = {} as const;
 export type WorkflowId = never;
 
 export function getWorkflowBinding(
-  _id: string
+  _id: string,
 ): { className: string; binding: string } | undefined {
   return undefined;
 }

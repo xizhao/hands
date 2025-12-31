@@ -4,8 +4,8 @@
  * Uses Tauri's native drag events (requires dragDropEnabled: true in tauri.conf.json).
  */
 
-import { listen } from "@tauri-apps/api/event";
 import { FileArrowUp } from "@phosphor-icons/react";
+import { listen } from "@tauri-apps/api/event";
 import { useEffect, useState } from "react";
 import { cn } from "@/lib/utils";
 

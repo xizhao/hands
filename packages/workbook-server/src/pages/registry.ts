@@ -6,8 +6,8 @@
 
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
-import { discoverPages, ensureBlocksDir, type DiscoveredPage } from "./discovery.js";
-import { compilePage, type CompiledPage } from "./mdx.js";
+import { type DiscoveredPage, discoverPages, ensureBlocksDir } from "./discovery.js";
+import { type CompiledPage, compilePage } from "./mdx.js";
 
 // ============================================================================
 // Types
@@ -128,7 +128,7 @@ export class PageRegistry {
 
     // Add trailing slash and try
     if (!normalizedPath.endsWith("/")) {
-      const withSlash = normalizedPath + "/";
+      const withSlash = `${normalizedPath}/`;
       if (this.pages.has(withSlash)) {
         return this.pages.get(withSlash);
       }

@@ -5,14 +5,14 @@
  * Handles edge cases: expressions, booleans, arrays, objects, null values.
  */
 
+import type { TElement, TText } from "platejs";
 import type {
+  DeserializeOptions,
+  MdxDeserializeNode,
   MdxJsxAttribute,
   MdxJsxAttributeValueExpression,
-  MdxDeserializeNode,
   SerializeOptions,
-  DeserializeOptions,
 } from "./types";
-import type { TElement, TText } from "platejs";
 
 // ============================================================================
 // Attribute Parsing (MDX → Props)
@@ -27,7 +27,7 @@ import type { TElement, TText } from "platejs";
  * - expression → parsed JSON or raw string
  */
 export function parseAttributeValue(
-  value: string | MdxJsxAttributeValueExpression | null | undefined
+  value: string | MdxJsxAttributeValueExpression | null | undefined,
 ): unknown {
   // Boolean attribute: <Input required /> → required: true
   if (value === null || value === undefined) {
@@ -52,10 +52,7 @@ export function parseAttributeValue(
   }
 
   // Expression value: <Input min={5} /> or <Select options={[...]} />
-  if (
-    typeof value === "object" &&
-    value.type === "mdxJsxAttributeValueExpression"
-  ) {
+  if (typeof value === "object" && value.type === "mdxJsxAttributeValueExpression") {
     return parseExpression(value.value);
   }
 
@@ -137,9 +134,7 @@ export function parseExpression(expr: string): unknown {
  * parseAttributes(node) // → { query: "SELECT *", display: "table", params: { limit: 10 } }
  * ```
  */
-export function parseAttributes(
-  node: MdxDeserializeNode
-): Record<string, unknown> {
+export function parseAttributes(node: MdxDeserializeNode): Record<string, unknown> {
   const props: Record<string, unknown> = {};
 
   for (const attr of node.attributes || []) {
@@ -164,7 +159,7 @@ export function parseAttributes(
  */
 export function parseAttributesTyped<T extends Record<string, unknown>>(
   node: MdxDeserializeNode,
-  defaults: T
+  defaults: T,
 ): T {
   const parsed = parseAttributes(node);
   return { ...defaults, ...parsed } as T;
@@ -185,7 +180,7 @@ export function parseAttributesTyped<T extends Record<string, unknown>>(
  * - number/object/array → expression
  */
 export function serializeAttributeValue(
-  value: unknown
+  value: unknown,
 ): string | MdxJsxAttributeValueExpression | null | undefined {
   // Omit undefined/null values
   if (value === undefined || value === null) {
@@ -233,7 +228,7 @@ export function serializeAttributeValue(
  * instead of `options={[{"value":"a","label":"A"}]}`.
  */
 export function serializeAttributeValueReadable(
-  value: unknown
+  value: unknown,
 ): string | MdxJsxAttributeValueExpression | null | undefined {
   // Handle arrays of objects specially for readability
   if (
@@ -284,7 +279,7 @@ export function serializeAttributes(
     exclude?: string[];
     /** Default values - don't serialize if value equals default */
     defaults?: Record<string, unknown>;
-  } = {}
+  } = {},
 ): MdxJsxAttribute[] {
   const { readable = true, include, exclude = [], defaults = {} } = options;
 
@@ -362,12 +357,7 @@ function deepEqual(a: unknown, b: unknown): boolean {
   if (aKeys.length !== bKeys.length) return false;
 
   for (const key of aKeys) {
-    if (
-      !deepEqual(
-        (a as Record<string, unknown>)[key],
-        (b as Record<string, unknown>)[key]
-      )
-    ) {
+    if (!deepEqual((a as Record<string, unknown>)[key], (b as Record<string, unknown>)[key])) {
       return false;
     }
   }
@@ -380,7 +370,7 @@ function deepEqual(a: unknown, b: unknown): boolean {
  */
 export function createVoidElement<T extends { type: string }>(
   type: string,
-  props: Omit<T, "type" | "children">
+  props: Omit<T, "type" | "children">,
 ): T {
   return {
     type,
@@ -395,7 +385,7 @@ export function createVoidElement<T extends { type: string }>(
 export function createContainerElement<T extends { type: string }>(
   type: string,
   props: Omit<T, "type" | "children">,
-  children: unknown[]
+  children: unknown[],
 ): T {
   return {
     type,
@@ -420,17 +410,24 @@ export function createContainerElement<T extends { type: string }>(
  */
 export function serializeChildren(
   children: (TElement | TText)[],
-  options?: SerializeOptions
+  options?: SerializeOptions,
 ): unknown[] {
   if (!options) return [];
 
   // Use custom rules for testing (when no editor available)
-  const rules = (options as any)._rules as Record<string, { serialize: (node: any, opts: SerializeOptions) => unknown }> | undefined;
+  const rules = (options as any)._rules as
+    | Record<string, { serialize: (node: any, opts: SerializeOptions) => unknown }>
+    | undefined;
   if (rules) {
     return children.map((node) => {
       // Handle text nodes with marks (bold, italic, code, strikethrough)
       if ("text" in node) {
-        const textNode = node as TText & { bold?: boolean; italic?: boolean; code?: boolean; strikethrough?: boolean };
+        const textNode = node as TText & {
+          bold?: boolean;
+          italic?: boolean;
+          code?: boolean;
+          strikethrough?: boolean;
+        };
         // Inline code is special - it's a leaf node, not a wrapper
         if (textNode.code) {
           return { type: "inlineCode", value: textNode.text };
@@ -477,7 +474,7 @@ export function serializeChildren(
 export function deserializeChildren(
   children: unknown[],
   deco: unknown,
-  options?: DeserializeOptions
+  options?: DeserializeOptions,
 ): (TElement | TText)[] {
   if (!children || children.length === 0) return [];
   if (!options?.convertChildren) return [];

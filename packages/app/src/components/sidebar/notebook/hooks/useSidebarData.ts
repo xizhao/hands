@@ -22,10 +22,7 @@ export function useSidebarData(options: SidebarDataOptions = {}) {
   const { searchQuery = "" } = options;
 
   // Consolidated runtime state
-  const {
-    workbookId: activeWorkbookId,
-    manifest,
-  } = useRuntimeState();
+  const { workbookId: activeWorkbookId, manifest } = useRuntimeState();
 
   // Domains from tRPC (source of truth for tables)
   // Poll every 2 seconds for live updates when schema changes
@@ -49,12 +46,12 @@ export function useSidebarData(options: SidebarDataOptions = {}) {
 
   const filteredActions = useMemo(
     () => actions.filter((a) => matchesSearch(a.name ?? a.id) || matchesSearch(a.id)),
-    [actions, searchQuery],
+    [actions, matchesSearch],
   );
 
   const filteredDomains = useMemo(
     () => domains.filter((d) => matchesSearch(d.name) || matchesSearch(d.id)),
-    [domains, searchQuery],
+    [domains, matchesSearch],
   );
 
   // Legacy stubs for backward compatibility

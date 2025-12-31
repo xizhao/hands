@@ -8,23 +8,18 @@
  * - Empty state prompting user to select something from sidebar
  */
 
+import { createFileRoute } from "@tanstack/react-router";
 import { EmptyWorkbookState } from "@/components/workbook/EmptyWorkbookState";
 import { useChatState } from "@/hooks/useChatState";
 import { useRuntimeState } from "@/hooks/useRuntimeState";
 import { trpc } from "@/lib/trpc";
-import { createFileRoute } from "@tanstack/react-router";
 
 export const Route = createFileRoute("/_notebook/")({
   component: IndexPage,
 });
 
 function IndexPage() {
-  const {
-    manifest,
-    isFullyReady,
-    isDbBooting,
-    isStarting,
-  } = useRuntimeState();
+  const { manifest, isFullyReady, isDbBooting, isStarting } = useRuntimeState();
   const chatState = useChatState();
 
   // Domains come from tRPC (not manifest)
@@ -42,10 +37,7 @@ function IndexPage() {
   const hasContent = blockCount > 0 || domainCount > 0;
 
   // Show getting started ONLY when fully ready AND everything is empty
-  const showGettingStarted =
-    isFullyReady &&
-    domainCount === 0 &&
-    blockCount === 0;
+  const showGettingStarted = isFullyReady && domainCount === 0 && blockCount === 0;
 
   const handleImportFile = () => {
     // File import is now handled via the sidebar chat
@@ -68,10 +60,7 @@ function IndexPage() {
   if (showGettingStarted) {
     return (
       <div className="flex-1 flex items-start justify-center overflow-y-auto">
-        <EmptyWorkbookState
-          onImportFile={handleImportFile}
-          chatExpanded={chatState.chatExpanded}
-        />
+        <EmptyWorkbookState onImportFile={handleImportFile} chatExpanded={chatState.chatExpanded} />
       </div>
     );
   }

@@ -64,10 +64,7 @@ export interface ActionRunMeta {
 
 export interface ActionContext {
   sources: Record<string, Record<string, TableClient>>;
-  sql: <T = unknown>(
-    strings: TemplateStringsArray,
-    ...values: unknown[]
-  ) => Promise<T[]>;
+  sql: <T = unknown>(strings: TemplateStringsArray, ...values: unknown[]) => Promise<T[]>;
   log: ActionLogger;
   notify: ActionNotify;
   secrets: Record<string, string>;
@@ -87,7 +84,7 @@ export interface ActionDefinition<TInput = unknown, TOutput = unknown> {
 }
 
 export declare function defineAction<TInput = unknown, TOutput = unknown>(
-  config: ActionDefinition<TInput, TOutput>
+  config: ActionDefinition<TInput, TOutput>,
 ): ActionDefinition<TInput, TOutput>;
 
 export interface DiscoveredAction {

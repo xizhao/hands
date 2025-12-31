@@ -32,9 +32,9 @@ export const getTRPCClient = createTRPCClient;
 // Re-export types for convenience
 export type { AppRouter };
 export type {
-  ActionRunRecord,
   ActionRunLog,
+  ActionRunRecord,
+  RecentItem,
   StepRecord,
   UiState,
-  RecentItem,
 } from "@hands/workbook-server/trpc";

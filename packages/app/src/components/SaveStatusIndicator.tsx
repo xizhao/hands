@@ -17,7 +17,6 @@ import {
   CloudArrowUp,
   Copy,
   Database,
-  Globe,
   Rocket,
   Warning,
 } from "@phosphor-icons/react";
@@ -190,7 +189,7 @@ export function SaveStatusIndicator() {
     };
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [save.isPending]);
+  }, [handleSave]);
 
   // Tooltip text for hover
   const tooltipText = save.isPending
@@ -244,7 +243,7 @@ export function SaveStatusIndicator() {
               "flex-1 flex items-center justify-center gap-1.5 px-3 py-2 text-[11px] font-medium transition-colors",
               activeTab === "local"
                 ? "text-foreground border-b-2 border-primary -mb-px"
-                : "text-muted-foreground hover:text-foreground"
+                : "text-muted-foreground hover:text-foreground",
             )}
           >
             <ClockCounterClockwise weight="bold" className="h-3 w-3" />
@@ -256,7 +255,7 @@ export function SaveStatusIndicator() {
               "flex-1 flex items-center justify-center gap-1.5 px-3 py-2 text-[11px] font-medium transition-colors",
               activeTab === "publish"
                 ? "text-foreground border-b-2 border-primary -mb-px"
-                : "text-muted-foreground hover:text-foreground"
+                : "text-muted-foreground hover:text-foreground",
             )}
           >
             <Rocket weight="bold" className="h-3 w-3" />
@@ -279,7 +278,9 @@ export function SaveStatusIndicator() {
                         ? `Saved ${lastSaveTime}`
                         : "All changes saved"}
                 </span>
-                {showBranch && <span className="text-[10px] text-muted-foreground/50">({branch})</span>}
+                {showBranch && (
+                  <span className="text-[10px] text-muted-foreground/50">({branch})</span>
+                )}
               </div>
               {hasChanges && (
                 <button
@@ -415,7 +416,9 @@ export function SaveStatusIndicator() {
                         )}
                       </button>
                     </TooltipTrigger>
-                    <TooltipContent side="bottom" className="text-[10px]">Copy</TooltipContent>
+                    <TooltipContent side="bottom" className="text-[10px]">
+                      Copy
+                    </TooltipContent>
                   </Tooltip>
                   <Tooltip>
                     <TooltipTrigger asChild>
@@ -426,7 +429,9 @@ export function SaveStatusIndicator() {
                         <ArrowSquareOut weight="bold" className="h-3 w-3 text-muted-foreground" />
                       </button>
                     </TooltipTrigger>
-                    <TooltipContent side="bottom" className="text-[10px]">Open</TooltipContent>
+                    <TooltipContent side="bottom" className="text-[10px]">
+                      Open
+                    </TooltipContent>
                   </Tooltip>
                 </div>
               ) : (
@@ -451,7 +456,9 @@ export function SaveStatusIndicator() {
                         <ArrowSquareOut weight="bold" className="h-3 w-3 text-muted-foreground" />
                       </button>
                     </TooltipTrigger>
-                    <TooltipContent side="bottom" className="text-[10px]">Open</TooltipContent>
+                    <TooltipContent side="bottom" className="text-[10px]">
+                      Open
+                    </TooltipContent>
                   </Tooltip>
                 </div>
               </div>
@@ -497,7 +504,7 @@ export function SaveStatusIndicator() {
                   "w-full flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-md text-[11px] font-medium",
                   "bg-primary text-primary-foreground hover:bg-primary/90",
                   "disabled:opacity-50 disabled:cursor-not-allowed",
-                  "transition-colors"
+                  "transition-colors",
                 )}
               >
                 {isDeploying ? (
@@ -540,7 +547,7 @@ export function SaveStatusIndicator() {
                       "flex-1 flex items-center justify-center gap-1 px-2 py-1 rounded-md text-[10px] font-medium",
                       "bg-secondary text-secondary-foreground hover:bg-secondary/80",
                       "disabled:opacity-50 disabled:cursor-not-allowed",
-                      "transition-colors"
+                      "transition-colors",
                     )}
                   >
                     {isPushingDb ? (
@@ -557,7 +564,7 @@ export function SaveStatusIndicator() {
                       "flex-1 flex items-center justify-center gap-1 px-2 py-1 rounded-md text-[10px] font-medium",
                       "bg-secondary text-secondary-foreground hover:bg-secondary/80",
                       "disabled:opacity-50 disabled:cursor-not-allowed",
-                      "transition-colors"
+                      "transition-colors",
                     )}
                   >
                     {isPullingDb ? (

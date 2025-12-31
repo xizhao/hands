@@ -50,7 +50,10 @@ export async function buildRSC(
     }
 
     const pkg = JSON.parse(readFileSync(pkgJsonPath, "utf-8"));
-    const config: HandsConfig = { name: pkg.name?.replace(/^@hands\//, "") || "workbook", ...pkg.hands };
+    const config: HandsConfig = {
+      name: pkg.name?.replace(/^@hands\//, "") || "workbook",
+      ...pkg.hands,
+    };
 
     // Discover blocks
     const blocksDir = join(workbookDir, config.blocks?.dir || "./blocks");

@@ -5,14 +5,10 @@
  * Uses the Database Durable Object for SQL access (same as dev).
  */
 
-import type {
-  ActionContext,
-  ActionLogger,
-  ActionNotify,
-} from "../types/action";
+import type { DB } from "@hands/db/types";
 import { sql as kyselySql } from "kysely";
 import { createDb } from "rwsdk/db";
-import type { DB } from "@hands/db/types";
+import type { ActionContext, ActionLogger, ActionNotify } from "../types/action";
 
 /**
  * Escape a SQL value for safe interpolation
@@ -73,22 +69,33 @@ export function buildWorkflowContext(env: Env, runId: string): ActionContext {
   // In production, we recommend using ctx.sql directly for type safety
   const sources = new Proxy({} as ActionContext["sources"], {
     get: () => {
-      return new Proxy({}, {
-        get: () => ({
-          select: async () => {
-            throw new Error("Use ctx.sql`SELECT...` in production workflows for better type safety");
-          },
-          insert: async () => {
-            throw new Error("Use ctx.sql`INSERT...` in production workflows for better type safety");
-          },
-          update: async () => {
-            throw new Error("Use ctx.sql`UPDATE...` in production workflows for better type safety");
-          },
-          delete: async () => {
-            throw new Error("Use ctx.sql`DELETE...` in production workflows for better type safety");
-          },
-        }),
-      });
+      return new Proxy(
+        {},
+        {
+          get: () => ({
+            select: async () => {
+              throw new Error(
+                "Use ctx.sql`SELECT...` in production workflows for better type safety",
+              );
+            },
+            insert: async () => {
+              throw new Error(
+                "Use ctx.sql`INSERT...` in production workflows for better type safety",
+              );
+            },
+            update: async () => {
+              throw new Error(
+                "Use ctx.sql`UPDATE...` in production workflows for better type safety",
+              );
+            },
+            delete: async () => {
+              throw new Error(
+                "Use ctx.sql`DELETE...` in production workflows for better type safety",
+              );
+            },
+          }),
+        },
+      );
     },
   });
 

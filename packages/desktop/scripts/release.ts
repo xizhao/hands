@@ -1,4 +1,5 @@
 #!/usr/bin/env bun
+
 /**
  * Release Script
  *
@@ -18,10 +19,10 @@
  *   APPLE_TEAM_ID           - Team ID for notarization
  */
 
+import { readFileSync, writeFileSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { $ } from "bun";
-import { join, dirname } from "path";
-import { fileURLToPath } from "url";
-import { readFileSync, writeFileSync } from "fs";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const DESKTOP_DIR = join(__dirname, "..");
@@ -52,22 +53,19 @@ function updateTauriConf(version: string) {
   const content = readFileSync(TAURI_CONF, "utf-8");
   const config = JSON.parse(content);
   config.version = version;
-  writeFileSync(TAURI_CONF, JSON.stringify(config, null, 2) + "\n");
+  writeFileSync(TAURI_CONF, `${JSON.stringify(config, null, 2)}\n`);
 }
 
 function updatePackageJson(version: string) {
   const content = readFileSync(PACKAGE_JSON, "utf-8");
   const pkg = JSON.parse(content);
   pkg.version = version;
-  writeFileSync(PACKAGE_JSON, JSON.stringify(pkg, null, 2) + "\n");
+  writeFileSync(PACKAGE_JSON, `${JSON.stringify(pkg, null, 2)}\n`);
 }
 
 function updateCargoToml(version: string) {
   let content = readFileSync(CARGO_TOML, "utf-8");
-  content = content.replace(
-    /^version = "[\d.]+"$/m,
-    `version = "${version}"`
-  );
+  content = content.replace(/^version = "[\d.]+"$/m, `version = "${version}"`);
   writeFileSync(CARGO_TOML, content);
 }
 
@@ -130,9 +128,12 @@ async function main() {
 
     // Build docs
     console.log("→ Building docs...");
-    await $`bun run build:docs`.cwd(DESKTOP_DIR).quiet().catch(() => {
-      console.log("  (docs skipped)");
-    });
+    await $`bun run build:docs`
+      .cwd(DESKTOP_DIR)
+      .quiet()
+      .catch(() => {
+        console.log("  (docs skipped)");
+      });
 
     // Build Tauri app
     console.log("→ Building Tauri app...");
@@ -145,7 +146,7 @@ async function main() {
     // Output location
     const dmgPath = `src-tauri/target/release/bundle/dmg/Hands_${newVersion}_aarch64.dmg`;
 
-    console.log("\n" + "=".repeat(50));
+    console.log(`\n${"=".repeat(50)}`);
     console.log(`✅ Release v${newVersion} built successfully!`);
     console.log("=".repeat(50));
     console.log(`\nOutput: ${dmgPath}\n`);

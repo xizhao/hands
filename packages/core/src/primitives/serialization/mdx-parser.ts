@@ -5,30 +5,29 @@
  * Used by both the markdown worker (editor) and vite-plugin-workbook (runtime).
  */
 
-import { unified } from "unified";
-import remarkParse from "remark-parse";
-import remarkGfm from "remark-gfm";
-import remarkMdx from "remark-mdx";
 import {
-  defaultRules,
-  convertNodesDeserialize,
   convertChildrenDeserialize,
+  convertNodesDeserialize,
+  defaultRules,
   type MdRules,
 } from "@platejs/markdown";
 import { KEYS, type Value } from "platejs";
-
+import remarkGfm from "remark-gfm";
+import remarkMdx from "remark-mdx";
+import remarkParse from "remark-parse";
+import { unified } from "unified";
+import { blockRules } from "./rules/block";
+import { cardRules } from "./rules/card";
+import { chartRules } from "./rules/charts";
+import { columnRules } from "./rules/column";
+import { dataGridRules } from "./rules/data-grid";
+import { kanbanRules } from "./rules/kanban";
+import { liveActionRules } from "./rules/live-action";
+import { liveQueryRule, liveValueInlineRule, liveValueRule } from "./rules/live-value";
+import { tabsRules } from "./rules/tabs";
+import { viewRules } from "./rules/view";
 // Import rules directly to avoid circular dependency with index.ts
 import type { MdxSerializationRule } from "./types";
-import { liveValueRule, liveValueInlineRule, liveQueryRule } from "./rules/live-value";
-import { liveActionRules } from "./rules/live-action";
-import { chartRules } from "./rules/charts";
-import { kanbanRules } from "./rules/kanban";
-import { dataGridRules } from "./rules/data-grid";
-import { viewRules } from "./rules/view";
-import { cardRules } from "./rules/card";
-import { columnRules } from "./rules/column";
-import { blockRules } from "./rules/block";
-import { tabsRules } from "./rules/tabs";
 
 // Inline the rules array to avoid circular import
 const serializationRules: MdxSerializationRule<any>[] = [
@@ -100,13 +99,34 @@ const editorShim = {
 
 // Register known Plate types
 const knownTypes = [
-  KEYS.p, KEYS.blockquote, KEYS.codeBlock, KEYS.codeLine,
-  KEYS.h1, KEYS.h2, KEYS.h3, KEYS.h4, KEYS.h5, KEYS.h6,
-  KEYS.ul, KEYS.ol, KEYS.li, KEYS.lic,
-  KEYS.hr, KEYS.a, KEYS.img,
-  KEYS.table, KEYS.tr, KEYS.td, KEYS.th,
-  KEYS.column, KEYS.columnGroup,
-  KEYS.bold, KEYS.italic, KEYS.code, KEYS.strikethrough, KEYS.underline,
+  KEYS.p,
+  KEYS.blockquote,
+  KEYS.codeBlock,
+  KEYS.codeLine,
+  KEYS.h1,
+  KEYS.h2,
+  KEYS.h3,
+  KEYS.h4,
+  KEYS.h5,
+  KEYS.h6,
+  KEYS.ul,
+  KEYS.ol,
+  KEYS.li,
+  KEYS.lic,
+  KEYS.hr,
+  KEYS.a,
+  KEYS.img,
+  KEYS.table,
+  KEYS.tr,
+  KEYS.td,
+  KEYS.th,
+  KEYS.column,
+  KEYS.columnGroup,
+  KEYS.bold,
+  KEYS.italic,
+  KEYS.code,
+  KEYS.strikethrough,
+  KEYS.underline,
 ];
 
 for (const key of knownTypes) {
@@ -280,17 +300,13 @@ export function parseMdxToPlate(source: string): ParseMdxResult {
     const preprocessed = collapseMultilineJsxExpressions(content);
 
     // Parse MDX to mdast
-    const mdast = unified()
-      .use(remarkParse)
-      .use(remarkGfm)
-      .use(remarkMdx)
-      .parse(preprocessed);
+    const mdast = unified().use(remarkParse).use(remarkGfm).use(remarkMdx).parse(preprocessed);
 
     // Convert mdast to Plate Value using @platejs/markdown
     const value = convertNodesDeserialize(
       (mdast as any).children || [],
       {},
-      deserializeOptions
+      deserializeOptions,
     ) as Value;
 
     return { frontmatter, value, errors };
@@ -312,17 +328,9 @@ export function parseMarkdownToPlate(markdown: string): Value {
   // This fixes remark-mdx/acorn failing on multi-line attribute values
   const preprocessed = collapseMultilineJsxExpressions(markdown);
 
-  const mdast = unified()
-    .use(remarkParse)
-    .use(remarkGfm)
-    .use(remarkMdx)
-    .parse(preprocessed);
+  const mdast = unified().use(remarkParse).use(remarkGfm).use(remarkMdx).parse(preprocessed);
 
-  return convertNodesDeserialize(
-    (mdast as any).children || [],
-    {},
-    deserializeOptions
-  ) as Value;
+  return convertNodesDeserialize((mdast as any).children || [], {}, deserializeOptions) as Value;
 }
 
 // =============================================================================

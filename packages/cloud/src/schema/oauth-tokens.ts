@@ -1,28 +1,30 @@
-import { pgTable, text, timestamp, uuid, jsonb, unique } from "drizzle-orm/pg-core";
+import { jsonb, pgTable, text, timestamp, unique, uuid } from "drizzle-orm/pg-core";
 import { users } from "./users";
 
-export const oauthConnections = pgTable("oauth_connections", {
-  id: uuid("id").primaryKey().defaultRandom(),
-  userId: uuid("user_id")
-    .notNull()
-    .references(() => users.id, { onDelete: "cascade" }),
-  provider: text("provider").notNull(), // google, slack, github, salesforce, etc.
+export const oauthConnections = pgTable(
+  "oauth_connections",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    provider: text("provider").notNull(), // google, slack, github, salesforce, etc.
 
-  // Tokens (should be encrypted at rest)
-  accessToken: text("access_token").notNull(),
-  refreshToken: text("refresh_token"),
-  expiresAt: timestamp("expires_at", { withTimezone: true }),
+    // Tokens (should be encrypted at rest)
+    accessToken: text("access_token").notNull(),
+    refreshToken: text("refresh_token"),
+    expiresAt: timestamp("expires_at", { withTimezone: true }),
 
-  // Metadata
-  scopes: jsonb("scopes").$type<string[]>(),
-  accountEmail: text("account_email"),
-  accountId: text("account_id"),
+    // Metadata
+    scopes: jsonb("scopes").$type<string[]>(),
+    accountEmail: text("account_email"),
+    accountId: text("account_id"),
 
-  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
-}, (table) => [
-  unique("oauth_connections_unique").on(table.userId, table.provider),
-]);
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [unique("oauth_connections_unique").on(table.userId, table.provider)],
+);
 
 export type OAuthConnectionRecord = typeof oauthConnections.$inferSelect;
 export type NewOAuthConnection = typeof oauthConnections.$inferInsert;

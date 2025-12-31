@@ -1,5 +1,5 @@
-import { CaretRight } from '@phosphor-icons/react';
-import { SlateElement, type SlateElementProps } from 'platejs/static';
+import { CaretRight } from "@phosphor-icons/react";
+import { SlateElement, type SlateElementProps } from "platejs/static";
 
 export function ToggleElementStatic(props: SlateElementProps) {
   return (

@@ -5,7 +5,7 @@
  * Tabs are handled by ContentHeader.
  */
 
-import type { DomainTab, Domain } from "../sidebar/domain/types";
+import type { Domain, DomainTab } from "../sidebar/domain/types";
 
 interface DomainViewProps {
   domain: Domain;

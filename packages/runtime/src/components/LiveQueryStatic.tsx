@@ -14,7 +14,7 @@
 import type { TElement, TText } from "platejs";
 import { createSlateEditor } from "platejs";
 import { PlateStatic } from "platejs/static";
-import { Suspense, type ReactNode } from "react";
+import { type ReactNode, Suspense } from "react";
 import { sql } from "../db/dev";
 
 // ============================================================================
@@ -58,11 +58,7 @@ function hasTemplateContent(children?: (TElement | TText)[]): boolean {
   return true;
 }
 
-function replaceTextBindings(
-  text: string,
-  data: Record<string, unknown>,
-  index?: number
-): string {
+function replaceTextBindings(text: string, data: Record<string, unknown>, index?: number): string {
   const keys = Object.keys(data);
   const firstKey = keys[0];
 
@@ -93,7 +89,7 @@ function replaceTextBindings(
 function replaceBindings(
   node: TElement | TText,
   data: Record<string, unknown>,
-  index?: number
+  index?: number,
 ): TElement | TText {
   if ("text" in node) {
     return {
@@ -114,11 +110,9 @@ function replaceBindings(
 function renderTemplate(
   template: (TElement | TText)[],
   data: Record<string, unknown>,
-  index: number
+  index: number,
 ): ReactNode {
-  const boundTemplate = template.map((node) =>
-    replaceBindings(node, data, index)
-  ) as TElement[];
+  const boundTemplate = template.map((node) => replaceBindings(node, data, index)) as TElement[];
 
   const editor = createSlateEditor({
     value: boundTemplate,
@@ -205,12 +199,7 @@ function LiveQueryEmpty() {
 // Data Fetching Component (async server component)
 // ============================================================================
 
-async function LiveQueryData({
-  query,
-  params = [],
-  children,
-  columns,
-}: LiveQueryStaticProps) {
+async function LiveQueryData({ query, params = [], children, columns }: LiveQueryStaticProps) {
   // Execute the query
   const parts = query.split("?");
   const strings = parts as unknown as TemplateStringsArray;
@@ -226,9 +215,7 @@ async function LiveQueryData({
 
   // Table mode (explicit columns or no template)
   if (columns || !isTemplateMode) {
-    const resolvedColumns = columns === "auto" || !columns
-      ? autoDetectColumns(data)
-      : columns;
+    const resolvedColumns = columns === "auto" || !columns ? autoDetectColumns(data) : columns;
     return renderTable(data, resolvedColumns);
   }
 
@@ -236,20 +223,14 @@ async function LiveQueryData({
   const isSingleRow = data.length === 1;
 
   if (isSingleRow) {
-    return (
-      <div className="my-2">
-        {renderTemplate(template!, data[0], 1)}
-      </div>
-    );
+    return <div className="my-2">{renderTemplate(template!, data[0], 1)}</div>;
   }
 
   // Multiple rows: render template for each row
   return (
     <div className="my-2 space-y-1">
       {data.map((row, rowIndex) => (
-        <div key={rowIndex}>
-          {renderTemplate(template!, row, rowIndex + 1)}
-        </div>
+        <div key={rowIndex}>{renderTemplate(template!, row, rowIndex + 1)}</div>
       ))}
     </div>
   );

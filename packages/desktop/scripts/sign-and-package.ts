@@ -1,4 +1,5 @@
 #!/usr/bin/env bun
+
 /**
  * Sign and repackage the Tauri app bundle
  *
@@ -13,10 +14,10 @@
  * - APPLE_TEAM_ID: Team ID for notarization (optional)
  */
 
+import { existsSync, readFileSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { $ } from "bun";
-import { join, dirname } from "path";
-import { fileURLToPath } from "url";
-import { existsSync, readFileSync } from "fs";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const TAURI_DIR = join(__dirname, "../src-tauri");
@@ -102,9 +103,13 @@ async function main() {
 
       // Submit for notarization
       const notarizeArgs = [
-        "notarytool", "submit", zipPath,
-        "--apple-id", process.env.APPLE_ID,
-        "--password", process.env.APPLE_PASSWORD,
+        "notarytool",
+        "submit",
+        zipPath,
+        "--apple-id",
+        process.env.APPLE_ID,
+        "--password",
+        process.env.APPLE_PASSWORD,
         "--wait",
       ];
       if (teamId) notarizeArgs.push("--team-id", teamId);

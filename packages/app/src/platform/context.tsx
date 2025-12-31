@@ -7,7 +7,7 @@
  * Components use usePlatform() to access platform-specific functionality.
  */
 
-import { createContext, useContext, type ReactNode } from "react";
+import { createContext, type ReactNode, useContext } from "react";
 import type { PlatformAdapter, PlatformCapabilities } from "./types";
 
 // ============================================================================
@@ -43,11 +43,7 @@ export interface PlatformProviderProps {
  * ```
  */
 export function PlatformProvider({ adapter, children }: PlatformProviderProps) {
-  return (
-    <PlatformContext.Provider value={adapter}>
-      {children}
-    </PlatformContext.Provider>
-  );
+  return <PlatformContext.Provider value={adapter}>{children}</PlatformContext.Provider>;
 }
 
 // ============================================================================

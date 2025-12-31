@@ -3,10 +3,10 @@
  */
 export { TableEditor } from "./TableEditor";
 export type {
-  TableEditorProps,
-  TableEditorDataProvider,
   ColumnDefinition,
-  TableRow,
   PendingChange,
+  TableEditorDataProvider,
+  TableEditorProps,
+  TableRow,
 } from "./types";
-export { getColumnWidth, getCssVar, blendWithBackground } from "./utils";
+export { blendWithBackground, getColumnWidth, getCssVar } from "./utils";

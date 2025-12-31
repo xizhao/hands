@@ -4,11 +4,11 @@
  * Combines the table editor with a collapsible relations sidebar.
  */
 
-import { useState, useCallback } from "react";
 import { TableEditor } from "@hands/editor/table-editor";
-import { useTRPCReady } from "@/hooks/useTRPC";
+import { ArrowRight, ChevronRight, Database, GitBranch } from "lucide-react";
+import { useCallback, useState } from "react";
 import { useTableEditorProvider } from "@/hooks/useTableEditorProvider";
-import { GitBranch, ArrowRight, ChevronRight, Database } from "lucide-react";
+import { useTRPCReady } from "@/hooks/useTRPC";
 import { cn } from "@/lib/utils";
 import type { Domain, DomainForeignKey } from "../../sidebar/domain/types";
 
@@ -25,13 +25,10 @@ export function SheetTab({ domain }: SheetTabProps) {
   const [sortDirection, setSortDirection] = useState<"asc" | "desc">("asc");
 
   // Handle sort changes
-  const handleSortChange = useCallback(
-    (column: string | null, direction: "asc" | "desc") => {
-      setSortColumn(column ?? undefined);
-      setSortDirection(direction);
-    },
-    []
-  );
+  const handleSortChange = useCallback((column: string | null, direction: "asc" | "desc") => {
+    setSortColumn(column ?? undefined);
+    setSortDirection(direction);
+  }, []);
 
   // Create data provider
   const dataProvider = useTableEditorProvider({
@@ -74,14 +71,14 @@ export function SheetTab({ domain }: SheetTabProps) {
           className={cn(
             "flex-shrink-0 w-6 flex items-center justify-center",
             "border-l border-border/50 hover:bg-muted/50 transition-colors",
-            showRelations && "bg-muted/30"
+            showRelations && "bg-muted/30",
           )}
           title={showRelations ? "Hide relations" : "Show relations"}
         >
           <ChevronRight
             className={cn(
               "h-4 w-4 text-muted-foreground transition-transform",
-              showRelations && "rotate-180"
+              showRelations && "rotate-180",
             )}
           />
         </button>

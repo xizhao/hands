@@ -6,7 +6,7 @@
  */
 
 import { existsSync, lstatSync, mkdirSync, symlinkSync, unlinkSync, writeFileSync } from "node:fs";
-import { dirname, resolve, join } from "node:path";
+import { dirname, join, resolve } from "node:path";
 
 // Setup NODE_PATH for native modules (nodejs-polars) shipped with the binary
 // This must be done before any imports that might need these modules
@@ -28,21 +28,20 @@ function setupNodePath() {
     if (existsSync(libPath)) {
       // Prepend to NODE_PATH so shipped modules take precedence
       const currentNodePath = process.env.NODE_PATH || "";
-      process.env.NODE_PATH = currentNodePath
-        ? `${libPath}:${currentNodePath}`
-        : libPath;
+      process.env.NODE_PATH = currentNodePath ? `${libPath}:${currentNodePath}` : libPath;
       console.log(`[agent] Set NODE_PATH to include: ${libPath}`);
       return;
     }
   }
 }
 setupNodePath();
+
 import type { Config } from "@opencode-ai/sdk";
 import { createOpencode } from "@opencode-ai/sdk";
 import { coderAgent, handsAgent, importAgent, researcherAgent } from "../agents";
 // Generated at build time by scripts/bundle-tools.ts
 // eslint-disable-next-line @typescript-eslint/ban-ts-comment
-// @ts-ignore - file may not exist in dev mode
+// @ts-expect-error - file may not exist in dev mode
 import { EMBEDDED_TOOLS } from "./embedded-tools.generated";
 
 // Configuration
@@ -119,7 +118,7 @@ function setupPluginsSymlink(workingDir: string) {
 
   try {
     symlinkSync(pluginSource, target, "dir");
-  } catch (err) {
+  } catch (_err) {
     // Ignore symlink errors in bundled mode
   }
 }

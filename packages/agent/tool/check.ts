@@ -1,9 +1,7 @@
-import { tool } from "@opencode-ai/plugin";
-
-
-import { spawn, execSync } from "node:child_process";
+import { spawn } from "node:child_process";
 import { existsSync } from "node:fs";
 import { dirname, resolve } from "node:path";
+import { tool } from "@opencode-ai/plugin";
 
 let cachedCliPath: string | null = null;
 
@@ -28,10 +26,15 @@ function findCli(): string {
       return cachedCliPath;
     }
   }
-  throw new Error(`Could not find hands-cli binary. Searched:\n${candidates.map(c => `  - ${c}`).join("\n")}`);
+  throw new Error(
+    `Could not find hands-cli binary. Searched:\n${candidates.map((c) => `  - ${c}`).join("\n")}`,
+  );
 }
 
-function runCli(args: string[], options: { cwd?: string; timeout?: number } = {}): Promise<{ stdout: string; stderr: string; code: number }> {
+function runCli(
+  args: string[],
+  options: { cwd?: string; timeout?: number } = {},
+): Promise<{ stdout: string; stderr: string; code: number }> {
   const cliPath = findCli();
   const { cwd = process.cwd(), timeout } = options;
   return new Promise((resolve) => {
@@ -42,11 +45,15 @@ function runCli(args: string[], options: { cwd?: string; timeout?: number } = {}
     if (timeout) {
       timeoutId = setTimeout(() => {
         proc.kill("SIGTERM");
-        resolve({ stdout, stderr: stderr + "\nCommand timed out", code: 124 });
+        resolve({ stdout, stderr: `${stderr}\nCommand timed out`, code: 124 });
       }, timeout);
     }
-    proc.stdout?.on("data", (data) => { stdout += data.toString(); });
-    proc.stderr?.on("data", (data) => { stderr += data.toString(); });
+    proc.stdout?.on("data", (data) => {
+      stdout += data.toString();
+    });
+    proc.stderr?.on("data", (data) => {
+      stderr += data.toString();
+    });
     proc.on("close", (code) => {
       if (timeoutId) clearTimeout(timeoutId);
       resolve({ stdout, stderr, code: code ?? 0 });
@@ -57,24 +64,6 @@ function runCli(args: string[], options: { cwd?: string; timeout?: number } = {}
     });
   });
 }
-
-function runCliSync(args: string[], options: { cwd?: string; timeout?: number } = {}): { stdout: string; stderr: string; code: number } {
-  const cliPath = findCli();
-  const { cwd = process.cwd(), timeout = 30000 } = options;
-  try {
-    const result = execSync(`"${cliPath}" ${args.join(" ")}`, {
-      cwd,
-      encoding: "utf-8",
-      timeout,
-      stdio: ["pipe", "pipe", "pipe"],
-    });
-    return { stdout: result, stderr: "", code: 0 };
-  } catch (error) {
-    const err = error as Error & { stdout?: string; stderr?: string; status?: number };
-    return { stdout: err.stdout ?? "", stderr: err.stderr ?? err.message, code: err.status ?? 1 };
-  }
-}
-
 
 const check = tool({
   description: `Run code quality checks on the workbook.
@@ -91,7 +80,10 @@ Use this tool to:
 
   args: {
     fix: tool.schema.boolean().optional().describe("Auto-fix formatting issues (default: true)"),
-    strict: tool.schema.boolean().optional().describe("Treat warnings and unused code as errors (default: false)"),
+    strict: tool.schema
+      .boolean()
+      .optional()
+      .describe("Treat warnings and unused code as errors (default: false)"),
   },
 
   async execute(args, _ctx) {

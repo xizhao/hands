@@ -1,6 +1,6 @@
-import postgres from "postgres";
-import { drizzle } from "drizzle-orm/postgres-js";
 import type { Hyperdrive } from "@cloudflare/workers-types";
+import { drizzle } from "drizzle-orm/postgres-js";
+import postgres from "postgres";
 import * as schema from "../schema";
 
 export function getDb(hyperdrive: Hyperdrive) {

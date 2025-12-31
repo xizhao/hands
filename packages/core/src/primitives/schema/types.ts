@@ -17,13 +17,7 @@
 /**
  * SQLite-compatible column types
  */
-export type ColumnType =
-  | "TEXT"
-  | "INTEGER"
-  | "REAL"
-  | "BOOLEAN"
-  | "TIMESTAMP"
-  | "JSON";
+export type ColumnType = "TEXT" | "INTEGER" | "REAL" | "BOOLEAN" | "TIMESTAMP" | "JSON";
 
 /**
  * Column in a schema declaration

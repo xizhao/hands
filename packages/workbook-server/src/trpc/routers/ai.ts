@@ -15,8 +15,8 @@ import { generateObject, generateText, type LanguageModel } from "ai";
 
 // OpenRouter model mappings
 const MODELS = {
-  fast: "google/gemini-2.5-flash-lite",  // Quick MDX generation
-  vision: "google/gemini-2.5-flash",     // Vision/screenshot analysis
+  fast: "google/gemini-2.5-flash-lite", // Quick MDX generation
+  vision: "google/gemini-2.5-flash", // Vision/screenshot analysis
 } as const;
 
 // Create OpenRouter provider
@@ -36,9 +36,10 @@ function getModel(modelId: string): LanguageModel {
   const openrouter = getOpenRouter();
   return openrouter(modelId) as LanguageModel;
 }
-import { z } from "zod";
+
 import { STDLIB_DOCS, STDLIB_QUICK_REF } from "@hands/core/docs";
-import { validateMdxContent, type ValidationContext, type ValidationError } from "@hands/core/validation";
+import { type ValidationContext, validateMdxContent } from "@hands/core/validation";
+import { z } from "zod";
 
 // Schema is passed from client (from manifest/useRuntimeState)
 const tableSchema = z.object({
@@ -46,7 +47,7 @@ const tableSchema = z.object({
   columns: z.array(z.string()),
 });
 
-export interface AIContext {}  // No server-side deps needed
+export type AIContext = {}; // No server-side deps needed
 
 const t = initTRPC.context<AIContext>().create();
 
@@ -58,25 +59,35 @@ export const aiRouter = t.router({
    * - <Prompt text="..."> for complex requests needing a background agent
    */
   generateMdx: t.procedure
-    .input(z.object({
-      prompt: z.string().min(1),
-      tables: z.array(tableSchema),
-      errors: z.array(z.string()).optional(), // Previous errors for retry context
-      previousGenerations: z.array(z.string()).optional(), // Previous failed outputs
-      // Page context (like copilot)
-      prefix: z.string().optional(), // Markdown content before cursor
-      suffix: z.string().optional(), // Markdown content after cursor
-      title: z.string().optional(),  // Page title from frontmatter
-      description: z.string().optional(), // Page description from frontmatter
-    }))
+    .input(
+      z.object({
+        prompt: z.string().min(1),
+        tables: z.array(tableSchema),
+        errors: z.array(z.string()).optional(), // Previous errors for retry context
+        previousGenerations: z.array(z.string()).optional(), // Previous failed outputs
+        // Page context (like copilot)
+        prefix: z.string().optional(), // Markdown content before cursor
+        suffix: z.string().optional(), // Markdown content after cursor
+        title: z.string().optional(), // Page title from frontmatter
+        description: z.string().optional(), // Page description from frontmatter
+      }),
+    )
     .mutation(async ({ input }) => {
-      const { prompt, tables, errors, previousGenerations, prefix, suffix, title, description } = input;
+      const { prompt, tables, errors, previousGenerations, prefix, suffix, title, description } =
+        input;
 
-      console.log('[ai.generateMdx] Request received:', { prompt, tableCount: tables.length, errorCount: errors?.length ?? 0, previousGenCount: previousGenerations?.length ?? 0, hasContext: !!(prefix || suffix) });
+      console.log("[ai.generateMdx] Request received:", {
+        prompt,
+        tableCount: tables.length,
+        errorCount: errors?.length ?? 0,
+        previousGenCount: previousGenerations?.length ?? 0,
+        hasContext: !!(prefix || suffix),
+      });
 
-      const schemaContext = tables.length > 0
-        ? tables.map((t) => `${t.name}(${t.columns.join(", ")})`).join("\n")
-        : "(No tables available)";
+      const schemaContext =
+        tables.length > 0
+          ? tables.map((t) => `${t.name}(${t.columns.join(", ")})`).join("\n")
+          : "(No tables available)";
 
       const systemPrompt = `You are an MDX generator. Use ONLY components from the stdlib below - do not invent new ones. For plain text, write directly without wrapper components.
 ${STDLIB_QUICK_REF}
@@ -120,26 +131,28 @@ Only for multi-file or multi-iteration tasks:
 - Use tables/columns from schema for SQL`;
 
       // Include retry context (previous failed attempts and their errors)
-      let retryContext = '';
+      let retryContext = "";
       if (previousGenerations?.length && errors?.length) {
-        retryContext = '\n\n## Previous Attempts (DO NOT repeat these - they failed)\n';
+        retryContext = "\n\n## Previous Attempts (DO NOT repeat these - they failed)\n";
         for (let i = 0; i < previousGenerations.length; i++) {
-          retryContext += `\nAttempt ${i + 1}:\n\`\`\`\n${previousGenerations[i]}\n\`\`\`\nError: ${errors[i] || 'Unknown error'}\n`;
+          retryContext += `\nAttempt ${i + 1}:\n\`\`\`\n${previousGenerations[i]}\n\`\`\`\nError: ${errors[i] || "Unknown error"}\n`;
         }
-        retryContext += '\nGenerate DIFFERENT, valid MDX that avoids these issues.';
+        retryContext += "\nGenerate DIFFERENT, valid MDX that avoids these issues.";
       } else if (errors?.length) {
-        retryContext = `\n\n## Previous Errors (fix these issues)\n${errors.map((e, i) => `${i + 1}. ${e}`).join('\n')}`;
+        retryContext = `\n\n## Previous Errors (fix these issues)\n${errors.map((e, i) => `${i + 1}. ${e}`).join("\n")}`;
       }
 
       // Build page context section
-      const pageContext = (title || description)
-        ? `## Page Context\n${title ? `Title: ${title}\n` : ''}${description ? `Description: ${description}\n` : ''}`
-        : '';
+      const pageContext =
+        title || description
+          ? `## Page Context\n${title ? `Title: ${title}\n` : ""}${description ? `Description: ${description}\n` : ""}`
+          : "";
 
       // Build document context (prefix/suffix around cursor)
-      const documentContext = (prefix || suffix)
-        ? `## Document Context\n<prefix>\n${prefix?.slice(-1500) || '(start of document)'}\n</prefix>\n[CURSOR - INSERT HERE]\n<suffix>\n${suffix?.slice(0, 500) || '(end of document)'}\n</suffix>`
-        : '';
+      const documentContext =
+        prefix || suffix
+          ? `## Document Context\n<prefix>\n${prefix?.slice(-1500) || "(start of document)"}\n</prefix>\n[CURSOR - INSERT HERE]\n<suffix>\n${suffix?.slice(0, 500) || "(end of document)"}\n</suffix>`
+          : "";
 
       const userPrompt = `## Schema
 ${schemaContext}
@@ -160,14 +173,14 @@ ${prompt}${retryContext}
         });
 
         const rawText = result.text || "";
-        console.log('[ai.generateMdx] RAW response:', JSON.stringify(rawText));
+        console.log("[ai.generateMdx] RAW response:", JSON.stringify(rawText));
 
         let mdx = rawText.trim();
 
         // Clean up any markdown code fences if present
         if (mdx.startsWith("```")) {
           mdx = mdx.replace(/^```\w*\n?/, "").replace(/\n?```$/, "");
-          console.log('[ai.generateMdx] After fence cleanup:', JSON.stringify(mdx));
+          console.log("[ai.generateMdx] After fence cleanup:", JSON.stringify(mdx));
         }
 
         if (!mdx) {
@@ -180,15 +193,15 @@ ${prompt}${retryContext}
         // Validate the generated MDX
         const validationCtx: ValidationContext = {
           pageRefs: [],
-          schema: tables.map(t => ({ name: t.name, columns: t.columns })),
+          schema: tables.map((t) => ({ name: t.name, columns: t.columns })),
         };
         const validationErrors = validateMdxContent(mdx, validationCtx);
         const errorMsgs = validationErrors
-          .filter(e => e.severity === "error")
-          .map(e => `${e.component}: ${e.message}`);
+          .filter((e) => e.severity === "error")
+          .map((e) => `${e.component}: ${e.message}`);
 
-        console.log('[ai.generateMdx] Final MDX:', mdx);
-        console.log('[ai.generateMdx] Validation errors:', errorMsgs);
+        console.log("[ai.generateMdx] Final MDX:", mdx);
+        console.log("[ai.generateMdx] Validation errors:", errorMsgs);
 
         // Return MDX with any validation errors (caller can retry)
         return {
@@ -212,24 +225,31 @@ ${prompt}${retryContext}
    * - reasoning="mid": Enable thinking for more complex generation
    */
   generateMdxBlock: t.procedure
-    .input(z.object({
-      prompt: z.string().min(1),
-      tables: z.array(tableSchema),
-      reasoning: z.enum(["low", "mid"]).default("low"),
-      // Page context
-      prefix: z.string().optional(),
-      suffix: z.string().optional(),
-      title: z.string().optional(),
-      description: z.string().optional(),
-    }))
+    .input(
+      z.object({
+        prompt: z.string().min(1),
+        tables: z.array(tableSchema),
+        reasoning: z.enum(["low", "mid"]).default("low"),
+        // Page context
+        prefix: z.string().optional(),
+        suffix: z.string().optional(),
+        title: z.string().optional(),
+        description: z.string().optional(),
+      }),
+    )
     .mutation(async ({ input }) => {
       const { prompt, tables, reasoning, prefix, suffix, title, description } = input;
 
-      console.log('[ai.generateMdxBlock] Request:', { prompt, tableCount: tables.length, reasoning });
+      console.log("[ai.generateMdxBlock] Request:", {
+        prompt,
+        tableCount: tables.length,
+        reasoning,
+      });
 
-      const schemaContext = tables.length > 0
-        ? tables.map((t) => `${t.name}(${t.columns.join(", ")})`).join("\n")
-        : "(No tables available)";
+      const schemaContext =
+        tables.length > 0
+          ? tables.map((t) => `${t.name}(${t.columns.join(", ")})`).join("\n")
+          : "(No tables available)";
 
       const systemPrompt = `You are an MDX generator. Use ONLY components from the reference below - do not invent new ones. For plain text, write directly without wrapper components.
 
@@ -246,13 +266,15 @@ ${STDLIB_DOCS}
 - Use tables/columns from schema for SQL`;
 
       // Build page context
-      const pageContext = (title || description)
-        ? `\n## Page Context\nTitle: ${title || "(untitled)"}\n${description ? `Description: ${description}` : ''}`
-        : '';
+      const pageContext =
+        title || description
+          ? `\n## Page Context\nTitle: ${title || "(untitled)"}\n${description ? `Description: ${description}` : ""}`
+          : "";
 
-      const documentContext = (prefix || suffix)
-        ? `\n## Document Context\n<prefix>\n${prefix?.slice(-1500) || '(start)'}\n</prefix>\n[INSERT HERE]\n<suffix>\n${suffix?.slice(0, 500) || '(end)'}\n</suffix>`
-        : '';
+      const documentContext =
+        prefix || suffix
+          ? `\n## Document Context\n<prefix>\n${prefix?.slice(-1500) || "(start)"}\n</prefix>\n[INSERT HERE]\n<suffix>\n${suffix?.slice(0, 500) || "(end)"}\n</suffix>`
+          : "";
 
       const userPrompt = `${pageContext}${documentContext}
 
@@ -272,7 +294,7 @@ ${prompt}
         });
 
         const rawText = result.text || "";
-        console.log('[ai.generateMdxBlock] RAW response:', JSON.stringify(rawText.slice(0, 500)));
+        console.log("[ai.generateMdxBlock] RAW response:", JSON.stringify(rawText.slice(0, 500)));
 
         let mdx = rawText.trim();
 
@@ -291,15 +313,18 @@ ${prompt}
         // Validate the generated MDX
         const validationCtx: ValidationContext = {
           pageRefs: [],
-          schema: tables.map(t => ({ name: t.name, columns: t.columns })),
+          schema: tables.map((t) => ({ name: t.name, columns: t.columns })),
         };
         const validationErrors = validateMdxContent(mdx, validationCtx);
         const errorMsgs = validationErrors
-          .filter(e => e.severity === "error")
-          .map(e => `${e.component}: ${e.message}`);
+          .filter((e) => e.severity === "error")
+          .map((e) => `${e.component}: ${e.message}`);
 
-        console.log('[ai.generateMdxBlock] Final MDX:', mdx.slice(0, 200) + (mdx.length > 200 ? '...' : ''));
-        console.log('[ai.generateMdxBlock] Validation errors:', errorMsgs);
+        console.log(
+          "[ai.generateMdxBlock] Final MDX:",
+          mdx.slice(0, 200) + (mdx.length > 200 ? "..." : ""),
+        );
+        console.log("[ai.generateMdxBlock] Validation errors:", errorMsgs);
 
         // Return MDX with any validation errors (caller can retry)
         return {
@@ -319,13 +344,17 @@ ${prompt}
    * Uses content hashing for deduplication and caching
    */
   generateHint: t.procedure
-    .input(z.object({
-      content: z.string().min(1).max(2000),
-      context: z.object({
-        tables: z.array(z.string()).optional(),
-        operation: z.string().optional(),
-      }).optional(),
-    }))
+    .input(
+      z.object({
+        content: z.string().min(1).max(2000),
+        context: z
+          .object({
+            tables: z.array(z.string()).optional(),
+            operation: z.string().optional(),
+          })
+          .optional(),
+      }),
+    )
     .mutation(async ({ input }) => {
       const { content, context } = input;
 
@@ -376,7 +405,7 @@ Examples:
 
         return { hint, cached: false };
       } catch (err) {
-        console.error('[ai.generateHint] Error:', err);
+        console.error("[ai.generateHint] Error:", err);
         // Return raw content on error
         return { hint: content, cached: false };
       }
@@ -387,21 +416,33 @@ Examples:
    * More efficient than multiple single calls
    */
   generateHintsBatch: t.procedure
-    .input(z.object({
-      items: z.array(z.object({
-        content: z.string().min(1).max(2000),
-        context: z.object({
-          tables: z.array(z.string()).optional(),
-          operation: z.string().optional(),
-        }).optional(),
-      })).max(20),
-    }))
+    .input(
+      z.object({
+        items: z
+          .array(
+            z.object({
+              content: z.string().min(1).max(2000),
+              context: z
+                .object({
+                  tables: z.array(z.string()).optional(),
+                  operation: z.string().optional(),
+                })
+                .optional(),
+            }),
+          )
+          .max(20),
+      }),
+    )
     .mutation(async ({ input }) => {
       const { items } = input;
 
       // Compute hashes and check cache
       const results: Array<{ content: string; hint: string; cached: boolean }> = [];
-      const uncachedItems: Array<{ idx: number; content: string; context?: { tables?: string[]; operation?: string } }> = [];
+      const uncachedItems: Array<{
+        idx: number;
+        content: string;
+        context?: { tables?: string[]; operation?: string };
+      }> = [];
 
       for (let i = 0; i < items.length; i++) {
         const item = items[i];
@@ -429,9 +470,7 @@ Examples:
       }
 
       // Build batch prompt
-      const batchPrompt = uncachedItems.map((item, i) =>
-        `[${i + 1}] ${item.content}`
-      ).join("\n");
+      const batchPrompt = uncachedItems.map((item, i) => `[${i + 1}] ${item.content}`).join("\n");
 
       const systemPrompt = `Convert each numbered SQL/database operation into a plain English summary.
 - One sentence per item, max 15 words each
@@ -450,7 +489,7 @@ Examples:
         });
 
         // Parse batch response
-        const lines = (result.text || "").split("\n").filter(l => l.trim());
+        const lines = (result.text || "").split("\n").filter((l) => l.trim());
         const hintMap = new Map<number, string>();
 
         for (const line of lines) {
@@ -472,7 +511,7 @@ Examples:
 
         return { hints: results };
       } catch (err) {
-        console.error('[ai.generateHintsBatch] Error:', err);
+        console.error("[ai.generateHintsBatch] Error:", err);
         // Return raw content on error
         for (const item of uncachedItems) {
           results[item.idx] = { content: item.content, hint: item.content, cached: false };
@@ -491,34 +530,55 @@ Examples:
    * If nothing actionable, returns empty actions with a brief/playful comment.
    */
   analyzeScreenshot: t.procedure
-    .input(z.object({
-      imagePath: z.string().min(1),
-    }))
+    .input(
+      z.object({
+        imagePath: z.string().min(1),
+      }),
+    )
     .mutation(async ({ input }) => {
       const { imagePath } = input;
 
-      console.log('[ai.analyzeScreenshot] Analyzing:', imagePath);
+      console.log("[ai.analyzeScreenshot] Analyzing:", imagePath);
 
       // Define schema for structured output
       const screenshotAnalysisSchema = z.object({
-        response: z.string().describe("Respond in first person (use 'I can...' or 'I found...'). Describe the data opportunity briefly. Don't reference 'the image' or 'screenshot'. If nothing actionable, respond playfully. 1-2 sentences max."),
-        suggestedActions: z.array(z.union([
-          z.object({
-            type: z.literal("get_data"),
-            label: z.string().describe("2-4 word action trigger, e.g. 'Import S3 Data'"),
-            prompt: z.string().describe("Full prompt with all context needed to execute: data source details, credentials, URLs, table names, etc."),
-          }),
-          z.object({
-            type: z.literal("set_up_sync"),
-            label: z.string().describe("2-4 word action trigger, e.g. 'Sync Daily Metrics'"),
-            prompt: z.string().describe("Full prompt with all context needed: what to sync, source details, frequency, any credentials or endpoints visible."),
-          }),
-          z.object({
-            type: z.literal("custom"),
-            label: z.string().describe("2-4 word action trigger"),
-            prompt: z.string().describe("Full prompt with all context needed to execute the action."),
-          }),
-        ])).max(3).describe("Data actions based on screenshot. Empty array if nothing actionable."),
+        response: z
+          .string()
+          .describe(
+            "Respond in first person (use 'I can...' or 'I found...'). Describe the data opportunity briefly. Don't reference 'the image' or 'screenshot'. If nothing actionable, respond playfully. 1-2 sentences max.",
+          ),
+        suggestedActions: z
+          .array(
+            z.union([
+              z.object({
+                type: z.literal("get_data"),
+                label: z.string().describe("2-4 word action trigger, e.g. 'Import S3 Data'"),
+                prompt: z
+                  .string()
+                  .describe(
+                    "Full prompt with all context needed to execute: data source details, credentials, URLs, table names, etc.",
+                  ),
+              }),
+              z.object({
+                type: z.literal("set_up_sync"),
+                label: z.string().describe("2-4 word action trigger, e.g. 'Sync Daily Metrics'"),
+                prompt: z
+                  .string()
+                  .describe(
+                    "Full prompt with all context needed: what to sync, source details, frequency, any credentials or endpoints visible.",
+                  ),
+              }),
+              z.object({
+                type: z.literal("custom"),
+                label: z.string().describe("2-4 word action trigger"),
+                prompt: z
+                  .string()
+                  .describe("Full prompt with all context needed to execute the action."),
+              }),
+            ]),
+          )
+          .max(3)
+          .describe("Data actions based on screenshot. Empty array if nothing actionable."),
       });
 
       try {
@@ -551,18 +611,21 @@ Examples:
           abortSignal: AbortSignal.timeout(20000),
         });
 
-        console.log('[ai.analyzeScreenshot] Raw result:', JSON.stringify(result.object, null, 2));
+        console.log("[ai.analyzeScreenshot] Raw result:", JSON.stringify(result.object, null, 2));
 
         const response = {
           summary: result.object.response || "What would you like me to do with this?",
           actions: result.object.suggestedActions || [],
         };
 
-        console.log('[ai.analyzeScreenshot] Returning:', JSON.stringify(response, null, 2));
+        console.log("[ai.analyzeScreenshot] Returning:", JSON.stringify(response, null, 2));
         return response;
       } catch (err) {
-        console.error('[ai.analyzeScreenshot] Error:', err);
-        console.error('[ai.analyzeScreenshot] Error details:', JSON.stringify(err, Object.getOwnPropertyNames(err), 2));
+        console.error("[ai.analyzeScreenshot] Error:", err);
+        console.error(
+          "[ai.analyzeScreenshot] Error details:",
+          JSON.stringify(err, Object.getOwnPropertyNames(err), 2),
+        );
         if (err instanceof TRPCError) throw err;
         throw new TRPCError({
           code: "INTERNAL_SERVER_ERROR",
@@ -584,9 +647,12 @@ const hintCache = new Map<string, string>();
 async function hashContent(content: string): Promise<string> {
   const encoder = new TextEncoder();
   const data = encoder.encode(content);
-  const hashBuffer = await crypto.subtle.digest('SHA-256', data);
+  const hashBuffer = await crypto.subtle.digest("SHA-256", data);
   const hashArray = Array.from(new Uint8Array(hashBuffer));
-  return hashArray.slice(0, 8).map(b => b.toString(16).padStart(2, '0')).join('');
+  return hashArray
+    .slice(0, 8)
+    .map((b) => b.toString(16).padStart(2, "0"))
+    .join("");
 }
 
 export type AIRouter = typeof aiRouter;

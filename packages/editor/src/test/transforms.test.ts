@@ -5,8 +5,8 @@
  * setBlockType tests are skipped as they require full editor setup.
  */
 
-import { describe, it, expect } from "vitest";
 import { KEYS } from "platejs";
+import { describe, expect, it } from "vitest";
 import { getBlockType } from "../transforms";
 
 describe("getBlockType", () => {

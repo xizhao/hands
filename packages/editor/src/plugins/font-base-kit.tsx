@@ -3,8 +3,8 @@ import {
   BaseFontColorPlugin,
   BaseFontFamilyPlugin,
   BaseFontSizePlugin,
-} from '@platejs/basic-styles';
-import { KEYS } from 'platejs';
+} from "@platejs/basic-styles";
+import { KEYS } from "platejs";
 
 // Target all text-containing elements
 const targetPlugins = [
@@ -26,8 +26,8 @@ export const BaseFontKit = [
     inject: {
       targetPlugins,
       nodeProps: {
-        defaultNodeValue: 'black',
-        nodeKey: 'color',
+        defaultNodeValue: "black",
+        nodeKey: "color",
       },
     },
   }),
@@ -35,8 +35,8 @@ export const BaseFontKit = [
     inject: {
       targetPlugins,
       nodeProps: {
-        defaultNodeValue: 'transparent',
-        nodeKey: 'backgroundColor',
+        defaultNodeValue: "transparent",
+        nodeKey: "backgroundColor",
       },
     },
   }),
@@ -44,7 +44,7 @@ export const BaseFontKit = [
     inject: {
       targetPlugins,
       nodeProps: {
-        nodeKey: 'fontSize',
+        nodeKey: "fontSize",
       },
     },
   }),
@@ -52,7 +52,7 @@ export const BaseFontKit = [
     inject: {
       targetPlugins,
       nodeProps: {
-        nodeKey: 'fontFamily',
+        nodeKey: "fontFamily",
       },
     },
   }),

@@ -11,7 +11,7 @@ import { findWorkbookRoot } from "../utils.js";
 function runCommand(
   cmd: string,
   args: string[],
-  opts: { cwd: string; env: Record<string, string | undefined> }
+  opts: { cwd: string; env: Record<string, string | undefined> },
 ): boolean {
   const result = spawnSync(cmd, args, {
     cwd: opts.cwd,

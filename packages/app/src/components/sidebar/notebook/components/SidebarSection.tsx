@@ -4,8 +4,8 @@
  * Generous clickable pill headers that expand/collapse content.
  */
 
+import { FileText, Lightning, PuzzlePiece, Table } from "@phosphor-icons/react";
 import { Plus } from "lucide-react";
-import { FileText, Table, Lightning, PuzzlePiece } from "@phosphor-icons/react";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
 
@@ -79,15 +79,13 @@ export function SidebarSection({
             isLarge ? "text-sm" : "text-[13px]",
             expanded
               ? "bg-accent text-foreground"
-              : "text-muted-foreground hover:bg-accent/50 hover:text-foreground"
+              : "text-muted-foreground hover:bg-accent/50 hover:text-foreground",
           )}
         >
           <Icon weight="duotone" className={cn("h-4 w-4", iconColor)} />
           <span>{title}</span>
           {count !== undefined && count > 0 && (
-            <span className="text-xs text-muted-foreground/60 tabular-nums">
-              {count}
-            </span>
+            <span className="text-xs text-muted-foreground/60 tabular-nums">{count}</span>
           )}
         </button>
 
@@ -102,7 +100,7 @@ export function SidebarSection({
                 className={cn(
                   "p-1 rounded-full",
                   "text-muted-foreground/40 hover:text-muted-foreground hover:bg-accent/50",
-                  "transition-colors"
+                  "transition-colors",
                 )}
               >
                 <Plus className="h-3.5 w-3.5" />
@@ -116,11 +114,7 @@ export function SidebarSection({
       </div>
 
       {/* Content */}
-      {expanded && (
-        <div className="pl-1 space-y-0.5">
-          {children}
-        </div>
-      )}
+      {expanded && <div className="pl-1 space-y-0.5">{children}</div>}
     </div>
   );
 }
@@ -132,9 +126,5 @@ interface EmptyStateProps {
 }
 
 export function SidebarEmptyState({ label }: EmptyStateProps) {
-  return (
-    <div className="px-3 py-2 text-xs text-muted-foreground/50">
-      {label}
-    </div>
-  );
+  return <div className="px-3 py-2 text-xs text-muted-foreground/50">{label}</div>;
 }

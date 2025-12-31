@@ -1,5 +1,5 @@
-import { SignJWT, jwtVerify } from "jose";
-import type { TokenPayload, GoogleTokenResponse, GoogleUserInfo } from "./types";
+import { jwtVerify, SignJWT } from "jose";
+import type { GoogleTokenResponse, GoogleUserInfo, TokenPayload } from "./types";
 
 const ISSUER = "hands-cloud";
 const AUDIENCE = "hands-app";
@@ -11,7 +11,7 @@ const AUDIENCE = "hands-app";
 export async function signToken(
   payload: Omit<TokenPayload, "iat" | "exp" | "iss" | "aud">,
   secret: string,
-  expiresIn: string = "7d"
+  expiresIn: string = "7d",
 ): Promise<string> {
   const secretKey = new TextEncoder().encode(secret);
 
@@ -24,10 +24,7 @@ export async function signToken(
     .sign(secretKey);
 }
 
-export async function verifyToken(
-  token: string,
-  secret: string
-): Promise<TokenPayload | null> {
+export async function verifyToken(token: string, secret: string): Promise<TokenPayload | null> {
   try {
     const secretKey = new TextEncoder().encode(secret);
     const { payload } = await jwtVerify(token, secretKey, {
@@ -57,10 +54,7 @@ export async function generateCodeChallenge(verifier: string): Promise<string> {
   return base64UrlEncode(new Uint8Array(digest));
 }
 
-export async function verifyCodeChallenge(
-  verifier: string,
-  challenge: string
-): Promise<boolean> {
+export async function verifyCodeChallenge(verifier: string, challenge: string): Promise<boolean> {
   const computed = await generateCodeChallenge(verifier);
   return computed === challenge;
 }
@@ -81,7 +75,7 @@ export function getGoogleAuthUrl(
   clientId: string,
   redirectUri: string,
   state: string,
-  codeChallenge?: string
+  codeChallenge?: string,
 ): string {
   const params = new URLSearchParams({
     client_id: clientId,
@@ -106,7 +100,7 @@ export async function exchangeGoogleCode(
   clientId: string,
   clientSecret: string,
   redirectUri: string,
-  codeVerifier?: string
+  codeVerifier?: string,
 ): Promise<GoogleTokenResponse> {
   const params = new URLSearchParams({
     code,
@@ -134,15 +128,10 @@ export async function exchangeGoogleCode(
   return response.json();
 }
 
-export async function getGoogleUserInfo(
-  accessToken: string
-): Promise<GoogleUserInfo> {
-  const response = await fetch(
-    "https://www.googleapis.com/oauth2/v3/userinfo",
-    {
-      headers: { Authorization: `Bearer ${accessToken}` },
-    }
-  );
+export async function getGoogleUserInfo(accessToken: string): Promise<GoogleUserInfo> {
+  const response = await fetch("https://www.googleapis.com/oauth2/v3/userinfo", {
+    headers: { Authorization: `Bearer ${accessToken}` },
+  });
 
   if (!response.ok) {
     throw new Error("Failed to get Google user info");

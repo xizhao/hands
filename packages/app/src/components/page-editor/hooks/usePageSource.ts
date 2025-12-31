@@ -8,13 +8,9 @@
  * - Conflict detection (local vs external changes)
  */
 
-import { trpc } from "@/lib/trpc";
+import { type Frontmatter, parseFrontmatter, serializeFrontmatter } from "@hands/editor";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import {
-  type Frontmatter,
-  parseFrontmatter,
-  serializeFrontmatter,
-} from "@hands/editor";
+import { trpc } from "@/lib/trpc";
 
 // ============================================================================
 // Types
@@ -62,7 +58,7 @@ export interface UsePageSourceReturn {
 
 function debounce<T extends (...args: any[]) => any>(
   fn: T,
-  delay: number
+  delay: number,
 ): T & { cancel: () => void; flush: () => void } {
   let timeoutId: ReturnType<typeof setTimeout> | null = null;
   let lastArgs: Parameters<T> | null = null;
@@ -146,7 +142,7 @@ export function usePageSource({
     {
       refetchInterval: pollInterval,
       refetchIntervalInBackground: false,
-    }
+    },
   );
 
   // Sync query result to state
@@ -220,7 +216,7 @@ export function usePageSource({
         setIsSaving(false);
       }
     },
-    [pageId, readOnly, saveSourceMutation]
+    [pageId, readOnly, saveSourceMutation],
   );
 
   // Use ref to always call latest performSave from debounced function
@@ -233,7 +229,7 @@ export function usePageSource({
       debounce((newSource: string) => {
         performSaveRef.current(newSource);
       }, debounceMs),
-    [debounceMs] // Only recreate if debounceMs changes
+    [debounceMs], // Only recreate if debounceMs changes
   );
 
   // Cleanup on unmount
@@ -255,7 +251,7 @@ export function usePageSource({
       setSourceState(newSource);
       debouncedSave(newSource);
     },
-    [readOnly, debouncedSave]
+    [readOnly, debouncedSave],
   );
 
   const setFrontmatter = useCallback(
@@ -268,7 +264,7 @@ export function usePageSource({
 
       setSource(newSource);
     },
-    [readOnly, source, setSource]
+    [readOnly, source, setSource],
   );
 
   const saveNow = useCallback(async (): Promise<boolean> => {
@@ -279,13 +275,16 @@ export function usePageSource({
   }, [readOnly, source, debouncedSave, performSave]);
 
   // Save a specific source immediately (for Cmd+S)
-  const saveSourceNow = useCallback(async (newSource: string): Promise<boolean> => {
-    if (readOnly) return false;
+  const saveSourceNow = useCallback(
+    async (newSource: string): Promise<boolean> => {
+      if (readOnly) return false;
 
-    debouncedSave.cancel();
-    setSourceState(newSource);
-    return performSave(newSource);
-  }, [readOnly, debouncedSave, performSave]);
+      debouncedSave.cancel();
+      setSourceState(newSource);
+      return performSave(newSource);
+    },
+    [readOnly, debouncedSave, performSave],
+  );
 
   return {
     source,

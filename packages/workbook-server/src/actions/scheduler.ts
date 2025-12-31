@@ -10,7 +10,9 @@ import { executeActionHttp } from "./executor-http.js";
 import { fetchActionsFromRuntime } from "./runtime-client.js";
 
 /** Type guard: valid action with a schedule */
-function isScheduledAction(action: DiscoveredAction): action is DiscoveredAction & { schedule: string } {
+function isScheduledAction(
+  action: DiscoveredAction,
+): action is DiscoveredAction & { schedule: string } {
   return action.valid && !!action.schedule;
 }
 

@@ -5,7 +5,7 @@
  * Also handles database sync between local and production.
  */
 
-import { initTRPC } from "@trpc/server";
+import Database from "bun:sqlite";
 import { spawn } from "node:child_process";
 import {
   cpSync,
@@ -17,8 +17,8 @@ import {
   writeFileSync,
 } from "node:fs";
 import { dirname, join } from "node:path";
+import { initTRPC } from "@trpc/server";
 import { z } from "zod";
-import Database from "bun:sqlite";
 
 // ============================================================================
 // Context
@@ -48,7 +48,7 @@ const publicProcedure = t.procedure;
 async function runCommand(
   command: string,
   args: string[],
-  options: { cwd: string; env?: Record<string, string> }
+  options: { cwd: string; env?: Record<string, string> },
 ): Promise<{ success: boolean; stdout: string; stderr: string; code: number }> {
   return new Promise((resolve) => {
     const proc = spawn(command, args, {
@@ -161,7 +161,9 @@ function readWorkflowBindings(workbookDir: string): Record<string, WorkflowBindi
     if (!match) return {};
 
     const bindings: Record<string, WorkflowBinding> = {};
-    const bindingMatches = match[1].matchAll(/"([^"]+)":\s*\{\s*className:\s*"([^"]+)",\s*binding:\s*"([^"]+)"\s*\}/g);
+    const bindingMatches = match[1].matchAll(
+      /"([^"]+)":\s*\{\s*className:\s*"([^"]+)",\s*binding:\s*"([^"]+)"\s*\}/g,
+    );
 
     for (const [, id, className, binding] of bindingMatches) {
       bindings[id] = { className, binding };
@@ -180,7 +182,7 @@ function generateWranglerConfig(
   workerName: string,
   workflowBindings: Record<string, WorkflowBinding>,
   secrets: Record<string, string>,
-  seedSecret?: string
+  seedSecret?: string,
 ): object {
   const config: Record<string, unknown> = {
     name: workerName,
@@ -252,7 +254,11 @@ function findLocalDbPath(workbookDir: string): string | null {
       // Check if this is a user database (not internal miniflare state)
       try {
         const db = new Database(fullPath, { readonly: true });
-        const tables = db.query("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' AND name NOT GLOB '__*'").all();
+        const tables = db
+          .query(
+            "SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' AND name NOT GLOB '__*'",
+          )
+          .all();
         db.close();
         if (tables.length > 0) {
           return fullPath;
@@ -274,15 +280,19 @@ function exportDbToSql(dbPath: string): string[] {
 
   try {
     // Get all user tables
-    const tables = db.query<{ name: string }, []>(
-      "SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' AND name NOT GLOB '__*'"
-    ).all();
+    const tables = db
+      .query<{ name: string }, []>(
+        "SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' AND name NOT GLOB '__*'",
+      )
+      .all();
 
     for (const { name: tableName } of tables) {
       // Get table schema
-      const createStmt = db.query<{ sql: string }, [string]>(
-        "SELECT sql FROM sqlite_master WHERE type='table' AND name=?"
-      ).get(tableName);
+      const createStmt = db
+        .query<{ sql: string }, [string]>(
+          "SELECT sql FROM sqlite_master WHERE type='table' AND name=?",
+        )
+        .get(tableName);
 
       if (createStmt?.sql) {
         // Use CREATE TABLE IF NOT EXISTS
@@ -303,7 +313,7 @@ function exportDbToSql(dbPath: string): string[] {
         });
 
         statements.push(
-          `INSERT OR REPLACE INTO "${tableName}" (${columns.map(c => `"${c}"`).join(", ")}) VALUES (${values.join(", ")})`
+          `INSERT OR REPLACE INTO "${tableName}" (${columns.map((c) => `"${c}"`).join(", ")}) VALUES (${values.join(", ")})`,
         );
       }
     }
@@ -332,8 +342,8 @@ async function getWorkersSubdomain(distDir: string, cfToken: string): Promise<st
 
   if (result.success) {
     // Output is like "👷 Your subdomain is: kwang1imsa"
-    const match = result.stdout.match(/subdomain is[:\s]+(\S+)/i) ||
-                  result.stdout.match(/(\w+)\.workers\.dev/);
+    const match =
+      result.stdout.match(/subdomain is[:\s]+(\S+)/i) || result.stdout.match(/(\w+)\.workers\.dev/);
     if (match) {
       return match[1].replace(".workers.dev", "");
     }
@@ -448,7 +458,12 @@ export const deployRouter = t.router({
         console.log(`[deploy] Including ${secretCount} secrets from .env.local`);
       }
 
-      const wranglerConfig = generateWranglerConfig(workerName, workflowBindings, secrets, seedSecret);
+      const wranglerConfig = generateWranglerConfig(
+        workerName,
+        workflowBindings,
+        secrets,
+        seedSecret,
+      );
       const wranglerPath = join(distDir, "wrangler.json");
       writeFileSync(wranglerPath, JSON.stringify(wranglerConfig, null, 2));
       console.log(`[deploy] Generated wrangler.json for ${workerName}`);
@@ -473,12 +488,8 @@ export const deployRouter = t.router({
 
       // Extract URL from wrangler output
       // wrangler outputs: "Published <name> (<id>)\n  https://<name>.<subdomain>.workers.dev"
-      const urlMatch = deployResult.stdout.match(
-        /https:\/\/[^\s]+\.workers\.dev/
-      );
-      const deployedUrl = urlMatch
-        ? urlMatch[0]
-        : `https://${workerName}.workers.dev`;
+      const urlMatch = deployResult.stdout.match(/https:\/\/[^\s]+\.workers\.dev/);
+      const deployedUrl = urlMatch ? urlMatch[0] : `https://${workerName}.workers.dev`;
 
       // Extract and cache subdomain for fast status queries
       const subdomainMatch = deployedUrl.match(/\.([^.]+)\.workers\.dev$/);
@@ -507,7 +518,7 @@ export const deployRouter = t.router({
             });
 
             if (seedResponse.ok) {
-              const result = await seedResponse.json() as { success: boolean; executed: number };
+              const result = (await seedResponse.json()) as { success: boolean; executed: number };
               console.log(`[deploy] Database seeded: ${result.executed} statements executed`);
             } else {
               console.error("[deploy] Database seed failed:", await seedResponse.text());
@@ -636,7 +647,11 @@ export const deployRouter = t.router({
         return { success: false, error: `Push failed: ${text}` };
       }
 
-      const result = (await response.json()) as { success: boolean; executed: number; failures: unknown[] };
+      const result = (await response.json()) as {
+        success: boolean;
+        executed: number;
+        failures: unknown[];
+      };
       return {
         success: result.success,
         executed: result.executed,

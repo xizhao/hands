@@ -1,10 +1,6 @@
-import { useState, useEffect, useCallback, type ReactNode } from "react";
-import {
-  LiveQueryProvider,
-  type QueryResult,
-  type MutationResult,
-} from "@hands/core/stdlib";
-import { initDatabase, executeQuery, executeMutation } from "../lib/sql";
+import { LiveQueryProvider, type MutationResult, type QueryResult } from "@hands/core/stdlib";
+import { type ReactNode, useCallback, useEffect, useState } from "react";
+import { executeMutation, executeQuery, initDatabase } from "../lib/sql";
 
 // ============================================================================
 // Types
@@ -80,19 +76,16 @@ function useDbReady() {
 /**
  * Query hook for sql.js - checks isDbReady on each execution
  */
-function useQuery(
-  sql: string,
-  params?: Record<string, unknown>
-): QueryResult {
+function useQuery(sql: string, params?: Record<string, unknown>): QueryResult {
   const [data, setData] = useState<Record<string, unknown>[] | undefined>(undefined);
   const [error, setError] = useState<Error | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
   // Subscribe to database ready state
-  const dbReady = useDbReady();
+  const _dbReady = useDbReady();
 
   // Subscribe to version changes for refetch
-  const version = useVersion();
+  const _version = useVersion();
 
   const executeQueryFn = useCallback(() => {
     if (!isDbReady || !sql) {
@@ -112,12 +105,12 @@ function useQuery(
     } finally {
       setIsLoading(false);
     }
-  }, [sql, params, dbReady]); // dbReady in deps triggers re-execution when ready
+  }, [sql, params]); // dbReady in deps triggers re-execution when ready
 
   // Execute query on mount and when dependencies change
   useEffect(() => {
     executeQueryFn();
-  }, [executeQueryFn, version]);
+  }, [executeQueryFn]);
 
   const refetch = useCallback(() => {
     executeQueryFn();
@@ -133,30 +126,27 @@ function useMutation(): MutationResult {
   const [isPending, setIsPending] = useState(false);
   const [error, setError] = useState<Error | null>(null);
 
-  const mutate = useCallback(
-    async (sql: string, params?: Record<string, unknown>) => {
-      if (!isDbReady) {
-        console.warn("[BrowserSqlProvider] Database not ready, skipping mutation");
-        return;
-      }
+  const mutate = useCallback(async (sql: string, params?: Record<string, unknown>) => {
+    if (!isDbReady) {
+      console.warn("[BrowserSqlProvider] Database not ready, skipping mutation");
+      return;
+    }
 
-      setIsPending(true);
-      setError(null);
+    setIsPending(true);
+    setError(null);
 
-      try {
-        executeMutation(sql, params);
-        // Trigger refetch of all queries
-        incrementVersion();
-      } catch (err) {
-        const e = err instanceof Error ? err : new Error(String(err));
-        setError(e);
-        throw e;
-      } finally {
-        setIsPending(false);
-      }
-    },
-    []
-  );
+    try {
+      executeMutation(sql, params);
+      // Trigger refetch of all queries
+      incrementVersion();
+    } catch (err) {
+      const e = err instanceof Error ? err : new Error(String(err));
+      setError(e);
+      throw e;
+    } finally {
+      setIsPending(false);
+    }
+  }, []);
 
   return { mutate, isPending, error };
 }

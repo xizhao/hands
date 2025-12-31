@@ -107,17 +107,19 @@ export const WithLabels: Story = () => (
 
 export const AllVariantsGrid: Story = () => (
   <div className="grid grid-cols-4 gap-8">
-    {(["spinner", "dots", "bars", "pulse", "ring", "bounce", "wave", "square"] as const).map((variant) => (
-      <div key={variant} className="flex flex-col items-center gap-4 p-4 border rounded-lg">
-        <Loader variant={variant} size="lg" />
-        <span className="text-sm font-medium">{variant}</span>
-        <div className="flex gap-2">
-          <Loader variant={variant} size="xs" color="muted" />
-          <Loader variant={variant} size="sm" color="muted" />
-          <Loader variant={variant} size="md" color="muted" />
+    {(["spinner", "dots", "bars", "pulse", "ring", "bounce", "wave", "square"] as const).map(
+      (variant) => (
+        <div key={variant} className="flex flex-col items-center gap-4 p-4 border rounded-lg">
+          <Loader variant={variant} size="lg" />
+          <span className="text-sm font-medium">{variant}</span>
+          <div className="flex gap-2">
+            <Loader variant={variant} size="xs" color="muted" />
+            <Loader variant={variant} size="sm" color="muted" />
+            <Loader variant={variant} size="md" color="muted" />
+          </div>
         </div>
-      </div>
-    ))}
+      ),
+    )}
   </div>
 );
 

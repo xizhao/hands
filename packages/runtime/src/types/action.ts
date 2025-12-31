@@ -4,45 +4,40 @@
  * Re-exports core action types and adds runtime-specific types.
  */
 
-import type {
-  ActionContext as CoreActionContext,
-  ActionLogger,
-  ActionNotify,
-  ActionRunMeta,
-} from "@hands/core/primitives";
+import type { ActionLogger, ActionNotify, ActionRunMeta } from "@hands/core/primitives";
 import type { Services } from "@hands/core/services";
 
 // Re-export core action types
 export type {
-  ActionTriggerType,
-  ActionTrigger,
-  ActionRunStatus,
-  ActionRun,
   ActionChain,
-  ActionResult,
+  ActionDefinition,
   ActionLogger,
   ActionNotify,
+  ActionResult,
+  ActionRun,
   ActionRunMeta,
-  InputValidator,
-  ActionDefinition,
-  RunActionDefinition,
-  WorkflowActionDefinition,
+  ActionRunStatus,
+  ActionTrigger,
+  ActionTriggerType,
   DiscoveredAction,
-  ValidAction,
+  InputValidator,
   InvalidAction,
+  RunActionDefinition,
   // Workflow types
   Serializable,
-  WorkflowDuration,
-  WorkflowStepConfig,
-  WorkflowStep,
+  StepRecord,
   StepStatus,
   StepType,
-  StepRecord,
+  ValidAction,
+  WorkflowActionDefinition,
+  WorkflowDuration,
   WorkflowFn,
   WorkflowRunResult,
+  WorkflowStep,
+  WorkflowStepConfig,
 } from "@hands/core/primitives";
 
-export { defineAction, isWorkflowAction, isRunAction } from "@hands/core/primitives";
+export { defineAction, isRunAction, isWorkflowAction } from "@hands/core/primitives";
 
 // =============================================================================
 // Runtime-Specific Types
@@ -81,10 +76,7 @@ export interface ActionContext {
   sources: Record<string, Record<string, TableClient>>;
 
   /** Raw SQL tagged template: ctx.sql`SELECT * FROM users` */
-  sql: <T = unknown>(
-    strings: TemplateStringsArray,
-    ...values: unknown[]
-  ) => Promise<T[]>;
+  sql: <T = unknown>(strings: TemplateStringsArray, ...values: unknown[]) => Promise<T[]>;
 
   /** Structured logging */
   log: ActionLogger;

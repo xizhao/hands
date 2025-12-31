@@ -9,18 +9,18 @@
  * - Schema drift warnings
  */
 
-import { useState } from "react";
 import {
   ArrowsClockwise,
+  CaretDown,
   Check,
   Clock,
+  Database,
   GitBranch,
   GitCommit,
-  Warning,
-  CaretDown,
-  Database,
   Table,
+  Warning,
 } from "@phosphor-icons/react";
+import { useState } from "react";
 import { cn } from "../lib/utils";
 import {
   DropdownMenu,
@@ -151,27 +151,20 @@ export function PageSyncStatus({ className }: PageSyncStatusProps) {
           className={cn(
             "flex items-center gap-1.5 px-2 h-7 rounded text-xs transition-colors",
             "hover:bg-accent text-muted-foreground hover:text-foreground",
-            className
+            className,
           )}
         >
           <span className={statusColor}>{statusIcon}</span>
           <span className="hidden sm:inline">
-            {syncStatus.lastSyncedAt
-              ? formatRelativeTime(syncStatus.lastSyncedAt)
-              : "Never synced"
-            }
+            {syncStatus.lastSyncedAt ? formatRelativeTime(syncStatus.lastSyncedAt) : "Never synced"}
           </span>
           {(gitStatus.hasUncommittedChanges || schemaDrift.hasDrift) && (
             <span className="flex items-center gap-1">
               {gitStatus.hasUncommittedChanges && (
-                <span className="text-amber-500 text-[10px]">
-                  •{gitStatus.uncommittedFiles}
-                </span>
+                <span className="text-amber-500 text-[10px]">•{gitStatus.uncommittedFiles}</span>
               )}
               {schemaDrift.hasDrift && (
-                <span className="text-amber-500 text-[10px]">
-                  Δ{totalDriftItems}
-                </span>
+                <span className="text-amber-500 text-[10px]">Δ{totalDriftItems}</span>
               )}
             </span>
           )}
@@ -189,10 +182,7 @@ export function PageSyncStatus({ className }: PageSyncStatusProps) {
           <div className="flex items-center justify-between">
             <span>Last synced</span>
             <span className={cn("font-medium", statusColor)}>
-              {syncStatus.lastSyncedAt
-                ? formatRelativeTime(syncStatus.lastSyncedAt)
-                : "Never"
-              }
+              {syncStatus.lastSyncedAt ? formatRelativeTime(syncStatus.lastSyncedAt) : "Never"}
             </span>
           </div>
           {syncStatus.hasUnsyncedChanges && (
@@ -216,18 +206,14 @@ export function PageSyncStatus({ className }: PageSyncStatusProps) {
               <GitBranch size={12} />
               Branch
             </span>
-            <span className="font-mono font-medium text-foreground">
-              {gitStatus.branch}
-            </span>
+            <span className="font-mono font-medium text-foreground">{gitStatus.branch}</span>
           </div>
           <div className="flex items-center justify-between">
             <span className="flex items-center gap-1">
               <GitCommit size={12} />
               Last commit
             </span>
-            <span className="text-foreground">
-              {formatRelativeTime(gitStatus.lastCommitTime)}
-            </span>
+            <span className="text-foreground">{formatRelativeTime(gitStatus.lastCommitTime)}</span>
           </div>
           {gitStatus.hasUncommittedChanges && (
             <div className="flex items-center justify-between">

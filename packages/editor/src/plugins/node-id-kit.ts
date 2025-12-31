@@ -1,6 +1,6 @@
-'use client';
+"use client";
 
-import { NodeIdPlugin } from 'platejs';
+import { NodeIdPlugin } from "platejs";
 
 /**
  * NodeIdKit - Generates unique IDs for block elements

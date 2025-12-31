@@ -4,10 +4,9 @@
  * Unified discovery for blocks, pages, UI components, database tables, and actions.
  */
 
-import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { readdir, readFile } from "node:fs/promises";
 import { basename, dirname, join, relative } from "node:path";
-import type { ActionDefinition } from "@hands/core/primitives";
 import type {
   DiscoveredAction,
   DiscoveredBlock,
@@ -28,7 +27,8 @@ import { BLOCKS_SUBDIR } from "./types.js";
 
 // Re-export WorkbookConfig for convenience
 export type { WorkbookConfig } from "./types.js";
-import { extractBlockMeta, validateBlockFile } from "./validate.js";
+
+import { validateBlockFile } from "./validate.js";
 
 // ============================================================================
 // Configuration
@@ -61,7 +61,7 @@ export interface DiscoverBlocksOptions {
  */
 export async function discoverBlocks(
   pagesDir: string,
-  options: DiscoverBlocksOptions = {}
+  options: DiscoverBlocksOptions = {},
 ): Promise<DiscoveryResult<DiscoveredBlock>> {
   const items: DiscoveredBlock[] = [];
   const errors: DiscoveryError[] = [];
@@ -182,7 +182,7 @@ function pathToRoute(path: string, ext: string): string {
 // ============================================================================
 
 export async function discoverComponents(
-  uiDir: string
+  uiDir: string,
 ): Promise<DiscoveryResult<DiscoveredComponent>> {
   const items: DiscoveredComponent[] = [];
   const errors: DiscoveryError[] = [];
@@ -203,7 +203,8 @@ export async function discoverComponents(
     try {
       const content = await readFile(filePath, "utf-8");
       const name = basename(file).replace(/\.(tsx|ts)$/, "");
-      const isClientComponent = content.includes('"use client"') || content.includes("'use client'");
+      const isClientComponent =
+        content.includes('"use client"') || content.includes("'use client'");
 
       items.push({ name, path: file, isClientComponent });
     } catch (err) {
@@ -310,7 +311,7 @@ const JUNCTION_PATTERNS = [
 function generateSchemaHash(
   tableName: string,
   columns: DomainColumn[],
-  foreignKeys: DomainForeignKey[]
+  foreignKeys: DomainForeignKey[],
 ): string {
   const normalized = {
     table: tableName,
@@ -342,7 +343,7 @@ function detectRelationTable(
   tableName: string,
   columns: DomainColumn[],
   foreignKeys: DomainForeignKey[],
-  allTableNames: string[]
+  allTableNames: string[],
 ): { isRelation: boolean; reason?: string } {
   // Check for junction naming patterns
   for (const pattern of JUNCTION_PATTERNS) {
@@ -376,17 +377,14 @@ function detectRelationTable(
   // Check if table has exactly 2 FKs and minimal other columns
   if (foreignKeys.length === 2) {
     const nonFkColumns = columns.filter(
-      (col) =>
-        !foreignKeys.some((fk) => fk.column === col.name) && !col.isPrimary
+      (col) => !foreignKeys.some((fk) => fk.column === col.name) && !col.isPrimary,
     );
 
     // If only has FK columns + optional timestamps/id, likely a junction
     const isMinimalJunction =
       nonFkColumns.length <= 2 &&
       nonFkColumns.every((col) =>
-        ["created_at", "updated_at", "id", "created", "modified"].includes(
-          col.name.toLowerCase()
-        )
+        ["created_at", "updated_at", "id", "created", "modified"].includes(col.name.toLowerCase()),
       );
 
     if (isMinimalJunction) {
@@ -416,7 +414,7 @@ function toDisplayName(tableName: string): string {
  */
 export function discoverDomains(
   rootPath: string,
-  pages: DiscoveredPage[]
+  pages: DiscoveredPage[],
 ): DiscoveryResult<DiscoveredDomain> {
   const items: DiscoveredDomain[] = [];
   const errors: DiscoveryError[] = [];
@@ -437,19 +435,21 @@ export function discoverDomains(
   let db: import("bun:sqlite").Database;
   try {
     db = getWorkbookDb(rootPath);
-  } catch (err) {
+  } catch (_err) {
     // Database doesn't exist yet - that's ok, just return empty
     return { items, errors };
   }
 
   // Get all user tables
-  const tables = db.query<{ name: string }, []>(`
+  const tables = db
+    .query<{ name: string }, []>(`
     SELECT name FROM sqlite_master
     WHERE type = 'table'
       AND name NOT LIKE 'sqlite_%'
       AND name NOT GLOB '__*'
     ORDER BY name
-  `).all();
+  `)
+    .all();
 
   const allTableNames = tables.map((t) => t.name);
 
@@ -462,13 +462,18 @@ export function discoverDomains(
   for (const table of tables) {
     try {
       // Get columns
-      const columnsRaw = db.query<{
-        name: string;
-        type: string;
-        notnull: number;
-        pk: number;
-        dflt_value: string | null;
-      }, []>(`PRAGMA table_info("${table.name}")`).all();
+      const columnsRaw = db
+        .query<
+          {
+            name: string;
+            type: string;
+            notnull: number;
+            pk: number;
+            dflt_value: string | null;
+          },
+          []
+        >(`PRAGMA table_info("${table.name}")`)
+        .all();
 
       const columns: DomainColumn[] = columnsRaw.map((c) => ({
         name: c.name,
@@ -479,11 +484,16 @@ export function discoverDomains(
       }));
 
       // Get foreign keys
-      const fksRaw = db.query<{
-        from: string;
-        table: string;
-        to: string;
-      }, []>(`PRAGMA foreign_key_list("${table.name}")`).all();
+      const fksRaw = db
+        .query<
+          {
+            from: string;
+            table: string;
+            to: string;
+          },
+          []
+        >(`PRAGMA foreign_key_list("${table.name}")`)
+        .all();
 
       const foreignKeys: DomainForeignKey[] = fksRaw.map((fk) => ({
         column: fk.from,
@@ -510,7 +520,7 @@ export function discoverDomains(
       table.name,
       schema.columns,
       schema.foreignKeys,
-      allTableNames
+      allTableNames,
     );
 
     if (relationCheck.isRelation) {
@@ -536,11 +546,7 @@ export function discoverDomains(
     }
 
     // Generate schema hash
-    const schemaHash = generateSchemaHash(
-      table.name,
-      schema.columns,
-      schema.foreignKeys
-    );
+    const schemaHash = generateSchemaHash(table.name, schema.columns, schema.foreignKeys);
 
     // Find matching page
     const matchedPage = findMatchingPage(table.name, pages);
@@ -574,7 +580,7 @@ export function discoverDomains(
  */
 function findMatchingPage(
   tableName: string,
-  pages: DiscoveredPage[]
+  pages: DiscoveredPage[],
 ): { path: string; id: string } | null {
   // Normalize table name for comparison
   const normalizedTable = tableName.toLowerCase();
@@ -612,7 +618,7 @@ function findMatchingPage(
  * Plugins are TSX components that extend the editor stdlib.
  */
 export async function discoverPlugins(
-  pluginsDir: string
+  pluginsDir: string,
 ): Promise<DiscoveryResult<DiscoveredPlugin>> {
   const items: DiscoveredPlugin[] = [];
   const errors: DiscoveryError[] = [];
@@ -672,7 +678,7 @@ function formatPluginName(filename: string): string {
 /**
  * Read secrets from .env.local file
  */
-function readEnvFile(workbookDir: string): Map<string, string> {
+function _readEnvFile(workbookDir: string): Map<string, string> {
   const envPath = join(workbookDir, ".env.local");
 
   if (!existsSync(envPath)) {
@@ -722,7 +728,7 @@ function readEnvFile(workbookDir: string): Map<string, string> {
 function discoverActionFile(
   actionPath: string,
   actionId: string,
-  rootPath: string
+  rootPath: string,
 ): DiscoveredAction | null {
   if (!existsSync(actionPath)) {
     return null;
@@ -750,7 +756,7 @@ function discoverActionFile(
  */
 export function discoverActions(
   actionsDir: string,
-  rootPath: string
+  rootPath: string,
 ): DiscoveryResult<DiscoveredAction> {
   const items: DiscoveredAction[] = [];
   const errors: DiscoveryError[] = [];
@@ -813,10 +819,7 @@ export async function discoverWorkbook(config: WorkbookConfig): Promise<Workbook
   return {
     blocks: blocksResult.items,
     actions: actionsResult.items,
-    errors: [
-      ...blocksResult.errors,
-      ...actionsResult.errors,
-    ],
+    errors: [...blocksResult.errors, ...actionsResult.errors],
     timestamp: Date.now(),
   };
 }
@@ -834,7 +837,7 @@ interface FindFilesOptions {
 async function findFiles(
   baseDir: string,
   subDir: string,
-  options: FindFilesOptions
+  options: FindFilesOptions,
 ): Promise<string[]> {
   const files: string[] = [];
   const currentDir = subDir ? join(baseDir, subDir) : baseDir;
@@ -899,7 +902,7 @@ function matchPattern(path: string, pattern: string): boolean {
       .replace(/\*\*/g, "<<GLOBSTAR>>")
       .replace(/\*/g, "[^/]*")
       .replace(/<<GLOBSTAR>>/g, ".*")
-      .replace(/\?/g, ".")}$`
+      .replace(/\?/g, ".")}$`,
   );
   return regex.test(path);
 }

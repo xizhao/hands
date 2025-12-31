@@ -41,7 +41,7 @@ function hslToHex(hsl: string): string {
 
   const toHex = (x: number) => {
     const hex = Math.round(x * 255).toString(16);
-    return hex.length === 1 ? "0" + hex : hex;
+    return hex.length === 1 ? `0${hex}` : hex;
   };
 
   return `#${toHex(r)}${toHex(g)}${toHex(b)}`;
@@ -53,9 +53,7 @@ function hslToHex(hsl: string): string {
 function getCssVar(name: string): string {
   if (typeof window === "undefined") return "#888888";
 
-  const value = getComputedStyle(document.documentElement)
-    .getPropertyValue(name)
-    .trim();
+  const value = getComputedStyle(document.documentElement).getPropertyValue(name).trim();
 
   if (!value) return "#888888";
   return hslToHex(value);
@@ -152,7 +150,7 @@ export function defineEditorThemes(monaco: Monaco) {
       // Selection
       "editor.selectionBackground": colors.accent,
       "editor.inactiveSelectionBackground": colors.secondary,
-      "editor.selectionHighlightBackground": colors.accent + "40",
+      "editor.selectionHighlightBackground": `${colors.accent}40`,
 
       // Line numbers
       "editorLineNumber.foreground": colors.mutedForeground,
@@ -178,8 +176,8 @@ export function defineEditorThemes(monaco: Monaco) {
       "editorBracketMatch.border": colors.mutedForeground,
 
       // Find/replace
-      "editor.findMatchBackground": colors.warning + "40",
-      "editor.findMatchHighlightBackground": colors.warning + "20",
+      "editor.findMatchBackground": `${colors.warning}40`,
+      "editor.findMatchHighlightBackground": `${colors.warning}20`,
 
       // Errors/warnings (for diagnostics)
       "editorError.foreground": colors.destructive,
@@ -199,9 +197,6 @@ export function updateEditorThemes(monaco: Monaco) {
 /**
  * Get the theme name - always "hands" now since we use a single dynamic theme.
  */
-export function getThemeName(
-  _theme: "light" | "dark" | "auto",
-  _isDarkMode: boolean
-): string {
+export function getThemeName(_theme: "light" | "dark" | "auto", _isDarkMode: boolean): string {
   return "hands";
 }

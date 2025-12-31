@@ -5,9 +5,9 @@
  * All presets include StdlibKit (LiveValue, charts, forms) and MarkdownKit.
  */
 
-import { TrailingBlockPlugin } from "platejs";
 import { StdlibKit } from "@hands/core/stdlib";
-
+import { TrailingBlockPlugin } from "platejs";
+import { AtKit } from "./at-kit";
 import { AutoformatKit } from "./autoformat-kit";
 import { BasicBlocksKit } from "./basic-blocks-kit";
 import { BasicMarksKit } from "./basic-marks-kit";
@@ -26,9 +26,8 @@ import { LinkKit } from "./link-kit";
 import { ListKit } from "./list-kit";
 // MarkdownKit removed - worker handles serialization
 import { MediaKit } from "./media-kit";
-import { AtKit } from "./at-kit";
-import { TableKit } from "./table-kit";
 import { NodeIdKit } from "./node-id-kit";
+import { TableKit } from "./table-kit";
 import { TocKit } from "./toc-kit";
 import { ToggleKit } from "./toggle-kit";
 

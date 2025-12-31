@@ -1,25 +1,19 @@
-import { insertCallout } from '@platejs/callout';
-import { insertCodeBlock } from '@platejs/code-block';
-import { insertDate } from '@platejs/date';
-import { insertColumnGroup, toggleColumnGroup } from '@platejs/layout';
+import { insertCallout } from "@platejs/callout";
+import { insertCodeBlock } from "@platejs/code-block";
+import { insertDate } from "@platejs/date";
+import { insertColumnGroup, toggleColumnGroup } from "@platejs/layout";
 import {
   insertAudioPlaceholder,
   insertFilePlaceholder,
   insertImagePlaceholder,
   insertVideoPlaceholder,
-} from '@platejs/media';
-import { insertTable } from '@platejs/table';
-import { insertToc } from '@platejs/toc';
-import {
-  KEYS,
-  type NodeEntry,
-  type Path,
-  PathApi,
-  type TElement,
-} from 'platejs';
-import type { PlateEditor } from 'platejs/react';
+} from "@platejs/media";
+import { insertTable } from "@platejs/table";
+import { insertToc } from "@platejs/toc";
+import { KEYS, type NodeEntry, type Path, PathApi, type TElement } from "platejs";
+import type { PlateEditor } from "platejs/react";
 
-const ACTION_THREE_COLUMNS = 'action_three_columns';
+const ACTION_THREE_COLUMNS = "action_three_columns";
 
 const insertList = (editor: PlateEditor, type: string) => {
   editor.tf.insertNodes(
@@ -27,19 +21,15 @@ const insertList = (editor: PlateEditor, type: string) => {
       indent: 1,
       listStyleType: type,
     }),
-    { select: true }
+    { select: true },
   );
 };
 
-const insertBlockMap: Record<
-  string,
-  (editor: PlateEditor, type: string) => void
-> = {
+const insertBlockMap: Record<string, (editor: PlateEditor, type: string) => void> = {
   [KEYS.listTodo]: insertList,
   [KEYS.ol]: insertList,
   [KEYS.ul]: insertList,
-  [ACTION_THREE_COLUMNS]: (editor) =>
-    insertColumnGroup(editor, { columns: 3, select: true }),
+  [ACTION_THREE_COLUMNS]: (editor) => insertColumnGroup(editor, { columns: 3, select: true }),
   [KEYS.audio]: (editor) => insertAudioPlaceholder(editor, { select: true }),
   [KEYS.callout]: (editor) => insertCallout(editor, { select: true }),
   [KEYS.codeBlock]: (editor) => insertCodeBlock(editor, { select: true }),
@@ -50,10 +40,7 @@ const insertBlockMap: Record<
   [KEYS.video]: (editor) => insertVideoPlaceholder(editor, { select: true }),
 };
 
-const insertInlineMap: Record<
-  string,
-  (editor: PlateEditor, type: string) => void
-> = {
+const insertInlineMap: Record<string, (editor: PlateEditor, type: string) => void> = {
   [KEYS.date]: (editor) => insertDate(editor, { select: true }),
 };
 
@@ -82,11 +69,7 @@ export const insertInlineElement = (editor: PlateEditor, type: string) => {
   }
 };
 
-const setList = (
-  editor: PlateEditor,
-  type: string,
-  entry: NodeEntry<TElement>
-) => {
+const setList = (editor: PlateEditor, type: string, entry: NodeEntry<TElement>) => {
   editor.tf.setNodes(
     editor.api.create.block({
       indent: 1,
@@ -94,7 +77,7 @@ const setList = (
     }),
     {
       at: entry[1],
-    }
+    },
   );
 };
 
@@ -108,17 +91,13 @@ const setBlockMap: Record<
   [ACTION_THREE_COLUMNS]: (editor) => toggleColumnGroup(editor, { columns: 3 }),
 };
 
-export const setBlockType = (
-  editor: PlateEditor,
-  type: string,
-  { at }: { at?: Path } = {}
-) => {
+export const setBlockType = (editor: PlateEditor, type: string, { at }: { at?: Path } = {}) => {
   editor.tf.withoutNormalizing(() => {
     const setEntry = (entry: NodeEntry<TElement>) => {
       const [node, path] = entry;
 
       if (node[KEYS.listType]) {
-        editor.tf.unsetNodes([KEYS.listType, 'indent'], { at: path });
+        editor.tf.unsetNodes([KEYS.listType, "indent"], { at: path });
       }
       if (type in setBlockMap) {
         return setBlockMap[type](editor, type, entry);
@@ -138,7 +117,7 @@ export const setBlockType = (
       }
     }
 
-    const entries = editor.api.blocks({ mode: 'lowest' });
+    const entries = editor.api.blocks({ mode: "lowest" });
 
     entries.forEach((entry) => {
       setEntry(entry);

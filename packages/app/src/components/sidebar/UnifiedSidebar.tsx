@@ -8,39 +8,6 @@
  * - Two modes: "browse" (NotebookSidebar) and "chat" (ChatPanel)
  */
 
-import { SaveStatusIndicator } from "@/components/SaveStatusIndicator";
-import { Button } from "@/components/ui/button";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
-import {
-  Popover,
-  PopoverAnchor,
-  PopoverContent,
-} from "@/components/ui/popover";
-import { ATTACHMENT_TYPE, useChatState } from "@/hooks/useChatState";
-import { resetSidebarState } from "./notebook/hooks/useSidebarState";
-import { useNeedsTrafficLightOffset } from "@/hooks/useFullscreen";
-import { useRuntimeProcess } from "@/hooks/useRuntimeState";
-import {
-  useCreateWorkbook,
-  useOpenWorkbook,
-  useUpdateWorkbook,
-  useWorkbook,
-  useWorkbooks,
-} from "@/hooks/useWorkbook";
-import { useFilePicker } from "@/hooks/useFilePicker";
-import { useActiveSession } from "@/hooks/useNavState";
-import {
-  useCreateSession,
-  useSendMessage,
-} from "@/hooks/useSession";
-import type { Workbook } from "@/lib/workbook";
-import { cn } from "@/lib/utils";
 import { useRouter } from "@tanstack/react-router";
 // Note: invoke is no longer needed - we handle chat locally now
 import {
@@ -59,23 +26,44 @@ import {
   Search,
 } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { DomainSidebar } from "./domain/DomainSidebar";
 import { ChatPanel } from "@/components/chat/ChatPanel";
+import { SaveStatusIndicator } from "@/components/SaveStatusIndicator";
+import { Button } from "@/components/ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { Popover, PopoverAnchor, PopoverContent } from "@/components/ui/popover";
+import { ATTACHMENT_TYPE, useChatState } from "@/hooks/useChatState";
+import { useFilePicker } from "@/hooks/useFilePicker";
+import { useNeedsTrafficLightOffset } from "@/hooks/useFullscreen";
+import { useActiveSession } from "@/hooks/useNavState";
+import { useRuntimeProcess } from "@/hooks/useRuntimeState";
+import { useCreateSession, useSendMessage } from "@/hooks/useSession";
+import {
+  useCreateWorkbook,
+  useOpenWorkbook,
+  useUpdateWorkbook,
+  useWorkbook,
+  useWorkbooks,
+} from "@/hooks/useWorkbook";
+import { cn } from "@/lib/utils";
+import type { Workbook } from "@/lib/workbook";
+import { DomainSidebar } from "./domain/DomainSidebar";
+import { resetSidebarState } from "./notebook/hooks/useSidebarState";
 
 interface UnifiedSidebarProps {
   compact?: boolean;
-  onSelectItem?: (
-    type: "page" | "source" | "table" | "action",
-    id: string
-  ) => void;
+  floating?: boolean;
+  onSelectItem?: (type: "page" | "source" | "table" | "action", id: string) => void;
 }
 
 type SidebarMode = "browse" | "chat";
 
-export function UnifiedSidebar({
-  compact = false,
-  onSelectItem,
-}: UnifiedSidebarProps) {
+export function UnifiedSidebar({ compact = false, floating = false, onSelectItem }: UnifiedSidebarProps) {
   const router = useRouter();
   const chatState = useChatState();
   const { workbookId: activeWorkbookId } = useRuntimeProcess();
@@ -107,7 +95,6 @@ export function UnifiedSidebar({
   const inputRef = useRef<HTMLInputElement>(null);
   const expandedInputRef = useRef<HTMLTextAreaElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
-
 
   // Track container width for responsive layout
   const POPOVER_WIDTH = 400;
@@ -195,7 +182,7 @@ export function UnifiedSidebar({
       resetSidebarState();
       openWorkbook.mutate(workbook);
     },
-    [openWorkbook]
+    [openWorkbook],
   );
 
   const handleCreateWorkbook = useCallback(() => {
@@ -210,7 +197,7 @@ export function UnifiedSidebar({
             },
           });
         },
-      }
+      },
     );
   }, [createWorkbook, openWorkbook, router]);
 
@@ -231,7 +218,7 @@ export function UnifiedSidebar({
       data-tauri-drag-region
       className={cn(
         "shrink-0 flex items-center gap-1 h-10",
-        needsTrafficLightOffset ? "pl-[80px] pr-3" : "px-3"
+        needsTrafficLightOffset ? "pl-[80px] pr-3" : "px-3",
       )}
     >
       {/* Editable workbook title */}
@@ -262,7 +249,7 @@ export function UnifiedSidebar({
           "px-1 py-0.5 text-sm font-medium bg-transparent rounded-sm cursor-text",
           "outline-none truncate max-w-[140px]",
           "hover:bg-accent/50",
-          "focus:bg-background focus:ring-1 focus:ring-ring/20"
+          "focus:bg-background focus:ring-1 focus:ring-ring/20",
         )}
         spellCheck={false}
       >
@@ -345,7 +332,7 @@ export function UnifiedSidebar({
           <div
             className={cn(
               "flex-1 min-w-0 py-0.5 text-sm overflow-hidden text-ellipsis whitespace-nowrap",
-              input ? "text-foreground" : "text-muted-foreground/50"
+              input ? "text-foreground" : "text-muted-foreground/50",
             )}
           >
             {input || placeholder}
@@ -509,18 +496,10 @@ export function UnifiedSidebar({
     </div>
   );
 
-  // Add source dialog state
-  const [addSourceOpen, setAddSourceOpen] = useState(false);
-
-  const handleAddSource = useCallback(() => {
-    // Sources deprecated - navigate to home
-    router.navigate({ to: "/" });
-  }, [router]);
-
   // Browse content
   const browseContent = (
     <div className={cn(compact ? "p-2" : "p-3")}>
-      <DomainSidebar filterQuery={filterQuery} onAddSource={handleAddSource} />
+      <DomainSidebar filterQuery={filterQuery} />
     </div>
   );
 
@@ -536,19 +515,22 @@ export function UnifiedSidebar({
   );
 
   // Handle session selection - switch to chat mode when a session is selected
-  const handleSessionSelect = useCallback((id: string | null) => {
-    setActiveSessionId(id);
-    if (id) {
-      setMode("chat");
-    }
-  }, [setActiveSessionId]);
+  const _handleSessionSelect = useCallback(
+    (id: string | null) => {
+      setActiveSessionId(id);
+      if (id) {
+        setMode("chat");
+      }
+    },
+    [setActiveSessionId],
+  );
 
   // ============================================================================
   // Render
   // ============================================================================
 
   return (
-    <div ref={containerRef} className="flex flex-col h-full w-full">
+    <div ref={containerRef} className={cn("flex flex-col h-full w-full", floating && "overflow-hidden")}>
       {/* Workbook header with traffic light offset */}
       {workbookHeader}
 
@@ -561,7 +543,7 @@ export function UnifiedSidebar({
               "flex items-center gap-1.5 px-2.5 py-1 text-xs rounded-md transition-all",
               mode === "browse"
                 ? "bg-background text-foreground shadow-sm"
-                : "text-muted-foreground hover:text-foreground"
+                : "text-muted-foreground hover:text-foreground",
             )}
           >
             <Search className="h-3 w-3" />
@@ -573,7 +555,7 @@ export function UnifiedSidebar({
               "flex items-center gap-1.5 px-2.5 py-1 text-xs rounded-md transition-all",
               mode === "chat"
                 ? "bg-background text-foreground shadow-sm"
-                : "text-muted-foreground hover:text-foreground"
+                : "text-muted-foreground hover:text-foreground",
             )}
           >
             <MessageSquare className="h-3 w-3" />

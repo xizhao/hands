@@ -6,8 +6,8 @@
 
 import { existsSync, mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import type { ResolvedWorkbookConfig, WorkbookManifest } from "./types.js";
 import { discoverWorkbook, resolveConfig, type WorkbookConfig } from "./discovery.js";
+import type { ResolvedWorkbookConfig, WorkbookManifest } from "./types.js";
 
 /**
  * Generate all manifest files for a workbook
@@ -28,11 +28,7 @@ export async function generateManifests(config: WorkbookConfig): Promise<Workboo
   generateBlocksManifest(resolved, manifest);
 
   // Generate full manifest (JSON for debugging)
-  writeFileSync(
-    join(resolved.outDir, "manifest.json"),
-    JSON.stringify(manifest, null, 2),
-    "utf-8"
-  );
+  writeFileSync(join(resolved.outDir, "manifest.json"), JSON.stringify(manifest, null, 2), "utf-8");
 
   return manifest;
 }
@@ -59,13 +55,8 @@ function generateBlocksManifest(config: ResolvedWorkbookConfig, manifest: Workbo
     uninitialized: block.uninitialized,
   }));
 
-  writeFileSync(
-    join(config.outDir, "blocks.json"),
-    JSON.stringify(blocksData, null, 2),
-    "utf-8"
-  );
+  writeFileSync(join(config.outDir, "blocks.json"), JSON.stringify(blocksData, null, 2), "utf-8");
 }
-
 
 /**
  * Watch workbook for changes and regenerate manifests
@@ -73,7 +64,7 @@ function generateBlocksManifest(config: ResolvedWorkbookConfig, manifest: Workbo
  */
 export async function watchWorkbook(
   config: WorkbookConfig,
-  onChange: (manifest: WorkbookManifest) => void
+  onChange: (manifest: WorkbookManifest) => void,
 ): Promise<() => void> {
   const resolved = resolveConfig(config);
 
@@ -87,11 +78,13 @@ export async function watchWorkbook(
   }
 
   const watcher = chokidar.watch(
-    [resolved.pagesDir, resolved.uiDir, resolved.pluginsDir, resolved.actionsDir].filter(existsSync),
+    [resolved.pagesDir, resolved.uiDir, resolved.pluginsDir, resolved.actionsDir].filter(
+      existsSync,
+    ),
     {
       ignoreInitial: true,
-      ignored: /(^|[\/\\])\../, // ignore dotfiles
-    }
+      ignored: /(^|[/\\])\../, // ignore dotfiles
+    },
   );
 
   let debounceTimer: NodeJS.Timeout | null = null;

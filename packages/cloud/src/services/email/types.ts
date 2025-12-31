@@ -18,11 +18,7 @@ export interface EmailResult {
   success: boolean;
 }
 
-export type EmailTemplate =
-  | "welcome"
-  | "usage_alert"
-  | "payment_failed"
-  | "subscription_canceled";
+export type EmailTemplate = "welcome" | "usage_alert" | "payment_failed" | "subscription_canceled";
 
 export interface TemplateData {
   welcome: { name: string };

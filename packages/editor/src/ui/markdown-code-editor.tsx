@@ -7,9 +7,9 @@
  * Provides syntax highlighting, diagnostics display, and full editor features.
  */
 
-import { cn } from "../lib/utils";
 import { MonacoEditor } from "../code-editor/MonacoEditor";
 import type { Diagnostic } from "../code-editor/types";
+import { cn } from "../lib/utils";
 
 export interface MarkdownCodeEditorProps {
   /** Raw content value */

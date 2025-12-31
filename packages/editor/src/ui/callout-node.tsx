@@ -1,35 +1,35 @@
-'use client';
+"use client";
 
-import { useCalloutEmojiPicker } from '@platejs/callout/react';
-import { useEmojiDropdownMenuState } from '@platejs/emoji/react';
-import { PlateElement, type PlateElementProps } from 'platejs/react';
+import { useCalloutEmojiPicker } from "@platejs/callout/react";
+import { useEmojiDropdownMenuState } from "@platejs/emoji/react";
+import { PlateElement, type PlateElementProps } from "platejs/react";
 
-import { Button } from './button';
-import { EmojiPicker, EmojiPopover } from './emoji-toolbar-button';
+import { Button } from "./button";
+import { EmojiPicker, EmojiPopover } from "./emoji-toolbar-button";
 
 export function CalloutElement(props: PlateElementProps) {
   const { emojiPickerState, isOpen, setIsOpen } = useEmojiDropdownMenuState({
     closeOnSelect: true,
   });
 
-  const { emojiToolbarDropdownProps, props: calloutProps } =
-    useCalloutEmojiPicker({
-      isOpen,
-      setIsOpen,
-    });
+  const { emojiToolbarDropdownProps, props: calloutProps } = useCalloutEmojiPicker({
+    isOpen,
+    setIsOpen,
+  });
 
   return (
     <PlateElement
       className="my-1 flex rounded-sm bg-muted p-4 pl-3"
       style={{
-        backgroundColor: typeof props.element.backgroundColor === 'string'
-          ? props.element.backgroundColor
-          : undefined,
+        backgroundColor:
+          typeof props.element.backgroundColor === "string"
+            ? props.element.backgroundColor
+            : undefined,
       }}
       {...props}
       attributes={{
         ...props.attributes,
-        'data-plate-open-context-menu': 'true',
+        "data-plate-open-context-menu": "true",
       }}
     >
       <div className="flex w-full gap-2 rounded-md">
@@ -45,7 +45,7 @@ export function CalloutElement(props: PlateElementProps) {
               }}
               variant="ghost"
             >
-              {typeof props.element.icon === 'string' ? props.element.icon : '💡'}
+              {typeof props.element.icon === "string" ? props.element.icon : "💡"}
             </Button>
           }
         >

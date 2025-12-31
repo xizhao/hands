@@ -8,10 +8,10 @@
  * Used by production builds for pre-rendering static pages.
  */
 
-import type * as React from "react";
-import { renderToString } from "react-dom/server";
 import { renderPlateToHtml } from "@hands/editor/lib/plate-static-render-node";
 import type { Value } from "platejs";
+import type * as React from "react";
+import { renderToString } from "react-dom/server";
 
 // Plate types
 type TText = { text: string; [key: string]: unknown };

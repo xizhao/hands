@@ -1,4 +1,4 @@
-import type { NotificationsEnv, SlackMessage, SlackResponse, AlertLevel } from "./types";
+import type { AlertLevel, NotificationsEnv, SlackMessage, SlackResponse } from "./types";
 
 const LEVEL_EMOJI: Record<AlertLevel, string> = {
   info: ":information_source:",
@@ -7,7 +7,7 @@ const LEVEL_EMOJI: Record<AlertLevel, string> = {
   success: ":white_check_mark:",
 };
 
-const LEVEL_COLOR: Record<AlertLevel, string> = {
+const _LEVEL_COLOR: Record<AlertLevel, string> = {
   info: "#3b82f6",
   warning: "#f59e0b",
   error: "#ef4444",
@@ -19,7 +19,7 @@ const LEVEL_COLOR: Record<AlertLevel, string> = {
  */
 export async function sendSlackWebhook(
   webhookUrl: string,
-  message: SlackMessage
+  message: SlackMessage,
 ): Promise<SlackResponse> {
   const response = await fetch(webhookUrl, {
     method: "POST",
@@ -42,7 +42,7 @@ export async function sendSlackWebhook(
 export async function sendSlackMessage(
   token: string,
   channel: string,
-  message: SlackMessage
+  message: SlackMessage,
 ): Promise<SlackResponse> {
   const response = await fetch("https://slack.com/api/chat.postMessage", {
     method: "POST",

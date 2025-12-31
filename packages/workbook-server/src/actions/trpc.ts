@@ -5,11 +5,11 @@
  * Queries runtime's /actions endpoint for action metadata.
  */
 
+import { readFile } from "node:fs/promises";
 import { initTRPC, TRPCError } from "@trpc/server";
 import { z } from "zod";
-import { readFile } from "node:fs/promises";
-import { fetchActionsFromRuntime } from "./runtime-client.js";
 import type { DiscoveredAction } from "../workbook/types.js";
+import { fetchActionsFromRuntime } from "./runtime-client.js";
 
 // ============================================================================
 // Context
@@ -42,7 +42,6 @@ const runActionInput = z.object({
 const getActionInput = z.object({
   id: z.string(),
 });
-
 
 // ============================================================================
 // Router

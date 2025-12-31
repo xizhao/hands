@@ -15,43 +15,38 @@
  */
 
 import {
+  closestCenter,
+  DndContext,
+  type DragEndEvent,
+  DragOverlay,
+  type DragStartEvent,
+  KeyboardSensor,
+  PointerSensor,
+  useSensor,
+  useSensors,
+} from "@dnd-kit/core";
+import { horizontalListSortingStrategy, SortableContext, useSortable } from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
+import { GripVertical, Plus, X } from "lucide-react";
+import type { Path } from "platejs";
+import {
   createPlatePlugin,
   PlateElement,
   type PlateElementProps,
-  useElement,
-  useSelected,
   useEditorRef,
+  useElement,
   useReadOnly,
+  useSelected,
 } from "platejs/react";
-import { memo, Children, isValidElement, useState, useRef, useEffect, useMemo } from "react";
-import { Plus, X, GripVertical } from "lucide-react";
-import type { Path } from "platejs";
+import { Children, isValidElement, memo, useEffect, useMemo, useRef, useState } from "react";
 import {
-  DndContext,
-  DragOverlay,
-  KeyboardSensor,
-  PointerSensor,
-  closestCenter,
-  useSensor,
-  useSensors,
-  type DragEndEvent,
-  type DragStartEvent,
-} from "@dnd-kit/core";
-import {
-  SortableContext,
-  horizontalListSortingStrategy,
-  useSortable,
-  arrayMove,
-} from "@dnd-kit/sortable";
-import { CSS } from "@dnd-kit/utilities";
-
-import {
-  Tabs as ShadcnTabs,
-  TabsList,
-  TabsTrigger,
-  TabsContent,
-} from "../components/tabs";
-import { TABS_KEY, TAB_KEY, type TTabsElement, type TTabElement, type ComponentMeta } from "../../types";
+  type ComponentMeta,
+  TAB_KEY,
+  TABS_KEY,
+  type TTabElement,
+  type TTabsElement,
+} from "../../types";
+import { Tabs as ShadcnTabs, TabsContent, TabsList, TabsTrigger } from "../components/tabs";
 import { cn } from "../lib/utils";
 
 // ============================================================================
@@ -129,7 +124,11 @@ export function Tabs({ defaultValue, children, className }: TabsProps) {
 export function Tab({ value, label, children, className }: TabProps) {
   // This component is only used for prop extraction by parent Tabs.
   // The actual rendering is done by Tabs using TabsContent.
-  return <div data-tab-value={value} data-tab-label={label} className={className}>{children}</div>;
+  return (
+    <div data-tab-value={value} data-tab-label={label} className={className}>
+      {children}
+    </div>
+  );
 }
 
 // ============================================================================
@@ -235,11 +234,9 @@ function EditableTabTrigger({
         "group/tab relative inline-flex items-center gap-1",
         "px-3 py-1.5 -mb-px text-sm font-medium rounded-md border-b-2 border-transparent transition-all",
         "hover:bg-muted/50 hover:text-foreground",
-        isActive
-          ? "bg-muted text-foreground border-primary"
-          : "text-muted-foreground",
+        isActive ? "bg-muted text-foreground border-primary" : "text-muted-foreground",
         !readOnly && "cursor-pointer",
-        (isSortableDragging || isDragging) && "opacity-50"
+        (isSortableDragging || isDragging) && "opacity-50",
       )}
       onClick={onSelect}
       onDoubleClick={handleDoubleClick}
@@ -276,7 +273,7 @@ function EditableTabTrigger({
           className={cn(
             "ml-1 p-0.5 rounded opacity-0 group-hover/tab:opacity-100",
             "hover:bg-destructive/20 hover:text-destructive",
-            "transition-opacity"
+            "transition-opacity",
           )}
         >
           <X className="size-3" />
@@ -293,7 +290,7 @@ function EditableTabTrigger({
 function TabsElement(props: PlateElementProps) {
   const editor = useEditorRef();
   const element = useElement<TTabsElement>();
-  const selected = useSelected();
+  const _selected = useSelected();
   const readOnly = useReadOnly();
   const [activeTab, setActiveTab] = useState<string | null>(null);
   const [draggingTab, setDraggingTab] = useState<{ value: string; label: string } | null>(null);
@@ -316,7 +313,7 @@ function TabsElement(props: PlateElementProps) {
     }
   });
 
-  const tabIds = useMemo(() => tabs.map((t) => t.value), [tabs]);
+  const tabIds = useMemo(() => tabs.map((t) => t.value), []);
 
   const effectiveActive = activeTab || element.defaultValue || tabs[0]?.value || "";
 
@@ -396,11 +393,7 @@ function TabsElement(props: PlateElementProps) {
   };
 
   return (
-    <PlateElement
-      {...props}
-      as="div"
-      className="my-4"
-    >
+    <PlateElement {...props} as="div" className="my-4">
       <ShadcnTabs value={effectiveActive} onValueChange={setActiveTab}>
         <div className="flex items-center gap-1">
           <DndContext
@@ -440,7 +433,7 @@ function TabsElement(props: PlateElementProps) {
               className={cn(
                 "p-1.5 rounded-md",
                 "text-muted-foreground hover:text-foreground hover:bg-muted",
-                "transition-colors"
+                "transition-colors",
               )}
               title="Add tab"
             >
@@ -503,7 +496,7 @@ export const TabPlugin = createPlatePlugin({
  */
 export function createTabsElement(
   tabs: Array<{ value: string; label: string; content: string }>,
-  options?: { defaultValue?: string }
+  options?: { defaultValue?: string },
 ): TTabsElement {
   return {
     type: TABS_KEY,

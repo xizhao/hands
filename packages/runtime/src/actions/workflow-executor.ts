@@ -5,14 +5,13 @@
  */
 
 import type {
+  ActionContext,
+  Serializable,
+  WorkflowActionDefinition,
+  WorkflowDuration,
+  WorkflowRunResult,
   WorkflowStep,
   WorkflowStepConfig,
-  WorkflowDuration,
-  Serializable,
-  StepRecord,
-  WorkflowRunResult,
-  ActionContext,
-  WorkflowActionDefinition,
 } from "@hands/core/primitives";
 import { StepRecorder } from "@hands/core/primitives";
 
@@ -69,7 +68,7 @@ export interface WaitForEventHandler {
     runId: string,
     stepName: string,
     eventType: string,
-    timeout?: number
+    timeout?: number,
   ): Promise<T>;
 
   /**
@@ -108,7 +107,7 @@ export function createWorkflowStep(options: CreateWorkflowStepOptions): Workflow
     async do<T extends Serializable>(
       name: string,
       configOrCallback: WorkflowStepConfig | (() => Promise<T> | T),
-      maybeCallback?: () => Promise<T> | T
+      maybeCallback?: () => Promise<T> | T,
     ): Promise<T> {
       // Handle overloaded signature
       const config: WorkflowStepConfig | undefined =
@@ -159,7 +158,7 @@ export function createWorkflowStep(options: CreateWorkflowStepOptions): Workflow
 
     async waitForEvent<T extends Serializable>(
       name: string,
-      opts: { type: string; timeout?: WorkflowDuration }
+      opts: { type: string; timeout?: WorkflowDuration },
     ): Promise<T> {
       recorder.startStep(name, "waitForEvent");
       recorder.waitStep();
@@ -186,7 +185,7 @@ export function createWorkflowStep(options: CreateWorkflowStepOptions): Workflow
 
 async function executeWithRetry<T>(
   callback: () => Promise<T> | T,
-  config?: WorkflowStepConfig
+  config?: WorkflowStepConfig,
 ): Promise<T> {
   const maxRetries = config?.retries?.limit ?? 0;
   const baseDelay = config?.retries?.delay ? parseDuration(config.retries.delay) : 1000;
@@ -202,7 +201,7 @@ async function executeWithRetry<T>(
         const result = await Promise.race([
           Promise.resolve(callback()),
           new Promise<never>((_, reject) =>
-            setTimeout(() => reject(new Error("Step timeout")), timeout)
+            setTimeout(() => reject(new Error("Step timeout")), timeout),
           ),
         ]);
         return result;
@@ -216,12 +215,11 @@ async function executeWithRetry<T>(
         let delay: number;
         switch (backoff) {
           case "exponential":
-            delay = baseDelay * Math.pow(2, attempt);
+            delay = baseDelay * 2 ** attempt;
             break;
           case "constant":
             delay = baseDelay;
             break;
-          case "linear":
           default:
             delay = baseDelay * (attempt + 1);
             break;
@@ -250,7 +248,7 @@ export interface ExecuteWorkflowOptions {
  * Execute a workflow action and return result with step records
  */
 export async function executeWorkflow<T extends Serializable>(
-  options: ExecuteWorkflowOptions
+  options: ExecuteWorkflowOptions,
 ): Promise<WorkflowRunResult<T>> {
   const { action, input, ctx, runId, eventHandler } = options;
 
@@ -268,7 +266,7 @@ export async function executeWorkflow<T extends Serializable>(
       steps: recorder.getSteps(),
       durationMs,
     };
-  } catch (error) {
+  } catch (_error) {
     const durationMs = Date.now() - startTime;
 
     // Return partial result with steps recorded so far

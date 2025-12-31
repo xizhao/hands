@@ -9,42 +9,41 @@
 
 import { BaseColumnItemPlugin, BaseColumnPlugin } from "@platejs/layout";
 import { MarkdownPlugin, remarkMdx } from "@platejs/markdown";
+import type { TColumnElement } from "platejs";
 import { Plate, PlateContent, usePlateEditor } from "platejs/react";
 import { SlateElement, type SlateElementProps } from "platejs/static";
 import remarkGfm from "remark-gfm";
-import type { TColumnElement } from "platejs";
 
 import { serializationRules, toMarkdownPluginRules } from "../primitives/serialization";
-import { MockDataProvider } from "./mock-data-provider";
-
-// Import all stdlib plugins for rendering
 import {
-  LiveValuePlugin,
-  LineChartPlugin,
-  BarChartPlugin,
-  AreaChartPlugin,
-  PieChartPlugin,
-  ChartPlugin,
-  ScatterChartPlugin,
-  HistogramChartPlugin,
-  HeatmapChartPlugin,
-  BoxPlotChartPlugin,
-  MapChartPlugin,
-  MetricPlugin,
-  BadgePlugin,
-  ProgressPlugin,
-  AlertPlugin,
-  LoaderPlugin,
-} from "../ui/view";
-import {
-  LiveActionPlugin,
   ButtonPlugin,
-  InputPlugin,
-  SelectPlugin,
   CheckboxPlugin,
+  InputPlugin,
+  LiveActionPlugin,
+  SelectPlugin,
   TextareaPlugin,
 } from "../ui/action";
 import { DataGridPlugin, KanbanPlugin } from "../ui/data";
+// Import all stdlib plugins for rendering
+import {
+  AlertPlugin,
+  AreaChartPlugin,
+  BadgePlugin,
+  BarChartPlugin,
+  BoxPlotChartPlugin,
+  ChartPlugin,
+  HeatmapChartPlugin,
+  HistogramChartPlugin,
+  LineChartPlugin,
+  LiveValuePlugin,
+  LoaderPlugin,
+  MapChartPlugin,
+  MetricPlugin,
+  PieChartPlugin,
+  ProgressPlugin,
+  ScatterChartPlugin,
+} from "../ui/view";
+import { MockDataProvider } from "./mock-data-provider";
 
 // ============================================================================
 // Column Components (inline to avoid circular deps)
@@ -160,11 +159,7 @@ export function PlateHarness({ mdx, mockData, className }: PlateHarnessProps) {
 
   const content = (
     <Plate editor={editor}>
-      <PlateContent
-        className={className}
-        data-testid="plate-harness"
-        readOnly
-      />
+      <PlateContent className={className} data-testid="plate-harness" readOnly />
     </Plate>
   );
 
@@ -204,11 +199,7 @@ export function PlateHarnessDebug({ mdx, mockData, className }: PlateHarnessProp
       <div className="border rounded-md p-4">
         <h3 className="text-sm font-medium mb-2">Rendered:</h3>
         <Plate editor={editor}>
-          <PlateContent
-            className={className}
-            data-testid="plate-harness"
-            readOnly
-          />
+          <PlateContent className={className} data-testid="plate-harness" readOnly />
         </Plate>
       </div>
 

@@ -11,13 +11,9 @@
  */
 
 import { cn } from "@udecode/cn";
-import type { TElement, Descendant, Value } from "platejs";
-import {
-  Plate,
-  PlateContent,
-  usePlateEditor,
-} from "platejs/react";
-import { forwardRef, useEffect, useMemo, type ReactNode } from "react";
+import type { Descendant, TElement, Value } from "platejs";
+import { Plate, PlateContent, usePlateEditor } from "platejs/react";
+import { forwardRef, type ReactNode, useEffect, useMemo } from "react";
 
 import { useMarkdownWorker } from "./hooks/use-markdown-worker";
 import { EditorCorePlugins } from "./plugins/presets";
@@ -263,73 +259,68 @@ export interface PreviewEditorProps {
 // Component
 // ============================================================================
 
-export const PreviewEditor = forwardRef<HTMLDivElement, PreviewEditorProps>(
-  function PreviewEditor(
-    { value, className, contentClassName, wrapper: Wrapper },
-    ref
-  ) {
-    // Use markdown worker for async serialization
-    const { deserialize } = useMarkdownWorker();
+export const PreviewEditor = forwardRef<HTMLDivElement, PreviewEditorProps>(function PreviewEditor(
+  { value, className, contentClassName, wrapper: Wrapper },
+  ref,
+) {
+  // Use markdown worker for async serialization
+  const { deserialize } = useMarkdownWorker();
 
-    // Build plugins - same as main editor but without copilot
-    // Note: Serialization is handled by the worker, not MarkdownPlugin
-    const plugins = useMemo(() => EditorCorePlugins, []);
+  // Build plugins - same as main editor but without copilot
+  // Note: Serialization is handled by the worker, not MarkdownPlugin
+  const plugins = useMemo(() => EditorCorePlugins, []);
 
-    // Create editor instance
-    const editor = usePlateEditor({
-      plugins,
-      value: [{ type: "p", children: [{ text: "" }] }],
-    });
+  // Create editor instance
+  const editor = usePlateEditor({
+    plugins,
+    value: [{ type: "p", children: [{ text: "" }] }],
+  });
 
-    // Parse MDX and set editor value
-    // Normalizes nodes to handle streaming/partial content gracefully
-    useEffect(() => {
-      if (!value) return;
+  // Parse MDX and set editor value
+  // Normalizes nodes to handle streaming/partial content gracefully
+  useEffect(() => {
+    if (!value) return;
 
-      let cancelled = false;
+    let cancelled = false;
 
-      (async () => {
-        try {
-          const nodes = await deserialize(value);
-          if (cancelled) return;
+    (async () => {
+      try {
+        const nodes = await deserialize(value);
+        if (cancelled) return;
 
-          if (nodes && nodes.length > 0) {
-            // Normalize nodes to fix malformed structures from partial streaming
-            const normalized = normalizeNodes(nodes);
-            if (normalized.length > 0) {
-              editor.tf.setValue(normalized);
-            }
-          }
-        } catch (err) {
-          // Silently handle parse errors during streaming - content will render
-          // correctly once the stream completes
-          if (process.env.NODE_ENV === "development") {
-            console.debug("[PreviewEditor] Parse error (expected during streaming):", err);
+        if (nodes && nodes.length > 0) {
+          // Normalize nodes to fix malformed structures from partial streaming
+          const normalized = normalizeNodes(nodes);
+          if (normalized.length > 0) {
+            editor.tf.setValue(normalized);
           }
         }
-      })();
+      } catch (err) {
+        // Silently handle parse errors during streaming - content will render
+        // correctly once the stream completes
+        if (process.env.NODE_ENV === "development") {
+          console.debug("[PreviewEditor] Parse error (expected during streaming):", err);
+        }
+      }
+    })();
 
-      return () => {
-        cancelled = true;
-      };
-    }, [value, editor, deserialize]);
+    return () => {
+      cancelled = true;
+    };
+  }, [value, editor, deserialize]);
 
-    const content = (
-      <div ref={ref} className={cn("preview-editor", className)}>
-        <Plate editor={editor} readOnly>
-          <PlateContent
-            readOnly
-            className={cn(
-              "prose prose-sm dark:prose-invert max-w-none",
-              contentClassName
-            )}
-          />
-        </Plate>
-      </div>
-    );
+  const content = (
+    <div ref={ref} className={cn("preview-editor", className)}>
+      <Plate editor={editor} readOnly>
+        <PlateContent
+          readOnly
+          className={cn("prose prose-sm dark:prose-invert max-w-none", contentClassName)}
+        />
+      </Plate>
+    </div>
+  );
 
-    return Wrapper ? <Wrapper>{content}</Wrapper> : content;
-  }
-);
+  return Wrapper ? <Wrapper>{content}</Wrapper> : content;
+});
 
 export default PreviewEditor;

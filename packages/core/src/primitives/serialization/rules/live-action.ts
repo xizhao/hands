@@ -11,27 +11,21 @@
  */
 
 import {
-  LIVE_ACTION_KEY,
   BUTTON_KEY,
-  INPUT_KEY,
-  SELECT_KEY,
   CHECKBOX_KEY,
-  TEXTAREA_KEY,
-  type TLiveActionElement,
+  INPUT_KEY,
+  LIVE_ACTION_KEY,
+  SELECT_KEY,
   type TButtonElement,
-  type TInputElement,
-  type TSelectElement,
   type TCheckboxElement,
+  TEXTAREA_KEY,
+  type TInputElement,
+  type TLiveActionElement,
+  type TSelectElement,
   type TTextareaElement,
 } from "../../../types";
-import type { MdxSerializationRule, DeserializeOptions } from "../types";
-import {
-  parseAttributes,
-  serializeAttributes,
-  hasChildContent,
-  createContainerElement,
-  serializeChildren,
-} from "../helpers";
+import { parseAttributes, serializeAttributes, serializeChildren } from "../helpers";
+import type { MdxSerializationRule } from "../types";
 
 // ============================================================================
 // LiveAction
@@ -94,7 +88,7 @@ export const liveActionRule: MdxSerializationRule<TLiveActionElement> = {
         src: element.src,
         params: element.params,
       },
-      { include: ["sql", "src", "params"] }
+      { include: ["sql", "src", "params"] },
     );
 
     const children = serializeChildren(element.children, options);
@@ -147,7 +141,7 @@ export const buttonRule: MdxSerializationRule<TButtonElement> = {
   serialize: (element, options) => {
     const attrs = serializeAttributes(
       { variant: element.variant },
-      { defaults: { variant: "default" } }
+      { defaults: { variant: "default" } },
     );
 
     const children = serializeChildren(element.children, options);
@@ -232,7 +226,7 @@ export const inputRule: MdxSerializationRule<TInputElement> = {
           "step",
         ],
         defaults: { type: "text", required: false },
-      }
+      },
     );
 
     const children = serializeChildren(element.children, options);
@@ -299,7 +293,7 @@ export const selectRule: MdxSerializationRule<TSelectElement> = {
       {
         include: ["name", "options", "placeholder", "defaultValue", "required"],
         defaults: { required: false },
-      }
+      },
     );
 
     const children = serializeChildren(element.children, options);
@@ -361,7 +355,7 @@ export const checkboxRule: MdxSerializationRule<TCheckboxElement> = {
       {
         include: ["name", "defaultChecked", "required"],
         defaults: { defaultChecked: false, required: false },
-      }
+      },
     );
 
     const children = serializeChildren(element.children, options);
@@ -428,7 +422,7 @@ export const textareaRule: MdxSerializationRule<TTextareaElement> = {
       {
         include: ["name", "placeholder", "defaultValue", "rows", "required"],
         defaults: { rows: 3, required: false },
-      }
+      },
     );
 
     const children = serializeChildren(element.children, options);

@@ -7,17 +7,17 @@
 
 import type {
   PlatformAdapter,
-  Workbook,
   RuntimeConnection,
   RuntimeStatus,
   User,
+  Workbook,
 } from "@hands/app/platform";
 import {
-  getStoredToken,
-  setStoredToken,
-  getStoredRefreshToken,
-  setStoredRefreshToken,
   clearAuthTokens,
+  getStoredRefreshToken,
+  getStoredToken,
+  setStoredRefreshToken,
+  setStoredToken,
 } from "../lib/cloud-trpc";
 
 // PKCE helpers
@@ -51,18 +51,13 @@ const CODE_VERIFIER_KEY = "hands_code_verifier";
 /**
  * Create a Cloud Platform Adapter for web deployment
  */
-export function createCloudPlatformAdapter(
-  options: CloudAdapterOptions,
-): PlatformAdapter {
+export function createCloudPlatformAdapter(options: CloudAdapterOptions): PlatformAdapter {
   const { apiUrl } = options;
 
   /**
    * Fetch with authorization header
    */
-  const fetchWithAuth = async (
-    path: string,
-    init?: RequestInit,
-  ): Promise<Response> => {
+  const fetchWithAuth = async (path: string, init?: RequestInit): Promise<Response> => {
     const token = getStoredToken();
     const headers: HeadersInit = {
       "Content-Type": "application/json",
@@ -137,9 +132,7 @@ export function createCloudPlatformAdapter(
 
     const res = await fetchWithAuth(path, {
       method: method === "query" ? "GET" : "POST",
-      ...(method === "mutation" && input
-        ? { body: JSON.stringify(input) }
-        : {}),
+      ...(method === "mutation" && input ? { body: JSON.stringify(input) } : {}),
     });
 
     if (!res.ok) {
@@ -225,12 +218,8 @@ export function createCloudPlatformAdapter(
       create: async (name: string, template?: string): Promise<Workbook> => {
         // TODO: Implement cloud workbooks endpoint
         try {
-          return await trpcCall<Workbook>(
-            "workbooks.create",
-            { name, template },
-            "mutation",
-          );
-        } catch (e) {
+          return await trpcCall<Workbook>("workbooks.create", { name, template }, "mutation");
+        } catch (_e) {
           console.warn("workbooks.create not implemented on cloud");
           // Return a temporary local workbook
           const id = `wb_${Date.now().toString(36)}`;

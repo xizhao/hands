@@ -7,14 +7,10 @@
  * Shows on hover with icon-only actions for a clean look.
  */
 
+import { Eye, Pencil, Zap } from "lucide-react";
 import { useState } from "react";
-import { Zap, Eye, Pencil } from "lucide-react";
 
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from "../components/popover";
+import { Popover, PopoverContent, PopoverTrigger } from "../components/popover";
 import type { LiveControlsMenuProps } from "./types";
 
 /**
@@ -99,9 +95,7 @@ export function LiveControlsMenu({
           </div>
 
           {/* Divider */}
-          {(onViewData || onEdit) && (
-            <div className="w-px h-3 bg-purple-500/30" />
-          )}
+          {(onViewData || onEdit) && <div className="w-px h-3 bg-purple-500/30" />}
 
           {/* View Data button - icon only */}
           {onViewData && (

@@ -1,21 +1,14 @@
-import { z } from "zod";
 import { TRPCError } from "@trpc/server";
-import { router, protectedProcedure } from "../../trpc/base";
+import { and, eq } from "drizzle-orm";
+import { z } from "zod";
+import { decrypt, encrypt } from "../../lib/crypto";
 import { oauthConnections } from "../../schema/oauth-tokens";
-import { eq, and } from "drizzle-orm";
-import { encrypt, decrypt } from "../../lib/crypto";
+import { protectedProcedure, router } from "../../trpc/base";
+import { exchangeCode, getAccountInfo, getClientId, refreshToken } from "./client";
 import { OAUTH_PROVIDERS } from "./providers";
-import { getClientId, exchangeCode, refreshToken, getAccountInfo } from "./client";
 import type { OAuthProviderType } from "./types";
 
-const providerSchema = z.enum([
-  "google",
-  "slack",
-  "github",
-  "salesforce",
-  "quickbooks",
-  "shopify",
-]);
+const providerSchema = z.enum(["google", "slack", "github", "salesforce", "quickbooks", "shopify"]);
 
 export const integrationsRouter = router({
   // List user's connected integrations
@@ -56,7 +49,7 @@ export const integrationsRouter = router({
       z.object({
         provider: providerSchema,
         shopDomain: z.string().optional(), // For Shopify
-      })
+      }),
     )
     .mutation(async ({ ctx, input }) => {
       const providerConfig = OAUTH_PROVIDERS[input.provider];
@@ -101,7 +94,7 @@ export const integrationsRouter = router({
           provider: input.provider,
           shopDomain: input.shopDomain,
         }),
-        { expirationTtl: 600 }
+        { expirationTtl: 600 },
       );
 
       return {
@@ -118,7 +111,7 @@ export const integrationsRouter = router({
         code: z.string(),
         state: z.string(),
         shopDomain: z.string().optional(),
-      })
+      }),
     )
     .mutation(async ({ ctx, input }) => {
       const stateKey = `oauth-connect:${input.state}`;
@@ -136,7 +129,7 @@ export const integrationsRouter = router({
         input.code,
         redirectUri,
         ctx.env,
-        input.shopDomain
+        input.shopDomain,
       );
 
       const accountInfo = await getAccountInfo(input.provider, tokens.access_token);
@@ -155,15 +148,13 @@ export const integrationsRouter = router({
         .where(
           and(
             eq(oauthConnections.userId, ctx.user.id),
-            eq(oauthConnections.provider, input.provider)
-          )
+            eq(oauthConnections.provider, input.provider),
+          ),
         )
         .limit(1)
         .then((rows) => rows[0]);
 
-      const expiresAt = tokens.expires_in
-        ? new Date(Date.now() + tokens.expires_in * 1000)
-        : null;
+      const expiresAt = tokens.expires_in ? new Date(Date.now() + tokens.expires_in * 1000) : null;
 
       if (existing) {
         await ctx.db
@@ -207,12 +198,7 @@ export const integrationsRouter = router({
       const connection = await ctx.db
         .select()
         .from(oauthConnections)
-        .where(
-          and(
-            eq(oauthConnections.id, input.id),
-            eq(oauthConnections.userId, ctx.user.id)
-          )
-        )
+        .where(and(eq(oauthConnections.id, input.id), eq(oauthConnections.userId, ctx.user.id)))
         .limit(1)
         .then((rows) => rows[0]);
 
@@ -235,8 +221,8 @@ export const integrationsRouter = router({
         .where(
           and(
             eq(oauthConnections.userId, ctx.user.id),
-            eq(oauthConnections.provider, input.provider)
-          )
+            eq(oauthConnections.provider, input.provider),
+          ),
         )
         .limit(1)
         .then((rows) => rows[0]);
@@ -253,19 +239,16 @@ export const integrationsRouter = router({
 
         const decryptedRefreshToken = await decrypt(
           connection.refreshToken,
-          ctx.env.ENCRYPTION_KEY
+          ctx.env.ENCRYPTION_KEY,
         );
 
         const newTokens = await refreshToken(
           input.provider as OAuthProviderType,
           decryptedRefreshToken,
-          ctx.env
+          ctx.env,
         );
 
-        const encryptedAccessToken = await encrypt(
-          newTokens.access_token,
-          ctx.env.ENCRYPTION_KEY
-        );
+        const encryptedAccessToken = await encrypt(newTokens.access_token, ctx.env.ENCRYPTION_KEY);
         const encryptedRefreshToken = newTokens.refresh_token
           ? await encrypt(newTokens.refresh_token, ctx.env.ENCRYPTION_KEY)
           : connection.refreshToken;
@@ -285,10 +268,7 @@ export const integrationsRouter = router({
         return { accessToken: newTokens.access_token };
       }
 
-      const decryptedAccessToken = await decrypt(
-        connection.accessToken,
-        ctx.env.ENCRYPTION_KEY
-      );
+      const decryptedAccessToken = await decrypt(connection.accessToken, ctx.env.ENCRYPTION_KEY);
 
       return { accessToken: decryptedAccessToken };
     }),

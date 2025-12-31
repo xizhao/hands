@@ -42,8 +42,8 @@ export function SpecBar({
           onChange={(e) => {
             onDescriptionChange(e.target.value);
             // Auto-resize height
-            e.target.style.height = 'auto';
-            e.target.style.height = e.target.scrollHeight + 'px';
+            e.target.style.height = "auto";
+            e.target.style.height = `${e.target.scrollHeight}px`;
           }}
           placeholder="Describe what this page should show..."
           readOnly={readOnly}
@@ -51,9 +51,9 @@ export function SpecBar({
           className={cn(
             "w-full bg-transparent text-sm outline-none resize-none min-h-[1.5em]",
             "placeholder:text-muted-foreground/50",
-            "text-foreground"
+            "text-foreground",
           )}
-          style={{ height: 'auto', overflow: 'hidden' }}
+          style={{ height: "auto", overflow: "hidden" }}
         />
 
         {/* Sync button row */}
@@ -65,7 +65,7 @@ export function SpecBar({
               "flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium",
               "bg-primary/10 text-primary hover:bg-primary/20",
               "disabled:opacity-30 disabled:cursor-not-allowed",
-              "transition-colors"
+              "transition-colors",
             )}
           >
             <RefreshCw className={cn("h-3.5 w-3.5", isSyncing && "animate-spin")} />

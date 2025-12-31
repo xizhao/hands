@@ -10,32 +10,32 @@
  */
 
 import {
-  Project,
-  SyntaxKind,
+  type ArrowFunction,
+  type FunctionExpression,
+  type MethodDeclaration,
   Node,
-  SourceFile,
-  ArrowFunction,
-  FunctionExpression,
-  MethodDeclaration,
-  ObjectLiteralExpression,
+  type ObjectLiteralExpression,
+  Project,
+  type SourceFile,
+  SyntaxKind,
 } from "ts-morph";
-import type {
-  ActionFlow,
-  FlowStep,
-  SqlStep,
-  FetchStep,
-  ConditionStep,
-  LoopStep,
-  TableSummary,
-  ExternalSource,
-  SourceLocation,
-  CloudCallStep,
-  ActionCallStep,
-  ChainedAction,
-  CloudServiceUsage,
-  ActionCallSummary,
-} from "./types";
 import { analyzeSql } from "./analyze-sql";
+import type {
+  ActionCallStep,
+  ActionCallSummary,
+  ActionFlow,
+  ChainedAction,
+  CloudCallStep,
+  CloudServiceUsage,
+  ConditionStep,
+  ExternalSource,
+  FetchStep,
+  FlowStep,
+  LoopStep,
+  SourceLocation,
+  SqlStep,
+  TableSummary,
+} from "./types";
 
 /** Types that can represent a run function */
 type RunFunctionNode = ArrowFunction | FunctionExpression | MethodDeclaration;
@@ -211,7 +211,7 @@ function extractTriggers(sourceFile: SourceFile, sources: ExternalSource[]): voi
 
         if (propName === "triggers") {
           const init = prop.getInitializer();
-          if (init && init.getText().includes("webhook") && !seenIds.has("webhook")) {
+          if (init?.getText().includes("webhook") && !seenIds.has("webhook")) {
             seenIds.add("webhook");
             sources.push({
               id: "webhook",
@@ -299,8 +299,12 @@ function walkStatement(statement: Node, ctx: WalkContext): FlowStep[] {
   }
 
   // For/ForOf/ForIn/While loops
-  if (Node.isForStatement(statement) || Node.isForOfStatement(statement) ||
-      Node.isForInStatement(statement) || Node.isWhileStatement(statement)) {
+  if (
+    Node.isForStatement(statement) ||
+    Node.isForOfStatement(statement) ||
+    Node.isForInStatement(statement) ||
+    Node.isWhileStatement(statement)
+  ) {
     const body: FlowStep[] = [];
     let loopType: "for" | "for-of" | "for-in" | "while" = "for";
     let iterates: string | undefined;
@@ -377,7 +381,7 @@ function walkStatement(statement: Node, ctx: WalkContext): FlowStep[] {
 function walkExpression(
   expr: Node,
   assignedTo: string | undefined,
-  ctx: WalkContext
+  ctx: WalkContext,
 ): FlowStep | null {
   // Await expression - unwrap
   if (Node.isAwaitExpression(expr)) {
@@ -425,7 +429,7 @@ function walkExpression(
       if (!ctx.cloudCalls.has(service)) {
         ctx.cloudCalls.set(service, new Set());
       }
-      ctx.cloudCalls.get(service)!.add(method);
+      ctx.cloudCalls.get(service)?.add(method);
 
       const cloudCall: CloudCallStep = {
         service: service as CloudCallStep["service"],
@@ -450,7 +454,7 @@ function walkExpression(
       if (!ctx.cloudCalls.has("fetch")) {
         ctx.cloudCalls.set("fetch", new Set());
       }
-      ctx.cloudCalls.get("fetch")!.add("request");
+      ctx.cloudCalls.get("fetch")?.add("request");
 
       const cloudCall: CloudCallStep = {
         service: "fetch",

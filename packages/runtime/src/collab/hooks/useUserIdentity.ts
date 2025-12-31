@@ -1,11 +1,6 @@
-import { useState, useEffect } from "react";
+import { useEffect, useState } from "react";
+import { ADJECTIVES, ANIMALS, CURSOR_COLORS, USER_STORAGE_KEY } from "../constants";
 import type { CollabUser } from "../types";
-import {
-  ADJECTIVES,
-  ANIMALS,
-  CURSOR_COLORS,
-  USER_STORAGE_KEY,
-} from "../constants";
 
 function generateUser(): CollabUser {
   const adj = ADJECTIVES[Math.floor(Math.random() * ADJECTIVES.length)];

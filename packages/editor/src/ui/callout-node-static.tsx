@@ -1,4 +1,4 @@
-import { SlateElement, type SlateElementProps } from 'platejs/static';
+import { SlateElement, type SlateElementProps } from "platejs/static";
 
 export function CalloutElementStatic(props: SlateElementProps) {
   return (
@@ -18,9 +18,7 @@ export function CalloutElementStatic(props: SlateElementProps) {
               '"Apple Color Emoji", "Segoe UI Emoji", NotoColorEmoji, "Noto Color Emoji", "Segoe UI Symbol", "Android Emoji", EmojiSymbols',
           }}
         >
-          <span data-plate-prevent-deserialization>
-            {(props.element.icon as any) || '💡'}
-          </span>
+          <span data-plate-prevent-deserialization>{(props.element.icon as any) || "💡"}</span>
         </div>
         <div className="w-full">{props.children}</div>
       </div>

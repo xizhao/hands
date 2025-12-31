@@ -6,19 +6,15 @@
  * For domains, includes Chrome-like tabs.
  */
 
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipTrigger,
-} from "@/components/ui/tooltip";
-import { useRuntimeState } from "@/hooks/useRuntimeState";
 import { X } from "@phosphor-icons/react";
-import { FileText, Table2, Zap } from "lucide-react";
 import { useRouter, useRouterState } from "@tanstack/react-router";
-import { type ReactNode } from "react";
-import { HeaderActionsSlot, SpecBarSlot, SyncStatusSlot } from "./HeaderActionsContext";
-import { cn } from "@/lib/utils";
+import { FileText, Table2, Zap } from "lucide-react";
+import type { ReactNode } from "react";
 import type { DomainTab } from "@/components/sidebar/domain/types";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { useRuntimeState } from "@/hooks/useRuntimeState";
+import { cn } from "@/lib/utils";
+import { HeaderActionsSlot, SpecBarSlot, SyncStatusSlot } from "./HeaderActionsContext";
 
 interface ContentHeaderProps {
   children?: ReactNode;
@@ -77,13 +73,11 @@ export function ContentHeader({ children }: ContentHeaderProps) {
         "flex shrink-0",
         isDomainRoute
           ? "h-10 items-end pb-0 pl-2 pr-2" // Tabs at bottom, minimal padding for border radius
-          : "h-10 items-center justify-between pt-0.5 px-4"
+          : "h-10 items-center justify-between pt-0.5 px-4",
       )}
     >
       {/* Domain route - primary tab left, secondary tabs right */}
-      {domainId && (
-        <DomainTabs domainId={domainId} onClose={handleClose} />
-      )}
+      {domainId && <DomainTabs domainId={domainId} onClose={handleClose} />}
 
       {/* Non-domain routes: Breadcrumb on left */}
       {!domainId && (
@@ -218,22 +212,15 @@ function DomainTabs({ domainId, onClose }: { domainId: string; onClose: () => vo
             "relative flex items-center gap-1.5 px-3 pt-1.5 pb-1.5 text-sm font-medium transition-colors whitespace-nowrap",
             "rounded-t-md border-x border-t",
             isActive
-              ? [
-                  "bg-background text-foreground",
-                  "border-border/40",
-                  "mb-[-1px] z-10",
-                ]
+              ? ["bg-background text-foreground", "border-border/40", "mb-[-1px] z-10"]
               : [
                   "text-muted-foreground hover:text-foreground",
                   "border-transparent",
                   "hover:bg-muted/50",
-                ]
+                ],
           )}
         >
-          <Icon className={cn(
-            "h-4 w-4",
-            isActive && "text-blue-500",
-          )} />
+          <Icon className={cn("h-4 w-4", isActive && "text-blue-500")} />
           <span>{tab.label}</span>
           {/* Sync status indicator slot */}
           {isActive && <SyncStatusSlot />}
@@ -250,12 +237,14 @@ function DomainTabs({ domainId, onClose }: { domainId: string; onClose: () => vo
 
         {/* SpecBar dropdown - shows on tab hover */}
         {isActive && (
-          <div className={cn(
-            "absolute top-full left-0 z-20",
-            "opacity-0 pointer-events-none translate-y-1",
-            "group-hover/tab:opacity-100 group-hover/tab:pointer-events-auto group-hover/tab:translate-y-0",
-            "transition-all duration-150"
-          )}>
+          <div
+            className={cn(
+              "absolute top-full left-0 z-20",
+              "opacity-0 pointer-events-none translate-y-1",
+              "group-hover/tab:opacity-100 group-hover/tab:pointer-events-auto group-hover/tab:translate-y-0",
+              "transition-all duration-150",
+            )}
+          >
             <div className="pt-1">
               <div className="bg-background border border-border/40 rounded-lg shadow-lg overflow-hidden">
                 <SpecBarSlot />
@@ -282,14 +271,16 @@ function DomainTabs({ domainId, onClose }: { domainId: string; onClose: () => vo
               "rounded-md",
               isActive
                 ? "bg-accent text-foreground"
-                : "text-muted-foreground hover:text-foreground hover:bg-muted/50"
+                : "text-muted-foreground hover:text-foreground hover:bg-muted/50",
             )}
           >
-            <Icon className={cn(
-              "h-4 w-4",
-              isActive && tab.id === "sheet" && "text-emerald-500",
-              isActive && tab.id === "actions" && "text-orange-500",
-            )} />
+            <Icon
+              className={cn(
+                "h-4 w-4",
+                isActive && tab.id === "sheet" && "text-emerald-500",
+                isActive && tab.id === "actions" && "text-orange-500",
+              )}
+            />
           </button>
         </TooltipTrigger>
         <TooltipContent side="bottom">{tab.label}</TooltipContent>

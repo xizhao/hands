@@ -9,9 +9,9 @@
  * Import the DB type from "@hands/db/types" for typed queries.
  */
 
-import { AsyncLocalStorage } from "node:async_hooks";
 import { env } from "cloudflare:workers";
-import { sql as kyselySql, type Kysely } from "kysely";
+import { AsyncLocalStorage } from "node:async_hooks";
+import { type Kysely, sql as kyselySql } from "kysely";
 import { createDb } from "rwsdk/db";
 
 // Re-export Database DO for worker.tsx
@@ -40,7 +40,9 @@ function getOrCreateDb(): Kysely<DB> {
     // @ts-expect-error - DATABASE binding is defined in wrangler.jsonc
     const databaseBinding = env.DATABASE as DurableObjectNamespace;
     if (!databaseBinding) {
-      throw new Error("[db] DATABASE binding not found. Check wrangler.jsonc durable_objects config.");
+      throw new Error(
+        "[db] DATABASE binding not found. Check wrangler.jsonc durable_objects config.",
+      );
     }
     kyselyInstance = createDb<DB>(databaseBinding, "hands-db");
   }
@@ -105,9 +107,7 @@ export async function sql<T = Record<string, unknown>>(
   // Enforce read-only in block mode
   const mode = getCurrentMode();
   if (mode === "block" && !isReadOnlyQuery(queryText)) {
-    throw new Error(
-      "[db] Write operations are not allowed in blocks. Use an action instead."
-    );
+    throw new Error("[db] Write operations are not allowed in blocks. Use an action instead.");
   }
 
   // Use Kysely's sql template to build the query

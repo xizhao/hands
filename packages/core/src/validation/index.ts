@@ -27,25 +27,32 @@ type SchemaEntry = (typeof COMPONENT_SCHEMA)[keyof typeof COMPONENT_SCHEMA];
 
 // Get validation rules from schema
 function getEnumValues(component: string, prop: string): readonly string[] | undefined {
-  const schema = COMPONENT_SCHEMA[component as keyof typeof COMPONENT_SCHEMA] as SchemaEntry | undefined;
+  const schema = COMPONENT_SCHEMA[component as keyof typeof COMPONENT_SCHEMA] as
+    | SchemaEntry
+    | undefined;
   if (!schema || !("propRules" in schema)) return undefined;
   const propRules = schema.propRules as Record<string, { enum?: readonly string[] }> | undefined;
   return propRules?.[prop]?.enum;
 }
 
 function getRequiredProps(component: string): readonly string[] {
-  const schema = COMPONENT_SCHEMA[component as keyof typeof COMPONENT_SCHEMA] as SchemaEntry | undefined;
+  const schema = COMPONENT_SCHEMA[component as keyof typeof COMPONENT_SCHEMA] as
+    | SchemaEntry
+    | undefined;
   if (!schema || !("requiredProps" in schema)) return [];
   return (schema.requiredProps as readonly string[]) ?? [];
 }
 
 // Hardcoded constraints for nested components not in generated schema
-const NESTED_COMPONENT_CONSTRAINTS: Record<string, {
-  requireParent?: readonly string[];
-  requireChild?: readonly string[];
-  forbidParent?: readonly string[];
-  forbidChild?: readonly string[];
-}> = {
+const NESTED_COMPONENT_CONSTRAINTS: Record<
+  string,
+  {
+    requireParent?: readonly string[];
+    requireChild?: readonly string[];
+    forbidParent?: readonly string[];
+    forbidChild?: readonly string[];
+  }
+> = {
   Tab: { requireParent: ["Tabs"] },
 };
 
@@ -55,14 +62,18 @@ function getConstraints(component: string) {
     return NESTED_COMPONENT_CONSTRAINTS[component];
   }
 
-  const schema = COMPONENT_SCHEMA[component as keyof typeof COMPONENT_SCHEMA] as SchemaEntry | undefined;
+  const schema = COMPONENT_SCHEMA[component as keyof typeof COMPONENT_SCHEMA] as
+    | SchemaEntry
+    | undefined;
   if (!schema || !("constraints" in schema)) return undefined;
-  return schema.constraints as {
-    requireParent?: readonly string[];
-    requireChild?: readonly string[];
-    forbidParent?: readonly string[];
-    forbidChild?: readonly string[];
-  } | undefined;
+  return schema.constraints as
+    | {
+        requireParent?: readonly string[];
+        requireChild?: readonly string[];
+        forbidParent?: readonly string[];
+        forbidChild?: readonly string[];
+      }
+    | undefined;
 }
 
 // ============================================================================
@@ -178,7 +189,7 @@ export function parseMdxHierarchy(content: string): MdxNode[] {
   // Match both opening and closing tags
   const tagRegex = new RegExp(
     `<(/?)(${VALIDATABLE_COMPONENTS.join("|")})(?:\\s+([^>]*?))?(\\s*/?)>`,
-    "g"
+    "g",
   );
 
   let match: RegExpExecArray | null;
@@ -231,10 +242,7 @@ export function parseMdxHierarchy(content: string): MdxNode[] {
 /**
  * Validate structural constraints from COMPONENT_SCHEMA.
  */
-export function validateStructure(
-  content: string,
-  filePath = ""
-): ValidationError[] {
+export function validateStructure(content: string, filePath = ""): ValidationError[] {
   const errors: ValidationError[] = [];
   const roots = parseMdxHierarchy(content);
 
@@ -244,8 +252,7 @@ export function validateStructure(
     if (constraints) {
       // Check requireParent
       if (constraints.requireParent && constraints.requireParent.length > 0) {
-        const hasValidParent = node.parent &&
-          constraints.requireParent.includes(node.parent.name);
+        const hasValidParent = node.parent && constraints.requireParent.includes(node.parent.name);
 
         if (!hasValidParent) {
           errors.push({
@@ -261,8 +268,8 @@ export function validateStructure(
 
       // Check requireChild
       if (constraints.requireChild && constraints.requireChild.length > 0) {
-        const childNames = new Set(node.children.map(c => c.name));
-        const hasRequiredChild = constraints.requireChild.some(c => childNames.has(c));
+        const childNames = new Set(node.children.map((c) => c.name));
+        const hasRequiredChild = constraints.requireChild.some((c) => childNames.has(c));
 
         if (!hasRequiredChild && node.children.length === 0) {
           // Only warn if no children parsed - might be false negative
@@ -451,10 +458,7 @@ const EXTRA_REQUIRED_PROPS: Record<string, readonly string[]> = {
  * Schema-driven validation for required props.
  * Checks requiredProps from COMPONENT_SCHEMA for any component.
  */
-function validateRequiredPropsFromSchema(
-  comp: MdxComponent,
-  filePath: string,
-): ValidationError[] {
+function validateRequiredPropsFromSchema(comp: MdxComponent, filePath: string): ValidationError[] {
   const errors: ValidationError[] = [];
 
   // Get required props from schema
@@ -486,10 +490,7 @@ function validateRequiredPropsFromSchema(
  * Schema-driven validation for enum props.
  * Checks propRules.enum from COMPONENT_SCHEMA.
  */
-function validateEnumPropsFromSchema(
-  comp: MdxComponent,
-  filePath: string,
-): ValidationError[] {
+function validateEnumPropsFromSchema(comp: MdxComponent, filePath: string): ValidationError[] {
   const errors: ValidationError[] = [];
 
   for (const [propName, propValue] of Object.entries(comp.props)) {

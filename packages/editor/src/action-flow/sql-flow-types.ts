@@ -190,7 +190,7 @@ export function getNode(flow: SqlFlow, id: NodeId): SqlFlowNode | undefined {
 /** Helper to get all nodes of a specific type */
 export function getNodesOfType<T extends SqlFlowNode["type"]>(
   flow: SqlFlow,
-  type: T
+  type: T,
 ): Extract<SqlFlowNode, { type: T }>[] {
   return flow.nodes.filter((n) => n.type === type) as Extract<SqlFlowNode, { type: T }>[];
 }
@@ -199,10 +199,7 @@ export function getNodesOfType<T extends SqlFlowNode["type"]>(
 export function getSourceTables(flow: SqlFlow): string[] {
   const sources = getNodesOfType(flow, "source");
   const joins = getNodesOfType(flow, "join");
-  return [
-    ...sources.map((s) => s.table),
-    ...joins.map((j) => j.table),
-  ];
+  return [...sources.map((s) => s.table), ...joins.map((j) => j.table)];
 }
 
 /** Get the target table for write operations */

@@ -1,11 +1,17 @@
-import { z } from "zod";
 import { TRPCError } from "@trpc/server";
-import { router, protectedProcedure } from "../../trpc/base";
-import { users } from "../../schema/users";
-import { subscriptions, PLANS, type PlanType } from "../../schema/subscriptions";
+import { and, eq, gte, lte, sql } from "drizzle-orm";
+import { z } from "zod";
+import { PLANS, type PlanType, subscriptions } from "../../schema/subscriptions";
 import { usageDaily } from "../../schema/usage";
-import { eq, and, sql, gte, lte } from "drizzle-orm";
-import { createStripeClient, createCheckoutSession, createPortalSession, listActiveSubscriptions, cancelSubscription } from "./client";
+import { users } from "../../schema/users";
+import { protectedProcedure, router } from "../../trpc/base";
+import {
+  cancelSubscription,
+  createCheckoutSession,
+  createPortalSession,
+  createStripeClient,
+  listActiveSubscriptions,
+} from "./client";
 
 export const paymentsRouter = router({
   // Get current subscription
@@ -51,8 +57,8 @@ export const paymentsRouter = router({
         and(
           eq(usageDaily.userId, ctx.user.id),
           gte(usageDaily.date, monthStart.toISOString().split("T")[0]),
-          lte(usageDaily.date, monthEnd.toISOString().split("T")[0])
-        )
+          lte(usageDaily.date, monthEnd.toISOString().split("T")[0]),
+        ),
       )
       .then((rows) => rows[0]);
 
@@ -78,7 +84,7 @@ export const paymentsRouter = router({
       },
       requests: usage?.totalRequests ?? 0,
       cost: {
-        included: plan === "free" ? 0 : PLANS[plan as PlanType]?.monthlyPrice ?? 0,
+        included: plan === "free" ? 0 : (PLANS[plan as PlanType]?.monthlyPrice ?? 0),
         overage: overageTokens > 0 ? Math.round(overageTokens / 1000) : 0,
         total: 0,
       },

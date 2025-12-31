@@ -6,10 +6,10 @@
  * - In floating chat: routes through Tauri to open/focus workbook window
  */
 
-import { createContext, useContext, useEffect, useCallback, type ReactNode } from "react";
 import { useNavigate } from "@tanstack/react-router";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
+import { createContext, type ReactNode, useCallback, useContext, useEffect } from "react";
 
 interface LinkNavigationContextValue {
   /** Whether we're in floating chat mode (vs workbook browser) */
@@ -81,7 +81,7 @@ export function LinkNavigationProvider({
         navigate({ to: route });
       }
     },
-    [isFloatingChat, workbookId, navigate]
+    [isFloatingChat, workbookId, navigate],
   );
 
   const handleLinkClick = useCallback(
@@ -108,7 +108,7 @@ export function LinkNavigationProvider({
 
       return false;
     },
-    [navigateTo]
+    [navigateTo],
   );
 
   return (
@@ -186,7 +186,7 @@ export function LinkClickHandler({ children, className }: LinkClickHandlerProps)
         window.open(href, "_blank", "noopener,noreferrer");
       }
     },
-    [context]
+    [context],
   );
 
   return (

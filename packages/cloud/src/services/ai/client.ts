@@ -4,11 +4,7 @@ import type { AIEnv, AIGatewayMetadata, AIRequestOptions } from "./types";
  * Build CF AI Gateway URL
  * Format: https://gateway.ai.cloudflare.com/v1/{account_id}/{gateway_id}/{provider}/{endpoint}
  */
-export function buildGatewayUrl(
-  env: AIEnv,
-  provider: string,
-  endpoint: string
-): string {
+export function buildGatewayUrl(env: AIEnv, provider: string, endpoint: string): string {
   return `https://gateway.ai.cloudflare.com/v1/${env.AI_GATEWAY_ACCOUNT_ID}/${env.AI_GATEWAY_ID}/${provider}/${endpoint}`;
 }
 
@@ -17,7 +13,7 @@ export function buildGatewayUrl(
  */
 export function createGatewayHeaders(
   originalHeaders: Headers,
-  metadata: AIGatewayMetadata
+  metadata: AIGatewayMetadata,
 ): Headers {
   const headers = new Headers(originalHeaders);
   headers.set("cf-aig-metadata", JSON.stringify(metadata));
@@ -30,13 +26,13 @@ export function createGatewayHeaders(
 export async function forwardToGateway(
   env: AIEnv,
   options: AIRequestOptions,
-  originalHeaders: Headers
+  originalHeaders: Headers,
 ): Promise<Response> {
   const url = buildGatewayUrl(env, options.provider, options.endpoint);
 
   const headers = createGatewayHeaders(
     originalHeaders,
-    options.metadata ?? { userId: "anonymous" }
+    options.metadata ?? { userId: "anonymous" },
   );
 
   const response = await fetch(url, {
@@ -55,7 +51,7 @@ export async function proxyToGateway(
   env: AIEnv,
   request: Request,
   path: string,
-  metadata: AIGatewayMetadata
+  metadata: AIGatewayMetadata,
 ): Promise<Response> {
   // Remove /ai prefix from path
   const cleanPath = path.startsWith("/ai") ? path.slice(3) : path;

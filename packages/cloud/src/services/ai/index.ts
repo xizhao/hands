@@ -21,6 +21,6 @@
  *   X-Usage-Overage-Cost-Cents: 50
  */
 
-export { aiGateway } from "./gateway";
 export { buildGatewayUrl, createGatewayHeaders, forwardToGateway, proxyToGateway } from "./client";
+export { aiGateway } from "./gateway";
 export * from "./types";

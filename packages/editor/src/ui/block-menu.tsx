@@ -1,39 +1,30 @@
-'use client';
+"use client";
 
-import { showCaption } from '@platejs/caption/react';
+import {
+  ArrowsClockwise,
+  ClosedCaptioning,
+  Files,
+  PaintRoller,
+  TextAlignCenter,
+  TextAlignLeft,
+  TextAlignRight,
+  Trash,
+} from "@phosphor-icons/react";
+import { showCaption } from "@platejs/caption/react";
 import {
   BlockMenuPlugin,
   BlockSelectionPlugin,
   useBlockSelectionFragmentProp,
   useBlockSelectionNodes,
-} from '@platejs/selection/react';
-import {
-  TextAlignCenter,
-  TextAlignLeft,
-  TextAlignRight,
-  ClosedCaptioning,
-  Files,
-  PaintRoller,
-  ArrowsClockwise,
-  Trash,
-} from '@phosphor-icons/react';
-import { KEYS, type TElement } from 'platejs';
-import type { PlateEditor } from 'platejs/react';
-import { useEditorRef, useHotkeys } from 'platejs/react';
-import * as React from 'react';
+} from "@platejs/selection/react";
+import { KEYS, type TElement } from "platejs";
+import type { PlateEditor } from "platejs/react";
+import { useEditorRef, useHotkeys } from "platejs/react";
+import * as React from "react";
 
-import {
-  getBlockType,
-  setBlockType,
-} from '../transforms';
-import {
-  backgroundColorItems,
-  ColorIcon,
-  textColorItems,
-} from './font-color-toolbar-button';
-import { turnIntoItems } from './turn-into-toolbar-button';
-
-import { Input } from './input';
+import { getBlockType, setBlockType } from "../transforms";
+import { backgroundColorItems, ColorIcon, textColorItems } from "./font-color-toolbar-button";
+import { Input } from "./input";
 import {
   type Action,
   ComboboxContent,
@@ -50,7 +41,8 @@ import {
   type MenuProps,
   MenuTrigger,
   useComboboxValueState,
-} from './menu';
+} from "./menu";
+import { turnIntoItems } from "./turn-into-toolbar-button";
 
 export function BlockMenu({
   id,
@@ -60,8 +52,8 @@ export function BlockMenu({
   open: openProp,
   placement,
   store,
-}: Pick<MenuProps, 'open' | 'placement' | 'store'> &
-  Pick<MenuContentProps, 'animateZoom' | 'getAnchorRect'> & {
+}: Pick<MenuProps, "open" | "placement" | "store"> &
+  Pick<MenuContentProps, "animateZoom" | "getAnchorRect"> & {
     id?: string;
     children?: React.ReactNode;
   }) {
@@ -112,12 +104,11 @@ export function BlockMenu({
 
 function BlockMenuInput({ onHide }: { onHide: () => void }) {
   const editor = useEditorRef();
-  const blockSelectionTf =
-    editor.getTransforms(BlockSelectionPlugin).blockSelection;
+  const blockSelectionTf = editor.getTransforms(BlockSelectionPlugin).blockSelection;
   const [value] = useComboboxValueState();
 
   useHotkeys(
-    'backspace',
+    "backspace",
     (e) => {
       if (value.length === 0) {
         e.preventDefault();
@@ -125,11 +116,11 @@ function BlockMenuInput({ onHide }: { onHide: () => void }) {
         onHide();
       }
     },
-    { enableOnFormTags: true }
+    { enableOnFormTags: true },
   );
 
   useHotkeys(
-    'meta+d',
+    "meta+d",
     (e) => {
       if (value.length === 0) {
         e.preventDefault();
@@ -137,15 +128,15 @@ function BlockMenuInput({ onHide }: { onHide: () => void }) {
         onHide();
       }
     },
-    { enableOnFormTags: true }
+    { enableOnFormTags: true },
   );
 
   useHotkeys(
-    'meta+j',
+    "meta+j",
     () => {
       onHide();
     },
-    { enableOnFormTags: true }
+    { enableOnFormTags: true },
   );
 
   return (
@@ -156,32 +147,30 @@ function BlockMenuInput({ onHide }: { onHide: () => void }) {
 }
 
 const GROUP = {
-  ALIGN: 'align',
-  BACKGROUND: 'background',
-  COLOR: 'color',
-  TURN_INTO: 'turn_into',
+  ALIGN: "align",
+  BACKGROUND: "background",
+  COLOR: "color",
+  TURN_INTO: "turn_into",
 } as const;
 
 export const blockMenuItems = {
   caption: {
     icon: <ClosedCaptioning />,
-    keywords: ['alt'],
-    label: 'Caption',
-    value: 'caption',
+    keywords: ["alt"],
+    label: "Caption",
+    value: "caption",
     onSelect: ({ editor }: { editor: PlateEditor }) => {
-      const firstBlock = editor
-        .getApi(BlockSelectionPlugin)
-        .blockSelection.getNodes()[0];
+      const firstBlock = editor.getApi(BlockSelectionPlugin).blockSelection.getNodes()[0];
       showCaption(editor, firstBlock[0] as TElement);
       editor.getApi(BlockSelectionPlugin).blockSelection.clear();
     },
   },
   delete: {
     icon: <Trash />,
-    keywords: ['remove'],
-    label: 'Delete',
-    shortcut: 'Del or Ctrl+D',
-    value: 'delete',
+    keywords: ["remove"],
+    label: "Delete",
+    shortcut: "Del or Ctrl+D",
+    value: "delete",
     onSelect: ({ editor }: { editor: PlateEditor }) => {
       editor.getTransforms(BlockSelectionPlugin).blockSelection.removeNodes();
     },
@@ -189,14 +178,12 @@ export const blockMenuItems = {
   duplicate: {
     focusEditor: false,
     icon: <Files />,
-    keywords: ['copy'],
-    label: 'Duplicate',
-    shortcut: '⌘+D',
-    value: 'duplicate',
+    keywords: ["copy"],
+    label: "Duplicate",
+    shortcut: "⌘+D",
+    value: "duplicate",
     onSelect: ({ editor }: { editor: PlateEditor }) => {
-      editor
-        .getTransforms(BlockSelectionPlugin)
-        .blockSelection.duplicate();
+      editor.getTransforms(BlockSelectionPlugin).blockSelection.duplicate();
 
       editor.getApi(BlockSelectionPlugin).blockSelection.focus();
     },
@@ -206,11 +193,11 @@ export const blockMenuItems = {
     filterItems: true,
     icon: <TextAlignLeft />,
     items: [
-      { icon: <TextAlignLeft />, label: 'Left', value: 'left' },
-      { icon: <TextAlignCenter />, label: 'Center', value: 'center' },
-      { icon: <TextAlignRight />, label: 'Right', value: 'right' },
+      { icon: <TextAlignLeft />, label: "Left", value: "left" },
+      { icon: <TextAlignCenter />, label: "Center", value: "center" },
+      { icon: <TextAlignRight />, label: "Right", value: "right" },
     ],
-    label: 'Align',
+    label: "Align",
     value: GROUP.ALIGN,
   },
   [GROUP.COLOR]: {
@@ -218,15 +205,15 @@ export const blockMenuItems = {
     filterItems: true,
     icon: <PaintRoller />,
     items: [
-      { group: GROUP.COLOR, items: textColorItems, label: 'Text color' },
+      { group: GROUP.COLOR, items: textColorItems, label: "Text color" },
       {
         group: GROUP.BACKGROUND,
         items: backgroundColorItems,
-        label: 'Background color',
+        label: "Background color",
       },
     ],
-    keywords: ['highlight', 'background'],
-    label: 'Color',
+    keywords: ["highlight", "background"],
+    label: "Color",
     value: GROUP.COLOR,
   },
   [GROUP.TURN_INTO]: {
@@ -234,18 +221,14 @@ export const blockMenuItems = {
     filterItems: true,
     icon: <ArrowsClockwise />,
     items: turnIntoItems,
-    label: 'Turn into',
+    label: "Turn into",
     value: GROUP.TURN_INTO,
   },
 };
 
 const orderedMenuItems = [
   {
-    items: [
-      blockMenuItems.delete,
-      blockMenuItems.duplicate,
-      blockMenuItems[GROUP.TURN_INTO],
-    ],
+    items: [blockMenuItems.delete, blockMenuItems.duplicate, blockMenuItems[GROUP.TURN_INTO]],
   },
   {
     items: [blockMenuItems[GROUP.COLOR]],
@@ -274,8 +257,8 @@ function BlockMenuItems() {
       selectedBlocks.length === 1 &&
       selectedBlocks.some((item) =>
         [KEYS.audio, KEYS.file, KEYS.img, KEYS.mediaEmbed, KEYS.video].includes(
-          item[0].type as any
-        )
+          item[0].type as any,
+        ),
       );
 
     const items = isMedia ? mediaMenuItems : orderedMenuItems;
@@ -322,19 +305,17 @@ function ColorMenuItem() {
 
   const color = useBlockSelectionFragmentProp({
     key: KEYS.color,
-    defaultValue: 'inherit',
-    mode: 'text',
+    defaultValue: "inherit",
+    mode: "text",
   });
   const background = useBlockSelectionFragmentProp({
     key: KEYS.backgroundColor,
-    defaultValue: 'transparent',
+    defaultValue: "transparent",
   });
 
   const handleColorChange = (group: string, value: string) => {
     if (group === GROUP.COLOR) {
-      editor
-        .getTransforms(BlockSelectionPlugin)
-        .blockSelection.setNodes({ color: value });
+      editor.getTransforms(BlockSelectionPlugin).blockSelection.setNodes({ color: value });
     } else if (group === GROUP.BACKGROUND) {
       editor
         .getTransforms(BlockSelectionPlugin)
@@ -346,7 +327,7 @@ function ColorMenuItem() {
 
   const menuGroups = React.useMemo(
     () => filterMenuGroups(blockMenuItems[GROUP.COLOR].items, searchValue),
-    [searchValue]
+    [searchValue],
   );
 
   const content = (
@@ -356,9 +337,7 @@ function ColorMenuItem() {
           {menuGroup.items?.map((item, index) => (
             <MenuItem
               checked={
-                menuGroup.group === GROUP.COLOR
-                  ? color === item.value
-                  : background === item.value
+                menuGroup.group === GROUP.COLOR ? color === item.value : background === item.value
               }
               icon={<ColorIcon group={menuGroup.group!} value={item.value!} />}
               key={index}
@@ -392,13 +371,13 @@ function AlignMenuItem() {
   const [searchValue] = useComboboxValueState();
   const editor = useEditorRef();
   const value = useBlockSelectionFragmentProp({
-    key: 'align',
-    defaultValue: 'left',
+    key: "align",
+    defaultValue: "left",
   });
 
   const menuItems = React.useMemo(
     () => filterMenuItems(blockMenuItems[GROUP.ALIGN], searchValue),
-    [searchValue]
+    [searchValue],
   );
 
   const content = (
@@ -421,9 +400,7 @@ function AlignMenuItem() {
   );
 
   if (searchValue)
-    return (
-      <MenuGroup label={blockMenuItems[GROUP.ALIGN].label}>{content}</MenuGroup>
-    );
+    return <MenuGroup label={blockMenuItems[GROUP.ALIGN].label}>{content}</MenuGroup>;
 
   return (
     <Menu
@@ -463,7 +440,7 @@ function TurnIntoMenuItem() {
 
   const menuItems = React.useMemo(
     () => filterMenuItems(blockMenuItems[GROUP.TURN_INTO], searchValue),
-    [searchValue]
+    [searchValue],
   );
 
   const content = (
@@ -485,11 +462,7 @@ function TurnIntoMenuItem() {
   );
 
   if (searchValue)
-    return (
-      <MenuGroup label={blockMenuItems[GROUP.TURN_INTO].label}>
-        {content}
-      </MenuGroup>
-    );
+    return <MenuGroup label={blockMenuItems[GROUP.TURN_INTO].label}>{content}</MenuGroup>;
 
   return (
     <Menu

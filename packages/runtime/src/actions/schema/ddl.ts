@@ -4,7 +4,7 @@
  * Generate CREATE TABLE statements from schema declarations.
  */
 
-import type { SchemaTable, ColumnType } from "@hands/core/primitives";
+import type { ColumnType, SchemaTable } from "@hands/core/primitives";
 
 /**
  * Map ColumnType to SQLite type

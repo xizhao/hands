@@ -6,9 +6,9 @@
  */
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { usePlatform } from "../platform";
-import type { Workbook, RuntimeStatus } from "../platform/types";
 import { trpc } from "@/lib/trpc";
+import { usePlatform } from "../platform";
+import type { RuntimeStatus, Workbook } from "../platform/types";
 
 // ============================================================================
 // Types (re-exported for backward compatibility)
@@ -202,7 +202,7 @@ export function useCreateWorkbook() {
       platform.workbook.create(request.name, request.description),
     onSuccess: (newWorkbook) => {
       queryClient.setQueryData<Workbook[]>(["workbooks"], (old) =>
-        old ? [newWorkbook, ...old] : [newWorkbook]
+        old ? [newWorkbook, ...old] : [newWorkbook],
       );
     },
   });
@@ -226,7 +226,7 @@ export function useUpdateWorkbook() {
     },
     onSuccess: (updated) => {
       queryClient.setQueryData<Workbook[]>(["workbooks"], (old) =>
-        old?.map((w) => (w.id === updated.id ? updated : w))
+        old?.map((w) => (w.id === updated.id ? updated : w)),
       );
       queryClient.setQueryData(["workbook", updated.id], updated);
     },
@@ -245,7 +245,7 @@ export function useDeleteWorkbook() {
     mutationFn: (id: string) => platform.workbook.delete(id),
     onSuccess: (_, deletedId) => {
       queryClient.setQueryData<Workbook[]>(["workbooks"], (old) =>
-        old?.filter((w) => w.id !== deletedId)
+        old?.filter((w) => w.id !== deletedId),
       );
       queryClient.removeQueries({ queryKey: ["workbook", deletedId] });
       queryClient.removeQueries({ queryKey: ["runtime-status", deletedId] });

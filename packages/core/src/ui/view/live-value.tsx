@@ -12,6 +12,7 @@
  * <LiveValue sql="SELECT * FROM tasks WHERE status = 'active'" display="table" />
  */
 
+import { Database, ExternalLink } from "lucide-react";
 import {
   createPlatePlugin,
   PlateElement,
@@ -21,32 +22,31 @@ import {
   useReadOnly,
   useSelected,
 } from "platejs/react";
-import { memo, useState, useCallback } from "react";
-import { Database, ExternalLink } from "lucide-react";
-import { useViewportVisibility } from "../lib/virtualization";
+import { memo, useCallback, useState } from "react";
+import { assertReadOnlySQL } from "../../primitives/sql-validation";
 
 import {
   type ColumnConfig,
+  type ComponentMeta,
   type DataGridColumnConfig,
   type DisplayMode,
-  LIVE_VALUE_KEY,
   LIVE_VALUE_INLINE_KEY,
+  LIVE_VALUE_KEY,
   type TLiveValueElement,
-  type ComponentMeta,
 } from "../../types";
-import { assertReadOnlySQL } from "../../primitives/sql-validation";
-import { LiveValueProvider } from "./charts/context";
-import { DataGrid } from "../data/data-grid";
-import { useLiveQuery, useNavigateToTable } from "../query-provider";
+import { Button } from "../components/button";
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogHeader,
   DialogTitle,
-  DialogDescription,
 } from "../components/dialog";
-import { Button } from "../components/button";
-import { LiveControlsMenu, LiveQueryEditor, extractTableName } from "../livecontrol";
+import { DataGrid } from "../data/data-grid";
+import { useViewportVisibility } from "../lib/virtualization";
+import { extractTableName, LiveControlsMenu, LiveQueryEditor } from "../livecontrol";
+import { useLiveQuery, useNavigateToTable } from "../query-provider";
+import { LiveValueProvider } from "./charts/context";
 
 // ============================================================================
 // Display Type Selection
@@ -343,22 +343,26 @@ function LiveValueElement(props: PlateElementProps) {
   // IMPORTANT: All hooks must be called before any early return to satisfy Rules of Hooks.
   // Query is only executed when visible (via empty query when not visible).
   const shouldQuery = isVisible && !staticData && !!query;
-  const { data: queryData, isLoading: queryLoading, error: queryError } = useLiveQuery(
-    shouldQuery ? query : "",
-    shouldQuery ? params : undefined
-  );
+  const {
+    data: queryData,
+    isLoading: queryLoading,
+    error: queryError,
+  } = useLiveQuery(shouldQuery ? query : "", shouldQuery ? params : undefined);
 
   // Callback for applying query changes (must be called before early return)
-  const handleApplyQuery = useCallback((newQuery: string) => {
-    try {
-      const path = editor.api.findPath(element);
-      if (path) {
-        editor.tf.setNodes({ query: newQuery } as Partial<TLiveValueElement>, { at: path });
+  const handleApplyQuery = useCallback(
+    (newQuery: string) => {
+      try {
+        const path = editor.api.findPath(element);
+        if (path) {
+          editor.tf.setNodes({ query: newQuery } as Partial<TLiveValueElement>, { at: path });
+        }
+      } catch (e) {
+        console.error("Failed to update query:", e);
       }
-    } catch (e) {
-      console.error("Failed to update query:", e);
-    }
-  }, [editor, element]);
+    },
+    [editor, element],
+  );
 
   // Show placeholder for off-screen block elements
   // This early return is now AFTER all hooks have been called
@@ -410,11 +414,14 @@ function LiveValueElement(props: PlateElementProps) {
   );
 
   return (
-    <PlateElement
-      {...props}
-      as={isInline ? "span" : "div"}
-    >
-      <LiveValueProvider data={data} isLoading={isLoading} error={error} tableName={tableName} query={query}>
+    <PlateElement {...props} as={isInline ? "span" : "div"}>
+      <LiveValueProvider
+        data={data}
+        isLoading={isLoading}
+        error={error}
+        tableName={tableName}
+        query={query}
+      >
         <LiveControlsMenu
           type="query"
           sql={query}
@@ -531,13 +538,15 @@ export const LiveValueInlinePlugin = createPlatePlugin({
  * If query is provided, throws if not read-only (SELECT, WITH, EXPLAIN, etc.)
  */
 export function createLiveValueElement(
-  queryOrOptions: string | {
-    query?: string;
-    data?: Record<string, unknown>[];
-    display?: DisplayMode;
-    params?: Record<string, unknown>;
-    columns?: ColumnConfig[] | "auto";
-  },
+  queryOrOptions:
+    | string
+    | {
+        query?: string;
+        data?: Record<string, unknown>[];
+        display?: DisplayMode;
+        params?: Record<string, unknown>;
+        columns?: ColumnConfig[] | "auto";
+      },
   legacyOptions?: {
     display?: DisplayMode;
     params?: Record<string, unknown>;

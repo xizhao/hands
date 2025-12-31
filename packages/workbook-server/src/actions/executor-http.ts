@@ -5,9 +5,9 @@
  * Runtime has direct DB access for efficient execution.
  */
 
-import type { ActionRun, ActionTriggerType } from "@hands/core/primitives";
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
+import type { ActionRun, ActionTriggerType } from "@hands/core/primitives";
 import type { DiscoveredAction } from "../workbook/types.js";
 
 /**
@@ -82,9 +82,7 @@ export interface ExecuteActionHttpOptions {
  * - Building context with direct DB access
  * - Executing the action
  */
-export async function executeActionHttp(
-  options: ExecuteActionHttpOptions
-): Promise<ActionRun> {
+export async function executeActionHttp(options: ExecuteActionHttpOptions): Promise<ActionRun> {
   const { action, trigger, input, runtimeUrl, workbookDir } = options;
 
   // Check for missing secrets before delegating
@@ -165,7 +163,7 @@ export async function executeActionByIdHttp(
   trigger: ActionTriggerType,
   input: unknown,
   runtimeUrl: string,
-  workbookDir: string
+  workbookDir: string,
 ): Promise<ActionRun> {
   const action = actions.find((a) => a.id === actionId);
 

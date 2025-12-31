@@ -7,20 +7,15 @@
  * If no workflow actions exist, this module exports empty bindings.
  */
 
-import type { WorkflowEntrypoint } from "cloudflare:workers";
-
 /** Map of workflow ID to binding info */
-export declare const workflowBindings: Record<
-  string,
-  { className: string; binding: string }
->;
+export declare const workflowBindings: Record<string, { className: string; binding: string }>;
 
 /** Type of workflow IDs (union of all workflow keys) */
 export type WorkflowId = keyof typeof workflowBindings;
 
 /** Get workflow binding info by ID */
 export declare function getWorkflowBinding(
-  id: string
+  id: string,
 ): { className: string; binding: string } | undefined;
 
 // Workflow classes are dynamically generated based on actions

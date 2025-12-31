@@ -12,14 +12,12 @@ const polarsPromise = import("nodejs-polars")
     polarsError = err;
   });
 
-
 const DEFAULT_RUNTIME_PORT = 55000;
 function getRuntimePort(): number {
   const envPort = process.env.HANDS_RUNTIME_PORT;
   if (envPort) return parseInt(envPort, 10);
   return DEFAULT_RUNTIME_PORT;
 }
-
 
 import { createTRPCClient, httpBatchLink } from "@trpc/client";
 
@@ -40,7 +38,6 @@ function getTRPCClient() {
   currentPort = port;
   return client;
 }
-
 
 class DataFrameStore extends Map<string, pl.DataFrame> {
   private maxSize = 50;
@@ -110,7 +107,11 @@ function buildCreateTable(df: pl.DataFrame, tableName: string): string {
   return `CREATE TABLE "${tableName}" (${columns.join(", ")})`;
 }
 
-function buildBatchInsert(tableName: string, columns: string[], rows: Record<string, unknown>[]): string {
+function buildBatchInsert(
+  tableName: string,
+  columns: string[],
+  rows: Record<string, unknown>[],
+): string {
   const escapedCols = columns.map((c) => `"${c}"`).join(", ");
   const values = rows.map((row) => {
     const vals = columns.map((col) => escapeValue(row[col]));
@@ -130,7 +131,11 @@ function createPolarsContext() {
     return pl.DataFrame(result.rows as Record<string, unknown>[]);
   }
 
-  async function write_db(df: pl.DataFrame, tableName: string, opts: { ifExists?: "replace" | "append" | "fail" } = {}): Promise<number> {
+  async function write_db(
+    df: pl.DataFrame,
+    tableName: string,
+    opts: { ifExists?: "replace" | "append" | "fail" } = {},
+  ): Promise<number> {
     const { ifExists = "fail" } = opts;
     const safeTableName = tableName.replace(/[^a-zA-Z0-9_]/g, "_");
 
@@ -140,8 +145,12 @@ function createPolarsContext() {
     const tableExists = ((existsResult.rows as unknown[])?.length ?? 0) > 0;
 
     if (tableExists) {
-      if (ifExists === "fail") throw new Error(`Table "${safeTableName}" already exists. Use ifExists: "replace" or "append"`);
-      if (ifExists === "replace") await trpc.db.query.mutate({ sql: `DROP TABLE "${safeTableName}"` });
+      if (ifExists === "fail")
+        throw new Error(
+          `Table "${safeTableName}" already exists. Use ifExists: "replace" or "append"`,
+        );
+      if (ifExists === "replace")
+        await trpc.db.query.mutate({ sql: `DROP TABLE "${safeTableName}"` });
     }
 
     if (!tableExists || ifExists === "replace") {
@@ -202,8 +211,13 @@ return { rows: filtered.height, preview: filtered.head(5).toRecords() };
 Return a value to see it in the output.`,
 
   args: {
-    code: tool.schema.string().describe("TypeScript code to execute with Polars. Must return a value."),
-    timeout: tool.schema.number().optional().describe("Execution timeout in ms (default: 30000, max: 120000)"),
+    code: tool.schema
+      .string()
+      .describe("TypeScript code to execute with Polars. Must return a value."),
+    timeout: tool.schema
+      .number()
+      .optional()
+      .describe("Execution timeout in ms (default: 30000, max: 120000)"),
   },
 
   async execute(args, _ctx) {
@@ -224,7 +238,12 @@ Return a value to see it in the output.`,
 
       const result = await Promise.race([
         fn(pl, dataframes, context.read_db, context.write_db),
-        new Promise((_, reject) => setTimeout(() => reject(new Error(`Timeout after ${effectiveTimeout}ms`)), effectiveTimeout)),
+        new Promise((_, reject) =>
+          setTimeout(
+            () => reject(new Error(`Timeout after ${effectiveTimeout}ms`)),
+            effectiveTimeout,
+          ),
+        ),
       ]);
 
       if (result === undefined) return "Code executed successfully (no return value)";
@@ -233,8 +252,10 @@ Return a value to see it in the output.`,
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
 
-      if (message.includes("not defined")) return `Error: ${message}\n\nHint: Available in scope: pl, dfs, read_db, write_db`;
-      if (message.includes("ENOENT") || message.includes("No such file")) return `Error: File not found\n${message}`;
+      if (message.includes("not defined"))
+        return `Error: ${message}\n\nHint: Available in scope: pl, dfs, read_db, write_db`;
+      if (message.includes("ENOENT") || message.includes("No such file"))
+        return `Error: File not found\n${message}`;
       if (message.includes("ECONNREFUSED") || message.includes("fetch failed")) {
         return `Error: Cannot connect to runtime.\n${message}\n\nMake sure a workbook is open in Hands.\nRuntime port: ${getRuntimePort()}`;
       }

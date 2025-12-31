@@ -32,9 +32,7 @@ interface RuntimeActionMetadata {
  *
  * Returns empty array if runtime is not available.
  */
-export async function fetchActionsFromRuntime(
-  runtimeUrl: string
-): Promise<DiscoveredAction[]> {
+export async function fetchActionsFromRuntime(runtimeUrl: string): Promise<DiscoveredAction[]> {
   try {
     const response = await fetch(`${runtimeUrl}/actions`);
     if (!response.ok) return [];

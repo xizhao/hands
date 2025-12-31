@@ -6,12 +6,12 @@
  */
 
 export {
-  sqliteTRPCRouter,
-  type SQLiteTRPCContext,
-  type SQLiteTRPCRouter,
-  // SSE subscription exports
-  getDbSubscriptionManager,
   createDbSubscriptionManager,
   type DbChangeEvent,
   type DbSubscriptionState,
+  // SSE subscription exports
+  getDbSubscriptionManager,
+  type SQLiteTRPCContext,
+  type SQLiteTRPCRouter,
+  sqliteTRPCRouter,
 } from "./trpc.js";

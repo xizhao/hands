@@ -1,11 +1,11 @@
-import { type ReactNode } from "react";
 import {
   EditorProvider,
   type EditorTrpcClient,
-  type GenerateMdxInput,
   type GenerateMdxBlockInput,
+  type GenerateMdxInput,
   type GenerateMdxOutput,
 } from "@hands/editor";
+import type { ReactNode } from "react";
 import { BrowserSqlProvider } from "./BrowserSqlProvider";
 
 // ============================================================================
@@ -24,7 +24,7 @@ interface SiteEditorProviderProps {
  * Fetch wrapper for the AI edge function
  */
 async function generateMdxFromApi(
-  input: GenerateMdxInput | GenerateMdxBlockInput
+  input: GenerateMdxInput | GenerateMdxBlockInput,
 ): Promise<GenerateMdxOutput> {
   const response = await fetch("/api/complete", {
     method: "POST",
@@ -74,7 +74,17 @@ const demoTables = [
   // RevOps / Sales
   {
     name: "deals",
-    columns: ["id", "company", "owner", "stage", "amount", "probability", "status", "close_date", "sales_cycle_days"],
+    columns: [
+      "id",
+      "company",
+      "owner",
+      "stage",
+      "amount",
+      "probability",
+      "status",
+      "close_date",
+      "sales_cycle_days",
+    ],
   },
   {
     name: "revenue_monthly",
@@ -96,11 +106,28 @@ const demoTables = [
   // Operations Alerts
   {
     name: "alerts",
-    columns: ["id", "severity", "system", "message", "status", "triggered_at", "acknowledged_by", "resolved_at"],
+    columns: [
+      "id",
+      "severity",
+      "system",
+      "message",
+      "status",
+      "triggered_at",
+      "acknowledged_by",
+      "resolved_at",
+    ],
   },
   {
     name: "system_health",
-    columns: ["id", "timestamp", "system", "uptime_pct", "error_rate", "latency_p50", "latency_p95"],
+    columns: [
+      "id",
+      "timestamp",
+      "system",
+      "uptime_pct",
+      "error_rate",
+      "latency_p50",
+      "latency_p95",
+    ],
   },
   {
     name: "api_metrics",

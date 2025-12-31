@@ -8,11 +8,11 @@
  * Both run in CF Workers with access to @hands/db.
  */
 
-import crypto from "crypto";
-import fs from "fs";
-import path from "path";
-import type { Plugin } from "vite";
+import crypto from "node:crypto";
+import fs from "node:fs";
+import path from "node:path";
 import type { Value } from "platejs";
+import type { Plugin } from "vite";
 
 interface WorkbookPluginOptions {
   workbookPath: string;
@@ -75,8 +75,8 @@ function parseFrontmatter(content: string): { frontmatter: Record<string, unknow
   const frontmatter: Record<string, unknown> = {};
 
   // Simple YAML parsing (key: value only)
-  for (const line of yaml.split('\n')) {
-    const colonIdx = line.indexOf(':');
+  for (const line of yaml.split("\n")) {
+    const colonIdx = line.indexOf(":");
     if (colonIdx > 0) {
       const key = line.slice(0, colonIdx).trim();
       let value: unknown = line.slice(colonIdx + 1).trim();
@@ -92,7 +92,9 @@ function parseFrontmatter(content: string): { frontmatter: Record<string, unknow
 }
 
 // Lazy-load the MDX parser only when needed (after Vite is running)
-let parseMdxToPlate: ((source: string) => { frontmatter: Record<string, unknown>; value: Value; errors: string[] }) | null = null;
+let parseMdxToPlate:
+  | ((source: string) => { frontmatter: Record<string, unknown>; value: Value; errors: string[] })
+  | null = null;
 
 async function loadMdxParser() {
   if (parseMdxToPlate) return parseMdxToPlate;
@@ -107,9 +109,7 @@ async function processPages(pagesDir: string): Promise<PageMeta[]> {
     return [];
   }
 
-  const pageFiles = fs
-    .readdirSync(pagesDir)
-    .filter((f) => f.endsWith(".mdx") || f.endsWith(".md"));
+  const pageFiles = fs.readdirSync(pagesDir).filter((f) => f.endsWith(".mdx") || f.endsWith(".md"));
 
   const pages: PageMeta[] = [];
 
@@ -175,7 +175,7 @@ ${blockMap}
 ${pages
   .map(
     (p) => `const ${sanitizeId(p.id)}Frontmatter = ${JSON.stringify(p.frontmatter)};
-const ${sanitizeId(p.id)}Value = ${JSON.stringify(p.value)};`
+const ${sanitizeId(p.id)}Value = ${JSON.stringify(p.value)};`,
   )
   .join("\n\n")}
 
@@ -188,7 +188,7 @@ ${pages
       <PageStatic value={${sanitizeId(p.id)}Value} blocks={blocks} />
     </Page>
   );
-}`
+}`,
   )
   .join("\n\n")}
 
@@ -253,14 +253,19 @@ function toPascalCase(id: string): string {
     .join("");
 }
 
-function generateActionsManifest(actions: ActionMeta[], outputDir: string, workbookPath: string, isDev: boolean): void {
+function generateActionsManifest(
+  actions: ActionMeta[],
+  outputDir: string,
+  workbookPath: string,
+  isDev: boolean,
+): void {
   const imports = actions
-    .map((a) => `import ${sanitizeId(a.id)}Action from "${path.join(workbookPath, a.relativePath)}";`)
+    .map(
+      (a) => `import ${sanitizeId(a.id)}Action from "${path.join(workbookPath, a.relativePath)}";`,
+    )
     .join("\n");
 
-  const actionMap = actions
-    .map((a) => `  "${a.id}": ${sanitizeId(a.id)}Action,`)
-    .join("\n");
+  const actionMap = actions.map((a) => `  "${a.id}": ${sanitizeId(a.id)}Action,`).join("\n");
 
   const manifest = `// Auto-generated actions manifest - DO NOT EDIT
 import type { ActionDefinition } from "@hands/runtime";
@@ -298,7 +303,7 @@ function generateWorkflowClasses(
   workflowActions: ActionMeta[],
   outputDir: string,
   workbookPath: string,
-  isDev: boolean
+  isDev: boolean,
 ): void {
   // In dev mode, don't generate workflow classes - keep the stub
   // Workflow classes use cloudflare:workers imports which only work in production
@@ -325,7 +330,9 @@ export function getWorkflowBinding(_id: string): { className: string; binding: s
   }
 
   const imports = workflowActions
-    .map((a) => `import ${sanitizeId(a.id)}Action from "${path.join(workbookPath, a.relativePath)}";`)
+    .map(
+      (a) => `import ${sanitizeId(a.id)}Action from "${path.join(workbookPath, a.relativePath)}";`,
+    )
     .join("\n");
 
   const workflowClasses = workflowActions
@@ -411,33 +418,42 @@ export function workbookPlugin(options: WorkbookPluginOptions): Plugin {
     // Pages stub
     const pagesIndex = path.join(pagesOutputDir, "index.tsx");
     if (!fs.existsSync(pagesIndex)) {
-      fs.writeFileSync(pagesIndex, `// Auto-generated - DO NOT EDIT
+      fs.writeFileSync(
+        pagesIndex,
+        `// Auto-generated - DO NOT EDIT
 export const pages = {} as const;
 export type PageId = never;
 export const pageRoutes = [] as const;
-`);
+`,
+      );
     }
 
     // Actions stub
     const actionsIndex = path.join(actionsOutputDir, "index.ts");
     if (!fs.existsSync(actionsIndex)) {
-      fs.writeFileSync(actionsIndex, `// Auto-generated - DO NOT EDIT
+      fs.writeFileSync(
+        actionsIndex,
+        `// Auto-generated - DO NOT EDIT
 export const actions = {} as const;
 export type ActionId = never;
 export function getAction(_id: string) { return undefined; }
 export function listActions() { return []; }
-`);
+`,
+      );
     }
 
     // Workflows stub - always write on startup to ensure clean state
     // In dev mode, we keep this stub; in prod, generateWorkflowClasses overwrites it
     const workflowsFile = path.join(actionsOutputDir, "workflows.ts");
-    fs.writeFileSync(workflowsFile, `// Auto-generated - DO NOT EDIT
+    fs.writeFileSync(
+      workflowsFile,
+      `// Auto-generated - DO NOT EDIT
 // Workflows only run in production CF deployments
 export const workflowBindings = {} as const;
 export type WorkflowId = never;
 export function getWorkflowBinding(_id: string) { return undefined; }
-`);
+`,
+    );
   }
 
   async function processAll() {
@@ -491,9 +507,11 @@ export function getWorkflowBinding(_id: string) { return undefined; }
       server.watcher.add(actionsDir);
 
       const handleChange = async (changedPath: string, action: string) => {
-        const isPage = changedPath.startsWith(pagesDir) &&
+        const isPage =
+          changedPath.startsWith(pagesDir) &&
           (changedPath.endsWith(".mdx") || changedPath.endsWith(".md"));
-        const isAction = changedPath.startsWith(actionsDir) &&
+        const isAction =
+          changedPath.startsWith(actionsDir) &&
           changedPath.endsWith(".ts") &&
           !changedPath.endsWith(".test.ts") &&
           !changedPath.endsWith(".d.ts");

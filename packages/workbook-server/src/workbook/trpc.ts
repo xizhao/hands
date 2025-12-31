@@ -223,7 +223,9 @@ export const workbookTRPCRouter = t.router({
       const segments = input.blockId.split("/");
       const blockName = segments[segments.length - 1];
       const source =
-        input.source ?? ctx.generateBlockSource?.(blockName) ?? generateDefaultBlockSource(blockName);
+        input.source ??
+        ctx.generateBlockSource?.(blockName) ??
+        generateDefaultBlockSource(blockName);
 
       try {
         const { writeFileSync, mkdirSync } = await import("node:fs");
@@ -377,7 +379,6 @@ export const workbookTRPCRouter = t.router({
       return { success };
     }),
   }),
-
 });
 
 export type WorkbookTRPCRouter = typeof workbookTRPCRouter;

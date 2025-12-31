@@ -75,10 +75,7 @@ function fuzzyScore(query: string, target: string): number {
 /**
  * Find best matching tables for a query
  */
-export function matchTables(
-  query: string,
-  schema: TableSchema[]
-): FuzzyMatch<TableSchema>[] {
+export function matchTables(query: string, schema: TableSchema[]): FuzzyMatch<TableSchema>[] {
   const words = query.toLowerCase().split(/\s+/);
 
   return schema
@@ -100,11 +97,10 @@ export function matchTables(
  */
 export function matchColumns(
   query: string,
-  tables: TableSchema[]
+  tables: TableSchema[],
 ): FuzzyMatch<{ table: string; column: string; type: string }>[] {
   const words = query.toLowerCase().split(/\s+/);
-  const matches: FuzzyMatch<{ table: string; column: string; type: string }>[] =
-    [];
+  const matches: FuzzyMatch<{ table: string; column: string; type: string }>[] = [];
 
   for (const table of tables) {
     for (const col of table.columns) {
@@ -129,7 +125,7 @@ export function matchColumns(
  * Detect aggregation keywords in query
  */
 function detectAggregation(
-  query: string
+  query: string,
 ): { type: "count" | "sum" | "avg" | "min" | "max"; keyword: string } | null {
   const lower = query.toLowerCase();
 
@@ -187,11 +183,7 @@ function detectGrouping(query: string): string[] {
 /**
  * Infer result shape from query structure
  */
-function inferShape(
-  columns: string[],
-  hasAggregation: boolean,
-  groupBy: string[]
-): ResultShape {
+function inferShape(columns: string[], hasAggregation: boolean, groupBy: string[]): ResultShape {
   // Single aggregation without grouping = single value
   if (hasAggregation && groupBy.length === 0) {
     return "single";
@@ -214,10 +206,7 @@ function inferShape(
 /**
  * Main text-to-SQL conversion
  */
-export function textToSQL(
-  query: string,
-  schema: TableSchema[]
-): TextToSQLResult | null {
+export function textToSQL(query: string, schema: TableSchema[]): TextToSQLResult | null {
   if (!query.trim() || schema.length === 0) {
     return null;
   }
@@ -242,7 +231,7 @@ export function textToSQL(
   const groupColumns = groupKeywords
     .map((kw) => {
       const match = columnMatches.find(
-        (m) => m.item.column.toLowerCase().includes(kw) || kw.includes(m.item.column.toLowerCase())
+        (m) => m.item.column.toLowerCase().includes(kw) || kw.includes(m.item.column.toLowerCase()),
       );
       return match?.item.column;
     })
@@ -260,7 +249,7 @@ export function textToSQL(
           !groupColumns.includes(m.item.column) &&
           (m.item.type.includes("INT") ||
             m.item.type.includes("REAL") ||
-            m.item.type.includes("NUMERIC"))
+            m.item.type.includes("NUMERIC")),
       );
       const aggTarget = aggCol ? aggCol.item.column : "*";
       selectClause = `${groupColumns.join(", ")}, ${aggregation.type.toUpperCase()}(${aggTarget})`;
@@ -284,25 +273,20 @@ export function textToSQL(
   const fromClause = primaryTable.table_name;
 
   // Build GROUP BY clause
-  const groupByClause =
-    groupColumns.length > 0 ? `GROUP BY ${groupColumns.join(", ")}` : "";
+  const groupByClause = groupColumns.length > 0 ? `GROUP BY ${groupColumns.join(", ")}` : "";
 
   // Build full query
-  const sql = `SELECT ${selectClause} FROM ${fromClause}${groupByClause ? " " + groupByClause : ""}`;
+  const sql = `SELECT ${selectClause} FROM ${fromClause}${groupByClause ? ` ${groupByClause}` : ""}`;
 
   // Infer shape
-  const shape = inferShape(
-    selectedColumns,
-    !!aggregation,
-    groupColumns
-  );
+  const shape = inferShape(selectedColumns, !!aggregation, groupColumns);
 
   // Calculate confidence
   const confidence = Math.min(
     1,
     tableMatches[0].score * 0.5 +
       (columnMatches.length > 0 ? columnMatches[0].score * 0.3 : 0.1) +
-      (aggregation ? 0.2 : 0)
+      (aggregation ? 0.2 : 0),
   );
 
   // Build preview
@@ -338,7 +322,7 @@ export function textToSQL(
 export function getAutocompleteSuggestions(
   query: string,
   schema: TableSchema[],
-  limit = 5
+  limit = 5,
 ): Array<{ type: "table" | "column"; name: string; table?: string; score: number }> {
   const suggestions: Array<{
     type: "table" | "column";

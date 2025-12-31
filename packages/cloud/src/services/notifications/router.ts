@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { router, protectedProcedure } from "../../trpc/base";
+import { protectedProcedure, router } from "../../trpc/base";
 import { createNotificationSender } from "./client";
 
 export const notificationsRouter = router({
@@ -10,7 +10,7 @@ export const notificationsRouter = router({
         level: z.enum(["info", "warning", "error", "success"]),
         title: z.string().min(1).max(100),
         message: z.string().min(1).max(1000),
-      })
+      }),
     )
     .mutation(async ({ ctx, input }) => {
       const sender = createNotificationSender(ctx.env);
@@ -23,7 +23,7 @@ export const notificationsRouter = router({
     .input(
       z.object({
         event: z.string().min(1).max(100),
-      })
+      }),
     )
     .mutation(async ({ ctx, input }) => {
       const sender = createNotificationSender(ctx.env);
@@ -40,7 +40,7 @@ export const notificationsRouter = router({
       z.object({
         title: z.string().min(1).max(100),
         details: z.record(z.string()),
-      })
+      }),
     )
     .mutation(async ({ ctx, input }) => {
       const sender = createNotificationSender(ctx.env);

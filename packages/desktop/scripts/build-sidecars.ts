@@ -1,4 +1,5 @@
 #!/usr/bin/env bun
+
 /**
  * Build sidecars for Tauri distribution
  *
@@ -6,10 +7,10 @@
  * Output goes to src-tauri/binaries/ with platform-specific naming
  */
 
+import { copyFileSync, cpSync, existsSync, mkdirSync, rmSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { $ } from "bun";
-import { existsSync, mkdirSync, copyFileSync, cpSync, rmSync } from "fs";
-import { join, dirname } from "path";
-import { fileURLToPath } from "url";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT = join(__dirname, "../../.."); // monorepo root
@@ -111,7 +112,9 @@ async function copyOpencode(targetTriple: string): Promise<void> {
   }
 
   if (!opencodePath) {
-    throw new Error("opencode binary not found in PATH. Please install it with: npm install -g opencode");
+    throw new Error(
+      "opencode binary not found in PATH. Please install it with: npm install -g opencode",
+    );
   }
 
   console.log(`  Source: ${opencodePath}`);
@@ -173,7 +176,9 @@ async function copyPolarsNativeModules(): Promise<void> {
 
   const nativeDir = join(bunModules, `${nativePkgName}@0.17.0/node_modules/${nativePkgName}`);
   if (!existsSync(nativeDir)) {
-    throw new Error(`Native module ${nativePkgName} not found at ${nativeDir}. Run 'bun install' first.`);
+    throw new Error(
+      `Native module ${nativePkgName} not found at ${nativeDir}. Run 'bun install' first.`,
+    );
   }
   cpSync(nativeDir, join(libDir, nativePkgName), { recursive: true });
   console.log(`  ✓ Copied ${nativePkgName}`);

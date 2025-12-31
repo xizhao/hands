@@ -20,7 +20,7 @@ function extractTablesFromSql(sql: string): string[] {
   const tables: string[] = [];
 
   // Normalize SQL - collapse whitespace, case insensitive
-  const normalized = sql.replace(/\s+/g, ' ').trim();
+  const normalized = sql.replace(/\s+/g, " ").trim();
 
   // Patterns that precede table names
   const patterns = [
@@ -38,12 +38,50 @@ function extractTablesFromSql(sql: string): string[] {
       const tableName = match[1];
       // Filter out SQL keywords that might be mistakenly captured
       const keywords = new Set([
-        'select', 'from', 'where', 'and', 'or', 'not', 'in', 'like',
-        'values', 'set', 'as', 'on', 'using', 'null', 'true', 'false',
-        'case', 'when', 'then', 'else', 'end', 'order', 'by', 'group',
-        'having', 'limit', 'offset', 'inner', 'outer', 'left', 'right',
-        'cross', 'full', 'natural', 'distinct', 'all', 'union', 'except',
-        'intersect', 'exists', 'between', 'is', 'asc', 'desc'
+        "select",
+        "from",
+        "where",
+        "and",
+        "or",
+        "not",
+        "in",
+        "like",
+        "values",
+        "set",
+        "as",
+        "on",
+        "using",
+        "null",
+        "true",
+        "false",
+        "case",
+        "when",
+        "then",
+        "else",
+        "end",
+        "order",
+        "by",
+        "group",
+        "having",
+        "limit",
+        "offset",
+        "inner",
+        "outer",
+        "left",
+        "right",
+        "cross",
+        "full",
+        "natural",
+        "distinct",
+        "all",
+        "union",
+        "except",
+        "intersect",
+        "exists",
+        "between",
+        "is",
+        "asc",
+        "desc",
       ]);
       if (!keywords.has(tableName.toLowerCase())) {
         tables.push(tableName);
@@ -70,7 +108,7 @@ function extractSqlLiterals(source: string): string[] {
   while ((match = taggedTemplateRegex.exec(source)) !== null) {
     const sql = match[1];
     // Replace template expressions ${...} with placeholder
-    const cleanedSql = sql.replace(/\$\{[^}]*\}/g, '$1');
+    const cleanedSql = sql.replace(/\$\{[^}]*\}/g, "$1");
     sqls.push(cleanedSql);
   }
 

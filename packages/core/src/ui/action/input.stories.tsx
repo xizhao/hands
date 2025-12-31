@@ -24,5 +24,10 @@ export const Masks: Story = () => (
 );
 
 export const CustomMask: Story = () => (
-  <Input name="code" label="Product Code" mask={{ pattern: "##-####-##" }} placeholder="12-3456-78" />
+  <Input
+    name="code"
+    label="Product Code"
+    mask={{ pattern: "##-####-##" }}
+    placeholder="12-3456-78"
+  />
 );

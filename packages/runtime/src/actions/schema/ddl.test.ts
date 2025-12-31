@@ -1,6 +1,6 @@
-import { describe, it, expect } from "vitest";
-import { generateCreateTable, generateCreateTables } from "./ddl";
 import type { SchemaTable } from "@hands/core/primitives";
+import { describe, expect, it } from "vitest";
+import { generateCreateTable, generateCreateTables } from "./ddl";
 
 describe("generateCreateTable", () => {
   it("generates basic table", () => {

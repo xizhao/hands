@@ -1,9 +1,7 @@
-import { tool } from "@opencode-ai/plugin";
-
-
-import { spawn, execSync } from "node:child_process";
+import { execSync, spawn } from "node:child_process";
 import { existsSync } from "node:fs";
 import { dirname, resolve } from "node:path";
+import { tool } from "@opencode-ai/plugin";
 
 let cachedCliPath: string | null = null;
 
@@ -28,10 +26,15 @@ function findCli(): string {
       return cachedCliPath;
     }
   }
-  throw new Error(`Could not find hands-cli binary. Searched:\n${candidates.map(c => `  - ${c}`).join("\n")}`);
+  throw new Error(
+    `Could not find hands-cli binary. Searched:\n${candidates.map((c) => `  - ${c}`).join("\n")}`,
+  );
 }
 
-function runCli(args: string[], options: { cwd?: string; timeout?: number } = {}): Promise<{ stdout: string; stderr: string; code: number }> {
+function runCli(
+  args: string[],
+  options: { cwd?: string; timeout?: number } = {},
+): Promise<{ stdout: string; stderr: string; code: number }> {
   const cliPath = findCli();
   const { cwd = process.cwd(), timeout } = options;
   return new Promise((resolve) => {
@@ -42,11 +45,15 @@ function runCli(args: string[], options: { cwd?: string; timeout?: number } = {}
     if (timeout) {
       timeoutId = setTimeout(() => {
         proc.kill("SIGTERM");
-        resolve({ stdout, stderr: stderr + "\nCommand timed out", code: 124 });
+        resolve({ stdout, stderr: `${stderr}\nCommand timed out`, code: 124 });
       }, timeout);
     }
-    proc.stdout?.on("data", (data) => { stdout += data.toString(); });
-    proc.stderr?.on("data", (data) => { stderr += data.toString(); });
+    proc.stdout?.on("data", (data) => {
+      stdout += data.toString();
+    });
+    proc.stderr?.on("data", (data) => {
+      stderr += data.toString();
+    });
     proc.on("close", (code) => {
       if (timeoutId) clearTimeout(timeoutId);
       resolve({ stdout, stderr, code: code ?? 0 });
@@ -58,7 +65,10 @@ function runCli(args: string[], options: { cwd?: string; timeout?: number } = {}
   });
 }
 
-function runCliSync(args: string[], options: { cwd?: string; timeout?: number } = {}): { stdout: string; stderr: string; code: number } {
+function _runCliSync(
+  args: string[],
+  options: { cwd?: string; timeout?: number } = {},
+): { stdout: string; stderr: string; code: number } {
   const cliPath = findCli();
   const { cwd = process.cwd(), timeout = 30000 } = options;
   try {
@@ -75,7 +85,6 @@ function runCliSync(args: string[], options: { cwd?: string; timeout?: number } 
   }
 }
 
-
 const sources = tool({
   description: `Manage external data sources for the workbook.
 
@@ -91,9 +100,17 @@ Use this tool to:
 - Check what sources are already configured`,
 
   args: {
-    action: tool.schema.enum(["list", "add"]).describe("Action to perform: 'list' shows available sources, 'add' enables a source"),
-    name: tool.schema.string().optional().describe("Source name to add (required for 'add' action). Options: hackernews, github"),
-    schedule: tool.schema.string().optional().describe("Custom cron schedule (optional). Default is hourly: '0 * * * *'"),
+    action: tool.schema
+      .enum(["list", "add"])
+      .describe("Action to perform: 'list' shows available sources, 'add' enables a source"),
+    name: tool.schema
+      .string()
+      .optional()
+      .describe("Source name to add (required for 'add' action). Options: hackernews, github"),
+    schedule: tool.schema
+      .string()
+      .optional()
+      .describe("Custom cron schedule (optional). Default is hourly: '0 * * * *'"),
   },
 
   async execute(args, _ctx) {
@@ -138,9 +155,11 @@ Available sources:
 
       let response = result.stdout || `Source "${name}" added successfully.`;
       if (name === "github") {
-        response += "\n\nNote: GitHub source requires GITHUB_TOKEN. Make sure it's set in your environment or workbook secrets.";
+        response +=
+          "\n\nNote: GitHub source requires GITHUB_TOKEN. Make sure it's set in your environment or workbook secrets.";
       }
-      response += "\n\nThe source will sync data automatically on schedule. Use the schema tool to see the new tables once data syncs.";
+      response +=
+        "\n\nThe source will sync data automatically on schedule. Use the schema tool to see the new tables once data syncs.";
       return response;
     }
 

@@ -1,6 +1,6 @@
 "use client";
 
-import type { CommentThread as CommentThreadType, CollabUser } from "../types";
+import type { CollabUser, CommentThread as CommentThreadType } from "../types";
 import { CommentInput } from "./CommentInput";
 
 interface CommentThreadProps {
@@ -21,7 +21,10 @@ export function CommentThread({
   return (
     <div className="space-y-3">
       {thread.comments.map((comment, index) => {
-        const initials = comment.authorName.split(" ").map(n => n[0]).join("");
+        const initials = comment.authorName
+          .split(" ")
+          .map((n) => n[0])
+          .join("");
         return (
           <div key={comment.id} className="group">
             <div className="flex items-start gap-2">
@@ -36,9 +39,7 @@ export function CommentThread({
               <div className="flex-1 min-w-0">
                 {/* Header */}
                 <div className="flex items-center gap-2">
-                  <span className="text-xs font-medium text-foreground">
-                    {comment.authorName}
-                  </span>
+                  <span className="text-xs font-medium text-foreground">{comment.authorName}</span>
                   <span className="text-[10px] text-muted-foreground">
                     {formatTime(comment.createdAt)}
                   </span>
@@ -57,7 +58,13 @@ export function CommentThread({
                   className="opacity-0 group-hover:opacity-100 p-1 text-muted-foreground hover:text-destructive transition-all"
                   title="Delete comment"
                 >
-                  <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
+                  <svg
+                    className="w-3 h-3"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                    strokeWidth={2}
+                  >
                     <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
                   </svg>
                 </button>
@@ -70,7 +77,13 @@ export function CommentThread({
                 onClick={onResolve}
                 className="mt-2 ml-8 text-[10px] text-muted-foreground hover:text-green-600 flex items-center gap-1 transition-colors"
               >
-                <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
+                <svg
+                  className="w-3 h-3"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                  strokeWidth={2}
+                >
                   <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
                 </svg>
                 Resolve

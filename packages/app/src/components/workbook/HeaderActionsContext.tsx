@@ -8,13 +8,7 @@
  * the spec input connected to the page tab.
  */
 
-import {
-  createContext,
-  useContext,
-  useState,
-  type ReactNode,
-  useCallback,
-} from "react";
+import { createContext, type ReactNode, useCallback, useContext, useState } from "react";
 import { createPortal } from "react-dom";
 
 // ============================================================================
@@ -30,9 +24,7 @@ interface HeaderActionsContextValue {
   setSyncStatusTarget: (target: HTMLSpanElement | null) => void;
 }
 
-const HeaderActionsContext = createContext<HeaderActionsContextValue | null>(
-  null
-);
+const HeaderActionsContext = createContext<HeaderActionsContextValue | null>(null);
 
 // ============================================================================
 // Provider
@@ -48,11 +40,16 @@ export function HeaderActionsProvider({ children }: HeaderActionsProviderProps) 
   const [syncStatusTarget, setSyncStatusTarget] = useState<HTMLSpanElement | null>(null);
 
   return (
-    <HeaderActionsContext.Provider value={{
-      portalTarget, setPortalTarget,
-      specBarTarget, setSpecBarTarget,
-      syncStatusTarget, setSyncStatusTarget
-    }}>
+    <HeaderActionsContext.Provider
+      value={{
+        portalTarget,
+        setPortalTarget,
+        specBarTarget,
+        setSpecBarTarget,
+        syncStatusTarget,
+        setSyncStatusTarget,
+      }}
+    >
       {children}
     </HeaderActionsContext.Provider>
   );
@@ -69,7 +66,7 @@ export function HeaderActionsSlot() {
     (node: HTMLDivElement | null) => {
       context?.setPortalTarget(node);
     },
-    [context]
+    [context],
   );
 
   return <div ref={ref} className="flex items-center gap-2" />;
@@ -104,7 +101,7 @@ export function SpecBarSlot() {
     (node: HTMLDivElement | null) => {
       context?.setSpecBarTarget(node);
     },
-    [context]
+    [context],
   );
 
   // Container that will hold the portaled SpecBar content
@@ -140,7 +137,7 @@ export function SyncStatusSlot() {
     (node: HTMLSpanElement | null) => {
       context?.setSyncStatusTarget(node);
     },
-    [context]
+    [context],
   );
 
   return <span ref={ref} className="inline-flex items-center" />;

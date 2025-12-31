@@ -44,20 +44,16 @@ import {
   X,
 } from "@phosphor-icons/react";
 import { toast } from "sonner";
-
-import type { TableEditorProps, TableRow, PendingChange } from "./types";
-import { blendWithBackground, getCssVar, getColumnWidth } from "./utils";
 import { cn } from "../lib/utils";
 import {
-  generateUpdateSql,
-  generateInsertSql,
-  generateDeleteSql,
-  generateBulkDeleteSql,
-  generateRenameColumnSql,
-  generateAlterColumnTypeSql,
   generateAddColumnSql,
+  generateAlterColumnTypeSql,
   generateDropColumnSql,
+  generateRenameColumnSql,
+  generateUpdateSql,
 } from "../sql";
+import type { PendingChange, TableEditorProps } from "./types";
+import { blendWithBackground, getColumnWidth, getCssVar } from "./utils";
 
 // Common SQL types for dropdown
 const SQL_TYPES = [
@@ -90,9 +86,9 @@ export function TableEditor({
   const [isCanvasReady, setIsCanvasReady] = useState(false);
   // Pending changes keyed by ROW INDEX (not row ID) to ensure uniqueness
   // Map<rowIndex, { columnName: newValue }>
-  const [pendingChanges, setPendingChanges] = useState<
-    Map<number, Record<string, unknown>>
-  >(new Map());
+  const [pendingChanges, setPendingChanges] = useState<Map<number, Record<string, unknown>>>(
+    new Map(),
+  );
 
   // Grid-controlled selection state (tracks current UI selection)
   const [gridSelection, setGridSelection] = useState<GridSelection>({
@@ -104,12 +100,10 @@ export function TableEditor({
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
 
   // Theme version to force re-render on theme change
-  const [themeVersion, setThemeVersion] = useState(0);
+  const [_themeVersion, setThemeVersion] = useState(0);
 
   // Column width overrides (for resize)
-  const [columnWidths, setColumnWidths] = useState<Map<string, number>>(
-    new Map()
-  );
+  const [columnWidths, setColumnWidths] = useState<Map<string, number>>(new Map());
 
   // Sorting state
   const [sortColumn, setSortColumn] = useState<string | null>(null);
@@ -139,9 +133,7 @@ export function TableEditor({
     type: string;
     nullable: boolean;
   } | null>(null);
-  const [dropColumnConfirm, setDropColumnConfirm] = useState<string | null>(
-    null
-  );
+  const [dropColumnConfirm, setDropColumnConfirm] = useState<string | null>(null);
 
   // SQL preview panel
   const [showPreview, setShowPreview] = useState(false);
@@ -238,14 +230,12 @@ export function TableEditor({
     setMenuPosition(null);
     setIsCanvasReady(false);
     setShowPreview(false);
-  }, [tableName]);
+  }, []);
 
   // Apply column order
   const orderedColumns = useMemo(() => {
     if (!columnOrder) return columns;
-    return columnOrder
-      .filter((i) => i >= 0 && i < columns.length)
-      .map((i) => columns[i]);
+    return columnOrder.filter((i) => i >= 0 && i < columns.length).map((i) => columns[i]);
   }, [columns, columnOrder]);
 
   // Custom header icons
@@ -259,18 +249,14 @@ export function TableEditor({
         </svg>`;
       },
     }),
-    []
+    [],
   );
 
   // Build grid columns
   const gridColumns = useMemo<GridColumn[]>(() => {
     return orderedColumns.map((col) => {
       const isSorted = sortColumn === col.name;
-      const sortIndicator = isSorted
-        ? sortDirection === "asc"
-          ? " ↑"
-          : " ↓"
-        : "";
+      const sortIndicator = isSorted ? (sortDirection === "asc" ? " ↑" : " ↓") : "";
       return {
         id: col.name,
         title: col.name + sortIndicator,
@@ -282,10 +268,7 @@ export function TableEditor({
   }, [orderedColumns, columnWidths, sortColumn, sortDirection]);
 
   // Column name lookup
-  const columnNames = useMemo(
-    () => orderedColumns.map((col) => col.name),
-    [orderedColumns]
-  );
+  const columnNames = useMemo(() => orderedColumns.map((col) => col.name), [orderedColumns]);
 
   // Compute theme from CSS variables
   const gridTheme = useMemo<Partial<Theme>>(() => {
@@ -323,7 +306,7 @@ export function TableEditor({
       lineHeight: 1.4,
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [themeVersion]);
+  }, []);
 
   // Handle visible region changes for infinite scroll
   const onVisibleRegionChanged = useCallback(
@@ -333,7 +316,7 @@ export function TableEditor({
       const endRow = Math.min(totalRows, range.y + range.height + buffer);
       dataProvider.loadRange(startRow, endRow);
     },
-    [dataProvider, totalRows]
+    [dataProvider, totalRows],
   );
 
   // Get cell content callback
@@ -418,7 +401,7 @@ export function TableEditor({
         readonly: !editable,
       };
     },
-    [dataProvider, columnNames, orderedColumns, pendingChanges, editable]
+    [dataProvider, columnNames, orderedColumns, pendingChanges, editable],
   );
 
   // Handle cell edits (use row index as key for uniqueness)
@@ -449,7 +432,7 @@ export function TableEditor({
         return next;
       });
     },
-    [editable, dataProvider, columnNames]
+    [editable, dataProvider, columnNames],
   );
 
   // Save pending changes (convert row indices to row IDs for SQL)
@@ -476,9 +459,7 @@ export function TableEditor({
       setShowPreview(false);
       toast.success(`Saved ${updates.length} changes`);
     } catch (error) {
-      toast.error(
-        `Failed to save: ${error instanceof Error ? error.message : "Unknown error"}`
-      );
+      toast.error(`Failed to save: ${error instanceof Error ? error.message : "Unknown error"}`);
     }
   }, [pendingChanges, dataProvider]);
 
@@ -511,9 +492,7 @@ export function TableEditor({
       await dataProvider.createRow(newData);
       toast.success("Row added");
     } catch (error) {
-      toast.error(
-        `Failed to add row: ${error instanceof Error ? error.message : "Unknown error"}`
-      );
+      toast.error(`Failed to add row: ${error instanceof Error ? error.message : "Unknown error"}`);
     }
   }, [columns, dataProvider]);
 
@@ -527,9 +506,7 @@ export function TableEditor({
       setSelectedIds(new Set());
       toast.success(`Deleted ${ids.length} rows`);
     } catch (error) {
-      toast.error(
-        `Failed to delete: ${error instanceof Error ? error.message : "Unknown error"}`
-      );
+      toast.error(`Failed to delete: ${error instanceof Error ? error.message : "Unknown error"}`);
     }
   }, [selectedIds, dataProvider]);
 
@@ -549,7 +526,7 @@ export function TableEditor({
       }
       setSelectedIds(newIds);
     },
-    [dataProvider]
+    [dataProvider],
   );
 
   // Handle column resize
@@ -573,7 +550,7 @@ export function TableEditor({
         y: bounds.y + bounds.height,
       });
     },
-    [columnNames]
+    [columnNames],
   );
 
   // Close menu
@@ -623,7 +600,7 @@ export function TableEditor({
         return newOrder;
       });
     },
-    [columns]
+    [columns],
   );
 
   // Column operation handlers
@@ -645,22 +622,24 @@ export function TableEditor({
       setTypeDialog(null);
       toast.success(`Changed column type to ${typeDialog.newType}`);
     } catch (error) {
-      toast.error(`Failed to change type: ${error instanceof Error ? error.message : "Unknown error"}`);
+      toast.error(
+        `Failed to change type: ${error instanceof Error ? error.message : "Unknown error"}`,
+      );
     }
   }, [typeDialog, dataProvider]);
 
   const handleAddColumn = useCallback(async () => {
     if (!addColumnDialog || !dataProvider.addColumn) return;
     try {
-      await dataProvider.addColumn(
-        addColumnDialog.name,
-        addColumnDialog.type,
-        { nullable: addColumnDialog.nullable }
-      );
+      await dataProvider.addColumn(addColumnDialog.name, addColumnDialog.type, {
+        nullable: addColumnDialog.nullable,
+      });
       setAddColumnDialog(null);
       toast.success(`Added column "${addColumnDialog.name}"`);
     } catch (error) {
-      toast.error(`Failed to add column: ${error instanceof Error ? error.message : "Unknown error"}`);
+      toast.error(
+        `Failed to add column: ${error instanceof Error ? error.message : "Unknown error"}`,
+      );
     }
   }, [addColumnDialog, dataProvider]);
 
@@ -671,7 +650,9 @@ export function TableEditor({
       setDropColumnConfirm(null);
       toast.success(`Dropped column "${dropColumnConfirm}"`);
     } catch (error) {
-      toast.error(`Failed to drop column: ${error instanceof Error ? error.message : "Unknown error"}`);
+      toast.error(
+        `Failed to drop column: ${error instanceof Error ? error.message : "Unknown error"}`,
+      );
     }
   }, [dropColumnConfirm, dataProvider]);
 
@@ -695,8 +676,7 @@ export function TableEditor({
           <span className="font-medium text-foreground">{tableName}</span>
           <span className="text-xs">
             {totalRows.toLocaleString()} rows
-            {loadedCount < totalRows &&
-              ` (${loadedCount.toLocaleString()} loaded)`}
+            {loadedCount < totalRows && ` (${loadedCount.toLocaleString()} loaded)`}
           </span>
         </div>
 
@@ -747,7 +727,7 @@ export function TableEditor({
                     onClick={() => setShowPreview(!showPreview)}
                     className={cn(
                       "flex items-center gap-1 px-2 py-1 text-xs rounded hover:bg-muted",
-                      showPreview && "bg-muted"
+                      showPreview && "bg-muted",
                     )}
                     title="Preview SQL"
                   >
@@ -777,10 +757,7 @@ export function TableEditor({
           )}
 
           {(isFetching || isMutating) && (
-            <CircleNotch
-              weight="bold"
-              className="h-3.5 w-3.5 animate-spin text-muted-foreground"
-            />
+            <CircleNotch weight="bold" className="h-3.5 w-3.5 animate-spin text-muted-foreground" />
           )}
         </div>
       </div>
@@ -809,10 +786,7 @@ export function TableEditor({
       <div ref={containerRef} className="flex-1 overflow-hidden">
         {isLoading ? (
           <div className="flex items-center justify-center h-full">
-            <CircleNotch
-              weight="bold"
-              className="h-8 w-8 animate-spin text-muted-foreground"
-            />
+            <CircleNotch weight="bold" className="h-8 w-8 animate-spin text-muted-foreground" />
           </div>
         ) : totalRows === 0 ? (
           <div className="flex flex-col items-center justify-center h-64 text-muted-foreground">
@@ -831,10 +805,7 @@ export function TableEditor({
           </div>
         ) : !containerSize || !isCanvasReady ? (
           <div className="flex items-center justify-center h-full">
-            <CircleNotch
-              weight="bold"
-              className="h-6 w-6 animate-spin text-muted-foreground/50"
-            />
+            <CircleNotch weight="bold" className="h-6 w-6 animate-spin text-muted-foreground/50" />
           </div>
         ) : (
           <>
@@ -868,10 +839,7 @@ export function TableEditor({
 
             {/* Column header menu dropdown */}
             {menuPosition && menuColumnIndex !== null && currentMenuColumn && (
-              <div
-                className="fixed z-50"
-                style={{ left: menuPosition.x, top: menuPosition.y }}
-              >
+              <div className="fixed z-50" style={{ left: menuPosition.x, top: menuPosition.y }}>
                 <div
                   className="absolute inset-0 fixed"
                   onClick={closeMenu}
@@ -892,7 +860,7 @@ export function TableEditor({
                           "flex items-center gap-1 px-2 py-1 text-xs rounded hover:bg-accent",
                           sortColumn === columnNames[menuColumnIndex] &&
                             sortDirection === "asc" &&
-                            "bg-accent text-primary"
+                            "bg-accent text-primary",
                         )}
                       >
                         <ArrowUp weight="bold" className="h-3 w-3" />
@@ -905,7 +873,7 @@ export function TableEditor({
                           "flex items-center gap-1 px-2 py-1 text-xs rounded hover:bg-accent",
                           sortColumn === columnNames[menuColumnIndex] &&
                             sortDirection === "desc" &&
-                            "bg-accent text-primary"
+                            "bg-accent text-primary",
                         )}
                       >
                         <ArrowDown weight="bold" className="h-3 w-3" />
@@ -1006,9 +974,7 @@ export function TableEditor({
                   >
                     <Broadcast weight="fill" className="h-4 w-4 text-purple-500" />
                     <span>Subscribe</span>
-                    <span className="ml-auto text-xs text-purple-500/70">
-                      shape
-                    </span>
+                    <span className="ml-auto text-xs text-purple-500/70">shape</span>
                   </button>
                 </div>
               </div>
@@ -1023,21 +989,16 @@ export function TableEditor({
           <div className="bg-popover border rounded-lg shadow-lg p-4 w-80">
             <h3 className="font-medium mb-3">Rename Column</h3>
             <div className="mb-3">
-              <label className="block text-xs text-muted-foreground mb-1">
-                New name
-              </label>
+              <label className="block text-xs text-muted-foreground mb-1">New name</label>
               <input
                 type="text"
                 value={renameDialog.newName}
                 onChange={(e) => setRenameDialog({ ...renameDialog, newName: e.target.value })}
                 className="w-full px-2 py-1.5 text-sm border rounded bg-background"
-                autoFocus
               />
             </div>
             <div className="mb-3">
-              <label className="block text-xs text-muted-foreground mb-1">
-                SQL Preview
-              </label>
+              <label className="block text-xs text-muted-foreground mb-1">SQL Preview</label>
               <pre className="text-xs font-mono bg-muted p-2 rounded overflow-x-auto">
                 {generateRenameColumnSql(tableName, renameDialog.columnName, renameDialog.newName)}
               </pre>
@@ -1078,14 +1039,14 @@ export function TableEditor({
                 className="w-full px-2 py-1.5 text-sm border rounded bg-background"
               >
                 {SQL_TYPES.map((type) => (
-                  <option key={type} value={type}>{type}</option>
+                  <option key={type} value={type}>
+                    {type}
+                  </option>
                 ))}
               </select>
             </div>
             <div className="mb-3">
-              <label className="block text-xs text-muted-foreground mb-1">
-                SQL Preview
-              </label>
+              <label className="block text-xs text-muted-foreground mb-1">SQL Preview</label>
               <pre className="text-xs font-mono bg-muted p-2 rounded overflow-x-auto">
                 {generateAlterColumnTypeSql(tableName, typeDialog.columnName, typeDialog.newType)}
               </pre>
@@ -1116,29 +1077,26 @@ export function TableEditor({
           <div className="bg-popover border rounded-lg shadow-lg p-4 w-80">
             <h3 className="font-medium mb-3">Add Column</h3>
             <div className="mb-3">
-              <label className="block text-xs text-muted-foreground mb-1">
-                Column name
-              </label>
+              <label className="block text-xs text-muted-foreground mb-1">Column name</label>
               <input
                 type="text"
                 value={addColumnDialog.name}
                 onChange={(e) => setAddColumnDialog({ ...addColumnDialog, name: e.target.value })}
                 className="w-full px-2 py-1.5 text-sm border rounded bg-background"
-                autoFocus
                 placeholder="column_name"
               />
             </div>
             <div className="mb-3">
-              <label className="block text-xs text-muted-foreground mb-1">
-                Type
-              </label>
+              <label className="block text-xs text-muted-foreground mb-1">Type</label>
               <select
                 value={addColumnDialog.type}
                 onChange={(e) => setAddColumnDialog({ ...addColumnDialog, type: e.target.value })}
                 className="w-full px-2 py-1.5 text-sm border rounded bg-background"
               >
                 {SQL_TYPES.map((type) => (
-                  <option key={type} value={type}>{type}</option>
+                  <option key={type} value={type}>
+                    {type}
+                  </option>
                 ))}
               </select>
             </div>
@@ -1147,7 +1105,9 @@ export function TableEditor({
                 type="checkbox"
                 id="nullable"
                 checked={addColumnDialog.nullable}
-                onChange={(e) => setAddColumnDialog({ ...addColumnDialog, nullable: e.target.checked })}
+                onChange={(e) =>
+                  setAddColumnDialog({ ...addColumnDialog, nullable: e.target.checked })
+                }
                 className="rounded"
               />
               <label htmlFor="nullable" className="text-sm">
@@ -1155,9 +1115,7 @@ export function TableEditor({
               </label>
             </div>
             <div className="mb-3">
-              <label className="block text-xs text-muted-foreground mb-1">
-                SQL Preview
-              </label>
+              <label className="block text-xs text-muted-foreground mb-1">SQL Preview</label>
               <pre className="text-xs font-mono bg-muted p-2 rounded overflow-x-auto">
                 {addColumnDialog.name
                   ? generateAddColumnSql(tableName, addColumnDialog.name, addColumnDialog.type, {
@@ -1193,12 +1151,11 @@ export function TableEditor({
           <div className="bg-popover border rounded-lg shadow-lg p-4 w-80">
             <h3 className="font-medium mb-3 text-destructive">Drop Column</h3>
             <p className="text-sm text-muted-foreground mb-3">
-              Are you sure you want to drop column "{dropColumnConfirm}"? This action cannot be undone.
+              Are you sure you want to drop column "{dropColumnConfirm}"? This action cannot be
+              undone.
             </p>
             <div className="mb-3">
-              <label className="block text-xs text-muted-foreground mb-1">
-                SQL Preview
-              </label>
+              <label className="block text-xs text-muted-foreground mb-1">SQL Preview</label>
               <pre className="text-xs font-mono bg-muted p-2 rounded overflow-x-auto">
                 {generateDropColumnSql(tableName, dropColumnConfirm)}
               </pre>

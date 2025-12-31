@@ -5,21 +5,20 @@
  */
 
 import {
-  LIVE_VALUE_KEY,
-  LIVE_VALUE_INLINE_KEY,
-  type DisplayMode,
   type ColumnConfig,
+  type DisplayMode,
+  LIVE_VALUE_INLINE_KEY,
+  LIVE_VALUE_KEY,
   type TLiveValueElement,
 } from "../../../types";
-import type { MdxSerializationRule, DeserializeOptions } from "../types";
 import {
+  deserializeChildren,
+  hasChildContent,
   parseAttributes,
   serializeAttributes,
-  hasChildContent,
-  createVoidElement,
   serializeChildren,
-  deserializeChildren,
 } from "../helpers";
+import type { DeserializeOptions, MdxSerializationRule } from "../types";
 
 /**
  * LiveValue serialization rule.
@@ -54,12 +53,10 @@ function serializeLiveValue(element: TLiveValueElement, options: any) {
     {
       include: ["query", "data", "display", "params", "columns", "className"],
       defaults: { display: "auto" },
-    }
+    },
   );
 
-  const children = hasTemplate
-    ? serializeChildren(element.children, options)
-    : [];
+  const children = hasTemplate ? serializeChildren(element.children, options) : [];
 
   return {
     type: "mdxJsxFlowElement" as const,
@@ -72,7 +69,11 @@ function serializeLiveValue(element: TLiveValueElement, options: any) {
 /**
  * Shared deserialize function for LiveValue.
  */
-function deserializeLiveValue(node: Parameters<MdxSerializationRule<TLiveValueElement>["deserialize"]>[0], deco: unknown, options: DeserializeOptions | undefined) {
+function deserializeLiveValue(
+  node: Parameters<MdxSerializationRule<TLiveValueElement>["deserialize"]>[0],
+  deco: unknown,
+  options: DeserializeOptions | undefined,
+) {
   const props = parseAttributes(node);
   const display = (props.display as DisplayMode | undefined) ?? "auto";
 
@@ -113,7 +114,8 @@ function deserializeLiveValue(node: Parameters<MdxSerializationRule<TLiveValueEl
 export const liveValueRule: MdxSerializationRule<TLiveValueElement> = {
   tagName: "LiveValue",
   key: LIVE_VALUE_KEY,
-  deserialize: (node, deco, options) => deserializeLiveValue(node, deco, options) as TLiveValueElement,
+  deserialize: (node, deco, options) =>
+    deserializeLiveValue(node, deco, options) as TLiveValueElement,
   serialize: serializeLiveValue,
 };
 
@@ -123,7 +125,8 @@ export const liveValueRule: MdxSerializationRule<TLiveValueElement> = {
 export const liveValueInlineRule: MdxSerializationRule<TLiveValueElement> = {
   tagName: "LiveValue", // Same tag name (handled by liveValueRule for deserialize)
   key: LIVE_VALUE_INLINE_KEY,
-  deserialize: (node, deco, options) => deserializeLiveValue(node, deco, options) as TLiveValueElement,
+  deserialize: (node, deco, options) =>
+    deserializeLiveValue(node, deco, options) as TLiveValueElement,
   serialize: serializeLiveValue,
 };
 
@@ -133,6 +136,7 @@ export const liveValueInlineRule: MdxSerializationRule<TLiveValueElement> = {
 export const liveQueryRule: MdxSerializationRule<TLiveValueElement> = {
   tagName: "LiveQuery",
   key: LIVE_VALUE_KEY, // Maps to same element type
-  deserialize: (node, deco, options) => deserializeLiveValue(node, deco, options) as TLiveValueElement,
+  deserialize: (node, deco, options) =>
+    deserializeLiveValue(node, deco, options) as TLiveValueElement,
   serialize: serializeLiveValue,
 };

@@ -5,22 +5,18 @@
  * Deserialization uses the shared parser from @hands/core.
  */
 
-import { unified } from "unified";
-import remarkStringify from "remark-stringify";
-import remarkGfm from "remark-gfm";
-import remarkMdx from "remark-mdx";
 import {
-  defaultRules,
-  convertNodesSerialize,
-  type MdRules,
-} from "@platejs/markdown";
-import { KEYS } from "platejs";
-import {
+  convertIndentListsToClassic,
   serializationRules,
   toMarkdownPluginRules,
-  convertIndentListsToClassic,
 } from "@hands/core/primitives/serialization";
 import { parseMarkdownToPlate } from "@hands/core/primitives/serialization/mdx-parser";
+import { convertNodesSerialize, defaultRules, type MdRules } from "@platejs/markdown";
+import { KEYS } from "platejs";
+import remarkGfm from "remark-gfm";
+import remarkMdx from "remark-mdx";
+import remarkStringify from "remark-stringify";
+import { unified } from "unified";
 
 // ============================================================================
 // Build Combined Rules (for serialization)
@@ -95,14 +91,36 @@ const editorShim = {
 // Note: Include both new (disc/decimal) and classic (ul/ol) list keys
 // The markdown serializer uses classic keys (ul/ol)
 const knownTypes = [
-  KEYS.p, KEYS.blockquote, KEYS.codeBlock, KEYS.codeLine,
-  KEYS.h1, KEYS.h2, KEYS.h3, KEYS.h4, KEYS.h5, KEYS.h6,
-  KEYS.ul, KEYS.ol, KEYS.li, KEYS.lic,
-  KEYS.ulClassic, KEYS.olClassic, // Classic list keys for markdown serialization
-  KEYS.hr, KEYS.a, KEYS.img,
-  KEYS.table, KEYS.tr, KEYS.td, KEYS.th,
-  KEYS.column, KEYS.columnGroup,
-  KEYS.bold, KEYS.italic, KEYS.code, KEYS.strikethrough, KEYS.underline,
+  KEYS.p,
+  KEYS.blockquote,
+  KEYS.codeBlock,
+  KEYS.codeLine,
+  KEYS.h1,
+  KEYS.h2,
+  KEYS.h3,
+  KEYS.h4,
+  KEYS.h5,
+  KEYS.h6,
+  KEYS.ul,
+  KEYS.ol,
+  KEYS.li,
+  KEYS.lic,
+  KEYS.ulClassic,
+  KEYS.olClassic, // Classic list keys for markdown serialization
+  KEYS.hr,
+  KEYS.a,
+  KEYS.img,
+  KEYS.table,
+  KEYS.tr,
+  KEYS.td,
+  KEYS.th,
+  KEYS.column,
+  KEYS.columnGroup,
+  KEYS.bold,
+  KEYS.italic,
+  KEYS.code,
+  KEYS.strikethrough,
+  KEYS.underline,
 ];
 
 for (const key of knownTypes) {
@@ -137,7 +155,7 @@ const serializeOptions = {
 // Message Handler
 // ============================================================================
 
-let isReady = true;
+const isReady = true;
 self.postMessage({ type: "ready" });
 
 self.onmessage = (e) => {

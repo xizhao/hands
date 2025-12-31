@@ -9,11 +9,11 @@
 import {
   COLUMN_GROUP_KEY,
   COLUMN_KEY,
-  type TColumnGroupElement,
   type TColumnElement,
+  type TColumnGroupElement,
 } from "../../../types";
-import type { MdxSerializationRule } from "../types";
 import { parseAttributes, serializeAttributes, serializeChildren } from "../helpers";
+import type { MdxSerializationRule } from "../types";
 
 // ============================================================================
 // Columns (ColumnGroup)
@@ -38,16 +38,11 @@ export const columnsRule: MdxSerializationRule<TColumnGroupElement> = {
     // Deserialize children (should be Column elements)
     let children: TColumnGroupElement["children"] = [];
     if (node.children && node.children.length > 0 && options?.convertChildren) {
-      const converted = options.convertChildren(
-        node.children as any,
-        _deco as any,
-        options as any
-      );
+      const converted = options.convertChildren(node.children as any, _deco as any, options as any);
       if (converted.length > 0) {
         // Filter to only Column elements
         children = converted.filter(
-          (child): child is TColumnElement =>
-            "type" in child && child.type === COLUMN_KEY
+          (child): child is TColumnElement => "type" in child && child.type === COLUMN_KEY,
         );
       }
     }
@@ -103,15 +98,9 @@ export const columnRule: MdxSerializationRule<TColumnElement> = {
     const props = parseAttributes(node);
 
     // Deserialize children
-    let children: TColumnElement["children"] = [
-      { type: "p" as const, children: [{ text: "" }] },
-    ];
+    let children: TColumnElement["children"] = [{ type: "p" as const, children: [{ text: "" }] }];
     if (node.children && node.children.length > 0 && options?.convertChildren) {
-      const converted = options.convertChildren(
-        node.children as any,
-        _deco as any,
-        options as any
-      );
+      const converted = options.convertChildren(node.children as any, _deco as any, options as any);
       if (converted.length > 0) {
         children = converted;
       }
@@ -131,7 +120,7 @@ export const columnRule: MdxSerializationRule<TColumnElement> = {
       },
       {
         include: ["width"],
-      }
+      },
     );
 
     const children = serializeChildren(element.children, options);

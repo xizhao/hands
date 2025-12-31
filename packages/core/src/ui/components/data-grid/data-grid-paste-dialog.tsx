@@ -2,6 +2,9 @@
 
 import type { TableMeta } from "@tanstack/react-table";
 import * as React from "react";
+import type { PasteDialogState } from "../../../types/data-grid";
+import { useAsRef } from "../../hooks/use-as-ref";
+import { cn } from "../../lib/utils";
 import { Button } from "../button";
 import {
   Dialog,
@@ -11,9 +14,6 @@ import {
   DialogHeader,
   DialogTitle,
 } from "../dialog";
-import { useAsRef } from "../../hooks/use-as-ref";
-import { cn } from "../../lib/utils";
-import type { PasteDialogState } from "../../../types/data-grid";
 
 interface DataGridPasteDialogProps<TData> {
   tableMeta: TableMeta<TData>;
@@ -50,11 +50,7 @@ const PasteDialog = React.memo(PasteDialogImpl, (prev, next) => {
   return true;
 });
 
-function PasteDialogImpl({
-  pasteDialog,
-  onPasteDialogOpenChange,
-  onCellsPaste,
-}: PasteDialogProps) {
+function PasteDialogImpl({ pasteDialog, onPasteDialogOpenChange, onCellsPaste }: PasteDialogProps) {
   const propsRef = useAsRef({
     onPasteDialogOpenChange,
     onCellsPaste,
@@ -84,35 +80,24 @@ function PasteDialogImpl({
           <DialogTitle>Do you want to add more rows?</DialogTitle>
           <DialogDescription>
             We need <strong>{pasteDialog.rowsNeeded}</strong> additional row
-            {pasteDialog.rowsNeeded !== 1 ? "s" : ""} to paste everything from
-            your clipboard.
+            {pasteDialog.rowsNeeded !== 1 ? "s" : ""} to paste everything from your clipboard.
           </DialogDescription>
         </DialogHeader>
         <div className="flex flex-col gap-3 py-1">
           <label className="flex cursor-pointer items-start gap-3">
-            <RadioItem
-              ref={expandRadioRef}
-              name="expand-option"
-              value="expand"
-              defaultChecked
-            />
+            <RadioItem ref={expandRadioRef} name="expand-option" value="expand" defaultChecked />
             <div className="flex flex-col gap-1">
-              <span className="font-medium text-sm leading-none">
-                Create new rows
-              </span>
+              <span className="font-medium text-sm leading-none">Create new rows</span>
               <span className="text-muted-foreground text-sm">
                 Add {pasteDialog.rowsNeeded} new row
-                {pasteDialog.rowsNeeded !== 1 ? "s" : ""} to the table and paste
-                all data
+                {pasteDialog.rowsNeeded !== 1 ? "s" : ""} to the table and paste all data
               </span>
             </div>
           </label>
           <label className="flex cursor-pointer items-start gap-3">
             <RadioItem name="expand-option" value="no-expand" />
             <div className="flex flex-col gap-1">
-              <span className="font-medium text-sm leading-none">
-                Keep current rows
-              </span>
+              <span className="font-medium text-sm leading-none">Keep current rows</span>
               <span className="text-muted-foreground text-sm">
                 Paste only what fits in the existing rows
               </span>

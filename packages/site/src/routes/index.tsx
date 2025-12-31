@@ -1,5 +1,5 @@
+import { animate, motion, useMotionValue } from "motion/react";
 import { useEffect, useRef, useState } from "react";
-import { motion, useMotionValue, animate } from "motion/react";
 import { Demo } from "../components/Demo";
 import { useTheme } from "../hooks/useTheme";
 import { SiteEditorProvider } from "../providers/SiteEditorProvider";
@@ -18,7 +18,6 @@ export default function IndexPage() {
   const introProgress = useMotionValue(0);
   const [introProgressValue, setIntroProgressValue] = useState(0);
   const [activeSection, setActiveSection] = useState(0);
-
 
   // Refs for each section to track visibility
   const sectionRefs = [
@@ -89,7 +88,7 @@ export default function IndexPage() {
             setActiveSection(index);
           }
         },
-        { threshold: 0.5, rootMargin: "-20% 0px -20% 0px" }
+        { threshold: 0.5, rootMargin: "-20% 0px -20% 0px" },
       );
 
       if (ref.current) {
@@ -102,7 +101,7 @@ export default function IndexPage() {
     return () => {
       observers.forEach((observer) => observer.disconnect());
     };
-  }, [introPhase]);
+  }, [introPhase, sectionRefs.map]);
 
   return (
     <SiteEditorProvider>
@@ -111,15 +110,27 @@ export default function IndexPage() {
         <div className="hidden lg:flex fixed top-0 right-0 w-[55%] xl:w-[60%] h-screen items-center justify-center pr-8 z-10">
           <div className="relative w-full max-w-[900px]">
             {/* Demo 0: Editor with chat bar */}
-            <div className={`absolute inset-0 flex items-center justify-center ${activeSection === 0 ? "" : "opacity-0 pointer-events-none"}`}>
+            <div
+              className={`absolute inset-0 flex items-center justify-center ${activeSection === 0 ? "" : "opacity-0 pointer-events-none"}`}
+            >
               <div className="space-y-4">
                 {/* Prompt bar - fades in when prompt-typing starts, types text */}
                 <motion.div
                   className="w-[500px]"
                   initial={{ opacity: 0, y: 20 }}
                   animate={{
-                    opacity: introPhase === "prompt-typing" || introPhase === "editor-fade" || introPhase === "done" ? 1 : 0,
-                    y: introPhase === "prompt-typing" || introPhase === "editor-fade" || introPhase === "done" ? 0 : 20,
+                    opacity:
+                      introPhase === "prompt-typing" ||
+                      introPhase === "editor-fade" ||
+                      introPhase === "done"
+                        ? 1
+                        : 0,
+                    y:
+                      introPhase === "prompt-typing" ||
+                      introPhase === "editor-fade" ||
+                      introPhase === "done"
+                        ? 0
+                        : 20,
                   }}
                   transition={{ duration: 0.5, ease: [0.22, 1, 0.36, 1] }}
                 >
@@ -172,16 +183,23 @@ export default function IndexPage() {
             ref={sectionRefs[0]}
             className="min-h-screen flex flex-col justify-center px-8 lg:px-16 pt-24"
           >
-            <AnimatedHeroHeadline
-              scrollProgress={introProgressValue}
-              isVisible={true}
-            />
+            <AnimatedHeroHeadline scrollProgress={introProgressValue} isVisible={true} />
             <motion.div
               className="flex items-center gap-4"
               initial={{ opacity: 0, y: 20 }}
               animate={{
-                opacity: introPhase === "prompt-typing" || introPhase === "editor-fade" || introPhase === "done" ? 1 : 0,
-                y: introPhase === "prompt-typing" || introPhase === "editor-fade" || introPhase === "done" ? 0 : 20
+                opacity:
+                  introPhase === "prompt-typing" ||
+                  introPhase === "editor-fade" ||
+                  introPhase === "done"
+                    ? 1
+                    : 0,
+                y:
+                  introPhase === "prompt-typing" ||
+                  introPhase === "editor-fade" ||
+                  introPhase === "done"
+                    ? 0
+                    : 20,
               }}
               transition={{ duration: 0.5, ease: [0.22, 1, 0.36, 1] }}
             >
@@ -197,86 +215,84 @@ export default function IndexPage() {
 
           {/* Hidden for now */}
           <div className="hidden">
-          {/* Section 1: Connect */}
-          <section
-            ref={sectionRefs[1]}
-            className="min-h-screen flex flex-col justify-center px-8 lg:px-16"
-          >
-            <div className="inline-flex items-center gap-2 px-3 py-1 bg-muted rounded-full text-sm text-muted-foreground mb-4 w-fit">
-              <span className="w-5 h-5 rounded-full bg-foreground text-background flex items-center justify-center text-xs font-bold">
-                1
-              </span>
-              Connect
-            </div>
-            <h3 className="site-header text-3xl font-bold text-foreground mb-4">
-              Point Hands towards any data
-            </h3>
-            <p className="text-lg text-muted-foreground mb-6">
-              Hands will figure out how to set up live syncs to any
-              business process — whether you know how to, or not. Press{" "}
-              <kbd className="px-2 py-1 bg-muted border border-border rounded text-sm font-mono shadow-sm">
-                ⌘⇧H
-              </kbd>{" "}
-              to capture anything on screen.
-            </p>
-            <ul className="space-y-3 text-muted-foreground">
-              <FeatureItem>Works with databases, APIs, spreadsheets, files</FeatureItem>
-              <FeatureItem>Figures out auth, parsing, and sync logic</FeatureItem>
-              <FeatureItem>Builds the integration automatically</FeatureItem>
-            </ul>
-          </section>
+            {/* Section 1: Connect */}
+            <section
+              ref={sectionRefs[1]}
+              className="min-h-screen flex flex-col justify-center px-8 lg:px-16"
+            >
+              <div className="inline-flex items-center gap-2 px-3 py-1 bg-muted rounded-full text-sm text-muted-foreground mb-4 w-fit">
+                <span className="w-5 h-5 rounded-full bg-foreground text-background flex items-center justify-center text-xs font-bold">
+                  1
+                </span>
+                Connect
+              </div>
+              <h3 className="site-header text-3xl font-bold text-foreground mb-4">
+                Point Hands towards any data
+              </h3>
+              <p className="text-lg text-muted-foreground mb-6">
+                Hands will figure out how to set up live syncs to any business process — whether you
+                know how to, or not. Press{" "}
+                <kbd className="px-2 py-1 bg-muted border border-border rounded text-sm font-mono shadow-sm">
+                  ⌘⇧H
+                </kbd>{" "}
+                to capture anything on screen.
+              </p>
+              <ul className="space-y-3 text-muted-foreground">
+                <FeatureItem>Works with databases, APIs, spreadsheets, files</FeatureItem>
+                <FeatureItem>Figures out auth, parsing, and sync logic</FeatureItem>
+                <FeatureItem>Builds the integration automatically</FeatureItem>
+              </ul>
+            </section>
 
-          {/* Section 2: Analyze */}
-          <section
-            ref={sectionRefs[2]}
-            className="min-h-screen flex flex-col justify-center px-8 lg:px-16"
-          >
-            <div className="inline-flex items-center gap-2 px-3 py-1 bg-muted rounded-full text-sm text-muted-foreground mb-4 w-fit">
-              <span className="w-5 h-5 rounded-full bg-foreground text-background flex items-center justify-center text-xs font-bold">
-                2
-              </span>
-              Analyze
-            </div>
-            <h3 className="site-header text-3xl font-bold text-foreground mb-4">
-              Analyze and iterate
-            </h3>
-            <p className="text-lg text-muted-foreground mb-6">
-              Describe what you want to see. Hands' AI agent writes the
-              queries, builds the charts, and refines until it's right.
-              Just keep describing — it keeps improving.
-            </p>
-            <ul className="space-y-3 text-muted-foreground">
-              <FeatureItem>Natural language to SQL and charts</FeatureItem>
-              <FeatureItem>Iterative refinement through conversation</FeatureItem>
-              <FeatureItem>AI that understands your business context</FeatureItem>
-            </ul>
-          </section>
+            {/* Section 2: Analyze */}
+            <section
+              ref={sectionRefs[2]}
+              className="min-h-screen flex flex-col justify-center px-8 lg:px-16"
+            >
+              <div className="inline-flex items-center gap-2 px-3 py-1 bg-muted rounded-full text-sm text-muted-foreground mb-4 w-fit">
+                <span className="w-5 h-5 rounded-full bg-foreground text-background flex items-center justify-center text-xs font-bold">
+                  2
+                </span>
+                Analyze
+              </div>
+              <h3 className="site-header text-3xl font-bold text-foreground mb-4">
+                Analyze and iterate
+              </h3>
+              <p className="text-lg text-muted-foreground mb-6">
+                Describe what you want to see. Hands' AI agent writes the queries, builds the
+                charts, and refines until it's right. Just keep describing — it keeps improving.
+              </p>
+              <ul className="space-y-3 text-muted-foreground">
+                <FeatureItem>Natural language to SQL and charts</FeatureItem>
+                <FeatureItem>Iterative refinement through conversation</FeatureItem>
+                <FeatureItem>AI that understands your business context</FeatureItem>
+              </ul>
+            </section>
 
-          {/* Section 3: Share */}
-          <section
-            ref={sectionRefs[3]}
-            className="min-h-screen flex flex-col justify-center px-8 lg:px-16"
-          >
-            <div className="inline-flex items-center gap-2 px-3 py-1 bg-muted rounded-full text-sm text-muted-foreground mb-4 w-fit">
-              <span className="w-5 h-5 rounded-full bg-foreground text-background flex items-center justify-center text-xs font-bold">
-                3
-              </span>
-              Share
-            </div>
-            <h3 className="site-header text-3xl font-bold text-foreground mb-4">
-              Build documents you can run your business in
-            </h3>
-            <p className="text-lg text-muted-foreground mb-6">
-              Share living apps and automations. Replaces docs and
-              spreadsheets. Your workbooks stay live — data updates
-              automatically, charts refresh, automations run on schedule.
-            </p>
-            <ul className="space-y-3 text-muted-foreground">
-              <FeatureItem>Live dashboards that update automatically</FeatureItem>
-              <FeatureItem>Scheduled actions, alerts, and workflows</FeatureItem>
-              <FeatureItem>Share links instead of attachments</FeatureItem>
-            </ul>
-          </section>
+            {/* Section 3: Share */}
+            <section
+              ref={sectionRefs[3]}
+              className="min-h-screen flex flex-col justify-center px-8 lg:px-16"
+            >
+              <div className="inline-flex items-center gap-2 px-3 py-1 bg-muted rounded-full text-sm text-muted-foreground mb-4 w-fit">
+                <span className="w-5 h-5 rounded-full bg-foreground text-background flex items-center justify-center text-xs font-bold">
+                  3
+                </span>
+                Share
+              </div>
+              <h3 className="site-header text-3xl font-bold text-foreground mb-4">
+                Build documents you can run your business in
+              </h3>
+              <p className="text-lg text-muted-foreground mb-6">
+                Share living apps and automations. Replaces docs and spreadsheets. Your workbooks
+                stay live — data updates automatically, charts refresh, automations run on schedule.
+              </p>
+              <ul className="space-y-3 text-muted-foreground">
+                <FeatureItem>Live dashboards that update automatically</FeatureItem>
+                <FeatureItem>Scheduled actions, alerts, and workflows</FeatureItem>
+                <FeatureItem>Share links instead of attachments</FeatureItem>
+              </ul>
+            </section>
           </div>
         </div>
 
@@ -347,10 +363,10 @@ function AnimatedHeroHeadline({
     scrollProgress < 0.1
       ? "crooked"
       : scrollProgress < 0.5
-      ? "pushing"
-      : scrollProgress < 0.9
-      ? "dragging"
-      : "done";
+        ? "pushing"
+        : scrollProgress < 0.9
+          ? "dragging"
+          : "done";
 
   const easing = [0.22, 1, 0.36, 1] as const;
 
@@ -428,13 +444,7 @@ function AnimatedHeroHeadline({
 }
 
 // Pushing hand icon - points right to push things
-function PushHandIcon({
-  className,
-  style,
-}: {
-  className?: string;
-  style?: React.CSSProperties;
-}) {
+function PushHandIcon({ className, style }: { className?: string; style?: React.CSSProperties }) {
   return (
     <svg
       xmlns="http://www.w3.org/2000/svg"
@@ -457,13 +467,7 @@ function PushHandIcon({
 }
 
 // OK hand icon - for dragging/pinching (from svgrepo)
-function OkHandIcon({
-  className,
-  style,
-}: {
-  className?: string;
-  style?: React.CSSProperties;
-}) {
+function OkHandIcon({ className, style }: { className?: string; style?: React.CSSProperties }) {
   return (
     <svg
       xmlns="http://www.w3.org/2000/svg"
@@ -480,7 +484,7 @@ function OkHandIcon({
 }
 
 // Fade in animation component
-function FadeIn({
+function _FadeIn({
   children,
   delay = 0,
   className = "",
@@ -528,7 +532,7 @@ function FadeInOnScroll({
           observer.disconnect();
         }
       },
-      { threshold: 0.1, rootMargin: "0px 0px -50px 0px" }
+      { threshold: 0.1, rootMargin: "0px 0px -50px 0px" },
     );
 
     if (ref.current) observer.observe(ref.current);
@@ -554,9 +558,7 @@ function FeatureItem({ children }: { children: React.ReactNode }) {
       <div className="w-5 h-5 rounded-full bg-green-500/10 flex items-center justify-center transition-all duration-200 group-hover:bg-green-500/20 group-hover:scale-110">
         <CheckIcon className="w-3 h-3 text-green-500" />
       </div>
-      <span className="transition-colors duration-200 group-hover:text-foreground">
-        {children}
-      </span>
+      <span className="transition-colors duration-200 group-hover:text-foreground">{children}</span>
     </li>
   );
 }
@@ -618,9 +620,7 @@ function HeroChatBar({
         {displayText ? (
           <span className="text-foreground">{displayText}</span>
         ) : (
-          <span className="text-muted-foreground/50">
-            Describe what you need...
-          </span>
+          <span className="text-muted-foreground/50">Describe what you need...</span>
         )}
         <span className="inline-block w-0.5 h-5 bg-foreground animate-pulse ml-1 rounded-full" />
       </div>
@@ -796,21 +796,15 @@ function AgentCaptureDemo({ isActive = false }: { isActive?: boolean }) {
               </div>
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-2">
-                  <span className="font-semibold text-foreground text-sm">
-                    Marcus (Data Eng)
-                  </span>
+                  <span className="font-semibold text-foreground text-sm">Marcus (Data Eng)</span>
                   <span className="text-xs text-muted-foreground">2:34 PM</span>
                 </div>
-                <div className="text-xs text-muted-foreground">
-                  Q4 inventory export
-                </div>
+                <div className="text-xs text-muted-foreground">Q4 inventory export</div>
               </div>
             </div>
 
             <div className="text-sm text-foreground space-y-3">
-              <p className="text-muted-foreground">
-                Here's that data — it's in our data lake:
-              </p>
+              <p className="text-muted-foreground">Here's that data — it's in our data lake:</p>
 
               {/* File attachment */}
               <div className="flex items-center gap-3 p-2.5 bg-muted rounded-lg border border-border/50">
@@ -818,12 +812,8 @@ function AgentCaptureDemo({ isActive = false }: { isActive?: boolean }) {
                   <FileIcon className="w-4 h-4 text-emerald-600" />
                 </div>
                 <div className="flex-1 min-w-0">
-                  <div className="font-medium text-sm">
-                    inventory_q4.parquet
-                  </div>
-                  <div className="text-xs text-muted-foreground">
-                    2.3 MB • Apache Parquet
-                  </div>
+                  <div className="font-medium text-sm">inventory_q4.parquet</div>
+                  <div className="text-xs text-muted-foreground">2.3 MB • Apache Parquet</div>
                 </div>
               </div>
 
@@ -877,10 +867,7 @@ function AgentCaptureDemo({ isActive = false }: { isActive?: boolean }) {
           <div className="rounded-lg border border-border bg-card/50 overflow-hidden">
             <div className="p-2.5 space-y-1.5 max-h-[200px] overflow-y-auto text-xs font-mono">
               {reasoningSteps.slice(0, reasoningStep).map((step, i) => (
-                <div
-                  key={i}
-                  className="animate-in fade-in slide-in-from-bottom-1 duration-200"
-                >
+                <div key={i} className="animate-in fade-in slide-in-from-bottom-1 duration-200">
                   {step.type === "thought" && (
                     <div className="flex gap-2 text-muted-foreground">
                       <span className="shrink-0 opacity-50">→</span>
@@ -894,9 +881,7 @@ function AgentCaptureDemo({ isActive = false }: { isActive?: boolean }) {
                       </span>
                       <span className="text-violet-500">{step.name}</span>
                       <span className="text-muted-foreground">→</span>
-                      <span className="text-foreground/70 truncate">
-                        {step.result}
-                      </span>
+                      <span className="text-foreground/70 truncate">{step.result}</span>
                     </div>
                   )}
                   {step.type === "success" && (
@@ -1034,9 +1019,7 @@ function AIAnalysisDemo({ isActive = false }: { isActive?: boolean }) {
               <div className="w-3 h-3 rounded-full bg-yellow-500/80" />
               <div className="w-3 h-3 rounded-full bg-green-500/80" />
             </div>
-            <span className="text-xs text-muted-foreground ml-2">
-              Q4_Sales_Data.csv
-            </span>
+            <span className="text-xs text-muted-foreground ml-2">Q4_Sales_Data.csv</span>
           </div>
 
           {/* Spreadsheet grid */}
@@ -1051,19 +1034,14 @@ function AIAnalysisDemo({ isActive = false }: { isActive?: boolean }) {
               <div className="px-3 py-1.5 border-r border-border font-medium text-muted-foreground">
                 Orders
               </div>
-              <div className="px-3 py-1.5 font-medium text-muted-foreground">
-                Customers
-              </div>
+              <div className="px-3 py-1.5 font-medium text-muted-foreground">Customers</div>
             </div>
             {[
               ["Oct 2024", "$84,230", "423", "312"],
               ["Nov 2024", "$96,450", "487", "358"],
               ["Dec 2024", "$103,820", "512", "401"],
             ].map((row, i) => (
-              <div
-                key={i}
-                className="grid grid-cols-4 border-b border-border/50 last:border-0"
-              >
+              <div key={i} className="grid grid-cols-4 border-b border-border/50 last:border-0">
                 {row.map((cell, j) => (
                   <div
                     key={j}
@@ -1097,8 +1075,8 @@ function AIAnalysisDemo({ isActive = false }: { isActive?: boolean }) {
             </span>
           ) : (
             <p className="text-sm text-foreground">
-              Q4 sales data with monthly revenue, orders, and customer counts. I
-              can create a dashboard or import this.
+              Q4 sales data with monthly revenue, orders, and customer counts. I can create a
+              dashboard or import this.
             </p>
           )}
         </div>
@@ -1165,15 +1143,7 @@ function DashboardDemo() {
 }
 
 // Metric card with hover effect
-function MetricCard({
-  label,
-  value,
-  change,
-}: {
-  label: string;
-  value: string;
-  change: string;
-}) {
+function MetricCard({ label, value, change }: { label: string; value: string; change: string }) {
   return (
     <div className="p-4 bg-muted rounded-lg border border-border/50 transition-all duration-200 hover:border-border hover:shadow-lg group cursor-default">
       <div className="text-sm text-muted-foreground mb-1">{label}</div>
@@ -1181,12 +1151,7 @@ function MetricCard({
         {value}
       </div>
       <div className="text-xs text-green-500 flex items-center gap-1">
-        <svg
-          className="w-3 h-3"
-          fill="none"
-          viewBox="0 0 24 24"
-          stroke="currentColor"
-        >
+        <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
           <path
             strokeLinecap="round"
             strokeLinejoin="round"
@@ -1201,7 +1166,7 @@ function MetricCard({
 }
 
 // Icons
-function SunIcon({ className }: { className?: string }) {
+function _SunIcon({ className }: { className?: string }) {
   return (
     <svg
       xmlns="http://www.w3.org/2000/svg"
@@ -1219,7 +1184,7 @@ function SunIcon({ className }: { className?: string }) {
   );
 }
 
-function MoonIcon({ className }: { className?: string }) {
+function _MoonIcon({ className }: { className?: string }) {
   return (
     <svg
       xmlns="http://www.w3.org/2000/svg"
@@ -1236,7 +1201,7 @@ function MoonIcon({ className }: { className?: string }) {
   );
 }
 
-function MonitorIcon({ className }: { className?: string }) {
+function _MonitorIcon({ className }: { className?: string }) {
   return (
     <svg
       xmlns="http://www.w3.org/2000/svg"
@@ -1330,7 +1295,7 @@ function MailIcon({ className }: { className?: string }) {
   );
 }
 
-function SettingsIcon({ className }: { className?: string }) {
+function _SettingsIcon({ className }: { className?: string }) {
   return (
     <svg
       xmlns="http://www.w3.org/2000/svg"

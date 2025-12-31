@@ -230,9 +230,7 @@ export function getTotalDuration(steps: StepRecord[]): number {
 
   if (!first.startedAt) return 0;
 
-  const endTime = last.finishedAt
-    ? new Date(last.finishedAt).getTime()
-    : Date.now();
+  const endTime = last.finishedAt ? new Date(last.finishedAt).getTime() : Date.now();
 
   return endTime - new Date(first.startedAt).getTime();
 }

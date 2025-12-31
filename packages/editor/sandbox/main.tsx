@@ -1,14 +1,14 @@
-import './styles.css';
-import { useState, useRef } from 'react';
-import { createRoot } from 'react-dom/client';
-import { Editor, type EditorHandle, EditorProvider, PreviewEditor } from '@hands/editor';
-import { mockTrpc } from './mock-trpc';
-import { LiveQueryProvider, type QueryResult, type TableSchema } from '@hands/core/stdlib';
+import "./styles.css";
+import { LiveQueryProvider, type QueryResult, type TableSchema } from "@hands/core/stdlib";
+import { Editor, type EditorHandle, EditorProvider, PreviewEditor } from "@hands/editor";
+import { useRef, useState } from "react";
+import { createRoot } from "react-dom/client";
+import { mockTrpc } from "./mock-trpc";
 
 // Mock data for different queries (matches QUERIES in mock-trpc.ts)
 const MOCK_DATA: Record<string, Record<string, unknown>[]> = {
   // Sales data for charts
-  'SELECT month, sales, revenue, profit FROM monthly_sales': [
+  "SELECT month, sales, revenue, profit FROM monthly_sales": [
     { month: "Jan", sales: 4000, revenue: 2400, profit: 1200 },
     { month: "Feb", sales: 3000, revenue: 1398, profit: 900 },
     { month: "Mar", sales: 2000, revenue: 9800, profit: 1800 },
@@ -17,7 +17,7 @@ const MOCK_DATA: Record<string, Record<string, unknown>[]> = {
     { month: "Jun", sales: 2390, revenue: 3800, profit: 1700 },
   ],
   // Category data for bar chart
-  'SELECT category, value FROM categories': [
+  "SELECT category, value FROM categories": [
     { category: "Electronics", value: 4500 },
     { category: "Clothing", value: 3200 },
     { category: "Food", value: 2800 },
@@ -25,13 +25,13 @@ const MOCK_DATA: Record<string, Record<string, unknown>[]> = {
     { category: "Sports", value: 2100 },
   ],
   // Device data for pie chart
-  'SELECT name, value FROM device_breakdown': [
+  "SELECT name, value FROM device_breakdown": [
     { name: "Desktop", value: 45 },
     { name: "Mobile", value: 35 },
     { name: "Tablet", value: 20 },
   ],
   // User table data
-  'SELECT id, name, email, status, role FROM users LIMIT 10': [
+  "SELECT id, name, email, status, role FROM users LIMIT 10": [
     { id: 1, name: "Alice Johnson", email: "alice@example.com", status: "Active", role: "Admin" },
     { id: 2, name: "Bob Smith", email: "bob@example.com", status: "Active", role: "User" },
     { id: 3, name: "Carol White", email: "carol@example.com", status: "Pending", role: "User" },
@@ -39,13 +39,13 @@ const MOCK_DATA: Record<string, Record<string, unknown>[]> = {
     { id: 5, name: "Eve Davis", email: "eve@example.com", status: "Inactive", role: "User" },
   ],
   // Count queries
-  'SELECT COUNT(*) as count FROM users': [{ count: 42 }],
-  'SELECT COUNT(*) FROM users': [{ 'COUNT(*)': 42 }],
+  "SELECT COUNT(*) as count FROM users": [{ count: 42 }],
+  "SELECT COUNT(*) FROM users": [{ "COUNT(*)": 42 }],
   // Existing feature status query
-  'SELECT status, COUNT(*) as count FROM features GROUP BY status': [
-    { status: 'done', count: 12 },
-    { status: 'in_progress', count: 8 },
-    { status: 'todo', count: 5 },
+  "SELECT status, COUNT(*) as count FROM features GROUP BY status": [
+    { status: "done", count: 12 },
+    { status: "in_progress", count: 8 },
+    { status: "todo", count: 5 },
   ],
 };
 
@@ -117,7 +117,7 @@ function useMockQuery(sql: string): QueryResult {
 // Mock mutation hook for sandbox
 function useMockMutation() {
   return {
-    mutate: async (sql: string) => console.log('[Mock] Mutation:', sql),
+    mutate: async (sql: string) => console.log("[Mock] Mutation:", sql),
     isPending: false,
     error: null,
   };
@@ -198,7 +198,7 @@ Total users in system: <LiveValue query="SELECT COUNT(*) as count FROM users" />
 
 function App() {
   const [markdown, setMarkdown] = useState(initialMarkdown);
-  const [previewContent, setPreviewContent] = useState<keyof typeof PREVIEW_TEST_CONTENT>('chart');
+  const [previewContent, setPreviewContent] = useState<keyof typeof PREVIEW_TEST_CONTENT>("chart");
   const [showPreviewTest, setShowPreviewTest] = useState(false);
   const editorRef = useRef<EditorHandle>(null);
 
@@ -210,55 +210,80 @@ function App() {
     <div className="sandbox">
       <header className="sandbox-header">
         <h1>@hands/editor Sandbox</h1>
-        <div style={{ display: 'flex', gap: 16, alignItems: 'center' }}>
+        <div style={{ display: "flex", gap: 16, alignItems: "center" }}>
           <span className="sandbox-hint">Edit in editor, see markdown output</span>
           <button
             onClick={() => setShowPreviewTest(!showPreviewTest)}
             style={{
-              padding: '4px 12px',
+              padding: "4px 12px",
               borderRadius: 4,
-              border: '1px solid #ccc',
-              background: showPreviewTest ? '#007bff' : '#fff',
-              color: showPreviewTest ? '#fff' : '#000',
-              cursor: 'pointer',
+              border: "1px solid #ccc",
+              background: showPreviewTest ? "#007bff" : "#fff",
+              color: showPreviewTest ? "#fff" : "#000",
+              cursor: "pointer",
             }}
           >
-            {showPreviewTest ? 'Hide' : 'Show'} Preview Test
+            {showPreviewTest ? "Hide" : "Show"} Preview Test
           </button>
         </div>
       </header>
 
       {showPreviewTest && (
-        <div style={{ padding: 16, borderBottom: '1px solid #eee', background: '#fafafa' }}>
-          <div style={{ marginBottom: 8, display: 'flex', gap: 8 }}>
+        <div style={{ padding: 16, borderBottom: "1px solid #eee", background: "#fafafa" }}>
+          <div style={{ marginBottom: 8, display: "flex", gap: 8 }}>
             <strong>Preview Test:</strong>
-            {(Object.keys(PREVIEW_TEST_CONTENT) as Array<keyof typeof PREVIEW_TEST_CONTENT>).map((key) => (
-              <button
-                key={key}
-                onClick={() => setPreviewContent(key)}
+            {(Object.keys(PREVIEW_TEST_CONTENT) as Array<keyof typeof PREVIEW_TEST_CONTENT>).map(
+              (key) => (
+                <button
+                  key={key}
+                  onClick={() => setPreviewContent(key)}
+                  style={{
+                    padding: "2px 8px",
+                    borderRadius: 4,
+                    border: "1px solid #ccc",
+                    background: previewContent === key ? "#007bff" : "#fff",
+                    color: previewContent === key ? "#fff" : "#000",
+                    cursor: "pointer",
+                  }}
+                >
+                  {key}
+                </button>
+              ),
+            )}
+          </div>
+          <div style={{ display: "flex", gap: 16 }}>
+            <div style={{ flex: 1 }}>
+              <div style={{ fontSize: 12, color: "#666", marginBottom: 4 }}>MDX Input:</div>
+              <pre
                 style={{
-                  padding: '2px 8px',
+                  background: "#f0f0f0",
+                  padding: 8,
                   borderRadius: 4,
-                  border: '1px solid #ccc',
-                  background: previewContent === key ? '#007bff' : '#fff',
-                  color: previewContent === key ? '#fff' : '#000',
-                  cursor: 'pointer',
+                  fontSize: 11,
+                  overflow: "auto",
+                  maxHeight: 200,
                 }}
               >
-                {key}
-              </button>
-            ))}
-          </div>
-          <div style={{ display: 'flex', gap: 16 }}>
-            <div style={{ flex: 1 }}>
-              <div style={{ fontSize: 12, color: '#666', marginBottom: 4 }}>MDX Input:</div>
-              <pre style={{ background: '#f0f0f0', padding: 8, borderRadius: 4, fontSize: 11, overflow: 'auto', maxHeight: 200 }}>
                 {PREVIEW_TEST_CONTENT[previewContent]}
               </pre>
             </div>
-            <div style={{ flex: 1, border: '1px solid #ddd', borderRadius: 4, padding: 8, background: '#fff' }}>
-              <div style={{ fontSize: 12, color: '#666', marginBottom: 4 }}>PreviewEditor Output:</div>
-              <LiveQueryProvider useQuery={useMockQuery} useMutation={useMockMutation} schema={MOCK_SCHEMA}>
+            <div
+              style={{
+                flex: 1,
+                border: "1px solid #ddd",
+                borderRadius: 4,
+                padding: 8,
+                background: "#fff",
+              }}
+            >
+              <div style={{ fontSize: 12, color: "#666", marginBottom: 4 }}>
+                PreviewEditor Output:
+              </div>
+              <LiveQueryProvider
+                useQuery={useMockQuery}
+                useMutation={useMockMutation}
+                schema={MOCK_SCHEMA}
+              >
                 <PreviewEditor value={PREVIEW_TEST_CONTENT[previewContent]} />
               </LiveQueryProvider>
             </div>
@@ -273,7 +298,11 @@ function App() {
             <span className="panel-hint">Type @ to trigger AI autocomplete</span>
           </div>
           <EditorProvider trpc={mockTrpc}>
-            <LiveQueryProvider useQuery={useMockQuery} useMutation={useMockMutation} schema={MOCK_SCHEMA}>
+            <LiveQueryProvider
+              useQuery={useMockQuery}
+              useMutation={useMockMutation}
+              schema={MOCK_SCHEMA}
+            >
               <Editor
                 ref={editorRef}
                 value={markdown}
@@ -289,16 +318,11 @@ function App() {
           <div className="panel-header">
             <span>Markdown Output</span>
           </div>
-          <textarea
-            className="markdown-textarea"
-            value={markdown}
-            readOnly
-            spellCheck={false}
-          />
+          <textarea className="markdown-textarea" value={markdown} readOnly spellCheck={false} />
         </aside>
       </main>
     </div>
   );
 }
 
-createRoot(document.getElementById('root')!).render(<App />);
+createRoot(document.getElementById("root")!).render(<App />);

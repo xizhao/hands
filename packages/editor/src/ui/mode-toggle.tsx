@@ -35,7 +35,7 @@ export function ModeToggle({ mode, onModeChange }: ModeToggleProps) {
             "h-6 w-7 rounded-sm",
             mode === m
               ? "bg-background text-foreground shadow-sm"
-              : "text-muted-foreground hover:text-foreground"
+              : "text-muted-foreground hover:text-foreground",
           )}
         >
           <Icon size={14} weight={mode === m ? "fill" : "regular"} />

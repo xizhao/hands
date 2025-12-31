@@ -5,11 +5,12 @@
  * These routes are exposed in production (unlike actionRoutes which are dev-only).
  */
 
-import { route } from "rwsdk/router";
 import { env } from "cloudflare:workers";
+import { route } from "rwsdk/router";
 
 // Import workflow bindings (empty in dev, populated in production)
 import { workflowBindings as importedBindings } from "./workflows";
+
 const workflowBindings = importedBindings as Record<string, { className: string; binding: string }>;
 
 /**
@@ -100,10 +101,10 @@ export const workflowRoutes = [
       const workflow = getWorkflow(workflowId);
 
       if (!workflow) {
-        return new Response(
-          JSON.stringify({ error: `Workflow not found: ${workflowId}` }),
-          { status: 404, headers: { "Content-Type": "application/json" } }
-        );
+        return new Response(JSON.stringify({ error: `Workflow not found: ${workflowId}` }), {
+          status: 404,
+          headers: { "Content-Type": "application/json" },
+        });
       }
 
       try {
@@ -116,14 +117,14 @@ export const workflowRoutes = [
             workflowId,
             status: "started",
           }),
-          { headers: { "Content-Type": "application/json" } }
+          { headers: { "Content-Type": "application/json" } },
         );
       } catch (err) {
         return new Response(
           JSON.stringify({
             error: `Failed to start workflow: ${err instanceof Error ? err.message : String(err)}`,
           }),
-          { status: 500, headers: { "Content-Type": "application/json" } }
+          { status: 500, headers: { "Content-Type": "application/json" } },
         );
       }
     },
@@ -139,10 +140,10 @@ export const workflowRoutes = [
       const workflow = getWorkflow(workflowId);
 
       if (!workflow) {
-        return new Response(
-          JSON.stringify({ error: `Workflow not found: ${workflowId}` }),
-          { status: 404, headers: { "Content-Type": "application/json" } }
-        );
+        return new Response(JSON.stringify({ error: `Workflow not found: ${workflowId}` }), {
+          status: 404,
+          headers: { "Content-Type": "application/json" },
+        });
       }
 
       try {
@@ -157,7 +158,7 @@ export const workflowRoutes = [
           JSON.stringify({
             error: `Failed to get instance: ${err instanceof Error ? err.message : String(err)}`,
           }),
-          { status: 500, headers: { "Content-Type": "application/json" } }
+          { status: 500, headers: { "Content-Type": "application/json" } },
         );
       }
     },
@@ -174,10 +175,10 @@ export const workflowRoutes = [
       const workflow = getWorkflow(workflowId);
 
       if (!workflow) {
-        return new Response(
-          JSON.stringify({ error: `Workflow not found: ${workflowId}` }),
-          { status: 404, headers: { "Content-Type": "application/json" } }
-        );
+        return new Response(JSON.stringify({ error: `Workflow not found: ${workflowId}` }), {
+          status: 404,
+          headers: { "Content-Type": "application/json" },
+        });
       }
 
       try {
@@ -187,16 +188,15 @@ export const workflowRoutes = [
         // Send event to resume workflow
         await instance.sendEvent({ type: body.type, payload: body.payload });
 
-        return new Response(
-          JSON.stringify({ success: true, instanceId }),
-          { headers: { "Content-Type": "application/json" } }
-        );
+        return new Response(JSON.stringify({ success: true, instanceId }), {
+          headers: { "Content-Type": "application/json" },
+        });
       } catch (err) {
         return new Response(
           JSON.stringify({
             error: `Failed to send event: ${err instanceof Error ? err.message : String(err)}`,
           }),
-          { status: 500, headers: { "Content-Type": "application/json" } }
+          { status: 500, headers: { "Content-Type": "application/json" } },
         );
       }
     },
@@ -212,26 +212,25 @@ export const workflowRoutes = [
       const workflow = getWorkflow(workflowId);
 
       if (!workflow) {
-        return new Response(
-          JSON.stringify({ error: `Workflow not found: ${workflowId}` }),
-          { status: 404, headers: { "Content-Type": "application/json" } }
-        );
+        return new Response(JSON.stringify({ error: `Workflow not found: ${workflowId}` }), {
+          status: 404,
+          headers: { "Content-Type": "application/json" },
+        });
       }
 
       try {
         const instance = await workflow.get(instanceId);
         await instance.terminate();
 
-        return new Response(
-          JSON.stringify({ success: true, instanceId, status: "terminated" }),
-          { headers: { "Content-Type": "application/json" } }
-        );
+        return new Response(JSON.stringify({ success: true, instanceId, status: "terminated" }), {
+          headers: { "Content-Type": "application/json" },
+        });
       } catch (err) {
         return new Response(
           JSON.stringify({
             error: `Failed to terminate: ${err instanceof Error ? err.message : String(err)}`,
           }),
-          { status: 500, headers: { "Content-Type": "application/json" } }
+          { status: 500, headers: { "Content-Type": "application/json" } },
         );
       }
     },

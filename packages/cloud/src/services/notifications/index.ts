@@ -13,6 +13,6 @@
  *   await sender.alert("info", "Title", "Message");
  */
 
+export { createNotificationSender, sendSlackMessage, sendSlackWebhook } from "./client";
 export { notificationsRouter } from "./router";
-export { createNotificationSender, sendSlackWebhook, sendSlackMessage } from "./client";
 export * from "./types";

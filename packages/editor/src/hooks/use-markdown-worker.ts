@@ -2,11 +2,10 @@
  * useMarkdownWorker - Hook for offloading markdown serialization to a web worker
  */
 
-import { useCallback, useEffect, useRef, useState } from "react";
 import type { TElement } from "platejs";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 // Use Vite's worker bundling - creates a real worker file, not a blob URL
-// @ts-ignore - Vite worker import, type defined in vite-env.d.ts (ignored for non-Vite consumers)
 import MarkdownWorker from "../workers/markdown.worker?worker";
 
 // ============================================================================
@@ -171,7 +170,7 @@ export function useMarkdownWorker(): UseMarkdownWorkerResult {
     const id = ++requestId;
     return new Promise((resolve, reject) => {
       pendingRequests.set(id, { resolve: resolve as (v: unknown) => void, reject });
-      sharedWorker!.postMessage({ id, type: "serialize", value });
+      sharedWorker?.postMessage({ id, type: "serialize", value });
     });
   }, []);
 
@@ -180,7 +179,7 @@ export function useMarkdownWorker(): UseMarkdownWorkerResult {
     const id = ++requestId;
     return new Promise((resolve, reject) => {
       pendingRequests.set(id, { resolve: resolve as (v: unknown) => void, reject });
-      sharedWorker!.postMessage({ id, type: "deserialize", markdown });
+      sharedWorker?.postMessage({ id, type: "deserialize", markdown });
     });
   }, []);
 
@@ -205,7 +204,7 @@ interface UseMarkdownWorkerDebouncedResult {
 }
 
 export function useMarkdownWorkerDebounced(
-  options: UseMarkdownWorkerDebouncedOptions = {}
+  options: UseMarkdownWorkerDebouncedOptions = {},
 ): UseMarkdownWorkerDebouncedResult {
   const { delay = 150, onSerialize, onError } = options;
   const { serialize, deserialize } = useMarkdownWorker();
@@ -234,7 +233,7 @@ export function useMarkdownWorkerDebounced(
         }
       }, delay);
     },
-    [serialize, delay, onSerialize, onError, cancel]
+    [serialize, delay, onSerialize, onError, cancel],
   );
 
   const serializeNow = useCallback(
@@ -242,7 +241,7 @@ export function useMarkdownWorkerDebounced(
       cancel();
       return serialize(value);
     },
-    [serialize, cancel]
+    [serialize, cancel],
   );
 
   useEffect(() => () => cancel(), [cancel]);

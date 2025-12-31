@@ -1,10 +1,9 @@
-'use client';
+"use client";
 
-import { Tooltip as TooltipPrimitive } from 'radix-ui';
-import * as React from 'react';
-
-import { cn } from '../lib/utils';
-import { useMounted } from '../hooks/use-mounted';
+import { Tooltip as TooltipPrimitive } from "radix-ui";
+import type * as React from "react";
+import { useMounted } from "../hooks/use-mounted";
+import { cn } from "../lib/utils";
 
 export function TooltipProvider({
   delayDuration = 200,
@@ -36,8 +35,8 @@ export function TooltipContent({
   return (
     <TooltipPrimitive.Content
       className={cn(
-        'z-9999 overflow-hidden rounded-md bg-primary px-2 py-1.5 font-semibold text-primary-foreground text-xs shadow-md',
-        className
+        "z-9999 overflow-hidden rounded-md bg-primary px-2 py-1.5 font-semibold text-primary-foreground text-xs shadow-md",
+        className,
       )}
       sideOffset={sideOffset}
       {...props}
@@ -91,15 +90,10 @@ type TooltipProps<T extends React.ElementType> = {
   tooltip?: React.ReactNode;
   tooltipContentProps?: Omit<
     React.ComponentPropsWithoutRef<typeof TooltipPrimitive.Content>,
-    'children'
+    "children"
   >;
-  tooltipProps?: Omit<
-    React.ComponentPropsWithoutRef<typeof TooltipPrimitive.Root>,
-    'children'
-  >;
-  tooltipTriggerProps?: React.ComponentPropsWithoutRef<
-    typeof TooltipPrimitive.Trigger
-  >;
+  tooltipProps?: Omit<React.ComponentPropsWithoutRef<typeof TooltipPrimitive.Root>, "children">;
+  tooltipTriggerProps?: React.ComponentPropsWithoutRef<typeof TooltipPrimitive.Trigger>;
 } & React.ComponentProps<T>;
 
 export function withTooltip<T extends React.ElementType>(Component: T) {
@@ -126,9 +120,7 @@ export function withTooltip<T extends React.ElementType>(Component: T) {
             <TooltipPortal>
               <TooltipContent {...tooltipContentProps}>
                 {tooltip}
-                {shortcut && (
-                  <div className="mt-px text-gray-400">{shortcut}</div>
-                )}
+                {shortcut && <div className="mt-px text-gray-400">{shortcut}</div>}
               </TooltipContent>
             </TooltipPortal>
           </Tooltip>

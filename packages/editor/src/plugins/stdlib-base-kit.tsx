@@ -6,10 +6,10 @@
  * they require JavaScript for Vega-Lite canvas rendering.
  */
 
+import type { TElement } from "platejs";
 import { createSlatePlugin, type SlatePlugin } from "platejs";
 import { SlateElement, type SlateElementProps } from "platejs/static";
-import type { TElement } from "platejs";
-import * as React from "react";
+import type * as React from "react";
 
 // Element keys - using PascalCase to match serialized data from MDX
 // The markdown/MDX parser outputs component names as-is (PascalCase)
@@ -162,9 +162,7 @@ function LiveValueElementStatic(props: SlateElementProps) {
   const displayType = resolveDisplayMode(element.display, data);
 
   // Check if has chart children (non-empty text)
-  const hasChildren = element.children?.some(
-    (child) => !("text" in child && child.text === "")
-  );
+  const hasChildren = element.children?.some((child) => !("text" in child && child.text === ""));
 
   // If has children, render them (charts will render as placeholders)
   if (hasChildren) {
@@ -288,7 +286,8 @@ function MetricElementStatic(props: SlateElementProps) {
         {element.label && <span className="text-sm text-muted-foreground">{element.label}</span>}
         {element.change !== undefined && (
           <span className={element.change >= 0 ? "text-green-600" : "text-red-600"}>
-            {element.change >= 0 ? "+" : ""}{element.change}%
+            {element.change >= 0 ? "+" : ""}
+            {element.change}%
           </span>
         )}
       </div>
@@ -338,9 +337,7 @@ function AlertElementStatic(props: SlateElementProps) {
 function LoaderElementStatic(props: SlateElementProps) {
   return (
     <SlateElement {...props} as="span">
-      <span className="inline-flex items-center text-muted-foreground">
-        Loading...
-      </span>
+      <span className="inline-flex items-center text-muted-foreground">Loading...</span>
       {props.children}
     </SlateElement>
   );
@@ -455,9 +452,7 @@ function KanbanElementStatic(props: SlateElementProps) {
 function TabsElementStatic(props: SlateElementProps) {
   return (
     <SlateElement {...props} as="div" className="my-2">
-      <div className="border rounded-lg">
-        {props.children}
-      </div>
+      <div className="border rounded-lg">{props.children}</div>
     </SlateElement>
   );
 }
@@ -468,9 +463,7 @@ function TabElementStatic(props: SlateElementProps) {
     <SlateElement {...props} as="div">
       <div className="p-4 border-t first:border-t-0">
         {element.label && (
-          <div className="font-medium text-sm mb-2 text-muted-foreground">
-            {element.label}
-          </div>
+          <div className="font-medium text-sm mb-2 text-muted-foreground">{element.label}</div>
         )}
         {props.children}
       </div>
@@ -496,11 +489,14 @@ function PageEmbedElementStatic(props: SlateElementProps) {
 // Base Plugins (without components - for .withComponent())
 // ============================================================================
 
-function createBasePlugin(key: string, options: {
-  isVoid?: boolean;
-  isInline?: boolean;
-  isContainer?: boolean;
-}): SlatePlugin {
+function createBasePlugin(
+  key: string,
+  options: {
+    isVoid?: boolean;
+    isInline?: boolean;
+    isContainer?: boolean;
+  },
+): SlatePlugin {
   return createSlatePlugin({
     key,
     node: {
@@ -514,17 +510,32 @@ function createBasePlugin(key: string, options: {
 
 // LiveValue plugins
 const BaseLiveValuePlugin = createBasePlugin(LIVE_VALUE_KEY, { isContainer: true });
-const BaseLiveValueInlinePlugin = createBasePlugin(LIVE_VALUE_INLINE_KEY, { isVoid: true, isInline: true });
+const BaseLiveValueInlinePlugin = createBasePlugin(LIVE_VALUE_INLINE_KEY, {
+  isVoid: true,
+  isInline: true,
+});
 
 // Chart plugins (all void, inline for nesting in LiveValue)
 const BaseLineChartPlugin = createBasePlugin(LINE_CHART_KEY, { isVoid: true, isInline: true });
 const BaseBarChartPlugin = createBasePlugin(BAR_CHART_KEY, { isVoid: true, isInline: true });
 const BaseAreaChartPlugin = createBasePlugin(AREA_CHART_KEY, { isVoid: true, isInline: true });
 const BasePieChartPlugin = createBasePlugin(PIE_CHART_KEY, { isVoid: true, isInline: true });
-const BaseScatterChartPlugin = createBasePlugin(SCATTER_CHART_KEY, { isVoid: true, isInline: true });
-const BaseHistogramChartPlugin = createBasePlugin(HISTOGRAM_CHART_KEY, { isVoid: true, isInline: true });
-const BaseHeatmapChartPlugin = createBasePlugin(HEATMAP_CHART_KEY, { isVoid: true, isInline: true });
-const BaseBoxPlotChartPlugin = createBasePlugin(BOXPLOT_CHART_KEY, { isVoid: true, isInline: true });
+const BaseScatterChartPlugin = createBasePlugin(SCATTER_CHART_KEY, {
+  isVoid: true,
+  isInline: true,
+});
+const BaseHistogramChartPlugin = createBasePlugin(HISTOGRAM_CHART_KEY, {
+  isVoid: true,
+  isInline: true,
+});
+const BaseHeatmapChartPlugin = createBasePlugin(HEATMAP_CHART_KEY, {
+  isVoid: true,
+  isInline: true,
+});
+const BaseBoxPlotChartPlugin = createBasePlugin(BOXPLOT_CHART_KEY, {
+  isVoid: true,
+  isInline: true,
+});
 const BaseMapChartPlugin = createBasePlugin(MAP_CHART_KEY, { isVoid: true, isInline: true });
 const BaseChartPlugin = createBasePlugin(CHART_KEY, { isVoid: true, isInline: true });
 

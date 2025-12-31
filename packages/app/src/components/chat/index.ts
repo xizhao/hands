@@ -6,7 +6,7 @@
  * - UnifiedSidebar (embedded in workbook)
  */
 
-export { ChatPanel, type ChatPanelProps } from "./ChatPanel";
 export { ChatInput, type ChatInputRef } from "./ChatInput";
+export { ChatPanel, type ChatPanelProps } from "./ChatPanel";
+export { type SessionStatus, StatusDot } from "./StatusDot";
 export { ThreadList } from "./ThreadList";
-export { StatusDot, type SessionStatus } from "./StatusDot";

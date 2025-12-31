@@ -28,7 +28,7 @@ import {
 import { memo, useMemo } from "react";
 
 import { METRIC_KEY, type TMetricElement } from "../../types";
-import { detectFormat, formatValue as d3FormatValue } from "../lib/format";
+import { formatValue as d3FormatValue, detectFormat } from "../lib/format";
 import { useLiveValueData } from "./charts/context";
 
 // ============================================================================
@@ -143,10 +143,19 @@ function extractValueFromContext(data: Record<string, unknown>[]): number | stri
 
 function MetricElement(props: PlateElementProps) {
   const element = useElement<TMetricElement>();
-  const selected = useSelected();
+  const _selected = useSelected();
   const liveValueCtx = useLiveValueData();
 
-  const { value: propValue, label, prefix, suffix, change, changeLabel, size, format: propFormat } = element;
+  const {
+    value: propValue,
+    label,
+    prefix,
+    suffix,
+    change,
+    changeLabel,
+    size,
+    format: propFormat,
+  } = element;
 
   // Resolve value: context data takes priority if inside LiveValue
   const contextValue = liveValueCtx?.data ? extractValueFromContext(liveValueCtx.data) : undefined;
@@ -172,11 +181,7 @@ function MetricElement(props: PlateElementProps) {
   const error = liveValueCtx?.error ?? null;
 
   return (
-    <PlateElement
-      {...props}
-      as="div"
-      className="inline-block my-2"
-    >
+    <PlateElement {...props} as="div" className="inline-block my-2">
       {isLoading ? (
         <div className="animate-pulse">
           <Metric value="..." label={label} prefix={prefix} suffix={suffix} size={size} />

@@ -8,8 +8,8 @@
  * Usage: bun run scripts/generate-docs.ts
  */
 
-import * as fs from "fs";
-import * as path from "path";
+import * as fs from "node:fs";
+import * as path from "node:path";
 
 // ============================================================================
 // Types
@@ -79,9 +79,7 @@ function parseJSDocContent(jsDocContent: string): ParsedJSDoc | null {
   // Extract @description
   const descMatch = jsDocContent.match(/@description\s+(.+?)(?=\n\s*\*\s*@|$)/s);
   if (descMatch) {
-    result.description = descMatch[1]
-      .replace(/\n\s*\*\s*/g, " ")
-      .trim();
+    result.description = descMatch[1].replace(/\n\s*\*\s*/g, " ").trim();
   }
 
   // Extract @keywords
@@ -114,13 +112,16 @@ function parseJSDocContent(jsDocContent: string): ParsedJSDoc | null {
  * Parse ComponentMeta export from a component file.
  * Uses regex since we can't dynamically import TS at script time.
  */
-function parseMetaFromFile(filePath: string, componentName: string): ComponentMetaParsed | undefined {
+function parseMetaFromFile(
+  filePath: string,
+  componentName: string,
+): ComponentMetaParsed | undefined {
   const content = fs.readFileSync(filePath, "utf-8");
 
   // Look for: export const {Name}Meta: ComponentMeta = { ... };
   const metaRegex = new RegExp(
     `export\\s+const\\s+${componentName}Meta\\s*:\\s*ComponentMeta\\s*=\\s*({[\\s\\S]*?});`,
-    "m"
+    "m",
   );
 
   const match = content.match(metaRegex);
@@ -137,7 +138,7 @@ function parseMetaFromFile(filePath: string, componentName: string): ComponentMe
     if (requiredPropsMatch) {
       const props = requiredPropsMatch[1].match(/"([^"]+)"/g);
       if (props) {
-        result.requiredProps = props.map(p => p.replace(/"/g, ""));
+        result.requiredProps = props.map((p) => p.replace(/"/g, ""));
       }
     }
 
@@ -160,7 +161,7 @@ function parseMetaFromFile(filePath: string, componentName: string): ComponentMe
         if (enumMatch) {
           const values = enumMatch[1].match(/"([^"]+)"/g);
           if (values) {
-            rule.enum = values.map(v => v.replace(/"/g, ""));
+            rule.enum = values.map((v) => v.replace(/"/g, ""));
           }
         }
 
@@ -183,12 +184,19 @@ function parseMetaFromFile(filePath: string, componentName: string): ComponentMe
       const constraintsContent = constraintsMatch[1];
 
       // Extract each constraint type
-      for (const constraintType of ["requireParent", "requireChild", "forbidParent", "forbidChild"] as const) {
-        const constraintMatch = constraintsContent.match(new RegExp(`${constraintType}:\\s*\\[(.*?)\\]`, "s"));
+      for (const constraintType of [
+        "requireParent",
+        "requireChild",
+        "forbidParent",
+        "forbidChild",
+      ] as const) {
+        const constraintMatch = constraintsContent.match(
+          new RegExp(`${constraintType}:\\s*\\[(.*?)\\]`, "s"),
+        );
         if (constraintMatch) {
           const values = constraintMatch[1].match(/"([^"]+)"/g);
           if (values) {
-            result.constraints[constraintType] = values.map(v => v.replace(/"/g, ""));
+            result.constraints[constraintType] = values.map((v) => v.replace(/"/g, ""));
           }
         }
       }
@@ -338,10 +346,10 @@ export const STDLIB_COMPONENTS = ${JSON.stringify(
           keywords: c.keywords,
           example: c.example,
         },
-      ])
+      ]),
     ),
     null,
-    2
+    2,
   )} as const;
 
 // Component names by category
@@ -367,10 +375,10 @@ export const COMPONENT_SCHEMA = ${JSON.stringify(
             category: c.category,
             ...c.meta,
           },
-        ])
+        ]),
     ),
     null,
-    2
+    2,
   )} as const;
 
 // Quick reference for agents (shorter than full docs)
@@ -464,7 +472,7 @@ async function generateDocs() {
           example: c.example,
           file: c.file,
         },
-      ])
+      ]),
     ),
   };
 

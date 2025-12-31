@@ -9,20 +9,18 @@
  *   import { createPlugin } from "@hands/core/plugin";
  */
 
-// SQL validation primitives
-export * from "./sql-validation";
+// Action primitives (serverless compute functions)
+export * from "./actions";
 
 // Schema primitives (action schema declarations, validation)
 export * from "./schema";
-
-// Action primitives (serverless compute functions)
-export * from "./actions";
+// SQL validation primitives
+export * from "./sql-validation";
 
 // Serialization primitives - NOT re-exported here to avoid Node ESM issues
 // Import directly from "@hands/core/primitives/serialization" instead
 
-// Sheet primitives (smart SQLite table abstraction)
-export * from "./sheet";
-
 // Domain primitives (table-as-first-class-entity abstraction)
 export * from "./domain";
+// Sheet primitives (smart SQLite table abstraction)
+export * from "./sheet";

@@ -1,5 +1,5 @@
-import type { IntegrationsEnv, TokenResponse, UserInfo, OAuthProviderType } from "./types";
 import { OAUTH_PROVIDERS } from "./providers";
+import type { IntegrationsEnv, OAuthProviderType, TokenResponse, UserInfo } from "./types";
 
 /**
  * Get client ID for a provider from environment
@@ -27,7 +27,7 @@ export async function exchangeCode(
   code: string,
   redirectUri: string,
   env: IntegrationsEnv,
-  shopDomain?: string
+  shopDomain?: string,
 ): Promise<TokenResponse> {
   const providerConfig = OAUTH_PROVIDERS[provider];
   let tokenUrl = providerConfig.tokenUrl;
@@ -65,7 +65,7 @@ export async function exchangeCode(
 export async function refreshToken(
   provider: OAuthProviderType,
   refreshTokenValue: string,
-  env: IntegrationsEnv
+  env: IntegrationsEnv,
 ): Promise<TokenResponse> {
   const providerConfig = OAUTH_PROVIDERS[provider];
 
@@ -95,7 +95,7 @@ export async function refreshToken(
  */
 export async function getAccountInfo(
   provider: OAuthProviderType,
-  accessToken: string
+  accessToken: string,
 ): Promise<UserInfo> {
   switch (provider) {
     case "google": {

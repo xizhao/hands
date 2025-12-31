@@ -6,9 +6,9 @@
  * with the desktop app's tRPC-based data layer.
  */
 
-import { useMemo } from "react";
 import type { TableEditorDataProvider } from "@hands/editor/table-editor";
-import { useTableData, type UseTableDataOptions } from "./useTableData";
+import { useMemo } from "react";
+import { type UseTableDataOptions, useTableData } from "./useTableData";
 
 export interface UseTableEditorProviderOptions extends UseTableDataOptions {
   // All options from useTableData are supported
@@ -29,7 +29,7 @@ export interface UseTableEditorProviderOptions extends UseTableDataOptions {
  * ```
  */
 export function useTableEditorProvider(
-  options: UseTableEditorProviderOptions
+  options: UseTableEditorProviderOptions,
 ): TableEditorDataProvider {
   const tableData = useTableData(options);
 
@@ -70,6 +70,6 @@ export function useTableEditorProvider(
       // Cache management
       invalidateCache: tableData.invalidateCache,
     }),
-    [tableData]
+    [tableData],
   );
 }

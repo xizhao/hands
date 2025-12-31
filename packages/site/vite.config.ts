@@ -1,7 +1,7 @@
-import react from "@vitejs/plugin-react";
-import { resolve } from "path";
-import { defineConfig } from "vite";
+import { resolve } from "node:path";
 import alias from "@rollup/plugin-alias";
+import react from "@vitejs/plugin-react";
+import { defineConfig } from "vite";
 
 export default defineConfig({
   plugins: [react()],
@@ -14,7 +14,10 @@ export default defineConfig({
       // Workspace package aliases for proper resolution
       "@hands/core/stdlib": resolve(__dirname, "../core/src/ui"),
       "@hands/core/plugin": resolve(__dirname, "../core/src/primitives/plugin.tsx"),
-      "@hands/core/primitives/serialization": resolve(__dirname, "../core/src/primitives/serialization"),
+      "@hands/core/primitives/serialization": resolve(
+        __dirname,
+        "../core/src/primitives/serialization",
+      ),
       "@hands/core/primitives/plugin": resolve(__dirname, "../core/src/primitives/plugin.tsx"),
       "@hands/core/primitives": resolve(__dirname, "../core/src/primitives"),
       "@hands/core/types": resolve(__dirname, "../core/src/types"),
@@ -37,7 +40,10 @@ export default defineConfig({
     plugins: () => [
       alias({
         entries: [
-          { find: "@hands/core/primitives/serialization", replacement: resolve(__dirname, "../core/src/primitives/serialization") },
+          {
+            find: "@hands/core/primitives/serialization",
+            replacement: resolve(__dirname, "../core/src/primitives/serialization"),
+          },
           { find: "@hands/core/types", replacement: resolve(__dirname, "../core/src/types") },
           { find: "@hands/core", replacement: resolve(__dirname, "../core/src") },
         ],

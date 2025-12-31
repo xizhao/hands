@@ -9,8 +9,8 @@
  */
 
 import { useCallback, useEffect, useState } from "react";
-import { usePlatform } from "../platform";
 import { PORTS } from "@/lib/ports";
+import { usePlatform } from "../platform";
 
 export interface Settings {
   // Server settings
@@ -86,29 +86,35 @@ export function useSettings() {
   );
 
   // Update the API key
-  const updateApiKey = useCallback(async (value: string) => {
-    setApiKeys({ openrouter_api_key: value });
+  const updateApiKey = useCallback(
+    async (value: string) => {
+      setApiKeys({ openrouter_api_key: value });
 
-    try {
-      if (platform.storage) {
-        await platform.storage.set("openrouter_api_key", value);
+      try {
+        if (platform.storage) {
+          await platform.storage.set("openrouter_api_key", value);
+        }
+      } catch (error) {
+        console.error("Failed to save API key:", error);
       }
-    } catch (error) {
-      console.error("Failed to save API key:", error);
-    }
-  }, [platform.storage]);
+    },
+    [platform.storage],
+  );
 
   // Save all settings at once
-  const saveSettings = useCallback(async (newSettings: Settings) => {
-    setSettings(newSettings);
-    try {
-      if (platform.storage) {
-        await platform.storage.set("settings", newSettings);
+  const saveSettings = useCallback(
+    async (newSettings: Settings) => {
+      setSettings(newSettings);
+      try {
+        if (platform.storage) {
+          await platform.storage.set("settings", newSettings);
+        }
+      } catch (error) {
+        console.error("Failed to save settings:", error);
       }
-    } catch (error) {
-      console.error("Failed to save settings:", error);
-    }
-  }, [platform.storage]);
+    },
+    [platform.storage],
+  );
 
   // Reset to defaults
   const resetSettings = useCallback(async () => {

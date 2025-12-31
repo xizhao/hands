@@ -16,9 +16,7 @@ interface Env {
 // R2 public URL
 const DEFAULT_R2_URL = "https://pub-aa371ada4bad4657853c1582c404f5aa.r2.dev";
 
-export async function onRequest(
-  context: EventContext<Env, string, unknown>
-): Promise<Response> {
+export async function onRequest(context: EventContext<Env, string, unknown>): Promise<Response> {
   const url = new URL(context.request.url);
   const path = url.pathname;
 

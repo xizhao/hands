@@ -52,9 +52,7 @@ export interface TableEditorDataProvider {
   createRow?(data: Record<string, unknown>): Promise<void>;
   updateRow?(id: string, data: Record<string, unknown>): Promise<void>;
   deleteRow?(id: string): Promise<void>;
-  bulkUpdate?(
-    updates: Array<{ id: string; data: Record<string, unknown> }>
-  ): Promise<void>;
+  bulkUpdate?(updates: Array<{ id: string; data: Record<string, unknown> }>): Promise<void>;
   bulkDelete?(ids: string[]): Promise<void>;
 
   // Column operations (optional - for schema editing)
@@ -63,7 +61,7 @@ export interface TableEditorDataProvider {
   addColumn?(
     columnName: string,
     columnType: string,
-    options?: { nullable?: boolean; defaultValue?: unknown }
+    options?: { nullable?: boolean; defaultValue?: unknown },
   ): Promise<void>;
   dropColumn?(columnName: string): Promise<void>;
 

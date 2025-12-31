@@ -6,16 +6,16 @@
 
 import { describe, expect, it } from "vitest";
 import {
-  parseAttributeValue,
-  parseExpression,
+  createContainerElement,
+  createVoidElement,
+  hasChildContent,
   parseAttributes,
   parseAttributesTyped,
+  parseAttributeValue,
+  parseExpression,
+  serializeAttributes,
   serializeAttributeValue,
   serializeAttributeValueReadable,
-  serializeAttributes,
-  hasChildContent,
-  createVoidElement,
-  createContainerElement,
 } from "./helpers";
 
 // ============================================================================
@@ -143,7 +143,7 @@ describe("parseExpression", () => {
 
     it("parses array of JS objects", () => {
       const result = parseExpression(
-        '[{ value: "a", label: "Option A" }, { value: "b", label: "Option B" }]'
+        '[{ value: "a", label: "Option A" }, { value: "b", label: "Option B" }]',
       );
       expect(result).toEqual([
         { value: "a", label: "Option A" },
@@ -306,7 +306,7 @@ describe("parseAttributesTyped", () => {
   it("applies defaults for missing attributes", () => {
     const result = parseAttributesTyped(
       { attributes: [{ type: "mdxJsxAttribute", name: "query", value: "SELECT 1" }] },
-      { query: "", display: "auto", limit: 100 }
+      { query: "", display: "auto", limit: 100 },
     );
     expect(result).toEqual({
       query: "SELECT 1",
@@ -320,10 +320,14 @@ describe("parseAttributesTyped", () => {
       {
         attributes: [
           { type: "mdxJsxAttribute", name: "display", value: "table" },
-          { type: "mdxJsxAttribute", name: "limit", value: { type: "mdxJsxAttributeValueExpression", value: "50" } },
+          {
+            type: "mdxJsxAttribute",
+            name: "limit",
+            value: { type: "mdxJsxAttributeValueExpression", value: "50" },
+          },
         ],
       },
-      { query: "", display: "auto", limit: 100 }
+      { query: "", display: "auto", limit: 100 },
     );
     expect(result).toEqual({
       query: "",
@@ -428,55 +432,41 @@ describe("serializeAttributes", () => {
 
   it("omits undefined values", () => {
     const result = serializeAttributes({ query: "SELECT 1", display: undefined });
-    expect(result).toEqual([
-      { type: "mdxJsxAttribute", name: "query", value: "SELECT 1" },
-    ]);
+    expect(result).toEqual([{ type: "mdxJsxAttribute", name: "query", value: "SELECT 1" }]);
   });
 
   it("omits null values", () => {
     const result = serializeAttributes({ query: "SELECT 1", display: null });
-    expect(result).toEqual([
-      { type: "mdxJsxAttribute", name: "query", value: "SELECT 1" },
-    ]);
+    expect(result).toEqual([{ type: "mdxJsxAttribute", name: "query", value: "SELECT 1" }]);
   });
 
   it("omits false boolean values", () => {
     const result = serializeAttributes({ required: true, disabled: false });
-    expect(result).toEqual([
-      { type: "mdxJsxAttribute", name: "required", value: null },
-    ]);
+    expect(result).toEqual([{ type: "mdxJsxAttribute", name: "required", value: null }]);
   });
 
   it("uses include option to filter and order", () => {
-    const result = serializeAttributes(
-      { c: 3, a: 1, b: 2 },
-      { include: ["a", "b"] }
-    );
+    const result = serializeAttributes({ c: 3, a: 1, b: 2 }, { include: ["a", "b"] });
     expect(result.map((a) => a.name)).toEqual(["a", "b"]);
   });
 
   it("uses exclude option to filter out keys", () => {
-    const result = serializeAttributes(
-      { a: 1, b: 2, c: 3 },
-      { exclude: ["b"] }
-    );
+    const result = serializeAttributes({ a: 1, b: 2, c: 3 }, { exclude: ["b"] });
     expect(result.map((a) => a.name)).toEqual(["a", "c"]);
   });
 
   it("skips values that match defaults", () => {
     const result = serializeAttributes(
       { query: "SELECT 1", display: "auto" },
-      { defaults: { display: "auto" } }
+      { defaults: { display: "auto" } },
     );
-    expect(result).toEqual([
-      { type: "mdxJsxAttribute", name: "query", value: "SELECT 1" },
-    ]);
+    expect(result).toEqual([{ type: "mdxJsxAttribute", name: "query", value: "SELECT 1" }]);
   });
 
   it("includes values that differ from defaults", () => {
     const result = serializeAttributes(
       { query: "SELECT 1", display: "table" },
-      { defaults: { display: "auto" } }
+      { defaults: { display: "auto" } },
     );
     expect(result).toHaveLength(2);
   });
@@ -484,7 +474,7 @@ describe("serializeAttributes", () => {
   it("respects readable option for array of objects", () => {
     const result = serializeAttributes(
       { options: [{ value: "a", label: "A" }] },
-      { readable: true }
+      { readable: true },
     );
     expect(result[0].value).toEqual({
       type: "mdxJsxAttributeValueExpression",
@@ -495,7 +485,7 @@ describe("serializeAttributes", () => {
   it("uses JSON when readable is false", () => {
     const result = serializeAttributes(
       { options: [{ value: "a", label: "A" }] },
-      { readable: false }
+      { readable: false },
     );
     expect(result[0].value).toEqual({
       type: "mdxJsxAttributeValueExpression",

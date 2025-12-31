@@ -12,9 +12,8 @@
 
 import { useQuery } from "@tanstack/react-query";
 import { useEffect, useMemo, useRef } from "react";
-import { usePlatform } from "../platform";
 import { trpc } from "@/lib/trpc";
-import type { RuntimeStatus } from "../platform/types";
+import { usePlatform } from "../platform";
 
 /** Workbook manifest from runtime (domains come from tRPC separately) */
 export interface WorkbookManifest {

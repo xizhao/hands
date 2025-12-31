@@ -1,7 +1,7 @@
-import { describe, expect, test, beforeEach } from "bun:test";
+import { beforeEach, describe, expect, test } from "bun:test";
 import { Hono } from "hono";
-import { rateLimit } from "./rate-limit";
 import type { Env, RateLimitEntry } from "../types";
+import { rateLimit } from "./rate-limit";
 
 // Mock KV namespace
 class MockKV {
@@ -14,11 +14,7 @@ class MockKV {
     return value as unknown as T;
   }
 
-  async put(
-    key: string,
-    value: string,
-    _options?: { expirationTtl?: number }
-  ): Promise<void> {
+  async put(key: string, value: string, _options?: { expirationTtl?: number }): Promise<void> {
     this.store.set(key, value);
   }
 
@@ -47,7 +43,7 @@ describe("rate limiting", () => {
         limit: 3,
         windowSeconds: 60,
         keyPrefix: "test",
-      })
+      }),
     );
 
     app.get("/test", (c) => c.json({ ok: true }));
@@ -67,10 +63,7 @@ describe("rate limiting", () => {
 
     // Create a fresh app for this test
     const testApp = new Hono<{ Bindings: Env }>();
-    testApp.use(
-      "*",
-      rateLimit({ limit: 3, windowSeconds: 60, keyPrefix: "test" })
-    );
+    testApp.use("*", rateLimit({ limit: 3, windowSeconds: 60, keyPrefix: "test" }));
     testApp.get("/test", (c) => c.json({ ok: true }));
 
     const req = new Request("http://localhost/test", {
@@ -87,10 +80,7 @@ describe("rate limiting", () => {
     const env = { RATE_LIMIT: mockKV } as unknown as Env;
 
     const testApp = new Hono<{ Bindings: Env }>();
-    testApp.use(
-      "*",
-      rateLimit({ limit: 3, windowSeconds: 60, keyPrefix: "test" })
-    );
+    testApp.use("*", rateLimit({ limit: 3, windowSeconds: 60, keyPrefix: "test" }));
     testApp.get("/test", (c) => c.json({ ok: true }));
 
     const req = () =>
@@ -116,10 +106,7 @@ describe("rate limiting", () => {
     const env = { RATE_LIMIT: mockKV } as unknown as Env;
 
     const testApp = new Hono<{ Bindings: Env }>();
-    testApp.use(
-      "*",
-      rateLimit({ limit: 5, windowSeconds: 60, keyPrefix: "headers" })
-    );
+    testApp.use("*", rateLimit({ limit: 5, windowSeconds: 60, keyPrefix: "headers" }));
     testApp.get("/test", (c) => c.json({ ok: true }));
 
     const req = new Request("http://localhost/test", {
@@ -137,10 +124,7 @@ describe("rate limiting", () => {
     const env = { RATE_LIMIT: mockKV } as unknown as Env;
 
     const testApp = new Hono<{ Bindings: Env }>();
-    testApp.use(
-      "*",
-      rateLimit({ limit: 2, windowSeconds: 60, keyPrefix: "multi" })
-    );
+    testApp.use("*", rateLimit({ limit: 2, windowSeconds: 60, keyPrefix: "multi" }));
     testApp.get("/test", (c) => c.json({ ok: true }));
 
     // IP 1 makes 2 requests
@@ -174,10 +158,7 @@ describe("rate limiting", () => {
     await mockKV.put("expired:ip:9.9.9.9", JSON.stringify(expiredEntry));
 
     const testApp = new Hono<{ Bindings: Env }>();
-    testApp.use(
-      "*",
-      rateLimit({ limit: 5, windowSeconds: 60, keyPrefix: "expired" })
-    );
+    testApp.use("*", rateLimit({ limit: 5, windowSeconds: 60, keyPrefix: "expired" }));
     testApp.get("/test", (c) => c.json({ ok: true }));
 
     const req = new Request("http://localhost/test", {
@@ -194,10 +175,7 @@ describe("rate limiting", () => {
     const env = { RATE_LIMIT: mockKV } as unknown as Env;
 
     const testApp = new Hono<{ Bindings: Env }>();
-    testApp.use(
-      "*",
-      rateLimit({ limit: 1, windowSeconds: 60, keyPrefix: "retry" })
-    );
+    testApp.use("*", rateLimit({ limit: 1, windowSeconds: 60, keyPrefix: "retry" }));
     testApp.get("/test", (c) => c.json({ ok: true }));
 
     const req = () =>

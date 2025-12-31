@@ -9,17 +9,32 @@
  * - Missing secrets overlay with configuration form
  */
 
-import { CaretDown, CaretRight, CheckCircle, CircleNotch, Clock, Code, Eye, EyeSlash, GitBranch, Globe, Key, Lock, Play, XCircle } from "@phosphor-icons/react";
+import { ActionEditor, WorkflowStepGraph } from "@hands/editor";
+import {
+  CaretDown,
+  CaretRight,
+  CheckCircle,
+  CircleNotch,
+  Clock,
+  Code,
+  Eye,
+  EyeSlash,
+  GitBranch,
+  Globe,
+  Key,
+  Lock,
+  Play,
+  XCircle,
+} from "@phosphor-icons/react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
 import { useState } from "react";
-import { ActionEditor, WorkflowStepGraph } from "@hands/editor";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { useRuntimePort } from "@/hooks/useRuntimeState";
-import { trpc, type ActionRunRecord, type ActionRunLog, type StepRecord } from "@/lib/trpc";
+import { type StepRecord, trpc } from "@/lib/trpc";
 import { cn } from "@/lib/utils";
 
 interface ActionDetailPanelProps {
@@ -79,9 +94,7 @@ function SecretsForm({
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    const nonEmpty = Object.fromEntries(
-      Object.entries(values).filter(([_, v]) => v.trim())
-    );
+    const nonEmpty = Object.fromEntries(Object.entries(values).filter(([_, v]) => v.trim()));
     if (Object.keys(nonEmpty).length > 0) {
       onSave(nonEmpty);
     }
@@ -94,7 +107,10 @@ function SecretsForm({
       <div className="space-y-2">
         {secrets.map((key) => (
           <div key={key} className="flex items-center gap-2">
-            <Label htmlFor={key} className="text-xs font-mono text-muted-foreground w-28 truncate shrink-0">
+            <Label
+              htmlFor={key}
+              className="text-xs font-mono text-muted-foreground w-28 truncate shrink-0"
+            >
               {key}
             </Label>
             <div className="relative flex-1">
@@ -103,9 +119,7 @@ function SecretsForm({
                 type={showValues[key] ? "text" : "password"}
                 placeholder="••••••••"
                 value={values[key] || ""}
-                onChange={(e) =>
-                  setValues((prev) => ({ ...prev, [key]: e.target.value }))
-                }
+                onChange={(e) => setValues((prev) => ({ ...prev, [key]: e.target.value }))}
                 className="font-mono text-sm h-8 pr-8"
               />
               <button
@@ -164,11 +178,7 @@ function MissingSecretsOverlay({
           <span>Configure secrets to unlock</span>
         </div>
 
-        <SecretsForm
-          secrets={missingSecrets}
-          onSave={onSave}
-          isSaving={isSaving}
-        />
+        <SecretsForm secrets={missingSecrets} onSave={onSave} isSaving={isSaving} />
       </div>
     </div>
   );
@@ -181,13 +191,13 @@ function RunHistoryPanel({ actionId }: { actionId: string }) {
   // Fetch run history from editor state database
   const { data: runs, isLoading } = trpc.actionRuns.list.useQuery(
     { actionId, limit: 20 },
-    { refetchOnWindowFocus: false }
+    { refetchOnWindowFocus: false },
   );
 
   // Fetch logs for expanded run
   const { data: logs } = trpc.actionRuns.getLogs.useQuery(
     { runId: expandedRunId! },
-    { enabled: !!expandedRunId }
+    { enabled: !!expandedRunId },
   );
 
   if (isLoading) {
@@ -200,11 +210,7 @@ function RunHistoryPanel({ actionId }: { actionId: string }) {
   }
 
   if (!runs || runs.length === 0) {
-    return (
-      <div className="p-4 text-xs text-muted-foreground text-center">
-        No run history yet
-      </div>
-    );
+    return <div className="p-4 text-xs text-muted-foreground text-center">No run history yet</div>;
   }
 
   return (
@@ -229,20 +235,22 @@ function RunHistoryPanel({ actionId }: { actionId: string }) {
 
               {isSuccess && <CheckCircle weight="fill" className="h-3.5 w-3.5 text-green-500" />}
               {isFailed && <XCircle weight="fill" className="h-3.5 w-3.5 text-red-500" />}
-              {isRunning && <CircleNotch weight="bold" className="h-3.5 w-3.5 text-blue-500 animate-spin" />}
+              {isRunning && (
+                <CircleNotch weight="bold" className="h-3.5 w-3.5 text-blue-500 animate-spin" />
+              )}
 
               <span className="flex-1 text-left truncate">
-                {run.trigger === "manual" ? "Manual run" : run.trigger === "schedule" ? "Scheduled" : run.trigger}
+                {run.trigger === "manual"
+                  ? "Manual run"
+                  : run.trigger === "schedule"
+                    ? "Scheduled"
+                    : run.trigger}
               </span>
 
-              <span className="text-muted-foreground">
-                {formatRelativeTime(run.startedAt)}
-              </span>
+              <span className="text-muted-foreground">{formatRelativeTime(run.startedAt)}</span>
 
               {run.durationMs !== null && (
-                <span className="text-muted-foreground tabular-nums">
-                  {run.durationMs}ms
-                </span>
+                <span className="text-muted-foreground tabular-nums">{run.durationMs}ms</span>
               )}
             </button>
 
@@ -274,7 +282,9 @@ function RunHistoryPanel({ actionId }: { actionId: string }) {
                   <div className="p-2 rounded bg-muted font-mono text-xs">
                     <div className="text-muted-foreground mb-1">Output:</div>
                     <pre className="whitespace-pre-wrap overflow-x-auto">
-                      {typeof run.output === "string" ? run.output : JSON.stringify(run.output, null, 2)}
+                      {typeof run.output === "string"
+                        ? run.output
+                        : JSON.stringify(run.output, null, 2)}
                     </pre>
                   </div>
                 ) : null}
@@ -287,7 +297,7 @@ function RunHistoryPanel({ actionId }: { actionId: string }) {
                         key={log.id}
                         className={cn(
                           "whitespace-pre-wrap",
-                          log.stream === "stderr" && "text-red-400"
+                          log.stream === "stderr" && "text-red-400",
                         )}
                       >
                         {log.content}
@@ -297,9 +307,7 @@ function RunHistoryPanel({ actionId }: { actionId: string }) {
                 ) : null}
 
                 {/* Run ID for debugging */}
-                <div className="text-[10px] text-muted-foreground font-mono">
-                  ID: {run.id}
-                </div>
+                <div className="text-[10px] text-muted-foreground font-mono">ID: {run.id}</div>
               </div>
             )}
           </div>
@@ -363,7 +371,6 @@ export function ActionDetailPanel({ actionId }: ActionDetailPanelProps) {
     },
     enabled: !!port && !!actionId,
   });
-
 
   // tRPC utils for invalidating queries
   const trpcUtils = trpc.useUtils();
@@ -457,18 +464,19 @@ export function ActionDetailPanel({ actionId }: ActionDetailPanelProps) {
         <div className="p-4 border-b border-border space-y-3">
           <div className="flex items-start justify-between gap-3">
             <div className="flex-1 min-w-0">
-              <h1 className={cn("text-lg font-semibold truncate", !action.valid && "text-destructive")}>
+              <h1
+                className={cn(
+                  "text-lg font-semibold truncate",
+                  !action.valid && "text-destructive",
+                )}
+              >
                 {action.name || action.id}
               </h1>
               {action.description && (
-                <p className="text-sm text-muted-foreground mt-0.5">
-                  {action.description}
-                </p>
+                <p className="text-sm text-muted-foreground mt-0.5">{action.description}</p>
               )}
               {!action.valid && action.error && (
-                <p className="text-sm text-destructive mt-1">
-                  Error: {action.error}
-                </p>
+                <p className="text-sm text-destructive mt-1">Error: {action.error}</p>
               )}
             </div>
             <div className="flex items-center gap-2">
@@ -540,13 +548,13 @@ export function ActionDetailPanel({ actionId }: ActionDetailPanelProps) {
                       "flex items-center gap-1 px-2 py-1 rounded-md transition-colors",
                       hasMissingSecrets
                         ? "bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20"
-                        : "bg-green-500/10 text-green-600 dark:text-green-400 border border-green-500/20 hover:bg-green-500/20 cursor-pointer"
+                        : "bg-green-500/10 text-green-600 dark:text-green-400 border border-green-500/20 hover:bg-green-500/20 cursor-pointer",
                     )}
                   >
                     <Key weight="duotone" className="h-3.5 w-3.5" />
                     <span>
                       {hasMissingSecrets
-                        ? `${action.missingSecrets!.length} missing`
+                        ? `${action.missingSecrets?.length} missing`
                         : `${action.secrets.length} configured`}
                     </span>
                   </button>
@@ -604,9 +612,7 @@ export function ActionDetailPanel({ actionId }: ActionDetailPanelProps) {
           {/* Schema Requirements */}
           {action.schema && action.schema.tables.length > 0 && (
             <div className="pt-2">
-              <p className="text-xs font-medium text-muted-foreground mb-2">
-                Schema Requirements
-              </p>
+              <p className="text-xs font-medium text-muted-foreground mb-2">Schema Requirements</p>
               <div className="space-y-2">
                 {action.schema.tables.map((table) => (
                   <div
@@ -658,7 +664,13 @@ export function ActionDetailPanel({ actionId }: ActionDetailPanelProps) {
               name={action.name || action.id}
               source={sourceData.source}
               className="h-full"
-              onTableClick={(table) => navigate({ to: "/domains/$domainId", params: { domainId: table }, search: { tab: "sheet" } } as any)}
+              onTableClick={(table) =>
+                navigate({
+                  to: "/domains/$domainId",
+                  params: { domainId: table },
+                  search: { tab: "sheet" },
+                } as any)
+              }
             />
           ) : (
             <div className="flex-1 flex items-center justify-center text-muted-foreground">

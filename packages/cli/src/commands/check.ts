@@ -333,7 +333,16 @@ async function runArchLints(workbookPath: string): Promise<boolean> {
 }
 
 // Canonical directories for workbook structure
-const CANONICAL_DIRS = new Set(["pages", "plugins", "lib", "sources", "actions", ".hands", "public", "node_modules"]);
+const CANONICAL_DIRS = new Set([
+  "pages",
+  "plugins",
+  "lib",
+  "sources",
+  "actions",
+  ".hands",
+  "public",
+  "node_modules",
+]);
 
 // Deprecated directories that hint at old architecture
 const DEPRECATED_DIRS: Record<string, string> = {
@@ -366,7 +375,9 @@ async function runDirectoryStructureCheck(workbookPath: string): Promise<boolean
       const dirPath = path.join(workbookPath, dirName);
       const hasCode = hasCodeFiles(dirPath);
       if (hasCode) {
-        warnings.push(`  ${pc.yellow("⚠")} Unexpected directory '${dirName}/' - move code to pages/, plugins/, or lib/`);
+        warnings.push(
+          `  ${pc.yellow("⚠")} Unexpected directory '${dirName}/' - move code to pages/, plugins/, or lib/`,
+        );
       }
     }
   }
@@ -376,11 +387,15 @@ async function runDirectoryStructureCheck(workbookPath: string): Promise<boolean
   if (existsSync(blocksDir)) {
     const mdxFiles = findMdxFiles(blocksDir);
     if (mdxFiles.length > 0) {
-      errors.push(`  ${pc.red("✗")} Found ${mdxFiles.length} MDX file(s) in 'blocks/' - move to 'pages/blocks/'`);
+      errors.push(
+        `  ${pc.red("✗")} Found ${mdxFiles.length} MDX file(s) in 'blocks/' - move to 'pages/blocks/'`,
+      );
     }
     const tsxFiles = findTsxFiles(blocksDir);
     if (tsxFiles.length > 0) {
-      errors.push(`  ${pc.red("✗")} Found ${tsxFiles.length} TSX file(s) in 'blocks/' - move to 'plugins/'`);
+      errors.push(
+        `  ${pc.red("✗")} Found ${tsxFiles.length} TSX file(s) in 'blocks/' - move to 'plugins/'`,
+      );
     }
   }
 

@@ -10,12 +10,7 @@
 import { ArrowLeft, ArrowRight } from "@phosphor-icons/react";
 import { cn } from "@udecode/cn";
 import type { TElement } from "platejs";
-import {
-  Plate,
-  PlateContent,
-  useEditorRef,
-  usePlateEditor,
-} from "platejs/react";
+import { Plate, PlateContent, useEditorRef, usePlateEditor } from "platejs/react";
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import { useMarkdownWorker } from "../hooks/use-markdown-worker";
@@ -117,7 +112,7 @@ export function SlidesView({ className, frontmatter }: SlidesViewProps) {
         console.error("[SlidesView] Failed to set markdown:", err);
       }
     },
-    [parentEditor, deserialize]
+    [parentEditor, deserialize],
   );
 
   // Parse slides from current markdown, prepend title slide if frontmatter exists
@@ -152,7 +147,7 @@ export function SlidesView({ className, frontmatter }: SlidesViewProps) {
     return () => {
       cancelled = true;
     };
-  }, [getMarkdown, parentEditor.children, frontmatter]);
+  }, [getMarkdown, frontmatter]);
 
   // Reset to valid slide index when slides change
   useEffect(() => {
@@ -185,7 +180,7 @@ export function SlidesView({ className, frontmatter }: SlidesViewProps) {
       markdownRef.current = newMarkdown;
       await setMarkdown(newMarkdown);
     },
-    [slides, currentIndex, setMarkdown]
+    [slides, currentIndex, setMarkdown],
   );
 
   // Keyboard navigation
@@ -212,7 +207,9 @@ export function SlidesView({ className, frontmatter }: SlidesViewProps) {
 
   if (slides.length === 0) {
     return (
-      <div className={cn("flex items-center justify-center h-full text-muted-foreground", className)}>
+      <div
+        className={cn("flex items-center justify-center h-full text-muted-foreground", className)}
+      >
         No slides found - add headings (# ## ###) to create slides
       </div>
     );
@@ -224,10 +221,7 @@ export function SlidesView({ className, frontmatter }: SlidesViewProps) {
       <div className="flex-1 min-h-0 overflow-auto flex items-center justify-center p-8">
         <div className="w-full max-w-4xl">
           {isTitleSlide ? (
-            <TitleSlide
-              title={frontmatter?.title || ""}
-              subtitle={frontmatter?.subtitle}
-            />
+            <TitleSlide title={frontmatter?.title || ""} subtitle={frontmatter?.subtitle} />
           ) : (
             <SlideEditor
               key={currentSlide.id}
@@ -265,7 +259,7 @@ export function SlidesView({ className, frontmatter }: SlidesViewProps) {
                     "w-2 h-2 rounded-full transition-colors",
                     i === currentIndex
                       ? "bg-primary"
-                      : "bg-muted-foreground/30 hover:bg-muted-foreground/50"
+                      : "bg-muted-foreground/30 hover:bg-muted-foreground/50",
                   )}
                   aria-label={`Go to slide ${i + 1}: ${slide.title}`}
                 />
@@ -297,9 +291,7 @@ function TitleSlide({ title, subtitle }: { title: string; subtitle?: string }) {
   return (
     <div className="flex flex-col items-center justify-center py-16 text-center">
       <h1 className="text-5xl font-bold mb-4">{title}</h1>
-      {subtitle && (
-        <p className="text-2xl text-muted-foreground">{subtitle}</p>
-      )}
+      {subtitle && <p className="text-2xl text-muted-foreground">{subtitle}</p>}
     </div>
   );
 }
@@ -362,15 +354,11 @@ function SlideEditor({
         // Ignore serialization errors
       }
     },
-    [serialize, onChange]
+    [serialize, onChange],
   );
 
   if (!content.trim()) {
-    return (
-      <div className="text-muted-foreground text-center py-12">
-        Empty slide
-      </div>
-    );
+    return <div className="text-muted-foreground text-center py-12">Empty slide</div>;
   }
 
   return (
@@ -386,7 +374,7 @@ function SlideEditor({
           "[&_li]:text-lg",
           "[&_ul]:space-y-2 [&_ol]:space-y-2",
           "[&_blockquote]:text-xl [&_blockquote]:border-l-4 [&_blockquote]:border-primary/50",
-          "[&_pre]:text-sm"
+          "[&_pre]:text-sm",
         )}
       />
     </Plate>

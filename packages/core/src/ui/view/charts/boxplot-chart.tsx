@@ -9,11 +9,7 @@
 import { createPlatePlugin, PlateElement, type PlateElementProps, useElement } from "platejs/react";
 import { memo } from "react";
 
-import {
-  BOXPLOT_CHART_KEY,
-  type TBoxPlotChartElement,
-  type VegaLiteSpec,
-} from "../../../types";
+import { BOXPLOT_CHART_KEY, type TBoxPlotChartElement, type VegaLiteSpec } from "../../../types";
 import { VegaChart } from "./vega-chart";
 
 // ============================================================================
@@ -43,12 +39,7 @@ export interface BoxPlotChartProps {
  * Build Vega-Lite spec for boxplot
  */
 function buildBoxPlotSpec(props: BoxPlotChartProps): VegaLiteSpec {
-  const {
-    categoryKey = "category",
-    valueKey = "value",
-    color,
-    orientation = "vertical",
-  } = props;
+  const { categoryKey = "category", valueKey = "value", color, orientation = "vertical" } = props;
 
   const isHorizontal = orientation === "horizontal";
 
@@ -120,7 +111,7 @@ export const BoxPlotChartPlugin = createPlatePlugin({
 });
 
 export function createBoxPlotChartElement(
-  options: Partial<Omit<TBoxPlotChartElement, "type" | "children">> = {}
+  options: Partial<Omit<TBoxPlotChartElement, "type" | "children">> = {},
 ): TBoxPlotChartElement {
   return {
     type: BOXPLOT_CHART_KEY,

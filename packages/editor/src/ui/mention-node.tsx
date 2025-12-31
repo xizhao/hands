@@ -1,4 +1,4 @@
-'use client';
+"use client";
 
 /**
  * Mention Node Components
@@ -7,15 +7,11 @@
  * The @ input is handled by at-kit/AtGhostInputElement.
  */
 
-import { IS_APPLE } from 'platejs';
-import {
-  PlateElement,
-  type PlateElementProps,
-  useReadOnly,
-} from 'platejs/react';
-import { cn } from '../lib/utils';
-import { useMounted } from '../hooks/use-mounted';
-import type { EditorMentionElement } from '../types';
+import { IS_APPLE } from "platejs";
+import { PlateElement, type PlateElementProps, useReadOnly } from "platejs/react";
+import { useMounted } from "../hooks/use-mounted";
+import { cn } from "../lib/utils";
+import type { EditorMentionElement } from "../types";
 
 /**
  * User Mention Element - renders @username style mentions
@@ -23,7 +19,7 @@ import type { EditorMentionElement } from '../types';
 export function MentionElement(
   props: PlateElementProps<EditorMentionElement> & {
     prefix?: string;
-  }
+  },
 ) {
   const { children } = props;
   const element = props.element;
@@ -36,15 +32,15 @@ export function MentionElement(
       attributes={{
         ...props.attributes,
         contentEditable: false,
-        'data-slate-value': element.value,
+        "data-slate-value": element.value,
         draggable: true,
       }}
       className={cn(
-        'inline-block cursor-pointer align-baseline font-medium text-primary/65',
-        !readOnly && 'cursor-pointer',
-        (element.children[0] as any).bold === true && 'font-bold',
-        (element.children[0] as any).italic === true && 'italic',
-        (element.children[0] as any).underline === true && 'underline'
+        "inline-block cursor-pointer align-baseline font-medium text-primary/65",
+        !readOnly && "cursor-pointer",
+        (element.children[0] as any).bold === true && "font-bold",
+        (element.children[0] as any).italic === true && "italic",
+        (element.children[0] as any).underline === true && "underline",
       )}
     >
       <span className="font-semibold text-primary/45">@</span>

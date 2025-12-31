@@ -75,8 +75,7 @@ export function parseFrontmatter(source: string): FrontmatterParseResult {
 
   try {
     const parsed = YAML.parse(yamlContent);
-    const frontmatter: Frontmatter =
-      typeof parsed === "object" && parsed !== null ? parsed : {};
+    const frontmatter: Frontmatter = typeof parsed === "object" && parsed !== null ? parsed : {};
 
     return {
       frontmatter,
@@ -157,7 +156,7 @@ export function FrontmatterHeader({
     ) {
       subtitleRef.current.textContent = frontmatter.description ?? "";
     }
-  }, [frontmatter.title, frontmatter.description]);
+  }, [frontmatter.title, frontmatter.description, subtitleRef.current]);
 
   // Handle field changes
   const handleFieldChange = useCallback(
@@ -193,7 +192,7 @@ export function FrontmatterHeader({
         }
       }
     },
-    [showDescription, onFocusEditor],
+    [showDescription, onFocusEditor, subtitleRef.current],
   );
 
   // Subtitle keyboard handler
@@ -277,4 +276,3 @@ export function FrontmatterHeader({
     </div>
   );
 }
-

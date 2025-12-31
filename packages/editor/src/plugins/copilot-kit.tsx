@@ -13,9 +13,8 @@
 import { CopilotPlugin } from "@platejs/ai/react";
 import type { TElement } from "platejs";
 import type { PlateEditor } from "platejs/react";
-
-import { GhostText } from "../ui/ghost-text";
 import type { EditorTrpcClient } from "../context";
+import { GhostText } from "../ui/ghost-text";
 
 // ============================================================================
 // Types
@@ -87,7 +86,8 @@ export function createCopilotKit(config: CopilotConfig) {
               const promptData = body.prompt ? JSON.parse(body.prompt) : {};
 
               const result = await trpc.ai.generateMdx.mutate({
-                prompt: "Continue writing the following text naturally. Output ONLY the continuation, no explanations.",
+                prompt:
+                  "Continue writing the following text naturally. Output ONLY the continuation, no explanations.",
                 prefix: promptData.prefix || "",
                 suffix: promptData.suffix || "",
                 title: promptData.title,
@@ -198,13 +198,13 @@ export function createCopilotKit(config: CopilotConfig) {
                   }
                 } else {
                   // Fallback to plain text if deserialization returns empty
-                  editor.tf.insertText(suggestionText + " ");
+                  editor.tf.insertText(`${suggestionText} `);
                 }
               })
               .catch((err) => {
                 console.error("[Copilot] Failed to deserialize:", err);
                 // Fallback to plain text on error
-                editor.tf.insertText(suggestionText + " ");
+                editor.tf.insertText(`${suggestionText} `);
               });
           },
         },

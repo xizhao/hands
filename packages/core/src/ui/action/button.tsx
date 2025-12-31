@@ -14,9 +14,8 @@
 
 import { createPlatePlugin, PlateElement, type PlateElementProps, useElement } from "platejs/react";
 import { memo, useContext } from "react";
-
+import { BUTTON_KEY, type ComponentMeta, type TButtonElement } from "../../types";
 import { Button as BaseButton, type ButtonProps as BaseButtonProps } from "../components/button";
-import { BUTTON_KEY, type TButtonElement, type ComponentMeta } from "../../types";
 import { Loader } from "../view/loader";
 import { LiveActionContext } from "./live-action";
 
@@ -35,20 +34,9 @@ export interface ButtonProps extends Omit<BaseButtonProps, "onClick"> {
  * Button component with loading state support.
  * Works standalone or inside LiveAction to trigger SQL execution.
  */
-export function Button({
-  onClick,
-  disabled,
-  isLoading,
-  children,
-  ...props
-}: ButtonProps) {
+export function Button({ onClick, disabled, isLoading, children, ...props }: ButtonProps) {
   return (
-    <BaseButton
-      type="button"
-      onClick={onClick}
-      disabled={disabled || isLoading}
-      {...props}
-    >
+    <BaseButton type="button" onClick={onClick} disabled={disabled || isLoading} {...props}>
       {isLoading && <Loader variant="spinner" size="xs" className="mr-1" />}
       {children}
     </BaseButton>
@@ -73,11 +61,7 @@ function ButtonElement(props: PlateElementProps) {
 
   return (
     <PlateElement {...props} as="span">
-      <Button
-        variant={variant}
-        onClick={handleClick}
-        isLoading={actionCtx?.isPending}
-      >
+      <Button variant={variant} onClick={handleClick} isLoading={actionCtx?.isPending}>
         {props.children}
       </Button>
     </PlateElement>

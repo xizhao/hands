@@ -2,23 +2,9 @@
  * Tests for SQL to Flow Parser
  */
 
-import { describe, it, expect, beforeEach } from "vitest";
+import { beforeEach, describe, expect, it } from "vitest";
+import { getNodesOfType, getSourceTables, getTargetTable } from "./sql-flow-types";
 import { parseSqlToFlow, resetNodeIdCounter } from "./sql-to-flow";
-import {
-  getNodesOfType,
-  getSourceTables,
-  getTargetTable,
-  type SourceNode,
-  type FilterNode,
-  type JoinNode,
-  type AggregateNode,
-  type ProjectNode,
-  type SortNode,
-  type LimitNode,
-  type InsertNode,
-  type UpdateNode,
-  type DeleteNode,
-} from "./sql-flow-types";
 
 beforeEach(() => {
   resetNodeIdCounter();
@@ -31,7 +17,7 @@ describe("parseSqlToFlow", () => {
 
       expect(result.success).toBe(true);
       expect(result.flow).toBeDefined();
-      expect(result.flow!.operation).toBe("select");
+      expect(result.flow?.operation).toBe("select");
 
       const sources = getNodesOfType(result.flow!, "source");
       expect(sources).toHaveLength(1);
@@ -82,7 +68,7 @@ describe("parseSqlToFlow", () => {
 
     it("parses complex WHERE with AND/OR", () => {
       const result = parseSqlToFlow(
-        "SELECT * FROM orders WHERE status = 'pending' AND total > 100"
+        "SELECT * FROM orders WHERE status = 'pending' AND total > 100",
       );
 
       expect(result.success).toBe(true);
@@ -220,9 +206,7 @@ describe("parseSqlToFlow", () => {
     });
 
     it("parses multiple ORDER BY columns", () => {
-      const result = parseSqlToFlow(
-        "SELECT * FROM users ORDER BY last_name ASC, first_name ASC"
-      );
+      const result = parseSqlToFlow("SELECT * FROM users ORDER BY last_name ASC, first_name ASC");
 
       expect(result.success).toBe(true);
       const sorts = getNodesOfType(result.flow!, "sort");
@@ -283,11 +267,11 @@ describe("parseSqlToFlow", () => {
   describe("INSERT statements", () => {
     it("parses simple INSERT", () => {
       const result = parseSqlToFlow(
-        "INSERT INTO users (name, email) VALUES ('John', 'john@example.com')"
+        "INSERT INTO users (name, email) VALUES ('John', 'john@example.com')",
       );
 
       expect(result.success).toBe(true);
-      expect(result.flow!.operation).toBe("insert");
+      expect(result.flow?.operation).toBe("insert");
 
       const inserts = getNodesOfType(result.flow!, "insert");
       expect(inserts).toHaveLength(1);
@@ -331,7 +315,7 @@ describe("parseSqlToFlow", () => {
       const result = parseSqlToFlow("UPDATE users SET name = 'Jane' WHERE id = 1");
 
       expect(result.success).toBe(true);
-      expect(result.flow!.operation).toBe("update");
+      expect(result.flow?.operation).toBe("update");
 
       const updates = getNodesOfType(result.flow!, "update");
       expect(updates).toHaveLength(1);
@@ -342,7 +326,7 @@ describe("parseSqlToFlow", () => {
 
     it("parses UPDATE with multiple SET columns", () => {
       const result = parseSqlToFlow(
-        "UPDATE users SET name = 'Jane', email = 'jane@test.com' WHERE id = 1"
+        "UPDATE users SET name = 'Jane', email = 'jane@test.com' WHERE id = 1",
       );
 
       expect(result.success).toBe(true);
@@ -351,7 +335,9 @@ describe("parseSqlToFlow", () => {
     });
 
     it("includes WHERE filter node", () => {
-      const result = parseSqlToFlow("UPDATE users SET active = false WHERE last_login < '2023-01-01'");
+      const result = parseSqlToFlow(
+        "UPDATE users SET active = false WHERE last_login < '2023-01-01'",
+      );
 
       expect(result.success).toBe(true);
       const filters = getNodesOfType(result.flow!, "filter");
@@ -367,7 +353,7 @@ describe("parseSqlToFlow", () => {
       const result = parseSqlToFlow("DELETE FROM users WHERE id = 1");
 
       expect(result.success).toBe(true);
-      expect(result.flow!.operation).toBe("delete");
+      expect(result.flow?.operation).toBe("delete");
 
       const deletes = getNodesOfType(result.flow!, "delete");
       expect(deletes).toHaveLength(1);
@@ -439,35 +425,31 @@ describe("parseSqlToFlow", () => {
       const result = parseSqlToFlow("SELECT * FROM users", "activeUsers");
 
       expect(result.success).toBe(true);
-      expect(result.flow!.description).toBe("Active users");
-      expect(result.flow!.assignedTo).toBe("activeUsers");
+      expect(result.flow?.description).toBe("Active users");
+      expect(result.flow?.assignedTo).toBe("activeUsers");
     });
 
     it("generates description for aggregation queries", () => {
-      const result = parseSqlToFlow(
-        "SELECT category, COUNT(*) FROM products GROUP BY category"
-      );
+      const result = parseSqlToFlow("SELECT category, COUNT(*) FROM products GROUP BY category");
 
       expect(result.success).toBe(true);
-      expect(result.flow!.description).toContain("Aggregate");
-      expect(result.flow!.description).toContain("COUNT");
+      expect(result.flow?.description).toContain("Aggregate");
+      expect(result.flow?.description).toContain("COUNT");
     });
 
     it("generates description for INSERT", () => {
       const result = parseSqlToFlow("INSERT INTO users (name) VALUES ('test')");
 
       expect(result.success).toBe(true);
-      expect(result.flow!.description).toContain("Insert");
-      expect(result.flow!.description).toContain("users");
+      expect(result.flow?.description).toContain("Insert");
+      expect(result.flow?.description).toContain("users");
     });
 
     it("generates description for upsert", () => {
-      const result = parseSqlToFlow(
-        "INSERT INTO users (id) VALUES (1) ON CONFLICT DO NOTHING"
-      );
+      const result = parseSqlToFlow("INSERT INTO users (id) VALUES (1) ON CONFLICT DO NOTHING");
 
       expect(result.success).toBe(true);
-      expect(result.flow!.description).toContain("Upsert");
+      expect(result.flow?.description).toContain("Upsert");
     });
   });
 
@@ -488,7 +470,8 @@ describe("parseSqlToFlow", () => {
 
   describe("complex real-world queries", () => {
     it("parses production shortfall query", () => {
-      const result = parseSqlToFlow(`
+      const result = parseSqlToFlow(
+        `
         SELECT
           production_date as date,
           kpi_name as line,
@@ -501,10 +484,12 @@ describe("parseSqlToFlow", () => {
           AND actual IS NOT NULL
         ORDER BY production_date DESC
         LIMIT 25
-      `, "shortfalls");
+      `,
+        "shortfalls",
+      );
 
       expect(result.success).toBe(true);
-      expect(result.flow!.description).toBe("Shortfalls");
+      expect(result.flow?.description).toBe("Shortfalls");
 
       const sources = getNodesOfType(result.flow!, "source");
       expect(sources[0].table).toBe("daily_dms_kpis");
@@ -520,7 +505,8 @@ describe("parseSqlToFlow", () => {
     });
 
     it("parses aggregation summary query", () => {
-      const result = parseSqlToFlow(`
+      const result = parseSqlToFlow(
+        `
         SELECT
           kpi_name as line,
           COUNT(*) as shortfall_days,
@@ -529,10 +515,12 @@ describe("parseSqlToFlow", () => {
         WHERE opex_focus = 'Production'
         GROUP BY kpi_name
         ORDER BY shortfall_days DESC
-      `, "summaryByLine");
+      `,
+        "summaryByLine",
+      );
 
       expect(result.success).toBe(true);
-      expect(result.flow!.description).toBe("Summary by line");
+      expect(result.flow?.description).toBe("Summary by line");
 
       const aggs = getNodesOfType(result.flow!, "aggregate");
       expect(aggs).toHaveLength(1);

@@ -14,12 +14,7 @@ const statusOptions = [
 export const Default: Story = () => <Select name="status" options={statusOptions} />;
 
 export const WithLabel: Story = () => (
-  <Select
-    name="status"
-    label="Status"
-    options={statusOptions}
-    placeholder="Choose status..."
-  />
+  <Select name="status" label="Status" options={statusOptions} placeholder="Choose status..." />
 );
 
 export const Required: Story = () => (

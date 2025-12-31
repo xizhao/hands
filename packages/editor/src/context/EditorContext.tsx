@@ -17,12 +17,7 @@
  * ```
  */
 
-import {
-  createContext,
-  useContext,
-  useMemo,
-  type ReactNode,
-} from "react";
+import { createContext, type ReactNode, useContext, useMemo } from "react";
 
 // ============================================================================
 // Types
@@ -97,10 +92,12 @@ export interface EditorTrpcClient {
   };
   db?: {
     schema: {
-      query: () => Promise<Array<{
-        table_name: string;
-        columns: Array<{ name: string; type: string; nullable: boolean }>;
-      }>>;
+      query: () => Promise<
+        Array<{
+          table_name: string;
+          columns: Array<{ name: string; type: string; nullable: boolean }>;
+        }>
+      >;
     };
     select: {
       query: (input: { sql: string; params?: unknown[] }) => Promise<{
@@ -148,22 +145,17 @@ const EditorContext = createContext<EditorContextValue>({
 // Provider
 // ============================================================================
 
-export function EditorProvider({
-  children,
-  trpc,
-  tables = [],
-}: EditorProviderProps) {
-  const value = useMemo<EditorContextValue>(() => ({
-    trpc: trpc ?? null,
-    tables,
-    hasBackend: !!trpc,
-  }), [trpc, tables]);
-
-  return (
-    <EditorContext.Provider value={value}>
-      {children}
-    </EditorContext.Provider>
+export function EditorProvider({ children, trpc, tables = [] }: EditorProviderProps) {
+  const value = useMemo<EditorContextValue>(
+    () => ({
+      trpc: trpc ?? null,
+      tables,
+      hasBackend: !!trpc,
+    }),
+    [trpc, tables],
   );
+
+  return <EditorContext.Provider value={value}>{children}</EditorContext.Provider>;
 }
 
 // ============================================================================
@@ -207,9 +199,9 @@ export function useEditorApi() {
   if (!trpc) return null;
 
   return {
-    generateMdx: (input: Omit<GenerateMdxInput, 'tables'>) =>
+    generateMdx: (input: Omit<GenerateMdxInput, "tables">) =>
       trpc.ai.generateMdx.mutate({ ...input, tables }),
-    generateMdxBlock: (input: Omit<GenerateMdxBlockInput, 'tables'>) =>
+    generateMdxBlock: (input: Omit<GenerateMdxBlockInput, "tables">) =>
       trpc.ai.generateMdxBlock.mutate({ ...input, tables }),
   };
 }

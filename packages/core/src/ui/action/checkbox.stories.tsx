@@ -5,17 +5,13 @@ export default {
   title: "Active/Checkbox",
 };
 
-export const Default: Story = () => (
-  <Checkbox name="agree" label="I agree to the terms" />
-);
+export const Default: Story = () => <Checkbox name="agree" label="I agree to the terms" />;
 
 export const Checked: Story = () => (
   <Checkbox name="checked" defaultChecked label="Already checked" />
 );
 
-export const Required: Story = () => (
-  <Checkbox name="required" required label="This is required" />
-);
+export const Required: Story = () => <Checkbox name="required" required label="This is required" />;
 
 export const Disabled: Story = () => (
   <div className="flex flex-col gap-2">

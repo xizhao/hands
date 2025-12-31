@@ -21,7 +21,7 @@
  * </Card>
  */
 
-import { type TElement, type TText } from "platejs";
+import type { TElement, TText } from "platejs";
 import {
   createPlatePlugin,
   PlateElement,
@@ -30,14 +30,7 @@ import {
 } from "platejs/react";
 import { memo } from "react";
 import { cn } from "../lib/utils";
-import {
-  Card,
-  CardHeader,
-  CardContent,
-  CardFooter,
-  CardTitle,
-  CardDescription,
-} from "../ui/card";
+import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "../ui/card";
 
 // ============================================================================
 // Types
@@ -91,10 +84,7 @@ function CardElement(props: PlateElementProps) {
     <PlateElement
       {...props}
       as="div"
-      className={cn(
-        "my-4",
-        selected && "ring-2 ring-ring ring-offset-2"
-      )}
+      className={cn("my-4", selected && "ring-2 ring-ring ring-offset-2")}
     >
       <Card>{props.children}</Card>
     </PlateElement>
@@ -228,45 +218,35 @@ export const CardKit = [
 // Element Creators
 // ============================================================================
 
-export function createCardElement(
-  children?: (TElement | TText)[]
-): TCardElement {
+export function createCardElement(children?: (TElement | TText)[]): TCardElement {
   return {
     type: CARD_KEY,
     children: children ?? [{ type: "p" as const, children: [{ text: "" }] }],
   };
 }
 
-export function createCardHeaderElement(
-  children?: (TElement | TText)[]
-): TCardHeaderElement {
+export function createCardHeaderElement(children?: (TElement | TText)[]): TCardHeaderElement {
   return {
     type: CARD_HEADER_KEY,
     children: children ?? [{ type: "p" as const, children: [{ text: "" }] }],
   };
 }
 
-export function createCardContentElement(
-  children?: (TElement | TText)[]
-): TCardContentElement {
+export function createCardContentElement(children?: (TElement | TText)[]): TCardContentElement {
   return {
     type: CARD_CONTENT_KEY,
     children: children ?? [{ type: "p" as const, children: [{ text: "" }] }],
   };
 }
 
-export function createCardFooterElement(
-  children?: (TElement | TText)[]
-): TCardFooterElement {
+export function createCardFooterElement(children?: (TElement | TText)[]): TCardFooterElement {
   return {
     type: CARD_FOOTER_KEY,
     children: children ?? [{ type: "p" as const, children: [{ text: "" }] }],
   };
 }
 
-export function createCardTitleElement(
-  children?: (TElement | TText)[]
-): TCardTitleElement {
+export function createCardTitleElement(children?: (TElement | TText)[]): TCardTitleElement {
   return {
     type: CARD_TITLE_KEY,
     children: children ?? [{ text: "" }],
@@ -274,7 +254,7 @@ export function createCardTitleElement(
 }
 
 export function createCardDescriptionElement(
-  children?: (TElement | TText)[]
+  children?: (TElement | TText)[],
 ): TCardDescriptionElement {
   return {
     type: CARD_DESCRIPTION_KEY,

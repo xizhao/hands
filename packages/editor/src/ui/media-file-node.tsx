@@ -1,17 +1,12 @@
-'use client';
+"use client";
 
-import { useMediaState } from '@platejs/media/react';
-import { ResizableProvider } from '@platejs/resizable';
-import { FileArrowUp } from '@phosphor-icons/react';
-import {
-  PlateElement,
-  type PlateElementProps,
-  useReadOnly,
-  withHOC,
-} from 'platejs/react';
+import { FileArrowUp } from "@phosphor-icons/react";
+import { useMediaState } from "@platejs/media/react";
+import { ResizableProvider } from "@platejs/resizable";
+import { PlateElement, type PlateElementProps, useReadOnly, withHOC } from "platejs/react";
 
-import { BlockActionButton } from './block-context-menu';
-import { Caption, CaptionTextarea } from './caption';
+import { BlockActionButton } from "./block-context-menu";
+import { Caption, CaptionTextarea } from "./caption";
 
 export const MediaFileElement = withHOC(
   ResizableProvider,
@@ -50,5 +45,5 @@ export const MediaFileElement = withHOC(
         {props.children}
       </PlateElement>
     );
-  }
+  },
 );

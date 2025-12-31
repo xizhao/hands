@@ -11,7 +11,6 @@
  * </LiveValue>
  */
 
-import { memo, useCallback, useMemo, useRef, useState } from "react";
 import {
   createPlatePlugin,
   PlateElement,
@@ -20,19 +19,20 @@ import {
   useElement,
   useSelected,
 } from "platejs/react";
+import { memo, useCallback, useMemo, useRef, useState } from "react";
 
-import { KANBAN_KEY, type TKanbanElement, type ComponentMeta } from "../../../types";
+import { type ComponentMeta, KANBAN_KEY, type TKanbanElement } from "../../../types";
 import { substituteFormBindings } from "../../action/live-action";
-import { useLiveValueData } from "../../view/charts/context";
+import { cn } from "../../lib/utils";
 import { useLiveMutation } from "../../query-provider";
+import { useLiveValueData } from "../../view/charts/context";
 import {
-  KanbanBoard,
   findMovedItem,
   groupByColumn,
+  KanbanBoard,
   type KanbanBoardValue,
   type KanbanItem,
 } from "./kanban-board";
-import { cn } from "../../lib/utils";
 
 // ============================================================================
 // Standalone Component
@@ -137,9 +137,7 @@ export function Kanban({
     // Otherwise use columnOrder + extras from data
     if (explicitColumnOrder && explicitColumnOrder.length > 0) {
       const dataColumns = Object.keys(groupedData);
-      const extraColumns = dataColumns.filter(
-        (col) => !explicitColumnOrder.includes(col),
-      );
+      const extraColumns = dataColumns.filter((col) => !explicitColumnOrder.includes(col));
       return [...explicitColumnOrder, ...extraColumns];
     }
 
@@ -181,9 +179,7 @@ export function Kanban({
   const renderColumnHeader = useCallback(
     (columnId: string, items: KanbanItem[]) => (
       <div className="flex items-center justify-between">
-        <span className="text-sm font-semibold capitalize">
-          {columnId.replace(/_/g, " ")}
-        </span>
+        <span className="text-sm font-semibold capitalize">{columnId.replace(/_/g, " ")}</span>
         <span className="rounded-full bg-muted px-2 py-0.5 text-xs text-muted-foreground">
           {items.length}
         </span>
@@ -195,9 +191,7 @@ export function Kanban({
   const renderCard = useCallback(
     (item: KanbanItem) => (
       <div className="space-y-1">
-        <div className="font-medium text-sm">
-          {String(item[cardTitleField] ?? "")}
-        </div>
+        <div className="font-medium text-sm">{String(item[cardTitleField] ?? "")}</div>
         {cardFields.map((field) => (
           <div key={field} className="text-xs text-muted-foreground">
             <span className="capitalize">{field.replace(/_/g, " ")}:</span>{" "}
@@ -221,10 +215,7 @@ export function Kanban({
     return (
       <div className="flex gap-3">
         {[1, 2, 3].map((i) => (
-          <div
-            key={i}
-            className="w-72 shrink-0 rounded-lg bg-muted/50 p-2 animate-pulse"
-          >
+          <div key={i} className="w-72 shrink-0 rounded-lg bg-muted/50 p-2 animate-pulse">
             <div className="h-4 w-20 rounded bg-muted mb-2" />
             <div className="space-y-1.5">
               <div className="h-10 rounded bg-muted" />
@@ -297,7 +288,9 @@ function KanbanElement(props: PlateElementProps) {
   const handleMove = useCallback(
     async (itemId: string | number, newColumn: string) => {
       if (!updateSql) {
-        console.warn("[Kanban] No updateSql configured and could not auto-generate (missing table name)");
+        console.warn(
+          "[Kanban] No updateSql configured and could not auto-generate (missing table name)",
+        );
         return;
       }
 
@@ -316,10 +309,7 @@ function KanbanElement(props: PlateElementProps) {
     (newColumns: string[]) => {
       const path = editor.api.findPath(element);
       if (path) {
-        editor.tf.setNodes(
-          { columnOrder: newColumns },
-          { at: path },
-        );
+        editor.tf.setNodes({ columnOrder: newColumns }, { at: path });
       }
     },
     [editor, element],
@@ -328,10 +318,7 @@ function KanbanElement(props: PlateElementProps) {
   // Show warning if not inside LiveValue
   if (!liveValueCtx) {
     return (
-      <PlateElement
-        {...props}
-        className="my-4"
-      >
+      <PlateElement {...props} className="my-4">
         <div className="rounded-lg border border-amber-500/50 bg-amber-500/10 p-4 text-amber-700 text-sm">
           Kanban must be wrapped in a LiveValue component to receive data.
         </div>
@@ -343,10 +330,7 @@ function KanbanElement(props: PlateElementProps) {
   return (
     <PlateElement
       {...props}
-      className={cn(
-        "my-4",
-        selected && "ring-1 ring-primary/30 ring-offset-2 rounded-lg",
-      )}
+      className={cn("my-4", selected && "ring-1 ring-primary/30 ring-offset-2 rounded-lg")}
     >
       <Kanban
         data={data}

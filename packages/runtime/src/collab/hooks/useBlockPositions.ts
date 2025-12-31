@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useCallback, useEffect, useState } from "react";
 
 export interface BlockPosition {
   index: number;
@@ -29,11 +29,12 @@ export function useBlockPositions() {
     const blocksWithIds = innerContainer.querySelectorAll("[data-block-id]");
 
     // Fallback to semantic elements if no data-block-id found
-    const blocks = blocksWithIds.length > 0
-      ? blocksWithIds
-      : innerContainer.querySelectorAll(
-          ":scope > p, :scope > h1, :scope > h2, :scope > h3, :scope > h4, :scope > h5, :scope > h6, :scope > ul, :scope > ol, :scope > blockquote, :scope > pre, :scope > figure, :scope > table, :scope > div:not(.mx-auto)"
-        );
+    const blocks =
+      blocksWithIds.length > 0
+        ? blocksWithIds
+        : innerContainer.querySelectorAll(
+            ":scope > p, :scope > h1, :scope > h2, :scope > h3, :scope > h4, :scope > h5, :scope > h6, :scope > ul, :scope > ol, :scope > blockquote, :scope > pre, :scope > figure, :scope > table, :scope > div:not(.mx-auto)",
+          );
 
     const newPositions: BlockPosition[] = [];
 
@@ -50,7 +51,9 @@ export function useBlockPositions() {
       });
     });
 
-    console.debug(`[useBlockPositions] Found ${newPositions.length} blocks (${blocksWithIds.length} with IDs)`);
+    console.debug(
+      `[useBlockPositions] Found ${newPositions.length} blocks (${blocksWithIds.length} with IDs)`,
+    );
     setPositions(newPositions);
   }, []);
 

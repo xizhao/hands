@@ -91,8 +91,8 @@ export function HeatmapMap<T extends Record<string, unknown>>({
       return { longitude: 0, latitude: 0, zoom: 2 };
     }
 
-    const lats = data.map((d) => Number(d[latKey])).filter((v) => !isNaN(v));
-    const lngs = data.map((d) => Number(d[lngKey])).filter((v) => !isNaN(v));
+    const lats = data.map((d) => Number(d[latKey])).filter((v) => !Number.isNaN(v));
+    const lngs = data.map((d) => Number(d[lngKey])).filter((v) => !Number.isNaN(v));
 
     if (lats.length === 0 || lngs.length === 0) {
       return { longitude: 0, latitude: 0, zoom: 2 };

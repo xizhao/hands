@@ -29,14 +29,14 @@ export function sleep(ms: number): Promise<void> {
 export async function loadModuleWithRetry<T>(
   loader: () => Promise<T>,
   moduleName: string,
-  retries = MAX_RETRIES
+  retries = MAX_RETRIES,
 ): Promise<T> {
   try {
     return await loader();
   } catch (err) {
     if (isPreBundleError(err) && retries > 0) {
       console.log(
-        `[worker] Pre-bundle invalidated for ${moduleName}, retrying... (${retries} left)`
+        `[worker] Pre-bundle invalidated for ${moduleName}, retrying... (${retries} left)`,
       );
       await sleep(RETRY_DELAY_MS);
       return loadModuleWithRetry(loader, moduleName, retries - 1);
@@ -52,13 +52,13 @@ export async function loadModuleWithRetry<T>(
  */
 export function createRegistry<T>(
   globResults: Record<string, () => Promise<T>>,
-  pattern: RegExp
+  pattern: RegExp,
 ): Map<string, () => Promise<T>> {
   const registry = new Map<string, () => Promise<T>>();
 
   for (const [path, loader] of Object.entries(globResults)) {
     const match = path.match(pattern);
-    if (match && match[1] && loader) {
+    if (match?.[1] && loader) {
       registry.set(match[1], loader);
     }
   }

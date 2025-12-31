@@ -8,16 +8,16 @@
 import { initTRPC } from "@trpc/server";
 import { z } from "zod";
 import {
-  getEditorDb,
-  getUiState,
-  updateUiState,
-  getExpandedFolders,
-  setFolderExpanded,
-  getExpandedSources,
-  setSourceExpanded,
-  getRecentItems,
   addRecentItem,
+  getEditorDb,
+  getExpandedFolders,
+  getExpandedSources,
+  getRecentItems,
+  getUiState,
+  setFolderExpanded,
+  setSourceExpanded,
   type UiState,
+  updateUiState,
 } from "../../db/editor-db.js";
 
 // ============================================================================
@@ -81,13 +81,11 @@ export const editorStateRouter = t.router({
   /**
    * Update UI state (partial updates supported)
    */
-  updateUiState: publicProcedure
-    .input(updateUiStateInput)
-    .mutation(({ ctx, input }) => {
-      const db = getEditorDb(ctx.workbookDir);
-      updateUiState(db, input);
-      return getUiState(db);
-    }),
+  updateUiState: publicProcedure.input(updateUiStateInput).mutation(({ ctx, input }) => {
+    const db = getEditorDb(ctx.workbookDir);
+    updateUiState(db, input);
+    return getUiState(db);
+  }),
 
   /**
    * Get all expanded folders
@@ -100,13 +98,11 @@ export const editorStateRouter = t.router({
   /**
    * Set folder expansion state
    */
-  setFolderExpanded: publicProcedure
-    .input(toggleFolderInput)
-    .mutation(({ ctx, input }) => {
-      const db = getEditorDb(ctx.workbookDir);
-      setFolderExpanded(db, input.path, input.expanded);
-      return { success: true };
-    }),
+  setFolderExpanded: publicProcedure.input(toggleFolderInput).mutation(({ ctx, input }) => {
+    const db = getEditorDb(ctx.workbookDir);
+    setFolderExpanded(db, input.path, input.expanded);
+    return { success: true };
+  }),
 
   /**
    * Get all expanded sources
@@ -119,13 +115,11 @@ export const editorStateRouter = t.router({
   /**
    * Set source expansion state
    */
-  setSourceExpanded: publicProcedure
-    .input(toggleSourceInput)
-    .mutation(({ ctx, input }) => {
-      const db = getEditorDb(ctx.workbookDir);
-      setSourceExpanded(db, input.sourceId, input.expanded);
-      return { success: true };
-    }),
+  setSourceExpanded: publicProcedure.input(toggleSourceInput).mutation(({ ctx, input }) => {
+    const db = getEditorDb(ctx.workbookDir);
+    setSourceExpanded(db, input.sourceId, input.expanded);
+    return { success: true };
+  }),
 
   /**
    * Get recent items
@@ -140,13 +134,11 @@ export const editorStateRouter = t.router({
   /**
    * Add item to recent list
    */
-  addRecentItem: publicProcedure
-    .input(addRecentItemInput)
-    .mutation(({ ctx, input }) => {
-      const db = getEditorDb(ctx.workbookDir);
-      addRecentItem(db, input.itemType, input.itemId);
-      return { success: true };
-    }),
+  addRecentItem: publicProcedure.input(addRecentItemInput).mutation(({ ctx, input }) => {
+    const db = getEditorDb(ctx.workbookDir);
+    addRecentItem(db, input.itemType, input.itemId);
+    return { success: true };
+  }),
 });
 
 export type EditorStateRouter = typeof editorStateRouter;

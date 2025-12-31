@@ -1,11 +1,11 @@
+import { fetchRequestHandler } from "@trpc/server/adapters/fetch";
 import { Hono } from "hono";
 import { cors } from "hono/cors";
 import { logger } from "hono/logger";
-import { fetchRequestHandler } from "@trpc/server/adapters/fetch";
+import { apiRateLimit, authRateLimit } from "./lib/rate-limit";
+import { aggregateUsage, aiGateway, paymentsWebhook } from "./services";
 import { appRouter } from "./trpc";
 import { createContext } from "./trpc/context";
-import { aiGateway, paymentsWebhook, aggregateUsage } from "./services";
-import { apiRateLimit, authRateLimit } from "./lib/rate-limit";
 import type { Env } from "./types";
 
 const app = new Hono<{ Bindings: Env }>();
@@ -25,13 +25,11 @@ app.use(
       return null;
     },
     credentials: true,
-  })
+  }),
 );
 
 // Health check
-app.get("/health", (c) =>
-  c.json({ status: "ok", timestamp: Date.now(), service: "hands-cloud" })
-);
+app.get("/health", (c) => c.json({ status: "ok", timestamp: Date.now(), service: "hands-cloud" }));
 
 // tRPC API with rate limiting
 app.use("/trpc/auth.*", authRateLimit);
@@ -62,7 +60,7 @@ app.get("/auth/callback", async (c) => {
   }
 
   return c.redirect(
-    `hands://oauth_callback?code=${encodeURIComponent(code ?? "")}&state=${encodeURIComponent(state ?? "")}`
+    `hands://oauth_callback?code=${encodeURIComponent(code ?? "")}&state=${encodeURIComponent(state ?? "")}`,
   );
 });
 
@@ -75,12 +73,12 @@ app.get("/oauth/:provider/callback", async (c) => {
 
   if (error) {
     return c.redirect(
-      `hands://oauth_connect?provider=${provider}&error=${encodeURIComponent(error)}`
+      `hands://oauth_connect?provider=${provider}&error=${encodeURIComponent(error)}`,
     );
   }
 
   return c.redirect(
-    `hands://oauth_connect?provider=${provider}&code=${encodeURIComponent(code ?? "")}&state=${encodeURIComponent(state ?? "")}`
+    `hands://oauth_connect?provider=${provider}&code=${encodeURIComponent(code ?? "")}&state=${encodeURIComponent(state ?? "")}`,
   );
 });
 
@@ -89,11 +87,7 @@ export default {
   fetch: app.fetch,
 
   // Scheduled handler for usage aggregation (hourly)
-  async scheduled(
-    _event: ScheduledEvent,
-    env: Env,
-    ctx: ExecutionContext
-  ): Promise<void> {
+  async scheduled(_event: ScheduledEvent, env: Env, ctx: ExecutionContext): Promise<void> {
     ctx.waitUntil(aggregateUsage(env));
   },
 };

@@ -6,7 +6,7 @@
  */
 
 import { useEffect, useState } from "react";
-import { usePlatform, useIsDesktop } from "../platform";
+import { useIsDesktop, usePlatform } from "../platform";
 
 // Check platform synchronously via navigator (fallback for SSR)
 const isMac = typeof navigator !== "undefined" && navigator.platform.toLowerCase().includes("mac");

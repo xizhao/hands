@@ -49,9 +49,7 @@ export function useDomainData(options: DomainDataOptions = {}) {
     if (!searchQuery) return domains;
     const query = searchQuery.toLowerCase();
     return domains.filter(
-      (d) =>
-        d.name.toLowerCase().includes(query) ||
-        d.id.toLowerCase().includes(query)
+      (d) => d.name.toLowerCase().includes(query) || d.id.toLowerCase().includes(query),
     );
   }, [domains, searchQuery]);
 

@@ -5,8 +5,9 @@
  * Captures keyboard shortcuts before they reach native handlers.
  */
 
-import { useNavigate, useLocation } from "@tanstack/react-router";
-import { useEffect, useCallback } from "react";
+import { useLocation, useNavigate } from "@tanstack/react-router";
+import { useCallback, useEffect } from "react";
+import { toggleSidebarModeState } from "./useNavState";
 
 export interface HotkeyDefinition {
   /** Key to match (e.g., "w", "t", ",") */
@@ -18,7 +19,7 @@ export interface HotkeyDefinition {
   /** Require Alt/Option */
   alt?: boolean;
   /** Handler function - return true to prevent default */
-  handler: (e: KeyboardEvent) => boolean | void;
+  handler: (e: KeyboardEvent) => boolean | undefined;
   /** Description for help/docs */
   description?: string;
   /** Whether this hotkey is enabled */
@@ -56,9 +57,7 @@ export function useHotkeys(hotkeys: HotkeyDefinition[]) {
       // Skip if focus is in an input/textarea (unless it's a global shortcut)
       const target = e.target as HTMLElement;
       const isInput =
-        target.tagName === "INPUT" ||
-        target.tagName === "TEXTAREA" ||
-        target.isContentEditable;
+        target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.isContentEditable;
 
       for (const hotkey of hotkeys) {
         if (hotkey.enabled === false) continue;
@@ -119,6 +118,15 @@ export function useAppHotkeys() {
       meta: true,
       handler: () => closeCurrentPage(),
       description: "Close current page",
+    },
+    {
+      key: "b",
+      meta: true,
+      handler: () => {
+        toggleSidebarModeState();
+        return true;
+      },
+      description: "Toggle sidebar expanded/floating mode",
     },
   ];
 

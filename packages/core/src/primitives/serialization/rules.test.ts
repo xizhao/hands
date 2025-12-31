@@ -10,40 +10,26 @@
 
 import { describe, expect, it } from "vitest";
 import {
-  liveValueRule,
-  liveQueryRule,
-} from "./rules/live-value";
+  cardContentRule,
+  cardDescriptionRule,
+  cardFooterRule,
+  cardHeaderRule,
+  cardRule,
+  cardTitleRule,
+} from "./rules/card";
+import { areaChartRule, barChartRule, lineChartRule, pieChartRule } from "./rules/charts";
+import { dataGridRule } from "./rules/data-grid";
+import { kanbanRule } from "./rules/kanban";
 import {
-  liveActionRule,
   buttonRule,
-  inputRule,
-  selectRule,
   checkboxRule,
+  inputRule,
+  liveActionRule,
+  selectRule,
   textareaRule,
 } from "./rules/live-action";
-import {
-  lineChartRule,
-  barChartRule,
-  areaChartRule,
-  pieChartRule,
-} from "./rules/charts";
-import { kanbanRule } from "./rules/kanban";
-import { dataGridRule } from "./rules/data-grid";
-import {
-  metricRule,
-  badgeRule,
-  progressRule,
-  alertRule,
-  loaderRule,
-} from "./rules/view";
-import {
-  cardRule,
-  cardHeaderRule,
-  cardContentRule,
-  cardFooterRule,
-  cardTitleRule,
-  cardDescriptionRule,
-} from "./rules/card";
+import { liveQueryRule, liveValueRule } from "./rules/live-value";
+import { alertRule, badgeRule, loaderRule, metricRule, progressRule } from "./rules/view";
 import type { MdxDeserializeNode } from "./types";
 
 // ============================================================================
@@ -53,10 +39,7 @@ import type { MdxDeserializeNode } from "./types";
 /**
  * Create a mock MDX attribute
  */
-function createMdxAttribute(
-  name: string,
-  value: string | number | boolean | object | null
-) {
+function createMdxAttribute(name: string, value: string | number | boolean | object | null) {
   if (value === null || value === undefined) {
     return { type: "mdxJsxAttribute" as const, name, value: null };
   }
@@ -78,12 +61,10 @@ function createMdxAttribute(
  */
 function createMdxNode(
   attributes: Array<{ name: string; value: any }>,
-  children: any[] = []
+  children: any[] = [],
 ): MdxDeserializeNode {
   return {
-    attributes: attributes.map((attr) =>
-      createMdxAttribute(attr.name, attr.value)
-    ),
+    attributes: attributes.map((attr) => createMdxAttribute(attr.name, attr.value)),
     children,
   };
 }
@@ -115,7 +96,12 @@ function buildSimpleRules(): Record<string, { serialize: (node: any, opts: any) 
     // Pass through text nodes
     text: { serialize: (node: any) => ({ type: "text", value: node.text }) },
     // Pass through children unchanged for simple testing
-    p: { serialize: (node: any, opts: any) => ({ type: "paragraph", children: serializeWithRules(node.children, opts) }) },
+    p: {
+      serialize: (node: any, opts: any) => ({
+        type: "paragraph",
+        children: serializeWithRules(node.children, opts),
+      }),
+    },
   };
   return rules;
 }
@@ -154,9 +140,7 @@ function createTestSerializeOptions() {
 describe("liveValueRule", () => {
   describe("deserialize", () => {
     it("deserializes basic LiveValue with query", () => {
-      const mdxNode = createMdxNode([
-        { name: "query", value: "SELECT COUNT(*) FROM users" },
-      ]);
+      const mdxNode = createMdxNode([{ name: "query", value: "SELECT COUNT(*) FROM users" }]);
       const result = liveValueRule.deserialize(mdxNode);
 
       // No children → inline variant
@@ -188,7 +172,7 @@ describe("liveValueRule", () => {
     it("deserializes LiveValue with template children", () => {
       const mdxNode = createMdxNode(
         [{ name: "query", value: "SELECT name FROM users" }],
-        [{ type: "text", value: "## {{name}}" }]
+        [{ type: "text", value: "## {{name}}" }],
       );
       const result = liveValueRule.deserialize(mdxNode, undefined, {
         convertChildren: mockConvertChildren,
@@ -281,9 +265,7 @@ describe("liveValueRule", () => {
 
 describe("liveQueryRule", () => {
   it("is an alias for LiveValue", () => {
-    const mdxNode = createMdxNode([
-      { name: "query", value: "SELECT 1" },
-    ]);
+    const mdxNode = createMdxNode([{ name: "query", value: "SELECT 1" }]);
     const result = liveQueryRule.deserialize(mdxNode);
 
     // No children → inline variant
@@ -379,7 +361,7 @@ describe("buttonRule", () => {
     it("deserializes Button with variant", () => {
       const mdxNode = createMdxNode(
         [{ name: "variant", value: "destructive" }],
-        [{ text: "Delete" }]
+        [{ text: "Delete" }],
       );
       const result = buttonRule.deserialize(mdxNode, undefined, {
         convertChildren: mockConvertChildren,
@@ -421,10 +403,7 @@ describe("buttonRule", () => {
 
   describe("roundtrip", () => {
     it("preserves variant through roundtrip", () => {
-      const original = createMdxNode(
-        [{ name: "variant", value: "ghost" }],
-        [{ text: "Close" }]
-      );
+      const original = createMdxNode([{ name: "variant", value: "ghost" }], [{ text: "Close" }]);
 
       const deserialized = buttonRule.deserialize(original, undefined, {
         convertChildren: mockConvertChildren,
@@ -648,7 +627,7 @@ describe("checkboxRule", () => {
     it("deserializes Checkbox", () => {
       const mdxNode = createMdxNode(
         [{ name: "name", value: "agree" }],
-        [{ text: "I agree to the terms" }]
+        [{ text: "I agree to the terms" }],
       );
       const result = checkboxRule.deserialize(mdxNode, undefined, {
         convertChildren: mockConvertChildren,
@@ -1238,7 +1217,10 @@ describe("kanbanRule", () => {
         { name: "columnOrder", value: ["open", "in_review", "closed"] },
         { name: "cardTitleField", value: "summary" },
         { name: "cardFields", value: ["reporter", "priority", "tags"] },
-        { name: "updateSql", value: "UPDATE issues SET state = {{state}} WHERE issue_id = {{issue_id}}" },
+        {
+          name: "updateSql",
+          value: "UPDATE issues SET state = {{state}} WHERE issue_id = {{issue_id}}",
+        },
         { name: "idField", value: "issue_id" },
       ]);
 
@@ -1284,20 +1266,21 @@ describe("dataGridRule", () => {
       const columns = [
         { key: "name", label: "Name", width: 200 },
         { key: "email", label: "Email" },
-        { key: "status", label: "Status", type: "select", options: [{ value: "active", label: "Active" }] },
+        {
+          key: "status",
+          label: "Status",
+          type: "select",
+          options: [{ value: "active", label: "Active" }],
+        },
       ];
-      const mdxNode = createMdxNode([
-        { name: "columns", value: columns },
-      ]);
+      const mdxNode = createMdxNode([{ name: "columns", value: columns }]);
       const result = dataGridRule.deserialize(mdxNode);
 
       expect(result.columns).toEqual(columns);
     });
 
     it("deserializes DataGrid with columns='auto'", () => {
-      const mdxNode = createMdxNode([
-        { name: "columns", value: "auto" },
-      ]);
+      const mdxNode = createMdxNode([{ name: "columns", value: "auto" }]);
       const result = dataGridRule.deserialize(mdxNode);
 
       expect(result.columns).toBe("auto");
@@ -1408,7 +1391,12 @@ describe("dataGridRule", () => {
       const columns = [
         { key: "id", label: "ID", width: 80 },
         { key: "name", label: "Name", width: 200 },
-        { key: "status", label: "Status", type: "select" as const, options: [{ value: "active", label: "Active" }] },
+        {
+          key: "status",
+          label: "Status",
+          type: "select" as const,
+          options: [{ value: "active", label: "Active" }],
+        },
       ];
       const original = createMdxNode([
         { name: "columns", value: columns },
@@ -1574,7 +1562,7 @@ describe("badgeRule", () => {
     it("deserializes Badge with variant", () => {
       const mdxNode = createMdxNode(
         [{ name: "variant", value: "success" }],
-        [{ text: "Completed" }]
+        [{ text: "Completed" }],
       );
       const result = badgeRule.deserialize(mdxNode, undefined, {
         convertChildren: mockConvertChildren,
@@ -1618,7 +1606,7 @@ describe("badgeRule", () => {
     it("preserves variant through roundtrip", () => {
       const original = createMdxNode(
         [{ name: "variant", value: "destructive" }],
-        [{ text: "Error" }]
+        [{ text: "Error" }],
       );
 
       const deserialized = badgeRule.deserialize(original, undefined, {
@@ -1643,9 +1631,7 @@ describe("badgeRule", () => {
 describe("progressRule", () => {
   describe("deserialize", () => {
     it("deserializes Progress with value", () => {
-      const mdxNode = createMdxNode([
-        { name: "value", value: 75 },
-      ]);
+      const mdxNode = createMdxNode([{ name: "value", value: 75 }]);
       const result = progressRule.deserialize(mdxNode);
 
       expect(result.type).toBe("progress");
@@ -1770,7 +1756,7 @@ describe("alertRule", () => {
           { name: "title", value: "Success" },
           { name: "variant", value: "success" },
         ],
-        [{ text: "Your changes have been saved." }]
+        [{ text: "Your changes have been saved." }],
       );
       const result = alertRule.deserialize(mdxNode, undefined, {
         convertChildren: mockConvertChildren,
@@ -1823,7 +1809,7 @@ describe("alertRule", () => {
           { name: "title", value: "Error" },
           { name: "variant", value: "destructive" },
         ],
-        [{ text: "An error occurred." }]
+        [{ text: "An error occurred." }],
       );
 
       const deserialized = alertRule.deserialize(original, undefined, {
@@ -1942,10 +1928,7 @@ describe("loaderRule", () => {
 describe("cardRule", () => {
   describe("deserialize", () => {
     it("deserializes Card", () => {
-      const mdxNode = createMdxNode(
-        [],
-        [{ type: "p", children: [{ text: "Content" }] }]
-      );
+      const mdxNode = createMdxNode([], [{ type: "p", children: [{ text: "Content" }] }]);
       const result = cardRule.deserialize(mdxNode, undefined, {
         convertChildren: mockConvertChildren,
       });
@@ -1972,10 +1955,7 @@ describe("cardRule", () => {
 
   describe("roundtrip", () => {
     it("preserves structure through roundtrip", () => {
-      const original = createMdxNode(
-        [],
-        [{ type: "p", children: [{ text: "Test content" }] }]
-      );
+      const original = createMdxNode([], [{ type: "p", children: [{ text: "Test content" }] }]);
 
       const deserialized = cardRule.deserialize(original, undefined, {
         convertChildren: mockConvertChildren,
@@ -1994,10 +1974,7 @@ describe("cardRule", () => {
 
 describe("cardHeaderRule", () => {
   it("deserializes CardHeader", () => {
-    const mdxNode = createMdxNode(
-      [],
-      [{ type: "card_title", children: [{ text: "Title" }] }]
-    );
+    const mdxNode = createMdxNode([], [{ type: "card_title", children: [{ text: "Title" }] }]);
     const result = cardHeaderRule.deserialize(mdxNode, undefined, {
       convertChildren: mockConvertChildren,
     });
@@ -2018,10 +1995,7 @@ describe("cardHeaderRule", () => {
 
 describe("cardContentRule", () => {
   it("deserializes CardContent", () => {
-    const mdxNode = createMdxNode(
-      [],
-      [{ type: "p", children: [{ text: "Content here" }] }]
-    );
+    const mdxNode = createMdxNode([], [{ type: "p", children: [{ text: "Content here" }] }]);
     const result = cardContentRule.deserialize(mdxNode, undefined, {
       convertChildren: mockConvertChildren,
     });
@@ -2042,10 +2016,7 @@ describe("cardContentRule", () => {
 
 describe("cardFooterRule", () => {
   it("deserializes CardFooter", () => {
-    const mdxNode = createMdxNode(
-      [],
-      [{ type: "button", children: [{ text: "Save" }] }]
-    );
+    const mdxNode = createMdxNode([], [{ type: "button", children: [{ text: "Save" }] }]);
     const result = cardFooterRule.deserialize(mdxNode, undefined, {
       convertChildren: mockConvertChildren,
     });

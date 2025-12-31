@@ -5,19 +5,18 @@
  * Import this in your editor to auto-register all components.
  */
 
-import type { MdxSerializationRule } from "./types";
-
-// Import all rule modules
-import { liveValueRule, liveValueInlineRule, liveQueryRule } from "./rules/live-value";
-import { liveActionRules } from "./rules/live-action";
-import { chartRules } from "./rules/charts";
-import { kanbanRules } from "./rules/kanban";
-import { dataGridRules } from "./rules/data-grid";
-import { viewRules } from "./rules/view";
-import { cardRules } from "./rules/card";
-import { columnRules } from "./rules/column";
 import { blockRules } from "./rules/block";
+import { cardRules } from "./rules/card";
+import { chartRules } from "./rules/charts";
+import { columnRules } from "./rules/column";
+import { dataGridRules } from "./rules/data-grid";
+import { kanbanRules } from "./rules/kanban";
+import { liveActionRules } from "./rules/live-action";
+// Import all rule modules
+import { liveQueryRule, liveValueInlineRule, liveValueRule } from "./rules/live-value";
 import { tabsRules } from "./rules/tabs";
+import { viewRules } from "./rules/view";
+import type { MdxSerializationRule } from "./types";
 
 // ============================================================================
 // All Rules Registry
@@ -119,52 +118,79 @@ export function toMarkdownPluginRules(rules: MdxSerializationRule[]): Record<str
 // Re-exports
 // ============================================================================
 
-// Types
-export type { MdxSerializationRule, DeserializeOptions, SerializeOptions } from "./types";
-export type {
-  MdxJsxAttribute,
-  MdxJsxAttributeValueExpression,
-  MdxJsxElement,
-  MdxDeserializeNode,
-} from "./types";
-
 // Helpers (for custom rules)
 export {
+  createContainerElement,
+  createVoidElement,
+  hasChildContent,
   parseAttributes,
   parseAttributeValue,
   parseExpression,
   serializeAttributes,
   serializeAttributeValue,
   serializeAttributeValueReadable,
-  hasChildContent,
-  createVoidElement,
-  createContainerElement,
 } from "./helpers";
-
-// Individual rule modules (for selective imports)
-export { liveValueRule, liveValueInlineRule, liveQueryRule } from "./rules/live-value";
-export { liveActionRules, liveActionRule, buttonRule, inputRule, selectRule, checkboxRule, textareaRule } from "./rules/live-action";
-export { chartRules, lineChartRule, barChartRule, areaChartRule, pieChartRule } from "./rules/charts";
-export { kanbanRules, kanbanRule } from "./rules/kanban";
-export { dataGridRules, dataGridRule } from "./rules/data-grid";
-export { viewRules, metricRule, badgeRule, progressRule, alertRule, loaderRule } from "./rules/view";
-// Legacy alias
-export { viewRules as staticRules } from "./rules/view";
-export { cardRules, cardRule, cardHeaderRule, cardContentRule, cardFooterRule, cardTitleRule, cardDescriptionRule } from "./rules/card";
-export { columnRules, columnsRule, columnRule } from "./rules/column";
-export { blockRules, blockRule } from "./rules/block";
-export { tabsRules, tabsRule, tabRule } from "./rules/tabs";
-
-// MDX Parser
-export {
-  parseMdxToPlate,
-  parseMarkdownToPlate,
-  extractFrontmatter,
-  type ParseMdxResult,
-} from "./mdx-parser";
-
 // List format conversion (indent-based ↔ classic)
 export {
   convertClassicListsToIndent,
   convertIndentListsToClassic,
 } from "./list-conversion";
+// MDX Parser
+export {
+  extractFrontmatter,
+  type ParseMdxResult,
+  parseMarkdownToPlate,
+  parseMdxToPlate,
+} from "./mdx-parser";
+export { blockRule, blockRules } from "./rules/block";
+export {
+  cardContentRule,
+  cardDescriptionRule,
+  cardFooterRule,
+  cardHeaderRule,
+  cardRule,
+  cardRules,
+  cardTitleRule,
+} from "./rules/card";
+export {
+  areaChartRule,
+  barChartRule,
+  chartRules,
+  lineChartRule,
+  pieChartRule,
+} from "./rules/charts";
+export { columnRule, columnRules, columnsRule } from "./rules/column";
+export { dataGridRule, dataGridRules } from "./rules/data-grid";
+export { kanbanRule, kanbanRules } from "./rules/kanban";
+export {
+  buttonRule,
+  checkboxRule,
+  inputRule,
+  liveActionRule,
+  liveActionRules,
+  selectRule,
+  textareaRule,
+} from "./rules/live-action";
+// Individual rule modules (for selective imports)
+export { liveQueryRule, liveValueInlineRule, liveValueRule } from "./rules/live-value";
+export { tabRule, tabsRule, tabsRules } from "./rules/tabs";
+// Legacy alias
+export {
+  alertRule,
+  badgeRule,
+  loaderRule,
+  metricRule,
+  progressRule,
+  viewRules,
+  viewRules as staticRules,
+} from "./rules/view";
+// Types
+export type {
+  DeserializeOptions,
+  MdxDeserializeNode,
+  MdxJsxAttribute,
+  MdxJsxAttributeValueExpression,
+  MdxJsxElement,
+  MdxSerializationRule,
+  SerializeOptions,
+} from "./types";

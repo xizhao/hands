@@ -4,11 +4,7 @@
  * Simple exact-match validation of action schema against database.
  */
 
-import type {
-  ActionSchema,
-  DbSchema,
-  SchemaValidationResult,
-} from "@hands/core/primitives";
+import type { ActionSchema, DbSchema, SchemaValidationResult } from "@hands/core/primitives";
 
 /**
  * Validate that database has all tables/columns required by action schema.
@@ -16,7 +12,7 @@ import type {
  */
 export function validateSchema(
   actionSchema: ActionSchema,
-  dbSchema: DbSchema
+  dbSchema: DbSchema,
 ): SchemaValidationResult {
   const missingTables: string[] = [];
   const missingColumns: Array<{ table: string; column: string }> = [];
@@ -42,9 +38,7 @@ export function validateSchema(
           table: requiredTable.name,
           column: requiredCol.name,
         });
-        errors.push(
-          `Column "${requiredTable.name}.${requiredCol.name}" does not exist`
-        );
+        errors.push(`Column "${requiredTable.name}.${requiredCol.name}" does not exist`);
       }
     }
   }
@@ -61,15 +55,10 @@ export function validateSchema(
  * Check if action can run against current database schema.
  * Throws if validation fails.
  */
-export function assertSchemaValid(
-  actionSchema: ActionSchema,
-  dbSchema: DbSchema
-): void {
+export function assertSchemaValid(actionSchema: ActionSchema, dbSchema: DbSchema): void {
   const result = validateSchema(actionSchema, dbSchema);
 
   if (!result.valid) {
-    throw new Error(
-      `Action schema validation failed:\n${result.errors.join("\n")}`
-    );
+    throw new Error(`Action schema validation failed:\n${result.errors.join("\n")}`);
   }
 }

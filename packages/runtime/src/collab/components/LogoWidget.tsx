@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, useEffect } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { CollabUser, UserPresence } from "../types";
 
 interface LogoWidgetProps {
@@ -63,15 +63,9 @@ export function LogoWidget({ user, otherUsers, pageMetadata }: LogoWidgetProps) 
   }, []);
 
   return (
-    <div
-      ref={containerRef}
-      className="fixed top-4 right-4 z-40"
-      style={{ pointerEvents: 'auto' }}
-    >
+    <div ref={containerRef} className="fixed top-4 right-4 z-40" style={{ pointerEvents: "auto" }}>
       {/* Premium dark toolbar */}
-      <div
-        className="relative flex items-center bg-neutral-900 border border-neutral-800/50 rounded-xl shadow-lg shadow-black/25"
-      >
+      <div className="relative flex items-center bg-neutral-900 border border-neutral-800/50 rounded-xl shadow-lg shadow-black/25">
         {/* Left: Overlapping avatars with tooltips */}
         {allUsers.length > 0 && (
           <div className="flex items-center h-12 px-2">
@@ -85,10 +79,14 @@ export function LogoWidget({ user, otherUsers, pageMetadata }: LogoWidgetProps) 
                     zIndex: displayUsers.length - i,
                   }}
                 >
-                  {p.user.name.split(" ").map(n => n[0]).join("")}
+                  {p.user.name
+                    .split(" ")
+                    .map((n) => n[0])
+                    .join("")}
                   {/* Centered tooltip above */}
                   <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-2 py-1 bg-neutral-800 text-[10px] text-white rounded shadow-lg whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-50">
-                    {p.user.name}{p.user.id === user?.id ? " (you)" : ""}
+                    {p.user.name}
+                    {p.user.id === user?.id ? " (you)" : ""}
                   </div>
                 </div>
               ))}
@@ -109,16 +107,10 @@ export function LogoWidget({ user, otherUsers, pageMetadata }: LogoWidgetProps) 
         )}
 
         {/* Separator */}
-        {allUsers.length > 0 && (
-          <div className="w-px h-6 bg-neutral-700/40" />
-        )}
+        {allUsers.length > 0 && <div className="w-px h-6 bg-neutral-700/40" />}
 
         {/* Right: Hands logo - hover shows metadata */}
-        <div
-          className="relative"
-          onMouseEnter={handleLogoEnter}
-          onMouseLeave={handleLogoLeave}
-        >
+        <div className="relative" onMouseEnter={handleLogoEnter} onMouseLeave={handleLogoLeave}>
           <a
             href="https://hands.app"
             target="_blank"
@@ -139,25 +131,37 @@ export function LogoWidget({ user, otherUsers, pageMetadata }: LogoWidgetProps) 
             <div className="px-3 py-2 space-y-1.5">
               {pageMetadata?.title && (
                 <div className="flex items-baseline gap-2">
-                  <span className="text-[9px] uppercase tracking-wider text-neutral-500 w-12 flex-shrink-0">Title</span>
-                  <span className="text-[11px] text-white font-medium truncate">{pageMetadata.title}</span>
+                  <span className="text-[9px] uppercase tracking-wider text-neutral-500 w-12 flex-shrink-0">
+                    Title
+                  </span>
+                  <span className="text-[11px] text-white font-medium truncate">
+                    {pageMetadata.title}
+                  </span>
                 </div>
               )}
               {pageMetadata?.description && (
                 <div className="flex items-baseline gap-2">
-                  <span className="text-[9px] uppercase tracking-wider text-neutral-500 w-12 flex-shrink-0">Desc</span>
-                  <span className="text-[11px] text-neutral-300 line-clamp-2">{pageMetadata.description}</span>
+                  <span className="text-[9px] uppercase tracking-wider text-neutral-500 w-12 flex-shrink-0">
+                    Desc
+                  </span>
+                  <span className="text-[11px] text-neutral-300 line-clamp-2">
+                    {pageMetadata.description}
+                  </span>
                 </div>
               )}
               {pageMetadata?.author && (
                 <div className="flex items-baseline gap-2">
-                  <span className="text-[9px] uppercase tracking-wider text-neutral-500 w-12 flex-shrink-0">Author</span>
+                  <span className="text-[9px] uppercase tracking-wider text-neutral-500 w-12 flex-shrink-0">
+                    Author
+                  </span>
                   <span className="text-[11px] text-neutral-300">{pageMetadata.author}</span>
                 </div>
               )}
               {pageMetadata?.date && (
                 <div className="flex items-baseline gap-2">
-                  <span className="text-[9px] uppercase tracking-wider text-neutral-500 w-12 flex-shrink-0">Date</span>
+                  <span className="text-[9px] uppercase tracking-wider text-neutral-500 w-12 flex-shrink-0">
+                    Date
+                  </span>
                   <span className="text-[11px] text-neutral-300">{pageMetadata.date}</span>
                 </div>
               )}
@@ -175,7 +179,14 @@ export function LogoWidget({ user, otherUsers, pageMetadata }: LogoWidgetProps) 
                   className="flex items-center justify-center gap-1 py-0.5 text-[9px] text-neutral-500 hover:text-neutral-300 transition-colors"
                 >
                   Built with Hands
-                  <svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <svg
+                    width="8"
+                    height="8"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                  >
                     <path d="M7 17L17 7M17 7H7M17 7v10" />
                   </svg>
                 </a>

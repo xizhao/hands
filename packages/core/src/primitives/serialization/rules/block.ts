@@ -5,12 +5,8 @@
  */
 
 import { BLOCK_KEY, type TBlockElement } from "../../../types";
+import { createVoidElement, parseAttributes, serializeAttributes } from "../helpers";
 import type { MdxSerializationRule } from "../types";
-import {
-  parseAttributes,
-  serializeAttributes,
-  createVoidElement,
-} from "../helpers";
 
 /**
  * Block serialization rule.
@@ -54,7 +50,7 @@ export const blockRule: MdxSerializationRule<TBlockElement> = {
         include: ["src", "params", "editing", "prompt", "height", "className"],
         // Don't serialize false/undefined editing
         defaults: { editing: false },
-      }
+      },
     );
 
     return {

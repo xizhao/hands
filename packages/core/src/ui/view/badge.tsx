@@ -69,16 +69,12 @@ export function Badge({ children, variant = "default", className }: BadgeProps) 
 
 function BadgeElement(props: PlateElementProps) {
   const element = useElement<TBadgeElement>();
-  const selected = useSelected();
+  const _selected = useSelected();
 
   const { variant = "default" } = element;
 
   return (
-    <PlateElement
-      {...props}
-      as="span"
-      className=""
-    >
+    <PlateElement {...props} as="span" className="">
       <Badge variant={variant}>{props.children}</Badge>
     </PlateElement>
   );

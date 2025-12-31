@@ -5,10 +5,10 @@
  */
 
 import { HoverCard, HoverCardContent, HoverCardTrigger } from "@/components/ui/hover-card";
-import { useThumbnail } from "@/hooks/useThumbnails";
 import { useTablePreview } from "@/hooks/useTablePreview";
-import { ThumbnailPreview } from "../../ThumbnailPreview";
+import { useThumbnail } from "@/hooks/useThumbnails";
 import { TablePreview } from "../../TablePreview";
+import { ThumbnailPreview } from "../../ThumbnailPreview";
 
 interface ThumbnailHoverCardProps {
   type: "page";

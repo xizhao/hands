@@ -1,8 +1,8 @@
-import type { Env, User } from "../types";
-import { verifyToken } from "../services/auth/client";
+import { eq } from "drizzle-orm";
 import { getDb } from "../lib/db";
 import { users } from "../schema/users";
-import { eq } from "drizzle-orm";
+import { verifyToken } from "../services/auth/client";
+import type { Env, User } from "../types";
 
 export interface Context {
   req: Request;

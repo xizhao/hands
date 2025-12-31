@@ -20,7 +20,7 @@
  *   cloud.integrations.getToken({ provider: "google" })
  */
 
+export { exchangeCode, getAccountInfo, getClientId, getClientSecret, refreshToken } from "./client";
+export { getProviderConfig, OAUTH_PROVIDERS } from "./providers";
 export { integrationsRouter } from "./router";
-export { OAUTH_PROVIDERS, getProviderConfig } from "./providers";
-export { getClientId, getClientSecret, exchangeCode, refreshToken, getAccountInfo } from "./client";
 export * from "./types";

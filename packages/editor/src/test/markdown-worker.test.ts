@@ -8,17 +8,15 @@
  * serialization logic directly by importing the same dependencies.
  */
 
-import { describe, it, expect } from 'vitest';
-import { unified } from 'unified';
-import remarkParse from 'remark-parse';
-import remarkStringify from 'remark-stringify';
-import remarkGfm from 'remark-gfm';
-import { remarkMdx } from '@platejs/markdown';
-import type { Root } from 'mdast';
-import type { TElement } from 'platejs';
-
-import { serializationRules, toMarkdownPluginRules } from '@hands/core/primitives/serialization';
-import { createTestEditor } from './create-test-editor';
+import { serializationRules, toMarkdownPluginRules } from "@hands/core/primitives/serialization";
+import { remarkMdx } from "@platejs/markdown";
+import type { Root } from "mdast";
+import type { TElement } from "platejs";
+import remarkGfm from "remark-gfm";
+import remarkParse from "remark-parse";
+import remarkStringify from "remark-stringify";
+import { unified } from "unified";
+import { describe, expect, it } from "vitest";
 
 // ============================================================================
 // Replicate Worker Logic for Testing
@@ -47,12 +45,12 @@ function buildWorkerRules(): SerializationRules {
       serialize: (node: unknown) => {
         const n = node as { fontColor?: string; text?: string };
         const color = n.fontColor;
-        if (!color) return { type: 'text', value: n.text || '' };
+        if (!color) return { type: "text", value: n.text || "" };
         return {
-          type: 'mdxJsxTextElement',
-          name: 'span',
-          attributes: [{ type: 'mdxJsxAttribute', name: 'style', value: `color: ${color};` }],
-          children: [{ type: 'text', value: n.text || '' }],
+          type: "mdxJsxTextElement",
+          name: "span",
+          attributes: [{ type: "mdxJsxAttribute", name: "style", value: `color: ${color};` }],
+          children: [{ type: "text", value: n.text || "" }],
         };
       },
     },
@@ -61,12 +59,14 @@ function buildWorkerRules(): SerializationRules {
       serialize: (node: unknown) => {
         const n = node as { fontBackgroundColor?: string; text?: string };
         const bgColor = n.fontBackgroundColor;
-        if (!bgColor) return { type: 'text', value: n.text || '' };
+        if (!bgColor) return { type: "text", value: n.text || "" };
         return {
-          type: 'mdxJsxTextElement',
-          name: 'span',
-          attributes: [{ type: 'mdxJsxAttribute', name: 'style', value: `background-color: ${bgColor};` }],
-          children: [{ type: 'text', value: n.text || '' }],
+          type: "mdxJsxTextElement",
+          name: "span",
+          attributes: [
+            { type: "mdxJsxAttribute", name: "style", value: `background-color: ${bgColor};` },
+          ],
+          children: [{ type: "text", value: n.text || "" }],
         };
       },
     },
@@ -79,14 +79,17 @@ const WORKER_RULES = buildWorkerRules();
 // Simplified Plate → MDAST conversion (matches worker implementation)
 function plateToMdast(nodes: TElement[], rules: SerializationRules): Root {
   return {
-    type: 'root',
-    children: nodes.map((node) => convertNode(node, rules)).filter(Boolean) as Root['children'],
+    type: "root",
+    children: nodes.map((node) => convertNode(node, rules)).filter(Boolean) as Root["children"],
   };
 }
 
 function convertNode(node: TElement | { text: string }, rules: SerializationRules): unknown {
-  if ('text' in node && typeof node.text === 'string') {
-    return convertTextNode(node as { text: string; bold?: boolean; italic?: boolean; code?: boolean }, rules);
+  if ("text" in node && typeof node.text === "string") {
+    return convertTextNode(
+      node as { text: string; bold?: boolean; italic?: boolean; code?: boolean },
+      rules,
+    );
   }
 
   const element = node as TElement;
@@ -98,51 +101,51 @@ function convertNode(node: TElement | { text: string }, rules: SerializationRule
   }
 
   switch (nodeType) {
-    case 'p':
+    case "p":
       return {
-        type: 'paragraph',
+        type: "paragraph",
         children: convertChildren(element.children, rules),
       };
-    case 'h1':
-    case 'h2':
-    case 'h3':
-    case 'h4':
-    case 'h5':
-    case 'h6':
+    case "h1":
+    case "h2":
+    case "h3":
+    case "h4":
+    case "h5":
+    case "h6":
       return {
-        type: 'heading',
+        type: "heading",
         depth: parseInt(nodeType[1], 10),
         children: convertChildren(element.children, rules),
       };
-    case 'blockquote':
+    case "blockquote":
       return {
-        type: 'blockquote',
+        type: "blockquote",
         children: convertChildren(element.children, rules),
       };
-    case 'code_block':
+    case "code_block":
       return {
-        type: 'code',
+        type: "code",
         lang: element.lang || null,
         value: getTextContent(element),
       };
-    case 'ul':
-    case 'ol':
+    case "ul":
+    case "ol":
       return {
-        type: 'list',
-        ordered: nodeType === 'ol',
+        type: "list",
+        ordered: nodeType === "ol",
         children: convertChildren(element.children, rules),
       };
-    case 'li':
+    case "li":
       return {
-        type: 'listItem',
+        type: "listItem",
         children: convertChildren(element.children, rules),
       };
-    case 'hr':
-      return { type: 'thematicBreak' };
-    case 'a':
+    case "hr":
+      return { type: "thematicBreak" };
+    case "a":
       return {
-        type: 'link',
-        url: element.url || '',
+        type: "link",
+        url: element.url || "",
         children: convertChildren(element.children, rules),
       };
     default:
@@ -150,7 +153,7 @@ function convertNode(node: TElement | { text: string }, rules: SerializationRule
         return serializeAsMdxElement(element, rules);
       }
       return {
-        type: 'paragraph',
+        type: "paragraph",
         children: convertChildren(element.children || [], rules),
       };
   }
@@ -158,9 +161,9 @@ function convertNode(node: TElement | { text: string }, rules: SerializationRule
 
 function convertTextNode(
   node: { text: string; bold?: boolean; italic?: boolean; code?: boolean; strikethrough?: boolean },
-  rules: SerializationRules
+  rules: SerializationRules,
 ): unknown {
-  let result: unknown = { type: 'text', value: node.text };
+  let result: unknown = { type: "text", value: node.text };
 
   for (const [key, rule] of Object.entries(rules)) {
     if (rule.mark && key in node && (node as Record<string, unknown>)[key] && rule.serialize) {
@@ -169,10 +172,10 @@ function convertTextNode(
     }
   }
 
-  if (node.bold) result = { type: 'strong', children: [result] };
-  if (node.italic) result = { type: 'emphasis', children: [result] };
-  if (node.code) result = { type: 'inlineCode', value: node.text };
-  if (node.strikethrough) result = { type: 'delete', children: [result] };
+  if (node.bold) result = { type: "strong", children: [result] };
+  if (node.italic) result = { type: "emphasis", children: [result] };
+  if (node.code) result = { type: "inlineCode", value: node.text };
+  if (node.strikethrough) result = { type: "delete", children: [result] };
 
   return result;
 }
@@ -183,32 +186,32 @@ function convertChildren(children: unknown[], rules: SerializationRules): unknow
 }
 
 function getTextContent(node: TElement): string {
-  if (!node.children) return '';
+  if (!node.children) return "";
   return node.children
     .map((child: unknown) => {
-      if (typeof child === 'object' && child !== null && 'text' in child) {
+      if (typeof child === "object" && child !== null && "text" in child) {
         return (child as { text: string }).text;
       }
-      if (typeof child === 'object' && child !== null && 'children' in child) {
+      if (typeof child === "object" && child !== null && "children" in child) {
         return getTextContent(child as TElement);
       }
-      return '';
+      return "";
     })
-    .join('');
+    .join("");
 }
 
 function serializeAsMdxElement(element: TElement, rules: SerializationRules): unknown {
   const { type, children, id, ...props } = element;
   const attributes = Object.entries(props).map(([name, value]) => ({
-    type: 'mdxJsxAttribute',
+    type: "mdxJsxAttribute",
     name,
-    value: typeof value === 'string' ? value : JSON.stringify(value),
+    value: typeof value === "string" ? value : JSON.stringify(value),
   }));
 
   const hasChildren = children && children.length > 0 && !isVoidElement(children);
 
   return {
-    type: 'mdxJsxFlowElement',
+    type: "mdxJsxFlowElement",
     name: type,
     attributes,
     children: hasChildren ? convertChildren(children, rules) : [],
@@ -216,31 +219,27 @@ function serializeAsMdxElement(element: TElement, rules: SerializationRules): un
 }
 
 function isVoidElement(children: unknown[]): boolean {
-  return children.length === 1 &&
-    typeof children[0] === 'object' &&
+  return (
+    children.length === 1 &&
+    typeof children[0] === "object" &&
     children[0] !== null &&
-    'text' in children[0] &&
-    (children[0] as { text: string }).text === '';
+    "text" in children[0] &&
+    (children[0] as { text: string }).text === ""
+  );
 }
 
 function workerSerialize(value: TElement[]): string {
   const mdast = plateToMdast(value, WORKER_RULES);
-  const processor = unified()
-    .use(remarkGfm)
-    .use(remarkMdx)
-    .use(remarkStringify, {
-      emphasis: '_',
-      bullet: '-',
-      fences: true,
-    });
+  const processor = unified().use(remarkGfm).use(remarkMdx).use(remarkStringify, {
+    emphasis: "_",
+    bullet: "-",
+    fences: true,
+  });
   return processor.stringify(mdast);
 }
 
 function workerDeserialize(markdown: string): TElement[] {
-  const processor = unified()
-    .use(remarkParse)
-    .use(remarkGfm)
-    .use(remarkMdx);
+  const processor = unified().use(remarkParse).use(remarkGfm).use(remarkMdx);
   const mdast = processor.parse(markdown) as Root;
   // Note: Full deserialization is more complex, we'll test serialize parity
   return mdast as unknown as TElement[];
@@ -251,111 +250,115 @@ function workerDeserialize(markdown: string): TElement[] {
 // ============================================================================
 
 function normalize(str: string): string {
-  return str.trim().replace(/\r\n/g, '\n').replace(/\n+$/g, '');
+  return str.trim().replace(/\r\n/g, "\n").replace(/\n+$/g, "");
 }
 
 // ============================================================================
 // Tests
 // ============================================================================
 
-describe('Markdown Worker Serialization', () => {
-  describe('Basic Text', () => {
-    it('serializes paragraph', () => {
+describe("Markdown Worker Serialization", () => {
+  describe("Basic Text", () => {
+    it("serializes paragraph", () => {
+      const nodes: TElement[] = [{ type: "p", children: [{ text: "Hello, world!" }] }];
+
+      const result = workerSerialize(nodes);
+      expect(normalize(result)).toBe("Hello, world!");
+    });
+
+    it("serializes headings", () => {
       const nodes: TElement[] = [
-        { type: 'p', children: [{ text: 'Hello, world!' }] },
+        { type: "h1", children: [{ text: "Title" }] },
+        { type: "h2", children: [{ text: "Subtitle" }] },
       ];
 
       const result = workerSerialize(nodes);
-      expect(normalize(result)).toBe('Hello, world!');
+      expect(result).toContain("# Title");
+      expect(result).toContain("## Subtitle");
     });
 
-    it('serializes headings', () => {
+    it("serializes bold text", () => {
       const nodes: TElement[] = [
-        { type: 'h1', children: [{ text: 'Title' }] },
-        { type: 'h2', children: [{ text: 'Subtitle' }] },
+        {
+          type: "p",
+          children: [{ text: "This is " }, { text: "bold", bold: true }, { text: " text" }],
+        },
       ];
 
       const result = workerSerialize(nodes);
-      expect(result).toContain('# Title');
-      expect(result).toContain('## Subtitle');
+      expect(result).toContain("**bold**");
     });
 
-    it('serializes bold text', () => {
+    it("serializes italic text", () => {
       const nodes: TElement[] = [
-        { type: 'p', children: [{ text: 'This is ' }, { text: 'bold', bold: true }, { text: ' text' }] },
-      ];
-
-      const result = workerSerialize(nodes);
-      expect(result).toContain('**bold**');
-    });
-
-    it('serializes italic text', () => {
-      const nodes: TElement[] = [
-        { type: 'p', children: [{ text: 'This is ' }, { text: 'italic', italic: true }, { text: ' text' }] },
+        {
+          type: "p",
+          children: [{ text: "This is " }, { text: "italic", italic: true }, { text: " text" }],
+        },
       ];
 
       const result = workerSerialize(nodes);
       // Worker uses _ for emphasis
-      expect(result).toContain('_italic_');
+      expect(result).toContain("_italic_");
     });
 
-    it('serializes inline code', () => {
+    it("serializes inline code", () => {
       const nodes: TElement[] = [
-        { type: 'p', children: [{ text: 'Use ' }, { text: 'console.log()', code: true }] },
+        { type: "p", children: [{ text: "Use " }, { text: "console.log()", code: true }] },
       ];
 
       const result = workerSerialize(nodes);
-      expect(result).toContain('`console.log()`');
+      expect(result).toContain("`console.log()`");
     });
   });
 
-  describe('Block Elements', () => {
-    it('serializes blockquote', () => {
+  describe("Block Elements", () => {
+    it("serializes blockquote", () => {
       const nodes: TElement[] = [
-        { type: 'blockquote', children: [{ type: 'p', children: [{ text: 'Quote text' }] }] },
+        { type: "blockquote", children: [{ type: "p", children: [{ text: "Quote text" }] }] },
       ];
 
       const result = workerSerialize(nodes);
-      expect(result).toContain('> Quote text');
+      expect(result).toContain("> Quote text");
     });
 
-    it('serializes unordered list', () => {
+    it("serializes unordered list", () => {
       const nodes: TElement[] = [
         {
-          type: 'ul',
+          type: "ul",
           children: [
-            { type: 'li', children: [{ type: 'p', children: [{ text: 'Item 1' }] }] },
-            { type: 'li', children: [{ type: 'p', children: [{ text: 'Item 2' }] }] },
+            { type: "li", children: [{ type: "p", children: [{ text: "Item 1" }] }] },
+            { type: "li", children: [{ type: "p", children: [{ text: "Item 2" }] }] },
           ],
         },
       ];
 
       const result = workerSerialize(nodes);
-      expect(result).toContain('- Item 1');
-      expect(result).toContain('- Item 2');
+      expect(result).toContain("- Item 1");
+      expect(result).toContain("- Item 2");
     });
 
-    it('serializes ordered list', () => {
+    it("serializes ordered list", () => {
       const nodes: TElement[] = [
         {
-          type: 'ol',
+          type: "ol",
           children: [
-            { type: 'li', children: [{ type: 'p', children: [{ text: 'First' }] }] },
-            { type: 'li', children: [{ type: 'p', children: [{ text: 'Second' }] }] },
+            { type: "li", children: [{ type: "p", children: [{ text: "First" }] }] },
+            { type: "li", children: [{ type: "p", children: [{ text: "Second" }] }] },
           ],
         },
       ];
 
       const result = workerSerialize(nodes);
-      expect(result).toContain('1. First');
-      expect(result).toContain('2. Second');
+      expect(result).toContain("1. First");
+      expect(result).toContain("2. Second");
     });
 
-    it('serializes horizontal rule', () => {
+    it("serializes horizontal rule", () => {
       const nodes: TElement[] = [
-        { type: 'p', children: [{ text: 'Before' }] },
-        { type: 'hr', children: [{ text: '' }] },
-        { type: 'p', children: [{ text: 'After' }] },
+        { type: "p", children: [{ text: "Before" }] },
+        { type: "hr", children: [{ text: "" }] },
+        { type: "p", children: [{ text: "After" }] },
       ];
 
       const result = workerSerialize(nodes);
@@ -364,54 +367,57 @@ describe('Markdown Worker Serialization', () => {
     });
   });
 
-  describe('Links', () => {
-    it('serializes links', () => {
+  describe("Links", () => {
+    it("serializes links", () => {
       const nodes: TElement[] = [
         {
-          type: 'p',
+          type: "p",
           children: [
-            { text: 'Visit ' },
-            { type: 'a', url: 'https://example.com', children: [{ text: 'Example' }] } as unknown as { text: string },
+            { text: "Visit " },
+            {
+              type: "a",
+              url: "https://example.com",
+              children: [{ text: "Example" }],
+            } as unknown as { text: string },
           ],
         },
       ];
 
       const result = workerSerialize(nodes);
-      expect(result).toContain('[Example](https://example.com)');
+      expect(result).toContain("[Example](https://example.com)");
     });
   });
 
-  describe('MDX Elements', () => {
-    it('serializes unknown element as MDX', () => {
+  describe("MDX Elements", () => {
+    it("serializes unknown element as MDX", () => {
       const nodes: TElement[] = [
         {
-          type: 'custom_component',
-          someProp: 'value',
-          children: [{ text: '' }],
+          type: "custom_component",
+          someProp: "value",
+          children: [{ text: "" }],
         },
       ];
 
       const result = workerSerialize(nodes);
-      expect(result).toContain('<custom_component');
-      expect(result).toContain('someProp');
+      expect(result).toContain("<custom_component");
+      expect(result).toContain("someProp");
     });
   });
-
 });
 
-describe('Markdown Worker Integration', () => {
-  it('rules are built correctly', () => {
+describe("Markdown Worker Integration", () => {
+  it("rules are built correctly", () => {
     expect(WORKER_RULES).toBeDefined();
     expect(Object.keys(WORKER_RULES).length).toBeGreaterThan(0);
   });
 
-  it('has fontColor mark rule', () => {
+  it("has fontColor mark rule", () => {
     expect(WORKER_RULES.fontColor).toBeDefined();
     expect(WORKER_RULES.fontColor.mark).toBe(true);
-    expect(typeof WORKER_RULES.fontColor.serialize).toBe('function');
+    expect(typeof WORKER_RULES.fontColor.serialize).toBe("function");
   });
 
-  it('has fontBackgroundColor mark rule', () => {
+  it("has fontBackgroundColor mark rule", () => {
     expect(WORKER_RULES.fontBackgroundColor).toBeDefined();
     expect(WORKER_RULES.fontBackgroundColor.mark).toBe(true);
   });

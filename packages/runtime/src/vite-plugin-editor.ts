@@ -157,7 +157,7 @@ async function handleClientModule(
   req: IncomingMessage,
   res: ServerResponse,
   server: ViteDevServer,
-  workbookPath: string
+  workbookPath: string,
 ): Promise<void> {
   const url = new URL(req.url || "", "http://localhost");
   const modulePath = url.pathname.replace("/_client", "");
@@ -239,31 +239,31 @@ function rewriteImports(code: string, _workbookPath: string): string {
         .replace("react-jsx", "react/jsx")
         .replace("react-dom", "react-dom");
       return `from "/_client/__shim/${normalizedPkg}"`;
-    }
+    },
   );
 
   // Rewrite absolute /@fs/ paths
   code = code.replace(
     /from\s+["']\/@fs(\/[^"']+)["']/g,
-    (_match, path) => `from "/_client/@fs${path}"`
+    (_match, path) => `from "/_client/@fs${path}"`,
   );
 
   // Rewrite absolute paths (starting with /) - skip paths already using /_client/
   code = code.replace(
     /from\s+["'](\/(?!_client\/)[^"']+)["']/g,
-    (_match, path) => `from "/_client${path}"`
+    (_match, path) => `from "/_client${path}"`,
   );
 
   // Rewrite dynamic imports with absolute paths
   code = code.replace(
     /import\(["'](\/(?!_client\/)[^"']+)["']\)/g,
-    (_match, path) => `import("/_client${path}")`
+    (_match, path) => `import("/_client${path}")`,
   );
 
   // Rewrite dynamic imports with /@fs/ paths
   code = code.replace(
     /import\(["']\/@fs(\/[^"']+)["']\)/g,
-    (_match, path) => `import("/_client/@fs${path}")`
+    (_match, path) => `import("/_client/@fs${path}")`,
   );
 
   return code;
@@ -274,10 +274,7 @@ function rewriteImports(code: string, _workbookPath: string): string {
  */
 function stripHmrCode(code: string): string {
   // Remove import.meta.hot checks and blocks
-  code = code.replace(
-    /if\s*\(\s*import\.meta\.hot\s*\)\s*\{[^}]*\}/g,
-    "/* HMR stripped */"
-  );
+  code = code.replace(/if\s*\(\s*import\.meta\.hot\s*\)\s*\{[^}]*\}/g, "/* HMR stripped */");
 
   // Remove RefreshRuntime calls
   code = code.replace(/\$RefreshReg\$\([^)]*\);?/g, "");
@@ -285,16 +282,10 @@ function stripHmrCode(code: string): string {
 
   // Remove preamble-related code
   code = code.replace(/import\s+["']virtual:vite-preamble["'];?/g, "");
-  code = code.replace(
-    /import\s+RefreshRuntime\s+from\s+["']\/@react-refresh["'];?/g,
-    ""
-  );
+  code = code.replace(/import\s+RefreshRuntime\s+from\s+["']\/@react-refresh["'];?/g, "");
 
   // Remove __vite_plugin_react_preamble_installed__ checks
-  code = code.replace(
-    /if\s*\(.*__vite_plugin_react_preamble_installed__.*\)\s*\{[^}]*\}/g,
-    ""
-  );
+  code = code.replace(/if\s*\(.*__vite_plugin_react_preamble_installed__.*\)\s*\{[^}]*\}/g, "");
 
   return code;
 }

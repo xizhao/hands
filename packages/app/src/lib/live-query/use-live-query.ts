@@ -7,9 +7,9 @@
  * Same SQL query = same cache entry = automatic deduplication across components.
  */
 
-import { useEffect, useCallback, useRef } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import { useDbSubscription, type DbChangeEvent } from "../db-subscription";
+import { useCallback, useEffect, useRef } from "react";
+import { type DbChangeEvent, useDbSubscription } from "../db-subscription";
 import { trpc } from "../trpc";
 
 export interface UseLiveQueryOptions {
@@ -57,7 +57,7 @@ export interface LiveQueryResult<T> {
  * - SSE invalidates all queries at once
  */
 export function useLiveQuery<T = Record<string, unknown>>(
-  options: UseLiveQueryOptions
+  options: UseLiveQueryOptions,
 ): LiveQueryResult<T> {
   const {
     sql,
@@ -88,9 +88,9 @@ export function useLiveQuery<T = Record<string, unknown>>(
       enabled: enabled && !!sql,
       staleTime: 0, // Always fresh - deduplication still works within same render
       retry: maxRetries,
-      retryDelay: (attemptIndex) => retryDelay * Math.pow(2, attemptIndex),
+      retryDelay: (attemptIndex) => retryDelay * 2 ** attemptIndex,
       meta: { suppressError: true }, // Handle errors locally in component
-    }
+    },
   );
 
   // Subscribe to database changes via SSE
@@ -121,7 +121,8 @@ export function useLiveQuery<T = Record<string, unknown>>(
   }, [trpcRefetch]);
 
   // Convert query error to Error type
-  const error = queryError instanceof Error ? queryError : queryError ? new Error(String(queryError)) : null;
+  const error =
+    queryError instanceof Error ? queryError : queryError ? new Error(String(queryError)) : null;
 
   return {
     data: (result?.rows as T[]) ?? [],
@@ -141,7 +142,7 @@ export function useLiveQuery<T = Record<string, unknown>>(
 export function useSqlQuery<T = Record<string, unknown>>(
   sql: string,
   params?: unknown[],
-  options?: { enabled?: boolean; runtimePort?: number | null }
+  options?: { enabled?: boolean; runtimePort?: number | null },
 ): { data: T[]; isLoading: boolean; error: Error | null } {
   const result = useLiveQuery<T>({
     sql,

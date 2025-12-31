@@ -11,40 +11,48 @@
  * (just a component) or advanced (custom Plate plugin + serialization).
  */
 
+import { createPlugin, type PluginOptions } from "@hands/core/plugin";
 // Note: MarkdownPlugin import removed - all serialization now goes through worker
 import { cn } from "@udecode/cn";
 import type { TElement } from "platejs";
 import {
   Plate,
   PlateContent,
-  usePlateEditor,
   type PlateEditor,
   type PlatePlugin,
+  usePlateEditor,
 } from "platejs/react";
 import {
+  type ComponentType,
   forwardRef,
+  type KeyboardEvent,
+  type ReactNode,
   useCallback,
   useEffect,
   useImperativeHandle,
   useMemo,
   useRef,
   useState,
-  type ComponentType,
-  type KeyboardEvent,
-  type ReactNode,
 } from "react";
-
-import { createPlugin, type PluginOptions } from "@hands/core/plugin";
 import { useEditorTables, useEditorTrpc } from "./context";
-import { FrontmatterHeader, type Frontmatter } from "./frontmatter";
-import { useMarkdownWorker, useMarkdownWorkerDebounced, getDeserializeCache, setDeserializeCache } from "./hooks/use-markdown-worker";
-import { createCopilotKit, type CopilotConfig } from "./plugins/copilot-kit";
-import { createMarkdownKit, type MarkdownRule } from "./plugins/markdown-kit";
+import {
+  type Frontmatter,
+  FrontmatterHeader,
+  parseFrontmatter,
+  serializeFrontmatter,
+  stripFrontmatter,
+} from "./frontmatter";
+import {
+  getDeserializeCache,
+  setDeserializeCache,
+  useMarkdownWorker,
+  useMarkdownWorkerDebounced,
+} from "./hooks/use-markdown-worker";
+import { type CopilotConfig, createCopilotKit } from "./plugins/copilot-kit";
 import { EditorCorePlugins } from "./plugins/presets";
-import { EditorStatusBar, TooltipProvider, TocSidebar, SlidesView } from "./ui";
-import { MarkdownCodeEditor, type Diagnostic } from "./ui/markdown-code-editor";
+import { EditorStatusBar, SlidesView, TocSidebar, TooltipProvider } from "./ui";
 import type { EditorMode } from "./ui/editor-status-bar";
-import { serializeFrontmatter, parseFrontmatter, stripFrontmatter } from "./frontmatter";
+import { type Diagnostic, MarkdownCodeEditor } from "./ui/markdown-code-editor";
 
 // ============================================================================
 // Editor Handle (exposed via ref)
@@ -92,9 +100,7 @@ export interface AdvancedEditorPlugin {
 
 export type EditorPlugin = SimpleEditorPlugin | AdvancedEditorPlugin;
 
-function isAdvancedPlugin(
-  plugin: EditorPlugin
-): plugin is AdvancedEditorPlugin {
+function isAdvancedPlugin(plugin: EditorPlugin): plugin is AdvancedEditorPlugin {
   return "plugin" in plugin && "rules" in plugin;
 }
 
@@ -205,7 +211,7 @@ const DEFAULT_PROSE_CLASSES = cn(
   "[&_a]:text-primary [&_a]:underline [&_a]:underline-offset-2",
   // Media
   "[&_img]:max-w-full [&_img]:rounded-md",
-  "[&_hr]:my-4 [&_hr]:border-border"
+  "[&_hr]:my-4 [&_hr]:border-border",
 );
 
 // ============================================================================
@@ -250,7 +256,7 @@ export const Editor = forwardRef<EditorHandle, EditorProps>(function Editor(
     autoFocus = false,
     wrapper: Wrapper,
   },
-  ref
+  ref,
 ) {
   // Track sync state
   const isExternalUpdateRef = useRef(false);
@@ -270,12 +276,15 @@ export const Editor = forwardRef<EditorHandle, EditorProps>(function Editor(
   // Debounced serialization for onChange (high-frequency path)
   const { queueSerialize } = useMarkdownWorkerDebounced({
     delay: 100,
-    onSerialize: useCallback((markdown: string) => {
-      if (markdown !== lastValueRef.current) {
-        lastValueRef.current = markdown;
-        onChange?.(markdown);
-      }
-    }, [onChange]),
+    onSerialize: useCallback(
+      (markdown: string) => {
+        if (markdown !== lastValueRef.current) {
+          lastValueRef.current = markdown;
+          onChange?.(markdown);
+        }
+      },
+      [onChange],
+    ),
     onError: useCallback((error: Error) => {
       console.error("[Editor] Worker serialization failed:", error);
     }, []),
@@ -292,7 +301,7 @@ export const Editor = forwardRef<EditorHandle, EditorProps>(function Editor(
         setInternalMode(newMode);
       }
     },
-    [onModeChange]
+    [onModeChange],
   );
 
   // Track markdown content for code editor mode
@@ -301,11 +310,11 @@ export const Editor = forwardRef<EditorHandle, EditorProps>(function Editor(
   // Merge deprecated + new props
   const allEditorPlugins = useMemo(
     () => [...editorPlugins, ...customBlocks],
-    [editorPlugins, customBlocks]
+    [editorPlugins, customBlocks],
   );
   const allExtraPlugins = useMemo(
     () => [...platePlugins, ...legacyPlugins],
-    [platePlugins, legacyPlugins]
+    [platePlugins, legacyPlugins],
   );
 
   // Process editor plugins into Plate plugins
@@ -323,7 +332,7 @@ export const Editor = forwardRef<EditorHandle, EditorProps>(function Editor(
         const { plugin } = createPlugin(
           editorPlugin.name,
           editorPlugin.component,
-          editorPlugin.options
+          editorPlugin.options,
         );
         plugins.push(plugin);
       }
@@ -361,18 +370,13 @@ export const Editor = forwardRef<EditorHandle, EditorProps>(function Editor(
   // Build copilot plugins if configured
   const copilotPlugins = useMemo(
     () => (effectiveCopilot ? createCopilotKit(effectiveCopilot) : []),
-    [effectiveCopilot]
+    [effectiveCopilot],
   );
 
   // Build complete plugin list
   const allPlugins = useMemo(
-    () => [
-      ...EditorCorePlugins,
-      ...generatedPlugins,
-      ...allExtraPlugins,
-      ...copilotPlugins,
-    ],
-    [generatedPlugins, allExtraPlugins, copilotPlugins]
+    () => [...EditorCorePlugins, ...generatedPlugins, ...allExtraPlugins, ...copilotPlugins],
+    [generatedPlugins, allExtraPlugins, copilotPlugins],
   );
 
   // Create editor
@@ -422,7 +426,7 @@ export const Editor = forwardRef<EditorHandle, EditorProps>(function Editor(
           });
       },
     }),
-    [editor, workerDeserialize]
+    [editor, workerDeserialize],
   );
 
   // Auto-focus
@@ -442,9 +446,7 @@ export const Editor = forwardRef<EditorHandle, EditorProps>(function Editor(
     // Check cache first - instant render, skip worker entirely
     const cached = getDeserializeCache(value);
     if (cached) {
-      const newValue = cached.length > 0
-        ? cached
-        : [{ type: "p", children: [{ text: "" }] }];
+      const newValue = cached.length > 0 ? cached : [{ type: "p", children: [{ text: "" }] }];
       editor.tf.setValue(newValue);
       lastValueRef.current = value;
       hasInitializedRef.current = true; // Mark as initialized
@@ -463,9 +465,8 @@ export const Editor = forwardRef<EditorHandle, EditorProps>(function Editor(
           setDeserializeCache(value, nodes);
         }
         // Reset to empty paragraph if content is empty, otherwise use deserialized nodes
-        const newValue = nodes && nodes.length > 0
-          ? nodes
-          : [{ type: "p", children: [{ text: "" }] }];
+        const newValue =
+          nodes && nodes.length > 0 ? nodes : [{ type: "p", children: [{ text: "" }] }];
         editor.tf.setValue(newValue);
         lastValueRef.current = value;
         hasInitializedRef.current = true; // Mark as initialized
@@ -494,7 +495,7 @@ export const Editor = forwardRef<EditorHandle, EditorProps>(function Editor(
       // Queue async serialization in web worker (debounced)
       queueSerialize(plateValue);
     },
-    [onChange, readOnly, queueSerialize]
+    [onChange, readOnly, queueSerialize],
   );
 
   // Focus editor (from frontmatter on Enter/ArrowDown)
@@ -529,7 +530,7 @@ export const Editor = forwardRef<EditorHandle, EditorProps>(function Editor(
         }
       }
     },
-    [editor, frontmatter, externalOnKeyDown]
+    [editor, frontmatter, externalOnKeyDown],
   );
 
   // Sync markdown content when switching to markdown mode (uses worker)
@@ -540,7 +541,7 @@ export const Editor = forwardRef<EditorHandle, EditorProps>(function Editor(
         .then((bodyMarkdown) => {
           // Prepend frontmatter if present
           const rawContent = frontmatter
-            ? serializeFrontmatter(frontmatter) + "\n" + bodyMarkdown
+            ? `${serializeFrontmatter(frontmatter)}\n${bodyMarkdown}`
             : bodyMarkdown;
           setMarkdownContent(rawContent);
         })
@@ -599,7 +600,7 @@ export const Editor = forwardRef<EditorHandle, EditorProps>(function Editor(
         }
       }, 150);
     },
-    [editor, onChange, onFrontmatterChange, workerDeserialize]
+    [editor, onChange, onFrontmatterChange, workerDeserialize],
   );
 
   // Toolbar is now removed - mode toggle moved to status bar
@@ -628,7 +629,10 @@ export const Editor = forwardRef<EditorHandle, EditorProps>(function Editor(
 
               {/* Table of contents - fixed to viewport, vertically centered */}
               {(frontmatter?.toc ?? tocProp) && (
-                <TocSidebar className="fixed right-4 top-1/2 -translate-y-1/2 w-8 z-40" position="right" />
+                <TocSidebar
+                  className="fixed right-4 top-1/2 -translate-y-1/2 w-8 z-40"
+                  position="right"
+                />
               )}
 
               {/* Frontmatter header */}
@@ -653,7 +657,7 @@ export const Editor = forwardRef<EditorHandle, EditorProps>(function Editor(
                   "pt-4 pb-32 min-h-[200px] outline-none",
                   DEFAULT_PROSE_CLASSES,
                   contentClassName,
-                  isLoading && "opacity-50 pointer-events-none"
+                  isLoading && "opacity-50 pointer-events-none",
                 )}
                 placeholder={placeholder}
                 readOnly={readOnly}
@@ -678,9 +682,7 @@ export const Editor = forwardRef<EditorHandle, EditorProps>(function Editor(
             </div>
           )}
 
-          {mode === "slides" && (
-            <SlidesView className="flex-1 min-h-0" frontmatter={frontmatter} />
-          )}
+          {mode === "slides" && <SlidesView className="flex-1 min-h-0" frontmatter={frontmatter} />}
 
           {/* Status bar - all modes, includes mode toggle */}
           {!readOnly && (

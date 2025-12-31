@@ -99,7 +99,14 @@ export function BarChart({
     const yValues = data.map((d) => d[firstYKey]);
 
     return {
-      xFormat: xFormat ?? (xKey ? detectFormat(xKey, data.map((d) => d[xKey])) : null),
+      xFormat:
+        xFormat ??
+        (xKey
+          ? detectFormat(
+              xKey,
+              data.map((d) => d[xKey]),
+            )
+          : null),
       yFormat: yFormat ?? detectFormat(firstYKey, yValues),
     };
   }, [data, xKey, yKey, xFormat, yFormat]);

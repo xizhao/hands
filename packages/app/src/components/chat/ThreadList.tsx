@@ -9,11 +9,11 @@
  * - New thread button
  */
 
-import { motion, AnimatePresence } from "framer-motion";
+import { AnimatePresence, motion } from "framer-motion";
 import { ChevronDown, Layers, Loader2, Plus, X } from "lucide-react";
 import { useState } from "react";
-import { StatusDot, type SessionStatus } from "./StatusDot";
 import type { Session } from "@/lib/api";
+import { type SessionStatus, StatusDot } from "./StatusDot";
 
 interface ThreadListProps {
   sessions: Session[];
@@ -148,9 +148,7 @@ export function ThreadList({
               >
                 <Layers className="h-3.5 w-3.5" />
                 <span>{backgroundSessions.length}</span>
-                {backgroundSessions.some(
-                  (s) => getSessionStatus(s.id) === "busy"
-                ) && (
+                {backgroundSessions.some((s) => getSessionStatus(s.id) === "busy") && (
                   <span className="relative flex h-1.5 w-1.5">
                     <span className="animate-ping absolute h-full w-full rounded-full bg-emerald-400 opacity-75" />
                     <span className="relative rounded-full h-1.5 w-1.5 bg-emerald-500" />

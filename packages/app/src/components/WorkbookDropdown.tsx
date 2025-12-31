@@ -101,9 +101,7 @@ export function WorkbookDropdown({
             className="flex items-center justify-between"
           >
             <span className="truncate text-[13px]">{wb.name}</span>
-            {isCurrentWorkbook(wb) && (
-              <Check className="h-3.5 w-3.5 text-primary shrink-0" />
-            )}
+            {isCurrentWorkbook(wb) && <Check className="h-3.5 w-3.5 text-primary shrink-0" />}
           </DropdownMenuItem>
         ))}
         {workbooks.length > 0 && <div className="border-t border-border my-1" />}

@@ -7,8 +7,8 @@
 
 // DataGrid
 export {
-  createDataGridElement,
   type CreateDataGridOptions,
+  createDataGridElement,
   DATA_GRID_KEY,
   DataGrid,
   DataGridPlugin,
@@ -17,18 +17,18 @@ export {
 
 // Kanban board
 export {
-  Kanban,
-  KanbanBoard,
-  KanbanPlugin,
+  type CreateKanbanElementOptions,
   createKanbanElement,
   findMovedItem,
   getColumnOrder,
   groupByColumn,
   KANBAN_KEY,
-  type CreateKanbanElementOptions,
+  Kanban,
+  KanbanBoard,
   type KanbanBoardProps,
   type KanbanBoardValue,
   type KanbanItem,
+  KanbanPlugin,
   type KanbanProps,
   type MovedItem,
 } from "./kanban";

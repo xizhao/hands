@@ -13,9 +13,9 @@ import { existsSync, unlinkSync } from "node:fs";
 import { join } from "node:path";
 import { initTRPC, TRPCError } from "@trpc/server";
 import { z } from "zod";
-import { getWorkbookDb, executeQuery } from "../../db/workbook-db.js";
-import { discoverDomains, discoverPages } from "../../workbook/discovery.js";
+import { executeQuery, getWorkbookDb } from "../../db/workbook-db.js";
 import type { PageRegistry } from "../../pages/index.js";
+import { discoverDomains, discoverPages } from "../../workbook/discovery.js";
 
 // ============================================================================
 // Context
@@ -45,11 +45,23 @@ const domainIdInput = z.object({
   domainId: z.string().min(1),
 });
 
+const createInput = z.object({
+  name: z
+    .string()
+    .min(1)
+    .regex(/^[a-z][a-z0-9_]*$/, {
+      message: "Invalid name - use lowercase, numbers, underscores only, start with letter",
+    }),
+});
+
 const renameInput = z.object({
   domainId: z.string().min(1),
-  newName: z.string().min(1).regex(/^[a-z][a-z0-9_]*$/, {
-    message: "Invalid name - use lowercase, numbers, underscores only, start with letter",
-  }),
+  newName: z
+    .string()
+    .min(1)
+    .regex(/^[a-z][a-z0-9_]*$/, {
+      message: "Invalid name - use lowercase, numbers, underscores only, start with letter",
+    }),
 });
 
 // ============================================================================
@@ -95,6 +107,92 @@ export const domainsRouter = t.router({
   }),
 
   /**
+   * Create a new domain (table + page)
+   *
+   * Steps:
+   * 1. Create SQLite table with id column
+   * 2. Create associated MDX page file
+   * 3. Trigger schema regeneration
+   */
+  create: publicProcedure.input(createInput).mutation(async ({ ctx, input }) => {
+    const { name } = input;
+    const tableName = name.replace(/[^a-zA-Z0-9_]/g, "");
+
+    if (tableName !== name) {
+      throw new TRPCError({
+        code: "BAD_REQUEST",
+        message: "Invalid name - use lowercase, numbers, underscores only",
+      });
+    }
+
+    try {
+      const db = getWorkbookDb(ctx.workbookDir);
+
+      // Check if table already exists
+      const tableExists = db
+        .query<{ name: string }, [string]>(
+          `SELECT name FROM sqlite_master WHERE type='table' AND name=?`,
+        )
+        .get(tableName);
+
+      if (tableExists) {
+        throw new TRPCError({
+          code: "CONFLICT",
+          message: `Table already exists: ${tableName}`,
+        });
+      }
+
+      // Create table with id column
+      executeQuery(db, `CREATE TABLE "${tableName}" (id INTEGER PRIMARY KEY AUTOINCREMENT)`);
+
+      // Create associated page file
+      const pagesDir = join(ctx.workbookDir, "pages");
+      const pageSlug = tableName.replace(/_/g, "-");
+      const pagePath = join(pagesDir, `${pageSlug}.mdx`);
+
+      // Format title from table name
+      const title = tableName
+        .split("_")
+        .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
+        .join(" ");
+
+      const pageContent = `---
+title: ${title}
+---
+
+`;
+
+      // Ensure pages directory exists
+      const { mkdirSync, writeFileSync } = await import("node:fs");
+      mkdirSync(pagesDir, { recursive: true });
+      writeFileSync(pagePath, pageContent, "utf-8");
+
+      // Reload page registry
+      const pageRegistry = ctx.getPageRegistry();
+      if (pageRegistry) {
+        await pageRegistry.load();
+      }
+
+      // Trigger schema regeneration
+      if (ctx.onSchemaChange) {
+        await ctx.onSchemaChange();
+      }
+
+      return {
+        success: true,
+        domainId: tableName,
+        pageSlug,
+      };
+    } catch (err) {
+      if (err instanceof TRPCError) throw err;
+      throw new TRPCError({
+        code: "INTERNAL_SERVER_ERROR",
+        message: `Failed to create domain: ${err instanceof Error ? err.message : String(err)}`,
+      });
+    }
+  }),
+
+  /**
    * Rename a domain (table + associated page)
    *
    * Steps:
@@ -133,7 +231,7 @@ export const domainsRouter = t.router({
       // Check if source table exists
       const tableExists = db
         .query<{ name: string }, [string]>(
-          `SELECT name FROM sqlite_master WHERE type='table' AND name=?`
+          `SELECT name FROM sqlite_master WHERE type='table' AND name=?`,
         )
         .get(oldTableName);
 
@@ -147,7 +245,7 @@ export const domainsRouter = t.router({
       // Check if target name already exists
       const targetExists = db
         .query<{ name: string }, [string]>(
-          `SELECT name FROM sqlite_master WHERE type='table' AND name=?`
+          `SELECT name FROM sqlite_master WHERE type='table' AND name=?`,
         )
         .get(newTableName);
 
@@ -229,7 +327,7 @@ export const domainsRouter = t.router({
       // Check if table exists
       const tableExists = db
         .query<{ name: string }, [string]>(
-          `SELECT name FROM sqlite_master WHERE type='table' AND name=?`
+          `SELECT name FROM sqlite_master WHERE type='table' AND name=?`,
         )
         .get(tableName);
 
@@ -241,12 +339,14 @@ export const domainsRouter = t.router({
       }
 
       // Get tables that reference this one (for cascade info)
-      const referencing = db.query<{ name: string }, [string]>(`
+      const referencing = db
+        .query<{ name: string }, [string]>(`
         SELECT DISTINCT m.name
         FROM sqlite_master m
         JOIN pragma_foreign_key_list(m.name) fk ON fk."table" = ?
         WHERE m.type = 'table'
-      `).all(tableName);
+      `)
+        .all(tableName);
 
       // Drop the table (SQLite doesn't have CASCADE, but foreign keys will fail if referenced)
       executeQuery(db, `DROP TABLE IF EXISTS "${tableName}"`);

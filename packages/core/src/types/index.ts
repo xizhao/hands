@@ -8,8 +8,8 @@ import type { TElement, TText } from "platejs";
 
 // Component metadata for validation
 export type {
-  ComponentMeta,
   ComponentConstraints,
+  ComponentMeta,
   ComponentSchema,
   PropRule,
 } from "./component-meta";

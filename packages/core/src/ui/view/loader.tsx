@@ -12,8 +12,8 @@
  * <Loader variant="bars" color="primary" label="Loading..." />
  */
 
-import { memo } from "react";
 import { createPlatePlugin, PlateElement, type PlateElementProps, useElement } from "platejs/react";
+import { memo } from "react";
 
 import { LOADER_KEY, type TLoaderElement } from "../../types";
 
@@ -21,7 +21,16 @@ import { LOADER_KEY, type TLoaderElement } from "../../types";
 // Types
 // ============================================================================
 
-export type LoaderVariant = "spinner" | "dots" | "bars" | "pulse" | "ring" | "bounce" | "wave" | "square" | "hands";
+export type LoaderVariant =
+  | "spinner"
+  | "dots"
+  | "bars"
+  | "pulse"
+  | "ring"
+  | "bounce"
+  | "wave"
+  | "square"
+  | "hands";
 export type LoaderSize = "xs" | "sm" | "md" | "lg" | "xl";
 export type LoaderColor = "default" | "primary" | "secondary" | "muted";
 export type LoaderSpeed = "slow" | "normal" | "fast";
@@ -45,7 +54,7 @@ const colorMap: Record<LoaderColor, string> = {
   muted: "text-muted-foreground",
 };
 
-const speedMap: Record<LoaderSpeed, string> = {
+const _speedMap: Record<LoaderSpeed, string> = {
   slow: "duration-1500",
   normal: "duration-1000",
   fast: "duration-500",
@@ -69,7 +78,15 @@ const spinKeyframes = `
 // Variant Components
 // ============================================================================
 
-function SpinnerLoader({ size, color, speed }: { size: LoaderSize; color: LoaderColor; speed: LoaderSpeed }) {
+function SpinnerLoader({
+  size,
+  color,
+  speed,
+}: {
+  size: LoaderSize;
+  color: LoaderColor;
+  speed: LoaderSpeed;
+}) {
   const s = sizeMap[size];
   const duration = speed === "slow" ? "1.5s" : speed === "fast" ? "0.5s" : "0.8s";
 
@@ -81,9 +98,26 @@ function SpinnerLoader({ size, color, speed }: { size: LoaderSize; color: Loader
   );
 }
 
-function DotsLoader({ size, color, speed }: { size: LoaderSize; color: LoaderColor; speed: LoaderSpeed }) {
+function DotsLoader({
+  size,
+  color,
+  speed,
+}: {
+  size: LoaderSize;
+  color: LoaderColor;
+  speed: LoaderSpeed;
+}) {
   const s = sizeMap[size];
-  const dotSize = size === "xs" ? "size-1" : size === "sm" ? "size-1.5" : size === "md" ? "size-2" : size === "lg" ? "size-2.5" : "size-3";
+  const dotSize =
+    size === "xs"
+      ? "size-1"
+      : size === "sm"
+        ? "size-1.5"
+        : size === "md"
+          ? "size-2"
+          : size === "lg"
+            ? "size-2.5"
+            : "size-3";
   const duration = speed === "slow" ? "1.5s" : speed === "fast" ? "0.6s" : "1s";
 
   return (
@@ -92,16 +126,37 @@ function DotsLoader({ size, color, speed }: { size: LoaderSize; color: LoaderCol
         <div
           key={i}
           className={`${dotSize} ${colorMap[color]} rounded-full bg-current`}
-          style={{ animation: `loader-pulse ${duration} ease-in-out infinite`, animationDelay: `${i * 0.15}s` }}
+          style={{
+            animation: `loader-pulse ${duration} ease-in-out infinite`,
+            animationDelay: `${i * 0.15}s`,
+          }}
         />
       ))}
     </div>
   );
 }
 
-function BarsLoader({ size, color, speed }: { size: LoaderSize; color: LoaderColor; speed: LoaderSpeed }) {
-  const barHeight = size === "xs" ? "h-3" : size === "sm" ? "h-4" : size === "md" ? "h-5" : size === "lg" ? "h-6" : "h-8";
-  const barWidth = size === "xs" ? "w-0.5" : size === "sm" ? "w-1" : size === "md" ? "w-1" : "w-1.5";
+function BarsLoader({
+  size,
+  color,
+  speed,
+}: {
+  size: LoaderSize;
+  color: LoaderColor;
+  speed: LoaderSpeed;
+}) {
+  const barHeight =
+    size === "xs"
+      ? "h-3"
+      : size === "sm"
+        ? "h-4"
+        : size === "md"
+          ? "h-5"
+          : size === "lg"
+            ? "h-6"
+            : "h-8";
+  const barWidth =
+    size === "xs" ? "w-0.5" : size === "sm" ? "w-1" : size === "md" ? "w-1" : "w-1.5";
   const gap = size === "xs" || size === "sm" ? "gap-0.5" : "gap-1";
   const duration = speed === "slow" ? "1.2s" : speed === "fast" ? "0.5s" : "0.8s";
 
@@ -111,14 +166,25 @@ function BarsLoader({ size, color, speed }: { size: LoaderSize; color: LoaderCol
         <div
           key={i}
           className={`${barHeight} ${barWidth} ${colorMap[color]} bg-current rounded-full origin-bottom`}
-          style={{ animation: `loader-wave ${duration} ease-in-out infinite`, animationDelay: `${i * 0.1}s` }}
+          style={{
+            animation: `loader-wave ${duration} ease-in-out infinite`,
+            animationDelay: `${i * 0.1}s`,
+          }}
         />
       ))}
     </div>
   );
 }
 
-function PulseLoader({ size, color, speed }: { size: LoaderSize; color: LoaderColor; speed: LoaderSpeed }) {
+function PulseLoader({
+  size,
+  color,
+  speed,
+}: {
+  size: LoaderSize;
+  color: LoaderColor;
+  speed: LoaderSpeed;
+}) {
   const s = sizeMap[size];
   const duration = speed === "slow" ? "2s" : speed === "fast" ? "0.8s" : "1.2s";
 
@@ -130,7 +196,15 @@ function PulseLoader({ size, color, speed }: { size: LoaderSize; color: LoaderCo
   );
 }
 
-function RingLoader({ size, color, speed }: { size: LoaderSize; color: LoaderColor; speed: LoaderSpeed }) {
+function RingLoader({
+  size,
+  color,
+  speed,
+}: {
+  size: LoaderSize;
+  color: LoaderColor;
+  speed: LoaderSpeed;
+}) {
   const s = sizeMap[size];
   const duration = speed === "slow" ? "2s" : speed === "fast" ? "0.8s" : "1.2s";
 
@@ -142,15 +216,35 @@ function RingLoader({ size, color, speed }: { size: LoaderSize; color: LoaderCol
       />
       <div
         className={`absolute inset-0 ${colorMap[color]} rounded-full border-2 border-current`}
-        style={{ animation: `loader-ring-pulse ${duration} ease-out infinite`, animationDelay: `${parseFloat(duration) / 2}s` }}
+        style={{
+          animation: `loader-ring-pulse ${duration} ease-out infinite`,
+          animationDelay: `${parseFloat(duration) / 2}s`,
+        }}
       />
     </div>
   );
 }
 
-function BounceLoader({ size, color, speed }: { size: LoaderSize; color: LoaderColor; speed: LoaderSpeed }) {
+function BounceLoader({
+  size,
+  color,
+  speed,
+}: {
+  size: LoaderSize;
+  color: LoaderColor;
+  speed: LoaderSpeed;
+}) {
   const s = sizeMap[size];
-  const dotSize = size === "xs" ? "size-1.5" : size === "sm" ? "size-2" : size === "md" ? "size-2.5" : size === "lg" ? "size-3" : "size-4";
+  const dotSize =
+    size === "xs"
+      ? "size-1.5"
+      : size === "sm"
+        ? "size-2"
+        : size === "md"
+          ? "size-2.5"
+          : size === "lg"
+            ? "size-3"
+            : "size-4";
   const duration = speed === "slow" ? "1s" : speed === "fast" ? "0.4s" : "0.6s";
 
   return (
@@ -159,15 +253,35 @@ function BounceLoader({ size, color, speed }: { size: LoaderSize; color: LoaderC
         <div
           key={i}
           className={`${dotSize} ${colorMap[color]} rounded-full bg-current`}
-          style={{ animation: `loader-bounce ${duration} ease-in-out infinite`, animationDelay: `${i * 0.1}s` }}
+          style={{
+            animation: `loader-bounce ${duration} ease-in-out infinite`,
+            animationDelay: `${i * 0.1}s`,
+          }}
         />
       ))}
     </div>
   );
 }
 
-function WaveLoader({ size, color, speed }: { size: LoaderSize; color: LoaderColor; speed: LoaderSpeed }) {
-  const dotSize = size === "xs" ? "size-1" : size === "sm" ? "size-1.5" : size === "md" ? "size-2" : size === "lg" ? "size-2.5" : "size-3";
+function WaveLoader({
+  size,
+  color,
+  speed,
+}: {
+  size: LoaderSize;
+  color: LoaderColor;
+  speed: LoaderSpeed;
+}) {
+  const dotSize =
+    size === "xs"
+      ? "size-1"
+      : size === "sm"
+        ? "size-1.5"
+        : size === "md"
+          ? "size-2"
+          : size === "lg"
+            ? "size-2.5"
+            : "size-3";
   const gap = size === "xs" || size === "sm" ? "gap-0.5" : "gap-1";
   const duration = speed === "slow" ? "1.8s" : speed === "fast" ? "0.8s" : "1.2s";
 
@@ -179,7 +293,7 @@ function WaveLoader({ size, color, speed }: { size: LoaderSize; color: LoaderCol
           className={`${dotSize} ${colorMap[color]} rounded-full bg-current`}
           style={{
             animation: `loader-bounce ${duration} ease-in-out infinite`,
-            animationDelay: `${i * 0.1}s`
+            animationDelay: `${i * 0.1}s`,
           }}
         />
       ))}
@@ -187,9 +301,26 @@ function WaveLoader({ size, color, speed }: { size: LoaderSize; color: LoaderCol
   );
 }
 
-function SquareLoader({ size, color, speed }: { size: LoaderSize; color: LoaderColor; speed: LoaderSpeed }) {
+function SquareLoader({
+  size,
+  color,
+  speed,
+}: {
+  size: LoaderSize;
+  color: LoaderColor;
+  speed: LoaderSpeed;
+}) {
   const s = sizeMap[size];
-  const squareSize = size === "xs" ? "size-2" : size === "sm" ? "size-3" : size === "md" ? "size-4" : size === "lg" ? "size-5" : "size-6";
+  const squareSize =
+    size === "xs"
+      ? "size-2"
+      : size === "sm"
+        ? "size-3"
+        : size === "md"
+          ? "size-4"
+          : size === "lg"
+            ? "size-5"
+            : "size-6";
   const duration = speed === "slow" ? "2s" : speed === "fast" ? "0.6s" : "1s";
 
   return (
@@ -202,8 +333,17 @@ function SquareLoader({ size, color, speed }: { size: LoaderSize; color: LoaderC
   );
 }
 
-function HandsLoader({ size, color, speed }: { size: LoaderSize; color: LoaderColor; speed: LoaderSpeed }) {
-  const iconSize = size === "xs" ? 12 : size === "sm" ? 16 : size === "md" ? 24 : size === "lg" ? 32 : 48;
+function HandsLoader({
+  size,
+  color,
+  speed,
+}: {
+  size: LoaderSize;
+  color: LoaderColor;
+  speed: LoaderSpeed;
+}) {
+  const iconSize =
+    size === "xs" ? 12 : size === "sm" ? 16 : size === "md" ? 24 : size === "lg" ? 32 : 48;
   const duration = speed === "slow" ? "1.5s" : speed === "fast" ? "0.6s" : "1s";
 
   return (
@@ -284,11 +424,7 @@ export function Loader({
         aria-label={label || "Loading"}
       >
         <LoaderComponent size={size} color={color} speed={speed} />
-        {label && (
-          <span className={`${s.text} ${colorMap[color]} mt-2`}>
-            {label}
-          </span>
-        )}
+        {label && <span className={`${s.text} ${colorMap[color]} mt-2`}>{label}</span>}
       </div>
     </>
   );
@@ -330,15 +466,13 @@ export const LoaderPlugin = createPlatePlugin({
 /**
  * Create a Loader element for insertion into editor.
  */
-export function createLoaderElement(
-  options?: {
-    variant?: LoaderVariant;
-    size?: LoaderSize;
-    color?: LoaderColor;
-    label?: string;
-    speed?: LoaderSpeed;
-  }
-): TLoaderElement {
+export function createLoaderElement(options?: {
+  variant?: LoaderVariant;
+  size?: LoaderSize;
+  color?: LoaderColor;
+  label?: string;
+  speed?: LoaderSpeed;
+}): TLoaderElement {
   return {
     type: LOADER_KEY,
     variant: options?.variant,

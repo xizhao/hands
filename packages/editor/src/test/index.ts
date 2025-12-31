@@ -4,4 +4,4 @@
  * Provides test harness for editor plugin and serialization testing.
  */
 
-export { createTestEditor, type CreateTestEditorOptions } from './create-test-editor';
+export { type CreateTestEditorOptions, createTestEditor } from "./create-test-editor";

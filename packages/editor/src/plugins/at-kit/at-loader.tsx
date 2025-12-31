@@ -9,18 +9,13 @@
  * Uses EditorContext for tRPC access.
  */
 
-import {
-  PlateElement,
-  type PlateElementProps,
-  useEditorRef,
-  useReadOnly,
-} from "platejs/react";
 import type { Descendant, TElement } from "platejs";
-import { useEffect, useRef, useCallback } from "react";
+import { PlateElement, type PlateElementProps, useEditorRef, useReadOnly } from "platejs/react";
+import { useCallback, useEffect, useRef } from "react";
 
 import { useEditorApi } from "../../context";
 import { useMarkdownWorker } from "../../hooks/use-markdown-worker";
-import { type TAtLoaderElement, pendingMdxQueries } from "./index";
+import { pendingMdxQueries, type TAtLoaderElement } from "./index";
 
 const MAX_RETRIES = 3;
 
@@ -47,11 +42,8 @@ export function AtLoaderElement(props: PlateElementProps) {
       const currentBlock = await serialize([contextEntry[0] as TElement]);
       const blockIndex = fullDoc.indexOf(currentBlock);
       const prefix =
-        blockIndex >= 0
-          ? fullDoc.slice(0, blockIndex + currentBlock.length)
-          : currentBlock;
-      const suffix =
-        blockIndex >= 0 ? fullDoc.slice(blockIndex + currentBlock.length) : "";
+        blockIndex >= 0 ? fullDoc.slice(0, blockIndex + currentBlock.length) : currentBlock;
+      const suffix = blockIndex >= 0 ? fullDoc.slice(blockIndex + currentBlock.length) : "";
       return { prefix, suffix };
     } catch {
       return { prefix: "", suffix: "" };
@@ -62,10 +54,7 @@ export function AtLoaderElement(props: PlateElementProps) {
     if (readOnly || hasCalledRef.current || !api) return;
     hasCalledRef.current = true;
 
-    const fetchAndSwap = async (
-      errors?: string[],
-      previousGenerations?: string[]
-    ) => {
+    const fetchAndSwap = async (errors?: string[], previousGenerations?: string[]) => {
       // Check for prefetched promise first
       let queryPromise = errors?.length ? null : pendingMdxQueries.get(prompt);
 
@@ -89,15 +78,9 @@ export function AtLoaderElement(props: PlateElementProps) {
         if (result.errors?.length && retryCountRef.current < MAX_RETRIES) {
           retryCountRef.current++;
           errorsRef.current = [...errorsRef.current, ...result.errors];
-          previousGenerationsRef.current = [
-            ...previousGenerationsRef.current,
-            result.mdx,
-          ];
+          previousGenerationsRef.current = [...previousGenerationsRef.current, result.mdx];
           pendingMdxQueries.delete(prompt);
-          await fetchAndSwap(
-            errorsRef.current,
-            previousGenerationsRef.current
-          );
+          await fetchAndSwap(errorsRef.current, previousGenerationsRef.current);
           return;
         }
 
@@ -135,21 +118,15 @@ export function AtLoaderElement(props: PlateElementProps) {
           if (retryCountRef.current < MAX_RETRIES) {
             retryCountRef.current++;
             errorsRef.current = [...errorsRef.current, errorMsg];
-            previousGenerationsRef.current = [
-              ...previousGenerationsRef.current,
-              result.mdx,
-            ];
+            previousGenerationsRef.current = [...previousGenerationsRef.current, result.mdx];
             pendingMdxQueries.delete(prompt);
-            await fetchAndSwap(
-              errorsRef.current,
-              previousGenerationsRef.current
-            );
+            await fetchAndSwap(errorsRef.current, previousGenerationsRef.current);
           } else {
             const path = editor.api.findPath(element);
             if (path) {
               editor.tf.withoutNormalizing(() => {
                 editor.tf.removeNodes({ at: path });
-                editor.tf.insertNodes({ text: result.mdx + " " }, { at: path });
+                editor.tf.insertNodes({ text: `${result.mdx} ` }, { at: path });
               });
             }
           }
@@ -179,9 +156,7 @@ export function AtLoaderElement(props: PlateElementProps) {
       as="span"
       className="inline"
     >
-      <span className="italic text-muted-foreground/50 animate-pulse">
-        {prompt}
-      </span>
+      <span className="italic text-muted-foreground/50 animate-pulse">{prompt}</span>
       {props.children}
     </PlateElement>
   );

@@ -12,25 +12,25 @@
  * - Back navigation
  */
 
-import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { motion, AnimatePresence } from "framer-motion";
+import { AnimatePresence, motion } from "framer-motion";
 import { ChevronLeft, Layers } from "lucide-react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ChatMessage } from "@/components/ChatMessage";
 import { ThinkingIndicator } from "@/components/ui/thinking-indicator";
 import { LinkClickHandler } from "@/hooks/useLinkNavigation";
-import { ChatInput, type ChatInputRef } from "./ChatInput";
-import { ThreadList } from "./ThreadList";
-import { type SessionStatus } from "./StatusDot";
 import {
-  useSessions,
+  useAbortSession,
+  useCreateSession,
+  useDeleteSession,
   useMessages,
   useSendMessage,
   useSessionStatuses,
-  useCreateSession,
-  useDeleteSession,
-  useAbortSession,
+  useSessions,
 } from "@/hooks/useSession";
 import type { Session } from "@/lib/api";
+import { ChatInput, type ChatInputRef } from "./ChatInput";
+import type { SessionStatus } from "./StatusDot";
+import { ThreadList } from "./ThreadList";
 
 export interface ChatPanelProps {
   /** Currently selected session ID */
@@ -132,7 +132,7 @@ export function ChatPanel({
       if (status?.type === "busy" || status?.type === "running") return "busy";
       return null;
     },
-    [sessionStatuses]
+    [sessionStatuses],
   );
 
   const activeStatus = sessionId ? sessionStatuses[sessionId] : null;
@@ -143,7 +143,7 @@ export function ChatPanel({
     if (scrollRef.current) {
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
     }
-  }, [messages]);
+  }, []);
 
   // Message handlers
   const handleSend = useCallback(() => {
@@ -204,7 +204,7 @@ export function ChatPanel({
         onSessionSelect(null);
       }
     },
-    [deleteSessionMutation, sessionId, onSessionSelect]
+    [deleteSessionMutation, sessionId, onSessionSelect],
   );
 
   const handleBack = useCallback(() => {
@@ -289,9 +289,7 @@ export function ChatPanel({
               className="flex items-center gap-1.5 px-2 h-7 text-xs text-muted-foreground hover:text-foreground bg-secondary dark:bg-muted hover:bg-secondary/80 dark:hover:bg-muted/80 rounded-md transition-colors"
             >
               <ChevronLeft className="h-3.5 w-3.5" />
-              <span className="max-w-[120px] truncate">
-                {activeSession?.title || "Thread"}
-              </span>
+              <span className="max-w-[120px] truncate">{activeSession?.title || "Thread"}</span>
             </button>
 
             {/* Background jobs indicator */}

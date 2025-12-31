@@ -8,9 +8,9 @@
  * - Submit/abort buttons
  */
 
-import { motion, AnimatePresence } from "framer-motion";
+import { AnimatePresence, motion } from "framer-motion";
 import { ArrowUp, Loader2, Square } from "lucide-react";
-import { useCallback, useRef, forwardRef, useImperativeHandle } from "react";
+import { forwardRef, useCallback, useImperativeHandle, useRef } from "react";
 import { AttachmentMenu } from "@/components/AttachmentMenu";
 import { useFilePicker } from "@/hooks/useFilePicker";
 
@@ -53,7 +53,7 @@ export const ChatInput = forwardRef<ChatInputRef, ChatInputProps>(function ChatI
     placeholder = "Ask anything...",
     className = "",
   },
-  ref
+  ref,
 ) {
   const inputRef = useRef<HTMLTextAreaElement>(null);
 
@@ -72,7 +72,7 @@ export const ChatInput = forwardRef<ChatInputRef, ChatInputProps>(function ChatI
       const maxHeight = 120; // ~5 lines
       e.target.style.height = `${Math.min(e.target.scrollHeight, maxHeight)}px`;
     },
-    [onChange]
+    [onChange],
   );
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
@@ -84,10 +84,8 @@ export const ChatInput = forwardRef<ChatInputRef, ChatInputProps>(function ChatI
 
   // Attachment handlers
   const { handlePickFile, handlePickFolder, handleSnapshot } = useFilePicker({
-    onFileSelected: (path) =>
-      onPendingFilesChange?.([...pendingFiles, path]),
-    onFolderSelected: (path) =>
-      onPendingFilesChange?.([...pendingFiles, path]),
+    onFileSelected: (path) => onPendingFilesChange?.([...pendingFiles, path]),
+    onFolderSelected: (path) => onPendingFilesChange?.([...pendingFiles, path]),
   });
 
   const handleRemoveFile = (index: number) => {

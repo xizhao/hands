@@ -11,6 +11,7 @@ import type {
   Todo as SdkTodo,
 } from "@opencode-ai/sdk/client";
 import type { QueryClient } from "@tanstack/react-query";
+import { setSessionError } from "@/hooks/useChatState";
 import {
   type MessageWithParts,
   type ServerEvent,
@@ -19,10 +20,10 @@ import {
   subscribeToEvents,
   type Todo,
 } from "@/lib/api";
-import { setSessionError } from "@/hooks/useChatState";
 
 // Set to true for verbose SSE logging (or localStorage.setItem("DEBUG_SSE", "true"))
-const DEBUG_SSE = typeof localStorage !== "undefined" && localStorage.getItem("DEBUG_SSE") === "true";
+const DEBUG_SSE =
+  typeof localStorage !== "undefined" && localStorage.getItem("DEBUG_SSE") === "true";
 const log = DEBUG_SSE ? console.log.bind(console) : () => {};
 
 // Navigation callback - set by the app to handle navigate tool

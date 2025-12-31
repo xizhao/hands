@@ -1,8 +1,8 @@
+import { and, desc, eq, gte, lte, sql } from "drizzle-orm";
 import { z } from "zod";
-import { router, protectedProcedure } from "../../trpc/base";
+import { PLANS, subscriptions } from "../../schema/subscriptions";
 import { usageDaily } from "../../schema/usage";
-import { subscriptions, PLANS } from "../../schema/subscriptions";
-import { eq, and, desc, sql, gte, lte } from "drizzle-orm";
+import { protectedProcedure, router } from "../../trpc/base";
 
 export const usageRouter = router({
   // Get usage summary for current month
@@ -23,8 +23,8 @@ export const usageRouter = router({
         and(
           eq(usageDaily.userId, ctx.user.id),
           gte(usageDaily.date, monthStart.toISOString().split("T")[0]),
-          lte(usageDaily.date, monthEnd.toISOString().split("T")[0])
-        )
+          lte(usageDaily.date, monthEnd.toISOString().split("T")[0]),
+        ),
       )
       .then((rows) => rows[0]);
 
@@ -45,7 +45,7 @@ export const usageRouter = router({
         limit: planConfig.includedTokens,
         percentage: Math.min(
           100,
-          Math.round(((usage?.totalTokens ?? 0) / planConfig.includedTokens) * 100)
+          Math.round(((usage?.totalTokens ?? 0) / planConfig.includedTokens) * 100),
         ),
       },
       requests: usage?.totalRequests ?? 0,
@@ -72,8 +72,8 @@ export const usageRouter = router({
           and(
             eq(usageDaily.userId, ctx.user.id),
             gte(usageDaily.date, startDate.toISOString().split("T")[0]),
-            lte(usageDaily.date, endDate.toISOString().split("T")[0])
-          )
+            lte(usageDaily.date, endDate.toISOString().split("T")[0]),
+          ),
         )
         .orderBy(desc(usageDaily.date));
 
@@ -108,8 +108,8 @@ export const usageRouter = router({
           and(
             eq(usageDaily.userId, ctx.user.id),
             gte(usageDaily.date, startDate.toISOString().split("T")[0]),
-            lte(usageDaily.date, endDate.toISOString().split("T")[0])
-          )
+            lte(usageDaily.date, endDate.toISOString().split("T")[0]),
+          ),
         )
         .groupBy(sql`TO_CHAR(${usageDaily.date}::date, 'YYYY-MM')`)
         .orderBy(desc(sql`TO_CHAR(${usageDaily.date}::date, 'YYYY-MM')`));

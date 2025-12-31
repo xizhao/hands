@@ -22,10 +22,7 @@ export interface EditorConfig {
 export function createEditorPlugins(config: EditorConfig = {}) {
   const { extraPlugins = [] } = config;
 
-  return [
-    ...EditorCorePlugins,
-    ...extraPlugins,
-  ];
+  return [...EditorCorePlugins, ...extraPlugins];
 }
 
 /** Default editor plugins with no extras */

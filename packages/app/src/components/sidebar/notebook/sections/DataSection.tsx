@@ -4,13 +4,7 @@
  * Displays sources with their tables and unassociated tables.
  */
 
-import {
-  ArrowsClockwise,
-  CircleNotch,
-  Code,
-  Key,
-  Warning,
-} from "@phosphor-icons/react";
+import { ArrowsClockwise, CircleNotch, Code, Key, Warning } from "@phosphor-icons/react";
 import { ChevronDown, ChevronRight } from "lucide-react";
 import { useState } from "react";
 import {
@@ -21,14 +15,14 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
-import { SidebarSection, SidebarEmptyState } from "../components/SidebarSection";
-import { listItemStyles, NestedItems } from "../components/SidebarItem";
-import { ItemActions } from "../components/ItemActions";
 import { TablePreviewHoverCard } from "../components/HoverCards";
+import { ItemActions } from "../components/ItemActions";
 import { SheetIcon, SourceIcon, SourceTypeIcon } from "../components/icons";
-import type { SidebarSource } from "../types";
-import type { SidebarState } from "../hooks/useSidebarState";
+import { listItemStyles, NestedItems } from "../components/SidebarItem";
+import { SidebarEmptyState, SidebarSection } from "../components/SidebarSection";
 import type { SidebarActions } from "../hooks/useSidebarActions";
+import type { SidebarState } from "../hooks/useSidebarState";
+import type { SidebarSource } from "../types";
 
 interface DataSectionProps {
   /** Section expanded state */
@@ -132,10 +126,7 @@ export function DataSection({
               return (
                 <div key={source.id}>
                   <div className={listItemStyles}>
-                    <button
-                      onClick={() => sourcesState.toggle(source.id)}
-                      className="shrink-0"
-                    >
+                    <button onClick={() => sourcesState.toggle(source.id)} className="shrink-0">
                       {isSourceExpanded ? (
                         <ChevronDown className="h-3 w-3" />
                       ) : (
@@ -155,10 +146,7 @@ export function DataSection({
                       </span>
                     )}
                     {hasMissingSecrets && (
-                      <Warning
-                        weight="fill"
-                        className="h-3.5 w-3.5 text-amber-500 shrink-0"
-                      />
+                      <Warning weight="fill" className="h-3.5 w-3.5 text-amber-500 shrink-0" />
                     )}
                     <button
                       onClick={(e) => {
@@ -168,8 +156,7 @@ export function DataSection({
                       disabled={isThisSyncing || hasMissingSecrets}
                       className={cn(
                         "p-0.5 rounded opacity-0 group-hover:opacity-100 hover:bg-accent transition-all",
-                        (isThisSyncing || hasMissingSecrets) &&
-                          "opacity-50 cursor-not-allowed",
+                        (isThisSyncing || hasMissingSecrets) && "opacity-50 cursor-not-allowed",
                       )}
                       title={hasMissingSecrets ? "Configure secrets first" : "Sync now"}
                     >

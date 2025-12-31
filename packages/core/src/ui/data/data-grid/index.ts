@@ -5,8 +5,8 @@
  */
 
 export {
-  createDataGridElement,
   type CreateDataGridOptions,
+  createDataGridElement,
   DATA_GRID_KEY,
   DataGrid,
   DataGridPlugin,

@@ -2,9 +2,9 @@
  * Tests for Action Flow Analysis
  */
 
-import { describe, it, expect } from "vitest";
-import { extractActionFlow } from "./walk-run-function";
+import { describe, expect, it } from "vitest";
 import { analyzeSql } from "./analyze-sql";
+import { extractActionFlow } from "./walk-run-function";
 
 describe("extractActionFlow", () => {
   it("extracts action name from defineAction", () => {
@@ -47,7 +47,7 @@ describe("extractActionFlow", () => {
     expect(sqlStep).toBeDefined();
     expect(sqlStep?.sql?.operation).toBe("select");
     expect(sqlStep?.sql?.tables).toContainEqual(
-      expect.objectContaining({ table: "users", usage: "read" })
+      expect.objectContaining({ table: "users", usage: "read" }),
     );
     expect(sqlStep?.sql?.assignedTo).toBe("users");
   });
@@ -70,11 +70,9 @@ describe("extractActionFlow", () => {
     const sqlSteps = flow.steps.filter((s) => s.type === "sql");
     expect(sqlSteps.length).toBe(2);
 
+    expect(flow.tables).toContainEqual(expect.objectContaining({ table: "orders", isRead: true }));
     expect(flow.tables).toContainEqual(
-      expect.objectContaining({ table: "orders", isRead: true })
-    );
-    expect(flow.tables).toContainEqual(
-      expect.objectContaining({ table: "products", isRead: true })
+      expect.objectContaining({ table: "products", isRead: true }),
     );
   });
 
@@ -97,7 +95,7 @@ describe("extractActionFlow", () => {
     const sqlStep = flow.steps.find((s) => s.type === "sql");
     expect(sqlStep?.sql?.operation).toBe("insert");
     expect(sqlStep?.sql?.tables).toContainEqual(
-      expect.objectContaining({ table: "logs", usage: "write" })
+      expect.objectContaining({ table: "logs", usage: "write" }),
     );
   });
 
@@ -142,9 +140,7 @@ describe("extractActionFlow", () => {
     expect(fetchStep?.fetch?.url).toContain("api.example.com");
     expect(fetchStep?.fetch?.assignedTo).toBe("response");
 
-    expect(flow.sources).toContainEqual(
-      expect.objectContaining({ type: "api", name: "Api" })
-    );
+    expect(flow.sources).toContainEqual(expect.objectContaining({ type: "api", name: "Api" }));
   });
 
   it("extracts schedule trigger", () => {
@@ -162,7 +158,7 @@ describe("extractActionFlow", () => {
 
     const flow = extractActionFlow(source);
     expect(flow.sources).toContainEqual(
-      expect.objectContaining({ type: "schedule", name: "0 * * * *" })
+      expect.objectContaining({ type: "schedule", name: "0 * * * *" }),
     );
   });
 
@@ -264,7 +260,7 @@ describe("analyzeSql", () => {
     const result = analyzeSql("SELECT id, name FROM users WHERE active = true");
     expect(result.operation).toBe("select");
     expect(result.tables).toContainEqual(
-      expect.objectContaining({ table: "users", usage: "read" })
+      expect.objectContaining({ table: "users", usage: "read" }),
     );
   });
 
@@ -275,19 +271,15 @@ describe("analyzeSql", () => {
       JOIN users u ON o.user_id = u.id
     `);
     expect(result.operation).toBe("select");
-    expect(result.tables).toContainEqual(
-      expect.objectContaining({ table: "orders" })
-    );
-    expect(result.tables).toContainEqual(
-      expect.objectContaining({ table: "users" })
-    );
+    expect(result.tables).toContainEqual(expect.objectContaining({ table: "orders" }));
+    expect(result.tables).toContainEqual(expect.objectContaining({ table: "users" }));
   });
 
   it("parses INSERT", () => {
     const result = analyzeSql("INSERT INTO logs (message) VALUES ('test')");
     expect(result.operation).toBe("insert");
     expect(result.tables).toContainEqual(
-      expect.objectContaining({ table: "logs", usage: "write" })
+      expect.objectContaining({ table: "logs", usage: "write" }),
     );
   });
 
@@ -295,7 +287,7 @@ describe("analyzeSql", () => {
     const result = analyzeSql("UPDATE users SET name = 'test' WHERE id = 1");
     expect(result.operation).toBe("update");
     expect(result.tables).toContainEqual(
-      expect.objectContaining({ table: "users", usage: "write" })
+      expect.objectContaining({ table: "users", usage: "write" }),
     );
   });
 
@@ -303,7 +295,7 @@ describe("analyzeSql", () => {
     const result = analyzeSql("DELETE FROM old_records WHERE created_at < '2020-01-01'");
     expect(result.operation).toBe("delete");
     expect(result.tables).toContainEqual(
-      expect.objectContaining({ table: "old_records", usage: "write" })
+      expect.objectContaining({ table: "old_records", usage: "write" }),
     );
   });
 
@@ -334,10 +326,10 @@ describe("analyzeSql", () => {
     `);
     expect(result.operation).toBe("insert");
     expect(result.tables).toContainEqual(
-      expect.objectContaining({ table: "archive", usage: "write" })
+      expect.objectContaining({ table: "archive", usage: "write" }),
     );
     expect(result.tables).toContainEqual(
-      expect.objectContaining({ table: "orders", usage: "read" })
+      expect.objectContaining({ table: "orders", usage: "read" }),
     );
   });
 
@@ -346,18 +338,12 @@ describe("analyzeSql", () => {
       SELECT * FROM orders
       WHERE user_id IN (SELECT id FROM users WHERE premium = true)
     `);
-    expect(result.tables).toContainEqual(
-      expect.objectContaining({ table: "orders" })
-    );
-    expect(result.tables).toContainEqual(
-      expect.objectContaining({ table: "users" })
-    );
+    expect(result.tables).toContainEqual(expect.objectContaining({ table: "orders" }));
+    expect(result.tables).toContainEqual(expect.objectContaining({ table: "users" }));
   });
 
   it("falls back to regex for invalid SQL", () => {
     const result = analyzeSql("SELECT * FROM users WHERE id = ${userId}");
-    expect(result.tables).toContainEqual(
-      expect.objectContaining({ table: "users" })
-    );
+    expect(result.tables).toContainEqual(expect.objectContaining({ table: "users" }));
   });
 });

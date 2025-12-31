@@ -38,7 +38,7 @@ export function mountCollab(pageId: string, pageMetadata?: PageMetadata) {
   root.render(
     <CollabProvider pageId={pageId} pageMetadata={pageMetadata}>
       <CollabWidget />
-    </CollabProvider>
+    </CollabProvider>,
   );
 
   return root;

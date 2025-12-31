@@ -9,7 +9,7 @@
  * - pages/blocks/*.mdx → Blocks (embeddable fragments, shown in BlocksPanel)
  */
 
-import { existsSync, readdirSync, statSync, mkdirSync } from "node:fs";
+import { existsSync, mkdirSync, readdirSync, statSync } from "node:fs";
 import { join } from "node:path";
 
 /** Subdirectory containing reusable blocks */

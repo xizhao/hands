@@ -1,44 +1,36 @@
-import { AIChatPlugin } from '@platejs/ai/react';
-import { BlockSelectionPlugin } from '@platejs/selection/react';
 import {
-  Waveform,
   Calendar,
   CaretDown,
   Code,
   FileArrowUp,
   FilmStrip,
-  TextHOne,
-  TextHTwo,
-  TextHThree,
+  type IconProps,
   Image,
   Lightbulb,
   List,
+  ListBullets,
   ListNumbers,
-  type IconProps,
   Paragraph,
   Quotes,
   Rectangle,
   Square,
   Table,
-  ListBullets,
-} from '@phosphor-icons/react';
-import { KEYS } from 'platejs';
-import type { PlateEditor } from 'platejs/react';
-import * as React from 'react';
+  TextHOne,
+  TextHThree,
+  TextHTwo,
+  Waveform,
+} from "@phosphor-icons/react";
+import { AIChatPlugin } from "@platejs/ai/react";
+import { BlockSelectionPlugin } from "@platejs/selection/react";
+import { KEYS } from "platejs";
+import type { PlateEditor } from "platejs/react";
+import type * as React from "react";
 
-import {
-  insertBlock,
-  insertInlineElement,
-  setBlockType,
-} from '../transforms';
-import { blockMenuItems } from './block-menu';
+import { insertBlock, insertInlineElement, setBlockType } from "../transforms";
+import { blockMenuItems } from "./block-menu";
 
-import {
-  backgroundColorItems,
-  ColorIcon,
-  textColorItems,
-} from './font-color-toolbar-button';
-import { turnIntoItems } from './turn-into-toolbar-button';
+import { backgroundColorItems, ColorIcon, textColorItems } from "./font-color-toolbar-button";
+import { turnIntoItems } from "./turn-into-toolbar-button";
 
 export type Group = {
   group: string;
@@ -77,14 +69,14 @@ export function AIIcon(props: IconProps) {
 
 export const groups: Group[] = [
   {
-    group: 'AI',
+    group: "AI",
     items: [
       {
-        description: 'Use AI to generate content.',
+        description: "Use AI to generate content.",
         focusEditor: false,
         icon: <AIIcon />,
-        keywords: ['ai', 'generate', 'help', 'chat'],
-        value: 'AI',
+        keywords: ["ai", "generate", "help", "chat"],
+        value: "AI",
         onSelect: (editor) => {
           editor.getApi(AIChatPlugin).aiChat.show();
         },
@@ -92,89 +84,89 @@ export const groups: Group[] = [
     ],
   },
   {
-    group: 'Basic blocks',
+    group: "Basic blocks",
     items: [
       {
-        description: 'Plain text.',
+        description: "Plain text.",
         icon: <Paragraph />,
-        keywords: ['paragraph'],
-        label: 'Text',
+        keywords: ["paragraph"],
+        label: "Text",
         value: KEYS.p,
       },
       {
-        description: 'Large section heading.',
+        description: "Large section heading.",
         icon: <TextHOne />,
-        keywords: ['title', 'h1'],
-        label: 'Heading 1',
+        keywords: ["title", "h1"],
+        label: "Heading 1",
         value: KEYS.h1,
       },
       {
-        description: 'Medium section heading.',
+        description: "Medium section heading.",
         icon: <TextHTwo />,
-        keywords: ['subtitle', 'h2'],
-        label: 'Heading 2',
+        keywords: ["subtitle", "h2"],
+        label: "Heading 2",
         value: KEYS.h2,
       },
       {
-        description: 'Small section heading.',
+        description: "Small section heading.",
         icon: <TextHThree />,
-        keywords: ['subtitle', 'h3'],
-        label: 'Heading 3',
+        keywords: ["subtitle", "h3"],
+        label: "Heading 3",
         value: KEYS.h3,
       },
       {
-        description: 'Create a bulleted list.',
+        description: "Create a bulleted list.",
         icon: <List />,
-        keywords: ['unordered', 'ul', '-'],
-        label: 'Bulleted list',
+        keywords: ["unordered", "ul", "-"],
+        label: "Bulleted list",
         value: KEYS.ul,
       },
       {
-        description: 'Create a numbered list.',
+        description: "Create a numbered list.",
         icon: <ListNumbers />,
-        keywords: ['ordered', 'ol', '1'],
-        label: 'Numbered list',
+        keywords: ["ordered", "ol", "1"],
+        label: "Numbered list",
         value: KEYS.ol,
       },
       {
-        description: 'Insert a checklist for tasks.',
+        description: "Insert a checklist for tasks.",
         icon: <Square />,
-        keywords: ['checklist', 'task', 'checkbox', '[]'],
-        label: 'To-do list',
+        keywords: ["checklist", "task", "checkbox", "[]"],
+        label: "To-do list",
         value: KEYS.listTodo,
       },
       {
-        description: 'Insert a collapsible section.',
+        description: "Insert a collapsible section.",
         icon: <CaretDown />,
-        keywords: ['collapsible', 'expandable'],
-        label: 'Toggle',
+        keywords: ["collapsible", "expandable"],
+        label: "Toggle",
         value: KEYS.toggle,
       },
       {
-        description: 'Insert a block for code.',
+        description: "Insert a block for code.",
         icon: <Code />,
-        keywords: ['```'],
-        label: 'Code Block',
+        keywords: ["```"],
+        label: "Code Block",
         value: KEYS.codeBlock,
       },
       {
-        description: 'Create a table for data.',
+        description: "Create a table for data.",
         icon: <Table />,
-        label: 'Table',
+        label: "Table",
         value: KEYS.table,
       },
       {
-        description: 'Insert a quote for emphasis.',
+        description: "Insert a quote for emphasis.",
         icon: <Quotes />,
-        keywords: ['citation', 'blockquote', 'quote', '>'],
-        label: 'Blockquote',
+        keywords: ["citation", "blockquote", "quote", ">"],
+        label: "Blockquote",
         value: KEYS.blockquote,
       },
       {
-        description: 'Insert a highlighted block.',
+        description: "Insert a highlighted block.",
         icon: <Lightbulb />,
-        keywords: ['note'],
-        label: 'Callout',
+        keywords: ["note"],
+        label: "Callout",
         value: KEYS.callout,
       },
     ].map((item) => ({
@@ -185,34 +177,34 @@ export const groups: Group[] = [
     })),
   },
   {
-    group: 'Media',
+    group: "Media",
     items: [
       {
-        description: 'Upload or embed an image.',
+        description: "Upload or embed an image.",
         icon: <Image />,
-        keywords: ['media', 'img', 'picture', 'photo'],
-        label: 'Image',
+        keywords: ["media", "img", "picture", "photo"],
+        label: "Image",
         value: KEYS.img,
       },
       {
-        description: 'Upload or embed a video.',
+        description: "Upload or embed a video.",
         icon: <FilmStrip />,
-        keywords: ['media', 'video', 'movie'],
-        label: 'Video',
+        keywords: ["media", "video", "movie"],
+        label: "Video",
         value: KEYS.video,
       },
       {
-        description: 'Upload or embed audio.',
+        description: "Upload or embed audio.",
         icon: <Waveform />,
-        keywords: ['media', 'audio', 'sound'],
-        label: 'Audio',
+        keywords: ["media", "audio", "sound"],
+        label: "Audio",
         value: KEYS.audio,
       },
       {
-        description: 'Upload or link any file type.',
+        description: "Upload or link any file type.",
         icon: <FileArrowUp />,
-        keywords: ['media', 'file', 'document', 'attachment'],
-        label: 'File',
+        keywords: ["media", "file", "document", "attachment"],
+        label: "File",
         value: KEYS.file,
       },
     ].map((item) => ({
@@ -224,20 +216,20 @@ export const groups: Group[] = [
     })),
   },
   {
-    group: 'Advanced blocks',
+    group: "Advanced blocks",
     items: [
       {
-        description: 'Generate a table of contents.',
+        description: "Generate a table of contents.",
         icon: <ListBullets />,
-        keywords: ['toc'],
-        label: 'Table of content',
+        keywords: ["toc"],
+        label: "Table of content",
         value: KEYS.toc,
       },
       {
-        description: 'Create 3 columns of blocks.',
+        description: "Create 3 columns of blocks.",
         icon: <Rectangle />,
-        label: '3 columns',
-        value: 'action_three_columns',
+        label: "3 columns",
+        value: "action_three_columns",
       },
     ].map((item) => ({
       ...item,
@@ -247,14 +239,14 @@ export const groups: Group[] = [
     })),
   },
   {
-    group: 'Inline',
+    group: "Inline",
     items: [
       {
-        description: 'Insert current or custom date.',
+        description: "Insert current or custom date.",
         focusEditor: true,
         icon: <Calendar />,
-        keywords: ['time'],
-        label: 'Date',
+        keywords: ["time"],
+        label: "Date",
         value: KEYS.date,
       },
     ].map((item) => ({
@@ -265,7 +257,7 @@ export const groups: Group[] = [
     })),
   },
   {
-    group: 'Turn into',
+    group: "Turn into",
     items: turnIntoItems.map((item) => ({
       ...item,
       onSelect: (editor) => {
@@ -274,7 +266,7 @@ export const groups: Group[] = [
     })),
   },
   {
-    group: 'Actions',
+    group: "Actions",
     items: [
       {
         ...blockMenuItems.delete,
@@ -291,28 +283,22 @@ export const groups: Group[] = [
     ],
   },
   {
-    group: 'Text color',
+    group: "Text color",
     items: textColorItems.map((item) => ({
       ...item,
       icon: <ColorIcon group="color" value={item.value} />,
       onSelect: (editor) => {
-        editor.tf.setNodes(
-          { color: item.value },
-          { at: editor.api.block()![1], mode: 'lowest' }
-        );
+        editor.tf.setNodes({ color: item.value }, { at: editor.api.block()?.[1], mode: "lowest" });
       },
     })),
   },
   {
-    group: 'Background color',
+    group: "Background color",
     items: backgroundColorItems.map((item) => ({
       ...item,
       icon: <ColorIcon group="background" value={item.value} />,
       onSelect: (editor) => {
-        editor.tf.setNodes(
-          { backgroundColor: item.value },
-          { at: editor.api.block()![1] }
-        );
+        editor.tf.setNodes({ backgroundColor: item.value }, { at: editor.api.block()?.[1] });
       },
     })),
   },

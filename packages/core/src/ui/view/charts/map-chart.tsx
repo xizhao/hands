@@ -10,11 +10,7 @@
 import { createPlatePlugin, PlateElement, type PlateElementProps, useElement } from "platejs/react";
 import { memo } from "react";
 
-import {
-  MAP_CHART_KEY,
-  type TMapChartElement,
-  type VegaLiteSpec,
-} from "../../../types";
+import { MAP_CHART_KEY, type TMapChartElement, type VegaLiteSpec } from "../../../types";
 import { VegaChart } from "./vega-chart";
 
 // ============================================================================
@@ -74,7 +70,8 @@ function buildChoroplethSpec(props: MapChartProps): VegaLiteSpec {
   } = props;
 
   const topoUrl = BUILT_IN_TOPOLOGIES[topology] ?? topology;
-  const featureName = topology === "us-counties" ? "counties" : topology === "us-states" ? "states" : "countries";
+  const featureName =
+    topology === "us-counties" ? "counties" : topology === "us-states" ? "states" : "countries";
 
   return {
     projection: { type: projection },
@@ -111,12 +108,13 @@ function buildChoroplethSpec(props: MapChartProps): VegaLiteSpec {
             type: "quantitative",
             scale: { scheme: colorScheme },
           },
-          tooltip: props.showTooltip !== false
-            ? [
-                { field: geoKey, type: "nominal", title: "Region" },
-                { field: valueKey, type: "quantitative" },
-              ]
-            : undefined,
+          tooltip:
+            props.showTooltip !== false
+              ? [
+                  { field: geoKey, type: "nominal", title: "Region" },
+                  { field: valueKey, type: "quantitative" },
+                ]
+              : undefined,
         },
       },
     ],
@@ -137,7 +135,8 @@ function buildPointMapSpec(props: MapChartProps): VegaLiteSpec {
   } = props;
 
   const topoUrl = BUILT_IN_TOPOLOGIES[topology] ?? topology;
-  const featureName = topology === "us-counties" ? "counties" : topology === "us-states" ? "states" : "countries";
+  const featureName =
+    topology === "us-counties" ? "counties" : topology === "us-states" ? "states" : "countries";
 
   return {
     projection: { type: projection },
@@ -160,13 +159,14 @@ function buildPointMapSpec(props: MapChartProps): VegaLiteSpec {
           color: valueKey
             ? { field: valueKey, type: "quantitative", scale: { scheme: colorScheme } }
             : { value: "#4c78a8" },
-          tooltip: props.showTooltip !== false
-            ? [
-                { field: latKey, type: "quantitative", title: "Lat" },
-                { field: lonKey, type: "quantitative", title: "Lon" },
-                ...(valueKey ? [{ field: valueKey, type: "quantitative" }] : []),
-              ]
-            : undefined,
+          tooltip:
+            props.showTooltip !== false
+              ? [
+                  { field: latKey, type: "quantitative", title: "Lat" },
+                  { field: lonKey, type: "quantitative", title: "Lon" },
+                  ...(valueKey ? [{ field: valueKey, type: "quantitative" }] : []),
+                ]
+              : undefined,
         },
       },
     ],
@@ -225,7 +225,7 @@ export const MapChartPlugin = createPlatePlugin({
 });
 
 export function createMapChartElement(
-  options: Partial<Omit<TMapChartElement, "type" | "children">> = {}
+  options: Partial<Omit<TMapChartElement, "type" | "children">> = {},
 ): TMapChartElement {
   return {
     type: MAP_CHART_KEY,

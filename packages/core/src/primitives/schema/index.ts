@@ -5,14 +5,14 @@
  */
 
 export type {
+  ActionSchema,
   ColumnType,
+  DbColumn,
+  DbSchema,
+  DbTable,
   SchemaColumn,
   SchemaTable,
-  ActionSchema,
-  DbColumn,
-  DbTable,
-  DbSchema,
   SchemaValidationResult,
 } from "./types.js";
 
-export { validateSchema, assertSchemaValid } from "./validate.js";
+export { assertSchemaValid, validateSchema } from "./validate.js";

@@ -1,5 +1,5 @@
 import { SESClient, SendEmailCommand } from "@aws-sdk/client-ses";
-import type { EmailEnv, SendEmailOptions, EmailResult } from "./types";
+import type { EmailEnv, EmailResult, SendEmailOptions } from "./types";
 
 export function createSESClient(env: EmailEnv): SESClient {
   return new SESClient({
@@ -14,7 +14,7 @@ export function createSESClient(env: EmailEnv): SESClient {
 export async function sendEmail(
   client: SESClient,
   from: string,
-  options: SendEmailOptions
+  options: SendEmailOptions,
 ): Promise<EmailResult> {
   const toAddresses = Array.isArray(options.to) ? options.to : [options.to];
 
@@ -71,7 +71,7 @@ export function createEmailSender(env: EmailEnv) {
     sendTemplate: async <T extends keyof typeof import("./templates").templates>(
       template: T,
       to: string,
-      data: Parameters<(typeof import("./templates").templates)[T]>[0]
+      data: Parameters<typeof import("./templates").templates[T]>[0],
     ) => {
       const { templates } = await import("./templates");
       const templateFn = templates[template] as (data: unknown) => {

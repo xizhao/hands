@@ -23,7 +23,10 @@ function parseEnvFile(content: string): Map<string, string> {
     if (eqIndex === -1) continue;
     const key = trimmed.slice(0, eqIndex).trim();
     let value = trimmed.slice(eqIndex + 1).trim();
-    if ((value.startsWith('"') && value.endsWith('"')) || (value.startsWith("'") && value.endsWith("'"))) {
+    if (
+      (value.startsWith('"') && value.endsWith('"')) ||
+      (value.startsWith("'") && value.endsWith("'"))
+    ) {
       value = value.slice(1, -1);
     }
     if (key) env.set(key, value);
@@ -70,8 +73,13 @@ Use this tool when you need API keys, tokens, or other credentials to connect to
 - You will NEVER see secret values - only whether they exist or not`,
 
   args: {
-    action: tool.schema.enum(["check", "request"]).describe("Action: check if secrets exist, or request from user"),
-    keys: tool.schema.array(tool.schema.string()).optional().describe("Secret keys to check or request (e.g., ['GITHUB_TOKEN'])"),
+    action: tool.schema
+      .enum(["check", "request"])
+      .describe("Action: check if secrets exist, or request from user"),
+    keys: tool.schema
+      .array(tool.schema.string())
+      .optional()
+      .describe("Secret keys to check or request (e.g., ['GITHUB_TOKEN'])"),
   },
 
   async execute(args, _ctx) {

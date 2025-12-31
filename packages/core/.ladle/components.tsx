@@ -6,9 +6,7 @@ export const Provider: GlobalProvider = ({ children, globalState }) => {
   return (
     <div className={globalState.theme === "dark" ? "dark" : ""}>
       <div className="bg-background text-foreground min-h-screen p-4">
-        <TooltipProvider>
-          {children}
-        </TooltipProvider>
+        <TooltipProvider>{children}</TooltipProvider>
       </div>
     </div>
   );

@@ -44,7 +44,7 @@ function hashContent(content: string): string {
   let hash = 0;
   for (let i = 0; i < content.length; i++) {
     const char = content.charCodeAt(i);
-    hash = ((hash << 5) - hash) + char;
+    hash = (hash << 5) - hash + char;
     hash = hash & hash;
   }
   return hash.toString(36);
@@ -84,7 +84,7 @@ export function useHint(content: string, options: UseHintOptions = {}): HintStat
   // Fetch hint
   useEffect(() => {
     if (!enabled || !content || !trpc) {
-      setState(prev => ({ ...prev, isLoading: false }));
+      setState((prev) => ({ ...prev, isLoading: false }));
       return;
     }
 
@@ -99,28 +99,31 @@ export function useHint(content: string, options: UseHintOptions = {}): HintStat
     // Check for pending request (deduplication)
     const pending = pendingRequests.get(cacheKey);
     if (pending) {
-      pending.then(hint => {
-        if (mountedRef.current) {
-          setState({ hint, isLoading: false, error: null });
-        }
-      }).catch(err => {
-        if (mountedRef.current) {
-          setState({ hint: null, isLoading: false, error: err.message });
-        }
-      });
+      pending
+        .then((hint) => {
+          if (mountedRef.current) {
+            setState({ hint, isLoading: false, error: null });
+          }
+        })
+        .catch((err) => {
+          if (mountedRef.current) {
+            setState({ hint: null, isLoading: false, error: err.message });
+          }
+        });
       return;
     }
 
     // Start new request
-    setState(prev => ({ ...prev, isLoading: true }));
+    setState((prev) => ({ ...prev, isLoading: true }));
 
-    const request = trpc.ai.generateHint.mutate({ content, context })
-      .then(result => {
+    const request = trpc.ai.generateHint
+      .mutate({ content, context })
+      .then((result) => {
         hintCache.set(cacheKey, result.hint);
         pendingRequests.delete(cacheKey);
         return result.hint;
       })
-      .catch(err => {
+      .catch((err) => {
         pendingRequests.delete(cacheKey);
         throw err;
       });
@@ -128,12 +131,12 @@ export function useHint(content: string, options: UseHintOptions = {}): HintStat
     pendingRequests.set(cacheKey, request);
 
     request
-      .then(hint => {
+      .then((hint) => {
         if (mountedRef.current) {
           setState({ hint, isLoading: false, error: null });
         }
       })
-      .catch(err => {
+      .catch((err) => {
         if (mountedRef.current) {
           setState({ hint: null, isLoading: false, error: err.message });
         }
@@ -149,7 +152,7 @@ export function useHint(content: string, options: UseHintOptions = {}): HintStat
  */
 export function usePrefetchHints(
   contents: string[],
-  options: { context?: { tables?: string[]; operation?: string } } = {}
+  options: { context?: { tables?: string[]; operation?: string } } = {},
 ) {
   const trpc = useEditorTrpc();
   const [hintsMap, setHintsMap] = useState<Map<string, string>>(new Map());
@@ -160,7 +163,7 @@ export function usePrefetchHints(
     if (!trpc || contents.length === 0) return;
 
     // Filter to uncached items
-    const uncached = contents.filter(c => {
+    const uncached = contents.filter((c) => {
       const key = hashContent(c);
       return !hintCache.has(key);
     });
@@ -179,13 +182,14 @@ export function usePrefetchHints(
 
     setIsLoading(true);
 
-    const items = uncached.map(content => ({
+    const items = uncached.map((content) => ({
       content,
       context: options.context,
     }));
 
-    trpc.ai.generateHintsBatch.mutate({ items })
-      .then(result => {
+    trpc.ai.generateHintsBatch
+      .mutate({ items })
+      .then((result) => {
         const map = new Map<string, string>();
 
         // Add cached items
@@ -208,11 +212,14 @@ export function usePrefetchHints(
       .catch(() => {
         setIsLoading(false);
       });
-  }, [contents.join(","), trpc, options.context]);
+  }, [trpc, options.context, contents]);
 
-  const getHint = useCallback((content: string): string | undefined => {
-    return hintsMap.get(content) ?? hintCache.get(hashContent(content));
-  }, [hintsMap]);
+  const getHint = useCallback(
+    (content: string): string | undefined => {
+      return hintsMap.get(content) ?? hintCache.get(hashContent(content));
+    },
+    [hintsMap],
+  );
 
   return { getHint, isLoading, hintsMap };
 }

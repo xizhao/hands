@@ -1,6 +1,6 @@
-import React from 'react';
-import { toast } from 'sonner';
-import { z } from 'zod';
+import React from "react";
+import { toast } from "sonner";
+import { z } from "zod";
 
 export interface UploadedFile {
   key: string;
@@ -41,13 +41,13 @@ export function useUploadFile({
 
     try {
       const formData = new FormData();
-      formData.append('file', file);
+      formData.append("file", file);
 
       // Use XMLHttpRequest for progress tracking
       const result = await new Promise<UploadedFile>((resolve, reject) => {
         const xhr = new XMLHttpRequest();
 
-        xhr.upload.addEventListener('progress', (event) => {
+        xhr.upload.addEventListener("progress", (event) => {
           if (event.lengthComputable) {
             const percentComplete = Math.round((event.loaded / event.total) * 100);
             setProgress(percentComplete);
@@ -55,7 +55,7 @@ export function useUploadFile({
           }
         });
 
-        xhr.addEventListener('load', () => {
+        xhr.addEventListener("load", () => {
           if (xhr.status >= 200 && xhr.status < 300) {
             try {
               const response = JSON.parse(xhr.responseText);
@@ -68,28 +68,28 @@ export function useUploadFile({
               };
               resolve(uploaded);
             } catch {
-              reject(new Error('Invalid response from server'));
+              reject(new Error("Invalid response from server"));
             }
           } else {
             try {
               const error = JSON.parse(xhr.responseText);
-              reject(new Error(error.error || 'Upload failed'));
+              reject(new Error(error.error || "Upload failed"));
             } catch {
               reject(new Error(`Upload failed with status ${xhr.status}`));
             }
           }
         });
 
-        xhr.addEventListener('error', () => {
-          reject(new Error('Network error during upload'));
+        xhr.addEventListener("error", () => {
+          reject(new Error("Network error during upload"));
         });
 
-        xhr.addEventListener('abort', () => {
-          reject(new Error('Upload aborted'));
+        xhr.addEventListener("abort", () => {
+          reject(new Error("Upload aborted"));
         });
 
         // Post to runtime's upload endpoint
-        xhr.open('POST', '/upload');
+        xhr.open("POST", "/upload");
         xhr.send(formData);
       });
 
@@ -119,11 +119,11 @@ export function useUploadFile({
 }
 
 export function getErrorMessage(err: unknown) {
-  const unknownError = 'Something went wrong, please try again later.';
+  const unknownError = "Something went wrong, please try again later.";
 
   if (err instanceof z.ZodError) {
     const errors = err.issues.map((issue) => issue.message);
-    return errors.join('\n');
+    return errors.join("\n");
   }
   if (err instanceof Error) {
     return err.message;

@@ -1,9 +1,7 @@
-import type { TAudioElement } from 'platejs';
-import { SlateElement, type SlateElementProps } from 'platejs/static';
+import type { TAudioElement } from "platejs";
+import { SlateElement, type SlateElementProps } from "platejs/static";
 
-export function MediaAudioElementStatic(
-  props: SlateElementProps<TAudioElement>
-) {
+export function MediaAudioElementStatic(props: SlateElementProps<TAudioElement>) {
   const { url } = props.element;
 
   return (
