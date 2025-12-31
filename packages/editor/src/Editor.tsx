@@ -255,6 +255,8 @@ export const Editor = forwardRef<EditorHandle, EditorProps>(function Editor(
   // Track sync state
   const isExternalUpdateRef = useRef(false);
   const lastValueRef = useRef<string | null>(null);
+  // Track whether initial value has been loaded - don't emit onChange until then
+  const hasInitializedRef = useRef(false);
 
   // Ref for keyboard navigation from editor to frontmatter
   const subtitleRef = useRef<HTMLDivElement>(null);
@@ -445,6 +447,7 @@ export const Editor = forwardRef<EditorHandle, EditorProps>(function Editor(
         : [{ type: "p", children: [{ text: "" }] }];
       editor.tf.setValue(newValue);
       lastValueRef.current = value;
+      hasInitializedRef.current = true; // Mark as initialized
       setTimeout(() => {
         isExternalUpdateRef.current = false;
       }, 0);
@@ -465,6 +468,7 @@ export const Editor = forwardRef<EditorHandle, EditorProps>(function Editor(
           : [{ type: "p", children: [{ text: "" }] }];
         editor.tf.setValue(newValue);
         lastValueRef.current = value;
+        hasInitializedRef.current = true; // Mark as initialized
       })
       .catch((err) => {
         console.error("[Editor] Failed to deserialize:", err);
@@ -482,6 +486,10 @@ export const Editor = forwardRef<EditorHandle, EditorProps>(function Editor(
     ({ value: plateValue }: { value: TElement[] }) => {
       if (readOnly || isExternalUpdateRef.current) return;
       if (!onChange) return;
+
+      // Don't emit changes until we've loaded initial content
+      // This prevents HMR from serializing empty editor state before real content loads
+      if (!hasInitializedRef.current) return;
 
       // Queue async serialization in web worker (debounced)
       queueSerialize(plateValue);

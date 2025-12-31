@@ -196,7 +196,6 @@ export function TocSidebar({
           className={cn(
             popoverVariants(),
             'max-h-80 w-[200px] overflow-auto rounded-lg p-1.5 shadow-lg',
-            position === 'right' && '-translate-x-[calc(100%-32px)]',
           )}
         >
           {headingList.slice(0, maxShowCount).map((item, index) => {
