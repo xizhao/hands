@@ -78,10 +78,6 @@ export default defineConfig({
         // Ensure consistent resolution in worker
         mainFields: ["module", "main", "browser"],
         dedupe: ["is-hotkey", "slate", "slate-dom", "slate-react"],
-        // Worker environment needs explicit aliases (doesn't inherit from root)
-        alias: {
-          "@hands/actions/workflows": path.join(workbookPath, ".hands/actions/workflows.ts"),
-        },
       },
     },
   },

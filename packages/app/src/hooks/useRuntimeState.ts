@@ -132,8 +132,13 @@ export function useRuntimeState(): RuntimeState {
   const runtimeQuery = useQuery({
     queryKey: ["active-runtime"],
     queryFn: () => platform.runtime.getStatus(),
-    staleTime: Infinity, // Only updates via mutations
+    staleTime: 0, // Always check for updates
     refetchOnWindowFocus: false,
+    // Poll every 500ms until we have a port, then stop polling
+    refetchInterval: (query) => {
+      const port = query.state.data?.runtime_port;
+      return port ? false : 500;
+    },
   });
 
   const port = runtimeQuery.data?.runtime_port ?? null;
@@ -306,8 +311,13 @@ export function useRuntimeProcess() {
   const runtimeQuery = useQuery({
     queryKey: ["active-runtime"],
     queryFn: () => platform.runtime.getStatus(),
-    staleTime: Infinity,
+    staleTime: 0, // Always check for updates
     refetchOnWindowFocus: false,
+    // Poll every 500ms until we have a port, then stop polling
+    refetchInterval: (query) => {
+      const port = query.state.data?.runtime_port;
+      return port ? false : 500;
+    },
   });
 
   return {

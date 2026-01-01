@@ -90,6 +90,29 @@ async function buildSidecar(sidecar: Sidecar, targetTriple: string): Promise<voi
   }
 }
 
+async function copyBun(targetTriple: string): Promise<void> {
+  console.log("Copying bun binary...");
+
+  // Get the path to the currently running bun
+  const bunPath = process.execPath;
+  console.log(`  Source: ${bunPath}`);
+
+  const outputName = `bun-${targetTriple}`;
+  const outputPath = join(BINARIES_DIR, outputName);
+  console.log(`  Output: ${outputPath}`);
+
+  // Copy the binary
+  copyFileSync(bunPath, outputPath);
+
+  // Ad-hoc sign on macOS (required for Gatekeeper)
+  if (process.platform === "darwin") {
+    await $`codesign --force --sign - ${outputPath}`;
+    console.log(`  ✓ Copied and signed ${outputName}`);
+  } else {
+    console.log(`  ✓ Copied ${outputName}`);
+  }
+}
+
 async function copyOpencode(targetTriple: string): Promise<void> {
   console.log("Copying opencode binary...");
 
@@ -136,9 +159,101 @@ async function copyOpencode(targetTriple: string): Promise<void> {
 }
 
 /**
- * Copy nodejs-polars native modules for the polars tool
+ * Copy tailwind native modules (lightningcss, @tailwindcss/oxide) for the builder
  * These are needed at runtime since native addons can't be bundled
  */
+async function copyTailwindNativeModules(): Promise<void> {
+  console.log("Copying tailwind native modules...");
+
+  const libDir = join(BINARIES_DIR, "lib", "node_modules");
+
+  // Find native modules in bun's node_modules structure
+  const bunModules = join(ROOT, "node_modules/.bun");
+
+  // Platform-specific package names
+  const arch = process.arch === "arm64" ? "arm64" : "x64";
+  const platform = process.platform;
+  let lightningPkgName: string;
+  let oxidePkgName: string;
+
+  if (platform === "darwin") {
+    lightningPkgName = `lightningcss-darwin-${arch}`;
+    oxidePkgName = `@tailwindcss/oxide-darwin-${arch}`;
+  } else if (platform === "win32") {
+    lightningPkgName = `lightningcss-win32-${arch}-msvc`;
+    oxidePkgName = `@tailwindcss/oxide-win32-${arch}-msvc`;
+  } else {
+    lightningPkgName = `lightningcss-linux-${arch}-gnu`;
+    oxidePkgName = `@tailwindcss/oxide-linux-${arch}-gnu`;
+  }
+
+  // Copy lightningcss main package
+  const lightningMainDir = join(bunModules, "lightningcss@1.30.2/node_modules/lightningcss");
+  if (existsSync(lightningMainDir)) {
+    cpSync(lightningMainDir, join(libDir, "lightningcss"), { recursive: true });
+    console.log("  ✓ Copied lightningcss");
+  }
+
+  // Copy lightningcss native binary
+  const lightningNativeDir = join(bunModules, `${lightningPkgName}@1.30.2/node_modules/${lightningPkgName}`);
+  if (existsSync(lightningNativeDir)) {
+    cpSync(lightningNativeDir, join(libDir, lightningPkgName), { recursive: true });
+    console.log(`  ✓ Copied ${lightningPkgName}`);
+  }
+
+  // Copy @tailwindcss/oxide native binary
+  const oxideNativeDir = join(bunModules, `${oxidePkgName}@4.1.18/node_modules/${oxidePkgName}`);
+  if (existsSync(oxideNativeDir)) {
+    mkdirSync(join(libDir, "@tailwindcss"), { recursive: true });
+    cpSync(oxideNativeDir, join(libDir, oxidePkgName), { recursive: true });
+    console.log(`  ✓ Copied ${oxidePkgName}`);
+  }
+
+  // Sign native binaries on macOS
+  if (platform === "darwin") {
+    const identity = process.env.APPLE_SIGNING_IDENTITY || "Developer ID Application";
+
+    // Find and sign .node files
+    const nodeFiles = [
+      join(libDir, lightningPkgName, `lightningcss.darwin-${arch}.node`),
+      join(libDir, oxidePkgName, `tailwindcss-oxide.darwin-${arch}.node`),
+    ];
+
+    for (const nodeFile of nodeFiles) {
+      if (existsSync(nodeFile)) {
+        await $`codesign --force --timestamp --options runtime --sign ${identity} ${nodeFile}`;
+        console.log(`  ✓ Signed ${nodeFile.split("/").pop()}`);
+      }
+    }
+  }
+}
+
+/**
+ * Build the builder.js bundle (NOT compiled - runs with bundled bun)
+ * This creates a tree-shaken, minified JS bundle that can use native modules at runtime
+ */
+async function buildBuilderBundle(): Promise<void> {
+  console.log("Building builder.js bundle...");
+
+  const entryPath = join(ROOT, "packages/runtime/src/build-cli.ts");
+  const outputPath = join(BINARIES_DIR, "builder.js");
+
+  console.log(`  Entry: ${entryPath}`);
+  console.log(`  Output: ${outputPath}`);
+
+  if (!existsSync(entryPath)) {
+    throw new Error(`Entry file not found: ${entryPath}`);
+  }
+
+  // Use bun build WITHOUT --compile to create a JS bundle
+  // Native modules (lightningcss, @tailwindcss/oxide) will load at runtime via bundled bun
+  // --target bun ensures Node.js builtins are available
+  // --external marks native modules to be loaded at runtime from lib/node_modules
+  await $`cd ${ROOT} && bun build --minify --target bun --external lightningcss --external @tailwindcss/oxide --outdir ${BINARIES_DIR} --entry-naming builder.js ${entryPath}`;
+
+  console.log("  ✓ Built builder.js bundle");
+}
+
 async function copyPolarsNativeModules(): Promise<void> {
   console.log("Copying nodejs-polars native modules...");
 
@@ -212,11 +327,20 @@ async function main(): Promise<void> {
     await buildSidecar(sidecar, targetTriple);
   }
 
+  // Copy bun binary (for vite build, wrangler deploy)
+  await copyBun(targetTriple);
+
   // Copy opencode binary
   await copyOpencode(targetTriple);
 
   // Copy nodejs-polars native modules for the polars tool
   await copyPolarsNativeModules();
+
+  // Copy tailwind native modules (lightningcss, @tailwindcss/oxide) for builder
+  await copyTailwindNativeModules();
+
+  // Build the builder.js bundle (runs with bundled bun, not compiled)
+  await buildBuilderBundle();
 
   console.log("\n✓ All sidecars built successfully\n");
 }

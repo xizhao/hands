@@ -71,6 +71,8 @@ export default defineConfig({
     // Prefer 'worker' condition for packages like decode-named-character-reference
     // that have worker-specific exports without DOM dependencies
     conditions: ["worker", "import", "module", "browser", "default"],
+    // Ensure single instances of these packages (prevents context/store issues)
+    dedupe: ["react", "react-dom", "jotai", "jotai-x", "platejs"],
     alias: {
       // Point @/ to the app package where all components/hooks/routes live
       "@": path.resolve(__dirname, "../app/src"),

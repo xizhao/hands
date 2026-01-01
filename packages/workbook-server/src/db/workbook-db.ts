@@ -1,69 +1,19 @@
 /**
  * Workbook Data Database
  *
- * Uses bun:sqlite to access the D1 local database file.
- * The D1 database is created/managed by wrangler via the runtime's vite plugin.
- * Path: {workbook}/.hands/db/v3/d1/{database_name}/{hash}.sqlite
+ * Simple SQLite database at .hands/workbook.db
+ * No runtime dependency - creates on first access.
  */
 
 import { Database } from "bun:sqlite";
-import { existsSync, mkdirSync, readdirSync, statSync } from "node:fs";
+import { existsSync, mkdirSync } from "node:fs";
 import { join } from "node:path";
 
 // Singleton database instances per workbook
 const dbInstances = new Map<string, Database>();
 
 /**
- * Find the D1 SQLite database file in the persist state directory.
- * D1 databases are stored at: {persistPath}/v3/d1/{database_name}/{hash}.sqlite
- */
-function findD1DatabaseFile(workbookDir: string): string | null {
-  const persistPath = join(workbookDir, ".hands", "db");
-  const d1Path = join(persistPath, "v3", "d1");
-
-  if (!existsSync(d1Path)) {
-    return null;
-  }
-
-  // Look for database folders (miniflare uses "miniflare-D1DatabaseObject")
-  const dbFolders = readdirSync(d1Path, { withFileTypes: true })
-    .filter((d) => d.isDirectory())
-    .map((d) => d.name);
-
-  if (dbFolders.length === 0) {
-    return null;
-  }
-
-  // Use the first database folder (typically "hands-workbook")
-  const dbFolder = join(d1Path, dbFolders[0]);
-
-  // Find .sqlite files in the folder
-  const sqliteFiles = readdirSync(dbFolder)
-    .filter((f) => f.endsWith(".sqlite"));
-
-  if (sqliteFiles.length === 0) {
-    return null;
-  }
-
-  // If multiple files, use the most recently modified
-  if (sqliteFiles.length > 1) {
-    sqliteFiles.sort((a, b) => {
-      const aPath = join(dbFolder, a);
-      const bPath = join(dbFolder, b);
-      return statSync(bPath).mtimeMs - statSync(aPath).mtimeMs;
-    });
-  }
-
-  return join(dbFolder, sqliteFiles[0]);
-}
-
-/**
- * Get database for a workbook.
- * Uses the D1 local database file that wrangler/miniflare manages.
- *
- * IMPORTANT: Does NOT create a database - only discovers existing D1 database.
- * The database is created by wrangler when the runtime starts.
- * This prevents race conditions where two different sqlite files exist.
+ * Get or create workbook database
  */
 export function getWorkbookDb(workbookDir: string): Database {
   const existing = dbInstances.get(workbookDir);
@@ -71,39 +21,31 @@ export function getWorkbookDb(workbookDir: string): Database {
     return existing;
   }
 
-  // Find existing D1 database (created by wrangler)
-  const dbPath = findD1DatabaseFile(workbookDir);
+  const handsDir = join(workbookDir, ".hands");
+  const dbPath = join(handsDir, "workbook.db");
 
-  if (!dbPath) {
-    throw new Error(
-      `[db] D1 database not found at ${workbookDir}/.hands/db/v3/d1/. ` +
-      `Start the runtime first to initialize the database.`
-    );
+  // Ensure .hands directory exists
+  if (!existsSync(handsDir)) {
+    mkdirSync(handsDir, { recursive: true });
   }
 
   const db = new Database(dbPath);
 
-  // Enable foreign keys
+  // Enable foreign keys and WAL mode
   db.run("PRAGMA foreign_keys = ON");
+  db.run("PRAGMA journal_mode = WAL");
 
-  console.log(`[db] Connected to D1 database: ${dbPath}`);
+  console.log(`[db] Connected: ${dbPath}`);
 
   dbInstances.set(workbookDir, db);
   return db;
 }
 
 /**
- * Get the path to the D1 database file (for external tools)
+ * Get the database path
  */
-export function getD1DatabasePath(workbookDir: string): string | null {
-  return findD1DatabaseFile(workbookDir);
-}
-
-/**
- * Check if database is initialized for a workbook
- */
-export function isDbInitialized(workbookDir: string): boolean {
-  return dbInstances.has(workbookDir);
+export function getWorkbookDbPath(workbookDir: string): string {
+  return join(workbookDir, ".hands", "workbook.db");
 }
 
 /**
@@ -148,13 +90,13 @@ export function executeQuery(db: Database, sql: string, params?: unknown[]): Que
     trimmedSql.startsWith("EXPLAIN");
 
   if (isSelect) {
-    const stmt = params && params.length > 0
+    const rows = params?.length
       ? db.query(sql).all(...(params as any[]))
       : db.query(sql).all();
-    return { rows: stmt as unknown[] };
+    return { rows };
   } else {
     const stmt = db.prepare(sql);
-    const result = params && params.length > 0
+    const result = params?.length
       ? stmt.run(...(params as any[]))
       : stmt.run();
     return {
@@ -166,7 +108,7 @@ export function executeQuery(db: Database, sql: string, params?: unknown[]): Que
 }
 
 /**
- * Get database schema (all tables, columns, and foreign keys)
+ * Get database schema
  */
 export function getSchema(db: Database): {
   tables: Array<{
@@ -184,47 +126,43 @@ export function getSchema(db: Database): {
     }>;
   }>;
 } {
-  // Get all user tables (excluding sqlite internal and double-underscore prefixed)
   const tables = db.query<{ name: string }, []>(`
     SELECT name FROM sqlite_master
     WHERE type = 'table'
       AND name NOT LIKE 'sqlite_%'
-      AND name NOT LIKE '_cf_%'
       AND name NOT GLOB '__*'
     ORDER BY name
   `).all();
 
-  const result = tables.map((t) => {
-    const columns = db.query<{
-      name: string;
-      type: string;
-      notnull: number;
-      pk: number;
-    }, []>(`PRAGMA table_info("${t.name}")`).all();
+  return {
+    tables: tables.map((t) => {
+      const columns = db.query<{
+        name: string;
+        type: string;
+        notnull: number;
+        pk: number;
+      }, []>(`PRAGMA table_info("${t.name}")`).all();
 
-    const fks = db.query<{
-      id: number;
-      seq: number;
-      table: string;
-      from: string;
-      to: string;
-    }, []>(`PRAGMA foreign_key_list("${t.name}")`).all();
+      const fks = db.query<{
+        from: string;
+        table: string;
+        to: string;
+      }, []>(`PRAGMA foreign_key_list("${t.name}")`).all();
 
-    return {
-      name: t.name,
-      columns: columns.map((c) => ({
-        name: c.name,
-        type: c.type,
-        nullable: c.notnull === 0,
-        isPrimary: c.pk === 1,
-      })),
-      foreignKeys: fks.map((fk) => ({
-        column: fk.from,
-        referencesTable: fk.table,
-        referencesColumn: fk.to,
-      })),
-    };
-  });
-
-  return { tables: result };
+      return {
+        name: t.name,
+        columns: columns.map((c) => ({
+          name: c.name,
+          type: c.type,
+          nullable: c.notnull === 0,
+          isPrimary: c.pk === 1,
+        })),
+        foreignKeys: fks.map((fk) => ({
+          column: fk.from,
+          referencesTable: fk.table,
+          referencesColumn: fk.to,
+        })),
+      };
+    }),
+  };
 }

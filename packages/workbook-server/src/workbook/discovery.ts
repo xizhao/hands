@@ -420,28 +420,17 @@ export function discoverDomains(
   const errors: DiscoveryError[] = [];
 
   // Import database functions (sync require for bun:sqlite)
-  let getWorkbookDb: typeof import("../db/workbook-db.js").getWorkbookDb;
-  let isDbInitialized: typeof import("../db/workbook-db.js").isDbInitialized;
+  let db: ReturnType<typeof import("../db/workbook-db.js").getWorkbookDb>;
   try {
-    // Use require for sync import
-    const dbModule = require("../db/workbook-db.js");
-    getWorkbookDb = dbModule.getWorkbookDb;
-    isDbInitialized = dbModule.isDbInitialized;
+    const { getWorkbookDb } = require("../db/workbook-db.js");
+    db = getWorkbookDb(rootPath);
   } catch (err) {
     errors.push({
       file: "workbook-db",
-      error: `Failed to load database module: ${err instanceof Error ? err.message : String(err)}`,
+      error: `Failed to load database: ${err instanceof Error ? err.message : String(err)}`,
     });
     return { items, errors };
   }
-
-  // Check if DB is initialized
-  if (!isDbInitialized(rootPath)) {
-    // Database not initialized yet - that's ok, just return empty
-    return { items, errors };
-  }
-
-  const db = getWorkbookDb(rootPath);
 
   // Get all user tables (sync bun:sqlite)
   const tables = db.query<{ name: string }, []>(`

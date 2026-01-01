@@ -200,7 +200,14 @@ export type PageId = keyof typeof pages;
 
 /** Navigation-friendly page list for client-side nav widget */
 export const navPages = [
-${pages.map((p) => `  { route: "/pages/${p.id}", title: ${sanitizeId(p.id)}Frontmatter.title as string || "${p.id}" },`).join("\n")}
+${pages.map((p) => {
+    // Use frontmatter title, or format the ID as a readable title
+    const fallbackTitle = p.id
+      .replace(/[-_]/g, " ")
+      .replace(/\b\w/g, (c) => c.toUpperCase());
+    const title = (p.frontmatter.title as string) || fallbackTitle;
+    return `  { route: "/pages/${p.id}", title: "${title.replace(/"/g, '\\"')}" },`;
+  }).join("\n")}
 ];
 
 export const pageRoutes = [

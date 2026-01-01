@@ -26,7 +26,7 @@ export async function initCommand(name?: string) {
     console.log(pc.green("  Created package.json"));
   }
 
-  // Create directories - new structure
+  // Create directories - new structure (empty workbook)
   const dirs = [
     "pages", // MDX pages
     "pages/blocks", // Embeddable MDX fragments
@@ -42,26 +42,7 @@ export async function initCommand(name?: string) {
     }
   }
 
-  // Create sample index.mdx
-  const indexMdxPath = path.join(workbookPath, "pages/index.mdx");
-  if (!fs.existsSync(indexMdxPath)) {
-    const indexMdx = `---
-title: Welcome
----
-
-# Welcome to ${workbookName}
-
-This is your first page. Edit \`pages/index.mdx\` to get started.
-
-## Quick Start
-
-- Add more pages in \`pages/\`
-- Create embeddable blocks in \`pages/blocks/\`
-- Build custom components in \`plugins/\`
-`;
-    fs.writeFileSync(indexMdxPath, indexMdx);
-    console.log(pc.green("  Created pages/index.mdx"));
-  }
+  // No default pages - workbook starts empty
 
   // Create .gitignore
   const gitignorePath = path.join(workbookPath, ".gitignore");

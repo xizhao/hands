@@ -1,5 +1,6 @@
 // Types from core
 import type {
+  DataGridColumnConfig,
   TAlertElement,
   TAreaChartElement,
   TBadgeElement,
@@ -689,7 +690,7 @@ const DataGridPlugin = createSlatePlugin({
     isVoid: true,
     component: ({ element }) => {
       const el = element as TElement & {
-        columns?: "auto" | string[];
+        columns?: "auto" | DataGridColumnConfig[];
         height?: number;
         readOnly?: boolean;
         enableSearch?: boolean;

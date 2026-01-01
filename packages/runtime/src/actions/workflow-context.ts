@@ -2,12 +2,12 @@
  * Workflow Context Builder (Production)
  *
  * Creates ActionContext for CF Workflow execution in production.
- * Uses the Database Durable Object for SQL access (same as dev).
+ * Uses D1 database via Kysely for SQL access.
  */
 
 import type { DB } from "@hands/db/types";
-import { sql as kyselySql } from "kysely";
-import { createDb } from "rwsdk/db";
+import { Kysely, sql as kyselySql } from "kysely";
+import { D1Dialect } from "kysely-d1";
 import type { ActionContext, ActionLogger, ActionNotify } from "../types/action";
 
 /**
@@ -36,7 +36,7 @@ function escapeValue(value: unknown): string {
 /**
  * Build an ActionContext for production workflow execution.
  *
- * Uses the DATABASE Durable Object binding for SQL access.
+ * Uses D1 database binding for SQL access.
  * Secrets are extracted from env bindings (HANDS_SECRET_*).
  */
 export function buildWorkflowContext(env: Env, runId: string): ActionContext {
@@ -46,8 +46,10 @@ export function buildWorkflowContext(env: Env, runId: string): ActionContext {
   // Build notify
   const notify = buildNotify();
 
-  // Get Kysely instance via DATABASE Durable Object
-  const db = createDb<DB>(env.DATABASE, "hands-db");
+  // Get Kysely instance via D1
+  const db = new Kysely<DB>({
+    dialect: new D1Dialect({ database: env.DB }),
+  });
 
   // SQL tagged template using Kysely raw queries
   // Matches the dev context pattern: escape values inline, use .execute()

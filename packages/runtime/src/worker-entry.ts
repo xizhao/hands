@@ -7,10 +7,6 @@
 
 import { isPreBundleError, sleep } from "./lib/module-loader";
 
-// Database is in runtime code (no workbook deps) - safe to import statically
-// Must be class export for Durable Objects binding
-export { Database } from "./db/dev";
-
 const MAX_RETRIES = 10;
 const RETRY_DELAY_MS = 500;
 

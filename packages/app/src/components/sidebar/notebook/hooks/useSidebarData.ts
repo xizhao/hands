@@ -37,8 +37,12 @@ export function useSidebarData(options: SidebarDataOptions = {}) {
   const tables: SidebarTable[] = [];
   const plugins: SidebarPlugin[] = [];
 
-  // Loading = waiting for manifest or domains
-  const isLoading = (!manifest && !!activeWorkbookId) || domainsLoading;
+  // Domain loading is independent of runtime (uses workbook-server directly)
+  const isDomainsLoading = domainsLoading;
+  // Manifest loading requires runtime
+  const isManifestLoading = !manifest && !!activeWorkbookId;
+  // Overall loading - only block on domains for the sidebar
+  const isLoading = isDomainsLoading;
 
   // Filter helpers
   const matchesSearch = (text: string) =>
@@ -87,6 +91,8 @@ export function useSidebarData(options: SidebarDataOptions = {}) {
 
     // Loading states
     isLoading,
+    isDomainsLoading,
+    isManifestLoading,
     activeWorkbookId,
 
     // Counts

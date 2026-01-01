@@ -4,6 +4,13 @@
   "description": "Hands runtime - workbook dev server",
   "main": "index.js",
   "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./vite-plugin-db-types": "./src/vite-plugin-db-types.ts",
+    "./vite-plugin-editor": "./src/vite-plugin-editor.ts",
+    "./vite-plugin-tailwind-source": "./src/vite-plugin-tailwind-source.ts",
+    "./vite-plugin-workbook": "./src/vite-plugin-workbook.ts"
+  },
   "sideEffects": [
     "./src/client.tsx",
     "./src/collab/**/*"

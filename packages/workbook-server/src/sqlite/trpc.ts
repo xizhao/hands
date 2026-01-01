@@ -174,17 +174,6 @@ export const sqliteTRPCRouter = t.router({
       });
     }
   }),
-
-  /** Health check - is database accessible? */
-  health: t.procedure.query(({ ctx }) => {
-    try {
-      const db = getWorkbookDb(ctx.workbookDir);
-      db.query("SELECT 1").get();
-      return { ready: true };
-    } catch {
-      return { ready: false };
-    }
-  }),
 });
 
 export type SQLiteTRPCRouter = typeof sqliteTRPCRouter;

@@ -41,7 +41,7 @@ import { ATTACHMENT_TYPE, useChatState } from "@/hooks/useChatState";
 import { useFilePicker } from "@/hooks/useFilePicker";
 import { useNeedsTrafficLightOffset } from "@/hooks/useFullscreen";
 import { useActiveSession } from "@/hooks/useNavState";
-import { useRuntimeProcess } from "@/hooks/useRuntimeState";
+import { useActiveWorkbookDirectory, useRuntimeProcess } from "@/hooks/useRuntimeState";
 import { useCreateSession, useSendMessage } from "@/hooks/useSession";
 import {
   useCreateWorkbook,
@@ -67,6 +67,7 @@ export function UnifiedSidebar({ compact = false, floating = false, onSelectItem
   const router = useRouter();
   const chatState = useChatState();
   const { workbookId: activeWorkbookId } = useRuntimeProcess();
+  const workbookDirectory = useActiveWorkbookDirectory();
 
   // Workbook management
   const { data: workbooks } = useWorkbooks();
@@ -121,31 +122,56 @@ export function UnifiedSidebar({ compact = false, floating = false, onSelectItem
     const prompt = input.trim();
     if (!prompt) return;
 
+    // Check if directory is available (required for chat)
+    if (!workbookDirectory) {
+      console.warn("[UnifiedSidebar] Cannot submit - workbook directory not yet available");
+      return;
+    }
+
     setIsSubmitting(true);
     setInput("");
     setIsInputExpanded(false);
 
-    try {
-      // Switch to chat mode
-      setMode("chat");
+    // Switch to chat mode
+    setMode("chat");
 
-      // Create new session and send message
-      if (!activeSessionId) {
-        createSession.mutate(undefined, {
-          onSuccess: (newSession) => {
-            setActiveSessionId(newSession.id);
-            sendMessage.mutate({ sessionId: newSession.id, content: prompt });
+    // Create new session and send message
+    if (!activeSessionId) {
+      createSession.mutate(undefined, {
+        onSuccess: (newSession) => {
+          setActiveSessionId(newSession.id);
+          sendMessage.mutate(
+            { sessionId: newSession.id, content: prompt },
+            {
+              onError: (err) => {
+                console.error("[UnifiedSidebar] Failed to send message:", err);
+                setIsSubmitting(false);
+              },
+              onSettled: () => {
+                setIsSubmitting(false);
+              },
+            },
+          );
+        },
+        onError: (err) => {
+          console.error("[UnifiedSidebar] Failed to create session:", err);
+          setIsSubmitting(false);
+        },
+      });
+    } else {
+      sendMessage.mutate(
+        { sessionId: activeSessionId, content: prompt },
+        {
+          onError: (err) => {
+            console.error("[UnifiedSidebar] Failed to send message:", err);
           },
-        });
-      } else {
-        sendMessage.mutate({ sessionId: activeSessionId, content: prompt });
-      }
-    } catch (err) {
-      console.error("[UnifiedSidebar] Failed to send message:", err);
-    } finally {
-      setIsSubmitting(false);
+          onSettled: () => {
+            setIsSubmitting(false);
+          },
+        },
+      );
     }
-  }, [input, activeSessionId, createSession, sendMessage, setActiveSessionId]);
+  }, [input, activeSessionId, createSession, sendMessage, setActiveSessionId, workbookDirectory]);
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === "Enter" && !e.shiftKey) {
@@ -204,6 +230,7 @@ export function UnifiedSidebar({ compact = false, floating = false, onSelectItem
   // UI state
   const pendingAttachment = chatState.pendingAttachment;
   const hasContent = input.trim() || pendingAttachment;
+  const canSubmit = hasContent && !!workbookDirectory;
 
   // Placeholder text
   const placeholder = "Search or ask anything...";
@@ -364,7 +391,7 @@ export function UnifiedSidebar({ compact = false, floating = false, onSelectItem
             </DropdownMenuContent>
           </DropdownMenu>
 
-          {hasContent && (
+          {canSubmit && (
             <Button
               variant="ghost"
               size="icon"
@@ -420,7 +447,7 @@ export function UnifiedSidebar({ compact = false, floating = false, onSelectItem
             className="flex-1 min-w-0 bg-transparent text-sm placeholder:text-muted-foreground/50 focus:outline-none resize-none py-1"
           />
 
-          {hasContent && (
+          {canSubmit && (
             <Button
               variant="ghost"
               size="icon"
@@ -478,7 +505,7 @@ export function UnifiedSidebar({ compact = false, floating = false, onSelectItem
         </DropdownMenuContent>
       </DropdownMenu>
 
-      {hasContent && (
+      {canSubmit && (
         <Button
           variant="ghost"
           size="icon"

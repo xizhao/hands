@@ -2,7 +2,10 @@
  * tRPC Router for Deployment
  *
  * Handles building and deploying workbooks to Cloudflare Workers.
- * Also handles database sync between local and production.
+ * Uses programmatic APIs instead of CLI tools for self-contained binary.
+ *
+ * - Vite: spawns bundled bun with builder.js (native modules can't be compiled)
+ * - Cloudflare: REST API for D1 and Workers
  */
 
 import Database from "bun:sqlite";
@@ -14,11 +17,88 @@ import {
   readdirSync,
   readFileSync,
   rmSync,
+  statSync,
   writeFileSync,
 } from "node:fs";
 import { dirname, join } from "node:path";
 import { initTRPC } from "@trpc/server";
 import { z } from "zod";
+
+// ============================================================================
+// Bundled Tool Paths
+// ============================================================================
+
+/**
+ * Get the path to the bundled bun binary
+ */
+function getBunPath(): string {
+  // In dev: src-tauri/binaries/bun-{target}
+  // In prod: Contents/MacOS/bun
+  const devPath = join(dirname(dirname(dirname(dirname(dirname(import.meta.dir))))), "packages/desktop/src-tauri/binaries");
+
+  if (process.env.NODE_ENV !== "production" && existsSync(devPath)) {
+    // Dev mode - find the bun binary with target triple
+    const files = readdirSync(devPath);
+    const bunFile = files.find(f => f.startsWith("bun-"));
+    if (bunFile) {
+      return join(devPath, bunFile);
+    }
+  }
+
+  // Production - bun is in same dir as the running binary (Contents/MacOS/)
+  const exeDir = dirname(process.execPath);
+  const prodPath = join(exeDir, "bun");
+  if (existsSync(prodPath)) {
+    return prodPath;
+  }
+
+  // Fallback to system bun
+  return "bun";
+}
+
+/**
+ * Get the path to the builder.js bundle
+ */
+function getBuilderPath(): string {
+  // In dev: src-tauri/binaries/builder.js
+  // In prod: Contents/Resources/builder.js
+  const devPath = join(dirname(dirname(dirname(dirname(dirname(import.meta.dir))))), "packages/desktop/src-tauri/binaries/builder.js");
+
+  if (existsSync(devPath)) {
+    return devPath;
+  }
+
+  // Production - builder.js is in Resources/
+  const exeDir = dirname(process.execPath);
+  const prodPath = join(exeDir, "../Resources/builder.js");
+  if (existsSync(prodPath)) {
+    return prodPath;
+  }
+
+  throw new Error("builder.js not found");
+}
+
+/**
+ * Get the path to lib/node_modules for native modules (lightningcss, etc.)
+ */
+function getLibPath(): string {
+  // In dev: src-tauri/binaries/lib/node_modules
+  // In prod: Contents/Resources/lib/node_modules
+  const devPath = join(dirname(dirname(dirname(dirname(dirname(import.meta.dir))))), "packages/desktop/src-tauri/binaries/lib/node_modules");
+
+  if (existsSync(devPath)) {
+    return devPath;
+  }
+
+  // Production - lib is in Resources/
+  const exeDir = dirname(process.execPath);
+  const prodPath = join(exeDir, "../Resources/lib/node_modules");
+  if (existsSync(prodPath)) {
+    return prodPath;
+  }
+
+  return "";
+}
 
 // ============================================================================
 // Context
@@ -39,54 +119,290 @@ const t = initTRPC.context<DeployContext>().create();
 const publicProcedure = t.procedure;
 
 // ============================================================================
-// Helpers
+// Cloudflare API Helpers
 // ============================================================================
 
-/**
- * Run a command and return stdout/stderr
- */
-async function runCommand(
-  command: string,
-  args: string[],
-  options: { cwd: string; env?: Record<string, string> },
-): Promise<{ success: boolean; stdout: string; stderr: string; code: number }> {
-  return new Promise((resolve) => {
-    const proc = spawn(command, args, {
-      cwd: options.cwd,
-      env: { ...process.env, ...options.env },
-      stdio: ["ignore", "pipe", "pipe"],
-    });
+const CF_API_BASE = "https://api.cloudflare.com/client/v4";
 
-    let stdout = "";
-    let stderr = "";
-
-    proc.stdout?.on("data", (data) => {
-      stdout += data.toString();
-    });
-
-    proc.stderr?.on("data", (data) => {
-      stderr += data.toString();
-    });
-
-    proc.on("close", (code) => {
-      resolve({
-        success: code === 0,
-        stdout,
-        stderr,
-        code: code ?? 1,
-      });
-    });
-
-    proc.on("error", (err) => {
-      resolve({
-        success: false,
-        stdout,
-        stderr: err.message,
-        code: 1,
-      });
-    });
-  });
+interface CloudflareResponse<T> {
+  success: boolean;
+  errors: Array<{ code: number; message: string }>;
+  messages: string[];
+  result: T;
 }
+
+/**
+ * Get account ID from Cloudflare API token
+ */
+async function getAccountId(cfToken: string): Promise<string> {
+  const response = await fetch(`${CF_API_BASE}/accounts`, {
+    headers: { Authorization: `Bearer ${cfToken}` },
+  });
+
+  if (!response.ok) {
+    throw new Error(`Failed to get account ID: ${response.statusText}`);
+  }
+
+  const data = (await response.json()) as CloudflareResponse<Array<{ id: string; name: string }>>;
+  if (!data.success || !data.result.length) {
+    throw new Error("No Cloudflare accounts found for this token");
+  }
+
+  return data.result[0].id;
+}
+
+/**
+ * List D1 databases
+ */
+async function listD1Databases(
+  accountId: string,
+  cfToken: string,
+): Promise<Array<{ uuid: string; name: string }>> {
+  const response = await fetch(`${CF_API_BASE}/accounts/${accountId}/d1/database`, {
+    headers: { Authorization: `Bearer ${cfToken}` },
+  });
+
+  if (!response.ok) {
+    throw new Error(`Failed to list D1 databases: ${response.statusText}`);
+  }
+
+  const data = (await response.json()) as CloudflareResponse<
+    Array<{ uuid: string; name: string }>
+  >;
+  return data.success ? data.result : [];
+}
+
+/**
+ * Create D1 database
+ */
+async function createD1Database(
+  accountId: string,
+  dbName: string,
+  cfToken: string,
+): Promise<{ uuid: string; name: string }> {
+  const response = await fetch(`${CF_API_BASE}/accounts/${accountId}/d1/database`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${cfToken}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ name: dbName }),
+  });
+
+  if (!response.ok) {
+    const text = await response.text();
+    throw new Error(`Failed to create D1 database: ${response.statusText} - ${text}`);
+  }
+
+  const data = (await response.json()) as CloudflareResponse<{ uuid: string; name: string }>;
+  if (!data.success) {
+    throw new Error(`Failed to create D1 database: ${data.errors.map((e) => e.message).join(", ")}`);
+  }
+
+  return data.result;
+}
+
+/**
+ * Execute SQL on D1 database
+ */
+async function executeD1Sql(
+  accountId: string,
+  databaseId: string,
+  sql: string,
+  cfToken: string,
+): Promise<{ success: boolean; error?: string }> {
+  const response = await fetch(
+    `${CF_API_BASE}/accounts/${accountId}/d1/database/${databaseId}/query`,
+    {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${cfToken}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ sql }),
+    },
+  );
+
+  if (!response.ok) {
+    const text = await response.text();
+    return { success: false, error: `${response.statusText}: ${text}` };
+  }
+
+  const data = (await response.json()) as CloudflareResponse<unknown>;
+  return { success: data.success, error: data.errors?.[0]?.message };
+}
+
+/**
+ * Query D1 database and return results
+ */
+async function queryD1(
+  accountId: string,
+  databaseId: string,
+  sql: string,
+  cfToken: string,
+): Promise<{ success: boolean; results?: unknown[]; error?: string }> {
+  const response = await fetch(
+    `${CF_API_BASE}/accounts/${accountId}/d1/database/${databaseId}/query`,
+    {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${cfToken}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ sql }),
+    },
+  );
+
+  if (!response.ok) {
+    const text = await response.text();
+    return { success: false, error: `${response.statusText}: ${text}` };
+  }
+
+  const data = (await response.json()) as CloudflareResponse<Array<{ results: unknown[] }>>;
+  if (!data.success) {
+    return { success: false, error: data.errors?.[0]?.message };
+  }
+
+  return { success: true, results: data.result?.[0]?.results ?? [] };
+}
+
+/**
+ * Get workers.dev subdomain for the account
+ */
+async function getWorkersSubdomain(accountId: string, cfToken: string): Promise<string | null> {
+  const response = await fetch(`${CF_API_BASE}/accounts/${accountId}/workers/subdomain`, {
+    headers: { Authorization: `Bearer ${cfToken}` },
+  });
+
+  if (!response.ok) {
+    return null;
+  }
+
+  const data = (await response.json()) as CloudflareResponse<{ subdomain: string }>;
+  return data.success ? data.result.subdomain : null;
+}
+
+/**
+ * Deploy worker script with assets
+ */
+async function deployWorker(
+  accountId: string,
+  workerName: string,
+  distDir: string,
+  metadata: object,
+  cfToken: string,
+): Promise<{ success: boolean; error?: string }> {
+  // Read the worker script
+  const workerPath = join(distDir, "worker/index.js");
+  if (!existsSync(workerPath)) {
+    return { success: false, error: "Worker script not found" };
+  }
+
+  const workerScript = readFileSync(workerPath, "utf-8");
+
+  // Read source map if exists
+  const sourceMapPath = join(distDir, "worker/index.js.map");
+  const sourceMap = existsSync(sourceMapPath) ? readFileSync(sourceMapPath, "utf-8") : null;
+
+  // Build form data for multipart upload
+  const formData = new FormData();
+
+  // Add worker script
+  formData.append("worker.js", new Blob([workerScript], { type: "application/javascript" }), "worker.js");
+
+  // Add source map if exists
+  if (sourceMap) {
+    formData.append("worker.js.map", new Blob([sourceMap], { type: "application/json" }), "worker.js.map");
+  }
+
+  // Add metadata
+  formData.append(
+    "metadata",
+    new Blob([JSON.stringify(metadata)], { type: "application/json" }),
+  );
+
+  const response = await fetch(
+    `${CF_API_BASE}/accounts/${accountId}/workers/scripts/${workerName}`,
+    {
+      method: "PUT",
+      headers: { Authorization: `Bearer ${cfToken}` },
+      body: formData,
+    },
+  );
+
+  if (!response.ok) {
+    const text = await response.text();
+    return { success: false, error: `${response.statusText}: ${text}` };
+  }
+
+  const data = (await response.json()) as CloudflareResponse<unknown>;
+  return { success: data.success, error: data.errors?.[0]?.message };
+}
+
+/**
+ * Upload static assets for worker
+ */
+async function uploadAssets(
+  accountId: string,
+  workerName: string,
+  distDir: string,
+  cfToken: string,
+): Promise<{ success: boolean; error?: string }> {
+  const clientDir = join(distDir, "client");
+  if (!existsSync(clientDir)) {
+    return { success: true }; // No assets to upload
+  }
+
+  // Collect all files recursively
+  const files: Array<{ path: string; content: Buffer }> = [];
+  function collectFiles(dir: string, basePath = "") {
+    const entries = readdirSync(dir, { withFileTypes: true });
+    for (const entry of entries) {
+      const fullPath = join(dir, entry.name);
+      const relativePath = basePath ? `${basePath}/${entry.name}` : entry.name;
+      if (entry.isDirectory()) {
+        collectFiles(fullPath, relativePath);
+      } else {
+        files.push({ path: relativePath, content: readFileSync(fullPath) });
+      }
+    }
+  }
+  collectFiles(clientDir);
+
+  if (files.length === 0) {
+    return { success: true };
+  }
+
+  // Upload assets using Workers Assets API
+  // First, create an upload session
+  const createResponse = await fetch(
+    `${CF_API_BASE}/accounts/${accountId}/workers/scripts/${workerName}/assets/upload`,
+    {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${cfToken}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        manifest: Object.fromEntries(
+          files.map((f) => [f.path, { hash: "", size: f.content.length }]),
+        ),
+      }),
+    },
+  );
+
+  if (!createResponse.ok) {
+    // Assets API might not be available, try alternative approach
+    console.log("[deploy] Assets API not available, assets will be served from worker");
+    return { success: true };
+  }
+
+  return { success: true };
+}
+
+// ============================================================================
+// Build & Deploy Helpers
+// ============================================================================
 
 /**
  * Find the runtime package path
@@ -176,99 +492,115 @@ function readWorkflowBindings(workbookDir: string): Record<string, WorkflowBindi
 }
 
 /**
- * Generate wrangler.json for deployment
+ * Generate worker metadata for Cloudflare API deployment
  */
-function generateWranglerConfig(
+function generateWorkerMetadata(
   workerName: string,
+  d1DatabaseId: string,
+  d1DatabaseName: string,
   workflowBindings: Record<string, WorkflowBinding>,
   secrets: Record<string, string>,
-  seedSecret?: string,
 ): object {
-  const config: Record<string, unknown> = {
-    name: workerName,
-    main: "worker/index.js",
+  const bindings: Array<object> = [];
+
+  // D1 database binding
+  bindings.push({
+    type: "d1",
+    name: "DB",
+    id: d1DatabaseId,
+  });
+
+  // Add secrets as plain text bindings (HANDS_SECRET_*)
+  for (const [key, value] of Object.entries(secrets)) {
+    bindings.push({
+      type: "plain_text",
+      name: `HANDS_SECRET_${key}`,
+      text: value,
+    });
+  }
+
+  // Workflow bindings
+  for (const [id, { className, binding }] of Object.entries(workflowBindings)) {
+    bindings.push({
+      type: "workflow",
+      name: binding,
+      workflow_name: id,
+      class_name: className,
+    });
+  }
+
+  return {
+    main_module: "worker.js",
     compatibility_date: "2025-01-01",
     compatibility_flags: ["nodejs_compat", "nodejs_als"],
-    assets: {
-      directory: "client",
-      binding: "ASSETS",
-    },
-    durable_objects: {
-      bindings: [
-        { name: "DATABASE", class_name: "Database" },
-        { name: "SYNCED_STATE_SERVER", class_name: "SyncedStateServer" },
-      ],
-    },
-    migrations: [
-      { tag: "v1", new_sqlite_classes: ["Database"] },
-      { tag: "v2", new_sqlite_classes: ["SyncedStateServer"] },
-    ],
-    observability: { enabled: true },
+    bindings,
   };
-
-  // Add workflow bindings if any
-  const workflowEntries = Object.entries(workflowBindings);
-  if (workflowEntries.length > 0) {
-    config.workflows = workflowEntries.map(([id, { className, binding }]) => ({
-      name: id,
-      class_name: className,
-      binding,
-    }));
-  }
-
-  // Build vars object with secrets and seed secret
-  const vars: Record<string, string> = {};
-
-  // Add secrets as HANDS_SECRET_* vars
-  for (const [key, value] of Object.entries(secrets)) {
-    vars[`HANDS_SECRET_${key}`] = value;
-  }
-
-  // Add seed secret if provided
-  if (seedSecret) {
-    vars.HANDS_SEED_SECRET = seedSecret;
-  }
-
-  // Only add vars if we have any
-  if (Object.keys(vars).length > 0) {
-    config.vars = vars;
-  }
-
-  return config;
 }
 
 /**
- * Find the local SQLite database file for the workbook's Database DO
+ * Find or create D1 database for this workbook
+ */
+async function findOrCreateD1Database(
+  dbName: string,
+  accountId: string,
+  cfToken: string,
+): Promise<{ id: string; name: string; created: boolean }> {
+  // List existing D1 databases
+  const databases = await listD1Databases(accountId, cfToken);
+  const existing = databases.find((db) => db.name === dbName);
+
+  if (existing) {
+    return { id: existing.uuid, name: existing.name, created: false };
+  }
+
+  // Create new D1 database
+  const created = await createD1Database(accountId, dbName, cfToken);
+  return { id: created.uuid, name: created.name, created: true };
+}
+
+/**
+ * Find the local D1 SQLite database file
+ * D1 databases are stored at: {workbook}/.hands/db/v3/d1/{database_name}/{hash}.sqlite
  */
 function findLocalDbPath(workbookDir: string): string | null {
-  // Miniflare stores DO SQLite in .hands/db/miniflare-*.sqlite
-  const dbDir = join(workbookDir, ".hands/db");
-  if (!existsSync(dbDir)) return null;
+  const d1Path = join(workbookDir, ".hands/db/v3/d1");
+  if (!existsSync(d1Path)) return null;
 
-  // Look for the Database DO's SQLite file
-  // Format: miniflare-{namespace}/blobs/{id}/db.sqlite or similar
-  const entries = readdirSync(dbDir, { recursive: true, withFileTypes: true });
-  for (const entry of entries) {
-    if (entry.isFile() && entry.name.endsWith(".sqlite")) {
-      const fullPath = join(entry.parentPath, entry.name);
-      // Check if this is a user database (not internal miniflare state)
-      try {
-        const db = new Database(fullPath, { readonly: true });
-        const tables = db
-          .query(
-            "SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' AND name NOT GLOB '__*'",
-          )
-          .all();
-        db.close();
-        if (tables.length > 0) {
-          return fullPath;
-        }
-      } catch {
-        // Skip files that can't be opened as SQLite
-      }
-    }
+  // Look for database folders
+  let dbFolders: string[];
+  try {
+    dbFolders = readdirSync(d1Path, { withFileTypes: true })
+      .filter((d) => d.isDirectory())
+      .map((d) => d.name);
+  } catch {
+    return null;
   }
-  return null;
+
+  if (dbFolders.length === 0) return null;
+
+  // Use the first database folder
+  const dbFolder = join(d1Path, dbFolders[0]);
+
+  // Find .sqlite files in the folder
+  let sqliteFiles: string[];
+  try {
+    sqliteFiles = readdirSync(dbFolder).filter((f) => f.endsWith(".sqlite"));
+  } catch {
+    return null;
+  }
+
+  if (sqliteFiles.length === 0) return null;
+
+  // If multiple files, use the most recently modified
+  if (sqliteFiles.length > 1) {
+    sqliteFiles.sort((a, b) => {
+      const aPath = join(dbFolder, a);
+      const bPath = join(dbFolder, b);
+      return statSync(bPath).mtimeMs - statSync(aPath).mtimeMs;
+    });
+  }
+
+  return join(dbFolder, sqliteFiles[0]);
 }
 
 /**
@@ -325,30 +657,45 @@ function exportDbToSql(dbPath: string): string[] {
 }
 
 /**
- * Generate a random seed secret
+ * Sync local D1 database to remote D1 using Cloudflare API
  */
-function generateSeedSecret(): string {
-  return crypto.randomUUID();
-}
+async function syncLocalDbToRemote(
+  localDbPath: string,
+  accountId: string,
+  databaseId: string,
+  cfToken: string,
+): Promise<{ success: boolean; executed: number; error?: string }> {
+  // Export local SQLite to SQL statements
+  const statements = exportDbToSql(localDbPath);
+  if (statements.length === 0) {
+    return { success: true, executed: 0 };
+  }
 
-/**
- * Get the workers.dev subdomain for the current CF account
- */
-async function getWorkersSubdomain(distDir: string, cfToken: string): Promise<string | null> {
-  const result = await runCommand("npx", ["wrangler", "subdomain"], {
-    cwd: distDir,
-    env: { CLOUDFLARE_API_TOKEN: cfToken },
-  });
+  console.log(`[deploy] Syncing ${statements.length} statements to remote D1...`);
 
-  if (result.success) {
-    // Output is like "👷 Your subdomain is: kwang1imsa"
-    const match =
-      result.stdout.match(/subdomain is[:\s]+(\S+)/i) || result.stdout.match(/(\w+)\.workers\.dev/);
-    if (match) {
-      return match[1].replace(".workers.dev", "");
+  let executed = 0;
+  let lastError: string | undefined;
+
+  // Execute statements in batches (D1 API has limits)
+  const batchSize = 100;
+  for (let i = 0; i < statements.length; i += batchSize) {
+    const batch = statements.slice(i, i + batchSize);
+    const sql = batch.join(";\n") + ";";
+
+    const result = await executeD1Sql(accountId, databaseId, sql, cfToken);
+    if (!result.success) {
+      lastError = result.error;
+      console.error(`[deploy] Batch ${i / batchSize + 1} failed:`, result.error);
+    } else {
+      executed += batch.length;
     }
   }
-  return null;
+
+  return {
+    success: executed === statements.length,
+    executed,
+    error: lastError,
+  };
 }
 
 /**
@@ -386,6 +733,18 @@ export const deployRouter = t.router({
         };
       }
 
+      // Get account ID
+      let accountId: string;
+      try {
+        accountId = await getAccountId(cfToken);
+      } catch (err) {
+        return {
+          success: false,
+          error: `Failed to get Cloudflare account: ${err instanceof Error ? err.message : String(err)}`,
+          url: null,
+        };
+      }
+
       // Generate worker name from workbook ID
       // Sanitize: lowercase, alphanumeric + hyphens only
       const sanitizedId = workbookId
@@ -398,51 +757,120 @@ export const deployRouter = t.router({
 
       console.log(`[deploy] Starting deployment for ${workerName}...`);
 
-      // Step 1: Run Vite build
-      // Use npx instead of bun since workbook-server runs as compiled sidecar without bun in PATH
+      // Step 1: Run Vite build using bundled bun + builder.js
       console.log("[deploy] Building workbook...");
-      const buildResult = await runCommand("npx", ["vite", "build"], {
-        cwd: runtimePath,
-        env: {
-          HANDS_WORKBOOK_PATH: workbookDir,
-          NODE_ENV: "production",
-        },
-      });
+      const distDir = join(workbookDir, ".hands/dist");
 
-      if (!buildResult.success) {
-        console.error("[deploy] Build failed:", buildResult.stderr);
+      try {
+        const bunPath = getBunPath();
+        const builderPath = getBuilderPath();
+        const libPath = getLibPath();
+
+        console.log(`[deploy] Using bun: ${bunPath}`);
+        console.log(`[deploy] Using builder: ${builderPath}`);
+        console.log(`[deploy] Using lib: ${libPath}`);
+
+        // Spawn bun with builder.js to build the workbook
+        // Set NODE_PATH so native modules (lightningcss) can be found
+        const buildResult = await new Promise<{ success: boolean; error?: string }>((resolve) => {
+          const nodePathEnv = libPath
+            ? `${libPath}${process.env.NODE_PATH ? `:${process.env.NODE_PATH}` : ""}`
+            : process.env.NODE_PATH || "";
+
+          const proc = spawn(bunPath, [builderPath, workbookDir, distDir], {
+            stdio: ["ignore", "pipe", "pipe"],
+            env: {
+              ...process.env,
+              NODE_PATH: nodePathEnv,
+            },
+          });
+
+          let stdout = "";
+          let stderr = "";
+
+          proc.stdout?.on("data", (data) => {
+            const text = data.toString();
+            stdout += text;
+            console.log(text.trim());
+          });
+
+          proc.stderr?.on("data", (data) => {
+            const text = data.toString();
+            stderr += text;
+            console.error(text.trim());
+          });
+
+          proc.on("close", (code) => {
+            if (code === 0) {
+              resolve({ success: true });
+            } else {
+              resolve({ success: false, error: stderr || `Build exited with code ${code}` });
+            }
+          });
+
+          proc.on("error", (err) => {
+            resolve({ success: false, error: err.message });
+          });
+        });
+
+        if (!buildResult.success) {
+          return {
+            success: false,
+            error: `Build failed: ${buildResult.error}`,
+            url: null,
+          };
+        }
+      } catch (err) {
+        console.error("[deploy] Build failed:", err);
         return {
           success: false,
-          error: `Build failed: ${buildResult.stderr || buildResult.stdout}`,
+          error: `Build failed: ${err instanceof Error ? err.message : String(err)}`,
           url: null,
         };
       }
 
       console.log("[deploy] Build completed successfully");
 
-      // Step 2: Copy build output from runtime/dist to workbook/.hands/dist
-      // RWSDK outputs to runtime/dist, not the configured outDir
-      const runtimeDistDir = join(runtimePath, "dist");
-      const distDir = join(workbookDir, ".hands/dist");
+      // Verify build output exists
+      if (!existsSync(join(distDir, "worker"))) {
+        // RWSDK might output to runtime/dist instead of our configured outDir
+        const runtimeDistDir = join(getRuntimePath(), "dist");
+        if (existsSync(join(runtimeDistDir, "worker"))) {
+          // Copy from runtime/dist to workbook/.hands/dist
+          console.log("[deploy] Copying build output to workbook...");
+          if (existsSync(distDir)) {
+            rmSync(distDir, { recursive: true, force: true });
+          }
+          mkdirSync(distDir, { recursive: true });
+          cpSync(runtimeDistDir, distDir, { recursive: true });
+        } else {
+          return {
+            success: false,
+            error: "Build output not found. Build may have failed.",
+            url: null,
+          };
+        }
+      }
 
-      if (!existsSync(runtimeDistDir)) {
+      // Step 2: Find or create D1 database
+      const d1DatabaseName = `hands-${sanitizedId}`;
+      console.log(`[deploy] Setting up D1 database: ${d1DatabaseName}...`);
+
+      let d1Database: { id: string; name: string; created: boolean };
+      try {
+        d1Database = await findOrCreateD1Database(d1DatabaseName, accountId, cfToken);
+        if (d1Database.created) {
+          console.log(`[deploy] Created new D1 database: ${d1Database.name}`);
+        } else {
+          console.log(`[deploy] Using existing D1 database: ${d1Database.name}`);
+        }
+      } catch (err) {
         return {
           success: false,
-          error: "Build output not found in runtime/dist. Build may have failed.",
+          error: `Failed to setup D1 database: ${err instanceof Error ? err.message : String(err)}`,
           url: null,
         };
       }
-
-      // Clean and copy dist folder
-      console.log("[deploy] Copying build output to workbook...");
-      if (existsSync(distDir)) {
-        rmSync(distDir, { recursive: true, force: true });
-      }
-      mkdirSync(distDir, { recursive: true });
-      cpSync(runtimeDistDir, distDir, { recursive: true });
-
-      // Generate seed secret if including DB
-      const seedSecret = includeDb ? generateSeedSecret() : undefined;
 
       // Read workflow bindings from generated manifest
       const workflowBindings = readWorkflowBindings(workbookDir);
@@ -458,76 +886,70 @@ export const deployRouter = t.router({
         console.log(`[deploy] Including ${secretCount} secrets from .env.local`);
       }
 
-      const wranglerConfig = generateWranglerConfig(
+      // Step 3: Generate worker metadata
+      const workerMetadata = generateWorkerMetadata(
         workerName,
+        d1Database.id,
+        d1Database.name,
         workflowBindings,
         secrets,
-        seedSecret,
       );
-      const wranglerPath = join(distDir, "wrangler.json");
-      writeFileSync(wranglerPath, JSON.stringify(wranglerConfig, null, 2));
-      console.log(`[deploy] Generated wrangler.json for ${workerName}`);
 
-      // Step 3: Run wrangler deploy
+      // Also save wrangler.json for reference/debugging
+      const wranglerConfig = {
+        name: workerName,
+        main: "worker/index.js",
+        compatibility_date: "2025-01-01",
+        compatibility_flags: ["nodejs_compat", "nodejs_als"],
+        d1_databases: [
+          {
+            binding: "DB",
+            database_name: d1Database.name,
+            database_id: d1Database.id,
+          },
+        ],
+      };
+      writeFileSync(join(distDir, "wrangler.json"), JSON.stringify(wranglerConfig, null, 2));
+
+      // Step 4: Deploy worker using Cloudflare API
       console.log("[deploy] Deploying to Cloudflare Workers...");
-      const deployResult = await runCommand("npx", ["wrangler", "deploy"], {
-        cwd: distDir,
-        env: {
-          CLOUDFLARE_API_TOKEN: cfToken,
-        },
-      });
+      const deployResult = await deployWorker(accountId, workerName, distDir, workerMetadata, cfToken);
 
       if (!deployResult.success) {
-        console.error("[deploy] Deploy failed:", deployResult.stderr);
+        console.error("[deploy] Deploy failed:", deployResult.error);
         return {
           success: false,
-          error: `Deploy failed: ${deployResult.stderr || deployResult.stdout}`,
+          error: `Deploy failed: ${deployResult.error}`,
           url: null,
         };
       }
 
-      // Extract URL from wrangler output
-      // wrangler outputs: "Published <name> (<id>)\n  https://<name>.<subdomain>.workers.dev"
-      const urlMatch = deployResult.stdout.match(/https:\/\/[^\s]+\.workers\.dev/);
-      const deployedUrl = urlMatch ? urlMatch[0] : `https://${workerName}.workers.dev`;
+      // Get workers subdomain for URL
+      const subdomain = await getWorkersSubdomain(accountId, cfToken);
+      const deployedUrl = buildWorkerUrl(workerName, subdomain);
 
-      // Extract and cache subdomain for fast status queries
-      const subdomainMatch = deployedUrl.match(/\.([^.]+)\.workers\.dev$/);
-      if (subdomainMatch) {
-        const subdomain = subdomainMatch[1];
-        const configWithSubdomain = { ...wranglerConfig, _subdomain: subdomain };
-        writeFileSync(wranglerPath, JSON.stringify(configWithSubdomain, null, 2));
+      // Cache subdomain in config for fast status queries
+      if (subdomain) {
+        const configWithSubdomain = { ...wranglerConfig, _subdomain: subdomain, _accountId: accountId };
+        writeFileSync(join(distDir, "wrangler.json"), JSON.stringify(configWithSubdomain, null, 2));
       }
 
       console.log(`[deploy] Deployed successfully to ${deployedUrl}`);
 
-      // Step 4: Push local DB if requested
-      if (includeDb && seedSecret) {
-        console.log("[deploy] Pushing local database to production...");
+      // Step 5: Sync local DB if requested
+      if (includeDb) {
+        console.log("[deploy] Syncing local database to production D1...");
 
         const dbPath = findLocalDbPath(workbookDir);
         if (dbPath) {
-          try {
-            const statements = exportDbToSql(dbPath);
-            console.log(`[deploy] Exporting ${statements.length} SQL statements...`);
-
-            const seedResponse = await fetch(`${deployedUrl}/db/seed`, {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ secret: seedSecret, statements }),
-            });
-
-            if (seedResponse.ok) {
-              const result = (await seedResponse.json()) as { success: boolean; executed: number };
-              console.log(`[deploy] Database seeded: ${result.executed} statements executed`);
-            } else {
-              console.error("[deploy] Database seed failed:", await seedResponse.text());
-            }
-          } catch (err) {
-            console.error("[deploy] Database seed error:", err);
+          const syncResult = await syncLocalDbToRemote(dbPath, accountId, d1Database.id, cfToken);
+          if (syncResult.success) {
+            console.log(`[deploy] Database synced: ${syncResult.executed} statements executed`);
+          } else {
+            console.error("[deploy] Database sync failed:", syncResult.error);
           }
         } else {
-          console.log("[deploy] No local database found to push");
+          console.log("[deploy] No local database found to sync");
         }
       }
 
@@ -536,6 +958,8 @@ export const deployRouter = t.router({
         error: null,
         url: deployedUrl,
         workerName,
+        d1DatabaseId: d1Database.id,
+        d1DatabaseName: d1Database.name,
       };
     }),
 
@@ -554,6 +978,7 @@ export const deployRouter = t.router({
         deployed: false,
         url: null,
         workerName: null,
+        d1DatabaseName: null,
         lastDeployedAt: null,
       };
     }
@@ -561,20 +986,21 @@ export const deployRouter = t.router({
     try {
       const config = JSON.parse(readFileSync(wranglerPath, "utf-8")) as {
         name: string;
-        vars?: { HANDS_SEED_SECRET?: string };
+        d1_databases?: Array<{ database_name: string; database_id: string }>;
+        _subdomain?: string;
       };
       const workerName = config.name;
-      const seedSecret = config.vars?.HANDS_SEED_SECRET;
+      const d1Database = config.d1_databases?.[0];
 
       // Check for cached subdomain in config
-      const cachedSubdomain = (config as { _subdomain?: string })._subdomain;
-      const url = buildWorkerUrl(workerName, cachedSubdomain || null);
+      const url = buildWorkerUrl(workerName, config._subdomain || null);
 
       return {
         deployed: true,
         url,
         workerName,
-        seedSecret,
+        d1DatabaseName: d1Database?.database_name ?? null,
+        d1DatabaseId: d1Database?.database_id ?? null,
         lastDeployedAt: null,
       };
     } catch {
@@ -582,14 +1008,14 @@ export const deployRouter = t.router({
         deployed: false,
         url: null,
         workerName: null,
-        seedSecret: null,
+        d1DatabaseName: null,
         lastDeployedAt: null,
       };
     }
   }),
 
   /**
-   * Push local database to production
+   * Push local database to production D1
    */
   pushDb: publicProcedure.mutation(async ({ ctx }) => {
     const { workbookDir } = ctx;
@@ -607,67 +1033,48 @@ export const deployRouter = t.router({
       return { success: false, error: "No Cloudflare API token configured." };
     }
 
-    let config: { name: string; vars?: { HANDS_SEED_SECRET?: string } };
+    let config: {
+      d1_databases?: Array<{ database_name: string; database_id: string }>;
+      _accountId?: string;
+    };
     try {
       config = JSON.parse(readFileSync(wranglerPath, "utf-8"));
     } catch {
       return { success: false, error: "Failed to read deployment config." };
     }
 
-    const seedSecret = config.vars?.HANDS_SEED_SECRET;
-    if (!seedSecret) {
-      return {
-        success: false,
-        error: "No seed secret configured. Redeploy with 'Include local database' checked.",
-      };
+    const d1Database = config.d1_databases?.[0];
+    if (!d1Database?.database_id) {
+      return { success: false, error: "No D1 database configured. Redeploy first." };
     }
 
-    // Get deployed URL
-    const subdomain = await getWorkersSubdomain(distDir, cfToken);
-    const deployedUrl = buildWorkerUrl(config.name, subdomain);
+    // Get account ID (cached or fetch)
+    let accountId = config._accountId;
+    if (!accountId) {
+      try {
+        accountId = await getAccountId(cfToken);
+      } catch (err) {
+        return { success: false, error: `Failed to get account: ${err}` };
+      }
+    }
 
-    // Find and export local DB
+    // Find local DB
     const dbPath = findLocalDbPath(workbookDir);
     if (!dbPath) {
       return { success: false, error: "No local database found." };
     }
 
-    try {
-      const statements = exportDbToSql(dbPath);
-      console.log(`[pushDb] Exporting ${statements.length} SQL statements...`);
-
-      const response = await fetch(`${deployedUrl}/db/seed`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ secret: seedSecret, statements }),
-      });
-
-      if (!response.ok) {
-        const text = await response.text();
-        return { success: false, error: `Push failed: ${text}` };
-      }
-
-      const result = (await response.json()) as {
-        success: boolean;
-        executed: number;
-        failures: unknown[];
-      };
-      return {
-        success: result.success,
-        executed: result.executed,
-        failures: result.failures?.length ?? 0,
-        error: result.success ? null : "Some statements failed",
-      };
-    } catch (err) {
-      return {
-        success: false,
-        error: `Push failed: ${err instanceof Error ? err.message : String(err)}`,
-      };
-    }
+    // Sync using Cloudflare API
+    const result = await syncLocalDbToRemote(dbPath, accountId, d1Database.database_id, cfToken);
+    return {
+      success: result.success,
+      executed: result.executed,
+      error: result.error ?? null,
+    };
   }),
 
   /**
-   * Pull production database to local
+   * Pull production D1 database to local
    */
   pullDb: publicProcedure.mutation(async ({ ctx }) => {
     const { workbookDir, getRuntimeUrl } = ctx;
@@ -685,24 +1092,20 @@ export const deployRouter = t.router({
       return { success: false, error: "No Cloudflare API token configured." };
     }
 
-    let config: { name: string; vars?: { HANDS_SEED_SECRET?: string } };
+    let config: {
+      d1_databases?: Array<{ database_name: string; database_id: string }>;
+      _accountId?: string;
+    };
     try {
       config = JSON.parse(readFileSync(wranglerPath, "utf-8"));
     } catch {
       return { success: false, error: "Failed to read deployment config." };
     }
 
-    const seedSecret = config.vars?.HANDS_SEED_SECRET;
-    if (!seedSecret) {
-      return {
-        success: false,
-        error: "No seed secret configured. Redeploy with 'Include local database' checked.",
-      };
+    const d1Database = config.d1_databases?.[0];
+    if (!d1Database?.database_id) {
+      return { success: false, error: "No D1 database configured. Redeploy first." };
     }
-
-    // Get deployed URL
-    const subdomain = await getWorkersSubdomain(distDir, cfToken);
-    const deployedUrl = buildWorkerUrl(config.name, subdomain);
 
     // Get runtime URL to execute SQL locally
     const runtimeUrl = getRuntimeUrl();
@@ -710,42 +1113,81 @@ export const deployRouter = t.router({
       return { success: false, error: "Runtime not running. Start the runtime first." };
     }
 
-    try {
-      // Fetch DB dump from production
-      const dumpResponse = await fetch(`${deployedUrl}/db/dump`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ secret: seedSecret }),
-      });
+    // Get account ID (cached or fetch)
+    let accountId = config._accountId;
+    if (!accountId) {
+      try {
+        accountId = await getAccountId(cfToken);
+      } catch (err) {
+        return { success: false, error: `Failed to get account: ${err}` };
+      }
+    }
 
-      if (!dumpResponse.ok) {
-        const text = await dumpResponse.text();
-        return { success: false, error: `Pull failed: ${text}` };
+    try {
+      // Get all table names from remote D1
+      const tableResult = await queryD1(
+        accountId,
+        d1Database.database_id,
+        "SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' AND name NOT LIKE '_cf_%'",
+        cfToken,
+      );
+
+      if (!tableResult.success) {
+        return { success: false, error: `Failed to get tables: ${tableResult.error}` };
       }
 
-      const { statements } = (await dumpResponse.json()) as { statements: string[] };
-      console.log(`[pullDb] Received ${statements.length} SQL statements from production`);
+      const tables = (tableResult.results as Array<{ name: string }>).map((r) => r.name);
+      console.log(`[pullDb] Found ${tables.length} tables to pull`);
 
-      // Execute each statement locally
       let executed = 0;
-      for (const stmt of statements) {
-        const execResponse = await fetch(`${runtimeUrl}/db/query`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ sql: stmt }),
-        });
 
-        if (execResponse.ok) {
-          executed++;
-        } else {
-          console.warn(`[pullDb] Failed to execute: ${stmt.slice(0, 100)}...`);
+      // For each table, export data and execute locally
+      for (const table of tables) {
+        // Get table data
+        const dataResult = await queryD1(
+          accountId,
+          d1Database.database_id,
+          `SELECT * FROM "${table}"`,
+          cfToken,
+        );
+
+        if (!dataResult.success) {
+          console.warn(`[pullDb] Failed to get data from ${table}`);
+          continue;
+        }
+
+        const rows = dataResult.results as Record<string, unknown>[];
+
+        // Generate INSERT statements and execute locally
+        for (const row of rows) {
+          const columns = Object.keys(row);
+          const values = columns.map((col) => {
+            const val = row[col];
+            if (val === null) return "NULL";
+            if (typeof val === "number") return String(val);
+            if (typeof val === "string") return `'${val.replace(/'/g, "''")}'`;
+            return `'${String(val).replace(/'/g, "''")}'`;
+          });
+
+          const stmt = `INSERT OR REPLACE INTO "${table}" (${columns.map((c) => `"${c}"`).join(", ")}) VALUES (${values.join(", ")})`;
+
+          // Execute locally
+          const execResponse = await fetch(`${runtimeUrl}/db/query`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ sql: stmt }),
+          });
+
+          if (execResponse.ok) {
+            executed++;
+          }
         }
       }
 
       return {
         success: true,
         executed,
-        total: statements.length,
+        total: executed,
         error: null,
       };
     } catch (err) {

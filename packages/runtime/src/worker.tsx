@@ -4,7 +4,6 @@ import { defineApp } from "rwsdk/worker";
 import { actionRoutes } from "./actions/routes";
 import { workflowRoutes } from "./actions/workflow-routes";
 import { dbRoutes } from "./db/routes";
-import { seedRoutes } from "./db/seed-routes";
 import { Document } from "./pages/Document";
 
 /** Document wrapper that injects nav config */
@@ -65,8 +64,6 @@ export default defineApp([
   ),
   // Database routes (dev only - for AI agent access)
   ...(import.meta.env.VITE_IS_DEV_SERVER ? dbRoutes : []),
-  // Seed routes (production - for deploying local DB state)
-  ...seedRoutes,
   // Action routes (dev only - for action execution via local executor)
   ...(import.meta.env.VITE_IS_DEV_SERVER ? actionRoutes : []),
   // Workflow routes (production - for CF Workflow execution)

@@ -15,6 +15,8 @@ pub enum Sidecar {
     WorkbookServer,
     /// OpenCode agent server
     Agent,
+    /// Bun runtime (for vite dev server)
+    Bun,
 }
 
 impl Sidecar {
@@ -24,6 +26,7 @@ impl Sidecar {
             Sidecar::Cli => "hands-cli",
             Sidecar::WorkbookServer => "hands-workbook-server",
             Sidecar::Agent => "hands-agent",
+            Sidecar::Bun => "bun",
         }
     }
 }

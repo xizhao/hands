@@ -34,7 +34,6 @@ let kyselyInstance: Kysely<DB> | null = null;
  */
 function getOrCreateDb(): Kysely<DB> {
   if (!kyselyInstance) {
-    // @ts-expect-error - DB binding is defined in wrangler.jsonc
     const d1Database = env.DB as D1Database;
     if (!d1Database) {
       throw new Error(

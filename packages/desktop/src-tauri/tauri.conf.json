@@ -34,10 +34,12 @@
       "binaries/hands-agent",
       "binaries/hands-workbook-server",
       "binaries/hands-cli",
-      "binaries/opencode"
+      "binaries/opencode",
+      "binaries/bun"
     ],
     "resources": {
-      "binaries/lib": "lib"
+      "binaries/lib": "lib",
+      "binaries/builder.js": "builder.js"
     },
     "icon": [
       "icons/32x32.png",
