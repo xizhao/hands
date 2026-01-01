@@ -198,6 +198,11 @@ ${pages.map((p) => `  "${p.id}": { frontmatter: ${sanitizeId(p.id)}Frontmatter }
 
 export type PageId = keyof typeof pages;
 
+/** Navigation-friendly page list for client-side nav widget */
+export const navPages = [
+${pages.map((p) => `  { route: "/pages/${p.id}", title: ${sanitizeId(p.id)}Frontmatter.title as string || "${p.id}" },`).join("\n")}
+];
+
 export const pageRoutes = [
 ${pages.map((p) => `  route("/pages/${p.id}", ${sanitizeId(p.id)}Page),`).join("\n")}
 ] as const;

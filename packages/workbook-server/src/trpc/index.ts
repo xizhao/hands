@@ -123,7 +123,7 @@ export function registerTRPCRoutes(app: Hono, config: TRPCConfig) {
       // Base context
       workbookId,
       workbookDir,
-      // SQLite context - direct bun:sqlite access via workbookDir
+      // D1 database context - uses wrangler's getPlatformProxy
       onSchemaChange,
       // Actions context - still needs runtime for action execution
       runtimeUrl: runtimeUrl ?? "http://localhost:55200",

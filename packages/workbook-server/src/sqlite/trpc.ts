@@ -1,15 +1,14 @@
 /**
  * SQLite tRPC Router
  *
- * Type-safe API for database operations via direct bun:sqlite.
- * No runtime dependency - queries go straight to the workbook database.
+ * Type-safe API for database operations via bun:sqlite.
  */
 
 import { initTRPC, TRPCError } from "@trpc/server";
 import { z } from "zod";
 import {
-  executeQuery as execSqlite,
-  getSchema as getSchemaDirect,
+  executeQuery,
+  getSchema,
   getWorkbookDb,
 } from "../db/workbook-db.js";
 
@@ -29,7 +28,6 @@ export interface SQLiteTRPCContext {
 // ============================================================================
 
 const t = initTRPC.context<SQLiteTRPCContext>().create();
-const publicProcedure = t.procedure;
 
 // ============================================================================
 // Input Schemas
@@ -54,42 +52,6 @@ function isDDL(sql: string): boolean {
   return ddlKeywords.some((kw) => upperSql.startsWith(kw));
 }
 
-interface QueryResult {
-  rows: unknown[];
-  changes?: number;
-  lastInsertRowid?: number;
-}
-
-/**
- * Execute SQL directly via bun:sqlite
- */
-function executeQuery(workbookDir: string, sql: string, params?: unknown[]): QueryResult {
-  try {
-    const db = getWorkbookDb(workbookDir);
-    return execSqlite(db, sql, params);
-  } catch (error) {
-    throw new TRPCError({
-      code: "INTERNAL_SERVER_ERROR",
-      message: `Database query failed: ${error instanceof Error ? error.message : String(error)}`,
-    });
-  }
-}
-
-/**
- * Get schema info directly via bun:sqlite
- */
-function getSchema(workbookDir: string) {
-  try {
-    const db = getWorkbookDb(workbookDir);
-    return getSchemaDirect(db);
-  } catch (error) {
-    throw new TRPCError({
-      code: "INTERNAL_SERVER_ERROR",
-      message: `Failed to get schema: ${error instanceof Error ? error.message : String(error)}`,
-    });
-  }
-}
-
 // ============================================================================
 // Router
 // ============================================================================
@@ -99,7 +61,7 @@ export const sqliteTRPCRouter = t.router({
    * Execute a read-only SELECT query (useQuery - cached/deduplicated)
    * Used by LiveValue for reactive data display
    */
-  select: publicProcedure.input(queryInput).query(({ ctx, input }) => {
+  select: t.procedure.input(queryInput).query(({ ctx, input }) => {
     // Validate it's a SELECT query
     const upperSql = input.sql.trim().toUpperCase();
     if (!upperSql.startsWith("SELECT") && !upperSql.startsWith("PRAGMA")) {
@@ -109,51 +71,83 @@ export const sqliteTRPCRouter = t.router({
       });
     }
 
-    const result = executeQuery(ctx.workbookDir, input.sql, input.params);
-    return {
-      rows: result.rows,
-      rowCount: result.rows.length,
-    };
+    try {
+      const db = getWorkbookDb(ctx.workbookDir);
+      const result = executeQuery(db, input.sql, input.params);
+      return {
+        rows: result.rows,
+        rowCount: result.rows.length,
+      };
+    } catch (error) {
+      throw new TRPCError({
+        code: "INTERNAL_SERVER_ERROR",
+        message: `Database query failed: ${error instanceof Error ? error.message : String(error)}`,
+      });
+    }
   }),
 
   /** Execute a SQL query/mutation (useMutation - not cached) */
-  query: publicProcedure.input(queryInput).mutation(async ({ ctx, input }) => {
-    const result = executeQuery(ctx.workbookDir, input.sql, input.params);
+  query: t.procedure.input(queryInput).mutation(async ({ ctx, input }) => {
+    try {
+      const db = getWorkbookDb(ctx.workbookDir);
+      const result = executeQuery(db, input.sql, input.params);
 
-    // Trigger schema regeneration if DDL detected
-    if (isDDL(input.sql) && ctx.onSchemaChange) {
-      ctx.onSchemaChange().catch(console.error);
+      // Trigger schema regeneration if DDL detected
+      if (isDDL(input.sql) && ctx.onSchemaChange) {
+        ctx.onSchemaChange().catch(console.error);
+      }
+
+      return {
+        rows: result.rows,
+        rowCount: result.rows.length,
+        changes: result.changes,
+      };
+    } catch (error) {
+      throw new TRPCError({
+        code: "INTERNAL_SERVER_ERROR",
+        message: `Database query failed: ${error instanceof Error ? error.message : String(error)}`,
+      });
     }
-
-    return {
-      rows: result.rows,
-      rowCount: result.rows.length,
-      changes: result.changes,
-    };
   }),
 
   /** List all tables */
-  tables: publicProcedure.query(({ ctx }) => {
-    const schema = getSchema(ctx.workbookDir);
-    return schema.tables.map((t) => ({ name: t.name }));
+  tables: t.procedure.query(({ ctx }) => {
+    try {
+      const db = getWorkbookDb(ctx.workbookDir);
+      const schema = getSchema(db);
+      return schema.tables.map((t) => ({ name: t.name }));
+    } catch (error) {
+      throw new TRPCError({
+        code: "INTERNAL_SERVER_ERROR",
+        message: `Failed to get tables: ${error instanceof Error ? error.message : String(error)}`,
+      });
+    }
   }),
 
   /** Get detailed schema for all tables */
-  schema: publicProcedure.query(({ ctx }) => {
-    const schema = getSchema(ctx.workbookDir);
-    return schema.tables.map((t) => ({
-      table_name: t.name,
-      columns: t.columns.map((c) => ({
-        name: c.name,
-        type: c.type,
-        nullable: c.nullable,
-      })),
-      foreignKeys: t.foreignKeys,
-    }));
+  schema: t.procedure.query(({ ctx }) => {
+    try {
+      const db = getWorkbookDb(ctx.workbookDir);
+      const schema = getSchema(db);
+      return schema.tables.map((t) => ({
+        table_name: t.name,
+        columns: t.columns.map((c) => ({
+          name: c.name,
+          type: c.type,
+          nullable: c.nullable,
+        })),
+        foreignKeys: t.foreignKeys,
+      }));
+    } catch (error) {
+      throw new TRPCError({
+        code: "INTERNAL_SERVER_ERROR",
+        message: `Failed to get schema: ${error instanceof Error ? error.message : String(error)}`,
+      });
+    }
   }),
 
   /** Drop a table */
-  dropTable: publicProcedure.input(dropTableInput).mutation(async ({ ctx, input }) => {
+  dropTable: t.procedure.input(dropTableInput).mutation(async ({ ctx, input }) => {
     // Sanitize table name
     const safeName = input.tableName.replace(/[^a-zA-Z0-9_]/g, "");
     if (safeName !== input.tableName) {
@@ -163,21 +157,28 @@ export const sqliteTRPCRouter = t.router({
       });
     }
 
-    executeQuery(ctx.workbookDir, `DROP TABLE IF EXISTS "${safeName}"`);
+    try {
+      const db = getWorkbookDb(ctx.workbookDir);
+      executeQuery(db, `DROP TABLE IF EXISTS "${safeName}"`);
 
-    // Trigger schema regeneration
-    if (ctx.onSchemaChange) {
-      await ctx.onSchemaChange();
+      // Trigger schema regeneration
+      if (ctx.onSchemaChange) {
+        await ctx.onSchemaChange();
+      }
+
+      return { success: true, tableName: safeName };
+    } catch (error) {
+      throw new TRPCError({
+        code: "INTERNAL_SERVER_ERROR",
+        message: `Failed to drop table: ${error instanceof Error ? error.message : String(error)}`,
+      });
     }
-
-    return { success: true, tableName: safeName };
   }),
 
   /** Health check - is database accessible? */
-  health: publicProcedure.query(({ ctx }) => {
+  health: t.procedure.query(({ ctx }) => {
     try {
       const db = getWorkbookDb(ctx.workbookDir);
-      // Simple query to verify db is accessible
       db.query("SELECT 1").get();
       return { ready: true };
     } catch {
@@ -205,6 +206,7 @@ export interface DbSubscriptionState {
 
 /**
  * Create a subscription manager for database changes
+ * Note: Uses polling via PRAGMA data_version for change detection
  */
 export function createDbSubscriptionManager(workbookDir: string) {
   const state: DbSubscriptionState = {
@@ -215,7 +217,7 @@ export function createDbSubscriptionManager(workbookDir: string) {
   let pollInterval: ReturnType<typeof setInterval> | null = null;
 
   /**
-   * Poll SQLite for data_version changes (direct bun:sqlite)
+   * Poll for data_version changes
    */
   function pollForChanges() {
     try {

@@ -78,7 +78,7 @@ export const domainsRouter = t.router({
     // Discover pages first (needed for matching)
     const pagesResult = await discoverPages(pagesDir);
 
-    // Discover domains from database
+    // Discover domains from database (sync bun:sqlite)
     const domainsResult = discoverDomains(ctx.workbookDir, pagesResult.items);
 
     return {
@@ -128,10 +128,10 @@ export const domainsRouter = t.router({
     try {
       const db = getWorkbookDb(ctx.workbookDir);
 
-      // Check if table already exists
+      // Check if table already exists (sync bun:sqlite)
       const tableExists = db
         .query<{ name: string }, [string]>(
-          `SELECT name FROM sqlite_master WHERE type='table' AND name=?`,
+          `SELECT name FROM sqlite_master WHERE type='table' AND name=?`
         )
         .get(tableName);
 
@@ -228,10 +228,10 @@ title: ${title}
     try {
       const db = getWorkbookDb(ctx.workbookDir);
 
-      // Check if source table exists
+      // Check if source table exists (sync bun:sqlite)
       const tableExists = db
         .query<{ name: string }, [string]>(
-          `SELECT name FROM sqlite_master WHERE type='table' AND name=?`,
+          `SELECT name FROM sqlite_master WHERE type='table' AND name=?`
         )
         .get(oldTableName);
 
@@ -242,10 +242,10 @@ title: ${title}
         });
       }
 
-      // Check if target name already exists
+      // Check if target name already exists (sync bun:sqlite)
       const targetExists = db
         .query<{ name: string }, [string]>(
-          `SELECT name FROM sqlite_master WHERE type='table' AND name=?`,
+          `SELECT name FROM sqlite_master WHERE type='table' AND name=?`
         )
         .get(newTableName);
 
@@ -324,10 +324,10 @@ title: ${title}
     try {
       const db = getWorkbookDb(ctx.workbookDir);
 
-      // Check if table exists
+      // Check if table exists (sync bun:sqlite)
       const tableExists = db
         .query<{ name: string }, [string]>(
-          `SELECT name FROM sqlite_master WHERE type='table' AND name=?`,
+          `SELECT name FROM sqlite_master WHERE type='table' AND name=?`
         )
         .get(tableName);
 
@@ -338,14 +338,14 @@ title: ${title}
         });
       }
 
-      // Get tables that reference this one (for cascade info)
+      // Get tables that reference this one (for cascade info) (sync bun:sqlite)
       const referencing = db
         .query<{ name: string }, [string]>(`
-        SELECT DISTINCT m.name
-        FROM sqlite_master m
-        JOIN pragma_foreign_key_list(m.name) fk ON fk."table" = ?
-        WHERE m.type = 'table'
-      `)
+          SELECT DISTINCT m.name
+          FROM sqlite_master m
+          JOIN pragma_foreign_key_list(m.name) fk ON fk."table" = ?
+          WHERE m.type = 'table'
+        `)
         .all(tableName);
 
       // Drop the table (SQLite doesn't have CASCADE, but foreign keys will fail if referenced)

@@ -1,8 +1,8 @@
 /**
- * Vite plugin to generate Kysely types from the Durable Object SQLite database
+ * Vite plugin to generate Kysely types from the D1 SQLite database
  *
  * On dev server start, this plugin:
- * 1. Looks for the DO sqlite file in .wrangler/state/v3/do/
+ * 1. Looks for the D1 sqlite file in .hands/db/v3/d1/
  * 2. Runs kysely-codegen against it to generate types
  * 3. Outputs to the workbook's .hands/db.d.ts
  *
@@ -92,14 +92,11 @@ function getSchemaHash(sqliteFile: string): string | null {
 }
 
 async function generateDbTypesIfChanged(workbookPath: string): Promise<void> {
-  // Check .hands/db (current) or legacy .wrangler path
-  const dbPath = path.join(workbookPath, ".hands/db");
-  const legacyPath = path.join(workbookPath, ".wrangler/state/v3/do");
-  const doStatePath = fs.existsSync(dbPath) ? dbPath : legacyPath;
+  const persistPath = path.join(workbookPath, ".hands/db");
   const outputPath = path.join(workbookPath, ".hands/db.d.ts");
 
-  // Find sqlite files in the DO state directory
-  const sqliteFile = findSqliteFile(doStatePath);
+  // Find sqlite files in the D1 state directory
+  const sqliteFile = findD1SqliteFile(persistPath);
 
   if (!sqliteFile) {
     // Only write placeholder if the file doesn't exist
@@ -147,56 +144,47 @@ export interface DB {}
 }
 
 /**
- * Get the script name from wrangler.jsonc - this determines the DO folder name.
- * Must match what the cloudflare vite plugin uses.
+ * Find the D1 sqlite file in the persist state directory.
+ * D1 databases are stored at: {persistPath}/v3/d1/{database_name}/{hash}.sqlite
  */
-function getScriptName(): string {
-  const wranglerPath = path.resolve(__dirname, "../wrangler.jsonc");
-  try {
-    const content = fs.readFileSync(wranglerPath, "utf-8");
-    // Strip comments and parse as JSON
-    const json = content.replace(/\/\*[\s\S]*?\*\/|\/\/.*/g, "");
-    const config = JSON.parse(json);
-    return config.name || "runtime";
-  } catch {
-    return "runtime";
-  }
-}
+function findD1SqliteFile(persistPath: string): string | null {
+  const d1Path = path.join(persistPath, "v3", "d1");
 
-/**
- * Find the sqlite file in the DO state directory.
- * Uses the script name from wrangler.jsonc to find the correct folder.
- * This ensures we read the same DB that the runtime writes to.
- */
-function findSqliteFile(doStatePath: string): string | null {
-  if (!fs.existsSync(doStatePath)) {
+  if (!fs.existsSync(d1Path)) {
     return null;
   }
 
-  // Look in the specific folder for our Database DO class
-  // Structure: {persistState}/v3/do/{scriptName}-Database/{idHash}.sqlite
-  const scriptName = getScriptName();
-  const dbFolder = path.join(doStatePath, "v3", "do", `${scriptName}-Database`);
-
-  if (!fs.existsSync(dbFolder)) {
-    // Fallback: scan all folders (for migration from old structure)
-    const files = walkDir(doStatePath);
-    const sqliteFiles = files.filter((f) => f.endsWith(".sqlite") && f.includes("-Database/"));
-    if (sqliteFiles.length === 0) return null;
-    // Return most recently modified (active one)
-    sqliteFiles.sort((a, b) => fs.statSync(b).mtimeMs - fs.statSync(a).mtimeMs);
-    return sqliteFiles[0];
+  // Look for database folders (miniflare uses "miniflare-D1DatabaseObject")
+  let dbFolders: string[];
+  try {
+    dbFolders = fs.readdirSync(d1Path, { withFileTypes: true })
+      .filter((d) => d.isDirectory())
+      .map((d) => d.name);
+  } catch {
+    return null;
   }
 
-  // Find sqlite files in the correct folder
-  const files = fs.readdirSync(dbFolder);
-  const sqliteFiles = files.filter((f) => f.endsWith(".sqlite"));
+  if (dbFolders.length === 0) {
+    return null;
+  }
+
+  // Use the first database folder (typically "hands-workbook")
+  const dbFolder = path.join(d1Path, dbFolders[0]);
+
+  // Find .sqlite files in the folder
+  let sqliteFiles: string[];
+  try {
+    sqliteFiles = fs.readdirSync(dbFolder)
+      .filter((f) => f.endsWith(".sqlite"));
+  } catch {
+    return null;
+  }
 
   if (sqliteFiles.length === 0) {
     return null;
   }
 
-  // If multiple (shouldn't happen with stable DO ID), use most recent
+  // If multiple files, use the most recently modified
   if (sqliteFiles.length > 1) {
     sqliteFiles.sort((a, b) => {
       const aPath = path.join(dbFolder, a);

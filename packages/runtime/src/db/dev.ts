@@ -1,7 +1,7 @@
 /**
  * Hands Database Module
  *
- * Provides typed SQL access via Kysely + Durable Object SQLite.
+ * Provides typed SQL access via Kysely + D1.
  * - Blocks: read-only access (SELECT only)
  * - Actions: full read-write access
  *
@@ -11,11 +11,8 @@
 
 import { env } from "cloudflare:workers";
 import { AsyncLocalStorage } from "node:async_hooks";
-import { type Kysely, sql as kyselySql } from "kysely";
-import { createDb } from "rwsdk/db";
-
-// Re-export Database DO for worker.tsx
-export { Database } from "./Database";
+import { Kysely, sql as kyselySql } from "kysely";
+import { D1Dialect } from "kysely-d1";
 
 // Import the generated DB type (will be available after first dev server run)
 import type { DB } from "@hands/db/types";
@@ -37,14 +34,16 @@ let kyselyInstance: Kysely<DB> | null = null;
  */
 function getOrCreateDb(): Kysely<DB> {
   if (!kyselyInstance) {
-    // @ts-expect-error - DATABASE binding is defined in wrangler.jsonc
-    const databaseBinding = env.DATABASE as DurableObjectNamespace;
-    if (!databaseBinding) {
+    // @ts-expect-error - DB binding is defined in wrangler.jsonc
+    const d1Database = env.DB as D1Database;
+    if (!d1Database) {
       throw new Error(
-        "[db] DATABASE binding not found. Check wrangler.jsonc durable_objects config.",
+        "[db] DB binding not found. Check wrangler.jsonc d1_databases config.",
       );
     }
-    kyselyInstance = createDb<DB>(databaseBinding, "hands-db");
+    kyselyInstance = new Kysely<DB>({
+      dialect: new D1Dialect({ database: d1Database }),
+    });
   }
   return kyselyInstance!;
 }

@@ -7,35 +7,13 @@
     "nodejs_compat",
     "nodejs_als"
   ],
-  "durable_objects": {
-    "bindings": [
-      {
-        "name": "DATABASE",
-        "class_name": "Database"
-      },
-      {
-        "name": "SYNCED_STATE_SERVER",
-        "class_name": "SyncedStateServer"
-      }
-    ]
-  },
-  "migrations": [
+  "d1_databases": [
     {
-      "tag": "v1",
-      "new_sqlite_classes": [
-        "Database"
-      ]
-    },
-    {
-      "tag": "v2",
-      "new_sqlite_classes": [
-        "SyncedStateServer"
-      ]
+      "binding": "DB",
+      "database_name": "hands-workbook",
+      "database_id": "local"
     }
   ],
-  "assets": {
-    "binding": "ASSETS"
-  },
   "observability": {
     "enabled": true
   },

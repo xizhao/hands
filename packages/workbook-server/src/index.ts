@@ -22,6 +22,7 @@ import { Hono } from "hono";
 import { cors } from "hono/cors";
 import { stopScheduler } from "./actions/index.js";
 import { getRuntimeSourcePath } from "./config/index.js";
+import { closeAllWorkbookDbs } from "./db/workbook-db.js";
 import { createPageRegistry, type PageRegistry } from "./pages/index.js";
 import { PORTS, waitForPortFree } from "./ports.js";
 import { getDbSubscriptionManager } from "./sqlite/trpc.js";
@@ -692,7 +693,7 @@ ${(suffix || "").slice(0, 100)}
   registerTRPCRoutes(app, {
     workbookId: config.workbookId,
     workbookDir: config.workbookDir,
-    // Runtime URL for RSC rendering (DB access is now direct via bun:sqlite)
+    // Runtime URL for RSC rendering
     getRuntimeUrl: () =>
       state.rscReady && state.rscPort ? `http://localhost:${state.rscPort}` : null,
     getState: () => ({
@@ -1502,6 +1503,7 @@ async function main() {
   console.log(`[runtime] Starting workbook: ${workbookId}`);
 
   // 1. Start HTTP server using Bun's native server with Hono
+  // Note: SQLite database is initialized lazily via bun:sqlite when first accessed
   const app = createApp(config);
 
   let server: ReturnType<typeof Bun.serve>;
@@ -1537,11 +1539,11 @@ async function main() {
 
   await startServer();
 
-  // 3. Boot critical services - pages can run in parallel (non-blocking)
+  // 3. Boot pages (non-blocking)
   bootPages(workbookDir);
 
   // Output ready JSON for Tauri - format must match lib.rs expectations
-  // Note: Database is SQLite in runtime, accessible via runtimePort
+  // Note: Database is bun:sqlite, initialized lazily
   console.log(
     JSON.stringify({
       type: "ready",
@@ -1549,13 +1551,13 @@ async function main() {
     }),
   );
 
-  // Boot Vite (block server) - can take a few seconds
+  // 4. Boot Vite (block server) - can take a few seconds
   bootRuntime(config).catch((err) => {
     console.error("[runtime] Vite boot failed:", err);
     state.rscError = err instanceof Error ? err.message : String(err);
   });
 
-  // 4. Start file watcher for real-time manifest updates
+  // 5. Start file watcher for real-time manifest updates
   startFileWatcher(config);
 
   // Handle shutdown
@@ -1567,8 +1569,10 @@ async function main() {
     for (const watcher of state.fileWatchers) {
       watcher.close();
     }
-    // Close runtime process (SQLite database lives in runtime)
+    // Close runtime process
     if (state.rscProc) state.rscProc.kill();
+    // Close SQLite database connections
+    closeAllWorkbookDbs();
     server.stop();
     process.exit(0);
   };

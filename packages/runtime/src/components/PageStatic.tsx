@@ -147,15 +147,17 @@ async function LiveValueDataFetcher({
 
   try {
     // Execute raw SQL query using Kysely
+    console.log("[LiveValue] Executing query:", query);
     const db = getDb();
     const result = await runWithDbMode("block", async () => {
       const raw = kyselySql.raw(query);
       return raw.execute(db);
     });
     data = result.rows as Record<string, unknown>[];
+    console.log("[LiveValue] Query result:", data.length, "rows");
   } catch (e) {
     error = e instanceof Error ? e : new Error(String(e));
-    console.error("[LiveValue] Query failed:", error.message);
+    console.error("[LiveValue] Query failed:", error.message, error.stack);
   }
 
   if (error) {
@@ -310,9 +312,9 @@ function LiveValueRSC({
 // ============================================================================
 
 const LiveValuePlugin = createSlatePlugin({
-  key: "LiveValue",
+  key: "live_value",
   node: {
-    type: "LiveValue",
+    type: "live_value",
     isElement: true,
     isVoid: false,
     component: ({ element, children }) => (
@@ -678,6 +680,33 @@ const TabPlugin = createSlatePlugin({
   },
 });
 
+// DataGrid plugin - renders within LiveValueProvider context
+const DataGridPlugin = createSlatePlugin({
+  key: "data_grid",
+  node: {
+    type: "data_grid",
+    isElement: true,
+    isVoid: true,
+    component: ({ element }) => {
+      const el = element as TElement & {
+        columns?: "auto" | string[];
+        height?: number;
+        readOnly?: boolean;
+        enableSearch?: boolean;
+      };
+      return (
+        <DataGrid
+          columns={el.columns ?? "auto"}
+          height={el.height ?? 400}
+          readOnly={el.readOnly ?? true}
+          enableSearch={el.enableSearch ?? true}
+          enablePaste={false}
+        />
+      );
+    },
+  },
+});
+
 /**
  * All RSC plugins for page rendering
  * - Base structure plugins (paragraphs, headings, etc.)
@@ -719,6 +748,7 @@ const RSCPlugins = [
   LoaderPlugin,
   TabsPlugin,
   TabPlugin,
+  DataGridPlugin,
 ];
 
 /**
@@ -766,7 +796,8 @@ export function PageStatic({ value, blocks }: PageStaticProps) {
 
   return (
     <TooltipProvider>
-      <article className="prose prose-slate max-w-none px-4 py-6 sm:px-6 lg:px-8">
+      {/* pl-14 gives clearance for the nav peek tab (40px + breathing room) */}
+      <article className="prose prose-slate max-w-none pl-14 pr-4 py-6 sm:pl-16 sm:pr-6 lg:pl-20 lg:pr-8">
         <div className="mx-auto max-w-4xl">
           <PlateStatic editor={editor} />
         </div>

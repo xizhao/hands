@@ -419,11 +419,14 @@ export function discoverDomains(
   const items: DiscoveredDomain[] = [];
   const errors: DiscoveryError[] = [];
 
-  // Import database functions
-  let getWorkbookDb: (workbookDir: string) => import("bun:sqlite").Database;
+  // Import database functions (sync require for bun:sqlite)
+  let getWorkbookDb: typeof import("../db/workbook-db.js").getWorkbookDb;
+  let isDbInitialized: typeof import("../db/workbook-db.js").isDbInitialized;
   try {
+    // Use require for sync import
     const dbModule = require("../db/workbook-db.js");
     getWorkbookDb = dbModule.getWorkbookDb;
+    isDbInitialized = dbModule.isDbInitialized;
   } catch (err) {
     errors.push({
       file: "workbook-db",
@@ -432,24 +435,23 @@ export function discoverDomains(
     return { items, errors };
   }
 
-  let db: import("bun:sqlite").Database;
-  try {
-    db = getWorkbookDb(rootPath);
-  } catch (_err) {
-    // Database doesn't exist yet - that's ok, just return empty
+  // Check if DB is initialized
+  if (!isDbInitialized(rootPath)) {
+    // Database not initialized yet - that's ok, just return empty
     return { items, errors };
   }
 
-  // Get all user tables
-  const tables = db
-    .query<{ name: string }, []>(`
+  const db = getWorkbookDb(rootPath);
+
+  // Get all user tables (sync bun:sqlite)
+  const tables = db.query<{ name: string }, []>(`
     SELECT name FROM sqlite_master
     WHERE type = 'table'
       AND name NOT LIKE 'sqlite_%'
+      AND name NOT LIKE '_cf_%'
       AND name NOT GLOB '__*'
     ORDER BY name
-  `)
-    .all();
+  `).all();
 
   const allTableNames = tables.map((t) => t.name);
 
@@ -461,21 +463,16 @@ export function discoverDomains(
 
   for (const table of tables) {
     try {
-      // Get columns
-      const columnsRaw = db
-        .query<
-          {
-            name: string;
-            type: string;
-            notnull: number;
-            pk: number;
-            dflt_value: string | null;
-          },
-          []
-        >(`PRAGMA table_info("${table.name}")`)
-        .all();
+      // Get columns (sync bun:sqlite)
+      const columnsResult = db.query<{
+        name: string;
+        type: string;
+        notnull: number;
+        pk: number;
+        dflt_value: string | null;
+      }, []>(`PRAGMA table_info("${table.name}")`).all();
 
-      const columns: DomainColumn[] = columnsRaw.map((c) => ({
+      const columns: DomainColumn[] = columnsResult.map((c) => ({
         name: c.name,
         type: c.type,
         nullable: c.notnull === 0,
@@ -483,19 +480,14 @@ export function discoverDomains(
         defaultValue: c.dflt_value ?? undefined,
       }));
 
-      // Get foreign keys
-      const fksRaw = db
-        .query<
-          {
-            from: string;
-            table: string;
-            to: string;
-          },
-          []
-        >(`PRAGMA foreign_key_list("${table.name}")`)
-        .all();
+      // Get foreign keys (sync bun:sqlite)
+      const fksResult = db.query<{
+        from: string;
+        table: string;
+        to: string;
+      }, []>(`PRAGMA foreign_key_list("${table.name}")`).all();
 
-      const foreignKeys: DomainForeignKey[] = fksRaw.map((fk) => ({
+      const foreignKeys: DomainForeignKey[] = fksResult.map((fk) => ({
         column: fk.from,
         referencedTable: fk.table,
         referencedColumn: fk.to,

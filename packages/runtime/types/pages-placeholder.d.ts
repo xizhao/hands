@@ -4,6 +4,7 @@
  */
 
 import type { RouteType } from "rwsdk/router";
+import type { NavPage } from "../src/nav/types";
 
 // Page metadata
 export interface PageMeta {
@@ -15,6 +16,9 @@ export declare const pages: Record<string, PageMeta>;
 
 // Page ID type
 export type PageId = string;
+
+// Navigation-friendly page list for client-side nav widget
+export declare const navPages: NavPage[];
 
 // Routes array for rwsdk render()
 export declare const pageRoutes: readonly RouteType[];

@@ -1,17 +1,18 @@
-import { env } from "cloudflare:workers";
-import { pageRoutes, pages } from "@hands/pages";
+import { navPages, pageRoutes, pages } from "@hands/pages";
 import { type RouteMiddleware, render, route } from "rwsdk/router";
-import { SyncedStateServer, syncedStateRoutes } from "rwsdk/use-synced-state/worker";
 import { defineApp } from "rwsdk/worker";
 import { actionRoutes } from "./actions/routes";
 import { workflowRoutes } from "./actions/workflow-routes";
-import { Database } from "./db/dev";
 import { dbRoutes } from "./db/routes";
 import { seedRoutes } from "./db/seed-routes";
 import { Document } from "./pages/Document";
 
-// Export Durable Objects for wrangler
-export { Database, SyncedStateServer };
+/** Document wrapper that injects nav config */
+const DocumentWithNav: React.FC<{ children: React.ReactNode }> = ({ children }) => (
+  <Document navPages={navPages} workbookTitle="Workbook">
+    {children}
+  </Document>
+);
 
 // Workflow bindings are exported for production CF Worker
 // In dev mode, this exports empty bindings from the stub
@@ -54,8 +55,6 @@ const firstPageId = Object.keys(pages)[0];
 
 export default defineApp([
   setCommonHeaders(),
-  // Synced state routes for real-time collaboration
-  ...syncedStateRoutes(() => env.SYNCED_STATE_SERVER),
   // Health check endpoint for workbook-server polling
   route(
     "/health",
@@ -86,5 +85,5 @@ export default defineApp([
     });
   }),
   // Pages wrapped in Document for proper hydration
-  render(Document, [...pageRoutes]),
+  render(DocumentWithNav, [...pageRoutes]),
 ]);

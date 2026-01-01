@@ -68,8 +68,6 @@ export default defineConfig({
           "tailwind-merge",
           "clsx",
           "class-variance-authority",
-          // rwsdk internals (must be pre-bundled to avoid stale cache errors)
-          "rwsdk/use-synced-state/worker",
         ],
         esbuildOptions: {
           // Worker uses "neutral" platform which ignores "main" by default
@@ -133,7 +131,7 @@ export default defineConfig({
     workbookPlugin({ workbookPath }),
     cloudflare({
       viteEnvironment: { name: "worker" },
-      // Persist Durable Object SQLite to .hands/db in workbook
+      // Persist D1 local database to .hands/db in workbook
       persistState: { path: path.join(workbookPath, ".hands/db") },
     }),
     redwood({
