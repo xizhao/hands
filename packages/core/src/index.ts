@@ -26,3 +26,6 @@ export * from "./ui";
 
 // Re-export validation utilities
 export * from "./validation";
+
+// Re-export database context
+export * from "./db/context";

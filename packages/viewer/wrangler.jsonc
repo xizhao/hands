@@ -1,0 +1,22 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "hands-viewer",
+  "main": "src/worker.tsx",
+  "compatibility_date": "2025-12-01",
+  "compatibility_flags": ["nodejs_compat", "nodejs_als"],
+
+  // Custom domain - requires hands.app zone in Cloudflare
+  "routes": [
+    { "pattern": "view.hands.app/*", "zone_name": "hands.app" }
+  ],
+
+  // CF credentials for D1 HTTP API
+  // Set via: wrangler secret put CF_ACCOUNT_ID / CF_API_TOKEN
+  "vars": {
+    "ENVIRONMENT": "production"
+  },
+
+  "observability": {
+    "enabled": true
+  }
+}

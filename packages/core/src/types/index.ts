@@ -938,3 +938,9 @@ export interface TPageEmbedElement extends TElement {
 
 /** @deprecated Use TPageEmbedElement instead */
 export type TBlockElement = TPageEmbedElement;
+
+// ============================================================================
+// Database Adapter
+// ============================================================================
+
+export { type DbAdapter, type QueryResult } from "../db/context";

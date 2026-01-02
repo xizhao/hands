@@ -54,11 +54,11 @@ export function SaveStatusIndicator() {
   const [isOpen, setIsOpen] = useState(false);
   const [copied, setCopied] = useState(false);
 
-  // Deploy status and mutation
-  const statusQuery = trpc.deploy.status.useQuery(undefined, {
+  // Deploy status and mutation (using viewer deploy - no build step)
+  const statusQuery = trpc.viewerDeploy.status.useQuery(undefined, {
     staleTime: 30000,
   });
-  const deployMutation = trpc.deploy.publish.useMutation({
+  const deployMutation = trpc.viewerDeploy.publish.useMutation({
     onSuccess: () => {
       statusQuery.refetch();
     },
@@ -66,7 +66,7 @@ export function SaveStatusIndicator() {
 
   const hasChanges = status?.hasChanges ?? false;
   const isDeployed = statusQuery.data?.deployed ?? false;
-  const deployedUrl = statusQuery.data?.url;
+  const deployedUrl = statusQuery.data?.url ?? undefined;
   const isDeploying = deployMutation.isPending;
   const isSaving = save.isPending;
 
@@ -119,8 +119,8 @@ export function SaveStatusIndicator() {
     if (save.isPending || deployMutation.isPending) return;
     try {
       await save.mutateAsync(undefined);
-      // Auto-deploy after save
-      deployMutation.mutate({ includeDb: true });
+      // Auto-deploy after save (viewer deploy - uploads MDX + data to D1)
+      deployMutation.mutate({ includeData: true });
     } catch (err) {
       console.error("[SaveStatusIndicator] Save failed:", err);
     }
@@ -209,7 +209,7 @@ export function SaveStatusIndicator() {
           {/* Deploy button for first-time or retry */}
           {(state === "not-deployed" || deployMutation.error) && state !== "unsaved" && (
             <button
-              onClick={() => deployMutation.mutate({ includeDb: true })}
+              onClick={() => deployMutation.mutate({ includeData: true })}
               disabled={isDeploying}
               className="flex items-center gap-1 text-[11px] font-medium text-primary hover:underline disabled:opacity-50"
             >

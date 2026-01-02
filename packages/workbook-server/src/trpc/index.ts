@@ -16,6 +16,7 @@ import { type ActionRunsContext, actionRunsRouter } from "./routers/action-runs.
 import { type AIContext, aiRouter } from "./routers/ai.js";
 import { type DeployContext, deployRouter } from "./routers/deploy.js";
 import { type DomainsContext, domainsRouter } from "./routers/domains.js";
+import { type ViewerDeployContext, viewerDeployRouter } from "./routers/viewer-deploy.js";
 import { type EditorStateContext, editorStateRouter } from "./routers/editor-state.js";
 import { type PagesContext, pagesRouter } from "./routers/pages.js";
 import { type SecretsContext, secretsRouter } from "./routers/secrets.js";
@@ -58,7 +59,8 @@ interface CombinedContext
     EditorStateContext,
     ActionRunsContext,
     DeployContext,
-    DomainsContext {}
+    DomainsContext,
+    ViewerDeployContext {}
 
 // Create a merged router that includes all routes
 const t = initTRPC.context<CombinedContext>().create();
@@ -90,6 +92,8 @@ const appRouter = t.router({
   actionRuns: actionRunsRouter,
   // Deploy routes (build and publish to CF Workers)
   deploy: deployRouter,
+  // Viewer deploy routes (publish to shared viewer - no build needed)
+  viewerDeploy: viewerDeployRouter,
 });
 
 export type AppRouter = typeof appRouter;
@@ -168,6 +172,7 @@ export type { ActionRunsRouter } from "./routers/action-runs.js";
 export type { AIRouter } from "./routers/ai.js";
 export type { DeployRouter } from "./routers/deploy.js";
 export type { DomainsRouter } from "./routers/domains.js";
+export type { ViewerDeployRouter } from "./routers/viewer-deploy.js";
 export type { EditorStateRouter } from "./routers/editor-state.js";
 export type { PagesRouter } from "./routers/pages.js";
 export type { SecretsRouter } from "./routers/secrets.js";

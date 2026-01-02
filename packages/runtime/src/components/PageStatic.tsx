@@ -1,24 +1,35 @@
 // Types from core
-import type {
-  DataGridColumnConfig,
-  TAlertElement,
-  TAreaChartElement,
-  TBadgeElement,
-  TBarChartElement,
-  TBoxPlotChartElement,
-  TChartElement,
-  THeatmapChartElement,
-  THistogramChartElement,
-  TLineChartElement,
-  TLiveValueElement,
-  TLoaderElement,
-  TMapChartElement,
-  TMetricElement,
-  TPieChartElement,
-  TProgressElement,
-  TScatterChartElement,
-  TTabElement,
-  TTabsElement,
+import {
+  AREA_CHART_KEY,
+  BAR_CHART_KEY,
+  BOXPLOT_CHART_KEY,
+  CHART_KEY,
+  HEATMAP_CHART_KEY,
+  HISTOGRAM_CHART_KEY,
+  LINE_CHART_KEY,
+  MAP_CHART_KEY,
+  PIE_CHART_KEY,
+  SCATTER_CHART_KEY,
+  type DataGridColumnConfig,
+  type DbAdapter,
+  type TAlertElement,
+  type TAreaChartElement,
+  type TBadgeElement,
+  type TBarChartElement,
+  type TBoxPlotChartElement,
+  type TChartElement,
+  type THeatmapChartElement,
+  type THistogramChartElement,
+  type TLineChartElement,
+  type TLiveValueElement,
+  type TLoaderElement,
+  type TMapChartElement,
+  type TMetricElement,
+  type TPieChartElement,
+  type TProgressElement,
+  type TScatterChartElement,
+  type TTabElement,
+  type TTabsElement,
 } from "@hands/core/types";
 // Helpers from core (re-exported in view)
 import { formatCellValue, selectDisplayType } from "@hands/core/ui/view";
@@ -39,8 +50,6 @@ import type { TElement, Value } from "platejs";
 import { createSlateEditor, createSlatePlugin } from "platejs";
 import { PlateStatic } from "platejs/static";
 import { Suspense } from "react";
-// Database access
-import { getDb, kyselySql, runWithDbMode } from "../db/dev";
 // Chart and view components (use client - will be hydrated by rwsdk)
 import {
   // View components
@@ -124,6 +133,8 @@ interface PageStaticProps {
   value: Value;
   /** Block components keyed by ID */
   blocks: Record<string, React.FC<Record<string, unknown>>>;
+  /** Database adapter for query execution */
+  db: DbAdapter;
 }
 
 // ============================================================================
@@ -136,25 +147,23 @@ async function LiveValueDataFetcher({
   children,
   display,
   hasChildren,
+  db,
 }: {
   query: string;
   params?: Record<string, unknown>;
   children: React.ReactNode;
   display?: "auto" | "inline" | "list" | "table";
   hasChildren: boolean;
+  db: DbAdapter;
 }) {
   let data: Record<string, unknown>[] = [];
   let error: Error | null = null;
 
   try {
-    // Execute raw SQL query using Kysely
+    // Execute raw SQL query using db adapter
     console.log("[LiveValue] Executing query:", query);
-    const db = getDb();
-    const result = await runWithDbMode("block", async () => {
-      const raw = kyselySql.raw(query);
-      return raw.execute(db);
-    });
-    data = result.rows as Record<string, unknown>[];
+    const result = await db.executeQuery(query);
+    data = result.rows;
     console.log("[LiveValue] Query result:", data.length, "rows");
   } catch (e) {
     error = e instanceof Error ? e : new Error(String(e));
@@ -230,9 +239,11 @@ function hasMeaningfulChildren(element: TLiveValueElement): boolean {
 function LiveValueRSC({
   element,
   children,
+  db,
 }: {
   element: TLiveValueElement;
   children: React.ReactNode;
+  db: DbAdapter;
 }) {
   const { query, data: staticData, display } = element;
   const hasChildren = hasMeaningfulChildren(element);
@@ -300,6 +311,7 @@ function LiveValueRSC({
           params={element.params}
           display={display}
           hasChildren={hasChildren}
+          db={db}
         >
           {children}
         </LiveValueDataFetcher>
@@ -312,22 +324,25 @@ function LiveValueRSC({
 // RSC Plugins
 // ============================================================================
 
-const LiveValuePlugin = createSlatePlugin({
-  key: "live_value",
-  node: {
-    type: "live_value",
-    isElement: true,
-    isVoid: false,
-    component: ({ element, children }) => (
-      <LiveValueRSC element={element as TLiveValueElement}>{children}</LiveValueRSC>
-    ),
-  },
-});
+// LiveValuePlugin is created dynamically in PageStatic to capture db from props
+function createLiveValuePlugin(db: DbAdapter) {
+  return createSlatePlugin({
+    key: "live_value",
+    node: {
+      type: "live_value",
+      isElement: true,
+      isVoid: false,
+      component: ({ element, children }) => (
+        <LiveValueRSC element={element as TLiveValueElement} db={db}>{children}</LiveValueRSC>
+      ),
+    },
+  });
+}
 
 const BarChartPlugin = createSlatePlugin({
-  key: "BarChart",
+  key: BAR_CHART_KEY,
   node: {
-    type: "BarChart",
+    type: BAR_CHART_KEY,
     isElement: true,
     isVoid: true,
     isInline: true,
@@ -340,8 +355,12 @@ const BarChartPlugin = createSlatePlugin({
           height={el.height ?? 300}
           showLegend={el.showLegend}
           showGrid={el.showGrid}
+          showTooltip={el.showTooltip}
           stacked={el.stacked}
           layout={el.layout}
+          colors={el.colors}
+          xFormat={el.xFormat}
+          yFormat={el.yFormat}
         />
       );
     },
@@ -349,9 +368,9 @@ const BarChartPlugin = createSlatePlugin({
 });
 
 const LineChartPlugin = createSlatePlugin({
-  key: "LineChart",
+  key: LINE_CHART_KEY,
   node: {
-    type: "LineChart",
+    type: LINE_CHART_KEY,
     isElement: true,
     isVoid: true,
     isInline: true,
@@ -364,6 +383,12 @@ const LineChartPlugin = createSlatePlugin({
           height={el.height ?? 300}
           showLegend={el.showLegend}
           showGrid={el.showGrid}
+          showTooltip={el.showTooltip}
+          curve={el.curve}
+          showDots={el.showDots}
+          colors={el.colors}
+          xFormat={el.xFormat}
+          yFormat={el.yFormat}
         />
       );
     },
@@ -371,9 +396,9 @@ const LineChartPlugin = createSlatePlugin({
 });
 
 const AreaChartPlugin = createSlatePlugin({
-  key: "AreaChart",
+  key: AREA_CHART_KEY,
   node: {
-    type: "AreaChart",
+    type: AREA_CHART_KEY,
     isElement: true,
     isVoid: true,
     isInline: true,
@@ -386,7 +411,13 @@ const AreaChartPlugin = createSlatePlugin({
           height={el.height ?? 300}
           showLegend={el.showLegend}
           showGrid={el.showGrid}
+          showTooltip={el.showTooltip}
           stacked={el.stacked}
+          curve={el.curve}
+          fillOpacity={el.fillOpacity}
+          colors={el.colors}
+          xFormat={el.xFormat}
+          yFormat={el.yFormat}
         />
       );
     },
@@ -394,9 +425,9 @@ const AreaChartPlugin = createSlatePlugin({
 });
 
 const PieChartPlugin = createSlatePlugin({
-  key: "PieChart",
+  key: PIE_CHART_KEY,
   node: {
-    type: "PieChart",
+    type: PIE_CHART_KEY,
     isElement: true,
     isVoid: true,
     isInline: true,
@@ -408,6 +439,9 @@ const PieChartPlugin = createSlatePlugin({
           nameKey={el.nameKey}
           height={el.height ?? 300}
           showLegend={el.showLegend}
+          innerRadius={el.innerRadius}
+          showLabels={el.showLabels}
+          colors={el.colors}
         />
       );
     },
@@ -415,15 +449,15 @@ const PieChartPlugin = createSlatePlugin({
 });
 
 const GenericChartPlugin = createSlatePlugin({
-  key: "Chart",
+  key: CHART_KEY,
   node: {
-    type: "Chart",
+    type: CHART_KEY,
     isElement: true,
     isVoid: true,
     isInline: true,
     component: ({ element }) => {
       const el = element as TChartElement;
-      return <Chart vegaSpec={el.vegaSpec as any} height={300} />;
+      return <Chart vegaSpec={el.vegaSpec as any} height={el.height ?? 300} />;
     },
   },
 });
@@ -431,9 +465,9 @@ const GenericChartPlugin = createSlatePlugin({
 // Additional Chart Plugins
 
 const ScatterChartPlugin = createSlatePlugin({
-  key: "ScatterChart",
+  key: SCATTER_CHART_KEY,
   node: {
-    type: "ScatterChart",
+    type: SCATTER_CHART_KEY,
     isElement: true,
     isVoid: true,
     isInline: true,
@@ -447,6 +481,7 @@ const ScatterChartPlugin = createSlatePlugin({
           sizeKey={el.sizeKey}
           height={el.height ?? 300}
           showTooltip={el.showTooltip}
+          colors={el.colors}
           opacity={el.opacity}
         />
       );
@@ -455,9 +490,9 @@ const ScatterChartPlugin = createSlatePlugin({
 });
 
 const HistogramChartPlugin = createSlatePlugin({
-  key: "HistogramChart",
+  key: HISTOGRAM_CHART_KEY,
   node: {
-    type: "HistogramChart",
+    type: HISTOGRAM_CHART_KEY,
     isElement: true,
     isVoid: true,
     isInline: true,
@@ -477,9 +512,9 @@ const HistogramChartPlugin = createSlatePlugin({
 });
 
 const HeatmapChartPlugin = createSlatePlugin({
-  key: "HeatmapChart",
+  key: HEATMAP_CHART_KEY,
   node: {
-    type: "HeatmapChart",
+    type: HEATMAP_CHART_KEY,
     isElement: true,
     isVoid: true,
     isInline: true,
@@ -500,9 +535,9 @@ const HeatmapChartPlugin = createSlatePlugin({
 });
 
 const BoxPlotChartPlugin = createSlatePlugin({
-  key: "BoxPlotChart",
+  key: BOXPLOT_CHART_KEY,
   node: {
-    type: "BoxPlotChart",
+    type: BOXPLOT_CHART_KEY,
     isElement: true,
     isVoid: true,
     isInline: true,
@@ -523,9 +558,9 @@ const BoxPlotChartPlugin = createSlatePlugin({
 });
 
 const MapChartPlugin = createSlatePlugin({
-  key: "MapChart",
+  key: MAP_CHART_KEY,
   node: {
-    type: "MapChart",
+    type: MAP_CHART_KEY,
     isElement: true,
     isVoid: true,
     isInline: true,
@@ -709,12 +744,11 @@ const DataGridPlugin = createSlatePlugin({
 });
 
 /**
- * All RSC plugins for page rendering
+ * Base RSC plugins for page rendering (without LiveValue - that's added dynamically)
  * - Base structure plugins (paragraphs, headings, etc.)
- * - RSC LiveValue (async + Suspense)
  * - Client chart components (hydrated by rwsdk)
  */
-const RSCPlugins = [
+const BaseRSCPlugins = [
   // Structure
   ...BaseBasicBlocksKit,
   ...BaseBasicMarksKit,
@@ -728,8 +762,7 @@ const RSCPlugins = [
   ...BaseMediaKit,
   ...BaseMentionKit,
   ...BaseTocKit,
-  // Data + Charts (RSC-aware)
-  LiveValuePlugin,
+  // Charts
   BarChartPlugin,
   LineChartPlugin,
   AreaChartPlugin,
@@ -760,7 +793,7 @@ const RSCPlugins = [
  * - Client chart components (hydrated by rwsdk)
  * - RSC block embeds (user blocks)
  */
-export function PageStatic({ value, blocks }: PageStaticProps) {
+export function PageStatic({ value, blocks, db }: PageStaticProps) {
   const RscBlockPlugin = createSlatePlugin({
     key: "rsc-block",
     node: {
@@ -790,15 +823,18 @@ export function PageStatic({ value, blocks }: PageStaticProps) {
     },
   });
 
+  // Create LiveValuePlugin with db adapter
+  const LiveValuePlugin = createLiveValuePlugin(db);
+
   const editor = createSlateEditor({
     value,
-    plugins: [...RSCPlugins, RscBlockPlugin],
+    plugins: [...BaseRSCPlugins, LiveValuePlugin, RscBlockPlugin],
   });
 
   return (
     <TooltipProvider>
       {/* pl-14 gives clearance for the nav peek tab (40px + breathing room) */}
-      <article className="prose prose-slate max-w-none pl-14 pr-4 py-6 sm:pl-16 sm:pr-6 lg:pl-20 lg:pr-8">
+      <article className="prose prose-slate max-w-none pl-14 pr-4 pt-4 pb-6 sm:pl-16 sm:pr-6 lg:pl-20 lg:pr-8">
         <div className="mx-auto max-w-4xl">
           <PlateStatic editor={editor} />
         </div>

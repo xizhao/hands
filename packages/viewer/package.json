@@ -1,0 +1,42 @@
+{
+  "name": "@hands/viewer",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite dev",
+    "build": "vite build",
+    "deploy": "vite build && wrangler deploy",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@hands/core": "workspace:*",
+    "@hands/runtime": "workspace:*",
+    "@hands/editor": "workspace:*",
+    "@tailwindcss/typography": "^0.5.19",
+    "@tailwindcss/vite": "^4.1.18",
+    "class-variance-authority": "^0.7.1",
+    "clsx": "^2.1.1",
+    "is-hotkey": "^0.2.0",
+    "platejs": "^52.0.15",
+    "react": "19.2.3",
+    "react-dom": "19.2.3",
+    "rwsdk": "1.0.0-beta.41",
+    "slate": "^0.120.0",
+    "slate-dom": "^0.119.0",
+    "slate-hyperscript": "^0.100.0",
+    "slate-react": "^0.120.0",
+    "tailwind-merge": "^3.4.0",
+    "tailwindcss": "^4.1.18"
+  },
+  "devDependencies": {
+    "@cloudflare/vite-plugin": "1.16.1",
+    "@cloudflare/workers-types": "4.20251202.0",
+    "@types/react": "19.1.2",
+    "@types/react-dom": "19.1.2",
+    "@vitejs/plugin-react": "^5.1.2",
+    "typescript": "5.8.3",
+    "vite": "7.2.6",
+    "wrangler": "4.52.1"
+  }
+}

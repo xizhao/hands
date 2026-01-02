@@ -119,9 +119,21 @@ export function lineChartToVegaSpec(props: LineChartSpecProps): VegaLiteSpec {
   const interpolation = mapCurve(curve);
   const yField = isMultiSeries ? "value" : yKeys[0];
 
-  // Simple line chart without complex hover interactions (Vega-Lite v6 compatible)
+  // Line chart with nearest-point tooltip for better interactivity
   const baseSpec: VegaLiteSpec = {
     $schema: "https://vega.github.io/schema/vega-lite/v6.json",
+    // Add params for nearest-point tooltip selection
+    params: [
+      {
+        name: "hover",
+        select: {
+          type: "point",
+          on: "pointerover",
+          nearest: true,
+          clear: "pointerout",
+        },
+      },
+    ],
     mark: {
       type: "line",
       interpolate: interpolation,
@@ -149,6 +161,17 @@ export function lineChartToVegaSpec(props: LineChartSpecProps): VegaLiteSpec {
           ...(yFormat ? { format: yFormat } : {}),
         },
       },
+      // Tooltip encoding for all fields
+      tooltip: isMultiSeries
+        ? [
+            { field: xKey, type: "ordinal" as const, title: xKey },
+            { field: "series", type: "nominal" as const, title: "Series" },
+            { field: "value", type: "quantitative" as const, title: "Value" },
+          ]
+        : [
+            { field: xKey, type: "ordinal" as const, title: xKey },
+            { field: yField, type: "quantitative" as const, title: yField },
+          ],
     },
   };
 
@@ -285,14 +308,28 @@ export function areaChartToVegaSpec(props: AreaChartSpecProps): VegaLiteSpec {
   const yKeys = Array.isArray(yKey) ? yKey : [yKey];
   const isMultiSeries = yKeys.length > 1;
   const interpolation = mapCurve(curve);
+  const yField = isMultiSeries ? "value" : yKeys[0];
 
   const baseSpec: VegaLiteSpec = {
     $schema: "https://vega.github.io/schema/vega-lite/v6.json",
+    // Add params for nearest-point tooltip selection
+    params: [
+      {
+        name: "hover",
+        select: {
+          type: "point",
+          on: "pointerover",
+          nearest: true,
+          clear: "pointerout",
+        },
+      },
+    ],
     mark: {
       type: "area",
       interpolate: interpolation,
       opacity: fillOpacity,
       line: true,
+      point: true, // Add points for better hover detection
       tooltip: true,
     },
     encoding: {
@@ -308,7 +345,7 @@ export function areaChartToVegaSpec(props: AreaChartSpecProps): VegaLiteSpec {
         },
       },
       y: {
-        field: isMultiSeries ? "value" : yKeys[0],
+        field: yField,
         type: "quantitative",
         axis: {
           grid: showGrid,
@@ -317,6 +354,17 @@ export function areaChartToVegaSpec(props: AreaChartSpecProps): VegaLiteSpec {
         },
         ...(stacked && isMultiSeries ? { stack: "zero" as const } : {}),
       },
+      // Tooltip encoding for all fields
+      tooltip: isMultiSeries
+        ? [
+            { field: xKey, type: "ordinal" as const, title: xKey },
+            { field: "series", type: "nominal" as const, title: "Series" },
+            { field: "value", type: "quantitative" as const, title: "Value" },
+          ]
+        : [
+            { field: xKey, type: "ordinal" as const, title: xKey },
+            { field: yField, type: "quantitative" as const, title: yField },
+          ],
     },
   };
 
@@ -372,6 +420,11 @@ export function pieChartToVegaSpec(props: PieChartSpecProps): VegaLiteSpec {
         type: "nominal",
         legend: showLegend ? {} : null,
       },
+      // Explicit tooltip encoding
+      tooltip: [
+        { field: nameKey, type: "nominal" as const, title: nameKey },
+        { field: valueKey, type: "quantitative" as const, title: valueKey },
+      ],
     },
   };
 

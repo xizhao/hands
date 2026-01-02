@@ -6,6 +6,8 @@
   "type": "module",
   "exports": {
     ".": "./src/index.ts",
+    "./components": "./src/components/index.ts",
+    "./components/PageStatic": "./src/components/PageStatic.tsx",
     "./vite-plugin-db-types": "./src/vite-plugin-db-types.ts",
     "./vite-plugin-editor": "./src/vite-plugin-editor.ts",
     "./vite-plugin-tailwind-source": "./src/vite-plugin-tailwind-source.ts",
