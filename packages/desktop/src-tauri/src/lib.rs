@@ -447,6 +447,8 @@ fn kill_processes_on_port(port: u16) {
 
 /// Force cleanup any stale runtime lockfile and processes
 async fn force_cleanup_workbook_server() {
+    let mut did_cleanup = false;
+
     // Get lockfile path (macOS: ~/Library/Application Support/Hands/runtime.lock)
     let lock_path = std::env::var("HOME").ok().map(|h| {
         PathBuf::from(h).join("Library/Application Support/Hands/runtime.lock")
@@ -463,6 +465,7 @@ async fn force_cleanup_workbook_server() {
                         let _ = std::process::Command::new("kill")
                             .args(["-9", &pid.to_string()])
                             .output();
+                        did_cleanup = true;
                     }
                     // Kill postgres by PID
                     if let Some(pid) = lock.get("postgresPid").and_then(|v| v.as_i64()) {
@@ -470,6 +473,7 @@ async fn force_cleanup_workbook_server() {
                         let _ = std::process::Command::new("kill")
                             .args(["-9", &pid.to_string()])
                             .output();
+                        did_cleanup = true;
                     }
                     // Kill wrangler by PID
                     if let Some(pid) = lock.get("wranglerPid").and_then(|v| v.as_i64()) {
@@ -477,25 +481,27 @@ async fn force_cleanup_workbook_server() {
                         let _ = std::process::Command::new("kill")
                             .args(["-9", &pid.to_string()])
                             .output();
+                        did_cleanup = true;
                     }
 
                     // Also kill by port (in case PIDs are stale but processes respawned)
                     if let Some(port) = lock.get("postgresPort").and_then(|v| v.as_u64()) {
                         kill_processes_on_port(port as u16);
+                        did_cleanup = true;
                     }
                     if let Some(port) = lock.get("wranglerPort").and_then(|v| v.as_u64()) {
                         kill_processes_on_port(port as u16);
+                        did_cleanup = true;
                     }
                     if let Some(port) = lock.get("runtimePort").and_then(|v| v.as_u64()) {
                         kill_processes_on_port(port as u16);
+                        did_cleanup = true;
                     }
                 }
             }
             // Remove the lockfile
             println!("[cleanup] Removing stale lockfile: {:?}", path);
             let _ = std::fs::remove_file(&path);
-            // Wait for processes to die
-            tokio::time::sleep(Duration::from_millis(1000)).await;
         }
     }
 
@@ -509,10 +515,16 @@ async fn force_cleanup_workbook_server() {
                     if postmaster_pid.exists() {
                         println!("[cleanup] Removing stale postmaster.pid: {:?}", postmaster_pid);
                         let _ = std::fs::remove_file(&postmaster_pid);
+                        did_cleanup = true;
                     }
                 }
             }
         }
+    }
+
+    // Only wait for processes to die if we actually killed something
+    if did_cleanup {
+        tokio::time::sleep(Duration::from_millis(300)).await;
     }
 }
 
@@ -807,6 +819,8 @@ pub async fn start_workbook_server_internal(
 ) -> Result<DevServerStatus, String> {
     println!("[internal] start_workbook_server: {} at {}", workbook_id, directory);
 
+    let mut did_stop_existing = false;
+
     // Stop ALL existing runtimes first (they share port 55000)
     {
         let mut state_guard = state.lock().await;
@@ -824,17 +838,19 @@ pub async fn start_workbook_server_internal(
                     .await;
                 // Force kill
                 let _ = runtime.child.kill().await;
+                did_stop_existing = true;
             }
         }
     }
 
-    // Small delay to ensure port is released
-    tokio::time::sleep(Duration::from_millis(500)).await;
+    // Only wait for port release if we stopped existing runtimes
+    if did_stop_existing {
+        tokio::time::sleep(Duration::from_millis(300)).await;
+    }
 
     // Force kill any process still on runtime port (55000) - handles orphaned processes
     let runtime_port_default: u16 = PORT_PREFIX as u16 * 1000;
     kill_processes_on_port(runtime_port_default);
-    tokio::time::sleep(Duration::from_millis(300)).await;
 
     let env_vars = get_api_keys_from_store(app);
     let (child, runtime_port) =
@@ -2204,29 +2220,32 @@ pub fn run() {
                 }
             });
 
-            let app_handle = app.handle().clone();
-            let env_vars = get_api_keys_from_store(&app_handle);
+            // Only start OpenCode without a workbook if there's no API key (setup flow)
+            // When there IS an API key, OpenCode will be started by set_active_workbook_internal
+            // with the correct workbook directory, avoiding a wasteful restart
+            if !has_api_key {
+                let app_handle = app.handle().clone();
+                let env_vars = get_api_keys_from_store(&app_handle);
 
-            // Start Hands agent server (no postgres - runtime manages it per workbook)
-            // No working directory at startup - will be set when workbook is activated
-            // Model defaults to OpenRouter in agent
-            tauri::async_runtime::spawn(async move {
-                match start_opencode_server(PORT_OPENCODE, None, env_vars, None).await {
-                    Ok(child) => {
-                        let mut s = state.lock().await;
-                        s.server = Some(child);
+                // Start Hands agent server without workbook for setup flow
+                tauri::async_runtime::spawn(async move {
+                    match start_opencode_server(PORT_OPENCODE, None, env_vars, None).await {
+                        Ok(child) => {
+                            let mut s = state.lock().await;
+                            s.server = Some(child);
 
-                        if wait_for_server(PORT_OPENCODE, 30).await {
-                            println!("Hands agent is ready!");
-                        } else {
-                            eprintln!("Hands agent started but health check timed out");
+                            if wait_for_server(PORT_OPENCODE, 30).await {
+                                println!("Hands agent is ready!");
+                            } else {
+                                eprintln!("Hands agent started but health check timed out");
+                            }
+                        }
+                        Err(e) => {
+                            eprintln!("Failed to start Hands agent: {}", e);
                         }
                     }
-                    Err(e) => {
-                        eprintln!("Failed to start Hands agent: {}", e);
-                    }
-                }
-            });
+                });
+            }
 
             #[cfg(target_os = "macos")]
             {
