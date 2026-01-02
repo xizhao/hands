@@ -52,8 +52,8 @@ test.describe("MDX Integration", () => {
   });
 
   test.describe("LiveValue standalone", () => {
-    test("deserializes inline LiveValue correctly", async ({ page }) => {
-      await page.goto("/?story=integration--mdx--live-value--inline");
+    test("deserializes block LiveValue correctly", async ({ page }) => {
+      await page.goto("/?story=integration--mdx--live-value--block");
       await page.waitForSelector('[data-testid="plate-harness"]');
 
       const plateValueText = await page.locator('[data-testid="plate-value"]').textContent();
@@ -65,6 +65,25 @@ test.describe("MDX Integration", () => {
       // Should not have meaningful children (just empty text placeholder)
       expect(liveValue.children).toHaveLength(1);
       expect(liveValue.children[0].text).toBe("");
+    });
+
+    test("deserializes inline LiveValue embedded in text correctly", async ({ page }) => {
+      await page.goto("/?story=integration--mdx--live-value--inline-in-text");
+      await page.waitForSelector('[data-testid="plate-harness"]');
+
+      const plateValueText = await page.locator('[data-testid="plate-value"]').textContent();
+      const plateValue = JSON.parse(plateValueText || "[]");
+
+      // Should have a paragraph with inline LiveValue
+      const paragraph = plateValue.find((el: any) => el.type === "p");
+      expect(paragraph).toBeDefined();
+
+      // Find the inline LiveValue element within the paragraph children
+      const inlineLiveValue = paragraph.children?.find(
+        (child: any) => child.type === "live_value_inline"
+      );
+      expect(inlineLiveValue).toBeDefined();
+      expect(inlineLiveValue.query).toBe("SELECT COUNT(*) FROM users");
     });
   });
 

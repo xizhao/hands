@@ -16,10 +16,18 @@ export default {
 // LiveValue Tests
 // ============================================================================
 
-export const LiveValueInline: Story = () => (
+export const LiveValueBlock: Story = () => (
   <PlateHarnessDebug mdx={`<LiveValue query="SELECT COUNT(*) FROM users" />`} />
 );
-LiveValueInline.storyName = "LiveValue - Inline";
+LiveValueBlock.storyName = "LiveValue - Block";
+
+// Inline LiveValue embedded in text - produces live_value_inline type
+export const LiveValueInline: Story = () => (
+  <PlateHarnessDebug
+    mdx={`There are <LiveValue query="SELECT COUNT(*) FROM users" /> total users.`}
+  />
+);
+LiveValueInline.storyName = "LiveValue - Inline in Text";
 
 export const LiveValueTable: Story = () => (
   <PlateHarnessDebug mdx={`<LiveValue query="SELECT * FROM users" display="table" />`} />

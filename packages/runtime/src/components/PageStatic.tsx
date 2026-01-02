@@ -1,15 +1,25 @@
 // Types from core
 import {
+  ALERT_KEY,
   AREA_CHART_KEY,
+  BADGE_KEY,
   BAR_CHART_KEY,
   BOXPLOT_CHART_KEY,
   CHART_KEY,
+  DATA_GRID_KEY,
   HEATMAP_CHART_KEY,
   HISTOGRAM_CHART_KEY,
   LINE_CHART_KEY,
+  LIVE_VALUE_INLINE_KEY,
+  LIVE_VALUE_KEY,
+  LOADER_KEY,
   MAP_CHART_KEY,
+  METRIC_KEY,
   PIE_CHART_KEY,
+  PROGRESS_KEY,
   SCATTER_CHART_KEY,
+  TAB_KEY,
+  TABS_KEY,
   type DataGridColumnConfig,
   type DbAdapter,
   type TAlertElement,
@@ -31,6 +41,9 @@ import {
   type TTabElement,
   type TTabsElement,
 } from "@hands/core/types";
+
+// RSC block key is runtime-specific
+const RSC_BLOCK_KEY = "rsc-block";
 // Helpers from core (re-exported in view)
 import { formatCellValue, selectDisplayType } from "@hands/core/ui/view";
 // Base plugins - import DIRECTLY to avoid pulling in React deps from index
@@ -86,18 +99,10 @@ interface RscBlockElement extends TElement {
 // Simple display components for RSC
 function InlineDisplay({ data }: { data: Record<string, unknown>[] }) {
   if (!data || data.length === 0) {
-    return (
-      <span className="inline-flex items-center px-1.5 py-0.5 rounded bg-muted text-muted-foreground">
-        —
-      </span>
-    );
+    return <span>—</span>;
   }
   const value = Object.values(data[0])[0];
-  return (
-    <span className="inline-flex items-center px-1.5 py-0.5 rounded bg-violet-500/10 text-violet-600 dark:text-violet-400 font-medium tabular-nums">
-      {formatCellValue(value)}
-    </span>
-  );
+  return <span>{formatCellValue(value)}</span>;
 }
 
 function ListDisplay({ data }: { data: Record<string, unknown>[] }) {
@@ -236,6 +241,41 @@ function hasMeaningfulChildren(element: TLiveValueElement): boolean {
   return true;
 }
 
+/**
+ * Inline LiveValue RSC - renders inline within text (no wrapper div)
+ */
+async function LiveValueInlineRSC({
+  element,
+  db,
+}: {
+  element: TLiveValueElement;
+  db: DbAdapter;
+}) {
+  const { query, data: staticData } = element;
+
+  // Static data - no fetch needed
+  if (staticData) {
+    return <InlineDisplay data={staticData} />;
+  }
+
+  // No query
+  if (!query) {
+    return <InlineDisplay data={[]} />;
+  }
+
+  // Fetch data
+  let data: Record<string, unknown>[] = [];
+  try {
+    const result = await db.executeQuery(query);
+    data = result.rows;
+  } catch (e) {
+    console.error("[LiveValueInline] Query failed:", e);
+    return <span>—</span>;
+  }
+
+  return <InlineDisplay data={data} />;
+}
+
 function LiveValueRSC({
   element,
   children,
@@ -247,6 +287,7 @@ function LiveValueRSC({
 }) {
   const { query, data: staticData, display } = element;
   const hasChildren = hasMeaningfulChildren(element);
+  const isInlineDisplay = display === "inline";
 
   // Static data - no fetch needed
   if (staticData) {
@@ -270,6 +311,21 @@ function LiveValueRSC({
       }
     }
 
+    // For inline display, don't wrap in block div
+    if (isInlineDisplay) {
+      return (
+        <LiveValueProvider
+          data={staticData}
+          tableName={tableName}
+          query={query}
+          isLoading={false}
+          error={null}
+        >
+          {content}
+        </LiveValueProvider>
+      );
+    }
+
     return (
       <div className="my-2">
         <LiveValueProvider
@@ -287,6 +343,9 @@ function LiveValueRSC({
 
   // No query
   if (!query) {
+    if (isInlineDisplay) {
+      return <InlineDisplay data={[]} />;
+    }
     return (
       <div className="my-2">
         <LiveValueProvider
@@ -303,6 +362,28 @@ function LiveValueRSC({
   }
 
   // Async fetch with Suspense
+  if (isInlineDisplay) {
+    return (
+      <Suspense
+        fallback={
+          <span className="inline-flex items-center px-1.5 py-0.5 rounded bg-muted/30 animate-pulse text-xs">
+            ...
+          </span>
+        }
+      >
+        <LiveValueDataFetcher
+          query={query}
+          params={element.params}
+          display={display}
+          hasChildren={hasChildren}
+          db={db}
+        >
+          {children}
+        </LiveValueDataFetcher>
+      </Suspense>
+    );
+  }
+
   return (
     <div className="my-2">
       <Suspense fallback={<div className="w-full h-48 animate-pulse bg-muted/30 rounded-lg" />}>
@@ -327,13 +408,31 @@ function LiveValueRSC({
 // LiveValuePlugin is created dynamically in PageStatic to capture db from props
 function createLiveValuePlugin(db: DbAdapter) {
   return createSlatePlugin({
-    key: "live_value",
+    key: LIVE_VALUE_KEY,
     node: {
-      type: "live_value",
+      type: LIVE_VALUE_KEY,
       isElement: true,
       isVoid: false,
       component: ({ element, children }) => (
         <LiveValueRSC element={element as TLiveValueElement} db={db}>{children}</LiveValueRSC>
+      ),
+    },
+  });
+}
+
+// Inline LiveValue - renders inline within text (no div wrapper)
+function createLiveValueInlinePlugin(db: DbAdapter) {
+  return createSlatePlugin({
+    key: LIVE_VALUE_INLINE_KEY,
+    node: {
+      type: LIVE_VALUE_INLINE_KEY,
+      isElement: true,
+      isInline: true,
+      isVoid: true,
+      component: ({ element }) => (
+        <Suspense fallback={<span>…</span>}>
+          <LiveValueInlineRSC element={element as TLiveValueElement} db={db} />
+        </Suspense>
       ),
     },
   });
@@ -588,9 +687,9 @@ const MapChartPlugin = createSlatePlugin({
 // View Component Plugins
 
 const AlertPlugin = createSlatePlugin({
-  key: "Alert",
+  key: ALERT_KEY,
   node: {
-    type: "Alert",
+    type: ALERT_KEY,
     isElement: true,
     isVoid: false,
     component: ({ element, children }) => {
@@ -605,9 +704,9 @@ const AlertPlugin = createSlatePlugin({
 });
 
 const BadgePlugin = createSlatePlugin({
-  key: "Badge",
+  key: BADGE_KEY,
   node: {
-    type: "Badge",
+    type: BADGE_KEY,
     isElement: true,
     isVoid: false,
     isInline: true,
@@ -619,9 +718,9 @@ const BadgePlugin = createSlatePlugin({
 });
 
 const MetricPlugin = createSlatePlugin({
-  key: "Metric",
+  key: METRIC_KEY,
   node: {
-    type: "Metric",
+    type: METRIC_KEY,
     isElement: true,
     isVoid: true,
     component: ({ element }) => {
@@ -642,9 +741,9 @@ const MetricPlugin = createSlatePlugin({
 });
 
 const ProgressPlugin = createSlatePlugin({
-  key: "Progress",
+  key: PROGRESS_KEY,
   node: {
-    type: "Progress",
+    type: PROGRESS_KEY,
     isElement: true,
     isVoid: true,
     component: ({ element }) => {
@@ -665,9 +764,9 @@ const ProgressPlugin = createSlatePlugin({
 });
 
 const LoaderPlugin = createSlatePlugin({
-  key: "Loader",
+  key: LOADER_KEY,
   node: {
-    type: "Loader",
+    type: LOADER_KEY,
     isElement: true,
     isVoid: true,
     isInline: true,
@@ -687,9 +786,9 @@ const LoaderPlugin = createSlatePlugin({
 });
 
 const TabsPlugin = createSlatePlugin({
-  key: "Tabs",
+  key: TABS_KEY,
   node: {
-    type: "Tabs",
+    type: TABS_KEY,
     isElement: true,
     isVoid: false,
     component: ({ element, children }) => {
@@ -700,9 +799,9 @@ const TabsPlugin = createSlatePlugin({
 });
 
 const TabPlugin = createSlatePlugin({
-  key: "Tab",
+  key: TAB_KEY,
   node: {
-    type: "Tab",
+    type: TAB_KEY,
     isElement: true,
     isVoid: false,
     component: ({ element, children }) => {
@@ -718,9 +817,9 @@ const TabPlugin = createSlatePlugin({
 
 // DataGrid plugin - renders within LiveValueProvider context
 const DataGridPlugin = createSlatePlugin({
-  key: "data_grid",
+  key: DATA_GRID_KEY,
   node: {
-    type: "data_grid",
+    type: DATA_GRID_KEY,
     isElement: true,
     isVoid: true,
     component: ({ element }) => {
@@ -795,9 +894,9 @@ const BaseRSCPlugins = [
  */
 export function PageStatic({ value, blocks, db }: PageStaticProps) {
   const RscBlockPlugin = createSlatePlugin({
-    key: "rsc-block",
+    key: RSC_BLOCK_KEY,
     node: {
-      type: "rsc-block",
+      type: RSC_BLOCK_KEY,
       isVoid: true,
       isElement: true,
       component: ({ element }: { element: RscBlockElement }) => {
@@ -816,19 +915,20 @@ export function PageStatic({ value, blocks, db }: PageStaticProps) {
     extendEditor: ({ editor }) => {
       const origIsVoid = editor.isVoid as (element: TElement) => boolean;
       editor.isVoid = (element: TElement) => {
-        if (element.type === "rsc-block") return true;
+        if (element.type === RSC_BLOCK_KEY) return true;
         return origIsVoid(element);
       };
       return editor;
     },
   });
 
-  // Create LiveValuePlugin with db adapter
+  // Create LiveValue plugins with db adapter
   const LiveValuePlugin = createLiveValuePlugin(db);
+  const LiveValueInlinePlugin = createLiveValueInlinePlugin(db);
 
   const editor = createSlateEditor({
     value,
-    plugins: [...BaseRSCPlugins, LiveValuePlugin, RscBlockPlugin],
+    plugins: [...BaseRSCPlugins, LiveValuePlugin, LiveValueInlinePlugin, RscBlockPlugin],
   });
 
   return (

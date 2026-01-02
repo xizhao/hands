@@ -295,16 +295,22 @@ export const viewerDeployRouter = t.router({
         return { success: false, error: `Schema init failed: ${schemaResult.error}` };
       }
 
-      // Upload MDX pages
+      // Upload MDX pages (clear and replace to handle deleted pages)
       console.log("[viewer-deploy] Uploading pages...");
       const pages = getMdxPages(workbookDir);
+
+      // Clear existing pages first
+      const clearResult = await executeD1(accountId, db.uuid, `DELETE FROM _pages`, [], cfToken);
+      if (!clearResult.success) {
+        console.warn(`[viewer-deploy] Failed to clear pages: ${clearResult.error}`);
+      }
 
       for (const page of pages) {
         const title = extractTitle(page.content) || page.id;
         const result = await executeD1(
           accountId,
           db.uuid,
-          `INSERT OR REPLACE INTO _pages (id, path, title, content, updated_at) VALUES (?, ?, ?, ?, unixepoch())`,
+          `INSERT INTO _pages (id, path, title, content, updated_at) VALUES (?, ?, ?, ?, unixepoch())`,
           [page.id, page.path, title, page.content],
           cfToken
         );

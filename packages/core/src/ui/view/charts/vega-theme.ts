@@ -22,15 +22,17 @@ function getCssVar(name: string): string {
 }
 
 /**
- * Convert a CSS variable with HSL values to a full hsl() string.
- * Handles both raw HSL values and hsl() wrapped values.
+ * Get a CSS color variable value.
+ * Handles hex colors, hsl() wrapped values, and raw HSL values.
  */
-function hslVar(name: string): string {
+function getColorVar(name: string): string {
   const value = getCssVar(name);
   if (!value) return "";
-  // If already wrapped in hsl(), return as-is
-  if (value.startsWith("hsl")) return value;
-  // Otherwise wrap the raw HSL values
+  // If hex color or already wrapped in hsl()/rgb(), return as-is
+  if (value.startsWith("#") || value.startsWith("hsl") || value.startsWith("rgb")) {
+    return value;
+  }
+  // Otherwise assume raw HSL values and wrap them
   return `hsl(${value})`;
 }
 
@@ -43,26 +45,26 @@ function hslVar(name: string): string {
  * Maps theme colors to Vega styling properties.
  */
 export function createVegaConfig(): Config {
-  const foreground = hslVar("--foreground");
-  const border = hslVar("--border");
-  const background = hslVar("--background");
+  const foreground = getColorVar("--foreground");
+  const border = getColorVar("--border");
+  const background = getColorVar("--background");
 
   // Chart color palette from CSS variables
   const chartColors = [
-    hslVar("--chart-1"),
-    hslVar("--chart-2"),
-    hslVar("--chart-3"),
-    hslVar("--chart-4"),
-    hslVar("--chart-5"),
+    getColorVar("--chart-1"),
+    getColorVar("--chart-2"),
+    getColorVar("--chart-3"),
+    getColorVar("--chart-4"),
+    getColorVar("--chart-5"),
   ].filter(Boolean);
 
-  // Fallback colors if CSS vars not defined
+  // Fallback colors if CSS vars not defined (use hex for Vega compatibility)
   const defaultColors = [
-    "hsl(220 70% 50%)",
-    "hsl(160 60% 45%)",
-    "hsl(30 80% 55%)",
-    "hsl(280 65% 60%)",
-    "hsl(340 75% 55%)",
+    "#3b82f6", // blue
+    "#22c55e", // green
+    "#f97316", // orange
+    "#a855f7", // purple
+    "#ec4899", // pink
   ];
 
   const colors = chartColors.length > 0 ? chartColors : defaultColors;
@@ -75,9 +77,9 @@ export function createVegaConfig(): Config {
     axis: {
       labelColor: foreground || "#71717a",
       titleColor: foreground || "#71717a",
-      gridColor: border || "#27272a",
-      domainColor: border || "#27272a",
-      tickColor: border || "#27272a",
+      gridColor: border || "#3f3f46",
+      domainColor: border || "#3f3f46",
+      tickColor: border || "#3f3f46",
       labelFont: "system-ui, sans-serif",
       titleFont: "system-ui, sans-serif",
       labelFontSize: 11,
@@ -111,32 +113,32 @@ export function createVegaConfig(): Config {
     // Mark defaults - use first chart color for single-series
     mark: {
       tooltip: true,
-      color: colors[0] || "hsl(220 70% 50%)",
+      color: colors[0] || "#3b82f6",
     },
 
     // Line mark defaults
     line: {
       strokeWidth: 2,
-      stroke: colors[0] || "hsl(220 70% 50%)",
+      stroke: colors[0] || "#3b82f6",
     },
 
     // Point mark defaults
     point: {
       size: 60,
       filled: true,
-      fill: colors[0] || "hsl(220 70% 50%)",
+      fill: colors[0] || "#3b82f6",
     },
 
     // Bar mark defaults
     bar: {
       cornerRadiusEnd: 4,
-      fill: colors[0] || "hsl(220 70% 50%)",
+      fill: colors[0] || "#3b82f6",
     },
 
     // Area mark defaults
     area: {
       opacity: 0.4,
-      fill: colors[0] || "hsl(220 70% 50%)",
+      fill: colors[0] || "#3b82f6",
     },
 
     // Arc mark defaults (for pie/donut)

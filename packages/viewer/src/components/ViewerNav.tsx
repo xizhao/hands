@@ -1,5 +1,7 @@
 "use client";
 
+import { useRef, useState } from "react";
+
 interface NavPage {
   id: string;
   path: string;
@@ -36,47 +38,107 @@ function HandsLogo({ size = 20 }: { size?: number }) {
 
 export function ViewerNav({ pages, workbookId, currentPath }: ViewerNavProps) {
   const workbookRoot = `/${workbookId}`;
+  const pageCount = pages.length;
+  const [isOpen, setIsOpen] = useState(false);
+  const closeTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const handleMouseEnter = () => {
+    if (closeTimeout.current) {
+      clearTimeout(closeTimeout.current);
+      closeTimeout.current = null;
+    }
+    setIsOpen(true);
+  };
+
+  const handleMouseLeave = () => {
+    // Small delay to prevent flicker when moving between elements
+    closeTimeout.current = setTimeout(() => setIsOpen(false), 75);
+  };
 
   return (
-    <div className="fixed top-6 left-2 z-50 group">
-      {/* Logo - always visible, links to workbook root */}
-      <a
-        href={workbookRoot}
-        className="
-          flex items-center justify-center
-          w-10 h-10
-          bg-neutral-900 text-white border border-neutral-800/50
-          rounded-xl
-          shadow-lg shadow-black/25
-          hover:bg-neutral-800
-          transition-colors
-        "
+    <div
+      className="fixed top-5 left-3 z-50"
+      onMouseEnter={handleMouseEnter}
+      onMouseLeave={handleMouseLeave}
+    >
+      {/* Logo + ToC bars - always visible */}
+      <div
+        className="flex flex-col items-center gap-3"
+        style={{
+          opacity: isOpen ? 0 : 1,
+          transition: "opacity 150ms cubic-bezier(0.4, 0, 0.2, 1)",
+          pointerEvents: isOpen ? "none" : "auto",
+        }}
       >
-        <HandsLogo size={20} />
-      </a>
+        {/* Logo - links to workbook root */}
+        <a
+          href={workbookRoot}
+          className="
+            flex items-center justify-center
+            w-10 h-10
+            bg-neutral-900 text-white border border-neutral-800/50
+            rounded-xl
+            shadow-lg shadow-black/25
+            hover:bg-neutral-800
+            transition-colors
+          "
+        >
+          <HandsLogo size={20} />
+        </a>
 
-      {/* Slide-in nav panel - appears on hover */}
+        {/* ToC-style depth bars */}
+        <div className="flex flex-col items-center gap-1.5 pt-1">
+          {pages.slice(0, 12).map((page, i) => {
+            const pageRoute = `/${workbookId}${page.path}`;
+            const isActive = page.path === currentPath || pageRoute === currentPath;
+            return (
+              <a
+                key={page.id}
+                href={pageRoute}
+                className={`
+                  h-[3px] rounded-full transition-all cursor-pointer
+                  ${isActive
+                    ? "bg-blue-400 w-6"
+                    : "bg-neutral-600 hover:bg-neutral-400"
+                  }
+                `}
+                style={{
+                  width: isActive ? undefined : `${16 - Math.min(i, 4) * 2}px`,
+                }}
+              />
+            );
+          })}
+          {pageCount > 12 && (
+            <span className="text-[8px] text-neutral-500 mt-0.5">+{pageCount - 12}</span>
+          )}
+        </div>
+      </div>
+
+      {/* Slide-in nav panel - offset to extend toward screen edge */}
       <div
         className="
-          absolute top-0 left-0
-          w-52
+          absolute -top-3 -left-3
+          w-56
           bg-neutral-900 border border-neutral-800/50
           rounded-xl
           shadow-xl shadow-black/30
-          transition-all duration-200 ease-out
-          origin-top-left
-          opacity-0 scale-95 pointer-events-none
-          group-hover:opacity-100 group-hover:scale-100 group-hover:pointer-events-auto
         "
+        style={{
+          transform: isOpen ? "translateX(0)" : "translateX(-100%)",
+          opacity: isOpen ? 1 : 0,
+          pointerEvents: isOpen ? "auto" : "none",
+          transition: "transform 200ms cubic-bezier(0.32, 0.72, 0, 1), opacity 150ms cubic-bezier(0.4, 0, 0.2, 1)",
+          willChange: "transform, opacity",
+        }}
       >
-        {/* Header with logo */}
-        <div className="flex items-center gap-2.5 p-2 border-b border-neutral-800/50">
+        {/* Header with logo - pt-3 pl-3 compensates for panel's negative offset */}
+        <div className="flex items-center gap-2.5 pt-3 pl-3 pb-2 border-b border-neutral-800/50">
           <a
             href={workbookRoot}
             className="
               flex items-center justify-center
               w-10 h-10
-              bg-neutral-800 text-white border border-neutral-700/50
+              bg-neutral-800 text-white
               rounded-xl
               hover:bg-neutral-700
               transition-colors
@@ -85,13 +147,13 @@ export function ViewerNav({ pages, workbookId, currentPath }: ViewerNavProps) {
           >
             <HandsLogo size={20} />
           </a>
-          <span className="text-xs font-medium text-white truncate">
+          <span className="text-xs font-medium text-white truncate pr-2">
             {workbookId}
           </span>
         </div>
 
         {/* Nav items */}
-        <nav className="p-1.5 max-h-72 overflow-auto">
+        <nav className="px-3 py-1.5 max-h-72 overflow-auto">
           {pages.map((page) => {
             const pageRoute = `/${workbookId}${page.path}`;
             const isActive = page.path === currentPath || pageRoute === currentPath;
@@ -115,7 +177,7 @@ export function ViewerNav({ pages, workbookId, currentPath }: ViewerNavProps) {
         </nav>
 
         {/* Footer */}
-        <div className="p-2 border-t border-neutral-800/50">
+        <div className="px-3 py-2 border-t border-neutral-800/50">
           <a
             href="https://hands.app"
             target="_blank"

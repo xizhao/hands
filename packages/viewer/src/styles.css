@@ -53,6 +53,13 @@
   --highlight: hsl(48 100% 50%);
   --subtle-foreground: hsl(240 5% 34%);
 
+  /* Chart colors for Vega-Lite theme (hex for compatibility) */
+  --chart-1: #3b82f6;
+  --chart-2: #22c55e;
+  --chart-3: #f97316;
+  --chart-4: #a855f7;
+  --chart-5: #ec4899;
+
   :focus-visible {
     @apply outline-none;
   }
@@ -75,7 +82,7 @@
   --accent-foreground: hsl(0 0% 98%);
   --destructive: hsl(0 79% 63%);
   --destructive-foreground: hsl(0 0% 98%);
-  --border: hsl(0 0% 14.9%);
+  --border: hsl(0 0% 27%);
   --input: hsl(0 0% 14.9%);
   --ring: hsl(0 0% 83.1%);
   --sidebar-background: hsl(0 0% 3.9%);
@@ -98,6 +105,13 @@
   --brand-90: hsl(211 77% 51% / 0.90);
   --highlight: hsl(48 100% 50%);
   --subtle-foreground: hsl(240 5% 34%);
+
+  /* Chart colors for dark mode (hex for compatibility) */
+  --chart-1: #60a5fa;
+  --chart-2: #4ade80;
+  --chart-3: #fb923c;
+  --chart-4: #c084fc;
+  --chart-5: #f472b6;
 }
 
 @theme inline {

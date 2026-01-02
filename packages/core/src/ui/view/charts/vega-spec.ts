@@ -244,6 +244,18 @@ export function barChartToVegaSpec(props: BarChartSpecProps): VegaLiteSpec {
     ...(stacked && isMultiSeries ? { stack: "zero" as const } : {}),
   };
 
+  // Build tooltip encoding based on series type
+  const tooltipEncoding = isMultiSeries
+    ? [
+        { field: categoryField, type: "nominal" as const, title: categoryField },
+        { field: "series", type: "nominal" as const, title: "Series" },
+        { field: "value", type: "quantitative" as const, title: "Value" },
+      ]
+    : [
+        { field: categoryField, type: "nominal" as const, title: categoryField },
+        { field: valueField, type: "quantitative" as const, title: valueField },
+      ];
+
   const baseSpec: VegaLiteSpec = {
     $schema: "https://vega.github.io/schema/vega-lite/v6.json",
     mark: {
@@ -254,6 +266,7 @@ export function barChartToVegaSpec(props: BarChartSpecProps): VegaLiteSpec {
     encoding: {
       x: isHorizontal ? valueEncoding : categoryEncoding,
       y: isHorizontal ? categoryEncoding : valueEncoding,
+      tooltip: tooltipEncoding,
     },
   };
 
