@@ -82,6 +82,8 @@ import {
   LineChart,
   LiveValueProvider,
   Loader,
+  // Page-level state
+  LocalStateProvider,
   MapChart,
   MapControls,
   MapMarker,
@@ -466,6 +468,8 @@ const BarChartPlugin = createSlatePlugin({
           colors={el.colors}
           xFormat={el.xFormat}
           yFormat={el.yFormat}
+          animateBy={el.animateBy}
+          frameValue={el.frameValue}
         />
       );
     },
@@ -494,6 +498,8 @@ const LineChartPlugin = createSlatePlugin({
           colors={el.colors}
           xFormat={el.xFormat}
           yFormat={el.yFormat}
+          animateBy={el.animateBy}
+          frameValue={el.frameValue}
         />
       );
     },
@@ -523,6 +529,8 @@ const AreaChartPlugin = createSlatePlugin({
           colors={el.colors}
           xFormat={el.xFormat}
           yFormat={el.yFormat}
+          animateBy={el.animateBy}
+          frameValue={el.frameValue}
         />
       );
     },
@@ -548,6 +556,8 @@ const PieChartPlugin = createSlatePlugin({
           showLabels={el.showLabels}
           colors={el.colors}
           valueFormat={el.valueFormat}
+          animateBy={el.animateBy}
+          frameValue={el.frameValue}
         />
       );
     },
@@ -974,13 +984,15 @@ export function PageStatic({ value, blocks, db }: PageStaticProps) {
   });
 
   return (
-    <TooltipProvider>
-      {/* pl-14 gives clearance for the nav peek tab (40px + breathing room) */}
-      <article className="prose prose-slate max-w-none pl-14 pr-4 pt-4 pb-6 sm:pl-16 sm:pr-6 lg:pl-20 lg:pr-8">
-        <div className="mx-auto max-w-4xl">
-          <PlateStatic editor={editor} />
-        </div>
-      </article>
-    </TooltipProvider>
+    <LocalStateProvider>
+      <TooltipProvider>
+        {/* pl-14 gives clearance for the nav peek tab (40px + breathing room) */}
+        <article className="prose prose-slate max-w-none pl-14 pr-4 pt-4 pb-6 sm:pl-16 sm:pr-6 lg:pl-20 lg:pr-8">
+          <div className="mx-auto max-w-4xl">
+            <PlateStatic editor={editor} />
+          </div>
+        </article>
+      </TooltipProvider>
+    </LocalStateProvider>
   );
 }

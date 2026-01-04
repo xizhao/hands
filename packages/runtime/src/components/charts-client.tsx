@@ -40,3 +40,6 @@ export {
   Tab,
   Tabs,
 } from "@hands/core/ui/view";
+
+// Re-export LocalStateProvider for page-level ephemeral state
+export { LocalStateProvider } from "@hands/core/ui";

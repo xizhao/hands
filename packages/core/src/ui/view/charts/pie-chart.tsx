@@ -19,6 +19,7 @@ import { memo, useMemo } from "react";
 
 import { PIE_CHART_KEY, type TPieChartElement, type VegaLiteSpec } from "../../../types";
 import { detectFormat } from "../../lib/format";
+import { useResolvedValue } from "../../local-state";
 import { useLiveValueData } from "./context";
 import { VegaChart } from "./vega-chart";
 import { pieChartToVegaSpec } from "./vega-spec";
@@ -61,6 +62,11 @@ export interface PieChartProps {
    * Enables frame-by-frame animation through distinct values.
    */
   animateBy?: string;
+  /**
+   * Specific frame value to display (disables auto-animation).
+   * Supports {{binding}} syntax to read from page state.
+   */
+  frameValue?: string | number;
 }
 
 /**
@@ -81,10 +87,17 @@ export function PieChart({
   valueFormat,
   vegaSpec: propVegaSpec,
   animateBy,
+  frameValue,
 }: PieChartProps) {
   // Get data from LiveValue context if not provided via props
   const ctx = useLiveValueData();
   const data = propData ?? ctx?.data;
+
+  // Resolve frameValue from LocalState if it's a binding
+  const resolvedFrameValue = useResolvedValue(frameValue);
+
+  // Native timer animation: when animateBy is set without frameValue
+  const useNativeTimer = animateBy !== undefined && frameValue === undefined;
 
   // Auto-detect format if not provided
   const resolvedValueFormat = useMemo(() => {
@@ -109,9 +122,18 @@ export function PieChart({
     innerRadius,
     valueFormat: resolvedValueFormat ?? undefined,
     animateBy,
+    frameValue: useNativeTimer ? undefined : resolvedFrameValue,
   });
 
-  return <VegaChart spec={spec} height={height} data={propData} className={className} />;
+  return (
+    <VegaChart
+      spec={spec}
+      height={height}
+      data={propData}
+      className={className}
+      embedData={useNativeTimer}
+    />
+  );
 }
 
 // ============================================================================
@@ -134,6 +156,7 @@ function PieChartElement(props: PlateElementProps) {
         valueFormat={element.valueFormat as string | undefined}
         vegaSpec={element.vegaSpec as VegaLiteSpec | undefined}
         animateBy={element.animateBy as string | undefined}
+        frameValue={element.frameValue as string | number | undefined}
       />
       <span className="absolute top-0 left-0 opacity-0 pointer-events-none">{props.children}</span>
     </PlateElement>
@@ -168,6 +191,7 @@ export interface CreatePieChartOptions {
   valueFormat?: string;
   vegaSpec?: VegaLiteSpec;
   animateBy?: string;
+  frameValue?: string | number;
 }
 
 /**
@@ -186,6 +210,7 @@ export function createPieChartElement(options?: CreatePieChartOptions): TPieChar
     valueFormat: options?.valueFormat,
     vegaSpec: options?.vegaSpec,
     animateBy: options?.animateBy,
+    frameValue: options?.frameValue,
     children: [{ text: "" }],
   };
 }

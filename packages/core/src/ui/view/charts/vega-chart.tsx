@@ -51,6 +51,12 @@ export interface VegaChartProps {
   renderer?: "canvas" | "svg";
   /** Show Vega action buttons (default: false) */
   actions?: boolean;
+  /**
+   * Embed data directly in spec instead of injecting via View API.
+   * Required for timer-based animations (native Vega-Lite timer selection).
+   * When true, data is included in the spec at compile time.
+   */
+  embedData?: boolean;
 }
 
 // ============================================================================
@@ -135,6 +141,7 @@ export function VegaChart({
   className,
   renderer = "canvas",
   actions = false,
+  embedData = false,
 }: VegaChartProps) {
   const ctx = useLiveValueData();
   const vegaTheme = useVegaTheme();
@@ -166,7 +173,7 @@ export function VegaChart({
     return () => observer.disconnect();
   }, []);
 
-  // Build spec (without data - data is injected via View API)
+  // Build spec (data injected via View API unless embedData is true)
   const baseSpec = useMemo((): VegaLiteSpec | null => {
     // Don't build spec until we have container dimensions
     if (containerWidth <= 0) return null;
@@ -176,8 +183,8 @@ export function VegaChart({
       // Use measured container width (subtract small buffer to prevent overflow)
       width: Math.max(100, containerWidth - 1),
       height,
-      // Use named data source for dynamic updates
-      data: { name: DATA_SOURCE_NAME },
+      // For timer animations, embed data in spec; otherwise use named source for dynamic updates
+      data: embedData ? { values: data ?? [] } : { name: DATA_SOURCE_NAME },
       // Apply theme config
       config: {
         ...vegaTheme,
@@ -190,7 +197,7 @@ export function VegaChart({
         contains: "padding",
       },
     };
-  }, [spec, height, vegaTheme, containerWidth]);
+  }, [spec, height, vegaTheme, containerWidth, embedData, data]);
 
   // Stable spec key for re-embedding only when spec structure changes
   const _specKey = useMemo(() => {
@@ -256,9 +263,10 @@ export function VegaChart({
   }, [baseSpec, renderer, actions, data]); // Note: data not in deps - handled separately
 
   // Update data efficiently via View API (no re-embed)
+  // Skip when embedData is true - data is baked into spec for timer animations
   useEffect(() => {
     const view = viewRef.current;
-    if (!view || !isEmbedded) return;
+    if (!view || !isEmbedded || embedData) return;
 
     const updateData = async () => {
       try {
@@ -270,7 +278,7 @@ export function VegaChart({
     };
 
     updateData();
-  }, [data, isEmbedded]);
+  }, [data, isEmbedded, embedData]);
 
   // Update dimensions when container resizes
   useEffect(() => {

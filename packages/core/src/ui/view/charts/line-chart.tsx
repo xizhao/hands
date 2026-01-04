@@ -18,6 +18,7 @@ import { memo, useMemo } from "react";
 
 import { LINE_CHART_KEY, type TLineChartElement, type VegaLiteSpec } from "../../../types";
 import { detectFormat } from "../../lib/format";
+import { useResolvedValue } from "../../local-state";
 import { useLiveValueData } from "./context";
 import { VegaChart } from "./vega-chart";
 import { lineChartToVegaSpec } from "./vega-spec";
@@ -69,6 +70,14 @@ export interface LineChartProps {
    * Enables frame-by-frame animation through distinct values.
    */
   animateBy?: string;
+  /**
+   * Specific frame value to display (disables auto-animation).
+   * Supports {{binding}} syntax to read from page state.
+   * @example
+   * <Select name="year" options={[2020, 2021, 2022]} />
+   * <LineChart animateBy="year" frameValue="{{year}}" />
+   */
+  frameValue?: string | number;
 }
 
 /**
@@ -92,10 +101,17 @@ export function LineChart({
   yFormat,
   vegaSpec: propVegaSpec,
   animateBy,
+  frameValue,
 }: LineChartProps) {
   // Get data from LiveValue context if not provided via props
   const ctx = useLiveValueData();
   const data = propData ?? ctx?.data;
+
+  // Resolve frameValue from LocalState if it's a binding
+  const resolvedFrameValue = useResolvedValue(frameValue);
+
+  // Native timer animation: when animateBy is set without frameValue
+  const useNativeTimer = animateBy !== undefined && frameValue === undefined;
 
   // Auto-detect formats if not provided
   const resolvedFormats = useMemo(() => {
@@ -134,9 +150,18 @@ export function LineChart({
     xFormat: resolvedFormats.xFormat ?? undefined,
     yFormat: resolvedFormats.yFormat ?? undefined,
     animateBy,
+    frameValue: useNativeTimer ? undefined : resolvedFrameValue,
   });
 
-  return <VegaChart spec={spec} height={height} data={propData} className={className} />;
+  return (
+    <VegaChart
+      spec={spec}
+      height={height}
+      data={propData}
+      className={className}
+      embedData={useNativeTimer}
+    />
+  );
 }
 
 // ============================================================================
@@ -162,6 +187,7 @@ function LineChartElement(props: PlateElementProps) {
         yFormat={element.yFormat as string | undefined}
         vegaSpec={element.vegaSpec as VegaLiteSpec | undefined}
         animateBy={element.animateBy as string | undefined}
+        frameValue={element.frameValue as string | number | undefined}
       />
       <span className="absolute top-0 left-0 opacity-0 pointer-events-none">{props.children}</span>
     </PlateElement>
@@ -199,6 +225,7 @@ export interface CreateLineChartOptions {
   yFormat?: string;
   vegaSpec?: VegaLiteSpec;
   animateBy?: string;
+  frameValue?: string | number;
 }
 
 /**
@@ -220,6 +247,7 @@ export function createLineChartElement(options?: CreateLineChartOptions): TLineC
     yFormat: options?.yFormat,
     vegaSpec: options?.vegaSpec,
     animateBy: options?.animateBy,
+    frameValue: options?.frameValue,
     children: [{ text: "" }],
   };
 }

@@ -23,6 +23,7 @@ import {
 import { memo, useContext, useEffect, useRef, useState } from "react";
 
 import { type ComponentMeta, TEXTAREA_KEY, type TTextareaElement } from "../../types";
+import { useLocalState } from "../local-state";
 import { LiveActionContext } from "./live-action";
 
 // ============================================================================
@@ -107,10 +108,13 @@ function TextareaElement(props: PlateElementProps) {
   const element = useElement<TTextareaElement>();
   const _selected = useSelected();
   const actionCtx = useContext(LiveActionContext);
+  const localState = useLocalState();
 
   const { name, placeholder, defaultValue, rows = 3, required } = element;
 
-  const [value, setValue] = useState(defaultValue || "");
+  // Get initial value from LocalState if available
+  const initialValue = (name && localState?.values[name] as string) || defaultValue || "";
+  const [value, setValue] = useState(initialValue);
   const valueRef = useRef(value);
   valueRef.current = value;
 
@@ -130,13 +134,22 @@ function TextareaElement(props: PlateElementProps) {
     (child) => "text" in child && typeof child.text === "string" && child.text.trim(),
   );
 
+  const handleValueChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    const newValue = e.target.value;
+    setValue(newValue);
+    // Write to LocalState if not wrapped in LiveAction
+    if (!actionCtx && localState && name) {
+      localState.setValue(name, newValue);
+    }
+  };
+
   return (
     <PlateElement {...props} as="div" className="my-2">
       <div className="flex flex-col gap-1.5">
         {hasLabel && <label className="text-sm font-medium">{props.children}</label>}
         <textarea
           value={value}
-          onChange={(e) => setValue(e.target.value)}
+          onChange={handleValueChange}
           placeholder={placeholder}
           rows={rows}
           disabled={isPending}

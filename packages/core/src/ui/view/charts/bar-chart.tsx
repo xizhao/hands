@@ -19,6 +19,7 @@ import { memo, useMemo } from "react";
 
 import { BAR_CHART_KEY, type TBarChartElement, type VegaLiteSpec } from "../../../types";
 import { detectFormat } from "../../lib/format";
+import { useResolvedValue } from "../../local-state";
 import { useLiveValueData } from "./context";
 import { VegaChart } from "./vega-chart";
 import { barChartToVegaSpec } from "./vega-spec";
@@ -70,6 +71,11 @@ export interface BarChartProps {
    * Enables frame-by-frame animation through distinct values.
    */
   animateBy?: string;
+  /**
+   * Specific frame value to display (disables auto-animation).
+   * Supports {{binding}} syntax to read from page state.
+   */
+  frameValue?: string | number;
 }
 
 /**
@@ -93,10 +99,18 @@ export function BarChart({
   yFormat,
   vegaSpec: propVegaSpec,
   animateBy,
+  frameValue,
 }: BarChartProps) {
   // Get data from LiveValue context if not provided via props
   const ctx = useLiveValueData();
   const data = propData ?? ctx?.data;
+
+  // Resolve frameValue from LocalState if it's a binding
+  const resolvedFrameValue = useResolvedValue(frameValue);
+
+  // Native timer animation: when animateBy is set without frameValue
+  // Timer animations require data embedded in spec (not injected via View API)
+  const useNativeTimer = animateBy !== undefined && frameValue === undefined;
 
   // Auto-detect formats if not provided
   const resolvedFormats = useMemo(() => {
@@ -125,6 +139,8 @@ export function BarChart({
   }
 
   // Convert simplified props to Vega-Lite spec
+  // For native timer: don't pass frameValue (let Vega handle animation)
+  // For controlled: pass resolved frameValue from LocalState binding
   const spec = barChartToVegaSpec({
     xKey,
     yKey,
@@ -135,9 +151,18 @@ export function BarChart({
     xFormat: resolvedFormats.xFormat ?? undefined,
     yFormat: resolvedFormats.yFormat ?? undefined,
     animateBy,
+    frameValue: useNativeTimer ? undefined : resolvedFrameValue,
   });
 
-  return <VegaChart spec={spec} height={height} data={propData} className={className} />;
+  return (
+    <VegaChart
+      spec={spec}
+      height={height}
+      data={propData}
+      className={className}
+      embedData={useNativeTimer}
+    />
+  );
 }
 
 // ============================================================================
@@ -163,6 +188,7 @@ function BarChartElement(props: PlateElementProps) {
         yFormat={element.yFormat as string | undefined}
         vegaSpec={element.vegaSpec as VegaLiteSpec | undefined}
         animateBy={element.animateBy as string | undefined}
+        frameValue={element.frameValue as string | number | undefined}
       />
       <span className="absolute top-0 left-0 opacity-0 pointer-events-none">{props.children}</span>
     </PlateElement>
@@ -200,6 +226,7 @@ export interface CreateBarChartOptions {
   yFormat?: string;
   vegaSpec?: VegaLiteSpec;
   animateBy?: string;
+  frameValue?: string | number;
 }
 
 /**
@@ -221,6 +248,7 @@ export function createBarChartElement(options?: CreateBarChartOptions): TBarChar
     yFormat: options?.yFormat,
     vegaSpec: options?.vegaSpec,
     animateBy: options?.animateBy,
+    frameValue: options?.frameValue,
     children: [{ text: "" }],
   };
 }

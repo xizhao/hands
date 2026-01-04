@@ -25,6 +25,7 @@ import { memo, useContext, useEffect, useRef, useState } from "react";
 import { type ComponentMeta, INPUT_KEY, type TInputElement } from "../../types";
 import { Label } from "../components/label";
 import { MaskInput, type MaskPattern } from "../components/mask-input";
+import { useLocalState } from "../local-state";
 import { LiveActionContext } from "./live-action";
 
 /** Built-in mask pattern names */
@@ -156,6 +157,7 @@ function InputElement(props: PlateElementProps) {
   const element = useElement<TInputElement>();
   const _selected = useSelected();
   const actionCtx = useContext(LiveActionContext);
+  const localState = useLocalState();
 
   const {
     name,
@@ -168,8 +170,10 @@ function InputElement(props: PlateElementProps) {
     locale,
   } = element;
 
-  const [value, setValue] = useState(defaultValue || "");
-  const [unmaskedValue, setUnmaskedValue] = useState(defaultValue || "");
+  // Get initial value from LocalState if available
+  const initialValue = (name && localState?.values[name] as string) || defaultValue || "";
+  const [value, setValue] = useState(initialValue);
+  const [unmaskedValue, setUnmaskedValue] = useState(initialValue);
   const [isValid, setIsValid] = useState<boolean | null>(null);
   const unmaskedRef = useRef(unmaskedValue);
   unmaskedRef.current = unmaskedValue;
@@ -193,6 +197,10 @@ function InputElement(props: PlateElementProps) {
   const handleValueChange = (masked: string, unmasked: string) => {
     setValue(masked);
     setUnmaskedValue(unmasked);
+    // Write to LocalState if not wrapped in LiveAction
+    if (!actionCtx && localState && name) {
+      localState.setValue(name, unmasked);
+    }
   };
 
   const handleValidate = (valid: boolean) => {

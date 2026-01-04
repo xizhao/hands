@@ -29,6 +29,7 @@ import {
 import { memo, useContext, useEffect, useRef, useState } from "react";
 
 import { type ComponentMeta, SELECT_KEY, type TSelectElement } from "../../types";
+import { useLocalState } from "../local-state";
 import { LiveActionContext } from "./live-action";
 
 // ============================================================================
@@ -69,6 +70,7 @@ export interface SelectProps {
 
 /**
  * Standalone select component for use outside Plate editor.
+ * Writes to LocalState if wrapped in LocalStateProvider.
  */
 export function Select({
   name,
@@ -82,12 +84,19 @@ export function Select({
   label,
   className,
 }: SelectProps) {
-  const [internalValue, setInternalValue] = useState(defaultValue || "");
+  const localState = useLocalState();
+  // Get initial value from LocalState if available, then defaultValue
+  const initialValue = (name && localState?.values[name] as string) || defaultValue || "";
+  const [internalValue, setInternalValue] = useState(initialValue);
   const displayValue = value !== undefined ? value : internalValue;
 
   const handleChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
     const newValue = e.target.value;
     setInternalValue(newValue);
+    // Write to LocalState if available
+    if (localState && name) {
+      localState.setValue(name, newValue);
+    }
     onChange?.(newValue);
   };
 
@@ -129,6 +138,7 @@ function SelectElement(props: PlateElementProps) {
   const element = useElement<TSelectElement>();
   const _selected = useSelected();
   const actionCtx = useContext(LiveActionContext);
+  const localState = useLocalState();
 
   const { name, options: rawOptions, placeholder = "Select...", defaultValue, required } = element;
   // Ensure options is always an array (may be string if deserialization failed)
@@ -137,11 +147,13 @@ function SelectElement(props: PlateElementProps) {
     console.warn("[Select] options is not an array:", typeof rawOptions, rawOptions);
   }
 
-  const [value, setValue] = useState(defaultValue || "");
+  // Get initial value from LocalState if available
+  const initialValue = (name && localState?.values[name] as string) || defaultValue || "";
+  const [value, setValue] = useState(initialValue);
   const valueRef = useRef(value);
   valueRef.current = value;
 
-  // Register with parent LiveAction
+  // Register with parent LiveAction (if wrapped)
   useEffect(() => {
     if (!actionCtx || !name) return;
 
@@ -149,6 +161,15 @@ function SelectElement(props: PlateElementProps) {
 
     return () => actionCtx.unregisterField(name);
   }, [actionCtx, name]);
+
+  // Sync value changes to LocalState (if not in LiveAction)
+  const handleValueChange = (newValue: string) => {
+    setValue(newValue);
+    // Write to LocalState if not wrapped in LiveAction
+    if (!actionCtx && localState && name) {
+      localState.setValue(name, newValue);
+    }
+  };
 
   const isPending = actionCtx?.isPending ?? false;
 
@@ -163,7 +184,7 @@ function SelectElement(props: PlateElementProps) {
         {hasLabel && <label className="text-sm font-medium">{props.children}</label>}
         <select
           value={value}
-          onChange={(e) => setValue(e.target.value)}
+          onChange={(e) => handleValueChange(e.target.value)}
           disabled={isPending}
           required={required}
           className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"

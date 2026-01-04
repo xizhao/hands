@@ -36,6 +36,8 @@
 export * from "./action";
 // Re-export data components
 export * from "./data";
+// Re-export local state (page-level ephemeral state for component binding)
+export * from "./local-state";
 // Re-export virtualization utilities (for performance optimization)
 export * from "./lib/virtualization";
 // Re-export query provider (for apps to implement data fetching)

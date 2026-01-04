@@ -28,7 +28,12 @@ export interface ChartFormatProps {
  *
  * @example
  * ```tsx
+ * // Auto-animated chart
  * <LineChart data={data} xKey="country" yKey="gdp" animateBy="year" />
+ *
+ * // Controlled chart with external state
+ * <Select name="year" options={years} />
+ * <LineChart data={data} xKey="country" yKey="gdp" animateBy="year" frameValue="{{year}}" />
  * ```
  */
 export interface AnimationProps {
@@ -46,6 +51,18 @@ export interface AnimationProps {
    * <BarChart xKey="country" yKey="gdp" animateBy="year" />
    */
   animateBy?: string;
+
+  /**
+   * Specific frame value to display (disables auto-animation).
+   * Use with `animateBy` to control which frame is shown externally.
+   * Supports {{binding}} syntax to read from LocalState.
+   *
+   * @example
+   * // Controlled by a Select component
+   * <Select name="year" options={[2020, 2021, 2022]} />
+   * <BarChart animateBy="year" frameValue="{{year}}" />
+   */
+  frameValue?: string | number;
 }
 
 export interface LineChartSpecProps extends ChartFormatProps, AnimationProps {
@@ -121,24 +138,40 @@ function createFoldTransform(yKeys: string[]) {
 /**
  * Apply animation params to a Vega-Lite spec (Vega-Lite 6.0+ feature).
  *
- * Uses timer selection to automatically cycle through animation frames.
- * Each distinct value of the animateBy field becomes one frame.
+ * - If only `animateBy` is set: Uses timer selection to auto-cycle through frames
+ * - If `frameValue` is also set: Filters to show only that specific frame (controlled mode)
  *
  * @example
  * ```ts
+ * // Auto-animated
  * const spec = lineChartToVegaSpec({ xKey: "country", yKey: "gdp" });
  * const animatedSpec = applyAnimation(spec, { animateBy: "year" });
+ *
+ * // Controlled by external value
+ * const controlledSpec = applyAnimation(spec, { animateBy: "year", frameValue: 2020 });
  * ```
  */
 export function applyAnimation(
   spec: VegaLiteSpec,
   props: AnimationProps,
 ): VegaLiteSpec {
-  const { animateBy } = props;
+  const { animateBy, frameValue } = props;
 
   if (!animateBy) return spec;
 
-  // Timer selection that auto-advances through animation frames
+  // If frameValue is set, use simple filter (controlled mode)
+  if (frameValue !== undefined && frameValue !== null && frameValue !== "") {
+    const filterTransform = {
+      filter: `datum['${animateBy}'] == ${typeof frameValue === "string" ? `'${frameValue}'` : frameValue}`,
+    };
+
+    return {
+      ...spec,
+      transform: [...((spec.transform as unknown[]) || []), filterTransform],
+    };
+  }
+
+  // Auto-animation mode: Timer selection that auto-advances through animation frames
   const animationParam = {
     name: "animation_frame",
     select: {
@@ -251,7 +284,7 @@ export function lineChartToVegaSpec(props: LineChartSpecProps): VegaLiteSpec {
   }
 
   // Apply animation if specified
-  return applyAnimation(baseSpec, { animateBy });
+  return applyAnimation(baseSpec, { animateBy, frameValue: props.frameValue });
 }
 
 /**
@@ -362,7 +395,7 @@ export function barChartToVegaSpec(props: BarChartSpecProps): VegaLiteSpec {
   }
 
   // Apply animation if specified
-  return applyAnimation(baseSpec, { animateBy });
+  return applyAnimation(baseSpec, { animateBy, frameValue: props.frameValue });
 }
 
 /**
@@ -448,7 +481,7 @@ export function areaChartToVegaSpec(props: AreaChartSpecProps): VegaLiteSpec {
   }
 
   // Apply animation if specified
-  return applyAnimation(baseSpec, { animateBy });
+  return applyAnimation(baseSpec, { animateBy, frameValue: props.frameValue });
 }
 
 /**
@@ -529,11 +562,11 @@ export function pieChartToVegaSpec(props: PieChartSpecProps): VegaLiteSpec {
       ],
     };
     // Apply animation if specified
-    return applyAnimation(layeredSpec, { animateBy });
+    return applyAnimation(layeredSpec, { animateBy, frameValue: props.frameValue });
   }
 
   // Apply animation if specified
-  return applyAnimation(baseSpec, { animateBy });
+  return applyAnimation(baseSpec, { animateBy, frameValue: props.frameValue });
 }
 
 // ============================================================================

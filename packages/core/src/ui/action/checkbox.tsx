@@ -24,6 +24,7 @@ import { memo, useContext, useEffect, useRef, useState } from "react";
 import { CHECKBOX_KEY, type ComponentMeta, type TCheckboxElement } from "../../types";
 import { Checkbox as BaseCheckbox } from "../components/checkbox";
 import { Label } from "../components/label";
+import { useLocalState } from "../local-state";
 import { LiveActionContext } from "./live-action";
 
 // ============================================================================
@@ -102,10 +103,13 @@ function CheckboxElement(props: PlateElementProps) {
   const element = useElement<TCheckboxElement>();
   const _selected = useSelected();
   const actionCtx = useContext(LiveActionContext);
+  const localState = useLocalState();
 
   const { name, defaultChecked, required } = element;
 
-  const [checked, setChecked] = useState(defaultChecked || false);
+  // Get initial value from LocalState if available
+  const initialChecked = (name && localState?.values[name] as boolean) ?? defaultChecked ?? false;
+  const [checked, setChecked] = useState(initialChecked);
   const checkedRef = useRef(checked);
   checkedRef.current = checked;
 
@@ -120,12 +124,21 @@ function CheckboxElement(props: PlateElementProps) {
 
   const isPending = actionCtx?.isPending ?? false;
 
+  const handleCheckedChange = (value: boolean | "indeterminate") => {
+    const newChecked = value === true;
+    setChecked(newChecked);
+    // Write to LocalState if not wrapped in LiveAction
+    if (!actionCtx && localState && name) {
+      localState.setValue(name, newChecked);
+    }
+  };
+
   return (
     <PlateElement {...props} as="div" className="my-2">
       <div className="flex items-center gap-2">
         <BaseCheckbox
           checked={checked}
-          onCheckedChange={(value) => setChecked(value === true)}
+          onCheckedChange={handleCheckedChange}
           disabled={isPending}
           required={required}
         />
