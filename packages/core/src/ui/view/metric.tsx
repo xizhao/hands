@@ -29,7 +29,7 @@ import { memo, useMemo } from "react";
 
 import { METRIC_KEY, type TMetricElement } from "../../types";
 import { formatValue as d3FormatValue, detectFormat } from "../lib/format";
-import { useLiveValueData } from "./charts/context";
+import { useLiveValueData, type LiveValueContextData } from "./charts/context";
 
 // ============================================================================
 // Standalone Component
@@ -72,19 +72,76 @@ function formatMetricValue(value: number | string, format?: string): string {
 }
 
 /**
+ * Check if value is a template placeholder like {{value}}
+ */
+function isTemplatePlaceholder(value: unknown): boolean {
+  return typeof value === "string" && /^\{\{.+\}\}$/.test(value);
+}
+
+/**
+ * Extract value from LiveValue context data.
+ * Looks for 'value' key first, then falls back to first column of first row.
+ */
+function extractValueFromContextData(data: Record<string, unknown>[]): number | string | undefined {
+  if (!data || data.length === 0) return undefined;
+  const row = data[0];
+  // Look for explicit 'value' key first
+  if ("value" in row) {
+    const v = row.value;
+    if (typeof v === "number" || typeof v === "string") return v;
+  }
+  // Fall back to first column
+  const keys = Object.keys(row);
+  if (keys.length > 0) {
+    const v = row[keys[0]];
+    if (typeof v === "number" || typeof v === "string") return v;
+  }
+  return undefined;
+}
+
+/**
  * Standalone Metric component for use outside Plate editor.
+ * Can consume data from parent LiveValue context or use direct value prop.
  */
 export function Metric({
-  value,
+  value: propValue,
   label,
   prefix,
   suffix,
   change,
   changeLabel,
   size = "md",
-  format,
+  format: propFormat,
   className,
 }: MetricProps) {
+  // Get data from LiveValue context if available
+  const ctx = useLiveValueData();
+
+  // Resolve value: if prop is a template placeholder or undefined, extract from context
+  const resolvedValue = useMemo(() => {
+    if (propValue !== undefined && !isTemplatePlaceholder(propValue)) {
+      return propValue;
+    }
+    if (ctx?.data) {
+      return extractValueFromContextData(ctx.data) ?? "—";
+    }
+    return "—";
+  }, [propValue, ctx?.data]);
+
+  // Auto-detect format if not provided and we have context data
+  const resolvedFormat = useMemo(() => {
+    if (propFormat) return propFormat;
+    if (!ctx?.data || ctx.data.length === 0) return undefined;
+
+    // Try to detect format from the column used for value
+    const row = ctx.data[0];
+    const key = "value" in row ? "value" : Object.keys(row)[0];
+    if (!key) return undefined;
+
+    const values = ctx.data.map((d) => d[key]);
+    return detectFormat(key, values) ?? undefined;
+  }, [propFormat, ctx?.data]);
+
   const sizeClasses = {
     sm: { value: "text-xl font-semibold", label: "text-xs", change: "text-xs" },
     md: { value: "text-3xl font-bold", label: "text-sm", change: "text-sm" },
@@ -98,7 +155,7 @@ export function Metric({
       {label && <span className={`text-muted-foreground ${classes.label}`}>{label}</span>}
       <span className={`tabular-nums ${classes.value}`}>
         {prefix}
-        {formatMetricValue(value, format)}
+        {formatMetricValue(resolvedValue, resolvedFormat)}
         {suffix}
       </span>
       {change !== undefined && (
@@ -120,61 +177,12 @@ export function Metric({
 // Plate Plugin
 // ============================================================================
 
-/**
- * Extract value from LiveValue context data.
- * Looks for 'value' key first, then falls back to first column of first row.
- */
-function extractValueFromContext(data: Record<string, unknown>[]): number | string | undefined {
-  if (!data || data.length === 0) return undefined;
-  const row = data[0];
-  // Look for explicit 'value' key first
-  if ("value" in row) {
-    const v = row.value;
-    if (typeof v === "number" || typeof v === "string") return v;
-  }
-  // Fall back to first column
-  const keys = Object.keys(row);
-  if (keys.length > 0) {
-    const v = row[keys[0]];
-    if (typeof v === "number" || typeof v === "string") return v;
-  }
-  return undefined;
-}
-
 function MetricElement(props: PlateElementProps) {
   const element = useElement<TMetricElement>();
   const _selected = useSelected();
   const liveValueCtx = useLiveValueData();
 
-  const {
-    value: propValue,
-    label,
-    prefix,
-    suffix,
-    change,
-    changeLabel,
-    size,
-    format: propFormat,
-  } = element;
-
-  // Resolve value: context data takes priority if inside LiveValue
-  const contextValue = liveValueCtx?.data ? extractValueFromContext(liveValueCtx.data) : undefined;
-  const value = contextValue ?? propValue;
-
-  // Auto-detect format if not provided and we have context data
-  const resolvedFormat = useMemo(() => {
-    if (propFormat) return propFormat;
-    if (!liveValueCtx?.data || liveValueCtx.data.length === 0) return undefined;
-
-    // Try to detect format from the column used for value
-    const row = liveValueCtx.data[0];
-    // Use 'value' key if present, otherwise first column
-    const key = "value" in row ? "value" : Object.keys(row)[0];
-    if (!key) return undefined;
-
-    const values = liveValueCtx.data.map((d) => d[key]);
-    return detectFormat(key, values) ?? undefined;
-  }, [propFormat, liveValueCtx?.data]);
+  const { value, label, prefix, suffix, change, changeLabel, size, format } = element;
 
   // Show loading state when inside LiveValue and loading
   const isLoading = liveValueCtx?.isLoading ?? false;
@@ -197,7 +205,7 @@ function MetricElement(props: PlateElementProps) {
           change={change}
           changeLabel={changeLabel}
           size={size}
-          format={resolvedFormat}
+          format={format}
         />
       )}
       <span className="hidden">{props.children}</span>

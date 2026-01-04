@@ -16,6 +16,21 @@ The stdlib provides three categories of components:
 
 Display-only components that render live data from SQL queries.
 
+### InteractiveMap
+
+Interactive MapLibre GL map with pan/zoom, markers, and popups. Uses free CARTO basemap tiles (no API key required). Supports light/dark/voyager styles.
+
+**Keywords:** map, interactive, maplibre, markers, popups, pan, zoom, geolocation, location
+
+**Example:**
+```tsx
+<InteractiveMap longitude={-122.4} latitude={37.8} zoom={12} />
+<InteractiveMap longitude={-74.006} latitude={40.7128} zoom={10} mapStyle="dark">
+  <MapMarker longitude={-74.006} latitude={40.7128} popup="New York City" />
+  <MapControls />
+</InteractiveMap>
+```
+
 ### Tabs
 
 Tabbed navigation for organizing content into switchable panels. Use for dashboards, settings pages, or any content that benefits from tab navigation.
@@ -72,50 +87,66 @@ Displays live SQL query results. Auto-selects display format based on data shape
 
 ### AreaChart
 
-Area chart for visualizing trends with filled regions. Supports stacking for comparing cumulative values.
+Area chart for visualizing trends with filled regions. Supports stacking for comparing cumulative values. Works standalone or inside LiveValue for live SQL data. Supports animation: use animateBy="fieldName" to animate through distinct values of that field.
 
-**Keywords:** chart, area, filled, trend, cumulative, visualization
+**Keywords:** chart, area, filled, trend, cumulative, visualization, animation
 
 **Example:**
 ```tsx
 <AreaChart data={data} xKey="date" yKey="pageviews" />
 <AreaChart data={data} xKey="month" yKey={["revenue", "costs"]} stacked />
+<AreaChart data={data} xKey="date" yKey="users" animateBy="year" />
 ```
 
 ### BarChart
 
-Bar chart for comparing categorical data. Supports vertical/horizontal orientation and stacked bars.
+Bar chart for comparing categorical data. Supports vertical/horizontal orientation and stacked bars. Works standalone or inside LiveValue for live SQL data. Supports animation: use animateBy="fieldName" to animate through distinct values of that field (e.g., animateBy="year" shows data for each year in sequence).
 
-**Keywords:** chart, bar, column, comparison, category, visualization
+**Keywords:** chart, bar, column, comparison, category, visualization, animation
 
 **Example:**
 ```tsx
 <BarChart data={data} xKey="category" yKey="value" />
 <BarChart data={data} xKey="month" yKey={["sales", "costs"]} stacked />
+<BarChart data={data} xKey="region" yKey="revenue" animateBy="year" />
 ```
 
 ### PieChart
 
-Pie/donut chart for showing proportional data. Set innerRadius > 0 to create a donut chart.
+Pie/donut chart for showing proportional data. Set innerRadius > 0 to create a donut chart. Works standalone or inside LiveValue for live SQL data. Supports animation: use animateBy="fieldName" to animate through distinct values of that field (e.g., animateBy="quarter" shows pie for each quarter).
 
-**Keywords:** chart, pie, donut, proportion, percentage, visualization
+**Keywords:** chart, pie, donut, proportion, percentage, visualization, animation
 
 **Example:**
 ```tsx
 <PieChart data={data} valueKey="count" nameKey="category" />
 <PieChart data={data} valueKey="amount" nameKey="type" innerRadius={60} />
+<PieChart data={data} valueKey="share" nameKey="segment" animateBy="quarter" />
+```
+
+### Chart
+
+Generic chart component for full Vega-Lite specifications. Use this for AI-generated advanced charts like boxplots, heatmaps, scatter matrices. Works standalone or inside LiveValue for live SQL data.
+
+**Keywords:** chart, vega, visualization, custom, advanced
+
+**Example:**
+```tsx
+<Chart vegaSpec={{ mark: "boxplot", encoding: { x: { field: "category" }, y: { field: "value" } } }} />
+<Chart vegaSpec={{ mark: "rect", encoding: { x: { field: "x" }, y: { field: "y" }, color: { field: "value" } } }} />
 ```
 
 ### LineChart
 
-Line chart for visualizing trends over time or continuous data. Works standalone or inside LiveValue for live SQL data.
+Line chart for visualizing trends over time or continuous data. Works standalone or inside LiveValue for live SQL data. Supports animation: use animateBy="fieldName" to animate through distinct values of that field (e.g., animateBy="year" cycles through years).
 
-**Keywords:** chart, line, graph, trend, time series, visualization
+**Keywords:** chart, line, graph, trend, time series, visualization, animation
 
 **Example:**
 ```tsx
 <LineChart data={data} xKey="date" yKey="revenue" />
 <LineChart data={data} xKey="month" yKey={["sales", "expenses"]} showLegend />
+<LineChart data={data} xKey="date" yKey="value" animateBy="year" />
 ```
 
 ### Metric
@@ -129,7 +160,6 @@ KPI display for showing a single metric value with optional label and change ind
 // Standalone with direct value
 <Metric label="Total Users" value={1234} />
 <Metric label="Revenue" value={50000} prefix="$" change={12.5} />
-<Metric label="Error Rate" value={0.5} suffix="%" change={-8} changeLabel="vs last week" />
 
 // With LiveValue data context (value comes from query)
 <LiveValue query="SELECT SUM(amount) as value FROM orders">

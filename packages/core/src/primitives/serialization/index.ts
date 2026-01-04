@@ -156,6 +156,7 @@ export {
   areaChartRule,
   barChartRule,
   chartRules,
+  interactiveMapRule,
   lineChartRule,
   pieChartRule,
 } from "./rules/charts";

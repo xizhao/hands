@@ -20,7 +20,35 @@ export interface ChartFormatProps {
   yFormat?: string;
 }
 
-export interface LineChartSpecProps extends ChartFormatProps {
+/**
+ * Animation props for charts (Vega-Lite 6.0+ timer selection)
+ *
+ * Enables frame-by-frame animation over a data field.
+ * The chart will automatically cycle through distinct values of the animateBy field.
+ *
+ * @example
+ * ```tsx
+ * <LineChart data={data} xKey="country" yKey="gdp" animateBy="year" />
+ * ```
+ */
+export interface AnimationProps {
+  /**
+   * Field to animate over (e.g., "year", "quarter", "month").
+   * Enables auto-playing animation that cycles through each distinct value.
+   *
+   * Requirements:
+   * - Field must exist as a column in your data
+   * - Data should have multiple rows per frame value
+   * - Query should be ordered by this field
+   *
+   * @example
+   * // Data has year, country, gdp columns with multiple countries per year
+   * <BarChart xKey="country" yKey="gdp" animateBy="year" />
+   */
+  animateBy?: string;
+}
+
+export interface LineChartSpecProps extends ChartFormatProps, AnimationProps {
   xKey?: string;
   yKey?: string | string[];
   showLegend?: boolean;
@@ -29,7 +57,7 @@ export interface LineChartSpecProps extends ChartFormatProps {
   showDots?: boolean;
 }
 
-export interface BarChartSpecProps extends ChartFormatProps {
+export interface BarChartSpecProps extends ChartFormatProps, AnimationProps {
   xKey?: string;
   yKey?: string | string[];
   showLegend?: boolean;
@@ -38,7 +66,7 @@ export interface BarChartSpecProps extends ChartFormatProps {
   layout?: "vertical" | "horizontal";
 }
 
-export interface AreaChartSpecProps extends ChartFormatProps {
+export interface AreaChartSpecProps extends ChartFormatProps, AnimationProps {
   xKey?: string;
   yKey?: string | string[];
   showLegend?: boolean;
@@ -48,7 +76,7 @@ export interface AreaChartSpecProps extends ChartFormatProps {
   fillOpacity?: number;
 }
 
-export interface PieChartSpecProps {
+export interface PieChartSpecProps extends AnimationProps {
   valueKey?: string;
   nameKey?: string;
   showLegend?: boolean;
@@ -90,6 +118,55 @@ function createFoldTransform(yKeys: string[]) {
   };
 }
 
+/**
+ * Apply animation params to a Vega-Lite spec (Vega-Lite 6.0+ feature).
+ *
+ * Uses timer selection to automatically cycle through animation frames.
+ * Each distinct value of the animateBy field becomes one frame.
+ *
+ * @example
+ * ```ts
+ * const spec = lineChartToVegaSpec({ xKey: "country", yKey: "gdp" });
+ * const animatedSpec = applyAnimation(spec, { animateBy: "year" });
+ * ```
+ */
+export function applyAnimation(
+  spec: VegaLiteSpec,
+  props: AnimationProps,
+): VegaLiteSpec {
+  const { animateBy } = props;
+
+  if (!animateBy) return spec;
+
+  // Timer selection that auto-advances through animation frames
+  const animationParam = {
+    name: "animation_frame",
+    select: {
+      type: "point",
+      fields: [animateBy],
+      on: "timer",
+    },
+  };
+
+  // Filter transform to show only current frame
+  const filterTransform = { filter: { param: "animation_frame" } };
+
+  // Time encoding channel - drives the animation
+  const timeEncoding = { field: animateBy, type: "ordinal" as const };
+
+  const existingEncoding = (spec.encoding ?? {}) as Record<string, unknown>;
+
+  return {
+    ...spec,
+    params: [...((spec.params as unknown[]) || []), animationParam],
+    transform: [...((spec.transform as unknown[]) || []), filterTransform],
+    encoding: {
+      ...existingEncoding,
+      time: timeEncoding,
+    },
+  };
+}
+
 // ============================================================================
 // Spec Converters
 // ============================================================================
@@ -112,32 +189,21 @@ export function lineChartToVegaSpec(props: LineChartSpecProps): VegaLiteSpec {
     showDots = true,
     xFormat,
     yFormat,
-  } = props;
+    animateBy,
+      } = props;
 
   const yKeys = Array.isArray(yKey) ? yKey : [yKey];
   const isMultiSeries = yKeys.length > 1;
   const interpolation = mapCurve(curve);
   const yField = isMultiSeries ? "value" : yKeys[0];
 
-  // Line chart with nearest-point tooltip for better interactivity
   const baseSpec: VegaLiteSpec = {
     $schema: "https://vega.github.io/schema/vega-lite/v6.json",
-    // Add params for nearest-point tooltip selection
-    params: [
-      {
-        name: "hover",
-        select: {
-          type: "point",
-          on: "pointerover",
-          nearest: true,
-          clear: "pointerout",
-        },
-      },
-    ],
     mark: {
       type: "line",
       interpolate: interpolation,
-      point: showDots, // Built-in point markers
+      strokeWidth: 2,
+      point: showDots ? { filled: true, size: 50 } : false,
       tooltip: true,
     },
     encoding: {
@@ -161,7 +227,6 @@ export function lineChartToVegaSpec(props: LineChartSpecProps): VegaLiteSpec {
           ...(yFormat ? { format: yFormat } : {}),
         },
       },
-      // Tooltip encoding for all fields
       tooltip: isMultiSeries
         ? [
             { field: xKey, type: "ordinal" as const, title: xKey },
@@ -175,7 +240,7 @@ export function lineChartToVegaSpec(props: LineChartSpecProps): VegaLiteSpec {
     },
   };
 
-  // Handle multi-series with fold transform and color encoding
+  // Handle multi-series
   if (isMultiSeries) {
     baseSpec.transform = [createFoldTransform(yKeys)];
     (baseSpec.encoding as Record<string, unknown>).color = {
@@ -185,7 +250,8 @@ export function lineChartToVegaSpec(props: LineChartSpecProps): VegaLiteSpec {
     };
   }
 
-  return baseSpec;
+  // Apply animation if specified
+  return applyAnimation(baseSpec, { animateBy });
 }
 
 /**
@@ -206,7 +272,8 @@ export function barChartToVegaSpec(props: BarChartSpecProps): VegaLiteSpec {
     layout = "vertical",
     xFormat,
     yFormat,
-  } = props;
+    animateBy,
+      } = props;
 
   const yKeys = Array.isArray(yKey) ? yKey : [yKey];
   const isMultiSeries = yKeys.length > 1;
@@ -294,7 +361,8 @@ export function barChartToVegaSpec(props: BarChartSpecProps): VegaLiteSpec {
     }
   }
 
-  return baseSpec;
+  // Apply animation if specified
+  return applyAnimation(baseSpec, { animateBy });
 }
 
 /**
@@ -316,7 +384,8 @@ export function areaChartToVegaSpec(props: AreaChartSpecProps): VegaLiteSpec {
     fillOpacity = 0.4,
     xFormat,
     yFormat,
-  } = props;
+    animateBy,
+      } = props;
 
   const yKeys = Array.isArray(yKey) ? yKey : [yKey];
   const isMultiSeries = yKeys.length > 1;
@@ -325,24 +394,12 @@ export function areaChartToVegaSpec(props: AreaChartSpecProps): VegaLiteSpec {
 
   const baseSpec: VegaLiteSpec = {
     $schema: "https://vega.github.io/schema/vega-lite/v6.json",
-    // Add params for nearest-point tooltip selection
-    params: [
-      {
-        name: "hover",
-        select: {
-          type: "point",
-          on: "pointerover",
-          nearest: true,
-          clear: "pointerout",
-        },
-      },
-    ],
     mark: {
       type: "area",
       interpolate: interpolation,
       opacity: fillOpacity,
       line: true,
-      point: true, // Add points for better hover detection
+      point: true,
       tooltip: true,
     },
     encoding: {
@@ -367,7 +424,6 @@ export function areaChartToVegaSpec(props: AreaChartSpecProps): VegaLiteSpec {
         },
         ...(stacked && isMultiSeries ? { stack: "zero" as const } : {}),
       },
-      // Tooltip encoding for all fields
       tooltip: isMultiSeries
         ? [
             { field: xKey, type: "ordinal" as const, title: xKey },
@@ -391,7 +447,8 @@ export function areaChartToVegaSpec(props: AreaChartSpecProps): VegaLiteSpec {
     };
   }
 
-  return baseSpec;
+  // Apply animation if specified
+  return applyAnimation(baseSpec, { animateBy });
 }
 
 /**
@@ -410,7 +467,8 @@ export function pieChartToVegaSpec(props: PieChartSpecProps): VegaLiteSpec {
     showLabels = false,
     innerRadius = 0,
     valueFormat,
-  } = props;
+    animateBy,
+      } = props;
 
   const baseSpec: VegaLiteSpec = {
     $schema: "https://vega.github.io/schema/vega-lite/v6.json",
@@ -444,7 +502,7 @@ export function pieChartToVegaSpec(props: PieChartSpecProps): VegaLiteSpec {
   // Add labels if requested
   if (showLabels) {
     // Use a layer to add text labels
-    return {
+    const layeredSpec: VegaLiteSpec = {
       $schema: "https://vega.github.io/schema/vega-lite/v6.json",
       layer: [
         baseSpec,
@@ -470,9 +528,12 @@ export function pieChartToVegaSpec(props: PieChartSpecProps): VegaLiteSpec {
         },
       ],
     };
+    // Apply animation if specified
+    return applyAnimation(layeredSpec, { animateBy });
   }
 
-  return baseSpec;
+  // Apply animation if specified
+  return applyAnimation(baseSpec, { animateBy });
 }
 
 // ============================================================================

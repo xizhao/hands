@@ -219,6 +219,15 @@ export function SaveStatusIndicator() {
           )}
         </div>
 
+        {/* Deploy error message */}
+        {deployMutation.error && (
+          <div className="px-2.5 py-2 border-b border-border/50">
+            <p className="text-[10px] text-red-500">
+              {deployMutation.error.message}
+            </p>
+          </div>
+        )}
+
         {/* Diff stats */}
         {hasChanges && diffStats && (
           <div className="px-2.5 py-2 border-b border-border/50">

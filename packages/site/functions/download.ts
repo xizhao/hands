@@ -55,7 +55,7 @@ export async function onRequest(context: EventContext<Env, string, unknown>): Pr
       headers.set("Content-Type", getContentType(platform));
       headers.set("Content-Disposition", `attachment; filename="${filename}"`);
       headers.set("Content-Length", object.size.toString());
-      headers.set("Cache-Control", "public, max-age=3600");
+      headers.set("Cache-Control", "no-cache, no-store, must-revalidate");
 
       return new Response(object.body, { headers });
     } catch (error) {
@@ -69,16 +69,16 @@ export async function onRequest(context: EventContext<Env, string, unknown>): Pr
 }
 
 function getLatestFilename(platform: string): string {
-  // For now, use fixed filenames. Later, could scan R2 for latest version.
+  // Use versioned filenames - update version here when releasing
   switch (platform) {
     case "mac":
-      return "Hands_latest_aarch64.dmg";
+      return "Hands_0.1.0_aarch64.dmg";
     case "win":
-      return "Hands_latest_x64.msi";
+      return "Hands_0.1.0_x64.msi";
     case "linux":
-      return "Hands_latest_amd64.deb";
+      return "Hands_0.1.0_amd64.deb";
     default:
-      return "Hands_latest_aarch64.dmg";
+      return "Hands_0.1.0_aarch64.dmg";
   }
 }
 

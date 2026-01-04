@@ -41,6 +41,7 @@ export const HISTOGRAM_CHART_KEY = "histogram_chart";
 export const HEATMAP_CHART_KEY = "heatmap_chart";
 export const BOXPLOT_CHART_KEY = "boxplot_chart";
 export const MAP_CHART_KEY = "map_chart";
+export const INTERACTIVE_MAP_KEY = "interactive_map";
 export const CHART_KEY = "chart"; // Generic Vega-Lite chart
 export const DATA_GRID_KEY = "data_grid";
 export const KANBAN_KEY = "kanban";
@@ -88,6 +89,7 @@ export const STDLIB_COMPONENT_NAMES = [
   "HeatmapChart",
   "BoxPlotChart",
   "MapChart",
+  "InteractiveMap",
   "Chart",
   "DataGrid",
   "Kanban",
@@ -745,6 +747,37 @@ export interface TMapChartElement extends TElement {
   colorScheme?: string;
   /** Show tooltip on hover */
   showTooltip?: boolean;
+  /** Children are unused (void element) */
+  children: (TElement | TText)[];
+}
+
+/**
+ * InteractiveMap element - MapLibre GL based interactive map.
+ * Supports pan/zoom, markers, popups, and custom styling.
+ */
+export interface InteractiveMapMarkerData {
+  longitude: number;
+  latitude: number;
+  popup?: string;
+  color?: string;
+}
+
+export interface TInteractiveMapElement extends TElement {
+  type: typeof INTERACTIVE_MAP_KEY;
+  /** Center longitude */
+  longitude: number;
+  /** Center latitude */
+  latitude: number;
+  /** Zoom level (0-22) */
+  zoom: number;
+  /** Map style: "light", "dark", or "voyager" */
+  mapStyle?: "light" | "dark" | "voyager";
+  /** Map height in pixels */
+  height?: number;
+  /** Markers to display */
+  markers?: InteractiveMapMarkerData[];
+  /** Show navigation controls */
+  showControls?: boolean;
   /** Children are unused (void element) */
   children: (TElement | TText)[];
 }

@@ -14,16 +14,19 @@ import {
   CHART_KEY,
   HEATMAP_CHART_KEY,
   HISTOGRAM_CHART_KEY,
+  INTERACTIVE_MAP_KEY,
   LINE_CHART_KEY,
   MAP_CHART_KEY,
   PIE_CHART_KEY,
   SCATTER_CHART_KEY,
+  type InteractiveMapMarkerData,
   type TAreaChartElement,
   type TBarChartElement,
   type TBoxPlotChartElement,
   type TChartElement,
   type THeatmapChartElement,
   type THistogramChartElement,
+  type TInteractiveMapElement,
   type TLineChartElement,
   type TMapChartElement,
   type TPieChartElement,
@@ -710,6 +713,70 @@ export const mapChartRule: MdxSerializationRule<TMapChartElement> = {
 };
 
 // ============================================================================
+// InteractiveMap
+// ============================================================================
+
+/**
+ * InteractiveMap serialization rule.
+ *
+ * MDX Example:
+ * ```mdx
+ * <InteractiveMap longitude={-122.4} latitude={37.8} zoom={12} />
+ * <InteractiveMap longitude={-74.006} latitude={40.7128} zoom={10} mapStyle="dark" markers={[{longitude: -74.006, latitude: 40.7128, popup: "NYC"}]} />
+ * ```
+ */
+export const interactiveMapRule: MdxSerializationRule<TInteractiveMapElement> = {
+  tagName: "InteractiveMap",
+  key: INTERACTIVE_MAP_KEY,
+
+  deserialize: (node) => {
+    const props = parseAttributes(node);
+
+    return createVoidElement<TInteractiveMapElement>(INTERACTIVE_MAP_KEY, {
+      longitude: props.longitude as number | undefined,
+      latitude: props.latitude as number | undefined,
+      zoom: props.zoom as number | undefined,
+      mapStyle: props.mapStyle as TInteractiveMapElement["mapStyle"],
+      height: props.height as number | undefined,
+      markers: props.markers as InteractiveMapMarkerData[] | undefined,
+      showControls: props.showControls as boolean | undefined,
+    });
+  },
+
+  serialize: (element) => {
+    const attrs = serializeAttributes(
+      {
+        longitude: element.longitude,
+        latitude: element.latitude,
+        zoom: element.zoom,
+        mapStyle: element.mapStyle,
+        height: element.height,
+        markers: element.markers,
+        showControls: element.showControls,
+      },
+      {
+        include: ["longitude", "latitude", "zoom", "mapStyle", "height", "markers", "showControls"],
+        defaults: {
+          longitude: -98.5795,
+          latitude: 39.8283,
+          zoom: 4,
+          mapStyle: "light",
+          height: 400,
+          showControls: true,
+        },
+      },
+    );
+
+    return {
+      type: "mdxJsxFlowElement",
+      name: "InteractiveMap",
+      attributes: attrs,
+      children: [],
+    };
+  },
+};
+
+// ============================================================================
 // Export all rules
 // ============================================================================
 
@@ -724,4 +791,5 @@ export const chartRules = [
   heatmapChartRule,
   boxPlotChartRule,
   mapChartRule,
+  interactiveMapRule,
 ];

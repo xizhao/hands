@@ -807,16 +807,6 @@ pages/
     revenue-summary.mdx
     customer-card.mdx
 \`\`\`
-
-### Note: Custom TSX Components
-
-For custom visualizations requiring React code, create plugins in \`plugins/\`:
-
-\`\`\`mdx
-import RevenueChart from "../plugins/revenue-chart"
-
-<RevenueChart period="6 months" />
-\`\`\`
 `;
 
 // ============================================================================

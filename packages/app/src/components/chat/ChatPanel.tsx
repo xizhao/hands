@@ -93,6 +93,7 @@ export function ChatPanel({
 
   const scrollRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<ChatInputRef>(null);
+  const isNearBottomRef = useRef(true); // Track if user is near bottom
 
   // Session hooks
   const { data: allSessions = [] } = useSessions();
@@ -120,8 +121,9 @@ export function ChatPanel({
   }, [sessions]);
 
   const backgroundSessions = useMemo(() => {
-    return sessions.filter((s) => (s as Session & { parentID?: string }).parentID);
-  }, [sessions]);
+    // Background sessions have parentID - filter from allSessions, not sessions
+    return allSessions.filter((s) => (s as Session & { parentID?: string }).parentID);
+  }, [allSessions]);
 
   const activeSession = sessions.find((s) => s.id === sessionId);
 
@@ -138,12 +140,21 @@ export function ChatPanel({
   const activeStatus = sessionId ? sessionStatuses[sessionId] : null;
   const isBusy = activeStatus?.type === "busy" || activeStatus?.type === "running";
 
-  // Scroll to bottom when new messages arrive
+  // Track scroll position to detect if user is near bottom
+  const handleScroll = useCallback(() => {
+    if (!scrollRef.current) return;
+    const { scrollTop, scrollHeight, clientHeight } = scrollRef.current;
+    const distanceFromBottom = scrollHeight - scrollTop - clientHeight;
+    isNearBottomRef.current = distanceFromBottom < 100;
+  }, []);
+
+  // Auto-scroll to bottom when messages change, but only if user is near bottom
+  const lastMessageContent = messages[messages.length - 1]?.parts?.length ?? 0;
   useEffect(() => {
-    if (scrollRef.current) {
+    if (scrollRef.current && isNearBottomRef.current) {
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
     }
-  }, []);
+  }, [messages.length, lastMessageContent]);
 
   // Message handlers
   const handleSend = useCallback(() => {
@@ -227,6 +238,7 @@ export function ChatPanel({
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: 10 }}
             ref={scrollRef}
+            onScroll={handleScroll}
             className="flex-1 overflow-y-auto min-h-0 flex flex-col"
           >
             <LinkClickHandler className="flex flex-col gap-3 mt-auto p-3">

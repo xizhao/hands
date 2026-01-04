@@ -1,14 +1,14 @@
 /**
- * DomainSidebar - Navigation sidebar with tables as first-class "domains"
+ * DomainSidebar - Navigation sidebar with tables as first-class "sets"
  *
- * Each domain (table) is shown as a navigation item. Clicking a domain
+ * Each set (domain/table) is shown as a navigation item. Clicking a set
  * opens a tabbed view with Page, Sheet, and Actions tabs.
  *
  * Uses tRPC for domain data and provides CRUD actions via context menu.
  */
 
 import { useNavigate, useParams } from "@tanstack/react-router";
-import { FileText, MoreHorizontal, Pencil, Plus, Trash2 } from "lucide-react";
+import { Layers, MoreHorizontal, Pencil, Plus, Trash2 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   AlertDialog,
@@ -147,7 +147,7 @@ export function DomainSidebar({ filterQuery }: DomainSidebarProps) {
       {/* Header with title and create button */}
       <div className="flex items-center justify-between px-2 py-1">
         <span className="text-[11px] font-medium text-muted-foreground uppercase tracking-wide">
-          Pages
+          Sets
         </span>
         <Tooltip>
           <TooltipTrigger asChild>
@@ -164,7 +164,7 @@ export function DomainSidebar({ filterQuery }: DomainSidebarProps) {
             </button>
           </TooltipTrigger>
           <TooltipContent side="right" className="text-[10px]">
-            New page
+            New set
           </TooltipContent>
         </Tooltip>
       </div>
@@ -181,7 +181,7 @@ export function DomainSidebar({ filterQuery }: DomainSidebarProps) {
         <div className="px-2 py-4">
           {filterQuery ? (
             <div className="text-center text-xs text-muted-foreground">
-              No pages matching "{filterQuery}"
+              No sets matching "{filterQuery}"
             </div>
           ) : (
             <button
@@ -196,7 +196,7 @@ export function DomainSidebar({ filterQuery }: DomainSidebarProps) {
               )}
             >
               <Plus className="h-3.5 w-3.5" />
-              Create your first page
+              Create your first set
             </button>
           )}
         </div>
@@ -317,7 +317,7 @@ function DomainItem({
 
     return (
       <div className="flex items-center gap-2 px-2 py-1.5">
-        <FileText className="h-4 w-4 flex-shrink-0 text-muted-foreground" />
+        <Layers className="h-4 w-4 flex-shrink-0 text-muted-foreground" />
         <div className="flex-1 min-w-0">
           <input
             ref={inputRef}
@@ -330,7 +330,7 @@ function DomainItem({
               "w-full bg-transparent text-sm outline-none",
               "border-b border-primary focus:border-primary",
             )}
-            placeholder="page_name"
+            placeholder="set_name"
           />
           {showPreview && (
             <div className="text-[10px] text-muted-foreground mt-0.5">
@@ -356,7 +356,7 @@ function DomainItem({
         )}
       >
         <button onClick={onClick} className="flex-1 flex items-center gap-2 min-w-0">
-          <FileText
+          <Layers
             className={cn(
               "h-4 w-4 flex-shrink-0",
               isActive ? "text-foreground" : "text-muted-foreground",
@@ -407,10 +407,10 @@ function DomainItem({
       <AlertDialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Delete domain "{domainName}"?</AlertDialogTitle>
+            <AlertDialogTitle>Delete set "{domainName}"?</AlertDialogTitle>
             <AlertDialogDescription>
-              This will permanently delete the "{domainId}" table and its associated page. This
-              action cannot be undone.
+              This will permanently delete the "{domainId}" table and its data. This action cannot
+              be undone.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>

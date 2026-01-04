@@ -6,10 +6,12 @@
  * @description Pie/donut chart for showing proportional data.
  * Set innerRadius > 0 to create a donut chart.
  * Works standalone or inside LiveValue for live SQL data.
- * @keywords chart, pie, donut, proportion, percentage, visualization
+ * Supports animation: use animateBy="fieldName" to animate through distinct values of that field (e.g., animateBy="quarter" shows pie for each quarter).
+ * @keywords chart, pie, donut, proportion, percentage, visualization, animation
  * @example
  * <PieChart data={data} valueKey="count" nameKey="category" />
  * <PieChart data={data} valueKey="amount" nameKey="type" innerRadius={60} />
+ * <PieChart data={data} valueKey="share" nameKey="segment" animateBy="quarter" />
  */
 
 import { createPlatePlugin, PlateElement, type PlateElementProps, useElement } from "platejs/react";
@@ -54,6 +56,11 @@ export interface PieChartProps {
    * If provided, overrides the simplified props above.
    */
   vegaSpec?: VegaLiteSpec;
+  /**
+   * Field to animate over (e.g., "year", "date").
+   * Enables frame-by-frame animation through distinct values.
+   */
+  animateBy?: string;
 }
 
 /**
@@ -73,6 +80,7 @@ export function PieChart({
   className,
   valueFormat,
   vegaSpec: propVegaSpec,
+  animateBy,
 }: PieChartProps) {
   // Get data from LiveValue context if not provided via props
   const ctx = useLiveValueData();
@@ -100,6 +108,7 @@ export function PieChart({
     showLabels,
     innerRadius,
     valueFormat: resolvedValueFormat ?? undefined,
+    animateBy,
   });
 
   return <VegaChart spec={spec} height={height} data={propData} className={className} />;
@@ -124,6 +133,7 @@ function PieChartElement(props: PlateElementProps) {
         colors={element.colors as string[] | undefined}
         valueFormat={element.valueFormat as string | undefined}
         vegaSpec={element.vegaSpec as VegaLiteSpec | undefined}
+        animateBy={element.animateBy as string | undefined}
       />
       <span className="absolute top-0 left-0 opacity-0 pointer-events-none">{props.children}</span>
     </PlateElement>
@@ -157,6 +167,7 @@ export interface CreatePieChartOptions {
   colors?: string[];
   valueFormat?: string;
   vegaSpec?: VegaLiteSpec;
+  animateBy?: string;
 }
 
 /**
@@ -174,6 +185,7 @@ export function createPieChartElement(options?: CreatePieChartOptions): TPieChar
     colors: options?.colors,
     valueFormat: options?.valueFormat,
     vegaSpec: options?.vegaSpec,
+    animateBy: options?.animateBy,
     children: [{ text: "" }],
   };
 }

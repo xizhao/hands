@@ -14,7 +14,6 @@ Hands is a framework for building data apps using **observable MDX** - markdown 
 workbook/
 ├── pages/           # MDX apps (primary output)
 │   └── blocks/      # Embeddable MDX fragments
-├── plugins/         # Custom TSX components (charts, complex UI)
 ├── lib/             # Shared utilities
 └── sources/         # Data connectors (API sync)
 \`\`\`
@@ -89,17 +88,6 @@ Embed reusable MDX blocks from \`pages/blocks/\`:
 <Page src="blocks/revenue-summary" />
 \`\`\`
 
-#### Plugins - Custom TSX Components
-
-Only create plugins when MDX can't express what you need (charts, complex interactivity).
-Plugins live in \`plugins/\` and are imported directly:
-
-\`\`\`mdx
-import RevenueChart from "../plugins/revenue-chart"
-
-<RevenueChart period="6 months" />
-\`\`\`
-
 ### Decision Guide: MDX First
 
 | Need | Solution |
@@ -111,10 +99,10 @@ import RevenueChart from "../plugins/revenue-chart"
 | Simple button action | \`<LiveAction sql="..."><Button>Do It</Button></LiveAction>\` |
 | Dropdown filter → action | \`<Select>\` inside \`<LiveAction>\` |
 | Reusable MDX fragment | \`<Page src="blocks/..." />\` |
-| Interactive chart | Plugin in \`plugins/\` (delegate to @coder) |
-| Complex custom UI | Plugin in \`plugins/\` (delegate to @coder) |
+| Interactive chart | Use \`<LineChart>\`, \`<BarChart>\`, \`<PieChart>\` inside LiveValue |
+| Maps | Use \`<InteractiveMap>\` or \`<MapChart>\` inside LiveValue |
 
-**90% of data apps can be built with LiveValue + LiveAction. Only use Plugins for truly custom visualizations.**
+**All data apps can be built with LiveValue + LiveAction + stdlib components.**
 
 ### Data Sources
 
@@ -134,7 +122,6 @@ sources action='add' name='stripe'
 |-----------|---------|----------------|
 | \`pages/\` | User-facing MDX apps | Always - this is the primary output |
 | \`pages/blocks/\` | Embeddable MDX fragments | Reusable MDX sections |
-| \`plugins/\` | Custom TSX components | Only when MDX can't express it |
 | \`lib/\` | Shared utilities | For reusable code |
 | \`sources/\` | API data connectors | When syncing external data |
 `;

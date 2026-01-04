@@ -120,7 +120,11 @@ export default defineConfig({
     "process.env": {},
   },
   optimizeDeps: {
-    include: ["react-server-dom-webpack/client"],
+    include: [
+      "react-server-dom-webpack/client",
+      "react-map-gl/maplibre",
+      "maplibre-gl",
+    ],
   },
   clearScreen: false,
   server: {

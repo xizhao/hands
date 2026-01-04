@@ -66,11 +66,12 @@ export function PageTab({ domain }: PageTabProps) {
   }
 
   // If we have a pageId (either from domain or newly created), show editor
+  // Key by pageId to reset all internal state (including sync) when domain changes
   const effectivePageId = pageId || domain.pageId;
   if (effectivePageId) {
     return (
       <div className="h-full">
-        <PageEditor pageId={effectivePageId} className="h-full" />
+        <PageEditor key={effectivePageId} pageId={effectivePageId} className="h-full" />
       </div>
     );
   }

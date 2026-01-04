@@ -153,3 +153,20 @@ export {
   TabsPlugin,
   type TabsProps,
 } from "./tabs";
+
+// Interactive Maps (MapLibre GL)
+export {
+  createInteractiveMapElement,
+  INTERACTIVE_MAP_KEY,
+  InteractiveMap,
+  InteractiveMapElement,
+  InteractiveMapPlugin,
+  type InteractiveMapProps,
+  MapControls,
+  type MapControlsProps,
+  MapMarker,
+  type MapMarkerProps,
+  MapPopup,
+  type MapPopupProps,
+  useMap,
+} from "./maps";

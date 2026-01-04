@@ -56,6 +56,7 @@ import {
   ChartPlugin,
   HeatmapChartPlugin,
   HistogramChartPlugin,
+  InteractiveMapPlugin,
   LineChartPlugin,
   LiveValueInlinePlugin,
   LiveValuePlugin,
@@ -83,6 +84,7 @@ export const ChartKit = [
   HeatmapChartPlugin,
   BoxPlotChartPlugin,
   MapChartPlugin,
+  InteractiveMapPlugin,
 ] as const;
 
 /**

@@ -6,10 +6,12 @@
  * @description Area chart for visualizing trends with filled regions.
  * Supports stacking for comparing cumulative values.
  * Works standalone or inside LiveValue for live SQL data.
- * @keywords chart, area, filled, trend, cumulative, visualization
+ * Supports animation: use animateBy="fieldName" to animate through distinct values of that field.
+ * @keywords chart, area, filled, trend, cumulative, visualization, animation
  * @example
  * <AreaChart data={data} xKey="date" yKey="pageviews" />
  * <AreaChart data={data} xKey="month" yKey={["revenue", "costs"]} stacked />
+ * <AreaChart data={data} xKey="date" yKey="users" animateBy="year" />
  */
 
 import { createPlatePlugin, PlateElement, type PlateElementProps, useElement } from "platejs/react";
@@ -65,6 +67,11 @@ export interface AreaChartProps {
    * If provided, overrides the simplified props above.
    */
   vegaSpec?: VegaLiteSpec;
+  /**
+   * Field to animate over (e.g., "year", "date").
+   * Enables frame-by-frame animation through distinct values.
+   */
+  animateBy?: string;
 }
 
 /**
@@ -88,6 +95,7 @@ export function AreaChart({
   xFormat,
   yFormat,
   vegaSpec: propVegaSpec,
+  animateBy,
 }: AreaChartProps) {
   // Get data from LiveValue context if not provided via props
   const ctx = useLiveValueData();
@@ -130,6 +138,7 @@ export function AreaChart({
     fillOpacity,
     xFormat: resolvedFormats.xFormat ?? undefined,
     yFormat: resolvedFormats.yFormat ?? undefined,
+    animateBy,
   });
 
   return <VegaChart spec={spec} height={height} data={propData} className={className} />;
@@ -158,6 +167,7 @@ function AreaChartElement(props: PlateElementProps) {
         xFormat={element.xFormat as string | undefined}
         yFormat={element.yFormat as string | undefined}
         vegaSpec={element.vegaSpec as VegaLiteSpec | undefined}
+        animateBy={element.animateBy as string | undefined}
       />
       <span className="absolute top-0 left-0 opacity-0 pointer-events-none">{props.children}</span>
     </PlateElement>
@@ -195,6 +205,7 @@ export interface CreateAreaChartOptions {
   xFormat?: string;
   yFormat?: string;
   vegaSpec?: VegaLiteSpec;
+  animateBy?: string;
 }
 
 /**
@@ -216,6 +227,7 @@ export function createAreaChartElement(options?: CreateAreaChartOptions): TAreaC
     xFormat: options?.xFormat,
     yFormat: options?.yFormat,
     vegaSpec: options?.vegaSpec,
+    animateBy: options?.animateBy,
     children: [{ text: "" }],
   };
 }

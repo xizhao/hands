@@ -20,8 +20,7 @@ import {
 import { RefreshCw } from "lucide-react";
 import { type ReactNode, useCallback, useEffect, useRef, useState } from "react";
 import { SpecBarPortal, SyncStatusPortal } from "@/components/workbook/HeaderActionsContext";
-import { setChatExpanded } from "@/hooks/useChatState";
-import { setActiveSessionState } from "@/hooks/useNavState";
+import { useActiveSession } from "@/hooks/useNavState";
 import { useCreateSession, useSendMessage, useSessionStatus } from "@/hooks/useSession";
 import { cn } from "@/lib/utils";
 import { DesktopEditorProvider } from "./DesktopEditorProvider";
@@ -88,6 +87,7 @@ export function PageEditor({ pageId, className, readOnly = false }: PageEditorPr
   // Session management for agent dispatch
   const createSession = useCreateSession();
   const sendMessage = useSendMessage();
+  const { sessionId: activeSessionId } = useActiveSession();
 
   // Track sync session - derive isSyncing from session status
   const [syncSessionId, setSyncSessionId] = useState<string | null>(null);
@@ -142,18 +142,16 @@ export function PageEditor({ pageId, className, readOnly = false }: PageEditorPr
     if (isSyncing) return;
 
     try {
-      // Create a new session for this sync task
+      // Create a background session for this sync task
+      // parentID makes it appear in background jobs pill instead of main thread list
       const newSession = await createSession.mutateAsync({
         title: `Sync: ${frontmatter.title || pageId}`,
+        parentID: activeSessionId || "__sync__",
       });
       const sessionId = newSession.id;
 
-      // Track this session for status updates
+      // Track this session for status updates (runs in background)
       setSyncSessionId(sessionId);
-
-      // Open chat with this session so user can see progress
-      setActiveSessionState(sessionId);
-      setChatExpanded(true);
 
       // Get current content for context
       const currentContent = editorRef.current?.getMarkdown() ?? "";
@@ -189,7 +187,7 @@ Write the content directly to the page file. Use the schema tool to understand a
       // Clear sync session on error so user can retry
       setSyncSessionId(null);
     }
-  }, [isSyncing, frontmatter, pageId, createSession, sendMessage]);
+  }, [isSyncing, frontmatter, pageId, activeSessionId, createSession, sendMessage]);
 
   // Cmd+S to force immediate save
   useEffect(() => {

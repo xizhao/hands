@@ -11,10 +11,11 @@
  */
 
 import Database from "bun:sqlite";
-import { existsSync, readdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
-import { basename, join } from "node:path";
-import { initTRPC } from "@trpc/server";
+import { existsSync, readFileSync, readdirSync, statSync, writeFileSync } from "node:fs";
+import { join } from "node:path";
+import { initTRPC, TRPCError } from "@trpc/server";
 import { z } from "zod";
+import { discoverDomains, discoverPages } from "../../workbook/discovery.js";
 
 // ============================================================================
 // Types
@@ -73,6 +74,27 @@ async function createD1Database(
   if (!data.success) throw new Error(data.errors[0]?.message || "Failed to create D1");
   console.log(`[viewer-deploy] Created D1: ${data.result.uuid}`);
   return data.result;
+}
+
+async function deleteD1Database(
+  accountId: string,
+  dbId: string,
+  token: string
+): Promise<void> {
+  console.log(`[viewer-deploy] Deleting D1 database: ${dbId}`);
+  const res = await fetch(`${CF_API_BASE}/accounts/${accountId}/d1/database/${dbId}`, {
+    method: "DELETE",
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+  if (!res.ok) {
+    const text = await res.text();
+    console.warn(`[viewer-deploy] Failed to delete D1: ${text}`);
+    // Don't throw - we'll just create a new one
+  } else {
+    console.log(`[viewer-deploy] Deleted D1 database`);
+  }
 }
 
 async function executeD1(
@@ -202,28 +224,41 @@ function findLocalDbPath(workbookDir: string): string | null {
   return join(dbFolder, sqliteFiles[0]);
 }
 
-function getMdxPages(workbookDir: string): Array<{ id: string; path: string; content: string }> {
+/**
+ * Get pages to deploy using the same discovery logic as DomainSidebar.
+ * Only includes pages that are associated with domains (database tables).
+ */
+async function getDomainPages(workbookDir: string): Promise<Array<{ id: string; path: string; content: string }>> {
   const pagesDir = join(workbookDir, "pages");
   if (!existsSync(pagesDir)) return [];
 
+  // Use same discovery as DomainSidebar
+  const pagesResult = await discoverPages(pagesDir);
+  const domainsResult = discoverDomains(workbookDir, pagesResult.items);
+
   const pages: Array<{ id: string; path: string; content: string }> = [];
 
-  function scanDir(dir: string, basePath: string) {
-    const entries = readdirSync(dir, { withFileTypes: true });
-    for (const entry of entries) {
-      const fullPath = join(dir, entry.name);
-      if (entry.isDirectory()) {
-        scanDir(fullPath, `${basePath}/${entry.name}`);
-      } else if (entry.name.endsWith(".mdx")) {
-        const id = basename(entry.name, ".mdx");
-        const path = id === "index" ? basePath || "/" : `${basePath}/${id}`;
-        const content = readFileSync(fullPath, "utf-8");
-        pages.push({ id: `${basePath}/${id}`.replace(/^\//, ""), path, content });
-      }
+  for (const domain of domainsResult.items) {
+    // Only include domains that have an associated page
+    if (!domain.hasPage || !domain.pagePath) continue;
+
+    const fullPath = join(pagesDir, domain.pagePath);
+    if (!existsSync(fullPath)) continue;
+
+    try {
+      const content = readFileSync(fullPath, "utf-8");
+      // Use domain id as page id, route from page path
+      const routePath = `/${domain.id.replace(/_/g, "-")}`;
+      pages.push({
+        id: domain.id,
+        path: routePath,
+        content,
+      });
+    } catch (err) {
+      console.warn(`[viewer-deploy] Failed to read page for domain ${domain.id}:`, err);
     }
   }
 
-  scanDir(pagesDir, "");
   return pages;
 }
 
@@ -261,43 +296,68 @@ export const viewerDeployRouter = t.router({
       // Token bundled at build time via HANDS_CF_TOKEN, or CLOUDFLARE_API_TOKEN for dev
       const cfToken = process.env.HANDS_CF_TOKEN || process.env.CLOUDFLARE_API_TOKEN;
       if (!cfToken) {
-        return { success: false, error: "Deploy not available - set HANDS_CF_TOKEN or CLOUDFLARE_API_TOKEN." };
+        throw new TRPCError({
+          code: "PRECONDITION_FAILED",
+          message: "Deploy not available - missing Cloudflare API token",
+        });
       }
 
       // Account ID bundled at build time via HANDS_CF_ACCOUNT_ID, or CF_ACCOUNT_ID for dev
       const accountId = process.env.HANDS_CF_ACCOUNT_ID || process.env.CF_ACCOUNT_ID;
       if (!accountId) {
-        return { success: false, error: "Deploy not available - set HANDS_CF_ACCOUNT_ID or CF_ACCOUNT_ID." };
+        throw new TRPCError({
+          code: "PRECONDITION_FAILED",
+          message: "Deploy not available - missing Cloudflare account ID",
+        });
       }
 
       console.log(`[viewer-deploy] Starting deploy for ${workbookId}...`);
 
-      // Find or create D1 database for this workbook
+      // Simple deploy: delete old DB if exists, create fresh one
+      // D1 doesn't support rename, so we can't do atomic swap
       const dbName = `hands-wb-${workbookId.slice(0, 40)}`;
       const databases = await listD1Databases(accountId, cfToken);
-      let db = databases.find((d) => d.name === dbName);
 
-      if (!db) {
-        console.log(`[viewer-deploy] Creating D1 database: ${dbName}`);
-        try {
-          db = await createD1Database(accountId, dbName, cfToken);
-        } catch (err) {
-          return { success: false, error: `Failed to create D1: ${err}` };
-        }
-      } else {
-        console.log(`[viewer-deploy] Using existing D1: ${dbName}`);
+      // Find and delete existing database (fresh deploy each time)
+      const existingDb = databases.find((d) => d.name === dbName);
+      if (existingDb) {
+        console.log(`[viewer-deploy] Deleting existing DB for fresh deploy`);
+        await deleteD1Database(accountId, existingDb.uuid, cfToken);
+      }
+
+      // Also clean up any leftover staging DBs from old deploys
+      const oldStagingDb = databases.find((d) => d.name === `${dbName}-staging`);
+      if (oldStagingDb) {
+        console.log(`[viewer-deploy] Cleaning up old staging DB`);
+        await deleteD1Database(accountId, oldStagingDb.uuid, cfToken);
+      }
+
+      // Create fresh database with production name
+      console.log(`[viewer-deploy] Creating D1 database: ${dbName}`);
+      let db: { uuid: string; name: string };
+      try {
+        db = await createD1Database(accountId, dbName, cfToken);
+      } catch (err) {
+        throw new TRPCError({
+          code: "INTERNAL_SERVER_ERROR",
+          message: `Failed to create D1: ${err}`,
+        });
       }
 
       // Initialize viewer schema
       console.log("[viewer-deploy] Initializing schema...");
       const schemaResult = await executeD1(accountId, db.uuid, VIEWER_SCHEMA, [], cfToken);
       if (!schemaResult.success) {
-        return { success: false, error: `Schema init failed: ${schemaResult.error}` };
+        throw new TRPCError({
+          code: "INTERNAL_SERVER_ERROR",
+          message: `Schema init failed: ${schemaResult.error}`,
+        });
       }
 
       // Upload MDX pages (clear and replace to handle deleted pages)
-      console.log("[viewer-deploy] Uploading pages...");
-      const pages = getMdxPages(workbookDir);
+      // Uses same discovery logic as DomainSidebar - only deploys pages with associated domains
+      console.log("[viewer-deploy] Discovering domain pages...");
+      const pages = await getDomainPages(workbookDir);
 
       // Clear existing pages first
       const clearResult = await executeD1(accountId, db.uuid, `DELETE FROM _pages`, [], cfToken);
@@ -353,9 +413,9 @@ export const viewerDeployRouter = t.router({
 
             // Get user tables (exclude system tables)
             // Note: Use ESCAPE to treat _ as literal underscore, not wildcard
-            const tables = localDb
-              .query<{ name: string; sql: string }, []>(
-                `SELECT name, sql FROM sqlite_master
+            const tableNames = localDb
+              .query<{ name: string }, []>(
+                `SELECT name FROM sqlite_master
                  WHERE type='table'
                  AND name NOT LIKE 'sqlite\\_%' ESCAPE '\\'
                  AND name NOT LIKE '\\_\\_%' ESCAPE '\\'
@@ -363,18 +423,34 @@ export const viewerDeployRouter = t.router({
               )
               .all();
 
-            console.log(`[viewer-deploy] User tables to sync: ${tables.map(t => t.name).join(', ') || '(none)'}`);
+            console.log(`[viewer-deploy] User tables to sync: ${tableNames.map(t => t.name).join(', ') || '(none)'}`);
 
-            if (tables.length > 0) {
-              // Start transaction
+            if (tableNames.length > 0) {
+              // Start transaction for data sync
               await executeD1(accountId, db.uuid, "BEGIN TRANSACTION", [], cfToken);
 
               try {
-                for (const { name: tableName, sql: createSql } of tables) {
-                  // Drop and recreate table for clean sync (handles deletes, schema changes)
-                  console.log(`[viewer-deploy] Syncing table: ${tableName}`);
+                // Create tables from local schema using PRAGMA table_info
+                // (sqlite_master.sql doesn't reflect ALTER TABLE ADD COLUMN changes)
+                for (const { name: tableName } of tableNames) {
+                  // Get actual column info from PRAGMA
+                  const tableColumns = localDb
+                    .query<{ name: string; type: string; notnull: number; dflt_value: string | null; pk: number }, []>(
+                      `PRAGMA table_info("${tableName}")`
+                    )
+                    .all();
 
-                  await executeD1(accountId, db.uuid, `DROP TABLE IF EXISTS "${tableName}"`, [], cfToken);
+                  // Build CREATE TABLE from column info
+                  const colDefs = tableColumns.map((col) => {
+                    let def = `"${col.name}" ${col.type || "TEXT"}`;
+                    if (col.pk) def += " PRIMARY KEY";
+                    if (col.notnull && !col.pk) def += " NOT NULL";
+                    if (col.dflt_value !== null) def += ` DEFAULT ${col.dflt_value}`;
+                    return def;
+                  });
+                  const createSql = `CREATE TABLE "${tableName}" (${colDefs.join(", ")})`;
+
+                  console.log(`[viewer-deploy] Creating table: ${tableName}`);
 
                   const createResult = await executeD1(accountId, db.uuid, createSql, [], cfToken);
                   if (!createResult.success) {

@@ -6,10 +6,12 @@
  * @description Bar chart for comparing categorical data.
  * Supports vertical/horizontal orientation and stacked bars.
  * Works standalone or inside LiveValue for live SQL data.
- * @keywords chart, bar, column, comparison, category, visualization
+ * Supports animation: use animateBy="fieldName" to animate through distinct values of that field (e.g., animateBy="year" shows data for each year in sequence).
+ * @keywords chart, bar, column, comparison, category, visualization, animation
  * @example
  * <BarChart data={data} xKey="category" yKey="value" />
  * <BarChart data={data} xKey="month" yKey={["sales", "costs"]} stacked />
+ * <BarChart data={data} xKey="region" yKey="revenue" animateBy="year" />
  */
 
 import { createPlatePlugin, PlateElement, type PlateElementProps, useElement } from "platejs/react";
@@ -63,6 +65,11 @@ export interface BarChartProps {
    * If provided, overrides the simplified props above.
    */
   vegaSpec?: VegaLiteSpec;
+  /**
+   * Field to animate over (e.g., "year", "date").
+   * Enables frame-by-frame animation through distinct values.
+   */
+  animateBy?: string;
 }
 
 /**
@@ -85,6 +92,7 @@ export function BarChart({
   xFormat,
   yFormat,
   vegaSpec: propVegaSpec,
+  animateBy,
 }: BarChartProps) {
   // Get data from LiveValue context if not provided via props
   const ctx = useLiveValueData();
@@ -126,6 +134,7 @@ export function BarChart({
     layout,
     xFormat: resolvedFormats.xFormat ?? undefined,
     yFormat: resolvedFormats.yFormat ?? undefined,
+    animateBy,
   });
 
   return <VegaChart spec={spec} height={height} data={propData} className={className} />;
@@ -153,6 +162,7 @@ function BarChartElement(props: PlateElementProps) {
         xFormat={element.xFormat as string | undefined}
         yFormat={element.yFormat as string | undefined}
         vegaSpec={element.vegaSpec as VegaLiteSpec | undefined}
+        animateBy={element.animateBy as string | undefined}
       />
       <span className="absolute top-0 left-0 opacity-0 pointer-events-none">{props.children}</span>
     </PlateElement>
@@ -189,6 +199,7 @@ export interface CreateBarChartOptions {
   xFormat?: string;
   yFormat?: string;
   vegaSpec?: VegaLiteSpec;
+  animateBy?: string;
 }
 
 /**
@@ -209,6 +220,7 @@ export function createBarChartElement(options?: CreateBarChartOptions): TBarChar
     xFormat: options?.xFormat,
     yFormat: options?.yFormat,
     vegaSpec: options?.vegaSpec,
+    animateBy: options?.animateBy,
     children: [{ text: "" }],
   };
 }

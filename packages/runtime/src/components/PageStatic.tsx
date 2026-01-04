@@ -9,6 +9,7 @@ import {
   DATA_GRID_KEY,
   HEATMAP_CHART_KEY,
   HISTOGRAM_CHART_KEY,
+  INTERACTIVE_MAP_KEY,
   LINE_CHART_KEY,
   LIVE_VALUE_INLINE_KEY,
   LIVE_VALUE_KEY,
@@ -30,6 +31,7 @@ import {
   type TChartElement,
   type THeatmapChartElement,
   type THistogramChartElement,
+  type TInteractiveMapElement,
   type TLineChartElement,
   type TLiveValueElement,
   type TLoaderElement,
@@ -75,10 +77,14 @@ import {
   DataGrid,
   HeatmapChart,
   HistogramChart,
+  // Interactive maps
+  InteractiveMap,
   LineChart,
   LiveValueProvider,
   Loader,
   MapChart,
+  MapControls,
+  MapMarker,
   Metric,
   PieChart,
   Progress,
@@ -541,6 +547,7 @@ const PieChartPlugin = createSlatePlugin({
           innerRadius={el.innerRadius}
           showLabels={el.showLabels}
           colors={el.colors}
+          valueFormat={el.valueFormat}
         />
       );
     },
@@ -684,6 +691,39 @@ const MapChartPlugin = createSlatePlugin({
   },
 });
 
+const InteractiveMapPlugin = createSlatePlugin({
+  key: INTERACTIVE_MAP_KEY,
+  node: {
+    type: INTERACTIVE_MAP_KEY,
+    isElement: true,
+    isVoid: true,
+    isInline: true,
+    component: ({ element }) => {
+      const el = element as TInteractiveMapElement;
+      return (
+        <InteractiveMap
+          longitude={el.longitude}
+          latitude={el.latitude}
+          zoom={el.zoom}
+          mapStyle={el.mapStyle}
+          height={el.height ?? 400}
+        >
+          {el.showControls !== false && <MapControls />}
+          {el.markers?.map((marker, i) => (
+            <MapMarker
+              key={i}
+              longitude={marker.longitude}
+              latitude={marker.latitude}
+              color={marker.color}
+              popup={marker.popup ? <div className="p-2 text-sm">{marker.popup}</div> : undefined}
+            />
+          ))}
+        </InteractiveMap>
+      );
+    },
+  },
+});
+
 // View Component Plugins
 
 const AlertPlugin = createSlatePlugin({
@@ -734,6 +774,7 @@ const MetricPlugin = createSlatePlugin({
           change={el.change}
           changeLabel={el.changeLabel}
           size={el.size}
+          format={el.format}
         />
       );
     },
@@ -873,6 +914,7 @@ const BaseRSCPlugins = [
   HeatmapChartPlugin,
   BoxPlotChartPlugin,
   MapChartPlugin,
+  InteractiveMapPlugin,
   // View components
   AlertPlugin,
   BadgePlugin,

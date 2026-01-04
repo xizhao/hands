@@ -783,25 +783,10 @@ export function TableEditor({
       )}
 
       {/* Data grid */}
-      <div ref={containerRef} className="flex-1 overflow-hidden">
+      <div ref={containerRef} className="flex-1 overflow-hidden relative">
         {isLoading ? (
           <div className="flex items-center justify-center h-full">
             <CircleNotch weight="bold" className="h-8 w-8 animate-spin text-muted-foreground" />
-          </div>
-        ) : totalRows === 0 ? (
-          <div className="flex flex-col items-center justify-center h-64 text-muted-foreground">
-            <TableIcon weight="duotone" className="h-12 w-12 mb-3 opacity-50" />
-            <p>No data in this table</p>
-            {editable && dataProvider.createRow && (
-              <button
-                type="button"
-                onClick={handleAddRow}
-                className="mt-4 flex items-center gap-1.5 px-3 py-2 text-sm rounded-md bg-primary text-primary-foreground hover:bg-primary/90"
-              >
-                <Plus weight="bold" className="h-4 w-4" />
-                Add First Row
-              </button>
-            )}
           </div>
         ) : !containerSize || !isCanvasReady ? (
           <div className="flex items-center justify-center h-full">
@@ -836,6 +821,27 @@ export function TableEditor({
               theme={gridTheme}
               rowMarkers="clickable-number"
             />
+
+            {/* Empty state overlay - shows below header when no rows */}
+            {totalRows === 0 && (
+              <div
+                className="absolute inset-x-0 bottom-0 flex flex-col items-center justify-center text-muted-foreground pointer-events-none"
+                style={{ top: 32 }} // Below header row
+              >
+                <TableIcon weight="duotone" className="h-10 w-10 mb-2 opacity-40" />
+                <p className="text-sm">No rows yet</p>
+                {editable && dataProvider.createRow && (
+                  <button
+                    type="button"
+                    onClick={handleAddRow}
+                    className="mt-3 flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-md bg-primary text-primary-foreground hover:bg-primary/90 pointer-events-auto"
+                  >
+                    <Plus weight="bold" className="h-3.5 w-3.5" />
+                    Add Row
+                  </button>
+                )}
+              </div>
+            )}
 
             {/* Column header menu dropdown */}
             {menuPosition && menuColumnIndex !== null && currentMenuColumn && (

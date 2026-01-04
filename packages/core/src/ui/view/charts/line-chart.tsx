@@ -5,10 +5,12 @@
  * @category static
  * @description Line chart for visualizing trends over time or continuous data.
  * Works standalone or inside LiveValue for live SQL data.
- * @keywords chart, line, graph, trend, time series, visualization
+ * Supports animation: use animateBy="fieldName" to animate through distinct values of that field (e.g., animateBy="year" cycles through years).
+ * @keywords chart, line, graph, trend, time series, visualization, animation
  * @example
  * <LineChart data={data} xKey="date" yKey="revenue" />
  * <LineChart data={data} xKey="month" yKey={["sales", "expenses"]} showLegend />
+ * <LineChart data={data} xKey="date" yKey="value" animateBy="year" />
  */
 
 import { createPlatePlugin, PlateElement, type PlateElementProps, useElement } from "platejs/react";
@@ -62,6 +64,11 @@ export interface LineChartProps {
    * If provided, overrides the simplified props above.
    */
   vegaSpec?: VegaLiteSpec;
+  /**
+   * Field to animate over (e.g., "year", "date").
+   * Enables frame-by-frame animation through distinct values.
+   */
+  animateBy?: string;
 }
 
 /**
@@ -84,6 +91,7 @@ export function LineChart({
   xFormat,
   yFormat,
   vegaSpec: propVegaSpec,
+  animateBy,
 }: LineChartProps) {
   // Get data from LiveValue context if not provided via props
   const ctx = useLiveValueData();
@@ -125,6 +133,7 @@ export function LineChart({
     showDots,
     xFormat: resolvedFormats.xFormat ?? undefined,
     yFormat: resolvedFormats.yFormat ?? undefined,
+    animateBy,
   });
 
   return <VegaChart spec={spec} height={height} data={propData} className={className} />;
@@ -152,6 +161,7 @@ function LineChartElement(props: PlateElementProps) {
         xFormat={element.xFormat as string | undefined}
         yFormat={element.yFormat as string | undefined}
         vegaSpec={element.vegaSpec as VegaLiteSpec | undefined}
+        animateBy={element.animateBy as string | undefined}
       />
       <span className="absolute top-0 left-0 opacity-0 pointer-events-none">{props.children}</span>
     </PlateElement>
@@ -188,6 +198,7 @@ export interface CreateLineChartOptions {
   xFormat?: string;
   yFormat?: string;
   vegaSpec?: VegaLiteSpec;
+  animateBy?: string;
 }
 
 /**
@@ -208,6 +219,7 @@ export function createLineChartElement(options?: CreateLineChartOptions): TLineC
     xFormat: options?.xFormat,
     yFormat: options?.yFormat,
     vegaSpec: options?.vegaSpec,
+    animateBy: options?.animateBy,
     children: [{ text: "" }],
   };
 }

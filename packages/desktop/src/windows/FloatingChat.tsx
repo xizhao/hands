@@ -91,6 +91,7 @@ export function FloatingChat() {
   const scrollRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const hasHandledDrop = useRef(false);
+  const isNearBottomRef = useRef(true); // Track if user is near bottom
   const queryClient = useQueryClient();
   const lastIgnoreState = useRef<boolean | null>(null);
 
@@ -758,12 +759,21 @@ export function FloatingChat() {
     if (activeSessionId) abortSessionMutation.mutate();
   }, [activeSessionId, abortSessionMutation]);
 
-  // Scroll to bottom when new messages arrive
+  // Track scroll position to detect if user is near bottom
+  const handleScroll = useCallback(() => {
+    if (!scrollRef.current) return;
+    const { scrollTop, scrollHeight, clientHeight } = scrollRef.current;
+    const distanceFromBottom = scrollHeight - scrollTop - clientHeight;
+    isNearBottomRef.current = distanceFromBottom < 100;
+  }, []);
+
+  // Auto-scroll to bottom when messages change, but only if user is near bottom
+  const lastMessageContent = messages[messages.length - 1]?.parts?.length ?? 0;
   useEffect(() => {
-    if (scrollRef.current) {
+    if (scrollRef.current && isNearBottomRef.current) {
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
     }
-  }, []);
+  }, [messages.length, lastMessageContent]);
 
   const activeSession = sessions.find((s) => s.id === activeSessionId);
 
@@ -818,6 +828,7 @@ export function FloatingChat() {
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: 20 }}
             ref={scrollRef}
+            onScroll={handleScroll}
             className="flex-1 overflow-y-auto min-h-0 flex flex-col"
           >
             <LinkClickHandler className="flex flex-col gap-3 mt-auto">
