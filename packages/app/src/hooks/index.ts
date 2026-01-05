@@ -16,9 +16,9 @@ export * from "./useFilePicker";
 
 // UI hooks
 export * from "./useFullscreen";
-// Git hooks
-export * from "./useGit";
 export * from "./useHotkeys";
+// Persistence hooks (replaces old useGit)
+export * from "./usePersistence";
 // Link navigation
 export * from "./useLinkNavigation";
 export * from "./useNavState";

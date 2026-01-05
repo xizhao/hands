@@ -32,7 +32,7 @@ export interface NavSearchParams {
 let activeTab: TabId = "preview";
 let activeSession: string | null = null;
 let sidebarWidth = 280;
-let sidebarMode: SidebarMode = "floating";
+let sidebarMode: SidebarMode = "expanded";
 let stateInitialized = false;
 
 interface NavStateSnapshot {

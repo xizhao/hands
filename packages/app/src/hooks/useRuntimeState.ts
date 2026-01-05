@@ -320,11 +320,22 @@ export function useRuntimeProcess() {
     },
   });
 
+  const isReadyQuery = useQuery({
+    queryKey: ["runtime-ready"],
+    queryFn: () => platform.runtime.isReady(),
+    staleTime: 0,
+    refetchOnWindowFocus: false,
+    refetchInterval: (query) => {
+      return query.state.data ? false : 500;
+    },
+  });
+
   return {
     port: runtimeQuery.data?.runtime_port ?? null,
     workbookId: runtimeQuery.data?.workbook_id ?? null,
     workbookDirectory: runtimeQuery.data?.directory ?? null,
-    isLoading: runtimeQuery.isPending,
+    isReady: isReadyQuery.data ?? false,
+    isLoading: runtimeQuery.isPending || isReadyQuery.isPending,
   };
 }
 

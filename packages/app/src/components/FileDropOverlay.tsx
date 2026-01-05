@@ -1,12 +1,13 @@
 /**
  * FileDropOverlay - Full-screen overlay for importing external files
  *
- * Uses Tauri's native drag events (requires dragDropEnabled: true in tauri.conf.json).
+ * Uses Tauri's native drag events on desktop (requires dragDropEnabled: true in tauri.conf.json).
+ * In web mode, uses HTML5 drag-drop events.
  */
 
 import { FileArrowUp } from "@phosphor-icons/react";
-import { listen } from "@tauri-apps/api/event";
 import { useEffect, useState } from "react";
+import { usePlatform } from "@/platform";
 import { cn } from "@/lib/utils";
 
 interface FileDropOverlayProps {
@@ -22,39 +23,95 @@ interface TauriDragPayload {
 
 export function FileDropOverlay({ onFileDrop, disabled = false }: FileDropOverlayProps) {
   const [isDragging, setIsDragging] = useState(false);
+  const platform = usePlatform();
 
+  // Desktop: Use Tauri native drag events
   useEffect(() => {
-    if (disabled) return;
+    if (disabled || platform.platform !== "desktop") return;
 
-    // Tauri drag events for UI state
-    // Only show overlay for external file drags (paths array will have entries)
-    const unlistenEnter = listen<TauriDragPayload>("tauri://drag-enter", (event) => {
-      // Only show overlay if dragging actual files from outside the app
-      if (event.payload.paths && event.payload.paths.length > 0) {
-        setIsDragging(true);
-      }
-    });
+    // Dynamic import to avoid bundling Tauri APIs in web build
+    let cleanup: (() => void) | null = null;
 
-    const unlistenLeave = listen("tauri://drag-leave", () => {
-      setIsDragging(false);
-    });
+    import("@tauri-apps/api/event").then(({ listen }) => {
+      const unlistenEnter = listen<TauriDragPayload>("tauri://drag-enter", (event) => {
+        if (event.payload.paths && event.payload.paths.length > 0) {
+          setIsDragging(true);
+        }
+      });
 
-    // Tauri drop event gives us the actual file path
-    const unlistenDrop = listen<TauriDragPayload>("tauri://drag-drop", (event) => {
-      setIsDragging(false);
+      const unlistenLeave = listen("tauri://drag-leave", () => {
+        setIsDragging(false);
+      });
 
-      const paths = event.payload.paths;
-      if (paths && paths.length > 0) {
-        onFileDrop(paths[0]);
-      }
+      const unlistenDrop = listen<TauriDragPayload>("tauri://drag-drop", (event) => {
+        setIsDragging(false);
+        const paths = event.payload.paths;
+        if (paths && paths.length > 0) {
+          onFileDrop(paths[0]);
+        }
+      });
+
+      cleanup = () => {
+        unlistenEnter.then((fn) => fn());
+        unlistenLeave.then((fn) => fn());
+        unlistenDrop.then((fn) => fn());
+      };
+    }).catch((err) => {
+      console.warn("[FileDropOverlay] Tauri events not available:", err);
     });
 
     return () => {
-      unlistenEnter.then((fn) => fn());
-      unlistenLeave.then((fn) => fn());
-      unlistenDrop.then((fn) => fn());
+      cleanup?.();
     };
-  }, [disabled, onFileDrop]);
+  }, [disabled, onFileDrop, platform.platform]);
+
+  // Web: Use HTML5 drag-drop events (file name only, no path)
+  useEffect(() => {
+    if (disabled || platform.platform !== "web") return;
+
+    const handleDragEnter = (e: DragEvent) => {
+      e.preventDefault();
+      if (e.dataTransfer?.types.includes("Files")) {
+        setIsDragging(true);
+      }
+    };
+
+    const handleDragLeave = (e: DragEvent) => {
+      e.preventDefault();
+      // Only hide if leaving the window (not entering a child element)
+      if (e.relatedTarget === null) {
+        setIsDragging(false);
+      }
+    };
+
+    const handleDragOver = (e: DragEvent) => {
+      e.preventDefault();
+    };
+
+    const handleDrop = (e: DragEvent) => {
+      e.preventDefault();
+      setIsDragging(false);
+
+      const files = e.dataTransfer?.files;
+      if (files && files.length > 0) {
+        // In web mode, we can only get the file name, not the full path
+        // Pass the File object as a special "web:" prefixed path
+        onFileDrop(`web:${files[0].name}`);
+      }
+    };
+
+    document.addEventListener("dragenter", handleDragEnter);
+    document.addEventListener("dragleave", handleDragLeave);
+    document.addEventListener("dragover", handleDragOver);
+    document.addEventListener("drop", handleDrop);
+
+    return () => {
+      document.removeEventListener("dragenter", handleDragEnter);
+      document.removeEventListener("dragleave", handleDragLeave);
+      document.removeEventListener("dragover", handleDragOver);
+      document.removeEventListener("drop", handleDrop);
+    };
+  }, [disabled, onFileDrop, platform.platform]);
 
   if (!isDragging) return null;
 

@@ -10,16 +10,27 @@
     "typecheck": "echo 'Web typecheck skipped: Relies on @hands/app typecheck for shared code'"
   },
   "dependencies": {
+    "@hands/agent": "workspace:*",
     "@hands/app": "workspace:*",
-    "@hands/core": "workspace:*",
     "@hands/cloud": "workspace:*",
+    "@hands/core": "workspace:*",
+    "@hands/editor": "workspace:*",
+    "@phosphor-icons/react": "^2.1.10",
+    "@sqlite.org/sqlite-wasm": "^3.47.2-build1",
     "@tanstack/react-query": "^5.62.16",
     "@trpc/client": "^11.0.0-rc.730",
     "@trpc/react-query": "^11.0.0-rc.730",
+    "idb": "^8.0.0",
+    "jotai": "^2.16.1",
+    "jotai-x": "^2.0.2",
+    "motion": "^12.0.0",
+    "platejs": "^52.0.15",
     "react": "^18.3.1",
-    "react-dom": "^18.3.1"
+    "react-dom": "^18.3.1",
+    "zod": "^3.24.1"
   },
   "devDependencies": {
+    "@rollup/plugin-alias": "^5.1.1",
     "@types/react": "^18.3.11",
     "@types/react-dom": "^18.3.1",
     "@vitejs/plugin-react": "^4.3.4",

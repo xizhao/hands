@@ -2,12 +2,77 @@
 @tailwind components;
 @tailwind utilities;
 
-/* Import shared styles from app package */
-@import "@hands/app/styles.css";
+@layer base {
+  :root {
+    /* Light theme from packages/site */
+    --background: 0 0% 100%;
+    --foreground: 220 9% 12%;
+    --card: 0 0% 100%;
+    --card-foreground: 220 9% 12%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 220 9% 12%;
+    --primary: 220 9% 12%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 220 14% 96%;
+    --secondary-foreground: 220 9% 12%;
+    --muted: 220 14% 96%;
+    --muted-foreground: 220 9% 46%;
+    --accent: 220 14% 96%;
+    --accent-foreground: 220 9% 12%;
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 220 13% 91%;
+    --input: 220 13% 91%;
+    --ring: 220 9% 12%;
+    --radius: 0.5rem;
+    --app-shell-padding: 0;
+  }
 
-/* Web-specific overrides */
-:root {
-  --app-shell-padding: 0;
+  .dark {
+    /* Dark theme from packages/site */
+    --background: 224 10% 10%;
+    --foreground: 210 20% 98%;
+    --card: 224 10% 12%;
+    --card-foreground: 210 20% 98%;
+    --popover: 224 10% 12%;
+    --popover-foreground: 210 20% 98%;
+    --primary: 210 20% 98%;
+    --primary-foreground: 224 10% 10%;
+    --secondary: 224 10% 16%;
+    --secondary-foreground: 210 20% 98%;
+    --muted: 224 10% 16%;
+    --muted-foreground: 215 16% 57%;
+    --accent: 224 10% 18%;
+    --accent-foreground: 210 20% 98%;
+    --destructive: 0 62% 50%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 224 10% 20%;
+    --input: 224 10% 20%;
+    --ring: 215 16% 57%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  html, body, #root {
+    background: hsl(var(--background));
+  }
+  body {
+    @apply text-foreground antialiased;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", sans-serif;
+  }
+}
+
+/* Fraunces for marketing headers */
+.site-header {
+  font-family: "Fraunces", Georgia, serif;
+}
+
+h1.site-header {
+  font-weight: 600;
+  letter-spacing: -0.01em;
 }
 
 /* Remove traffic light offset on web (no native window controls) */

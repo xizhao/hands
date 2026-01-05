@@ -53,6 +53,55 @@ export interface FilePickerOptions {
 }
 
 // ============================================================================
+// Persistence Types
+// ============================================================================
+
+export interface PersistenceStatus {
+  /** Whether there are unsaved changes */
+  hasChanges: boolean;
+  /** Last save timestamp */
+  lastSaved: number | null;
+  /** Whether sync is available */
+  canSync: boolean;
+  /** Remote status (for git/cloud sync) */
+  remote?: {
+    url: string | null;
+    ahead: number;
+    behind: number;
+  };
+}
+
+export interface SaveResult {
+  /** Unique identifier for this save (commit hash, snapshot id, etc.) */
+  id: string;
+  /** Save message */
+  message: string;
+  /** Timestamp */
+  timestamp: number;
+}
+
+export interface HistoryEntry {
+  /** Unique identifier */
+  id: string;
+  /** Short identifier for display */
+  shortId: string;
+  /** Entry message */
+  message: string;
+  /** Author name */
+  author: string;
+  /** Timestamp */
+  timestamp: number;
+}
+
+// ============================================================================
+// tRPC Client Type (generic to avoid importing @trpc/client in types)
+// ============================================================================
+
+/** Generic tRPC client interface - actual type comes from platform implementation */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export type TRPCClientLike = any;
+
+// ============================================================================
 // Platform Capabilities
 // ============================================================================
 
@@ -110,6 +159,8 @@ export interface PlatformAdapter {
   runtime: {
     /** Get current runtime status */
     getStatus(): Promise<RuntimeStatus | null>;
+    /** Check if runtime is ready to use (desktop: port available, web: always ready) */
+    isReady(): Promise<boolean>;
     /** Stop runtime for a workbook */
     stop(workbookId: string): Promise<void>;
     /** Trigger workbook evaluation */
@@ -181,12 +232,57 @@ export interface PlatformAdapter {
   };
 
   // ============================================================================
+  // Navigation (cross-window routing)
+  // ============================================================================
+  navigation?: {
+    /** Navigate to a route (used for cross-window navigation in desktop) */
+    navigateInWorkbook(workbookId: string, route: string): Promise<void>;
+    /** Subscribe to navigation events from other windows */
+    onNavigate(callback: (route: string) => void): () => void;
+  };
+
+  // ============================================================================
   // AI / OpenCode
   // ============================================================================
   ai: {
     /** Get OpenCode client URL (desktop: local, web: cloud proxy) */
     getOpenCodeUrl(): string;
   };
+
+  // ============================================================================
+  // Persistence (saving, versioning, sync)
+  // ============================================================================
+  persistence: {
+    /** Get current persistence status */
+    getStatus(): Promise<PersistenceStatus>;
+    /** Save current state with optional message */
+    save(message?: string): Promise<SaveResult | null>;
+    /** Get save history */
+    getHistory(limit?: number): Promise<HistoryEntry[]>;
+    /** Revert to a previous state */
+    revert(entryId: string): Promise<void>;
+    /** Sync operations (optional - git push/pull on desktop, cloud sync on web) */
+    sync?: {
+      /** Push local changes to remote */
+      push(): Promise<void>;
+      /** Pull remote changes */
+      pull(): Promise<void>;
+      /** Get remote URL */
+      getRemote(): Promise<string | null>;
+      /** Set remote URL */
+      setRemote(url: string): Promise<void>;
+    };
+  };
+
+  // ============================================================================
+  // tRPC Client Factory
+  // ============================================================================
+  /**
+   * Create a tRPC client for this platform.
+   * Desktop: HTTP client to runtime server
+   * Web: Local in-browser router
+   */
+  createTRPCClient?(): TRPCClientLike;
 
   // ============================================================================
   // Platform Info

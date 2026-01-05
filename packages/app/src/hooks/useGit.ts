@@ -1,11 +1,22 @@
 /**
- * Git Integration Hooks
+ * @deprecated This file is deprecated. Use usePersistence instead.
  *
- * React Query hooks for git version control operations via tRPC.
+ * The persistence hooks provide a platform-agnostic abstraction:
+ * - usePersistenceStatus() - replaces useGitStatus()
+ * - useSave() - replaces useGitSave()
+ * - usePersistenceHistory() - replaces useGitHistory()
+ * - useRevert() - replaces useGitRevert()
+ * - usePush() / usePull() - replaces useGitPush() / useGitPull()
+ *
+ * These hooks work on both desktop (git-backed) and web (auto-save) platforms.
+ *
+ * Old description:
+ * Git Integration Hooks - React Query hooks for git version control operations via tRPC.
  * Uses the runtime's git router for status, commits, history, and remote operations.
  */
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { usePlatform } from "../platform";
 import { useRuntimeState } from "./useRuntimeState";
 
 // ============================================================================
@@ -83,10 +94,21 @@ async function trpcMutation<T>(port: number, path: string, input?: unknown): Pro
 // ============================================================================
 
 /**
+ * Check if we're on a platform that supports git (desktop only)
+ */
+function useIsGitAvailable() {
+  const platform = usePlatform();
+  const { port } = useRuntimeState();
+  // Git requires desktop platform and a real runtime port (not sentinel value 1)
+  return platform.platform === "desktop" && !!port && port > 1;
+}
+
+/**
  * Get git status for the workbook
  */
 export function useGitStatus() {
   const { port, workbookId } = useRuntimeState();
+  const isAvailable = useIsGitAvailable();
 
   return useQuery({
     queryKey: ["git-status", workbookId, port],
@@ -94,7 +116,7 @@ export function useGitStatus() {
       if (!port) throw new Error("Runtime not connected");
       return trpcQuery<GitStatus>(port, "git.status");
     },
-    enabled: !!port && !!workbookId,
+    enabled: isAvailable && !!workbookId,
     staleTime: 5_000, // Cache for 5 seconds
     refetchInterval: 10_000, // Poll every 10 seconds
   });
@@ -105,6 +127,7 @@ export function useGitStatus() {
  */
 export function useGitHistory(limit = 50) {
   const { port, workbookId } = useRuntimeState();
+  const isAvailable = useIsGitAvailable();
 
   return useQuery({
     queryKey: ["git-history", workbookId, port, limit],
@@ -112,7 +135,7 @@ export function useGitHistory(limit = 50) {
       if (!port) throw new Error("Runtime not connected");
       return trpcQuery<GitCommit[]>(port, "git.history", { limit });
     },
-    enabled: !!port && !!workbookId,
+    enabled: isAvailable && !!workbookId,
     staleTime: 30_000, // Cache for 30 seconds
   });
 }
@@ -122,6 +145,7 @@ export function useGitHistory(limit = 50) {
  */
 export function useGitDiffStats() {
   const { port, workbookId } = useRuntimeState();
+  const isAvailable = useIsGitAvailable();
 
   return useQuery({
     queryKey: ["git-diff-stats", workbookId, port],
@@ -129,7 +153,7 @@ export function useGitDiffStats() {
       if (!port) throw new Error("Runtime not connected");
       return trpcQuery<GitDiffStats>(port, "git.diffStats");
     },
-    enabled: !!port && !!workbookId,
+    enabled: isAvailable && !!workbookId,
     staleTime: 5_000, // Cache for 5 seconds
     refetchInterval: 10_000, // Poll every 10 seconds
   });
@@ -142,15 +166,15 @@ export function useGitDiffStats() {
 export function useGitSave() {
   const { port } = useRuntimeState();
   const queryClient = useQueryClient();
+  const isAvailable = useIsGitAvailable();
 
   return useMutation({
     mutationKey: ["git-save"],
     mutationFn: async (message?: string): Promise<{ hash: string; message: string } | null> => {
-      if (!port) throw new Error("Runtime not connected");
+      if (!isAvailable || !port) throw new Error("Git not available");
       return trpcMutation<{ hash: string; message: string } | null>(port, "git.save", { message });
     },
     onSuccess: () => {
-      // Invalidate git queries to refresh status and history
       queryClient.invalidateQueries({ queryKey: ["git-status"] });
       queryClient.invalidateQueries({ queryKey: ["git-history"] });
     },
@@ -163,11 +187,12 @@ export function useGitSave() {
 export function useGitCommit() {
   const { port } = useRuntimeState();
   const queryClient = useQueryClient();
+  const isAvailable = useIsGitAvailable();
 
   return useMutation({
     mutationKey: ["git-commit"],
     mutationFn: async (message?: string): Promise<{ hash: string; message: string }> => {
-      if (!port) throw new Error("Runtime not connected");
+      if (!isAvailable || !port) throw new Error("Git not available");
       return trpcMutation<{ hash: string; message: string }>(port, "git.commit", { message });
     },
     onSuccess: () => {
@@ -183,11 +208,12 @@ export function useGitCommit() {
 export function useGitInit() {
   const { port } = useRuntimeState();
   const queryClient = useQueryClient();
+  const isAvailable = useIsGitAvailable();
 
   return useMutation({
     mutationKey: ["git-init"],
     mutationFn: async (): Promise<{ initialized: boolean }> => {
-      if (!port) throw new Error("Runtime not connected");
+      if (!isAvailable || !port) throw new Error("Git not available");
       return trpcMutation<{ initialized: boolean }>(port, "git.init");
     },
     onSuccess: () => {
@@ -202,11 +228,12 @@ export function useGitInit() {
 export function useGitSetRemote() {
   const { port } = useRuntimeState();
   const queryClient = useQueryClient();
+  const isAvailable = useIsGitAvailable();
 
   return useMutation({
     mutationKey: ["git-set-remote"],
     mutationFn: async (url: string): Promise<{ url: string }> => {
-      if (!port) throw new Error("Runtime not connected");
+      if (!isAvailable || !port) throw new Error("Git not available");
       return trpcMutation<{ url: string }>(port, "git.setRemote", { url });
     },
     onSuccess: () => {
@@ -221,11 +248,12 @@ export function useGitSetRemote() {
 export function useGitPush() {
   const { port } = useRuntimeState();
   const queryClient = useQueryClient();
+  const isAvailable = useIsGitAvailable();
 
   return useMutation({
     mutationKey: ["git-push"],
     mutationFn: async (): Promise<{ pushed: boolean }> => {
-      if (!port) throw new Error("Runtime not connected");
+      if (!isAvailable || !port) throw new Error("Git not available");
       return trpcMutation<{ pushed: boolean }>(port, "git.push");
     },
     onSuccess: () => {
@@ -240,11 +268,12 @@ export function useGitPush() {
 export function useGitPull() {
   const { port } = useRuntimeState();
   const queryClient = useQueryClient();
+  const isAvailable = useIsGitAvailable();
 
   return useMutation({
     mutationKey: ["git-pull"],
     mutationFn: async (): Promise<{ pulled: boolean }> => {
-      if (!port) throw new Error("Runtime not connected");
+      if (!isAvailable || !port) throw new Error("Git not available");
       return trpcMutation<{ pulled: boolean }>(port, "git.pull");
     },
     onSuccess: () => {
@@ -260,11 +289,12 @@ export function useGitPull() {
 export function useGitRevert() {
   const { port } = useRuntimeState();
   const queryClient = useQueryClient();
+  const isAvailable = useIsGitAvailable();
 
   return useMutation({
     mutationKey: ["git-revert"],
     mutationFn: async (hash: string): Promise<{ hash: string; message: string }> => {
-      if (!port) throw new Error("Runtime not connected");
+      if (!isAvailable || !port) throw new Error("Git not available");
       return trpcMutation<{ hash: string; message: string }>(port, "git.revert", { hash });
     },
     onSuccess: () => {
@@ -273,3 +303,8 @@ export function useGitRevert() {
     },
   });
 }
+
+/**
+ * Check if git is available on this platform
+ */
+export { useIsGitAvailable };

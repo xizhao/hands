@@ -23,8 +23,8 @@ export const Route = createFileRoute("/_notebook")({
 
 function NotebookLayout() {
   const navigate = useNavigate();
-  // Use minimal Tauri-only hook (works without TRPCProvider)
-  const { workbookId, port } = useRuntimeProcess();
+  // Use minimal platform hook (works without TRPCProvider)
+  const { workbookId, isReady } = useRuntimeProcess();
   const { sessionId: activeSessionId, setSession: setActiveSession } = useActiveSession();
 
   // Set up navigate callback for SSE - routes to correct page based on path
@@ -82,7 +82,7 @@ function NotebookLayout() {
       workbooksLoading,
       workbooksCount: workbooks?.length,
       workbookId,
-      port,
+      isReady,
       createPending: createWorkbook.isPending,
       openPending: openWorkbook.isPending,
     });
@@ -136,7 +136,7 @@ function NotebookLayout() {
         },
       );
     }
-  }, [workbooks, workbooksLoading, workbookId, createWorkbook, openWorkbook, port]);
+  }, [workbooks, workbooksLoading, workbookId, createWorkbook, openWorkbook, isReady]);
 
   // Clear activeSessionId if it points to a deleted session
   useEffect(() => {
@@ -161,9 +161,9 @@ function NotebookLayout() {
     [clearNavigation, openWorkbook],
   );
 
-  // When no port, show clean loading state that matches NotebookShell structure
+  // When runtime not ready, show clean loading state that matches NotebookShell structure
   // This prevents layout shifts when transitioning to full UI
-  if (!port) {
+  if (!isReady) {
     return (
       <div className="h-screen flex flex-col bg-background overflow-hidden relative before:absolute before:inset-0 before:bg-black/[0.03] before:dark:bg-black/[0.15] before:pointer-events-none">
         {/* Match NotebookShell's header exactly */}

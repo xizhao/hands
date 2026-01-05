@@ -6,10 +6,23 @@
  * - In floating chat: routes through Tauri to open/focus workbook window
  */
 
-import { useNavigate } from "@tanstack/react-router";
-import { invoke } from "@tauri-apps/api/core";
-import { listen } from "@tauri-apps/api/event";
+import { useRouter } from "@tanstack/react-router";
 import { createContext, type ReactNode, useCallback, useContext, useEffect } from "react";
+import { usePlatform } from "../platform";
+
+/**
+ * Safe hook that returns navigate function only if inside RouterProvider.
+ * Returns null if no router context is available.
+ */
+function useSafeNavigate() {
+  try {
+    const router = useRouter();
+    return (opts: { to: string }) => router.navigate(opts);
+  } catch {
+    // No router context available (e.g., web mode before router mounts)
+    return null;
+  }
+}
 
 interface LinkNavigationContextValue {
   /** Whether we're in floating chat mode (vs workbook browser) */
@@ -35,53 +48,48 @@ interface LinkNavigationProviderProps {
 /**
  * Provider for link navigation context.
  *
- * In workbook browser: listens for "navigate" events from Tauri
- * In floating chat: routes through Tauri to workbook windows
+ * In workbook browser: listens for navigation events from platform
+ * In floating chat: routes through platform to workbook windows
  */
 export function LinkNavigationProvider({
   children,
   isFloatingChat = false,
   workbookId = null,
 }: LinkNavigationProviderProps) {
-  const navigate = useNavigate();
+  const navigate = useSafeNavigate();
+  const platform = usePlatform();
 
-  // Listen for navigation events from Tauri (workbook windows only)
+  // Listen for navigation events from platform (workbook windows only)
   useEffect(() => {
-    if (isFloatingChat) return;
+    if (isFloatingChat || !navigate || !platform.navigation) return;
 
-    const unlisten = listen<string>("navigate", (event) => {
-      const route = event.payload;
+    const unsubscribe = platform.navigation.onNavigate((route) => {
       console.log("[LinkNavigation] Received navigate event:", route);
       if (route.startsWith("/")) {
         navigate({ to: route });
       }
     });
 
-    return () => {
-      unlisten.then((fn) => fn());
-    };
-  }, [isFloatingChat, navigate]);
+    return unsubscribe;
+  }, [isFloatingChat, navigate, platform.navigation]);
 
   const navigateTo = useCallback(
     async (route: string) => {
       if (isFloatingChat) {
-        // In floating chat: route through Tauri to open/focus workbook
-        if (workbookId) {
+        // In floating chat: route through platform to open/focus workbook
+        if (workbookId && platform.navigation) {
           try {
-            await invoke("navigate_in_workbook", {
-              workbookId,
-              route,
-            });
+            await platform.navigation.navigateInWorkbook(workbookId, route);
           } catch (err) {
             console.error("[LinkNavigation] Failed to navigate:", err);
           }
         }
-      } else {
+      } else if (navigate) {
         // In workbook browser: use router directly
         navigate({ to: route });
       }
     },
-    [isFloatingChat, workbookId, navigate],
+    [isFloatingChat, workbookId, navigate, platform.navigation],
   );
 
   const handleLinkClick = useCallback(

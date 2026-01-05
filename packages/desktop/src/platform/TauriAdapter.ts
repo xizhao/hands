@@ -6,12 +6,16 @@
  */
 
 import type {
+  HistoryEntry,
+  PersistenceStatus,
   PlatformAdapter,
   RuntimeConnection,
   RuntimeStatus,
+  SaveResult,
   Workbook,
 } from "@hands/app/platform";
 import { invoke } from "@tauri-apps/api/core";
+import { listen } from "@tauri-apps/api/event";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { open } from "@tauri-apps/plugin-dialog";
 import { load, type Store } from "@tauri-apps/plugin-store";
@@ -39,6 +43,78 @@ async function getStore(): Promise<Store> {
     storeInstance = await load("settings.json", { autoSave: true, defaults: {} });
   }
   return storeInstance;
+}
+
+// ============================================================================
+// Runtime Port Tracking (for persistence/tRPC calls)
+// ============================================================================
+
+let currentRuntimePort: number | null = null;
+
+function getPort(): number {
+  if (!currentRuntimePort) {
+    throw new Error("Runtime not connected");
+  }
+  return currentRuntimePort;
+}
+
+// ============================================================================
+// Git tRPC Helpers
+// ============================================================================
+
+interface GitStatus {
+  isRepo: boolean;
+  branch: string | null;
+  hasChanges: boolean;
+  staged: string[];
+  unstaged: string[];
+  untracked: string[];
+  remote: string | null;
+  ahead: number;
+  behind: number;
+}
+
+interface GitCommit {
+  hash: string;
+  shortHash: string;
+  message: string;
+  author: string;
+  email: string;
+  date: string;
+  timestamp: number;
+}
+
+async function gitQuery<T>(path: string, input?: unknown): Promise<T> {
+  const port = getPort();
+  const url = input
+    ? `http://localhost:${port}/trpc/${path}?input=${encodeURIComponent(JSON.stringify(input))}`
+    : `http://localhost:${port}/trpc/${path}`;
+
+  const res = await fetch(url);
+  if (!res.ok) {
+    const error = await res.json().catch(() => ({ message: "Request failed" }));
+    throw new Error(error.message || `tRPC ${path} failed`);
+  }
+
+  const data = await res.json();
+  return data.result?.data as T;
+}
+
+async function gitMutation<T>(path: string, input?: unknown): Promise<T> {
+  const port = getPort();
+  const res = await fetch(`http://localhost:${port}/trpc/${path}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(input ?? {}),
+  });
+
+  if (!res.ok) {
+    const error = await res.json().catch(() => ({ message: "Request failed" }));
+    throw new Error(error.error?.message || error.message || `tRPC ${path} failed`);
+  }
+
+  const data = await res.json();
+  return data.result?.data as T;
 }
 
 // ============================================================================
@@ -90,6 +166,9 @@ export const TauriPlatformAdapter: PlatformAdapter = {
         .then(() => console.log("[TauriAdapter] set_active_workbook done"))
         .catch((err) => console.error("[TauriAdapter] set_active_workbook error:", err));
 
+      // Store port for persistence/tRPC calls
+      currentRuntimePort = status.runtime_port;
+
       return {
         workbookId: workbook.id,
         port: status.runtime_port,
@@ -119,6 +198,11 @@ export const TauriPlatformAdapter: PlatformAdapter = {
         runtime_port: status.runtime_port,
         message: status.message,
       };
+    },
+
+    isReady: async (): Promise<boolean> => {
+      const status = await invoke<TauriRuntimeStatus | null>("get_active_runtime");
+      return !!(status?.runtime_port && status.runtime_port > 0);
     },
 
     stop: async (workbookId: string): Promise<void> => {
@@ -214,8 +298,109 @@ export const TauriPlatformAdapter: PlatformAdapter = {
     },
   },
 
+  navigation: {
+    navigateInWorkbook: async (workbookId: string, route: string): Promise<void> => {
+      await invoke("navigate_in_workbook", { workbookId, route });
+    },
+
+    onNavigate: (callback: (route: string) => void): (() => void) => {
+      let unlisten: (() => void) | null = null;
+
+      listen<string>("navigate", (event) => {
+        callback(event.payload);
+      }).then((fn) => {
+        unlisten = fn;
+      });
+
+      return () => {
+        unlisten?.();
+      };
+    },
+  },
+
   ai: {
     getOpenCodeUrl: () => "http://localhost:4096",
+  },
+
+  persistence: {
+    getStatus: async (): Promise<PersistenceStatus> => {
+      try {
+        const status = await gitQuery<GitStatus>("git.status");
+        return {
+          hasChanges: status.hasChanges,
+          lastSaved: null, // Git doesn't track this easily
+          canSync: status.isRepo,
+          remote: status.remote
+            ? {
+                url: status.remote,
+                ahead: status.ahead,
+                behind: status.behind,
+              }
+            : undefined,
+        };
+      } catch {
+        // Runtime not ready or git not initialized
+        return {
+          hasChanges: false,
+          lastSaved: null,
+          canSync: false,
+        };
+      }
+    },
+
+    save: async (message?: string): Promise<SaveResult | null> => {
+      const result = await gitMutation<{ hash: string; message: string } | null>("git.save", {
+        message,
+      });
+      if (!result) return null;
+      return {
+        id: result.hash,
+        message: result.message,
+        timestamp: Date.now(),
+      };
+    },
+
+    getHistory: async (limit = 50): Promise<HistoryEntry[]> => {
+      try {
+        const commits = await gitQuery<GitCommit[]>("git.history", { limit });
+        return commits.map((c) => ({
+          id: c.hash,
+          shortId: c.shortHash,
+          message: c.message,
+          author: c.author,
+          timestamp: c.timestamp,
+        }));
+      } catch {
+        return [];
+      }
+    },
+
+    revert: async (entryId: string): Promise<void> => {
+      await gitMutation("git.revert", { hash: entryId });
+    },
+
+    sync: {
+      push: async (): Promise<void> => {
+        await gitMutation("git.push");
+      },
+
+      pull: async (): Promise<void> => {
+        await gitMutation("git.pull");
+      },
+
+      getRemote: async (): Promise<string | null> => {
+        try {
+          const status = await gitQuery<GitStatus>("git.status");
+          return status.remote;
+        } catch {
+          return null;
+        }
+      },
+
+      setRemote: async (url: string): Promise<void> => {
+        await gitMutation("git.setRemote", { url });
+      },
+    },
   },
 
   platform: "desktop",

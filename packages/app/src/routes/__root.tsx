@@ -1,9 +1,11 @@
 import { createRootRoute, Outlet } from "@tanstack/react-router";
-import { listen } from "@tauri-apps/api/event";
 import { useEffect, useState } from "react";
 import { SettingsModal } from "@/components/SettingsModal";
 import { useAppHotkeys, useHotkeys } from "@/hooks/useHotkeys";
+import { LinkNavigationProvider } from "@/hooks/useLinkNavigation";
+import { useActiveRuntime } from "@/hooks/useWorkbook";
 import { initTheme } from "@/lib/theme";
+import { usePlatform } from "@/platform";
 
 export const Route = createRootRoute({
   component: RootComponent,
@@ -11,6 +13,9 @@ export const Route = createRootRoute({
 
 function RootComponent() {
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const platform = usePlatform();
+  const { data: runtime } = useActiveRuntime();
+  const workbookId = runtime?.workbook_id ?? null;
 
   // Global hotkeys (Cmd+W to close page, etc.)
   useAppHotkeys();
@@ -20,24 +25,16 @@ function RootComponent() {
     initTheme();
   }, []);
 
-  // Disable right-click context menu
+  // Disable right-click context menu (desktop only)
   useEffect(() => {
+    if (platform.platform !== "desktop") return;
+
     const handleContextMenu = (e: MouseEvent) => {
       e.preventDefault();
     };
     document.addEventListener("contextmenu", handleContextMenu);
     return () => document.removeEventListener("contextmenu", handleContextMenu);
-  }, []);
-
-  // Listen for menu event from Tauri (Hands > Settings)
-  useEffect(() => {
-    const unlisten = listen("open-settings", () => {
-      setSettingsOpen(true);
-    });
-    return () => {
-      unlisten.then((fn) => fn());
-    };
-  }, []);
+  }, [platform.platform]);
 
   // Cmd+, to open settings (using hotkey system)
   useHotkeys([
@@ -53,9 +50,9 @@ function RootComponent() {
   ]);
 
   return (
-    <>
+    <LinkNavigationProvider isFloatingChat={false} workbookId={workbookId}>
       <Outlet />
       <SettingsModal open={settingsOpen} onClose={() => setSettingsOpen(false)} />
-    </>
+    </LinkNavigationProvider>
   );
 }

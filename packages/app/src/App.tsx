@@ -16,8 +16,8 @@ import { MutationCache, QueryClient, QueryClientProvider } from "@tanstack/react
 import { RouterProvider } from "@tanstack/react-router";
 import { Toaster, toast } from "sonner";
 import { TooltipProvider } from "./components/ui/tooltip";
-import { LinkNavigationProvider } from "./hooks/useLinkNavigation";
 import { useActiveRuntime } from "./hooks/useWorkbook";
+import { usePlatform } from "./platform";
 import { router } from "./router";
 import { TRPCProvider } from "./TRPCProvider";
 
@@ -132,34 +132,42 @@ function AppShell({ children }: { children: React.ReactNode }) {
  * tRPC is only available when runtime is connected. The router renders
  * regardless, allowing workbook initialization to happen without tRPC.
  * Components using tRPC must be inside routes that only render when connected.
+ *
+ * Note: Web platform has its own LocalTRPCProvider in main.tsx, so we skip
+ * the HTTP-based TRPCProvider here. Desktop needs it for runtime server.
  */
 function AppContent() {
+  const platform = usePlatform();
   const { data: runtime } = useActiveRuntime();
   const runtimePort = runtime?.runtime_port ?? null;
-  const workbookId = runtime?.workbook_id ?? null;
 
-  // Always render the router - workbook init logic needs it
-  // tRPC provider only mounts when runtime is connected
-  if (runtimePort) {
+  // Web platform: tRPC is already provided by LocalTRPCProvider in main.tsx
+  // Just render the app shell with router
+  if (platform.platform === "web") {
+    return (
+      <AppShell>
+        <RouterProvider router={router} />
+      </AppShell>
+    );
+  }
+
+  // Desktop platform: wrap with HTTP-based TRPCProvider when runtime is connected
+  if (runtimePort && runtimePort > 1) {
     return (
       <TRPCProvider queryClient={queryClient} runtimePort={runtimePort}>
-        <LinkNavigationProvider isFloatingChat={false} workbookId={workbookId}>
-          <AppShell>
-            <RouterProvider router={router} />
-          </AppShell>
-        </LinkNavigationProvider>
+        <AppShell>
+          <RouterProvider router={router} />
+        </AppShell>
       </TRPCProvider>
     );
   }
 
-  // No runtime yet - render without tRPC
+  // Desktop: No runtime yet - render without tRPC
   // Workbook picker and initialization work via platform adapter
   return (
-    <LinkNavigationProvider isFloatingChat={false} workbookId={workbookId}>
-      <AppShell>
-        <RouterProvider router={router} />
-      </AppShell>
-    </LinkNavigationProvider>
+    <AppShell>
+      <RouterProvider router={router} />
+    </AppShell>
   );
 }
 
