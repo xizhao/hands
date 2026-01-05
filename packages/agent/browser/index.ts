@@ -5,11 +5,62 @@
  * - AI SDK + OpenRouter integration (BYOK)
  * - Multi-turn conversations with tool execution
  * - Jotai state management
- * - Swappable executor (browser now, server later)
+ * - Implements AgentProvider interface from core
  */
 
 // ============================================================================
-// Core Agent
+// Core Types (re-exported from @hands/agent/core)
+// ============================================================================
+
+export {
+  // Part types
+  type PartBase,
+  type TextPart,
+  type ReasoningPart,
+  type FilePart,
+  type ToolPart,
+  type ToolState,
+  type ToolStatePending,
+  type ToolStateRunning,
+  type ToolStateCompleted,
+  type ToolStateError,
+  type StepStartPart,
+  type StepFinishPart,
+  type Part,
+  // Message types
+  type MessageBase,
+  type UserMessage,
+  type AssistantMessage,
+  type Message,
+  type MessageWithParts,
+  // Session types
+  type Session,
+  type SessionStatus,
+  // Todos
+  type Todo,
+  // Agent config
+  type AgentConfig,
+  // Events
+  type AgentEvent,
+  // Provider interface
+  type AgentProvider,
+  type PromptOptions,
+  // Utilities
+  generateId,
+} from "../core";
+
+// ============================================================================
+// Browser Provider
+// ============================================================================
+
+export {
+  BrowserAgentProvider,
+  createBrowserProvider,
+  type BrowserProviderConfig,
+} from "./browser-provider";
+
+// ============================================================================
+// Low-level Agent (for direct use without provider abstraction)
 // ============================================================================
 
 export { runAgent, type AgentOptions, type AgentResult, type AgentConfigInput } from "./agent";
@@ -29,39 +80,6 @@ export {
 } from "../agents";
 
 // ============================================================================
-// Types
-// ============================================================================
-
-export {
-  // Part types
-  type TextPart,
-  type ReasoningPart,
-  type FilePart,
-  type ToolPart,
-  type ToolState,
-  type ToolStatePending,
-  type ToolStateRunning,
-  type ToolStateCompleted,
-  type ToolStateError,
-  type StepStartPart,
-  type StepFinishPart,
-  type Part,
-  // Message types
-  type UserMessage,
-  type AssistantMessage,
-  type Message,
-  type MessageWithParts,
-  // Session types
-  type Session,
-  // Agent config
-  type AgentConfig,
-  // Events
-  type AgentEvent,
-  // Utilities
-  generateId,
-} from "./types";
-
-// ============================================================================
 // Provider
 // ============================================================================
 
@@ -75,10 +93,12 @@ export {
   resolveModelId,
   parseModelString,
   getOpenRouterModelId,
+  STORAGE_KEYS,
   type ProviderConfig,
   type ProviderType,
   type ModelConfig,
   type ParsedModel,
+  type StorageKey,
 } from "./provider";
 
 // ============================================================================
@@ -102,16 +122,21 @@ export {
   createSqlExecuteTool,
   createSqlSchemaTool,
   createWebFetchTool,
+  createWebSearchTool,
   createCodeExecuteTool,
   createPageListTool,
   createPageReadTool,
   createPageWriteTool,
+  toAISDKTools,
   DATA_TOOLS,
+  RESEARCH_TOOLS,
   CONTENT_TOOLS,
   ALL_TOOLS,
   type ToolContext,
   type ToolId,
   type ToolRegistry,
+  type ToolDefinition,
+  type DatabaseContext,
 } from "./tools";
 
 // ============================================================================
@@ -145,3 +170,18 @@ export {
   type StreamEvent,
   type Provider,
 } from "./llm-client";
+
+// ============================================================================
+// Browser API (drop-in replacement for @opencode-ai/sdk client)
+// ============================================================================
+
+export {
+  api,
+  subscribeToEvents,
+  setToolContext,
+  getToolContext,
+  // Types (api-specific only, core types re-exported above)
+  type Agent as ApiAgent,
+  type ServerEvent,
+  type EventType,
+} from "./api";

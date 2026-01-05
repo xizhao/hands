@@ -1,15 +1,10 @@
 /**
  * SSE Event Handler for React Query
  *
- * Subscribes to OpenCode SSE events and updates React Query cache optimistically.
+ * Subscribes to browser agent events and updates React Query cache optimistically.
  * This gives us instant UI updates without waiting for refetches.
  */
 
-import type {
-  Message as SdkMessage,
-  Part as SdkPart,
-  Todo as SdkTodo,
-} from "@opencode-ai/sdk/client";
 import type { QueryClient } from "@tanstack/react-query";
 import { setSessionError } from "@/hooks/useChatState";
 import {
@@ -17,6 +12,8 @@ import {
   type ServerEvent,
   type Session,
   type SessionStatus,
+  type Message,
+  type Part,
   subscribeToEvents,
   type Todo,
 } from "@/lib/api";
@@ -58,45 +55,28 @@ export function startSSESync(queryClient: QueryClient): () => void {
 function processEvent(event: ServerEvent, queryClient: QueryClient, directory?: string) {
   switch (event.type) {
     case "session.created":
-      handleSessionCreated(event.properties.info, queryClient, directory);
+      handleSessionCreated(event.session, queryClient, directory);
       break;
     case "session.updated":
-      handleSessionUpdated(event.properties.info, queryClient, directory);
+      handleSessionUpdated(event.session, queryClient, directory);
       break;
     case "session.deleted":
-      handleSessionDeleted(event.properties.info.id, queryClient, directory);
+      handleSessionDeleted(event.sessionId, queryClient, directory);
       break;
     case "session.status":
-      handleSessionStatus(
-        event.properties.sessionID,
-        event.properties.status,
-        queryClient,
-        directory,
-      );
+      handleSessionStatus(event.sessionId, event.status, queryClient, directory);
       break;
     case "message.updated":
-      handleMessageUpdated(event.properties.info, queryClient, directory);
+      handleMessageUpdated(event.message, queryClient, directory);
       break;
     case "message.removed":
-      handleMessageRemoved(event.properties.messageID, queryClient);
+      handleMessageRemoved(event.messageId, queryClient);
       break;
     case "message.part.updated":
-      handlePartUpdated(event.properties.part, queryClient, directory);
-      break;
-    case "message.part.removed":
-      handlePartRemoved(event.properties.partID, queryClient);
+      handlePartUpdated(event.part, event.sessionId, event.messageId, queryClient, directory);
       break;
     case "todo.updated":
-      handleTodosUpdated(
-        event.properties.sessionID,
-        event.properties.todos,
-        queryClient,
-        directory,
-      );
-      break;
-    case "session.idle":
-      // Session finished - invalidate to get final state
-      handleSessionIdle(event.properties.sessionID, queryClient, directory);
+      handleTodosUpdated(event.sessionId, event.todos, queryClient, directory);
       break;
     default:
       log("[sse] Unknown event:", (event as { type: string }).type);
@@ -173,36 +153,29 @@ function handleSessionDeleted(sessionId: string, queryClient: QueryClient, direc
 
 function handleSessionStatus(
   sessionId: string,
-  status: any,
+  status: SessionStatus,
   queryClient: QueryClient,
   directory?: string,
 ) {
   log("[sse] session.status:", sessionId, status.type, "directory:", directory);
-
-  // Map SDK status to our SessionStatus type
-  const mappedStatus: SessionStatus =
-    status.type === "retry"
-      ? { type: "retry", error: status.message }
-      : status.type === "busy"
-        ? { type: "busy" }
-        : { type: "idle" };
 
   // Update session statuses
   queryClient.setQueriesData<Record<string, SessionStatus>>(
     { queryKey: ["session-statuses"], exact: false },
     (old) => ({
       ...old,
-      [sessionId]: mappedStatus,
+      [sessionId]: status,
     }),
   );
 }
 
-function handleMessageUpdated(message: SdkMessage, queryClient: QueryClient, directory?: string) {
+function handleMessageUpdated(message: Message, queryClient: QueryClient, directory?: string) {
+  const sessionId = message.sessionId;
   console.log(
     "[sse] message.updated:",
     message.id,
     "session:",
-    message.sessionID,
+    sessionId,
     "directory:",
     directory,
   );
@@ -210,7 +183,7 @@ function handleMessageUpdated(message: SdkMessage, queryClient: QueryClient, dir
   // Debug: Log all queries that might match
   const allQueries = queryClient.getQueryCache().getAll();
   const matchingQueries = allQueries.filter(
-    (q) => q.queryKey[0] === "messages" && q.queryKey[1] === message.sessionID,
+    (q) => q.queryKey[0] === "messages" && q.queryKey[1] === sessionId,
   );
   console.log(
     "[sse] message.updated: Found",
@@ -222,7 +195,7 @@ function handleMessageUpdated(message: SdkMessage, queryClient: QueryClient, dir
   // If we have a directory, try to set the specific query directly
   // This is more reliable than setQueriesData which only updates existing queries
   if (directory) {
-    const exactKey = ["messages", message.sessionID, directory];
+    const exactKey = ["messages", sessionId, directory];
     const existing = queryClient.getQueryData<MessageWithParts[]>(exactKey);
     log("[sse] message.updated: Checking exact key:", exactKey, "exists:", !!existing);
 
@@ -244,7 +217,7 @@ function handleMessageUpdated(message: SdkMessage, queryClient: QueryClient, dir
 
   // Fallback: use setQueriesData to update all matching queries
   const updated = queryClient.setQueriesData<MessageWithParts[]>(
-    { queryKey: ["messages", message.sessionID], exact: false },
+    { queryKey: ["messages", sessionId], exact: false },
     (old) => {
       // Initialize array if this is the first message for a new session
       if (!old) {
@@ -268,20 +241,20 @@ function handleMessageUpdated(message: SdkMessage, queryClient: QueryClient, dir
   if (updated.length === 0 && directory) {
     log("[sse] message.updated: Creating new cache entry for:", [
       "messages",
-      message.sessionID,
+      sessionId,
       directory,
     ]);
     queryClient.setQueryData<MessageWithParts[]>(
-      ["messages", message.sessionID, directory],
+      ["messages", sessionId, directory],
       [{ info: message, parts: [] }],
     );
   } else if (updated.length === 0) {
     // No directory - fallback to invalidation
     console.log(
       "[sse] message.updated: no matching queries found, invalidating for session:",
-      message.sessionID,
+      sessionId,
     );
-    queryClient.invalidateQueries({ queryKey: ["messages", message.sessionID], exact: false });
+    queryClient.invalidateQueries({ queryKey: ["messages", sessionId], exact: false });
   }
 }
 
@@ -294,12 +267,18 @@ function handleMessageRemoved(messageId: string, queryClient: QueryClient) {
   );
 }
 
-function handlePartUpdated(part: SdkPart, queryClient: QueryClient, directory?: string) {
+function handlePartUpdated(
+  part: Part,
+  sessionId: string,
+  messageId: string,
+  queryClient: QueryClient,
+  directory?: string,
+) {
   console.log(
     "[sse] part.updated:",
     part.id,
     "message:",
-    part.messageID,
+    messageId,
     "type:",
     part.type,
     "directory:",
@@ -353,7 +332,7 @@ function handlePartUpdated(part: SdkPart, queryClient: QueryClient, directory?: 
   // Debug: Log all queries that might match
   const allQueries = queryClient.getQueryCache().getAll();
   const matchingQueries = allQueries.filter(
-    (q) => q.queryKey[0] === "messages" && q.queryKey[1] === part.sessionID,
+    (q) => q.queryKey[0] === "messages" && q.queryKey[1] === sessionId,
   );
   console.log(
     "[sse] part.updated: Found",
@@ -366,43 +345,40 @@ function handlePartUpdated(part: SdkPart, queryClient: QueryClient, directory?: 
   const updateParts = (old: MessageWithParts[] | undefined): MessageWithParts[] | undefined => {
     // If no messages exist yet, create placeholder message to hold the part
     if (!old) {
-      console.log(
-        "[sse] part.updated: no messages cache, creating placeholder for:",
-        part.messageID,
-      );
+      console.log("[sse] part.updated: no messages cache, creating placeholder for:", messageId);
       return [
         {
           info: {
-            id: part.messageID,
-            sessionID: part.sessionID,
+            id: messageId,
+            sessionId,
             role: "assistant",
-            time: { created: Date.now(), updated: Date.now() },
-          } as unknown as MessageWithParts["info"],
+            time: { created: Date.now() },
+          } as Message,
           parts: [part],
         },
       ];
     }
 
     // Check if message exists - if not, create placeholder
-    const messageExists = old.some((m) => m.info.id === part.messageID);
+    const messageExists = old.some((m) => m.info.id === messageId);
     if (!messageExists) {
-      log("[sse] part.updated: message not found, creating placeholder:", part.messageID);
+      log("[sse] part.updated: message not found, creating placeholder:", messageId);
       return [
         ...old,
         {
           info: {
-            id: part.messageID,
-            sessionID: part.sessionID,
+            id: messageId,
+            sessionId,
             role: "assistant",
-            time: { created: Date.now(), updated: Date.now() },
-          } as unknown as MessageWithParts["info"],
+            time: { created: Date.now() },
+          } as Message,
           parts: [part],
         },
       ];
     }
 
     return old.map((m) => {
-      if (m.info.id !== part.messageID) return m;
+      if (m.info.id !== messageId) return m;
 
       const existingPartIndex = m.parts.findIndex((p) => p.id === part.id);
       if (existingPartIndex >= 0) {
@@ -419,7 +395,7 @@ function handlePartUpdated(part: SdkPart, queryClient: QueryClient, directory?: 
 
   // If we have a directory, try to update the specific query first
   if (directory) {
-    const exactKey = ["messages", part.sessionID, directory];
+    const exactKey = ["messages", sessionId, directory];
     const existing = queryClient.getQueryData<MessageWithParts[]>(exactKey);
     if (existing !== undefined) {
       queryClient.setQueryData<MessageWithParts[]>(exactKey, updateParts);
@@ -429,26 +405,14 @@ function handlePartUpdated(part: SdkPart, queryClient: QueryClient, directory?: 
 
   // Fallback: update all matching queries
   queryClient.setQueriesData<MessageWithParts[]>(
-    { queryKey: ["messages", part.sessionID], exact: false },
+    { queryKey: ["messages", sessionId], exact: false },
     updateParts,
-  );
-}
-
-function handlePartRemoved(partId: string, queryClient: QueryClient) {
-  log("[sse] part.removed:", partId);
-
-  // Remove from all messages
-  queryClient.setQueriesData<MessageWithParts[]>({ queryKey: ["messages"], exact: false }, (old) =>
-    old?.map((m) => ({
-      ...m,
-      parts: m.parts.filter((p) => p.id !== partId),
-    })),
   );
 }
 
 function handleTodosUpdated(
   sessionId: string,
-  todos: SdkTodo[],
+  todos: Todo[],
   queryClient: QueryClient,
   directory?: string,
 ) {
@@ -456,27 +420,12 @@ function handleTodosUpdated(
 
   // If we have a directory, set specific query
   if (directory) {
-    queryClient.setQueryData<Todo[]>(["todos", sessionId, directory], todos as Todo[]);
+    queryClient.setQueryData<Todo[]>(["todos", sessionId, directory], todos);
   } else {
     // Fallback: update all matching queries
     queryClient.setQueriesData<Todo[]>(
       { queryKey: ["todos", sessionId], exact: false },
-      () => todos as Todo[],
+      () => todos,
     );
   }
-}
-
-function handleSessionIdle(sessionId: string, queryClient: QueryClient, directory?: string) {
-  console.log(
-    "[sse] session.idle:",
-    sessionId,
-    "- invalidating to get final state",
-    "directory:",
-    directory,
-  );
-
-  // Session finished processing - invalidate to refetch final state
-  queryClient.invalidateQueries({ queryKey: ["messages", sessionId] });
-  queryClient.invalidateQueries({ queryKey: ["todos", sessionId] });
-  queryClient.invalidateQueries({ queryKey: ["session", sessionId] });
 }

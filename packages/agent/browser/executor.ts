@@ -7,7 +7,7 @@
  */
 
 import type { ToolSet } from "ai";
-import type { AgentConfig, Session, MessageWithParts, AgentEvent } from "./types";
+import type { AgentConfig, Session, MessageWithParts, AgentEvent } from "../core";
 import { runAgent } from "./agent";
 import type { ToolContext, ToolId } from "./tools";
 

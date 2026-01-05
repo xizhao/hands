@@ -224,7 +224,8 @@ export function ChatPanel({
   }, [onSessionSelect, onBack]);
 
   // Check if we're showing messages or thread list
-  const showMessages = sessionId && messages.length > 0;
+  // Show messages view when session is selected (even if empty - shows thinking indicator)
+  const showMessages = !!sessionId;
 
   return (
     <div className={`flex flex-col h-full ${className}`}>
@@ -251,7 +252,8 @@ export function ChatPanel({
                 />
               ))}
               <AnimatePresence>
-                {isBusy && messages[messages.length - 1]?.info.role === "user" && (
+                {/* Show thinking when: busy OR last message is from user (waiting for response) */}
+                {(isBusy || messages[messages.length - 1]?.info.role === "user") && (
                   <motion.div
                     initial={{ opacity: 0, y: 10 }}
                     animate={{ opacity: 1, y: 0 }}

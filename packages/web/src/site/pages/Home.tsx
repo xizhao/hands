@@ -1,64 +1,39 @@
 /**
  * Landing Page Component
  *
- * Adapted from packages/site with editable prompt bar as CTA.
- * Captures OpenRouter API key before navigating to editor.
+ * Animated landing with prompt bar CTA.
+ * Users can enter a prompt or upload data to create a new workbook.
  */
 
 import {
   ArrowRight,
   Envelope,
   Link,
+  Table,
   UploadSimple,
 } from "@phosphor-icons/react";
 import { animate, motion, useMotionValue } from "motion/react";
 import { FormEvent, KeyboardEvent, useEffect, useRef, useState } from "react";
 
-// Shared storage key with browser agent (packages/agent/browser/state.ts)
-const API_KEYS_STORAGE_KEY = "hands_api_keys";
+import { getStoredConfig, setStoredConfig } from "@hands/agent/browser";
+import { createWorkbook } from "../../shared/lib/storage";
 
-function getStoredApiKey(): string {
-  try {
-    const stored = localStorage.getItem(API_KEYS_STORAGE_KEY);
-    console.log("[Landing] getStoredApiKey raw:", stored);
-    if (stored) {
-      const parsed = JSON.parse(stored);
-      console.log("[Landing] getStoredApiKey parsed:", parsed);
-      return parsed.openrouter || "";
-    }
-  } catch (e) {
-    console.error("[Landing] getStoredApiKey error:", e);
-  }
-  return "";
-}
-
-function setStoredApiKey(key: string): boolean {
-  try {
-    const stored = localStorage.getItem(API_KEYS_STORAGE_KEY);
-    const existing = stored ? JSON.parse(stored) : {};
-    const newValue = { ...existing, openrouter: key };
-    localStorage.setItem(API_KEYS_STORAGE_KEY, JSON.stringify(newValue));
-    // Verify it was saved
-    const verify = localStorage.getItem(API_KEYS_STORAGE_KEY);
-    if (!verify) {
-      console.error("[Landing] setStoredApiKey: verification failed");
-      return false;
-    }
-    return true;
-  } catch (e) {
-    console.error("[Landing] setStoredApiKey error:", e);
-    return false;
-  }
-}
-
-export function Landing() {
+export function Home() {
+  const [checking, setChecking] = useState(true);
   const [headlineVisible, setHeadlineVisible] = useState(false);
   const [promptBarVisible, setPromptBarVisible] = useState(false);
   const introProgress = useMotionValue(0);
   const [introProgressValue, setIntroProgressValue] = useState(0);
 
-  // Staggered parallel animations
+  // Skip auto-redirect - let users stay on landing page
   useEffect(() => {
+    setChecking(false);
+  }, []);
+
+  // Staggered parallel animations (only start after workbook check)
+  useEffect(() => {
+    if (checking) return;
+
     // Headline appears immediately
     const headlineTimer = setTimeout(() => setHeadlineVisible(true), 100);
 
@@ -79,12 +54,21 @@ export function Landing() {
       clearTimeout(handsTimer);
       clearTimeout(promptTimer);
     };
-  }, [introProgress]);
+  }, [introProgress, checking]);
 
   const easing = [0.22, 1, 0.36, 1] as const;
 
+  // Show nothing while checking for existing workbooks
+  if (checking) {
+    return (
+      <div className="h-full bg-background flex items-center justify-center">
+        <div className="w-6 h-6 border-2 border-muted-foreground/30 border-t-muted-foreground rounded-full animate-spin" />
+      </div>
+    );
+  }
+
   return (
-    <div className="min-h-screen bg-background flex items-center justify-center px-6">
+    <div className="h-full bg-background flex items-center justify-center px-6">
       <div className="max-w-2xl w-full">
         {/* Animated Headline */}
         <AnimatedHeroHeadline
@@ -113,18 +97,19 @@ function PromptBar() {
   const [value, setValue] = useState("");
   const [showApiKeyPopover, setShowApiKeyPopover] = useState(false);
   const [showComingSoon, setShowComingSoon] = useState(false);
-  const [apiKey, setApiKey] = useState("");
+  const [apiKeyValue, setApiKeyValue] = useState("");
   const [hasKey, setHasKey] = useState(false);
   const [pendingAction, setPendingAction] = useState<string | null>(null);
+  const [isNavigating, setIsNavigating] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const apiKeyInputRef = useRef<HTMLInputElement>(null);
   const logoRef = useRef<HTMLButtonElement>(null);
 
   // Check for existing key on mount
   useEffect(() => {
-    const stored = getStoredApiKey();
-    setHasKey(!!stored);
-    setApiKey(stored);
+    const config = getStoredConfig();
+    setHasKey(!!config?.apiKey);
+    if (config?.apiKey) setApiKeyValue(config.apiKey);
   }, []);
 
   useEffect(() => {
@@ -142,7 +127,10 @@ function PromptBar() {
     if (!showApiKeyPopover) return;
     const handleClick = (e: MouseEvent) => {
       const target = e.target as HTMLElement;
-      if (!target.closest("[data-api-popover]") && !target.closest("[data-logo-button]")) {
+      if (
+        !target.closest("[data-api-popover]") &&
+        !target.closest("[data-logo-button]")
+      ) {
         setShowApiKeyPopover(false);
       }
     };
@@ -150,11 +138,24 @@ function PromptBar() {
     return () => document.removeEventListener("mousedown", handleClick);
   }, [showApiKeyPopover]);
 
-  const navigateToEditor = (prompt?: string) => {
-    if (prompt) {
-      window.location.href = `/w/?q=${encodeURIComponent(prompt)}`;
-    } else {
-      window.location.href = "/w/";
+  const navigateToEditor = async (prompt?: string) => {
+    if (isNavigating) return;
+    setIsNavigating(true);
+
+    try {
+      // Create a new workbook
+      const workbook = await createWorkbook("New Workbook");
+
+      if (prompt) {
+        window.location.href = `/w/${workbook.id}?q=${encodeURIComponent(
+          prompt
+        )}`;
+      } else {
+        window.location.href = `/w/${workbook.id}`;
+      }
+    } catch (err) {
+      console.error("Failed to create workbook:", err);
+      setIsNavigating(false);
     }
   };
 
@@ -184,13 +185,9 @@ function PromptBar() {
 
   const handleSaveApiKey = (e: FormEvent) => {
     e.preventDefault();
-    const key = apiKey.trim();
+    const key = apiKeyValue.trim();
     if (key) {
-      const saved = setStoredApiKey(key);
-      if (!saved) {
-        alert("Failed to save API key. Please check browser storage settings.");
-        return;
-      }
+      setStoredConfig({ type: "openrouter", apiKey: key });
       setHasKey(true);
       setShowApiKeyPopover(false);
       if (pendingAction) {
@@ -253,9 +250,14 @@ function PromptBar() {
             />
             <button
               type="submit"
-              className="h-9 w-9 shrink-0 rounded-full bg-primary text-primary-foreground hover:bg-primary/90 flex items-center justify-center transition-colors"
+              disabled={isNavigating}
+              className="h-9 w-9 shrink-0 rounded-full bg-primary text-primary-foreground hover:bg-primary/90 flex items-center justify-center transition-colors disabled:opacity-50"
             >
-              <ArrowRight className="w-4 h-4" weight="bold" />
+              {isNavigating ? (
+                <div className="w-4 h-4 border-2 border-primary-foreground/30 border-t-primary-foreground rounded-full animate-spin" />
+              ) : (
+                <ArrowRight className="w-4 h-4" weight="bold" />
+              )}
             </button>
           </div>
         </form>
@@ -280,15 +282,15 @@ function PromptBar() {
               <input
                 ref={apiKeyInputRef}
                 type="password"
-                value={apiKey}
-                onChange={(e) => setApiKey(e.target.value)}
+                value={apiKeyValue}
+                onChange={(e) => setApiKeyValue(e.target.value)}
                 placeholder="sk-or-v1-..."
                 autoComplete="off"
                 className="w-full px-3 py-2 bg-background border border-border rounded-lg mb-3 text-sm text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:ring-2 focus:ring-ring"
               />
               <button
                 type="submit"
-                disabled={!apiKey.trim()}
+                disabled={!apiKeyValue.trim()}
                 className="w-full px-3 py-2 bg-primary text-primary-foreground rounded-lg text-sm font-medium hover:bg-primary/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {hasKey ? "Update key" : "Save key"}
@@ -310,7 +312,7 @@ function PromptBar() {
       </div>
 
       {/* Data source pills */}
-      <div className="flex items-center justify-center gap-2 mt-4">
+      <div className="flex gap-2 mt-4">
         <button
           type="button"
           onClick={() => handleSourceClick("upload")}
@@ -330,10 +332,21 @@ function PromptBar() {
         <button
           type="button"
           onClick={() => handleSourceClick("email")}
-          className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-secondary hover:bg-secondary/80 text-secondary-foreground text-sm transition-colors"
+          className="inline-flex items-center gap-2 px-4 py-2 rounded-full  text-secondary-foreground/80 text-sm transition-colors"
+          disabled
         >
           <Envelope className="w-4 h-4" />
           Forward email
+        </button>
+
+        <button
+          type="button"
+          onClick={() => handleSourceClick("browser")}
+          className="inline-flex items-center gap-2 px-4 py-2 rounded-full text-secondary-foreground/80 text-sm transition-colors"
+          disabled
+        >
+          <Table className="w-4 h-4" />
+          Browse Datasets
         </button>
       </div>
 
@@ -353,7 +366,8 @@ function PromptBar() {
               Coming Soon
             </h2>
             <p className="text-sm text-muted-foreground mb-4">
-              Email forwarding is on our roadmap. For now, try uploading a file or pasting a link.
+              Email forwarding is on our roadmap. For now, try uploading a file
+              or pasting a link.
             </p>
             <button
               type="button"
@@ -390,7 +404,7 @@ function AnimatedHeroHeadline({
 
   return (
     <motion.div
-      className="mb-8 text-center"
+      className="mb-8"
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: isVisible ? 1 : 0, y: isVisible ? 0 : 20 }}
       transition={{ duration: 0.4, ease: easing }}
@@ -400,7 +414,7 @@ function AnimatedHeroHeadline({
         style={{ fontSize: "clamp(2.5rem, 6vw, 4rem)" }}
       >
         {/* Line 1 */}
-        <div className="relative inline-flex items-center justify-center">
+        <div className="relative inline-flex items-center">
           <motion.span
             initial={false}
             animate={{ x: phase === "crooked" ? -20 : 0 }}

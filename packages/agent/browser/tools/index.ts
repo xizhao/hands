@@ -12,10 +12,10 @@ import { z } from "zod";
 // ============================================================================
 
 export interface DatabaseContext {
-  /** Execute a read query */
-  query: (sql: string, params?: unknown[]) => unknown[];
-  /** Execute a mutation (INSERT/UPDATE/DELETE) */
-  execute: (sql: string, params?: unknown[]) => void;
+  /** Execute a read query (sync or async) */
+  query: (sql: string, params?: unknown[]) => unknown[] | Promise<unknown[]>;
+  /** Execute a mutation (INSERT/UPDATE/DELETE) (sync or async) */
+  execute: (sql: string, params?: unknown[]) => void | Promise<void>;
   /** Get current schema */
   getSchema: () => Array<{
     table_name: string;
@@ -40,6 +40,8 @@ export interface ToolContext {
   db?: DatabaseContext;
   /** Abort signal for cancellation */
   abortSignal?: AbortSignal;
+  /** CORS proxy URL prefix (e.g., "https://corsproxy.io/?") */
+  corsProxy?: string;
 }
 
 // ============================================================================
@@ -77,10 +79,10 @@ The database uses SQLite syntax.`,
           return { error: "Only SELECT and PRAGMA queries allowed. Use sql_execute for mutations." };
         }
 
-        const rows = ctx.db.query(sql, params);
+        const rows = await ctx.db.query(sql, params);
         return {
           rows,
-          rowCount: rows.length,
+          rowCount: Array.isArray(rows) ? rows.length : 0,
         };
       } catch (error) {
         return { error: error instanceof Error ? error.message : String(error) };
@@ -104,7 +106,7 @@ Use this for any data modifications. The database uses SQLite syntax.`,
       }
 
       try {
-        ctx.db.execute(sql, params);
+        await ctx.db.execute(sql, params);
         ctx.db.notifyChange();
         return { success: true, message: "Query executed successfully" };
       } catch (error) {
@@ -147,11 +149,11 @@ Use this to understand the data structure before writing queries.`,
 // Web Tools
 // ============================================================================
 
-export function createWebFetchTool(_ctx: ToolContext): ToolDefinition {
+export function createWebFetchTool(ctx: ToolContext): ToolDefinition {
   return {
     description: `Fetch content from a URL. Returns the response body as text.
 Useful for retrieving data from APIs or web pages.
-Note: Subject to CORS restrictions in browser.`,
+Uses CORS proxy for cross-origin requests when configured.`,
     parameters: z.object({
       url: z.string().url().describe("The URL to fetch"),
       method: z.enum(["GET", "POST", "PUT", "DELETE"]).optional().describe("HTTP method (default: GET)"),
@@ -167,7 +169,12 @@ Note: Subject to CORS restrictions in browser.`,
       };
 
       try {
-        const response = await fetch(url, {
+        // Use CORS proxy for cross-origin requests
+        const targetUrl = ctx.corsProxy
+          ? `${ctx.corsProxy}${encodeURIComponent(url)}`
+          : url;
+
+        const response = await fetch(targetUrl, {
           method,
           headers,
           body,
@@ -199,6 +206,121 @@ Note: Subject to CORS restrictions in browser.`,
       }
     },
   };
+}
+
+export function createWebSearchTool(ctx: ToolContext): ToolDefinition {
+  return {
+    description: `Search the web using DuckDuckGo. Returns search results with titles, URLs, and snippets.
+Use for finding information, documentation, or researching topics.`,
+    parameters: z.object({
+      query: z.string().describe("The search query"),
+      maxResults: z.number().optional().describe("Maximum results to return (default: 10)"),
+    }),
+    execute: async (args: unknown) => {
+      const { query, maxResults = 10 } = args as { query: string; maxResults?: number };
+
+      try {
+        const encodedQuery = encodeURIComponent(query);
+        const searchUrl = `https://html.duckduckgo.com/html/?q=${encodedQuery}`;
+
+        // Use CORS proxy for cross-origin request
+        const targetUrl = ctx.corsProxy
+          ? `${ctx.corsProxy}${encodeURIComponent(searchUrl)}`
+          : searchUrl;
+
+        const response = await fetch(targetUrl, {
+          headers: {
+            Accept: "text/html",
+          },
+        });
+
+        if (!response.ok) {
+          return { error: `Search failed: ${response.status} ${response.statusText}` };
+        }
+
+        const html = await response.text();
+        const results = parseSearchResults(html, maxResults);
+
+        if (results.length === 0) {
+          return { message: `No results found for "${query}"`, results: [] };
+        }
+
+        return { query, results };
+      } catch (error) {
+        return { error: error instanceof Error ? error.message : String(error) };
+      }
+    },
+  };
+}
+
+/** Parse DuckDuckGo HTML search results */
+function parseSearchResults(html: string, maxResults: number): Array<{ title: string; url: string; snippet: string }> {
+  const results: Array<{ title: string; url: string; snippet: string }> = [];
+
+  // Try JSON data first (most reliable)
+  const jsonMatch = html.match(/DDG\.pageLayout\.load\('d',(\[.*?\])\)/);
+  if (jsonMatch) {
+    try {
+      const data = JSON.parse(jsonMatch[1]);
+      for (const item of data) {
+        if (item.u && item.t) {
+          results.push({
+            title: item.t,
+            url: item.u,
+            snippet: item.a || "",
+          });
+          if (results.length >= maxResults) break;
+        }
+      }
+      return results;
+    } catch {
+      // Fall through to HTML parsing
+    }
+  }
+
+  // Parse HTML result blocks
+  const blocks = html.split(/<div[^>]*class="[^"]*result[^"]*"[^>]*>/i).slice(1);
+
+  for (const block of blocks) {
+    if (results.length >= maxResults) break;
+
+    // Extract URL
+    const urlMatch = block.match(/uddg=([^&"]+)/);
+    const directUrlMatch = block.match(/href="(https?:\/\/[^"]+)"/);
+
+    // Extract title
+    const titleMatch = block.match(/<a[^>]*class="[^"]*result__a[^"]*"[^>]*>([^<]+)<\/a>/i);
+    const altTitleMatch = block.match(/<h2[^>]*>([^<]+)<\/h2>/i);
+
+    // Extract snippet
+    const snippetMatch = block.match(/<a[^>]*class="[^"]*result__snippet[^"]*"[^>]*>([^<]+)/i);
+    const altSnippetMatch = block.match(/<span[^>]*class="[^"]*result__snippet[^"]*"[^>]*>([^<]+)/i);
+
+    const url = urlMatch ? decodeURIComponent(urlMatch[1]) : directUrlMatch?.[1] || null;
+    const title = titleMatch?.[1] || altTitleMatch?.[1];
+    const snippet = snippetMatch?.[1] || altSnippetMatch?.[1] || "";
+
+    if (url && title) {
+      results.push({
+        title: decodeHtmlEntities(title.trim()),
+        url,
+        snippet: decodeHtmlEntities(snippet.trim()),
+      });
+    }
+  }
+
+  return results;
+}
+
+/** Decode HTML entities */
+function decodeHtmlEntities(text: string): string {
+  return text
+    .replace(/&amp;/g, "&")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/&nbsp;/g, " ");
 }
 
 // ============================================================================
@@ -340,15 +462,17 @@ Writes MDX content to the specified path.`,
 // Tool Registry
 // ============================================================================
 
+// Tool IDs aligned with OpenCode SDK naming
 export type ToolId =
-  | "sql_query"
-  | "sql_execute"
-  | "sql_schema"
-  | "web_fetch"
-  | "code_execute"
-  | "page_list"
-  | "page_read"
-  | "page_write";
+  | "sql"           // Query database (read-only)
+  | "sql_execute"   // Execute database mutations
+  | "schema"        // Show database schema
+  | "webfetch"      // Fetch a URL
+  | "websearch"     // Search the web
+  | "code"          // Execute JavaScript code
+  | "glob"          // List pages/files
+  | "read"          // Read page content
+  | "write";        // Write page content
 
 export interface ToolRegistry {
   tools: Record<string, ToolDefinition>;
@@ -357,71 +481,90 @@ export interface ToolRegistry {
 
 /**
  * Create a tool registry with all available browser tools.
+ * Tool names aligned with OpenCode SDK naming conventions.
  */
 export function createToolRegistry(ctx: ToolContext): ToolRegistry {
   const allTools: Record<ToolId, ToolDefinition> = {
-    sql_query: createSqlQueryTool(ctx),
+    sql: createSqlQueryTool(ctx),
     sql_execute: createSqlExecuteTool(ctx),
-    sql_schema: createSqlSchemaTool(ctx),
-    web_fetch: createWebFetchTool(ctx),
-    code_execute: createCodeExecuteTool(ctx),
-    page_list: createPageListTool(ctx),
-    page_read: createPageReadTool(ctx),
-    page_write: createPageWriteTool(ctx),
+    schema: createSqlSchemaTool(ctx),
+    webfetch: createWebFetchTool(ctx),
+    websearch: createWebSearchTool(ctx),
+    code: createCodeExecuteTool(ctx),
+    glob: createPageListTool(ctx),
+    read: createPageReadTool(ctx),
+    write: createPageWriteTool(ctx),
   };
 
   return {
     tools: allTools,
     getTools: (ids?: ToolId[]) => {
       if (!ids) return allTools;
-      return Object.fromEntries(ids.map((id) => [id, allTools[id]])) as Record<string, ToolDefinition>;
+      // Filter out tool IDs that don't exist in the browser registry
+      // (e.g., desktop-only tools like 'sources', 'secrets', 'navigate', 'polars')
+      return Object.fromEntries(
+        ids
+          .filter((id) => id in allTools && allTools[id as keyof typeof allTools] !== undefined)
+          .map((id) => [id, allTools[id as keyof typeof allTools]])
+      ) as Record<string, ToolDefinition>;
     },
   };
 }
 
 // ============================================================================
-// Default Tool Sets
+// Default Tool Sets (aligned with OpenCode SDK naming)
 // ============================================================================
 
 /** Tools for data analysis tasks */
-export const DATA_TOOLS: ToolId[] = ["sql_query", "sql_schema", "code_execute"];
+export const DATA_TOOLS: ToolId[] = ["sql", "schema", "code"];
+
+/** Tools for web research */
+export const RESEARCH_TOOLS: ToolId[] = ["webfetch", "websearch"];
 
 /** Tools for content editing */
-export const CONTENT_TOOLS: ToolId[] = ["page_list", "page_read", "page_write"];
+export const CONTENT_TOOLS: ToolId[] = ["glob", "read", "write"];
 
 /** All available tools */
 export const ALL_TOOLS: ToolId[] = [
-  "sql_query",
+  "sql",
   "sql_execute",
-  "sql_schema",
-  "web_fetch",
-  "code_execute",
-  "page_list",
-  "page_read",
-  "page_write",
+  "schema",
+  "webfetch",
+  "websearch",
+  "code",
+  "glob",
+  "read",
+  "write",
 ];
 
 // ============================================================================
 // Convert to AI SDK ToolSet format
 // ============================================================================
 
-import { tool } from "ai";
+import type { Tool, ToolSet, ToolCallOptions } from "ai";
 
 /**
- * Convert our tool definitions to AI SDK's ToolSet format
+ * Convert our tool definitions to AI SDK's ToolSet format.
+ * Maps our ToolDefinition (with `parameters`) to AI SDK Tool (with `inputSchema`).
  */
-export function toAISDKTools(tools: Record<string, ToolDefinition>): Record<string, unknown> {
-  const result: Record<string, unknown> = {};
+export function toAISDKTools(tools: Record<string, ToolDefinition>): ToolSet {
+  const result: ToolSet = {};
 
   for (const [name, def] of Object.entries(tools)) {
-    // AI SDK v6 has strict overload typing for tool execute functions
-    // Bypass with type assertion to handle the version mismatch
-    const toolConfig = {
+    // Skip undefined tool definitions (can happen if tool ID isn't in registry)
+    if (!def) {
+      console.warn(`[toAISDKTools] Skipping undefined tool: ${name}`);
+      continue;
+    }
+
+    // Create a Tool object with proper typing
+    // Our ToolDefinition.parameters maps to Tool.inputSchema
+    const aiTool: Tool<unknown, unknown> = {
       description: def.description,
-      parameters: def.parameters,
-      execute: async (args: unknown) => def.execute(args),
+      inputSchema: def.parameters,
+      execute: async (input: unknown, _options: ToolCallOptions) => def.execute(input),
     };
-    result[name] = tool(toolConfig as unknown as Parameters<typeof tool>[0]);
+    result[name] = aiTool;
   }
 
   return result;

@@ -9,6 +9,7 @@
  */
 
 import { useCallback, useEffect, useState } from "react";
+import { getStoredConfig, setStoredConfig } from "@hands/agent/browser";
 import { PORTS } from "@/lib/ports";
 import { usePlatform } from "../platform";
 
@@ -43,21 +44,19 @@ export function useSettings() {
   // Load settings on mount
   useEffect(() => {
     async function loadSettings() {
-      if (!platform.storage) {
-        setLoading(false);
-        return;
-      }
-
       try {
-        const saved = await platform.storage.get<Settings>("settings");
-        if (saved) {
-          setSettings({ ...defaultSettings, ...saved });
+        // Load general settings from platform storage
+        if (platform.storage) {
+          const saved = await platform.storage.get<Settings>("settings");
+          if (saved) {
+            setSettings({ ...defaultSettings, ...saved });
+          }
         }
 
-        // Load API key
-        const openrouterKey = await platform.storage.get<string>("openrouter_api_key");
-        if (openrouterKey) {
-          setApiKeys({ openrouter_api_key: openrouterKey });
+        // Load API key from agent's storage (single source of truth)
+        const config = getStoredConfig();
+        if (config?.apiKey) {
+          setApiKeys({ openrouter_api_key: config.apiKey });
         }
       } catch (error) {
         console.error("Failed to load settings:", error);
@@ -85,21 +84,13 @@ export function useSettings() {
     [settings, platform.storage],
   );
 
-  // Update the API key
-  const updateApiKey = useCallback(
-    async (value: string) => {
-      setApiKeys({ openrouter_api_key: value });
-
-      try {
-        if (platform.storage) {
-          await platform.storage.set("openrouter_api_key", value);
-        }
-      } catch (error) {
-        console.error("Failed to save API key:", error);
-      }
-    },
-    [platform.storage],
-  );
+  // Update the API key (uses agent's storage as single source of truth)
+  const updateApiKey = useCallback((value: string) => {
+    setApiKeys({ openrouter_api_key: value });
+    if (value) {
+      setStoredConfig({ type: "openrouter", apiKey: value });
+    }
+  }, []);
 
   // Save all settings at once
   const saveSettings = useCallback(

@@ -27,14 +27,16 @@ export interface ModelConfig {
 }
 
 // ============================================================================
-// Provider Registry
+// Storage Keys (exported for type-safe access across packages)
 // ============================================================================
 
-const STORAGE_KEYS = {
+export const STORAGE_KEYS = {
   openrouter: "hands_openrouter_key",
   anthropic: "hands_anthropic_key",
   openai: "hands_openai_key",
 } as const;
+
+export type StorageKey = (typeof STORAGE_KEYS)[keyof typeof STORAGE_KEYS];
 
 const DEFAULT_MODELS: Record<ProviderType, string> = {
   openrouter: "anthropic/claude-sonnet-4-20250514",

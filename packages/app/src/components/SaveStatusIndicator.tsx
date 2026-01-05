@@ -189,24 +189,23 @@ export function SaveStatusIndicator() {
   }, [handleSave]);
 
   return (
-    <Popover open={isOpen} onOpenChange={setIsOpen}>
-      <Tooltip>
-        <TooltipTrigger asChild>
-          <PopoverTrigger asChild>
-            <button
+    <Tooltip>
+      <Popover open={isOpen} onOpenChange={setIsOpen}>
+        <PopoverTrigger asChild>
+          <TooltipTrigger asChild>
+            <div
               className={cn(
-                "flex items-center justify-center w-5 h-5 rounded-sm transition-colors",
+                "flex items-center justify-center w-5 h-5 rounded-sm transition-colors cursor-pointer",
                 "hover:bg-accent/50",
               )}
             >
               <span className={cn("w-2 h-2 rounded-full transition-colors", getDotColor())} />
-            </button>
-          </PopoverTrigger>
-        </TooltipTrigger>
+            </div>
+          </TooltipTrigger>
+        </PopoverTrigger>
         <TooltipContent side="bottom" className="text-[11px]">
           {getStatusText()}
         </TooltipContent>
-      </Tooltip>
 
       <PopoverContent side="bottom" align="start" className="w-[260px] p-0">
         {/* Status header with action button */}
@@ -351,6 +350,7 @@ export function SaveStatusIndicator() {
           </div>
         )}
       </PopoverContent>
-    </Popover>
+      </Popover>
+    </Tooltip>
   );
 }

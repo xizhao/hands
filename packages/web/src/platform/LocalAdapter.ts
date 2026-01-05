@@ -84,23 +84,10 @@ async function getIdb(): Promise<IDBPDatabase<LocalDBSchema>> {
 }
 
 // ============================================================================
-// Settings Management
-// ============================================================================
-
-export function getApiKey(): string | null {
-  return localStorage.getItem("hands_openrouter_key");
-}
-
-export function setApiKey(key: string | null): void {
-  if (key) {
-    localStorage.setItem("hands_openrouter_key", key);
-  } else {
-    localStorage.removeItem("hands_openrouter_key");
-  }
-}
-
-// ============================================================================
 // Page Storage
+//
+// NOTE: API key storage is handled by @hands/agent/browser
+// Use getStoredConfig/setStoredConfig from there for API keys
 // ============================================================================
 
 export async function listPages(workbookId: string): Promise<LocalPageData[]> {
@@ -229,7 +216,7 @@ export function createLocalPlatformAdapter(): PlatformAdapter {
         return {
           running: true,
           workbook_id: currentWorkbookId,
-          directory: "", // No directory in browser
+          directory: undefined, // No directory in browser - must match SSE events
           // Use a sentinel value (1) to indicate "local mode" - no real server
           runtime_port: 1,
           message: workbook ? "Local mode active" : "Workbook not found",

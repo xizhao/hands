@@ -132,6 +132,8 @@ export function useMessages(sessionId: string | null) {
     refetchOnMount: true,
     // Poll while session is busy (fallback for SSE), but less frequently
     refetchInterval: isBusy ? 2000 : false,
+    // Disable structural sharing to ensure streaming updates trigger re-renders
+    structuralSharing: false,
     // Retry on transient errors (like mid-stream fetches)
     retry: (failureCount, error) => {
       const errorMsg = error instanceof Error ? error.message : String(error);

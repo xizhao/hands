@@ -9,10 +9,13 @@ import { App, PlatformProvider } from "@hands/app";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import React, { useEffect, useState, useMemo } from "react";
 import ReactDOM from "react-dom/client";
-import { LocalDatabaseProvider } from "./db/LocalDatabaseProvider";
-import { LocalTRPCProvider } from "./trpc/LocalTRPCProvider";
-import { createLocalPlatformAdapter } from "./platform/LocalAdapter";
-import "./index.css";
+import { Header } from "../shared/components";
+import { getWorkbookIdFromUrl } from "../shared/lib/storage";
+import { LocalDatabaseProvider } from "../db/LocalDatabaseProvider";
+import { LocalTRPCProvider } from "../trpc/LocalTRPCProvider";
+import { AgentProvider } from "../agent/AgentProvider";
+import { createLocalPlatformAdapter } from "../platform/LocalAdapter";
+import "../index.css";
 
 // ============================================================================
 // Query Client
@@ -27,25 +30,6 @@ const queryClient = new QueryClient({
   },
 });
 
-// ============================================================================
-// Helpers
-// ============================================================================
-
-/** Hide the HTML initial loader */
-function hideInitialLoader() {
-  const loader = document.getElementById("initial-loader");
-  if (loader) {
-    loader.classList.add("hidden");
-    setTimeout(() => loader.remove(), 200);
-  }
-}
-
-/** Get workbook ID from URL path: /w/:id */
-function getWorkbookIdFromUrl(): string | null {
-  const path = window.location.pathname;
-  const match = path.match(/^\/w\/([^/]+)/);
-  return match ? match[1] : null;
-}
 
 // ============================================================================
 // Editor App
@@ -59,47 +43,54 @@ function EditorApp() {
 
   useEffect(() => {
     async function init() {
-      // If URL has workbook ID, use that
+      // If URL has workbook ID, validate it exists
       if (urlWorkbookId) {
         const workbooks = await adapter.workbook.list();
         const found = workbooks.find((w) => w.id === urlWorkbookId);
         if (found) {
           setWorkbookId(urlWorkbookId);
           setIsReady(true);
-          hideInitialLoader();
+          return;
+        } else {
+          // Workbook not found, redirect to landing
+          console.warn("[Main] Workbook not found:", urlWorkbookId);
+          window.location.href = "/";
           return;
         }
       }
 
-      // Otherwise, use first existing or create new
-      const workbooks = await adapter.workbook.list();
-      console.log("[Main] Existing workbooks:", workbooks.map((w) => ({ id: w.id, name: w.name })));
-
-      if (workbooks.length > 0) {
-        console.log("[Main] Using existing workbook:", workbooks[0].id);
-        setWorkbookId(workbooks[0].id);
-      } else {
-        const wb = await adapter.workbook.create("My Workbook");
-        console.log("[Main] Created new workbook:", wb.id);
-        setWorkbookId(wb.id);
-      }
-
-      setIsReady(true);
-      hideInitialLoader();
+      // No workbook ID in URL - redirect to landing
+      console.log("[Main] No workbook ID in URL, redirecting to landing");
+      window.location.href = "/";
     }
 
     init();
   }, [adapter, urlWorkbookId]);
 
+  // Show header with loading state while initializing
   if (!isReady) {
-    return null;
+    return (
+      <div className="h-screen flex flex-col bg-background">
+        <Header />
+        <div className="flex-1 flex items-center justify-center">
+          <div className="w-5 h-5 border-2 border-muted-foreground/30 border-t-muted-foreground rounded-full animate-spin" />
+        </div>
+      </div>
+    );
   }
 
   return (
     <PlatformProvider adapter={adapter}>
       <LocalDatabaseProvider initialWorkbookId={workbookId ?? undefined}>
         <LocalTRPCProvider queryClient={queryClient}>
-          <App />
+          <AgentProvider>
+            <div className="h-screen flex flex-col">
+              <Header />
+              <div className="flex-1 min-h-0">
+                <App />
+              </div>
+            </div>
+          </AgentProvider>
         </LocalTRPCProvider>
       </LocalDatabaseProvider>
     </PlatformProvider>

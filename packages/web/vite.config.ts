@@ -1,10 +1,26 @@
 import path from "node:path";
 import alias from "@rollup/plugin-alias";
 import react from "@vitejs/plugin-react";
-import { defineConfig } from "vite";
+import { defineConfig, type Plugin } from "vite";
+
+// Rewrite /w/* paths to /w/index.html for SPA routing within /w/
+function mpaHistoryFallback(): Plugin {
+  return {
+    name: "mpa-history-fallback",
+    configureServer(server) {
+      server.middlewares.use((req, _res, next) => {
+        // Rewrite /w/* paths (except static assets) to /w/index.html
+        if (req.url?.startsWith("/w/") && !req.url.includes(".")) {
+          req.url = "/w/index.html";
+        }
+        next();
+      });
+    },
+  };
+}
 
 export default defineConfig({
-  plugins: [react()],
+  plugins: [react(), mpaHistoryFallback()],
   worker: {
     format: "es",
     rollupOptions: {
@@ -32,7 +48,16 @@ export default defineConfig({
     // Ensure single instances of these packages (prevents context/store issues)
     dedupe: ["react", "react-dom", "jotai", "jotai-x", "platejs"],
     alias: [
-      // @hands/app uses @/ for its own imports - must come first
+      // Override @/lib/api to use browser API instead of opencode SDK
+      { find: "@/lib/api", replacement: path.resolve(__dirname, "src/lib/api.ts") },
+
+      // Map @opencode-ai/sdk types to our core agent types
+      {
+        find: "@opencode-ai/sdk/client",
+        replacement: path.resolve(__dirname, "../agent/core/index.ts"),
+      },
+
+      // @hands/app uses @/ for its own imports - must come after specific overrides
       { find: /^@\/(.*)/, replacement: path.resolve(__dirname, "../app/src/$1") },
 
       // @hands/core explicit exports (from package.json)
@@ -63,6 +88,10 @@ export default defineConfig({
       // CSS imports
       { find: "@hands/app/styles.css", replacement: path.resolve(__dirname, "../app/src/index.css") },
       { find: "@hands/core/styles/theme.css", replacement: path.resolve(__dirname, "../core/src/styles/theme.css") },
+
+      // @hands/agent exports
+      { find: "@hands/agent/core", replacement: path.resolve(__dirname, "../agent/core/index.ts") },
+      { find: "@hands/agent/browser", replacement: path.resolve(__dirname, "../agent/browser/index.ts") },
 
       // Base package aliases
       { find: "@hands/app", replacement: path.resolve(__dirname, "../app/src") },

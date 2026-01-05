@@ -5,27 +5,11 @@
  * - Workbook dropdown header with traffic light offset
  * - Search/prompt input that filters NotebookSidebar content
  * - On submit, switches to chat mode with inline ChatPanel
- * - Two modes: "browse" (NotebookSidebar) and "chat" (ChatPanel)
  */
 
+import { usePlatform } from "@/platform";
 import { useRouter } from "@tanstack/react-router";
 // Note: invoke is no longer needed - we handle chat locally now
-import {
-  ArrowUp,
-  Camera,
-  Check,
-  ChevronDown,
-  ChevronLeft,
-  ChevronRight,
-  File,
-  Folder,
-  Loader2,
-  MessageSquare,
-  Paperclip,
-  Plus,
-  Search,
-} from "lucide-react";
-import { useCallback, useEffect, useRef, useState } from "react";
 import { ChatPanel } from "@/components/chat/ChatPanel";
 import { SaveStatusIndicator } from "@/components/SaveStatusIndicator";
 import { Button } from "@/components/ui/button";
@@ -36,12 +20,19 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Popover, PopoverAnchor, PopoverContent } from "@/components/ui/popover";
+import {
+  Popover,
+  PopoverAnchor,
+  PopoverContent,
+} from "@/components/ui/popover";
 import { ATTACHMENT_TYPE, useChatState } from "@/hooks/useChatState";
 import { useFilePicker } from "@/hooks/useFilePicker";
 import { useNeedsTrafficLightOffset } from "@/hooks/useFullscreen";
 import { useActiveSession } from "@/hooks/useNavState";
-import { useActiveWorkbookDirectory, useRuntimeProcess } from "@/hooks/useRuntimeState";
+import {
+  useActiveWorkbookDirectory,
+  useRuntimeProcess,
+} from "@/hooks/useRuntimeState";
 import { useCreateSession, useSendMessage } from "@/hooks/useSession";
 import {
   useCreateWorkbook,
@@ -52,19 +43,39 @@ import {
 } from "@/hooks/useWorkbook";
 import { cn } from "@/lib/utils";
 import type { Workbook } from "@/lib/workbook";
-import { DomainSidebar } from "./domain/DomainSidebar";
+import {
+  ArrowUp,
+  Camera,
+  Check,
+  ChevronDown,
+  ChevronLeft,
+  ChevronRight,
+  File,
+  Folder,
+  Loader2,
+  Paperclip,
+  Plus,
+  Search,
+} from "lucide-react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { resetSidebarState } from "./notebook/hooks/useSidebarState";
 
 interface UnifiedSidebarProps {
   compact?: boolean;
   floating?: boolean;
-  onSelectItem?: (type: "page" | "source" | "table" | "action", id: string) => void;
+  onSelectItem?: (
+    type: "page" | "source" | "table" | "action",
+    id: string
+  ) => void;
 }
 
-type SidebarMode = "browse" | "chat";
-
-export function UnifiedSidebar({ compact = false, floating = false, onSelectItem }: UnifiedSidebarProps) {
+export function UnifiedSidebar({
+  compact = false,
+  floating = false,
+  onSelectItem,
+}: UnifiedSidebarProps) {
   const router = useRouter();
+  const platform = usePlatform();
   const chatState = useChatState();
   const { workbookId: activeWorkbookId } = useRuntimeProcess();
   const workbookDirectory = useActiveWorkbookDirectory();
@@ -81,11 +92,9 @@ export function UnifiedSidebar({ compact = false, floating = false, onSelectItem
   const { data: activeWorkbook } = useWorkbook(activeWorkbookId);
   const titleInputRef = useRef<HTMLSpanElement>(null);
 
-  // Mode: browse or chat
-  const [mode, setMode] = useState<SidebarMode>("browse");
-
   // Session state for chat mode
-  const { sessionId: activeSessionId, setSession: setActiveSessionId } = useActiveSession();
+  const { sessionId: activeSessionId, setSession: setActiveSessionId } =
+    useActiveSession();
   const createSession = useCreateSession();
   const sendMessage = useSendMessage();
 
@@ -114,6 +123,68 @@ export function UnifiedSidebar({ compact = false, floating = false, onSelectItem
     return () => observer.disconnect();
   }, []);
 
+  // Handle initial prompt from URL (?q=...)
+  const initialPromptHandled = useRef(false);
+  const [pendingInitialPrompt, setPendingInitialPrompt] = useState<
+    string | null
+  >(() => {
+    const params = new URLSearchParams(window.location.search);
+    return params.get("q");
+  });
+
+  // Process initial prompt once workbook directory is ready
+  useEffect(() => {
+    if (initialPromptHandled.current) return;
+    if (!pendingInitialPrompt) return;
+    if (!workbookDirectory) return;
+
+    initialPromptHandled.current = true;
+    const prompt = pendingInitialPrompt;
+    setPendingInitialPrompt(null);
+
+    // Clear URL param
+    const url = new URL(window.location.href);
+    url.searchParams.delete("q");
+    window.history.replaceState({}, "", url.toString());
+
+    // Switch to chat mode and create session with message
+    setIsSubmitting(true);
+
+    createSession.mutate(undefined, {
+      onSuccess: (newSession) => {
+        setActiveSessionId(newSession.id);
+        sendMessage.mutate(
+          { sessionId: newSession.id, content: prompt },
+          {
+            onError: (err) => {
+              console.error(
+                "[UnifiedSidebar] Failed to send initial prompt:",
+                err
+              );
+              setIsSubmitting(false);
+            },
+            onSettled: () => {
+              setIsSubmitting(false);
+            },
+          }
+        );
+      },
+      onError: (err) => {
+        console.error(
+          "[UnifiedSidebar] Failed to create session for initial prompt:",
+          err
+        );
+        setIsSubmitting(false);
+      },
+    });
+  }, [
+    pendingInitialPrompt,
+    workbookDirectory,
+    createSession,
+    sendMessage,
+    setActiveSessionId,
+  ]);
+
   // Filter query for NotebookSidebar
   const filterQuery = input.trim();
 
@@ -124,16 +195,15 @@ export function UnifiedSidebar({ compact = false, floating = false, onSelectItem
 
     // Check if directory is available (required for chat)
     if (!workbookDirectory) {
-      console.warn("[UnifiedSidebar] Cannot submit - workbook directory not yet available");
+      console.warn(
+        "[UnifiedSidebar] Cannot submit - workbook directory not yet available"
+      );
       return;
     }
 
     setIsSubmitting(true);
     setInput("");
     setIsInputExpanded(false);
-
-    // Switch to chat mode
-    setMode("chat");
 
     // Create new session and send message
     if (!activeSessionId) {
@@ -150,7 +220,7 @@ export function UnifiedSidebar({ compact = false, floating = false, onSelectItem
               onSettled: () => {
                 setIsSubmitting(false);
               },
-            },
+            }
           );
         },
         onError: (err) => {
@@ -168,10 +238,17 @@ export function UnifiedSidebar({ compact = false, floating = false, onSelectItem
           onSettled: () => {
             setIsSubmitting(false);
           },
-        },
+        }
       );
     }
-  }, [input, activeSessionId, createSession, sendMessage, setActiveSessionId, workbookDirectory]);
+  }, [
+    input,
+    activeSessionId,
+    createSession,
+    sendMessage,
+    setActiveSessionId,
+    workbookDirectory,
+  ]);
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === "Enter" && !e.shiftKey) {
@@ -208,7 +285,7 @@ export function UnifiedSidebar({ compact = false, floating = false, onSelectItem
       resetSidebarState();
       openWorkbook.mutate(workbook);
     },
-    [openWorkbook],
+    [openWorkbook]
   );
 
   const handleCreateWorkbook = useCallback(() => {
@@ -223,7 +300,7 @@ export function UnifiedSidebar({ compact = false, floating = false, onSelectItem
             },
           });
         },
-      },
+      }
     );
   }, [createWorkbook, openWorkbook, router]);
 
@@ -245,7 +322,7 @@ export function UnifiedSidebar({ compact = false, floating = false, onSelectItem
       data-tauri-drag-region
       className={cn(
         "shrink-0 flex items-center gap-1 h-10",
-        needsTrafficLightOffset ? "pl-[80px] pr-3" : "px-3",
+        needsTrafficLightOffset ? "pl-[80px] pr-3" : "px-3"
       )}
     >
       {/* Editable workbook title */}
@@ -276,7 +353,7 @@ export function UnifiedSidebar({ compact = false, floating = false, onSelectItem
           "px-1 py-0.5 text-sm font-medium bg-transparent rounded-sm cursor-text",
           "outline-none truncate max-w-[140px]",
           "hover:bg-accent/50",
-          "focus:bg-background focus:ring-1 focus:ring-ring/20",
+          "focus:bg-background focus:ring-1 focus:ring-ring/20"
         )}
         spellCheck={false}
       >
@@ -359,7 +436,7 @@ export function UnifiedSidebar({ compact = false, floating = false, onSelectItem
           <div
             className={cn(
               "flex-1 min-w-0 py-0.5 text-sm overflow-hidden text-ellipsis whitespace-nowrap",
-              input ? "text-foreground" : "text-muted-foreground/50",
+              input ? "text-foreground" : "text-muted-foreground/50"
             )}
           >
             {input || placeholder}
@@ -432,7 +509,10 @@ export function UnifiedSidebar({ compact = false, floating = false, onSelectItem
               setInput(e.target.value);
               // Auto-resize
               e.target.style.height = "auto";
-              e.target.style.height = `${Math.min(e.target.scrollHeight, 120)}px`;
+              e.target.style.height = `${Math.min(
+                e.target.scrollHeight,
+                120
+              )}px`;
             }}
             onKeyDown={(e) => {
               if (e.key === "Escape") {
@@ -523,85 +603,32 @@ export function UnifiedSidebar({ compact = false, floating = false, onSelectItem
     </div>
   );
 
-  // Browse content
-  const browseContent = (
-    <div className={cn(compact ? "p-2" : "p-3")}>
-      <DomainSidebar filterQuery={filterQuery} />
-    </div>
-  );
-
-  // Chat content (ChatPanel)
-  // Note: Don't pass onBack - we want back to show threads, not switch to browse mode
-  const chatContent = (
-    <ChatPanel
-      sessionId={activeSessionId}
-      onSessionSelect={setActiveSessionId}
-      compact={true}
-      showBackButton={true}
-    />
-  );
-
-  // Handle session selection - switch to chat mode when a session is selected
-  const _handleSessionSelect = useCallback(
-    (id: string | null) => {
-      setActiveSessionId(id);
-      if (id) {
-        setMode("chat");
-      }
-    },
-    [setActiveSessionId],
-  );
-
   // ============================================================================
   // Render
   // ============================================================================
 
+  // Web platform has its own header with workbook switcher
+  const showWorkbookHeader = platform.platform !== "web";
+
   return (
-    <div ref={containerRef} className={cn("flex flex-col h-full w-full", floating && "overflow-hidden")}>
-      {/* Workbook header with traffic light offset */}
-      {workbookHeader}
-
-      {/* Mode switcher - always visible */}
-      <div className={cn("shrink-0 flex items-center gap-1 py-2", compact ? "px-2" : "px-3")}>
-        <div className="flex items-center gap-0.5 p-0.5 bg-accent/30 rounded-lg">
-          <button
-            onClick={() => setMode("browse")}
-            className={cn(
-              "flex items-center gap-1.5 px-2.5 py-1 text-xs rounded-md transition-all",
-              mode === "browse"
-                ? "bg-background text-foreground shadow-sm"
-                : "text-muted-foreground hover:text-foreground",
-            )}
-          >
-            <Search className="h-3 w-3" />
-            <span>Browse</span>
-          </button>
-          <button
-            onClick={() => setMode("chat")}
-            className={cn(
-              "flex items-center gap-1.5 px-2.5 py-1 text-xs rounded-md transition-all",
-              mode === "chat"
-                ? "bg-background text-foreground shadow-sm"
-                : "text-muted-foreground hover:text-foreground",
-            )}
-          >
-            <MessageSquare className="h-3 w-3" />
-            <span>Chat</span>
-          </button>
-        </div>
-      </div>
-
-      {/* Input bar - only show in browse mode */}
-      {mode === "browse" && (
-        <div className={cn("shrink-0 py-2", compact ? "px-2" : "px-3")}>
-          {attachmentPreview}
-          {inputElement}
-        </div>
+    <div
+      ref={containerRef}
+      className={cn(
+        "flex flex-col h-full w-full",
+        floating && "overflow-hidden"
       )}
+    >
+      {/* Workbook header with traffic light offset - only on desktop */}
+      {showWorkbookHeader && workbookHeader}
 
       {/* Content: Browse or Chat based on mode */}
       <div className="flex-1 overflow-y-auto min-h-0">
-        {mode === "browse" ? browseContent : chatContent}
+        <ChatPanel
+          sessionId={activeSessionId}
+          onSessionSelect={setActiveSessionId}
+          compact={true}
+          showBackButton={true}
+        />
       </div>
     </div>
   );

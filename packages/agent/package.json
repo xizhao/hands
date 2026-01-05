@@ -6,6 +6,7 @@
   "main": "src/index.ts",
   "exports": {
     ".": "./src/index.ts",
+    "./core": "./core/index.ts",
     "./browser": "./browser/index.ts",
     "./plugin/diagnostics": "./plugin/diagnostics.ts"
   },

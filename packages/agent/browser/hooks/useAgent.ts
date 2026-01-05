@@ -7,7 +7,7 @@
 
 import { useCallback, useRef, useState } from "react";
 import { runAgent } from "../agent";
-import { generateId, type MessageWithParts, type Session, type Part, type TextPart, type AgentConfig } from "../types";
+import { generateId, type MessageWithParts, type Session, type Part, type TextPart, type AgentConfig } from "../../core";
 import type { ToolContext, ToolId } from "../tools";
 
 // ============================================================================
@@ -27,16 +27,13 @@ You have access to tools for:
 - Fetching data from the web
 
 When analyzing data:
-1. First use sql_schema to understand the available tables
-2. Use sql_query to explore the data
+1. First use schema to understand the available tables
+2. Use sql to explore the data
 3. Provide clear explanations of your findings
 
 Be concise and helpful. Format responses in markdown when appropriate.`,
-  model: {
-    providerId: "openrouter",
-    modelId: "anthropic/claude-sonnet-4-20250514",
-  },
-  tools: ["sql_query", "sql_schema", "sql_execute", "code_execute", "page_list", "page_read", "page_write"],
+  model: "openrouter/anthropic/claude-sonnet-4-20250514",
+  tools: ["sql", "schema", "sql_execute", "code", "glob", "read", "write"],
 };
 
 // ============================================================================
@@ -100,13 +97,11 @@ export function useAgent(options: UseAgentOptions): UseAgentReturn {
     const newSessionData: Session = {
       id: generateId("session"),
       time: { created: Date.now(), updated: Date.now() },
-      agent: agent.id,
-      model: agent.model || { providerId: "openrouter", modelId: "anthropic/claude-sonnet-4-20250514" },
     };
     setSession(newSessionData);
     setMessages([]);
     setError(null);
-  }, [agent]);
+  }, []);
 
   /**
    * Send a message to the agent
@@ -122,8 +117,6 @@ export function useAgent(options: UseAgentOptions): UseAgentReturn {
         currentSession = {
           id: generateId("session"),
           time: { created: Date.now(), updated: Date.now() },
-          agent: agent.id,
-          model: agent.model || { providerId: "openrouter", modelId: "anthropic/claude-sonnet-4-20250514" },
         };
         setSession(currentSession);
       }
@@ -138,8 +131,6 @@ export function useAgent(options: UseAgentOptions): UseAgentReturn {
           sessionId,
           role: "user",
           time: { created: Date.now() },
-          agent: agent.id,
-          model: agent.model || { providerId: "openrouter", modelId: "anthropic/claude-sonnet-4-20250514" },
         },
         parts: [
           {

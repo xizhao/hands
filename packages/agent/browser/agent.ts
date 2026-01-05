@@ -5,27 +5,27 @@
  * Inspired by OpenCode's session/prompt.ts but adapted for browser.
  */
 
-import { streamText, type ToolSet, type ModelMessage, type LanguageModel } from "ai";
+import { streamText, convertToModelMessages, type ModelMessage, type UIMessage } from "ai";
 import type { AgentConfig as OpenCodeAgentConfig } from "@opencode-ai/sdk";
 import { createProviderFromStorage, getOpenRouterModelId } from "./provider";
 import { createToolRegistry, toAISDKTools, type ToolContext, type ToolId, ALL_TOOLS } from "./tools";
 import type {
-  AgentConfig as BrowserAgentConfig,
-  Session,
+  AgentConfig,
   MessageWithParts,
   Part,
   AgentEvent,
   TextPart,
   ToolPart,
-} from "./types";
-import { generateId } from "./types";
+  Session,
+} from "../core";
+import { generateId } from "../core";
 
 /**
- * Agent configuration - supports both OpenCode format and browser format.
+ * Agent configuration - supports both OpenCode format and core format.
  * OpenCode format uses model strings like "openrouter/anthropic/claude-opus-4.5"
- * Browser format uses { providerId, modelId } objects.
+ * Core format uses plain AgentConfig interface.
  */
-export type AgentConfigInput = OpenCodeAgentConfig | BrowserAgentConfig;
+export type AgentConfigInput = OpenCodeAgentConfig | AgentConfig;
 
 // ============================================================================
 // Types
@@ -111,7 +111,7 @@ async function* executeAgentLoop(options: AgentOptions): AsyncGenerator<AgentEve
     turn++;
 
     // Convert messages to AI SDK format
-    const coreMessages = convertToCoreMessages(messages);
+    const coreMessages = await convertToCoreMessages(messages);
 
     // Debug: log message format
     console.log("[agent] Turn", turn, "messages:", JSON.stringify(coreMessages, null, 2));
@@ -136,12 +136,11 @@ async function* executeAgentLoop(options: AgentOptions): AsyncGenerator<AgentEve
     yield { type: "step.started" };
 
     // Stream response
-    // Cast to LanguageModel to handle version differences between AI SDK and OpenRouter provider
     const result = streamText({
-      model: provider.chat(modelId) as unknown as LanguageModel,
+      model: provider.chat(modelId),
       system: systemPrompt,
       messages: coreMessages,
-      tools: tools as ToolSet,
+      tools,
       maxOutputTokens: getMaxTokens(agent) || 4096,
       temperature: agent.temperature,
       abortSignal: options.abortSignal,
@@ -341,76 +340,80 @@ async function* executeAgentLoop(options: AgentOptions): AsyncGenerator<AgentEve
 // Message Conversion
 // ============================================================================
 
-function convertToCoreMessages(messages: MessageWithParts[]): ModelMessage[] {
-  const result: ModelMessage[] = [];
+/**
+ * Convert our MessageWithParts format to AI SDK ModelMessage format.
+ * Uses UIMessage[] intermediate format + convertToModelMessages() like OpenCode.
+ */
+async function convertToCoreMessages(messages: MessageWithParts[]): Promise<ModelMessage[]> {
+  const uiMessages: UIMessage[] = [];
 
   for (const msg of messages) {
     if (msg.info.role === "user") {
-      const textParts = msg.parts
-        .filter((p): p is TextPart => p.type === "text")
-        .map((p) => p.text)
-        .join("\n");
+      const userMessage: UIMessage = {
+        id: msg.info.id,
+        role: "user",
+        parts: [],
+      };
 
-      if (textParts) {
-        result.push({ role: "user", content: textParts });
+      for (const part of msg.parts) {
+        if (part.type === "text") {
+          userMessage.parts.push({
+            type: "text",
+            text: part.text,
+          });
+        }
+      }
+
+      if (userMessage.parts.length > 0) {
+        uiMessages.push(userMessage);
       }
     }
 
     if (msg.info.role === "assistant") {
-      const textParts = msg.parts
-        .filter((p): p is TextPart => p.type === "text")
-        .map((p) => p.text)
-        .join("");
+      const assistantMessage: UIMessage = {
+        id: msg.info.id,
+        role: "assistant",
+        parts: [],
+      };
 
-      const toolParts = msg.parts.filter((p): p is ToolPart => p.type === "tool");
-
-      if (textParts || toolParts.length > 0) {
-        // Build content array with proper AI SDK types
-        const content: Array<
-          | { type: "text"; text: string }
-          | { type: "tool-call"; toolCallId: string; toolName: string; args: string }
-        > = [];
-
-        if (textParts) {
-          content.push({ type: "text", text: textParts });
-        }
-
-        for (const tool of toolParts) {
-          content.push({
-            type: "tool-call",
-            toolCallId: tool.callId,
-            toolName: tool.tool,
-            // AI SDK expects input as JSON string
-            args: typeof tool.state.input === "string"
-              ? tool.state.input
-              : JSON.stringify(tool.state.input),
+      for (const part of msg.parts) {
+        if (part.type === "text") {
+          assistantMessage.parts.push({
+            type: "text",
+            text: part.text,
           });
         }
 
-        // Use 'as any' to bypass strict typing - the runtime format is correct
-        result.push({ role: "assistant", content } as ModelMessage);
+        if (part.type === "tool") {
+          // Use the OpenCode pattern: type: "tool-{toolName}" with state
+          if (part.state.status === "completed") {
+            assistantMessage.parts.push({
+              type: `tool-${part.tool}` as `tool-${string}`,
+              state: "output-available",
+              toolCallId: part.callId,
+              input: part.state.input,
+              output: part.state.output,
+            });
+          } else if (part.state.status === "error") {
+            assistantMessage.parts.push({
+              type: `tool-${part.tool}` as `tool-${string}`,
+              state: "output-error",
+              toolCallId: part.callId,
+              input: part.state.input,
+              errorText: (part.state as { error?: string }).error || "Unknown error",
+            });
+          }
+        }
       }
 
-      // Add tool results
-      for (const tool of toolParts) {
-        if (tool.state.status === "completed") {
-          result.push({
-            role: "tool",
-            content: [
-              {
-                type: "tool-result",
-                toolCallId: tool.callId,
-                toolName: tool.tool,
-                result: tool.state.output,  // AI SDK uses 'result' not 'output'
-              },
-            ],
-          } as unknown as ModelMessage);
-        }
+      if (assistantMessage.parts.length > 0) {
+        uiMessages.push(assistantMessage);
       }
     }
   }
 
-  return result;
+  // Use AI SDK's convertToModelMessages to handle the conversion properly
+  return convertToModelMessages(uiMessages.filter((msg) => msg.parts.length > 0));
 }
 
 // ============================================================================

@@ -345,7 +345,7 @@
           agent: selectedAgent,  // Real agent config from agents/
           toolContext,
           // Only enable tools we have implementations for in browser
-          enabledTools: ['sql_query', 'sql_schema', 'code_execute'],
+          enabledTools: ['sql', 'schema', 'code'],
         });
 
         let assistantContent = '';
@@ -421,6 +421,38 @@
               break;
 
             case 'done':
+              // Store assistant message for multi-turn conversations
+              const assistantMsgId = window.agentModule.generateId('msg');
+              const assistantParts = [];
+
+              // Add text part if present
+              if (assistantContent) {
+                assistantParts.push({
+                  id: window.agentModule.generateId('part'),
+                  sessionId: window.session.id,
+                  messageId: assistantMsgId,
+                  type: 'text',
+                  text: assistantContent,
+                });
+              }
+
+              // Add tool parts
+              for (const tool of toolCalls) {
+                assistantParts.push(tool);
+              }
+
+              // Store in messages array for next turn
+              window.messages.push({
+                info: {
+                  id: assistantMsgId,
+                  sessionId: window.session.id,
+                  role: 'assistant',
+                  parentId: userMsgId,
+                  time: { created: Date.now() },
+                },
+                parts: assistantParts,
+              });
+
               // Finalize streaming message (remove cursor)
               if (streamingMsgEl) {
                 streamingMsgEl.classList.remove('streaming');

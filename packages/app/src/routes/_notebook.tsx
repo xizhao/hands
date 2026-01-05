@@ -76,41 +76,21 @@ function NotebookLayout() {
   // On startup: if no workbook selected, open most recent workbook or create one
   // This should only run once on app start, not during workbook switching
   useEffect(() => {
-    console.log("[notebook] Auto-open effect:", {
-      initialized: initialized.current,
-      initializing: initializingRef.current,
-      workbooksLoading,
-      workbooksCount: workbooks?.length,
-      workbookId,
-      isReady,
-      createPending: createWorkbook.isPending,
-      openPending: openWorkbook.isPending,
-    });
-
     if (initialized.current || initializingRef.current) return;
     if (workbooksLoading || workbooks === undefined) return;
     if (createWorkbook.isPending || openWorkbook.isPending) return;
 
     // If we have a workbookId (even with port=0 during switching), don't auto-init
     if (workbookId) {
-      console.log("[notebook] Workbook already selected:", workbookId);
       initialized.current = true;
       return;
     }
 
     initializingRef.current = true;
-    console.log("[notebook] No workbook selected, opening one...");
 
     if (workbooks.length > 0) {
       const mostRecent = workbooks[0];
-      console.log("[notebook] Opening most recent workbook:", mostRecent.id);
       openWorkbook.mutate(mostRecent, {
-        onSuccess: () => {
-          console.log("[notebook] Successfully opened workbook");
-        },
-        onError: (error) => {
-          console.error("[notebook] Failed to open workbook:", error);
-        },
         onSettled: () => {
           initialized.current = true;
           initializingRef.current = false;
@@ -121,7 +101,6 @@ function NotebookLayout() {
         { name: "My Workbook" },
         {
           onSuccess: (workbook) => {
-            console.log("[notebook] Created new workbook:", workbook.id);
             openWorkbook.mutate(workbook, {
               onSettled: () => {
                 initialized.current = true;
@@ -165,7 +144,7 @@ function NotebookLayout() {
   // This prevents layout shifts when transitioning to full UI
   if (!isReady) {
     return (
-      <div className="h-screen flex flex-col bg-background overflow-hidden relative before:absolute before:inset-0 before:bg-black/[0.03] before:dark:bg-black/[0.15] before:pointer-events-none">
+      <div className="h-full flex flex-col bg-background overflow-hidden relative before:absolute before:inset-0 before:bg-black/[0.03] before:dark:bg-black/[0.15] before:pointer-events-none">
         {/* Match NotebookShell's header exactly */}
         <header
           data-tauri-drag-region

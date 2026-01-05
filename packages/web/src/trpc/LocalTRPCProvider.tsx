@@ -9,7 +9,7 @@
 import type { QueryClient } from "@tanstack/react-query";
 import type { TRPCLink, Operation } from "@trpc/client";
 import type { ReactNode } from "react";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useMemo, useRef } from "react";
 import { useLocalDatabase } from "../db/LocalDatabaseProvider";
 import { trpc } from "../lib/trpc";
 import { type LocalTRPCContext, executeProcedure } from "./local-router";
@@ -98,7 +98,6 @@ interface LocalTRPCProviderProps {
 
 export function LocalTRPCProvider({ children, queryClient }: LocalTRPCProviderProps) {
   const localDb = useLocalDatabase();
-  const [isReady, setIsReady] = useState(false);
 
   // Refs for stable context
   const localDbRef = useRef(localDb);
@@ -149,26 +148,8 @@ export function LocalTRPCProvider({ children, queryClient }: LocalTRPCProviderPr
     });
   }, [getContext]);
 
-  // Wait for database to be ready
-  useEffect(() => {
-    if (localDb.isReady) {
-      setIsReady(true);
-    }
-  }, [localDb.isReady]);
-
-  // Show loading state while database initializes
-  if (!isReady) {
-    return (
-      <div className="flex items-center justify-center h-screen bg-background text-foreground">
-        <div className="text-center">
-          <div className="text-lg mb-2">Initializing database...</div>
-          <div className="text-sm text-muted-foreground">
-            {localDb.hasOpfs ? "Using persistent storage (OPFS)" : "Using in-memory storage"}
-          </div>
-        </div>
-      </div>
-    );
-  }
+  // No blocking loading state here - EditorApp already shows Header + spinner
+  // Individual tRPC queries will handle their own loading states via React Query
 
   return (
     <trpc.Provider client={trpcClient} queryClient={queryClient}>

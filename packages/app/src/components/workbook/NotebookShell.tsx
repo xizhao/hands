@@ -16,6 +16,7 @@ import { ATTACHMENT_TYPE, useChatState, useChatStateSync } from "@/hooks/useChat
 import { useEditorStateSync, useSidebarMode, useSidebarWidth } from "@/hooks/useNavState";
 import { usePrefetchOnDbReady, useRuntimeState } from "@/hooks/useRuntimeState";
 import { cn } from "@/lib/utils";
+import { usePlatform } from "@/platform";
 import { UnifiedSidebar } from "../sidebar/UnifiedSidebar";
 import { ContentHeader } from "./ContentHeader";
 import { HeaderActionsProvider } from "./HeaderActionsContext";
@@ -29,6 +30,9 @@ interface NotebookShellProps {
 }
 
 export function NotebookShell({ children }: NotebookShellProps) {
+  const platform = usePlatform();
+  const isWeb = platform.platform === "web";
+
   // Initialize state from server (called once per workbook mount)
   useEditorStateSync();
   useSidebarStateSync();
@@ -162,11 +166,14 @@ export function NotebookShell({ children }: NotebookShellProps) {
   return (
     <TooltipProvider delayDuration={300}>
       <HeaderActionsProvider>
-        <div className="h-screen flex bg-surface overflow-hidden relative">
-          <div
-            className="absolute inset-0 pointer-events-none z-50 border border-black/[0.04] dark:border-white/[0.03]"
-            style={{ borderRadius: "10px" }}
-          />
+        <div className="h-full flex bg-surface overflow-hidden relative">
+          {/* Window border overlay - only on desktop */}
+          {!isWeb && (
+            <div
+              className="absolute inset-0 pointer-events-none z-50 border border-black/[0.04] dark:border-white/[0.03]"
+              style={{ borderRadius: "10px" }}
+            />
+          )}
 
           {/* Floating mode: hover trigger zone */}
           {isFloating && !isFullscreenSidebar && (
