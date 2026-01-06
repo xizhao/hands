@@ -42,6 +42,7 @@ import {
   useWorkbooks,
 } from "@/hooks/useWorkbook";
 import { cn } from "@/lib/utils";
+import { useAgentReady } from "@/context/AgentReadyContext";
 import type { Workbook } from "@/lib/workbook";
 import {
   ArrowUp,
@@ -79,6 +80,7 @@ export function UnifiedSidebar({
   const chatState = useChatState();
   const { workbookId: activeWorkbookId } = useRuntimeProcess();
   const workbookDirectory = useActiveWorkbookDirectory();
+  const isAgentReady = useAgentReady();
 
   // Workbook management
   const { data: workbooks } = useWorkbooks();
@@ -307,7 +309,8 @@ export function UnifiedSidebar({
   // UI state
   const pendingAttachment = chatState.pendingAttachment;
   const hasContent = input.trim() || pendingAttachment;
-  const canSubmit = hasContent && !!workbookDirectory;
+  // Check both workbook directory AND agent is ready
+  const canSubmit = hasContent && !!workbookDirectory && isAgentReady;
 
   // Placeholder text
   const placeholder = "Search or ask anything...";
@@ -607,8 +610,8 @@ export function UnifiedSidebar({
   // Render
   // ============================================================================
 
-  // Web platform has its own header with workbook switcher
-  const showWorkbookHeader = platform.platform !== "web";
+  // Show workbook header on all platforms (web uses floating sidebar)
+  const showWorkbookHeader = true;
 
   return (
     <div

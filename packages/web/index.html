@@ -11,15 +11,16 @@
     <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600;9..144,700&display=swap" rel="stylesheet">
     <script>
       // Theme: set immediately to prevent flash
+      // Default to light - only respect explicit "dark" preference
       (function() {
-        const stored = localStorage.getItem("theme") || "system";
-        const isDark = stored === "dark" || (stored === "system" && window.matchMedia("(prefers-color-scheme: dark)").matches);
+        const stored = localStorage.getItem("theme");
+        const isDark = stored === "dark";
         if (isDark) {
           document.documentElement.classList.add("dark");
           document.documentElement.style.colorScheme = "dark";
-          document.documentElement.style.backgroundColor = "hsl(224 10% 10%)";
+          document.documentElement.style.backgroundColor = "hsl(0 0% 3.9%)";
         } else {
-          document.documentElement.style.backgroundColor = "hsl(0 0% 100%)";
+          document.documentElement.style.backgroundColor = "hsl(0 0% 97%)";
         }
       })();
     </script>
@@ -28,16 +29,12 @@
       html, body, #root { min-height: 100vh; }
 
       /* Set background immediately via CSS (before JS runs) */
+      /* Default to light - ignore system preference */
       html {
-        background: hsl(0 0% 100%);
-      }
-      @media (prefers-color-scheme: dark) {
-        html {
-          background: hsl(224 10% 10%);
-        }
+        background: hsl(0 0% 97%);
       }
       html.dark {
-        background: hsl(224 10% 10%) !important;
+        background: hsl(0 0% 3.9%) !important;
       }
 
       /* Shell that shows before React loads */
@@ -45,10 +42,10 @@
         height: 100vh;
         display: flex;
         flex-direction: column;
-        background: hsl(0 0% 100%);
+        background: hsl(0 0% 97%);
       }
       .dark #shell {
-        background: hsl(224 10% 10%);
+        background: hsl(0 0% 3.9%);
       }
 
       #shell-header {
@@ -109,6 +106,6 @@
       <div id="shell-content"></div>
     </div>
 
-    <script type="module" src="/src/site/main.tsx"></script>
+    <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

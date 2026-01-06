@@ -136,11 +136,34 @@ export async function listWorkbooks(): Promise<WorkbookMeta[]> {
   }
 }
 
+/** Clean up empty workbooks (no pages). Call once on app load. */
+export async function cleanupEmptyWorkbooks(): Promise<void> {
+  try {
+    const idb = await getIdb();
+    const all = await idb.getAll("workbooks");
+
+    for (const wb of all) {
+      const pages = await idb.getAllFromIndex("pages", "by-workbook", wb.id);
+      if (pages.length === 0) {
+        await idb.delete("workbooks", wb.id);
+      }
+    }
+  } catch {
+    // Ignore cleanup errors
+  }
+}
+
 /** Get workbook ID from URL path: /w/:id */
 export function getWorkbookIdFromUrl(): string | null {
   const path = window.location.pathname;
   const match = path.match(/^\/w\/([^/]+)/);
   return match ? match[1] : null;
+}
+
+/** Get the ID of the last opened workbook (for redirect routing) */
+export async function getLastOpenedWorkbookId(): Promise<string | null> {
+  const workbook = await getLastWorkbook();
+  return workbook?.id || null;
 }
 
 /** Delete a workbook by ID */
@@ -154,4 +177,19 @@ export async function deleteWorkbook(id: string): Promise<void> {
     await tx.store.delete([page.workbookId, page.path]);
   }
   await tx.done;
+}
+
+/** Rename a workbook */
+export async function renameWorkbook(id: string, name: string): Promise<WorkbookMeta | null> {
+  const idb = await getIdb();
+  const workbook = await idb.get("workbooks", id);
+  if (!workbook) return null;
+
+  const updated: WorkbookMeta = {
+    ...workbook,
+    name,
+    updated_at: Date.now(),
+  };
+  await idb.put("workbooks", updated);
+  return updated;
 }

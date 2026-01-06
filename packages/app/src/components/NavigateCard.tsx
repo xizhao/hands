@@ -9,8 +9,11 @@ import { useNavigate } from "@tanstack/react-router";
 import { ArrowRight } from "lucide-react";
 import { memo } from "react";
 import { cn } from "@/lib/utils";
-
-type RouteType = "table" | "action";
+import {
+  type RouteType,
+  ROUTE_PREFIXES,
+  normalizeRouteId,
+} from "@/types/routes";
 
 export interface NavigateOutput {
   type: "navigate";
@@ -21,11 +24,6 @@ export interface NavigateOutput {
   autoNavigate?: boolean;
   refresh?: boolean;
 }
-
-const ROUTE_CONFIGS: Record<RouteType, { path: string; param: string }> = {
-  table: { path: "/tables/$tableId", param: "tableId" },
-  action: { path: "/actions/$actionId", param: "actionId" },
-};
 
 /**
  * Parse navigate tool output
@@ -46,8 +44,9 @@ export function parseNavigateOutput(output: string): NavigateOutput | null {
  * Build route path from navigate output
  */
 export function buildRoutePath(output: NavigateOutput): string {
-  const prefix = output.routeType === "table" ? "/tables" : "/actions";
-  return `${prefix}/${output.id}`;
+  const prefix = ROUTE_PREFIXES[output.routeType] || "/pages";
+  const id = normalizeRouteId(output.routeType, output.id);
+  return `${prefix}/${id}`;
 }
 
 interface NavigateCardProps {
@@ -59,13 +58,7 @@ export const NavigateCard = memo(({ output }: NavigateCardProps) => {
   const navigate = useNavigate();
 
   const handleClick = () => {
-    const config = ROUTE_CONFIGS[output.routeType];
-    if (config) {
-      navigate({
-        to: config.path as any,
-        params: { [config.param]: output.id } as any,
-      });
-    }
+    navigate({ to: buildRoutePath(output) });
   };
 
   // Minimal inline link

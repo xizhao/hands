@@ -3,24 +3,37 @@ import alias from "@rollup/plugin-alias";
 import react from "@vitejs/plugin-react";
 import { defineConfig, type Plugin } from "vite";
 
-// Rewrite /w/* paths to /w/index.html for SPA routing within /w/
-function mpaHistoryFallback(): Plugin {
+// SPA history fallback - all non-asset paths go to index.html
+function spaHistoryFallback(): Plugin {
   return {
-    name: "mpa-history-fallback",
+    name: "spa-history-fallback",
     configureServer(server) {
-      server.middlewares.use((req, _res, next) => {
-        // Rewrite /w/* paths (except static assets) to /w/index.html
-        if (req.url?.startsWith("/w/") && !req.url.includes(".")) {
-          req.url = "/w/index.html";
-        }
-        next();
-      });
+      // Return middleware that runs after Vite's built-in handling
+      return () => {
+        server.middlewares.use((req, res, next) => {
+          // Only handle GET requests
+          if (req.method !== "GET") return next();
+
+          // Skip if it has a file extension (asset)
+          if (req.url && req.url.includes(".")) return next();
+
+          // Skip API routes or special paths
+          if (req.url?.startsWith("/@") || req.url?.startsWith("/__")) return next();
+
+          // Rewrite to index.html for client-side routing
+          if (req.url && req.url !== "/" && req.url !== "/index.html") {
+            req.url = "/index.html";
+          }
+
+          next();
+        });
+      };
     },
   };
 }
 
 export default defineConfig({
-  plugins: [react(), mpaHistoryFallback()],
+  plugins: [react(), spaHistoryFallback()],
   worker: {
     format: "es",
     rollupOptions: {
@@ -117,15 +130,9 @@ export default defineConfig({
   optimizeDeps: {
     exclude: ["@sqlite.org/sqlite-wasm"],
   },
-  appType: "mpa",
+  appType: "spa",
   build: {
     outDir: "dist",
     sourcemap: true,
-    rollupOptions: {
-      input: {
-        landing: path.resolve(__dirname, "index.html"),
-        app: path.resolve(__dirname, "w/index.html"),
-      },
-    },
   },
 });

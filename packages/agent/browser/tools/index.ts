@@ -384,6 +384,53 @@ Available globals: console, JSON, Math, Date, Array, Object, String, Number, Boo
 }
 
 // ============================================================================
+// Navigation Tool
+// ============================================================================
+
+export function createNavigateTool(_ctx: ToolContext): ToolDefinition {
+  return {
+    description: `Navigate the user to a page or table in the workbook.
+
+Use this tool after completing work to show the user the result. For example:
+- After creating a page, navigate to that page
+- After importing data to a table, navigate to that table
+- After creating a customer database, navigate to the customers page
+
+Parameters:
+- routeType: "page", "block", or "table" (block is alias for page)
+- id: The page path (e.g., "customers.mdx") or table name (e.g., "customers")
+- title: Optional display title
+- description: Optional description of what they'll see`,
+    parameters: z.object({
+      routeType: z.enum(["page", "block", "table"]).describe('Type of destination: "page", "block" (alias for page), or "table"'),
+      id: z.string().describe("Page path (e.g., 'customers.mdx') or table name (e.g., 'customers')"),
+      title: z.string().optional().describe("Display title for the navigation"),
+      description: z.string().optional().describe("Brief description of what the user will see"),
+    }),
+    execute: async (args: unknown) => {
+      const { routeType, id, title, description } = args as {
+        routeType: "page" | "block" | "table";
+        id: string;
+        title?: string;
+        description?: string;
+      };
+
+      // Normalize "block" to "page" (browser has no separate blocks)
+      const normalizedType = routeType === "block" ? "page" : routeType;
+
+      // Return navigation intent as JSON - UI will handle actual navigation
+      return {
+        type: "navigate",
+        routeType: normalizedType,
+        id,
+        title: title || id,
+        description,
+      };
+    },
+  };
+}
+
+// ============================================================================
 // Page/Document Tools
 // ============================================================================
 
@@ -472,7 +519,8 @@ export type ToolId =
   | "code"          // Execute JavaScript code
   | "glob"          // List pages/files
   | "read"          // Read page content
-  | "write";        // Write page content
+  | "write"         // Write page content
+  | "navigate";     // Navigate to page/table
 
 export interface ToolRegistry {
   tools: Record<string, ToolDefinition>;
@@ -494,6 +542,7 @@ export function createToolRegistry(ctx: ToolContext): ToolRegistry {
     glob: createPageListTool(ctx),
     read: createPageReadTool(ctx),
     write: createPageWriteTool(ctx),
+    navigate: createNavigateTool(ctx),
   };
 
   return {
@@ -501,7 +550,7 @@ export function createToolRegistry(ctx: ToolContext): ToolRegistry {
     getTools: (ids?: ToolId[]) => {
       if (!ids) return allTools;
       // Filter out tool IDs that don't exist in the browser registry
-      // (e.g., desktop-only tools like 'sources', 'secrets', 'navigate', 'polars')
+      // (e.g., desktop-only tools like 'sources', 'secrets', 'polars')
       return Object.fromEntries(
         ids
           .filter((id) => id in allTools && allTools[id as keyof typeof allTools] !== undefined)
@@ -535,6 +584,7 @@ export const ALL_TOOLS: ToolId[] = [
   "glob",
   "read",
   "write",
+  "navigate",
 ];
 
 // ============================================================================

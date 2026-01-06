@@ -343,7 +343,7 @@ async function runPrompt(
 
   const session = store.sessions.get(sessionId)!;
   let assistantMsg: MessageWithParts | null = null;
-  let agentError: unknown = null;
+  let agentError: { type: string; message: string } | null = null;
 
   try {
     const { events } = runAgent({
@@ -402,7 +402,7 @@ async function runPrompt(
 
         case "error":
           console.error("[runPrompt] Agent error:", event.error);
-          agentError = event.error;
+          agentError = event.error as { type: string; message: string };
           break;
 
         case "done":
@@ -425,13 +425,36 @@ async function runPrompt(
     }
   }
 
+  // If there's an error but no assistant message was created, create one with the error
+  if (!assistantMsg && agentError) {
+    const messageId = generateId("msg");
+    const now = Date.now();
+
+    // Create assistant message with error info (no text part - let UI handle display)
+    assistantMsg = {
+      info: {
+        id: messageId,
+        sessionId,
+        role: "assistant",
+        parentId: messages[messages.length - 1]?.info.id ?? "",
+        time: { created: now },
+        // Store error info for special handling
+        error: {
+          name: agentError.type,
+          data: { message: agentError.message, type: agentError.type },
+        },
+      } as Message & { error: { name: string; data: { message: string; type: string } } },
+      parts: [],
+    };
+
+    const allMessages = store.messages.get(sessionId) ?? [];
+    allMessages.push(assistantMsg);
+    store.messages.set(sessionId, allMessages);
+
+    eventEmitter.emit({ type: "message.updated", message: assistantMsg.info });
+  }
+
   if (!assistantMsg) {
-    if (agentError) {
-      const errorMsg = typeof agentError === "object" && agentError !== null && "message" in agentError
-        ? (agentError as { message: string }).message
-        : String(agentError);
-      throw new Error(errorMsg);
-    }
     throw new Error("No assistant message generated");
   }
 

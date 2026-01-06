@@ -10,7 +10,7 @@ svg [opacity="0.2"] {
 
 @layer base {
   :root {
-    /* Premium light theme - Stripe/Clerk inspired */
+    /* Premium light theme - Stripe/Clerk inspired (matches packages/app) */
     --background: 0 0% 97%;
     --foreground: 0 0% 3.9%;
     --card: 0 0% 100%;
@@ -57,7 +57,7 @@ svg [opacity="0.2"] {
   }
 
   .dark {
-    /* Keep dark mode available but rarely used */
+    /* Dark theme (matches packages/app) */
     --background: 0 0% 3.9%;
     --foreground: 0 0% 98%;
     --card: 0 0% 3.9%;
@@ -110,15 +110,19 @@ svg [opacity="0.2"] {
   html, body, #root {
     background: hsl(var(--background));
   }
-  html.transparent-overlay,
-  html.transparent-overlay body,
-  html.transparent-overlay #root {
-    background: transparent !important;
-  }
   body {
     @apply text-foreground antialiased;
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", sans-serif;
     font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+  }
+  /* Fraunces for marketing site headers only (not demo content) */
+  .site-header {
+    font-family: "Fraunces", Georgia, serif;
+  }
+  /* Hero headline */
+  h1.site-header {
+    font-weight: 600;
+    letter-spacing: -0.01em;
   }
 }
 
@@ -141,15 +145,9 @@ svg [opacity="0.2"] {
   background: hsl(var(--foreground) / 0.25);
 }
 
-/* Tauri window controls */
-[data-tauri-drag-region] {
-  -webkit-app-region: drag;
-}
-
-[data-tauri-drag-region] button,
-[data-tauri-drag-region] input,
-[data-tauri-drag-region] a {
-  -webkit-app-region: no-drag;
+/* Selection */
+::selection {
+  background: hsl(var(--primary) / 0.15);
 }
 
 /* Status indicators */
@@ -177,23 +175,61 @@ svg [opacity="0.2"] {
   50% { opacity: 0.5; }
 }
 
+/* Glow pulse animation - like capture-action panel */
 @keyframes glow-pulse {
-  0%, 100% { opacity: 0.4; }
-  50% { opacity: 0.8; }
+  0%, 100% {
+    opacity: 0.5;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.8;
+    transform: scale(1.02);
+  }
 }
 
 .animate-glow-pulse {
   animation: glow-pulse 2s ease-in-out infinite;
 }
 
+/* Text shimmer animation - for "Thinking..." */
 @keyframes text-shimmer {
-  0% { opacity: 0.4; }
-  50% { opacity: 1; }
-  100% { opacity: 0.4; }
+  0% {
+    background-position: -200% center;
+  }
+  100% {
+    background-position: 200% center;
+  }
 }
 
 .animate-text-shimmer {
-  animation: text-shimmer 1.2s ease-in-out infinite;
+  background: linear-gradient(
+    90deg,
+    hsl(var(--muted-foreground)) 0%,
+    hsl(var(--foreground)) 50%,
+    hsl(var(--muted-foreground)) 100%
+  );
+  background-size: 200% auto;
+  background-clip: text;
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  animation: text-shimmer 1.5s ease-in-out infinite;
+}
+
+/* Subtle drag animation for hand icon */
+@keyframes subtle-drag {
+  0%, 100% {
+    transform: rotate(12deg) translate(0, 0);
+  }
+  25% {
+    transform: rotate(8deg) translate(-2px, 2px);
+  }
+  75% {
+    transform: rotate(15deg) translate(1px, -1px);
+  }
+}
+
+.animate-subtle-drag {
+  animation: subtle-drag 3s ease-in-out infinite;
 }
 
 /* Code blocks */
@@ -208,9 +244,4 @@ svg [opacity="0.2"] {
 
 .prose pre code {
   @apply bg-transparent p-0;
-}
-
-/* Selection */
-::selection {
-  background: hsl(var(--primary) / 0.15);
 }

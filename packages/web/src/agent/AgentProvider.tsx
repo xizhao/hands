@@ -5,9 +5,14 @@
  * Must be used within LocalDatabaseProvider.
  */
 
-import { type ReactNode, useEffect, useRef } from "react";
+import { type ReactNode, useEffect, useRef, useState } from "react";
 import { setToolContext, type ToolContext, type DatabaseContext } from "@hands/agent/browser";
+import { AgentReadyProvider } from "@hands/app";
 import { useLocalDatabase } from "../db/LocalDatabaseProvider";
+
+// ============================================================================
+// Provider
+// ============================================================================
 
 interface AgentProviderProps {
   children: ReactNode;
@@ -19,6 +24,7 @@ interface AgentProviderProps {
  */
 export function AgentProvider({ children }: AgentProviderProps) {
   const { query, execute, schema, notifyChange, isReady } = useLocalDatabase();
+  const [isAgentReady, setIsAgentReady] = useState(false);
 
   // Use refs to avoid stale closures in the database context
   const queryRef = useRef(query);
@@ -75,13 +81,19 @@ export function AgentProvider({ children }: AgentProviderProps) {
     };
 
     setToolContext(toolContext);
-    console.log("[AgentProvider] Tool context set");
+    setIsAgentReady(true);
+    console.log("[AgentProvider] Tool context set, agent ready");
 
     // Cleanup on unmount
     return () => {
       setToolContext(null as unknown as ToolContext);
+      setIsAgentReady(false);
     };
   }, [isReady]);
 
-  return <>{children}</>;
+  return (
+    <AgentReadyProvider isReady={isAgentReady}>
+      {children}
+    </AgentReadyProvider>
+  );
 }

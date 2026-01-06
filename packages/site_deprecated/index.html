@@ -10,9 +10,11 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600;9..144,700;9..144,800;9..144,900&display=swap" rel="stylesheet">
     <script>
-      // Prevent flash - follow system preference like desktop
-      const stored = localStorage.getItem("theme") || "system";
-      const isDark = stored === "dark" || (stored === "system" && window.matchMedia("(prefers-color-scheme: dark)").matches);
+      // Prevent flash - default to light for marketing site
+      // Only respect explicit "dark", ignore "system" (treat as light)
+      const stored = localStorage.getItem("theme");
+      const isDark = stored === "dark";
+      if (stored === "system") localStorage.removeItem("theme"); // Clean up old value
       document.documentElement.classList.toggle("dark", isDark);
     </script>
   </head>

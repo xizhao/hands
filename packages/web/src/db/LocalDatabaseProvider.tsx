@@ -21,6 +21,7 @@ import {
   useRef,
   type ReactNode,
 } from "react";
+import { LoadingState } from "@hands/app";
 
 // Import worker using Vite's worker syntax
 import SqliteWorker from "./sqlite.worker?worker";
@@ -285,6 +286,11 @@ export function LocalDatabaseProvider({ children, initialWorkbookId }: LocalData
     closeWorkbook,
     hasOpfs,
   }), [isReady, isLoading, workbookId, schema, dataVersion, query, execute, notifyChange, openWorkbook, closeWorkbook, hasOpfs]);
+
+  // Block rendering until database is ready (prevents tRPC queries from firing with null workbookId)
+  if (initialWorkbookId && !isReady) {
+    return <LoadingState />;
+  }
 
   return (
     <LocalDatabaseContext.Provider value={value}>

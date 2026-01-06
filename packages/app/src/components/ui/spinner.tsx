@@ -24,3 +24,20 @@ export function Spinner({
 }: Partial<LucideProps & VariantProps<typeof spinnerVariants>>) {
   return <Loader2Icon className={cn(spinnerVariants({ size }), className)} {...props} />;
 }
+
+/**
+ * Centered loading state with spinner - use for full-container loading
+ */
+export function LoadingState({
+  size = "default",
+  className,
+}: {
+  size?: "default" | "sm" | "lg" | "icon";
+  className?: string;
+}) {
+  return (
+    <div className={cn("h-full flex items-center justify-center", className)}>
+      <Spinner size={size} />
+    </div>
+  );
+}

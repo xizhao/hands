@@ -6,7 +6,7 @@ function getSystemPreference(): "light" | "dark" {
   if (typeof window !== "undefined" && window.matchMedia) {
     return window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
   }
-  return "dark";
+  return "light";
 }
 
 function resolveTheme(theme: Theme): "light" | "dark" {
@@ -20,12 +20,14 @@ export function useTheme() {
   const [theme, setTheme] = useState<Theme>(() => {
     if (typeof window !== "undefined") {
       const stored = localStorage.getItem("theme") as Theme | null;
-      if (stored) return stored;
+      // Only respect explicit light/dark, ignore "system" for marketing site
+      if (stored === "light" || stored === "dark") return stored;
     }
-    return "system";
+    return "light";
   });
 
-  const resolvedTheme = resolveTheme(theme);
+  // For marketing site, always resolve to the explicit theme (no system preference)
+  const resolvedTheme = theme === "system" ? "light" : theme;
 
   useEffect(() => {
     const root = document.documentElement;

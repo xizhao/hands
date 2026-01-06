@@ -216,8 +216,10 @@ export function createLocalPlatformAdapter(): PlatformAdapter {
         return {
           running: true,
           workbook_id: currentWorkbookId,
-          directory: undefined, // No directory in browser - must match SSE events
-          // Use a sentinel value (1) to indicate "local mode" - no real server
+          // Web uses workbookId as identifier (no filesystem access)
+          // This is used by session management to scope sessions to workbooks
+          directory: currentWorkbookId,
+          // Sentinel value (1) indicates "local mode" - no real HTTP server
           runtime_port: 1,
           message: workbook ? "Local mode active" : "Workbook not found",
         };

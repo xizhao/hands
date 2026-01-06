@@ -41,13 +41,12 @@ export function NotebookShell({ children }: NotebookShellProps) {
   // Get route info
   const routerState = useRouterState();
   const currentPath = routerState.location.pathname;
-  const isOnIndex = currentPath === "/";
 
   // Runtime state
   const { workbookId: activeWorkbookId } = useRuntimeState();
 
-  // On index route, sidebar takes full width (no content area needed)
-  const isFullscreenSidebar = isOnIndex;
+  // Always show two-column layout (sidebar + content)
+  const isFullscreenSidebar = false;
 
   // Prefetch schema when DB becomes ready
   usePrefetchOnDbReady();
@@ -222,36 +221,22 @@ export function NotebookShell({ children }: NotebookShellProps) {
 
           <div
             className={cn(
-              "flex-1 flex flex-col min-w-0 overflow-hidden",
+              "flex-1 min-w-0 flex flex-col overflow-hidden",
               isFullscreenSidebar && "hidden",
-              // In floating mode, content takes full width
               isFloating && "pl-1",
             )}
           >
-            <ContentHeader />
-            <main className="flex-1 min-h-0 overflow-hidden">
-              <div
-                className={cn(
-                  "h-full pr-2 pb-2",
-                  // Adjust left padding based on floating mode
-                  isFloating ? "pl-1" : "pl-1",
-                  // No top padding for domain routes - tabs connect directly
-                  currentPath.startsWith("/domains/") ? "pt-0" : "pt-2",
-                )}
-              >
-                <div
-                  className={cn(
-                    "h-full border border-border/40 bg-background overflow-hidden shadow-sm",
-                    // Adjust rounding for domain routes - no top-right rounding where tabs are
-                    currentPath.startsWith("/domains/")
-                      ? "rounded-b-lg rounded-tl-lg"
-                      : "rounded-lg",
-                  )}
-                >
-                  {children}
-                </div>
+            {/* Content area */}
+            <div className="flex-1 min-h-0 overflow-hidden pr-2 pl-1 pt-1">
+              <div className="h-full border border-border/40 border-b-0 bg-background overflow-hidden shadow-sm rounded-t-lg">
+                {children}
               </div>
-            </main>
+            </div>
+
+            {/* Bottom tabs */}
+            <div className="shrink-0 pr-2 pl-1 pb-1">
+              <ContentHeader />
+            </div>
           </div>
 
           {/* Hidden file input for import */}

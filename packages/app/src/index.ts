@@ -1,29 +1,76 @@
 /**
  * Hands App Package
  *
- * Shared React application for desktop and web.
+ * Shared component library for desktop and web.
  * Platform-specific functionality is abstracted via the platform adapter.
+ *
+ * Usage:
+ * - Desktop: Use `App` component (includes router with memory history)
+ * - Web: Use components directly (NotebookShell, ChatPanel, etc.)
+ *        and create your own router with browser history
  */
 
-// Main App component
+// Desktop App (includes RouterProvider with memory history - NOT for web)
 export { default as App, queryClient } from "./App";
+
+// Chat components
 export { AttachmentMenu, type AttachmentMenuProps } from "./components/AttachmentMenu";
 export { ChatInput, type ChatInputRef } from "./components/chat/ChatInput";
-// Chat components
 export { ChatPanel, type ChatPanelProps } from "./components/chat/ChatPanel";
 export { type SessionStatus, StatusDot } from "./components/chat/StatusDot";
 export { ThreadList } from "./components/chat/ThreadList";
 
-// Components (for direct use in platform-specific code)
+// Shell components (shared layout primitives)
+export { Topbar, type TopbarProps } from "./components/shell/Topbar";
+export { ResizableLayout, type ResizableLayoutProps } from "./components/shell/ResizableLayout";
+
+// Workbook components (for use without full App)
+export { NotebookShell } from "./components/workbook/NotebookShell";
+export { ContentHeader } from "./components/workbook/ContentHeader";
+export { ContentTabBar } from "./components/workbook/ContentTabBar";
+export { EmptyWorkbookState } from "./components/workbook/EmptyWorkbookState";
+
+// Content components (for page/table routes)
+export { PageEditor } from "./components/page-editor/PageEditor";
+export { SheetTab } from "./components/domain/tabs/SheetTab";
+
+// Other components
 export { SaveStatusIndicator } from "./components/SaveStatusIndicator";
 export { WorkbookDropdown, type WorkbookDropdownProps } from "./components/WorkbookDropdown";
-// Hooks (for direct use in platform-specific code)
+
+// Hooks
 export * from "./hooks";
-// Theme utilities
-export { getTheme, getThemeList, initTheme, setTheme } from "./lib/theme";
-// Platform abstraction (use this to provide platform-specific implementations)
+
+// Theme utilities (use these - don't duplicate)
+export { getTheme, getThemeList, initTheme, setTheme, THEMES, type Theme } from "./lib/theme";
+
+// Platform abstraction
 export * from "./platform";
-// Router (for customization)
+
+// Agent readiness context
+export { AgentReadyProvider, useAgentReady } from "./context/AgentReadyContext";
+
+// Router (memory-based for desktop, web should create own)
 export { router } from "./router";
-// tRPC Provider (for platform-specific wrapping)
+
+// Route tree (for extending or composing routes)
+export { routeTree } from "./routeTree.gen";
+
+// tRPC Provider
 export { TRPCProvider } from "./TRPCProvider";
+
+// UI primitives
+export { cn } from "./lib/utils";
+export { TooltipProvider, Tooltip, TooltipTrigger, TooltipContent } from "./components/ui/tooltip";
+export { Spinner, LoadingState } from "./components/ui/spinner";
+
+// Route types and utilities
+export {
+  type RouteType,
+  type RouteConfig,
+  ROUTE_CONFIGS,
+  ROUTE_PREFIXES,
+  normalizePageId,
+  getPageIdFromPath,
+  normalizeRouteId,
+} from "./types/routes";

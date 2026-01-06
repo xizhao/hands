@@ -4,11 +4,15 @@
  * Re-exports all hooks for convenient importing.
  */
 
+// API key context
+export * from "./useApiKey";
 // UI utility hooks (from ui folder, takes precedence)
 export * from "./ui";
 // Background tasks
 export * from "./useBackgroundTask";
 export * from "./useChatState";
+// Resizable panels
+export * from "./useResizable";
 // Data hooks
 export * from "./useDatabase";
 // File picker

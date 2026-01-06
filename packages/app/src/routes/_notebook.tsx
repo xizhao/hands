@@ -38,19 +38,13 @@ function NotebookLayout() {
         return;
       }
 
-      // Route to domain-based views (tables and pages are now domain tabs)
+      // Route to individual page/table views
       switch (routeType) {
         case "pages":
-        case "tables":
-        case "domains": {
-          // All navigate to domain view - pages go to page tab, tables to sheet tab
-          const tab = routeType === "tables" ? "sheet" : "page";
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          navigate({ to: "/domains/$domainId", params: { domainId: id }, search: { tab } } as any);
+          navigate({ to: "/pages/$pageId", params: { pageId: id } });
           break;
-        }
-        case "actions":
-          navigate({ to: "/actions/$actionId", params: { actionId: id } });
+        case "tables":
+          navigate({ to: "/tables/$tableId", params: { tableId: id } });
           break;
         default:
           console.warn("[navigate] Unknown route type:", routeType, "from path:", path);

@@ -30,7 +30,13 @@ export interface RuntimeConnection {
 export interface RuntimeStatus {
   running: boolean;
   workbook_id: string;
-  directory: string;
+  /**
+   * Workbook directory path (desktop) or workbook ID (web).
+   * Used as a unique identifier for the active workbook context.
+   * Desktop: filesystem path like "/Users/name/workbooks/my-project"
+   * Web: workbook ID like "abc123" (no filesystem access)
+   */
+  directory: string | undefined;
   runtime_port: number;
   message: string;
 }

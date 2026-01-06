@@ -4,9 +4,8 @@ export default {
   content: [
     "./index.html",
     "./src/**/*.{js,ts,jsx,tsx}",
-    "../app/src/**/*.{js,ts,jsx,tsx}",
-    "../core/src/**/*.{js,ts,jsx,tsx}",
     "../editor/src/**/*.{js,ts,jsx,tsx}",
+    "../core/src/**/*.{js,ts,jsx,tsx}",
   ],
   theme: {
     container: {
@@ -36,22 +35,6 @@ export default {
             "--tw-prose-pre-bg": "hsl(var(--muted))",
             "--tw-prose-th-borders": "hsl(var(--border))",
             "--tw-prose-td-borders": "hsl(var(--border))",
-            "--tw-prose-invert-body": "hsl(var(--foreground))",
-            "--tw-prose-invert-headings": "hsl(var(--foreground))",
-            "--tw-prose-invert-lead": "hsl(var(--muted-foreground))",
-            "--tw-prose-invert-links": "hsl(var(--foreground))",
-            "--tw-prose-invert-bold": "hsl(var(--foreground))",
-            "--tw-prose-invert-counters": "hsl(var(--muted-foreground))",
-            "--tw-prose-invert-bullets": "hsl(var(--muted-foreground))",
-            "--tw-prose-invert-hr": "hsl(var(--border))",
-            "--tw-prose-invert-quotes": "hsl(var(--foreground))",
-            "--tw-prose-invert-quote-borders": "hsl(var(--border))",
-            "--tw-prose-invert-captions": "hsl(var(--muted-foreground))",
-            "--tw-prose-invert-code": "hsl(var(--foreground))",
-            "--tw-prose-invert-pre-code": "hsl(var(--foreground))",
-            "--tw-prose-invert-pre-bg": "hsl(var(--muted))",
-            "--tw-prose-invert-th-borders": "hsl(var(--border))",
-            "--tw-prose-invert-td-borders": "hsl(var(--border))",
             fontSize: "14px",
             lineHeight: "1.6",
             "h1, h2, h3, h4": {
@@ -62,41 +45,9 @@ export default {
               textUnderlineOffset: "0.25rem",
               fontWeight: "inherit",
             },
-            "a:hover": {
-              textDecoration: "underline",
-            },
             code: {
               fontWeight: "500",
               fontSize: "0.9em",
-            },
-            "code::before": {
-              content: '`"',
-            },
-            "code::after": {
-              content: '`"',
-            },
-            "pre code::before": {
-              content: "none",
-            },
-            "pre code::after": {
-              content: "none",
-            },
-            blockquote: {
-              fontStyle: "normal",
-              borderLeftWidth: "2px",
-            },
-            "ul, ol": {
-              paddingLeft: "0",
-              listStyle: "none",
-            },
-            table: {
-              fontSize: "0.875em",
-            },
-            "thead th": {
-              fontWeight: "600",
-              textTransform: "uppercase",
-              fontSize: "0.75em",
-              letterSpacing: "0.05em",
             },
           },
         },
@@ -148,11 +99,6 @@ export default {
           DEFAULT: "hsl(var(--card))",
           foreground: "hsl(var(--card-foreground))",
         },
-        ai: {
-          DEFAULT: "hsl(var(--ai))",
-          foreground: "hsl(var(--ai-foreground))",
-          muted: "hsl(var(--ai-muted))",
-        },
         chart: {
           1: "hsl(var(--chart-1))",
           2: "hsl(var(--chart-2))",
@@ -183,66 +129,27 @@ export default {
       },
       keyframes: {
         "accordion-down": {
-          from: {
-            height: "0",
-          },
-          to: {
-            height: "var(--radix-accordion-content-height)",
-          },
+          from: { height: "0" },
+          to: { height: "var(--radix-accordion-content-height)" },
         },
         "accordion-up": {
-          from: {
-            height: "var(--radix-accordion-content-height)",
-          },
-          to: {
-            height: "0",
-          },
+          from: { height: "var(--radix-accordion-content-height)" },
+          to: { height: "0" },
         },
         shimmer: {
-          "0%": {
-            backgroundPosition: "-200% 0",
-          },
-          "100%": {
-            backgroundPosition: "200% 0",
-          },
-        },
-        "shimmer-fast": {
-          "0%": {
-            transform: "translateX(-100%)",
-            opacity: "0",
-          },
-          "50%": {
-            opacity: "1",
-          },
-          "100%": {
-            transform: "translateX(100%)",
-            opacity: "0",
-          },
+          "0%": { backgroundPosition: "-200% 0" },
+          "100%": { backgroundPosition: "200% 0" },
         },
         pulse: {
-          "0%, 100%": {
-            opacity: "1",
-          },
-          "50%": {
-            opacity: "0.5",
-          },
-        },
-        "typing-dot": {
-          "0%, 60%, 100%": {
-            transform: "translateY(0)",
-          },
-          "30%": {
-            transform: "translateY(-4px)",
-          },
+          "0%, 100%": { opacity: "1" },
+          "50%": { opacity: "0.5" },
         },
       },
       animation: {
         "accordion-down": "accordion-down 0.2s ease-out",
         "accordion-up": "accordion-up 0.2s ease-out",
         shimmer: "shimmer 2s linear infinite",
-        "shimmer-fast": "shimmer-fast 1.5s ease-in-out infinite",
         pulse: "pulse 2s ease-in-out infinite",
-        "typing-dot": "typing-dot 1.4s ease-in-out infinite",
       },
     },
   },

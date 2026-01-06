@@ -25,6 +25,7 @@ import {
   Search,
   Terminal,
 } from "lucide-react";
+import { ApiKeyPrompt } from "@/components/chat/ApiKeyPrompt";
 import { memo, type ReactNode, useMemo, useState } from "react";
 import { useInView } from "react-intersection-observer";
 import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
@@ -1562,17 +1563,23 @@ export const ChatMessage = memo(
 
               {/* Error display */}
               {assistantInfo?.error && (
-                <div
-                  className={cn(
-                    "flex items-center gap-2 text-red-400 px-2 py-1 rounded-lg bg-red-500/10",
-                    compact ? MSG_FONT.codeCompact : MSG_FONT.code,
-                  )}
-                >
-                  <AlertCircle className="h-3 w-3" />
-                  <span>
-                    {(assistantInfo.error.data?.message as string) || assistantInfo.error.name}
-                  </span>
-                </div>
+                // Check if this is a no_api_key error - show inline API key prompt
+                // Check the error.data.type since browser agent stores the error type there
+                (assistantInfo.error.data as { type?: string })?.type === "no_api_key" ? (
+                  <ApiKeyPrompt compact={compact} />
+                ) : (
+                  <div
+                    className={cn(
+                      "flex items-center gap-2 text-red-400 px-2 py-1 rounded-lg bg-red-500/10",
+                      compact ? MSG_FONT.codeCompact : MSG_FONT.code,
+                    )}
+                  >
+                    <AlertCircle className="h-3 w-3" />
+                    <span>
+                      {(assistantInfo.error.data?.message as string) || assistantInfo.error.name}
+                    </span>
+                  </div>
+                )
               )}
             </div>
           </div>

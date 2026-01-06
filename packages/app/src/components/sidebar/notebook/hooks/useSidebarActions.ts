@@ -102,13 +102,10 @@ export function useSidebarActions(options: SidebarActionsOptions = {}) {
 
   const handleActionClick = useCallback(
     (actionId: string) => {
-      if (preventNavigation) {
-        onSelectItem?.("action", actionId);
-        return;
-      }
-      navigate({ to: "/actions/$actionId", params: { actionId } });
+      // Action routes have been removed - just trigger the callback if provided
+      onSelectItem?.("action", actionId);
     },
-    [navigate, preventNavigation, onSelectItem],
+    [onSelectItem],
   );
 
   // Page creation handlers
