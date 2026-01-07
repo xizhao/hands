@@ -11,7 +11,7 @@ import { Envelope, Link, Table, UploadSimple } from "@phosphor-icons/react";
 import { useNavigate } from "@tanstack/react-router";
 import { animate, motion, useMotionValue } from "motion/react";
 import { useEffect, useRef, useState } from "react";
-import { createWorkbook } from "../shared/lib/storage";
+import { createWorkbookCache } from "../shared/lib/storage";
 import { HandsLogo, OkHandIcon, PushHandIcon } from "../components/icons";
 
 // Content only - shell is rendered by App.tsx root layout
@@ -93,7 +93,7 @@ function PromptBar() {
         prompt = prompt ? `${prompt}\n\n${fileRefs}` : fileRefs;
       }
 
-      const workbook = await createWorkbook("New Workbook");
+      const workbook = await createWorkbookCache("New Workbook");
       navigate({
         to: "/w/$workbookId",
         params: { workbookId: workbook.id },

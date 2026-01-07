@@ -16,7 +16,7 @@ export { default as App, queryClient } from "./App";
 // Chat components
 export { AttachmentMenu, type AttachmentMenuProps } from "./components/AttachmentMenu";
 export { ChatInput, type ChatInputRef } from "./components/chat/ChatInput";
-export { ChatPanel, type ChatPanelProps } from "./components/chat/ChatPanel";
+export { ChatPanel, type ChatPanelProps, type EditorContext } from "./components/chat/ChatPanel";
 export { type SessionStatus, StatusDot } from "./components/chat/StatusDot";
 export { ThreadList } from "./components/chat/ThreadList";
 
@@ -37,6 +37,13 @@ export { SheetTab } from "./components/domain/tabs/SheetTab";
 // Other components
 export { SaveStatusIndicator } from "./components/SaveStatusIndicator";
 export { WorkbookDropdown, type WorkbookDropdownProps } from "./components/WorkbookDropdown";
+export {
+  HeaderActionsProvider,
+  SyncStatusSlot,
+  SyncStatusPortal,
+  SpecBarSlot,
+  SpecBarPortal,
+} from "./components/workbook/HeaderActionsContext";
 
 // Hooks
 export * from "./hooks";
@@ -63,6 +70,13 @@ export { TRPCProvider } from "./TRPCProvider";
 export { cn } from "./lib/utils";
 export { TooltipProvider, Tooltip, TooltipTrigger, TooltipContent } from "./components/ui/tooltip";
 export { Spinner, LoadingState } from "./components/ui/spinner";
+export {
+  DropdownMenu,
+  DropdownMenuTrigger,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+} from "./components/ui/dropdown-menu";
 
 // Route types and utilities
 export {

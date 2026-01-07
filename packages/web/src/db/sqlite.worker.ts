@@ -12,11 +12,13 @@ import sqlite3InitModule, { type Sqlite3Static, type Database } from "@sqlite.or
 // ============================================================================
 
 type WorkerRequest =
-  | { id: number; type: "open"; workbookId: string }
+  | { id: number; type: "open"; workbookId: string; name?: string }
   | { id: number; type: "close" }
   | { id: number; type: "query"; sql: string; params?: unknown[] }
   | { id: number; type: "execute"; sql: string; params?: unknown[] }
-  | { id: number; type: "schema" };
+  | { id: number; type: "schema" }
+  | { id: number; type: "getWorkbookMeta" }
+  | { id: number; type: "setWorkbookMeta"; name?: string; description?: string };
 
 type WorkerResponse =
   | { id: number; type: "success"; result: unknown }
@@ -57,7 +59,7 @@ async function init() {
 // Database Operations
 // ============================================================================
 
-function openDatabase(workbookId: string): void {
+function openDatabase(workbookId: string, initialName?: string): { isNew: boolean; meta: ReturnType<typeof getWorkbookMeta> } {
   if (!sqlite3) throw new Error("SQLite not initialized");
 
   // Close existing database
@@ -76,8 +78,152 @@ function openDatabase(workbookId: string): void {
     db = new sqlite3.oo1.DB();
   }
 
+  // Initialize internal tables
+  initInternalTables();
+
+  // Check if this is a new workbook (no metadata yet)
+  let meta = getWorkbookMeta();
+  const isNew = !meta;
+
+  if (isNew && initialName) {
+    // New workbook - set initial metadata
+    setWorkbookMeta(initialName);
+    meta = getWorkbookMeta();
+  } else if (isNew) {
+    // New workbook without name - create default
+    setWorkbookMeta("Untitled");
+    meta = getWorkbookMeta();
+  }
+
   currentWorkbookId = workbookId;
-  console.log("[SQLiteWorker] Database opened:", workbookId);
+  console.log("[SQLiteWorker] Database opened:", workbookId, isNew ? "(new)" : "(existing)");
+
+  return { isNew, meta };
+}
+
+/**
+ * Initialize internal tables for workbook metadata, pages, sessions, messages, parts.
+ * These are prefixed with _ to distinguish from user data tables.
+ */
+function initInternalTables(): void {
+  if (!db) return;
+
+  db.exec(`
+    -- Workbook metadata (source of truth, cached in IndexedDB)
+    CREATE TABLE IF NOT EXISTS _workbook (
+      id TEXT PRIMARY KEY DEFAULT 'self',
+      name TEXT NOT NULL DEFAULT 'Untitled',
+      description TEXT,
+      created_at INTEGER NOT NULL DEFAULT (unixepoch() * 1000),
+      updated_at INTEGER NOT NULL DEFAULT (unixepoch() * 1000)
+    );
+
+    -- Pages (MDX content)
+    CREATE TABLE IF NOT EXISTS _pages (
+      path TEXT PRIMARY KEY,
+      content TEXT NOT NULL,
+      title TEXT,
+      created_at INTEGER NOT NULL DEFAULT (unixepoch() * 1000),
+      updated_at INTEGER NOT NULL DEFAULT (unixepoch() * 1000)
+    );
+
+    -- Sessions (agent conversations)
+    CREATE TABLE IF NOT EXISTS _sessions (
+      id TEXT PRIMARY KEY,
+      parent_id TEXT REFERENCES _sessions(id) ON DELETE CASCADE,
+      title TEXT,
+      created_at INTEGER NOT NULL,
+      updated_at INTEGER NOT NULL
+    );
+
+    -- Messages within sessions
+    CREATE TABLE IF NOT EXISTS _messages (
+      id TEXT PRIMARY KEY,
+      session_id TEXT NOT NULL REFERENCES _sessions(id) ON DELETE CASCADE,
+      parent_id TEXT,
+      role TEXT NOT NULL CHECK (role IN ('user', 'assistant')),
+      model_id TEXT,
+      provider_id TEXT,
+      created_at INTEGER NOT NULL,
+      completed_at INTEGER,
+      cost REAL,
+      tokens_input INTEGER,
+      tokens_output INTEGER,
+      finish_reason TEXT
+    );
+
+    -- Message parts (text, tool calls, etc.)
+    CREATE TABLE IF NOT EXISTS _parts (
+      id TEXT PRIMARY KEY,
+      message_id TEXT NOT NULL REFERENCES _messages(id) ON DELETE CASCADE,
+      session_id TEXT NOT NULL,
+      type TEXT NOT NULL,
+      data TEXT NOT NULL
+    );
+
+    -- Indexes for efficient queries
+    CREATE INDEX IF NOT EXISTS _sessions_parent ON _sessions(parent_id);
+    CREATE INDEX IF NOT EXISTS _sessions_updated ON _sessions(updated_at DESC);
+    CREATE INDEX IF NOT EXISTS _messages_session ON _messages(session_id);
+    CREATE INDEX IF NOT EXISTS _parts_message ON _parts(message_id);
+  `);
+
+  console.log("[SQLiteWorker] Internal tables initialized");
+}
+
+/**
+ * Get workbook metadata from _workbook table
+ */
+function getWorkbookMeta(): { name: string; description: string | null; created_at: number; updated_at: number } | null {
+  if (!db) return null;
+
+  const rows = executeQuery<{ name: string; description: string | null; created_at: number; updated_at: number }>(
+    "SELECT name, description, created_at, updated_at FROM _workbook WHERE id = 'self'"
+  );
+
+  return rows[0] || null;
+}
+
+/**
+ * Set workbook metadata in _workbook table
+ */
+function setWorkbookMeta(name?: string, description?: string): void {
+  if (!db) return;
+
+  const now = Date.now();
+
+  // Check if row exists
+  const existing = getWorkbookMeta();
+
+  if (existing) {
+    // Update existing
+    const updates: string[] = [];
+    const params: unknown[] = [];
+
+    if (name !== undefined) {
+      updates.push("name = ?");
+      params.push(name);
+    }
+    if (description !== undefined) {
+      updates.push("description = ?");
+      params.push(description);
+    }
+    updates.push("updated_at = ?");
+    params.push(now);
+
+    if (updates.length > 0) {
+      db.exec({
+        sql: `UPDATE _workbook SET ${updates.join(", ")} WHERE id = 'self'`,
+        bind: params,
+      });
+    }
+  } else {
+    // Insert new
+    db.exec({
+      sql: `INSERT INTO _workbook (id, name, description, created_at, updated_at) VALUES ('self', ?, ?, ?, ?)`,
+      bind: [name || "Untitled", description || null, now, now],
+    });
+  }
 }
 
 function closeDatabase(): void {
@@ -130,7 +276,7 @@ function executeMutation(sql: string, params?: unknown[]): void {
   }
 }
 
-function getSchema(): Array<{
+function getSchema(includeInternal = false): Array<{
   table_name: string;
   columns: Array<{ name: string; type: string; nullable: boolean }>;
 }> {
@@ -141,8 +287,13 @@ function getSchema(): Array<{
     columns: Array<{ name: string; type: string; nullable: boolean }>;
   }> = [];
 
+  // Filter out sqlite internals and optionally our internal tables (prefixed with _)
+  const filter = includeInternal
+    ? "name NOT LIKE 'sqlite_%'"
+    : "name NOT LIKE 'sqlite_%' AND name NOT LIKE '\\_%' ESCAPE '\\'";
+
   db.exec({
-    sql: "SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'",
+    sql: `SELECT name FROM sqlite_master WHERE type='table' AND ${filter}`,
     callback: (row) => {
       const tableName = row[0] as string;
       const columns: Array<{ name: string; type: string; nullable: boolean }> = [];
@@ -177,8 +328,7 @@ self.onmessage = (e: MessageEvent<WorkerRequest>) => {
 
     switch (type) {
       case "open":
-        openDatabase(e.data.workbookId);
-        result = { success: true };
+        result = openDatabase(e.data.workbookId, e.data.name);
         break;
 
       case "close":
@@ -197,6 +347,15 @@ self.onmessage = (e: MessageEvent<WorkerRequest>) => {
 
       case "schema":
         result = getSchema();
+        break;
+
+      case "getWorkbookMeta":
+        result = getWorkbookMeta();
+        break;
+
+      case "setWorkbookMeta":
+        setWorkbookMeta(e.data.name, e.data.description);
+        result = getWorkbookMeta();
         break;
 
       default:

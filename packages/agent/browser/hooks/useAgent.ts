@@ -8,7 +8,7 @@
 import { useCallback, useRef, useState } from "react";
 import { runAgent } from "../agent";
 import { generateId, type MessageWithParts, type Session, type Part, type TextPart, type AgentConfig } from "../../core";
-import type { ToolContext, ToolId } from "../tools";
+import { DATA_TOOLS, PAGE_TOOLS, type ToolContext, type ToolId } from "../tools";
 
 // ============================================================================
 // Default Agent Config
@@ -33,7 +33,7 @@ When analyzing data:
 
 Be concise and helpful. Format responses in markdown when appropriate.`,
   model: "openrouter/anthropic/claude-sonnet-4-20250514",
-  tools: ["sql", "schema", "sql_execute", "code", "glob", "read", "write"],
+  tools: [...DATA_TOOLS, ...PAGE_TOOLS] as ToolId[],
 };
 
 // ============================================================================

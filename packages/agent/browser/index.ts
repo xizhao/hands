@@ -93,10 +93,17 @@ export {
   resolveModelId,
   parseModelString,
   getOpenRouterModelId,
+  hasCustomApiKey,
+  getModelPreset,
+  setModelPreset,
+  getPresetModels,
+  DEFAULT_OPENROUTER_KEY,
+  MODEL_PRESETS,
   STORAGE_KEYS,
   type ProviderConfig,
   type ProviderType,
   type ModelConfig,
+  type ModelPreset,
   type ParsedModel,
   type StorageKey,
 } from "./provider";
@@ -118,25 +125,34 @@ export {
 
 export {
   createToolRegistry,
-  createSqlQueryTool,
-  createSqlExecuteTool,
+  createSqlTool,
   createSqlSchemaTool,
   createWebFetchTool,
   createWebSearchTool,
   createCodeExecuteTool,
-  createPageListTool,
-  createPageReadTool,
-  createPageWriteTool,
+  createListPagesTool,
+  createReadPageTool,
+  createWritePageTool,
+  createDeletePageTool,
+  createSearchPagesTool,
+  createTaskTool,
+  createNavigateTool,
   toAISDKTools,
+  normalizeToolId,
   DATA_TOOLS,
   RESEARCH_TOOLS,
-  CONTENT_TOOLS,
+  PAGE_TOOLS,
   ALL_TOOLS,
+  SUBAGENT_DISABLED_TOOLS,
+  LEGACY_TOOL_MAP,
   type ToolContext,
   type ToolId,
   type ToolRegistry,
   type ToolDefinition,
   type DatabaseContext,
+  type PagesContext,
+  type SubagentContext,
+  type SubagentResult,
 } from "./tools";
 
 // ============================================================================
@@ -148,6 +164,17 @@ export {
   apiKeysAtom,
   defaultModelAtom,
 } from "./state";
+
+// ============================================================================
+// Storage (SQLite persistence layer)
+// ============================================================================
+
+export {
+  createSessionStorage,
+  type SessionStorage,
+} from "./storage";
+
+export { createPagesStorage } from "./pages-storage";
 
 // ============================================================================
 // Hooks

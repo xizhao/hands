@@ -19,6 +19,7 @@ export type {
   ToolStateError,
   StepStartPart,
   StepFinishPart,
+  SubtaskPart,
   Part,
   // Messages
   MessageBase,
@@ -32,6 +33,7 @@ export type {
   // Todos
   Todo,
   // Agent config
+  AgentMode,
   AgentConfig,
   // Agent events (streaming)
   AgentEvent,

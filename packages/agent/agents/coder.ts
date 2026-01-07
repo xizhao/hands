@@ -261,7 +261,7 @@ Keep responses concise - the primary agent will communicate with the user.`;
 export const coderAgent: AgentConfig = {
   description: "Technical specialist for creating pages (MDX) and actions",
   mode: "subagent",
-  model: "openrouter/google/gemini-2.5-flash",
+  model: "openrouter/mistralai/devstral-2512:free",
   prompt: CODER_PROMPT,
   tools: {
     // Files

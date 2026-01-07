@@ -5,7 +5,8 @@
  * Single shell at root with conditional providers.
  */
 
-import { initTheme, ChatPanel, ContentHeader, PlatformProvider, TooltipProvider, ApiKeyProvider, LoadingState, type ApiKeyContextValue } from "@hands/app";
+import { initTheme, ChatPanel, PlatformProvider, TooltipProvider, ApiKeyProvider, LoadingState, HeaderActionsProvider, useAgentReady, type ApiKeyContextValue, type EditorContext } from "@hands/app";
+import { ContentTabBar } from "./components/workbook/ContentTabBar";
 import { api as browserApi, subscribeToEvents, getStoredConfig, setStoredConfig, type ServerEvent, type MessageWithParts, type Session, type SessionStatus, type Todo } from "@hands/agent/browser";
 import { QueryClient, QueryClientProvider, useQueryClient } from "@tanstack/react-query";
 import {
@@ -17,9 +18,9 @@ import {
   createRouter,
   useMatches,
 } from "@tanstack/react-router";
-import { lazy, ReactNode, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { lazy, type ReactNode, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Toaster } from "sonner";
-import { getLastOpenedWorkbookId, cleanupEmptyWorkbooks } from "./shared/lib/storage";
+import { getLastOpenedWorkbookId } from "./shared/lib/storage";
 import { WebShell } from "./shell/WebShell";
 import { LandingSidebar } from "./shell/LandingSidebar";
 import { LandingContent } from "./routes/LandingPage";
@@ -28,12 +29,10 @@ import { LocalDatabaseProvider } from "./db/LocalDatabaseProvider";
 import { createLocalPlatformAdapter } from "./platform/LocalAdapter";
 import { LocalTRPCProvider } from "./trpc/LocalTRPCProvider";
 import { SettingsPopover } from "./components/SettingsPopover";
+import { WorkbookTitleEditor } from "./components/WorkbookTitleEditor";
 
 // Initialize theme
 initTheme();
-
-// Clean up empty workbooks from previous sessions
-cleanupEmptyWorkbooks();
 
 // Query client at module level
 const queryClient = new QueryClient({
@@ -54,11 +53,26 @@ function ContentLoader() {
 
 // Chat sidebar for workbook
 function ChatSidebar() {
+  const matches = useMatches();
+  const isAgentReady = useAgentReady();
   const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
   const [inputValue, setInputValue] = useState("");
   const [pendingRetryContent, setPendingRetryContent] = useState<string | undefined>();
   const autoSendHandled = useRef(false);
   const lastPromptContent = useRef<string>("");
+
+  // Detect current page/table from route
+  const editorContext = useMemo<EditorContext>(() => {
+    const pageMatch = matches.find((m) => m.routeId === "/w/$workbookId/pages/$pageId");
+    if (pageMatch?.params?.pageId) {
+      return { type: "page", id: pageMatch.params.pageId as string };
+    }
+    const tableMatch = matches.find((m) => m.routeId === "/w/$workbookId/tables/$tableId");
+    if (tableMatch?.params?.tableId) {
+      return { type: "table", id: tableMatch.params.tableId as string };
+    }
+    return { type: "none" };
+  }, [matches]);
 
   // Check if API key is configured
   const hasApiKey = useMemo(() => {
@@ -95,9 +109,10 @@ function ChatSidebar() {
     setPendingRetryContent,
   }), [hasApiKey, saveApiKey, onApiKeySaved, pendingRetryContent]);
 
-  // Extract ?q= param and auto-send on mount
+  // Extract ?q= param and auto-send when agent is ready
   useEffect(() => {
     if (autoSendHandled.current) return;
+    if (!isAgentReady) return; // Wait for agent to be ready
 
     const params = new URLSearchParams(window.location.search);
     const q = params.get("q");
@@ -127,7 +142,7 @@ function ChatSidebar() {
         console.error("[ChatSidebar] Auto-send failed:", err);
       }
     })();
-  }, []);
+  }, [isAgentReady]);
 
   return (
     <ApiKeyProvider value={apiKeyContextValue}>
@@ -139,21 +154,13 @@ function ChatSidebar() {
           showBackButton={true}
           inputValue={inputValue}
           onInputChange={setInputValue}
+          editorContext={editorContext}
         />
       </div>
     </ApiKeyProvider>
   );
 }
 
-// Workbook title for topbar
-function WorkbookTitle({ name }: { name?: string }) {
-  if (!name) return null;
-  return (
-    <span className="text-sm font-medium text-foreground truncate max-w-[200px]">
-      {name}
-    </span>
-  );
-}
 
 // Browser event sync - connects browser API events to React Query cache
 function BrowserEventSync() {
@@ -229,7 +236,12 @@ function BrowserEventSync() {
 }
 
 // Render props type for WorkbookProviders
-type WorkbookRenderProps = { isReady: boolean; workbookName?: string };
+type WorkbookRenderProps = {
+  isReady: boolean;
+  workbookId?: string;
+  workbookName?: string;
+  onWorkbookNameChange?: (name: string) => void;
+};
 
 // Conditional providers - only activate when workbookId exists
 function WorkbookProviders({
@@ -240,6 +252,7 @@ function WorkbookProviders({
   children: (props: WorkbookRenderProps) => ReactNode;
 }) {
   const adapter = useMemo(() => createLocalPlatformAdapter(), []);
+  const qc = useQueryClient();
   const [isReady, setIsReady] = useState(false);
   const [workbookName, setWorkbookName] = useState<string | undefined>();
 
@@ -247,25 +260,51 @@ function WorkbookProviders({
     if (!workbookId) {
       setIsReady(false);
       setWorkbookName(undefined);
+      // Clear runtime status when no workbook
+      qc.setQueryData(["active-runtime"], null);
       return;
     }
 
     async function init() {
-      const workbooks = await adapter.workbook.list();
-      const found = workbooks.find((w) => w.id === workbookId);
-      if (found) {
-        await adapter.workbook.open(found);
-        setWorkbookName(found.name);
-        setIsReady(true);
+      try {
+        console.log("[WorkbookProviders] Loading workbooks for:", workbookId);
+        const workbooks = await adapter.workbook.list();
+        console.log("[WorkbookProviders] Found workbooks:", workbooks.map(w => w.id));
+        const found = workbooks.find((w) => w.id === workbookId);
+        if (found) {
+          console.log("[WorkbookProviders] Opening workbook:", found.id);
+          await adapter.workbook.open(found);
+          setWorkbookName(found.name);
+          setIsReady(true);
+
+          // Update query cache with runtime status so useTRPCReady works
+          qc.setQueryData(["active-runtime"], {
+            running: true,
+            workbook_id: found.id,
+            directory: found.id,
+            runtime_port: 1, // Sentinel for local mode
+            message: "Local mode active",
+          });
+          console.log("[WorkbookProviders] Workbook ready");
+        } else {
+          console.warn("[WorkbookProviders] Workbook not found:", workbookId);
+        }
+      } catch (err) {
+        console.error("[WorkbookProviders] Init error:", err);
       }
     }
 
     init();
-  }, [adapter, workbookId]);
+  }, [adapter, workbookId, qc]);
+
+  // Handler for name changes
+  const handleWorkbookNameChange = useCallback((name: string) => {
+    setWorkbookName(name);
+  }, []);
 
   // No workbook - render without providers (landing page)
   if (!workbookId) {
-    return <>{children({ isReady: false, workbookName: undefined })}</>;
+    return <>{children({ isReady: false })}</>;
   }
 
   // Workbook - wrap in providers
@@ -276,7 +315,9 @@ function WorkbookProviders({
           <AgentProvider>
             <BrowserEventSync />
             <TooltipProvider>
-              {children({ isReady, workbookName })}
+              <HeaderActionsProvider>
+                {children({ isReady, workbookId, workbookName, onWorkbookNameChange: handleWorkbookNameChange })}
+              </HeaderActionsProvider>
               <Toaster
                 position="bottom-right"
                 offset={16}
@@ -323,9 +364,10 @@ function RootLayout() {
   }, []);
 
   // Determine sidebar content
-  const getSidebar = (isReady: boolean) => {
+  // ChatSidebar doesn't need isReady - it has its own loading states
+  const getSidebar = () => {
     if (workbookId) {
-      return isReady ? <ChatSidebar /> : <div className="h-full" />;
+      return <ChatSidebar />;
     }
     // Landing page: only show sidebar if there are workbooks
     if (workbookCount === null || workbookCount === 0) return undefined;
@@ -335,11 +377,20 @@ function RootLayout() {
   return (
     <QueryClientProvider client={queryClient}>
       <WorkbookProviders workbookId={workbookId}>
-        {({ isReady, workbookName }) => (
+        {({ workbookId: wbId, workbookName, onWorkbookNameChange }) => (
           <WebShell
-            sidebar={getSidebar(isReady)}
+            sidebar={getSidebar()}
             floatingSidebar={workbookId ? <LandingSidebar onWorkbooksChange={handleWorkbooksChange} /> : undefined}
-            topbarCenter={workbookId ? <WorkbookTitle name={workbookName} /> : undefined}
+            inWorkbook={!!wbId}
+            topbarLeft={
+              wbId && workbookName ? (
+                <WorkbookTitleEditor
+                  workbookId={wbId}
+                  name={workbookName}
+                  onNameChange={onWorkbookNameChange}
+                />
+              ) : undefined
+            }
             topbarActions={<SettingsPopover />}
           >
             <Outlet />
@@ -370,8 +421,8 @@ function WorkbookContent() {
           <Outlet />
         </div>
       </div>
-      <div className="shrink-0 px-2 pb-1">
-        <ContentHeader />
+      <div className="shrink-0 h-8 px-2 pb-1">
+        <ContentTabBar />
       </div>
     </div>
   );

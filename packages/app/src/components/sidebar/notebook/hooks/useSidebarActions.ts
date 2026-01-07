@@ -48,20 +48,14 @@ export function useSidebarActions(options: SidebarActionsOptions = {}) {
     },
   });
 
-  // Navigation handlers - all go to domain routes now
+  // Navigation handlers
   const handlePageClick = useCallback(
     (pageId: string) => {
       if (preventNavigation) {
         onSelectItem?.("page", pageId);
         return;
       }
-      // Pages are now domain page tabs
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      navigate({
-        to: "/domains/$domainId",
-        params: { domainId: pageId },
-        search: { tab: "page" },
-      } as any);
+      navigate({ to: "/pages/$pageId", params: { pageId } });
     },
     [navigate, preventNavigation, onSelectItem],
   );
@@ -72,13 +66,8 @@ export function useSidebarActions(options: SidebarActionsOptions = {}) {
         onSelectItem?.("source", sourceId);
         return;
       }
-      // Sources deprecated - navigate to domain sheet tab
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      navigate({
-        to: "/domains/$domainId",
-        params: { domainId: sourceId },
-        search: { tab: "sheet" },
-      } as any);
+      // Sources deprecated - navigate to tables instead
+      navigate({ to: "/tables/$tableId", params: { tableId: sourceId } });
     },
     [navigate, preventNavigation, onSelectItem],
   );
@@ -89,13 +78,7 @@ export function useSidebarActions(options: SidebarActionsOptions = {}) {
         onSelectItem?.("table", tableId);
         return;
       }
-      // Tables are now domain sheet tabs
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      navigate({
-        to: "/domains/$domainId",
-        params: { domainId: tableId },
-        search: { tab: "sheet" },
-      } as any);
+      navigate({ to: "/tables/$tableId", params: { tableId } });
     },
     [navigate, preventNavigation, onSelectItem],
   );
@@ -146,12 +129,7 @@ export function useSidebarActions(options: SidebarActionsOptions = {}) {
         setIsCreatingNewPage(false);
         setNewPageName("");
         isConfirmingPageRef.current = false;
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        navigate({
-          to: "/domains/$domainId",
-          params: { domainId: pageId },
-          search: { tab: "page" },
-        } as any);
+        navigate({ to: "/pages/$pageId", params: { pageId } });
         return;
       }
 
@@ -159,23 +137,13 @@ export function useSidebarActions(options: SidebarActionsOptions = {}) {
         await createPage({ pageId });
         setIsCreatingNewPage(false);
         setNewPageName("");
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        navigate({
-          to: "/domains/$domainId",
-          params: { domainId: pageId },
-          search: { tab: "page" },
-        } as any);
+        navigate({ to: "/pages/$pageId", params: { pageId } });
       } catch (err: unknown) {
         const message = err instanceof Error ? err.message : "Failed to create page";
         if (message.includes("already exists")) {
           setIsCreatingNewPage(false);
           setNewPageName("");
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          navigate({
-            to: "/domains/$domainId",
-            params: { domainId: pageId },
-            search: { tab: "page" },
-          } as any);
+          navigate({ to: "/pages/$pageId", params: { pageId } });
         } else {
           console.error("[sidebar] failed to create page:", err);
         }
@@ -192,15 +160,9 @@ export function useSidebarActions(options: SidebarActionsOptions = {}) {
       try {
         const result = await duplicatePageMutation.mutateAsync({ route: pageId });
         console.log("[sidebar] duplicated page:", pageId, "->", result.newRoute);
-        // Navigate to the new page
         if (result.newRoute) {
           const newPageId = result.newRoute.replace(/^\//, "");
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          navigate({
-            to: "/domains/$domainId",
-            params: { domainId: newPageId },
-            search: { tab: "page" },
-          } as any);
+          navigate({ to: "/pages/$pageId", params: { pageId: newPageId } });
         }
       } catch (err) {
         console.error("[sidebar] failed to duplicate page:", err);
@@ -284,13 +246,7 @@ export function useSidebarActions(options: SidebarActionsOptions = {}) {
         if (!res.ok) throw new Error("Failed to convert table to source");
         const data = await res.json();
         console.log("[sidebar] converted table to source:", tableName, data);
-        // Navigate to the domain sheet tab
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        navigate({
-          to: "/domains/$domainId",
-          params: { domainId: tableName },
-          search: { tab: "sheet" },
-        } as any);
+        navigate({ to: "/tables/$tableId", params: { tableId: tableName } });
       } catch (err) {
         console.error("[sidebar] failed to convert table to source:", err);
       }

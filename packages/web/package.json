@@ -7,7 +7,8 @@
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
-    "typecheck": "echo 'Web typecheck skipped: Relies on @hands/app typecheck for shared code'"
+    "typecheck": "echo 'Web typecheck skipped: Relies on @hands/app typecheck for shared code'",
+    "deploy": "bun run build && wrangler pages deploy dist --project-name=hands-web"
   },
   "dependencies": {
     "@hands/agent": "workspace:*",

@@ -11,6 +11,8 @@ import { cn } from "@/lib/utils";
 export interface TopbarProps {
   /** Logo/brand element */
   logo?: ReactNode;
+  /** Left-aligned content after logo (e.g., workbook title, share link) */
+  left?: ReactNode;
   /** Center content (e.g., workbook name, tabs) */
   center?: ReactNode;
   /** Right side actions */
@@ -19,7 +21,7 @@ export interface TopbarProps {
   className?: string;
 }
 
-export function Topbar({ logo, center, actions, className }: TopbarProps) {
+export function Topbar({ logo, left, center, actions, className }: TopbarProps) {
   return (
     <div
       className={cn(
@@ -27,12 +29,13 @@ export function Topbar({ logo, center, actions, className }: TopbarProps) {
         className
       )}
     >
-      {/* Left: Logo */}
+      {/* Left: Logo + left content */}
       <div className="flex items-center gap-2">
         {logo}
+        {left}
       </div>
 
-      {/* Center: flexible content */}
+      {/* Center: flexible spacer (or content if provided) */}
       <div className="flex-1 flex items-center justify-center min-w-0">
         {center}
       </div>

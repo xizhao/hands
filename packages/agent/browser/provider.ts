@@ -27,6 +27,68 @@ export interface ModelConfig {
 }
 
 // ============================================================================
+// Default API Key (free-tier only, $0 budget limit)
+// ============================================================================
+
+/**
+ * Default OpenRouter API key for free models only.
+ * This key has a $0 credit limit and can only access free models.
+ * Users can override by setting their own key in localStorage.
+ */
+export const DEFAULT_OPENROUTER_KEY = "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";
+
+// ============================================================================
+// Model Presets
+// ============================================================================
+
+export type ModelPreset = "free" | "fast" | "smart";
+
+/**
+ * Model presets for different use cases.
+ * All models use OpenRouter format: provider/model
+ */
+export const MODEL_PRESETS: Record<ModelPreset, { primary: string; coding: string; research: string }> = {
+  /** Free models - no cost, lower rate limits */
+  free: {
+    primary: "mistralai/devstral-2512:free",
+    coding: "mistralai/devstral-2512:free",
+    research: "arcee-ai/trinity-mini:free",
+  },
+  /** Fast models - optimized for speed */
+  fast: {
+    primary: "anthropic/claude-sonnet-4-20250514",
+    coding: "anthropic/claude-sonnet-4-20250514",
+    research: "google/gemini-2.5-flash",
+  },
+  /** Smart models - best quality */
+  smart: {
+    primary: "anthropic/claude-sonnet-4-20250514",
+    coding: "anthropic/claude-sonnet-4-20250514",
+    research: "anthropic/claude-sonnet-4-20250514",
+  },
+};
+
+/** Get the current model preset from localStorage, defaulting to "free" */
+export function getModelPreset(): ModelPreset {
+  if (typeof localStorage === "undefined") return "free";
+  const stored = localStorage.getItem("hands_model_preset");
+  if (stored && (stored === "free" || stored === "fast" || stored === "smart")) {
+    return stored;
+  }
+  return "free";
+}
+
+/** Set the model preset in localStorage */
+export function setModelPreset(preset: ModelPreset): void {
+  localStorage.setItem("hands_model_preset", preset);
+}
+
+/** Get models for the current preset */
+export function getPresetModels(): { primary: string; coding: string; research: string } {
+  return MODEL_PRESETS[getModelPreset()];
+}
+
+// ============================================================================
 // Storage Keys (exported for type-safe access across packages)
 // ============================================================================
 
@@ -67,8 +129,9 @@ export function createProvider(config: ProviderConfig): OpenRouterProvider {
 
 /**
  * Get provider config from localStorage (BYOK pattern)
+ * Falls back to default free-tier key if no user key is set.
  */
-export function getStoredConfig(): ProviderConfig | null {
+export function getStoredConfig(): ProviderConfig {
   // Prefer OpenRouter (best browser CORS support)
   const openrouterKey = localStorage.getItem(STORAGE_KEYS.openrouter);
   if (openrouterKey) {
@@ -86,7 +149,19 @@ export function getStoredConfig(): ProviderConfig | null {
     return { type: "openai", apiKey: openaiKey };
   }
 
-  return null;
+  // Default to free-tier OpenRouter key
+  return { type: "openrouter", apiKey: DEFAULT_OPENROUTER_KEY };
+}
+
+/**
+ * Check if user has set their own API key (vs using default)
+ */
+export function hasCustomApiKey(): boolean {
+  return !!(
+    localStorage.getItem(STORAGE_KEYS.openrouter) ||
+    localStorage.getItem(STORAGE_KEYS.anthropic) ||
+    localStorage.getItem(STORAGE_KEYS.openai)
+  );
 }
 
 /**
@@ -216,10 +291,10 @@ export function getOpenRouterModelId(model: string | { providerId: string; model
 // ============================================================================
 
 /**
- * Create a provider from stored settings, or null if no API key
+ * Create a provider from stored settings.
+ * Always succeeds - uses default free-tier key if no user key is set.
  */
-export function createProviderFromStorage(): OpenRouterProvider | null {
+export function createProviderFromStorage(): OpenRouterProvider {
   const config = getStoredConfig();
-  if (!config) return null;
   return createProvider(config);
 }

@@ -3,17 +3,17 @@
  *
  * Provides tRPC context that routes to in-browser procedures instead of HTTP.
  * Uses a custom link that directly calls local procedure handlers.
- * Page storage is handled by LocalAdapter (hands-local IndexedDB).
+ * Pages are stored in SQLite via OPFS (same database as user data tables).
  */
 
 import type { QueryClient } from "@tanstack/react-query";
 import type { TRPCLink, Operation } from "@trpc/client";
 import type { ReactNode } from "react";
-import { useCallback, useMemo, useRef } from "react";
-import { useLocalDatabase } from "../db/LocalDatabaseProvider";
+import { useCallback, useMemo, useRef, useEffect, useState } from "react";
+import { useLocalDatabase, type TableSchema } from "../db/LocalDatabaseProvider";
 import { trpc } from "../lib/trpc";
 import { type LocalTRPCContext, executeProcedure } from "./local-router";
-import { listPages, getPage, savePage, deletePage } from "../platform/LocalAdapter";
+import { createPagesStorage, type DatabaseContext, type PagesContext } from "@hands/agent/browser";
 
 // ============================================================================
 // Simple Observable (no @trpc/server dependency)
@@ -43,12 +43,25 @@ function observable<T>(fn: (observer: Observer<T>) => (() => void) | void): Obse
 }
 
 // ============================================================================
-// Extract title from frontmatter
+// Create DatabaseContext from LocalDatabase hooks
 // ============================================================================
 
-function extractTitle(content: string): string {
-  const match = content.match(/^---\s*\n[\s\S]*?title:\s*["']?(.+?)["']?\s*\n[\s\S]*?---/);
-  return match?.[1]?.trim() ?? "Untitled";
+function createDbContext(
+  query: <T = Record<string, unknown>>(sql: string, params?: unknown[]) => Promise<T[]>,
+  execute: (sql: string, params?: unknown[]) => Promise<void>,
+  schema: TableSchema[],
+  notifyChange: () => void
+): DatabaseContext {
+  return {
+    query,
+    execute,
+    getSchema: () =>
+      schema.map((t) => ({
+        table_name: t.table_name,
+        columns: t.columns,
+      })),
+    notifyChange,
+  };
 }
 
 // ============================================================================
@@ -97,46 +110,104 @@ interface LocalTRPCProviderProps {
 }
 
 export function LocalTRPCProvider({ children, queryClient }: LocalTRPCProviderProps) {
-  const localDb = useLocalDatabase();
+  const { query, execute, schema, notifyChange, dataVersion, workbookId, isReady } = useLocalDatabase();
+  const [pagesContext, setPagesContext] = useState<PagesContext | null>(null);
 
-  // Refs for stable context
-  const localDbRef = useRef(localDb);
-  localDbRef.current = localDb;
+  // Create refs for stable callbacks
+  const queryRef = useRef(query);
+  const executeRef = useRef(execute);
+  const schemaRef = useRef(schema);
+  const notifyChangeRef = useRef(notifyChange);
+  const dataVersionRef = useRef(dataVersion);
+  const workbookIdRef = useRef(workbookId);
+  const pagesContextRef = useRef(pagesContext);
+
+  // Update refs on value changes
+  useEffect(() => {
+    queryRef.current = query;
+    executeRef.current = execute;
+    schemaRef.current = schema;
+    notifyChangeRef.current = notifyChange;
+    dataVersionRef.current = dataVersion;
+    workbookIdRef.current = workbookId;
+    pagesContextRef.current = pagesContext;
+  }, [query, execute, schema, notifyChange, dataVersion, workbookId, pagesContext]);
+
+  // Create pages storage when database is ready
+  useEffect(() => {
+    if (!isReady) {
+      setPagesContext(null);
+      return;
+    }
+
+    // Create database context for pages storage
+    const dbContext = createDbContext(
+      queryRef.current,
+      executeRef.current,
+      schemaRef.current,
+      notifyChangeRef.current
+    );
+
+    // Create pages storage backed by SQLite
+    const pages = createPagesStorage(dbContext);
+    setPagesContext(pages);
+
+    console.log("[LocalTRPCProvider] Pages context created with SQLite storage");
+  }, [isReady]);
 
   // Create context getter (uses refs for stability)
   const getContext = useCallback((): LocalTRPCContext => {
-    const db = localDbRef.current;
-    const workbookId = db.workbookId;
+    const pages = pagesContextRef.current;
 
     return {
-      query: db.query,
-      execute: db.execute,
-      getSchema: () => db.schema,
-      workbookId,
-      notifyChange: db.notifyChange,
-      dataVersion: db.dataVersion,
+      query: queryRef.current,
+      execute: executeRef.current,
+      getSchema: () => schemaRef.current,
+      workbookId: workbookIdRef.current,
+      notifyChange: notifyChangeRef.current,
+      dataVersion: dataVersionRef.current,
 
-      // Page operations - use LocalAdapter's storage (hands-local IndexedDB)
+      // Page operations - use SQLite storage via _pages table
       getPages: async () => {
-        if (!workbookId) return [];
-        const pages = await listPages(workbookId);
-        return pages.map((p) => ({
-          path: p.path,
-          title: extractTitle(p.content),
+        // Use the latest pagesContext from ref
+        const currentPages = pagesContextRef.current;
+        if (!currentPages) {
+          console.warn("[LocalTRPCProvider] getPages called before pages context ready");
+          return [];
+        }
+        const pageList = await currentPages.listPages();
+        return pageList.map((p) => ({
+          path: p.pageId.endsWith(".mdx") ? p.pageId : `${p.pageId}.mdx`,
+          title: p.title,
         }));
       },
       getPage: async (path: string) => {
-        if (!workbookId) return null;
-        const page = await getPage(workbookId, path);
-        return page ? { content: page.content, title: extractTitle(page.content) } : null;
+        const currentPages = pagesContextRef.current;
+        if (!currentPages) {
+          console.warn("[LocalTRPCProvider] getPage called before pages context ready");
+          return null;
+        }
+        // Convert path to pageId (strip .mdx extension)
+        const pageId = path.replace(/\.mdx$/, "");
+        return currentPages.readPage(pageId);
       },
       savePage: async (path: string, content: string, _title?: string) => {
-        if (!workbookId) throw new Error("No workbook open");
-        await savePage(workbookId, path, content);
+        const currentPages = pagesContextRef.current;
+        if (!currentPages) throw new Error("Pages storage not ready");
+        // Convert path to pageId (strip .mdx extension)
+        const pageId = path.replace(/\.mdx$/, "");
+        await currentPages.writePage(pageId, content);
+        // Notify change to trigger React Query refetch
+        notifyChangeRef.current();
       },
       deletePage: async (path: string) => {
-        if (!workbookId) throw new Error("No workbook open");
-        await deletePage(workbookId, path);
+        const currentPages = pagesContextRef.current;
+        if (!currentPages) throw new Error("Pages storage not ready");
+        // Convert path to pageId (strip .mdx extension)
+        const pageId = path.replace(/\.mdx$/, "");
+        await currentPages.deletePage(pageId);
+        // Notify change to trigger React Query refetch
+        notifyChangeRef.current();
       },
     };
   }, []);

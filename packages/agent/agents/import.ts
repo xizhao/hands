@@ -205,7 +205,7 @@ Always report:
 export const importAgent: AgentConfig = {
   description: "Data loading worker - loads files into existing tables",
   mode: "subagent",
-  model: "openrouter/google/gemini-2.5-flash",
+  model: "openrouter/mistralai/devstral-2512:free",
   temperature: 0.1,
   prompt: IMPORT_PROMPT,
   permission: {

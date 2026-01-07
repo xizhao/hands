@@ -2,7 +2,8 @@
  * Browser Agent Provider
  *
  * Implements AgentProvider interface for browser environments.
- * Uses AI SDK + OpenRouter for LLM calls, in-memory state for sessions.
+ * Uses AI SDK + OpenRouter for LLM calls.
+ * Persists sessions to SQLite when DatabaseContext is available.
  */
 
 import type {
@@ -14,11 +15,15 @@ import type {
   Todo,
   AgentConfig,
   AgentEvent,
+  Part,
+  ToolPart,
 } from "../core";
 import { generateId } from "../core";
 import { runAgent } from "./agent";
 import { agents, defaultAgent } from "../agents";
-import type { ToolContext } from "./tools";
+import type { ToolContext, SubagentContext, SubagentResult, DatabaseContext } from "./tools";
+import { SUBAGENT_DISABLED_TOOLS } from "./tools";
+import { createSessionStorage, type SessionStorage } from "./storage";
 
 // ============================================================================
 // Event Emitter
@@ -55,16 +60,47 @@ export interface BrowserProviderConfig {
 }
 
 export class BrowserAgentProvider implements AgentProvider {
-  private sessions = new Map<string, Session>();
-  private messages = new Map<string, MessageWithParts[]>();
-  private todos = new Map<string, Todo[]>();
+  // In-memory caches (always present)
+  private sessionCache = new Map<string, Session>();
+  private messageCache = new Map<string, MessageWithParts[]>();
   private statuses = new Map<string, SessionStatus>();
   private abortControllers = new Map<string, AbortController>();
   private eventEmitter = new EventEmitter();
   private toolContext: ToolContext;
 
+  // SQLite storage (when db is available)
+  private storage: SessionStorage | null = null;
+  private initialized = false;
+
   constructor(config: BrowserProviderConfig) {
     this.toolContext = config.toolContext;
+
+    // Create storage layer if database is available
+    if (config.toolContext.db) {
+      this.storage = createSessionStorage(config.toolContext.db);
+    }
+  }
+
+  /**
+   * Initialize the provider by loading sessions from storage.
+   * Called automatically on first access, but can be called explicitly.
+   */
+  async initialize(): Promise<void> {
+    if (this.initialized) return;
+    this.initialized = true;
+
+    if (this.storage) {
+      try {
+        const sessions = await this.storage.listSessions();
+        for (const session of sessions) {
+          this.sessionCache.set(session.id, session);
+          this.statuses.set(session.id, { type: "idle" });
+        }
+        console.log(`[BrowserProvider] Loaded ${sessions.length} sessions from storage`);
+      } catch (err) {
+        console.error("[BrowserProvider] Failed to load sessions:", err);
+      }
+    }
   }
 
   // ---------------------------------------------------------------------------
@@ -72,29 +108,55 @@ export class BrowserAgentProvider implements AgentProvider {
   // ---------------------------------------------------------------------------
 
   async listSessions(): Promise<Session[]> {
-    return Array.from(this.sessions.values()).sort(
+    await this.initialize();
+
+    if (this.storage) {
+      return this.storage.listSessions();
+    }
+
+    return Array.from(this.sessionCache.values()).sort(
       (a, b) => b.time.updated - a.time.updated
     );
   }
 
   async getSession(sessionId: string): Promise<Session> {
-    const session = this.sessions.get(sessionId);
-    if (!session) throw new Error(`Session not found: ${sessionId}`);
-    return session;
+    await this.initialize();
+
+    // Check cache first
+    const cached = this.sessionCache.get(sessionId);
+    if (cached) return cached;
+
+    // Try storage
+    if (this.storage) {
+      const session = await this.storage.getSession(sessionId);
+      if (session) {
+        this.sessionCache.set(session.id, session);
+        return session;
+      }
+    }
+
+    throw new Error(`Session not found: ${sessionId}`);
   }
 
   async createSession(options?: { title?: string; parentId?: string }): Promise<Session> {
-    const now = Date.now();
-    const session: Session = {
-      id: generateId("session"),
-      title: options?.title,
-      parentId: options?.parentId,
-      time: { created: now, updated: now },
-    };
+    await this.initialize();
 
-    this.sessions.set(session.id, session);
-    this.messages.set(session.id, []);
-    this.todos.set(session.id, []);
+    let session: Session;
+
+    if (this.storage) {
+      session = await this.storage.createSession(options);
+    } else {
+      const now = Date.now();
+      session = {
+        id: generateId("ses"),
+        title: options?.title,
+        parentId: options?.parentId,
+        time: { created: now, updated: now },
+      };
+    }
+
+    this.sessionCache.set(session.id, session);
+    this.messageCache.set(session.id, []);
     this.statuses.set(session.id, { type: "idle" });
 
     this.eventEmitter.emit({ type: "session.created", session });
@@ -103,9 +165,12 @@ export class BrowserAgentProvider implements AgentProvider {
   }
 
   async deleteSession(sessionId: string): Promise<void> {
-    this.sessions.delete(sessionId);
-    this.messages.delete(sessionId);
-    this.todos.delete(sessionId);
+    if (this.storage) {
+      await this.storage.deleteSession(sessionId);
+    }
+
+    this.sessionCache.delete(sessionId);
+    this.messageCache.delete(sessionId);
     this.statuses.delete(sessionId);
 
     this.eventEmitter.emit({ type: "session.deleted", sessionId });
@@ -128,11 +193,22 @@ export class BrowserAgentProvider implements AgentProvider {
   // ---------------------------------------------------------------------------
 
   async listMessages(sessionId: string): Promise<MessageWithParts[]> {
-    return this.messages.get(sessionId) ?? [];
+    // Check cache first
+    const cached = this.messageCache.get(sessionId);
+    if (cached && cached.length > 0) return cached;
+
+    // Try storage
+    if (this.storage) {
+      const messages = await this.storage.listMessages(sessionId);
+      this.messageCache.set(sessionId, messages);
+      return messages;
+    }
+
+    return [];
   }
 
   async getMessage(sessionId: string, messageId: string): Promise<MessageWithParts> {
-    const messages = this.messages.get(sessionId) ?? [];
+    const messages = await this.listMessages(sessionId);
     const msg = messages.find((m) => m.info.id === messageId);
     if (!msg) throw new Error(`Message not found: ${messageId}`);
     return msg;
@@ -147,12 +223,17 @@ export class BrowserAgentProvider implements AgentProvider {
     content: string,
     options?: PromptOptions
   ): AsyncIterable<AgentEvent> {
-    const messages = this.messages.get(sessionId) ?? [];
+    const messages = await this.listMessages(sessionId);
 
     // Create user message
     const userMsg = this.createUserMessage(sessionId, content, messages);
     messages.push(userMsg);
-    this.messages.set(sessionId, messages);
+    this.messageCache.set(sessionId, messages);
+
+    // Persist user message
+    if (this.storage) {
+      await this.storage.createMessage(sessionId, userMsg);
+    }
 
     this.eventEmitter.emit({
       type: "message.created",
@@ -168,12 +249,17 @@ export class BrowserAgentProvider implements AgentProvider {
     content: string,
     options?: PromptOptions
   ): Promise<{ messageId: string }> {
-    const messages = this.messages.get(sessionId) ?? [];
+    const messages = await this.listMessages(sessionId);
 
     // Create user message
     const userMsg = this.createUserMessage(sessionId, content, messages);
     messages.push(userMsg);
-    this.messages.set(sessionId, messages);
+    this.messageCache.set(sessionId, messages);
+
+    // Persist user message
+    if (this.storage) {
+      await this.storage.createMessage(sessionId, userMsg);
+    }
 
     this.eventEmitter.emit({
       type: "message.created",
@@ -208,7 +294,10 @@ export class BrowserAgentProvider implements AgentProvider {
   // ---------------------------------------------------------------------------
 
   async listTodos(sessionId: string): Promise<Todo[]> {
-    return this.todos.get(sessionId) ?? [];
+    if (this.storage) {
+      return this.storage.listTodos(sessionId);
+    }
+    return [];
   }
 
   // ---------------------------------------------------------------------------
@@ -257,6 +346,160 @@ export class BrowserAgentProvider implements AgentProvider {
   }
 
   // ---------------------------------------------------------------------------
+  // Subagent Spawning
+  // ---------------------------------------------------------------------------
+
+  /**
+   * Create a SubagentContext for the given session.
+   * This allows the Task tool to spawn child agents.
+   */
+  createSubagentContext(sessionId: string): SubagentContext {
+    return {
+      listAgents: () => {
+        return Object.entries(agents).map(([id, config]) => ({
+          id,
+          name: (config.name as string | undefined) ?? id,
+          description: config.description,
+          mode: config.mode,
+        }));
+      },
+      spawn: async (opts) => this.spawnSubagent(sessionId, opts),
+    };
+  }
+
+  /**
+   * Spawn a subagent in a child session.
+   */
+  private async spawnSubagent(
+    parentSessionId: string,
+    opts: {
+      agentId: string;
+      prompt: string;
+      description: string;
+    }
+  ): Promise<SubagentResult> {
+    const agentConfig = agents[opts.agentId as keyof typeof agents];
+    if (!agentConfig) {
+      return {
+        sessionId: "",
+        text: "",
+        toolCalls: [],
+        error: `Unknown agent: ${opts.agentId}`,
+      };
+    }
+
+    // Create child session
+    const childSession = await this.createSession({
+      title: `${opts.description} (@${opts.agentId} subagent)`,
+      parentId: parentSessionId,
+    });
+
+    // Create user message with the prompt
+    const userMsg = this.createUserMessage(childSession.id, opts.prompt, []);
+    const messages = [userMsg];
+    this.messageCache.set(childSession.id, messages);
+
+    // Persist user message
+    if (this.storage) {
+      await this.storage.createMessage(childSession.id, userMsg);
+    }
+
+    // Get base tool context
+    const baseToolContext = this.toolContext;
+
+    // Build tool context for subagent (disable task tool to prevent recursion)
+    const subagentToolContext: ToolContext = {
+      ...baseToolContext,
+      sessionId: childSession.id,
+      // Don't pass subagent context to prevent infinite nesting
+      subagent: undefined,
+    };
+
+    // Get enabled tools, filtering out disabled ones
+    const enabledTools = agentConfig.tools
+      ? Object.entries(agentConfig.tools)
+          .filter(([_, enabled]) => enabled)
+          .map(([toolId]) => toolId)
+          .filter((toolId) => !SUBAGENT_DISABLED_TOOLS.includes(toolId as any))
+      : undefined;
+
+    // Collect results
+    const toolCalls: SubagentResult["toolCalls"] = [];
+    let finalText = "";
+    const collectedParts: Part[] = [];
+
+    try {
+      const { events } = runAgent({
+        session: childSession,
+        messages,
+        agent: agentConfig,
+        toolContext: subagentToolContext,
+        enabledTools: enabledTools as any,
+      });
+
+      for await (const event of events) {
+        switch (event.type) {
+          case "part.created":
+          case "part.updated":
+            const part = event.part as Part;
+            const existingIdx = collectedParts.findIndex((p) => p.id === part.id);
+            if (existingIdx >= 0) {
+              collectedParts[existingIdx] = part;
+            } else {
+              collectedParts.push(part);
+            }
+
+            // Track tool calls
+            if (part.type === "tool") {
+              const toolPart = part as ToolPart;
+              const existingTool = toolCalls.find((t) => t.tool === toolPart.tool && t.status !== "completed");
+              if (existingTool) {
+                existingTool.status = toolPart.state.status;
+                if (toolPart.state.status === "completed") {
+                  existingTool.title = toolPart.state.title;
+                }
+              } else {
+                toolCalls.push({
+                  tool: toolPart.tool,
+                  status: toolPart.state.status,
+                  title: toolPart.state.status === "completed" ? toolPart.state.title : undefined,
+                });
+              }
+            }
+            break;
+
+          case "error":
+            return {
+              sessionId: childSession.id,
+              text: finalText,
+              toolCalls,
+              error: event.error.message,
+            };
+        }
+      }
+
+      // Extract final text from parts
+      finalText = collectedParts
+        .filter((p): p is Part & { type: "text" } => p.type === "text")
+        .map((p) => p.text)
+        .join("\n");
+
+      return {
+        sessionId: childSession.id,
+        text: finalText,
+        toolCalls,
+      };
+    } catch (error) {
+      return {
+        sessionId: childSession.id,
+        text: finalText,
+        toolCalls,
+        error: error instanceof Error ? error.message : String(error),
+      };
+    }
+  }
+
+  // ---------------------------------------------------------------------------
   // Private Helpers
   // ---------------------------------------------------------------------------
 
@@ -302,7 +545,14 @@ export class BrowserAgentProvider implements AgentProvider {
     const abortController = new AbortController();
     this.abortControllers.set(sessionId, abortController);
 
-    const session = this.sessions.get(sessionId)!;
+    const session = this.sessionCache.get(sessionId)!;
+
+    // Build tool context with subagent support
+    const toolContextWithSubagent: ToolContext = {
+      ...this.toolContext,
+      sessionId,
+      subagent: this.createSubagentContext(sessionId),
+    };
 
     try {
       const { events } = runAgent({
@@ -312,7 +562,7 @@ export class BrowserAgentProvider implements AgentProvider {
         },
         messages: messages as any,
         agent: agentConfig,
-        toolContext: this.toolContext,
+        toolContext: toolContextWithSubagent,
         abortSignal: options?.abortSignal ?? abortController.signal,
       });
 
@@ -335,9 +585,17 @@ export class BrowserAgentProvider implements AgentProvider {
               },
               parts: [],
             };
-            const allMessages = this.messages.get(sessionId) ?? [];
+            const allMessages = this.messageCache.get(sessionId) ?? [];
             allMessages.push(assistantMsg);
-            this.messages.set(sessionId, allMessages);
+            this.messageCache.set(sessionId, allMessages);
+
+            // Persist assistant message (initially empty)
+            if (this.storage) {
+              this.storage.createMessage(sessionId, assistantMsg).catch((err) => {
+                console.error("[BrowserProvider] Failed to persist message:", err);
+              });
+            }
+
             yield { type: "message.created", message: assistantMsg.info } as AgentEvent;
             break;
 
@@ -348,8 +606,16 @@ export class BrowserAgentProvider implements AgentProvider {
               const partIdx = assistantMsg.parts.findIndex((p) => p.id === part.id);
               if (partIdx >= 0) {
                 assistantMsg.parts[partIdx] = part;
+                // Update part in storage
+                if (this.storage) {
+                  this.storage.updatePart(part).catch(() => {});
+                }
               } else {
                 assistantMsg.parts.push(part);
+                // Create part in storage
+                if (this.storage) {
+                  this.storage.createPart(assistantMsg.info.id, sessionId, part).catch(() => {});
+                }
               }
             }
             yield event as AgentEvent;
@@ -374,6 +640,12 @@ export class BrowserAgentProvider implements AgentProvider {
 
       if (session) {
         session.time.updated = Date.now();
+
+        // Update session timestamp in storage
+        if (this.storage) {
+          this.storage.updateSession(sessionId, { updated: session.time.updated }).catch(() => {});
+        }
+
         yield { type: "session.updated", session } as AgentEvent;
       }
     }

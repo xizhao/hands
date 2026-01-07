@@ -8,7 +8,7 @@
 import { Gear, Key } from "@phosphor-icons/react";
 import { Check, Sun, Moon, Monitor } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
-import { getStoredConfig, setStoredConfig } from "@hands/agent/browser";
+import { getStoredConfig, setStoredConfig, hasCustomApiKey, clearStoredConfig } from "@hands/agent/browser";
 import { getTheme, setTheme } from "@hands/app";
 import { cn } from "@hands/app";
 
@@ -20,22 +20,28 @@ export function SettingsPopover() {
   const popoverRef = useRef<HTMLDivElement>(null);
   const buttonRef = useRef<HTMLButtonElement>(null);
 
-  // Check for API key on mount
+  // Check for custom API key on mount
   useEffect(() => {
-    const config = getStoredConfig();
-    if (config?.apiKey) {
-      setApiKey(config.apiKey);
-      setHasKey(true);
+    setHasKey(hasCustomApiKey());
+    if (hasCustomApiKey()) {
+      const config = getStoredConfig();
+      if (config?.apiKey) {
+        setApiKey(config.apiKey);
+      }
     }
   }, []);
 
   // Refresh when opened
   useEffect(() => {
     if (open) {
-      const config = getStoredConfig();
-      if (config?.apiKey) {
-        setApiKey(config.apiKey);
-        setHasKey(true);
+      setHasKey(hasCustomApiKey());
+      if (hasCustomApiKey()) {
+        const config = getStoredConfig();
+        if (config?.apiKey) {
+          setApiKey(config.apiKey);
+        }
+      } else {
+        setApiKey("");
       }
     }
   }, [open]);
@@ -80,6 +86,12 @@ export function SettingsPopover() {
     }
   };
 
+  const handleClearApiKey = () => {
+    clearStoredConfig("openrouter");
+    setApiKey("");
+    setHasKey(false);
+  };
+
   const themeOptions = [
     { id: "system", icon: Monitor },
     { id: "dark", icon: Moon },
@@ -101,9 +113,6 @@ export function SettingsPopover() {
         title="Settings"
       >
         <Gear weight={open ? "fill" : "duotone"} className="h-4 w-4" />
-        {!hasKey && (
-          <span className="absolute -top-0.5 -right-0.5 w-2 h-2 bg-yellow-500 rounded-full" />
-        )}
       </button>
 
       {/* Popover */}
@@ -138,42 +147,38 @@ export function SettingsPopover() {
             </div>
           </div>
 
-          {/* API Key section */}
-          <div className="p-3">
-            <div className="flex items-center gap-2 text-xs font-medium text-muted-foreground mb-2">
-              <Key weight="duotone" className="h-3.5 w-3.5" />
-              <span>OpenRouter API Key</span>
-              {hasKey && (
+          {/* API Key section - only show when user has custom key */}
+          {hasKey && (
+            <div className="p-3">
+              <div className="flex items-center gap-2 text-xs font-medium text-muted-foreground mb-2">
+                <Key weight="duotone" className="h-3.5 w-3.5" />
+                <span>OpenRouter API Key</span>
                 <span className="ml-auto text-green-500">Connected</span>
-              )}
-            </div>
-            <div className="flex items-center gap-2">
-              <input
-                type="password"
-                value={apiKey}
-                onChange={(e) => setApiKey(e.target.value)}
-                placeholder="sk-or-v1-..."
-                className="flex-1 h-8 px-2.5 text-xs bg-background border border-border rounded-lg placeholder:text-muted-foreground/50 focus:outline-none focus:ring-2 focus:ring-ring font-mono"
-              />
+              </div>
+              <div className="flex items-center gap-2">
+                <input
+                  type="password"
+                  value={apiKey}
+                  onChange={(e) => setApiKey(e.target.value)}
+                  placeholder="sk-or-v1-..."
+                  className="flex-1 h-8 px-2.5 text-xs bg-background border border-border rounded-lg placeholder:text-muted-foreground/50 focus:outline-none focus:ring-2 focus:ring-ring font-mono"
+                />
+                <button
+                  onClick={handleSaveApiKey}
+                  disabled={!apiKey.trim()}
+                  className="h-8 px-3 text-xs bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  Save
+                </button>
+              </div>
               <button
-                onClick={handleSaveApiKey}
-                disabled={!apiKey.trim()}
-                className="h-8 px-3 text-xs bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                onClick={handleClearApiKey}
+                className="text-[11px] text-muted-foreground mt-2 hover:text-foreground transition-colors"
               >
-                Save
+                Remove key & use free tier
               </button>
             </div>
-            <p className="text-[11px] text-muted-foreground mt-2">
-              <a
-                href="https://openrouter.ai/keys"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="text-primary hover:underline"
-              >
-                Get a key at openrouter.ai
-              </a>
-            </p>
-          </div>
+          )}
         </div>
       )}
     </div>

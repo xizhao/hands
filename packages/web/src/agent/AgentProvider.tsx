@@ -1,12 +1,19 @@
 /**
  * Agent Provider
  *
- * Sets up the browser agent tool context with database access.
+ * Sets up the browser agent tool context with database and pages access.
  * Must be used within LocalDatabaseProvider.
+ *
+ * Pages and sessions are stored in SQLite for per-workbook persistence.
  */
 
 import { type ReactNode, useEffect, useRef, useState } from "react";
-import { setToolContext, type ToolContext, type DatabaseContext } from "@hands/agent/browser";
+import {
+  setToolContext,
+  createPagesStorage,
+  type ToolContext,
+  type DatabaseContext,
+} from "@hands/agent/browser";
 import { AgentReadyProvider } from "@hands/app";
 import { useLocalDatabase } from "../db/LocalDatabaseProvider";
 
@@ -19,8 +26,10 @@ interface AgentProviderProps {
 }
 
 /**
- * Provider that wires up the browser agent with database access.
+ * Provider that wires up the browser agent with database and pages access.
  * Place this inside LocalDatabaseProvider and LocalTRPCProvider.
+ *
+ * All data (pages, sessions, user tables) is stored in SQLite via OPFS.
  */
 export function AgentProvider({ children }: AgentProviderProps) {
   const { query, execute, schema, notifyChange, isReady } = useLocalDatabase();
@@ -44,47 +53,38 @@ export function AgentProvider({ children }: AgentProviderProps) {
   useEffect(() => {
     if (!isReady) return;
 
-    // Create database context that matches DatabaseContext interface
+    // Create database context for SQL operations
     const db: DatabaseContext = {
-      // Execute a read query (async)
       query: async (sql: string, params?: unknown[]) => {
         return queryRef.current(sql, params);
       },
-
-      // Execute a mutation (async)
       execute: async (sql: string, params?: unknown[]) => {
         await executeRef.current(sql, params);
       },
-
-      // Get current schema
       getSchema: () => {
         return schemaRef.current.map((t) => ({
           table_name: t.table_name,
           columns: t.columns,
         }));
       },
-
-      // Notify data change
       notifyChange: () => {
         notifyChangeRef.current();
       },
-
-      // Page operations (stubs for now)
-      getPages: async () => [],
-      getPage: async () => null,
-      savePage: async () => {},
     };
+
+    // Create pages context using SQLite storage (via _pages table)
+    const pages = createPagesStorage(db);
 
     const toolContext: ToolContext = {
       db,
+      pages,
       corsProxy: "https://corsproxy.io/?",
     };
 
     setToolContext(toolContext);
     setIsAgentReady(true);
-    console.log("[AgentProvider] Tool context set, agent ready");
+    console.log("[AgentProvider] Tool context set with SQLite persistence, agent ready");
 
-    // Cleanup on unmount
     return () => {
       setToolContext(null as unknown as ToolContext);
       setIsAgentReady(false);

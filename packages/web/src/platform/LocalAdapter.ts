@@ -3,6 +3,10 @@
  *
  * Platform adapter for fully local browser execution with BYOK.
  * Uses official sqlite-wasm for in-browser SQLite with OPFS persistence.
+ *
+ * Storage architecture:
+ * - IndexedDB: Workbook metadata (list of workbooks, settings)
+ * - SQLite via OPFS: Per-workbook data (user tables, pages, sessions)
  */
 
 import type {
@@ -29,23 +33,11 @@ interface LocalWorkbookData {
   last_opened_at: number;
 }
 
-interface LocalPageData {
-  workbookId: string;
-  path: string;
-  content: string;
-  updated_at: number;
-}
-
 interface LocalDBSchema {
   workbooks: {
     key: string;
     value: LocalWorkbookData;
     indexes: { "by-updated": number };
-  };
-  pages: {
-    key: string;
-    value: LocalPageData;
-    indexes: { "by-workbook": string };
   };
   settings: {
     key: string;
@@ -54,65 +46,49 @@ interface LocalDBSchema {
 }
 
 // ============================================================================
-// IndexedDB Setup (for workbook metadata, pages, settings - NOT SQLite data)
+// IndexedDB Setup (for workbook metadata and global settings only)
+//
+// NOTE: Pages, sessions, and user data are stored in SQLite via OPFS.
+// See @hands/agent/browser for page and session storage.
 // ============================================================================
 
 const DB_NAME = "hands-local";
-const DB_VERSION = 1;
+const DB_VERSION = 2; // Bumped to remove pages store
 
 let idbPromise: Promise<IDBPDatabase<LocalDBSchema>> | null = null;
 
 async function getIdb(): Promise<IDBPDatabase<LocalDBSchema>> {
   if (!idbPromise) {
     idbPromise = openDB<LocalDBSchema>(DB_NAME, DB_VERSION, {
-      upgrade(db) {
+      upgrade(db, oldVersion, _newVersion, transaction) {
+        console.log(`[LocalAdapter] Upgrading IndexedDB from v${oldVersion} to v${DB_VERSION}`);
+
+        // Create workbooks store
         if (!db.objectStoreNames.contains("workbooks")) {
           const workbooksStore = db.createObjectStore("workbooks", { keyPath: "id" });
           workbooksStore.createIndex("by-updated", "updated_at");
         }
-        if (!db.objectStoreNames.contains("pages")) {
-          const pagesStore = db.createObjectStore("pages", { keyPath: ["workbookId", "path"] });
-          pagesStore.createIndex("by-workbook", "workbookId");
-        }
+
+        // Create settings store
         if (!db.objectStoreNames.contains("settings")) {
           db.createObjectStore("settings");
         }
+
+        // Remove pages store if upgrading from v1 (pages now in SQLite)
+        if (oldVersion < 2 && db.objectStoreNames.contains("pages")) {
+          console.log("[LocalAdapter] Removing legacy pages store (now in SQLite)");
+          db.deleteObjectStore("pages");
+        }
+      },
+      blocked() {
+        console.warn("[LocalAdapter] IndexedDB upgrade blocked - close other tabs");
+      },
+      blocking() {
+        console.warn("[LocalAdapter] This tab is blocking IndexedDB upgrade");
       },
     });
   }
   return idbPromise;
-}
-
-// ============================================================================
-// Page Storage
-//
-// NOTE: API key storage is handled by @hands/agent/browser
-// Use getStoredConfig/setStoredConfig from there for API keys
-// ============================================================================
-
-export async function listPages(workbookId: string): Promise<LocalPageData[]> {
-  const idb = await getIdb();
-  return idb.getAllFromIndex("pages", "by-workbook", workbookId);
-}
-
-export async function getPage(workbookId: string, path: string): Promise<LocalPageData | undefined> {
-  const idb = await getIdb();
-  return idb.get("pages", [workbookId, path]);
-}
-
-export async function savePage(workbookId: string, path: string, content: string): Promise<void> {
-  const idb = await getIdb();
-  await idb.put("pages", {
-    workbookId,
-    path,
-    content,
-    updated_at: Date.now(),
-  });
-}
-
-export async function deletePage(workbookId: string, path: string): Promise<void> {
-  const idb = await getIdb();
-  await idb.delete("pages", [workbookId, path]);
 }
 
 // ============================================================================
@@ -193,16 +169,12 @@ export function createLocalPlatformAdapter(): PlatformAdapter {
       delete: async (id: string): Promise<void> => {
         const idb = await getIdb();
 
-        // Delete workbook metadata
+        // Delete workbook metadata from IndexedDB
         await idb.delete("workbooks", id);
 
-        // Delete all pages
-        const pages = await idb.getAllFromIndex("pages", "by-workbook", id);
-        for (const page of pages) {
-          await idb.delete("pages", [id, page.path]);
-        }
-
-        // Note: SQLite database in OPFS is deleted separately if needed
+        // Note: SQLite database in OPFS (pages, tables, sessions) is
+        // automatically cleaned up when the OPFS file is deleted.
+        // TODO: Add OPFS cleanup for hands-{workbookId}.sqlite3
       },
     },
 

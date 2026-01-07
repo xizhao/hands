@@ -26,13 +26,13 @@ export interface LocalTRPCContext {
   notifyChange: () => void;
   /** Data version for reactivity */
   dataVersion: number;
-  /** Get pages from IndexedDB */
+  /** Get pages from SQLite _pages table */
   getPages: () => Promise<Array<{ path: string; title: string }>>;
-  /** Get a page */
+  /** Get a page from SQLite */
   getPage: (path: string) => Promise<{ content: string; title: string } | null>;
-  /** Save a page */
+  /** Save a page to SQLite */
   savePage: (path: string, content: string, title?: string) => Promise<void>;
-  /** Delete a page */
+  /** Delete a page from SQLite */
   deletePage: (path: string) => Promise<void>;
 }
 
@@ -121,12 +121,12 @@ export async function dbDropTable(ctx: LocalTRPCContext, input: { tableName: str
   return { success: true, tableName: safeName };
 }
 
-/** domains.list - List all domains */
-export async function domainsList(ctx: LocalTRPCContext) {
+/** tables.list - List all tables */
+export async function tablesList(ctx: LocalTRPCContext) {
   const schema = ctx.getSchema();
   const pages = await ctx.getPages();
 
-  const domains = schema.map((table) => {
+  const tables = schema.map((table) => {
     const pageSlug = table.table_name.replace(/_/g, "-");
     const page = pages.find(
       (p) => p.path === `${pageSlug}.mdx` || p.path === `${pageSlug}/index.mdx`
@@ -138,7 +138,7 @@ export async function domainsList(ctx: LocalTRPCContext) {
       columns: table.columns,
       schemaHash: "",
       foreignKeys: [],
-      relatedDomains: [],
+      relatedTables: [],
       hasPage: !!page,
       pagePath: page?.path,
       pageId: page?.path,
@@ -147,16 +147,16 @@ export async function domainsList(ctx: LocalTRPCContext) {
     };
   });
 
-  return { domains, errors: [] };
+  return { tables, errors: [] };
 }
 
-/** domains.get - Get a single domain */
-export async function domainsGet(ctx: LocalTRPCContext, input: { domainId: string }) {
+/** tables.get - Get a single table */
+export async function tablesGet(ctx: LocalTRPCContext, input: { tableId: string }) {
   const schema = ctx.getSchema();
-  const table = schema.find((t) => t.table_name === input.domainId);
+  const table = schema.find((t) => t.table_name === input.tableId);
 
   if (!table) {
-    throw new Error(`Domain not found: ${input.domainId}`);
+    throw new Error(`Table not found: ${input.tableId}`);
   }
 
   const pages = await ctx.getPages();
@@ -171,16 +171,16 @@ export async function domainsGet(ctx: LocalTRPCContext, input: { domainId: strin
     columns: table.columns,
     schemaHash: "",
     foreignKeys: [],
-    relatedDomains: [],
+    relatedTables: [],
     hasPage: !!page,
     pagePath: page?.path,
     pageId: page?.path,
   };
 }
 
-/** domains.create - Create a new domain */
-export async function domainsCreate(ctx: LocalTRPCContext, input: { name: string }) {
-  const tableName = input.name;
+/** tables.create - Create a new table (SQLite only, no page creation) */
+export async function tablesCreate(ctx: LocalTRPCContext, input: { name: string }) {
+  const tableName = input.name.replace(/[^a-zA-Z0-9_]/g, "");
 
   // Check if table exists
   const schema = ctx.getSchema();
@@ -188,53 +188,26 @@ export async function domainsCreate(ctx: LocalTRPCContext, input: { name: string
     throw new Error(`Table already exists: ${tableName}`);
   }
 
-  // Create table
+  // Create table in SQLite
   await ctx.execute(`CREATE TABLE "${tableName}" (id INTEGER PRIMARY KEY AUTOINCREMENT)`);
-
-  // Create associated page
-  const pageSlug = tableName.replace(/_/g, "-");
-  const title = tableName
-    .split("_")
-    .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
-    .join(" ");
-
-  const pageContent = `---
-title: ${title}
----
-
-`;
-
-  await ctx.savePage(`${pageSlug}.mdx`, pageContent, title);
   ctx.notifyChange();
 
   return {
     success: true,
-    domainId: tableName,
-    pageSlug,
+    tableId: tableName,
   };
 }
 
-/** domains.delete - Delete a domain */
-export async function domainsDelete(ctx: LocalTRPCContext, input: { domainId: string }) {
-  const tableName = input.domainId.replace(/[^a-zA-Z0-9_]/g, "");
+/** tables.delete - Delete a table (SQLite only) */
+export async function tablesDelete(ctx: LocalTRPCContext, input: { tableId: string }) {
+  const tableName = input.tableId.replace(/[^a-zA-Z0-9_]/g, "");
 
   await ctx.execute(`DROP TABLE IF EXISTS "${tableName}"`);
-
-  // Delete associated page
-  const pageSlug = tableName.replace(/_/g, "-");
-  try {
-    await ctx.deletePage(`${pageSlug}.mdx`);
-  } catch {
-    // Page might not exist
-  }
-
   ctx.notifyChange();
 
   return {
     success: true,
     deletedTable: tableName,
-    deletedPage: true,
-    referencingTables: [],
   };
 }
 
@@ -324,9 +297,13 @@ export async function pagesSave(ctx: LocalTRPCContext, input: { path: string; co
 }
 
 /** pages.delete - Delete a page */
-export async function pagesDelete(ctx: LocalTRPCContext, input: { path: string }) {
-  await ctx.deletePage(input.path);
-  return { success: true };
+export async function pagesDelete(ctx: LocalTRPCContext, input: { route: string }) {
+  // Normalize route to path
+  const route = input.route.startsWith("/") ? input.route.slice(1) : input.route;
+  const path = route === "" ? "index.mdx" : `${route}.mdx`;
+
+  await ctx.deletePage(path);
+  return { success: true, deletedRoute: `/${route}`, deletedPath: path };
 }
 
 // ============================================================================
@@ -349,17 +326,23 @@ export const procedures: Record<string, ProcedureDefinition> = {
   "db.schema": { type: "query", handler: dbSchema },
   "db.dropTable": { type: "mutation", handler: dbDropTable },
 
-  // Domains
-  "domains.list": { type: "query", handler: domainsList },
-  "domains.get": { type: "query", handler: domainsGet },
-  "domains.create": { type: "mutation", handler: domainsCreate },
-  "domains.delete": { type: "mutation", handler: domainsDelete },
-  "domains.rename": { type: "mutation", handler: async (ctx, input: { domainId: string; newName: string }) => {
-    // Rename table
-    const oldName = input.domainId.replace(/[^a-zA-Z0-9_]/g, "");
+  // Tables
+  "tables.list": { type: "query", handler: tablesList },
+  "tables.get": { type: "query", handler: tablesGet },
+  "tables.create": { type: "mutation", handler: tablesCreate },
+  "tables.delete": { type: "mutation", handler: tablesDelete },
+  "tables.rename": { type: "mutation", handler: async (ctx, input: { tableId: string; newName: string }) => {
+    const oldName = input.tableId.replace(/[^a-zA-Z0-9_]/g, "");
     const newName = input.newName.replace(/[^a-zA-Z0-9_]/g, "");
+
+    if (oldName === newName) {
+      return { success: true, noChange: true };
+    }
+
+    // Rename table in SQLite only
     await ctx.execute(`ALTER TABLE "${oldName}" RENAME TO "${newName}"`);
     ctx.notifyChange();
+
     return { success: true, oldName, newName };
   }},
 
@@ -389,6 +372,37 @@ export const procedures: Record<string, ProcedureDefinition> = {
     const newPath = `${newId}.mdx`;
     await ctx.savePage(newPath, page.content);
     return { originalRoute: input.route, newRoute: `/${newId}`, newPath };
+  }},
+  "pages.rename": { type: "mutation", handler: async (ctx, input: { route: string; newSlug: string }) => {
+    // Normalize route to get current path
+    const route = input.route.startsWith("/") ? input.route.slice(1) : input.route;
+    const oldPath = route === "" ? "index.mdx" : `${route}.mdx`;
+    const newPath = input.newSlug === "index" ? "index.mdx" : `${input.newSlug}.mdx`;
+
+    if (oldPath === newPath) {
+      return { noChange: true, newRoute: `/${route}` };
+    }
+
+    // Get the old page content
+    const page = await ctx.getPage(oldPath);
+    if (!page) throw new Error(`Page not found: ${input.route}`);
+
+    // Update title in frontmatter to match new slug
+    const newTitle = input.newSlug
+      .split("-")
+      .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
+      .join(" ");
+    const updatedContent = page.content.replace(
+      /^(---\s*\n[\s\S]*?title:\s*)["']?.*?["']?(\s*\n)/m,
+      `$1"${newTitle}"$2`
+    );
+
+    // Save to new path and delete old
+    await ctx.savePage(newPath, updatedContent, newTitle);
+    await ctx.deletePage(oldPath);
+
+    const newRoute = input.newSlug === "index" ? "/" : `/${input.newSlug}`;
+    return { oldRoute: `/${route}`, newRoute, newPath };
   }},
 
   // Editor State (stubs - stored in memory/localStorage for web)

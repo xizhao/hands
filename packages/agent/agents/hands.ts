@@ -395,7 +395,7 @@ Run independent tasks in parallel:
 export const handsAgent: AgentConfig = {
   description: "Primary user-facing agent - friendly data assistant",
   mode: "primary",
-  model: "openrouter/anthropic/claude-opus-4.5",
+  model: "openrouter/mistralai/devstral-2512:free",
   prompt: HANDS_PROMPT,
   permission: {
     bash: { "*": "allow" },
@@ -412,6 +412,7 @@ export const handsAgent: AgentConfig = {
 
     // Web research
     websearch: true,
+    webfetch: true,
 
     // Page editing (MDX files in pages/)
     read: true,

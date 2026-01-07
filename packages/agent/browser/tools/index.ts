@@ -13,7 +13,7 @@ import { z } from "zod";
 
 export interface DatabaseContext {
   /** Execute a read query (sync or async) */
-  query: (sql: string, params?: unknown[]) => unknown[] | Promise<unknown[]>;
+  query: <T = Record<string, unknown>>(sql: string, params?: unknown[]) => T[] | Promise<T[]>;
   /** Execute a mutation (INSERT/UPDATE/DELETE) (sync or async) */
   execute: (sql: string, params?: unknown[]) => void | Promise<void>;
   /** Get current schema */
@@ -23,12 +23,50 @@ export interface DatabaseContext {
   }>;
   /** Notify data change (for reactivity) */
   notifyChange: () => void;
-  /** Get pages list */
-  getPages: () => Promise<Array<{ path: string; title: string }>>;
-  /** Get a page */
-  getPage: (path: string) => Promise<{ content: string; title: string } | null>;
-  /** Save a page */
-  savePage: (path: string, content: string, title?: string) => Promise<void>;
+}
+
+// ============================================================================
+// Pages Context Interface (for page operations)
+// ============================================================================
+
+export interface PagesContext {
+  /** List all pages in the workbook */
+  listPages: () => Promise<Array<{ pageId: string; title: string }>>;
+  /** Read a page's content */
+  readPage: (pageId: string) => Promise<{ content: string; title: string } | null>;
+  /** Create or update a page */
+  writePage: (pageId: string, content: string) => Promise<void>;
+  /** Delete a page */
+  deletePage: (pageId: string) => Promise<void>;
+  /** Search pages by content (optional - falls back to listPages + readPage) */
+  searchPages?: (query: string) => Promise<Array<{ pageId: string; title: string; matches: string[] }>>;
+}
+
+// ============================================================================
+// Subagent Context (for spawning child agents)
+// ============================================================================
+
+export interface SubagentResult {
+  /** Child session ID */
+  sessionId: string;
+  /** Final text from the subagent */
+  text: string;
+  /** Tool calls made by the subagent */
+  toolCalls: Array<{ tool: string; title?: string; status: string }>;
+  /** Error if the subagent failed */
+  error?: string;
+}
+
+export interface SubagentContext {
+  /** Available agents */
+  listAgents: () => Array<{ id: string; name: string; description?: string; mode?: string }>;
+  /** Spawn a subagent */
+  spawn: (opts: {
+    agentId: string;
+    prompt: string;
+    description: string;
+    parentSessionId: string;
+  }) => Promise<SubagentResult>;
 }
 
 // ============================================================================
@@ -38,10 +76,16 @@ export interface DatabaseContext {
 export interface ToolContext {
   /** Database context for SQL operations */
   db?: DatabaseContext;
+  /** Pages context for page operations */
+  pages?: PagesContext;
+  /** Subagent context for spawning child agents */
+  subagent?: SubagentContext;
   /** Abort signal for cancellation */
   abortSignal?: AbortSignal;
   /** CORS proxy URL prefix (e.g., "https://corsproxy.io/?") */
   corsProxy?: string;
+  /** Current session ID (for subagent spawning) */
+  sessionId?: string;
 }
 
 // ============================================================================
@@ -55,60 +99,71 @@ export interface ToolDefinition {
 }
 
 // ============================================================================
-// SQL Tools
+// SQL Tool (unified read/write)
 // ============================================================================
 
-export function createSqlQueryTool(ctx: ToolContext): ToolDefinition {
+export function createSqlTool(ctx: ToolContext): ToolDefinition {
   return {
-    description: `Execute a read-only SQL query against the workbook database.
-Returns rows as JSON. Use for SELECT queries and PRAGMA commands.
-The database uses SQLite syntax.`,
+    description: `Execute SQL queries against the workbook's SQLite database.
+
+Use this tool to:
+- Query data for analysis (SELECT)
+- Create/alter tables (CREATE, ALTER)
+- Insert/update data (INSERT, UPDATE)
+- Delete data (DELETE, DROP)
+
+SQLite-specific notes:
+- Uses SQLite syntax (not PostgreSQL)
+- Use INTEGER PRIMARY KEY for auto-increment
+- BOOLEAN stored as 0/1
+- Use datetime('now') for current timestamp
+
+For destructive operations (DROP, TRUNCATE, DELETE without WHERE), set confirm_destructive: true.`,
     parameters: z.object({
-      sql: z.string().describe("The SQL SELECT query to execute"),
+      sql: z.string().describe("The SQL query to execute"),
       params: z.array(z.unknown()).optional().describe("Query parameters for prepared statement"),
+      confirm_destructive: z.boolean().optional().describe("Set to true to confirm destructive operations (DROP, TRUNCATE, DELETE without WHERE)"),
     }),
     execute: async (args: unknown) => {
-      const { sql, params } = args as { sql: string; params?: unknown[] };
+      const { sql, params, confirm_destructive = false } = args as {
+        sql: string;
+        params?: unknown[];
+        confirm_destructive?: boolean;
+      };
+
       if (!ctx.db) {
         return { error: "Database not available" };
+      }
+
+      const lowerSql = sql.toLowerCase().trim();
+      const isDestructive =
+        lowerSql.startsWith("drop") ||
+        lowerSql.startsWith("truncate") ||
+        (lowerSql.startsWith("delete") && !lowerSql.includes("where"));
+
+      if (isDestructive && !confirm_destructive) {
+        return {
+          error: "Destructive operation detected",
+          message: "This would modify/delete data. To proceed, run again with confirm_destructive: true",
+          query: sql,
+        };
       }
 
       try {
         const upperSql = sql.trim().toUpperCase();
-        if (!upperSql.startsWith("SELECT") && !upperSql.startsWith("PRAGMA")) {
-          return { error: "Only SELECT and PRAGMA queries allowed. Use sql_execute for mutations." };
+        const isQuery = upperSql.startsWith("SELECT") || upperSql.startsWith("PRAGMA");
+
+        if (isQuery) {
+          const rows = await ctx.db.query(sql, params);
+          return {
+            rows,
+            rowCount: Array.isArray(rows) ? rows.length : 0,
+          };
+        } else {
+          await ctx.db.execute(sql, params);
+          ctx.db.notifyChange();
+          return { success: true, message: "Query executed successfully" };
         }
-
-        const rows = await ctx.db.query(sql, params);
-        return {
-          rows,
-          rowCount: Array.isArray(rows) ? rows.length : 0,
-        };
-      } catch (error) {
-        return { error: error instanceof Error ? error.message : String(error) };
-      }
-    },
-  };
-}
-
-export function createSqlExecuteTool(ctx: ToolContext): ToolDefinition {
-  return {
-    description: `Execute a SQL mutation (INSERT, UPDATE, DELETE, CREATE TABLE, etc.) against the workbook database.
-Use this for any data modifications. The database uses SQLite syntax.`,
-    parameters: z.object({
-      sql: z.string().describe("The SQL statement to execute"),
-      params: z.array(z.unknown()).optional().describe("Query parameters for prepared statement"),
-    }),
-    execute: async (args: unknown) => {
-      const { sql, params } = args as { sql: string; params?: unknown[] };
-      if (!ctx.db) {
-        return { error: "Database not available" };
-      }
-
-      try {
-        await ctx.db.execute(sql, params);
-        ctx.db.notifyChange();
-        return { success: true, message: "Query executed successfully" };
       } catch (error) {
         return { error: error instanceof Error ? error.message : String(error) };
       }
@@ -431,21 +486,20 @@ Parameters:
 }
 
 // ============================================================================
-// Page/Document Tools
+// Page Tools (semantic API for workbook pages)
 // ============================================================================
 
-export function createPageListTool(ctx: ToolContext): ToolDefinition {
+export function createListPagesTool(ctx: ToolContext): ToolDefinition {
   return {
-    description: `List all pages/documents in the workbook.
-Returns paths and titles of MDX documents.`,
+    description: `List all pages in the workbook. Returns page IDs and titles.`,
     parameters: z.object({}),
     execute: async () => {
-      if (!ctx.db) {
-        return { error: "Database not available" };
+      if (!ctx.pages) {
+        return { error: "Pages context not available" };
       }
 
       try {
-        const pages = await ctx.db.getPages();
+        const pages = await ctx.pages.listPages();
         return { pages };
       } catch (error) {
         return { error: error instanceof Error ? error.message : String(error) };
@@ -454,25 +508,24 @@ Returns paths and titles of MDX documents.`,
   };
 }
 
-export function createPageReadTool(ctx: ToolContext): ToolDefinition {
+export function createReadPageTool(ctx: ToolContext): ToolDefinition {
   return {
-    description: `Read the content of a page/document.
-Returns the raw MDX source content.`,
+    description: `Read a page's content. Returns the MDX source and title.`,
     parameters: z.object({
-      path: z.string().describe("Path to the page (e.g., 'index.mdx', 'about.mdx')"),
+      pageId: z.string().describe("Page ID (e.g., 'index', 'about', 'customers')"),
     }),
     execute: async (args: unknown) => {
-      const { path } = args as { path: string };
-      if (!ctx.db) {
-        return { error: "Database not available" };
+      const { pageId } = args as { pageId: string };
+      if (!ctx.pages) {
+        return { error: "Pages context not available" };
       }
 
       try {
-        const page = await ctx.db.getPage(path);
+        const page = await ctx.pages.readPage(pageId);
         if (!page) {
-          return { error: `Page not found: ${path}` };
+          return { error: `Page not found: ${pageId}` };
         }
-        return { path, content: page.content, title: page.title };
+        return { pageId, content: page.content, title: page.title };
       } catch (error) {
         return { error: error instanceof Error ? error.message : String(error) };
       }
@@ -480,24 +533,200 @@ Returns the raw MDX source content.`,
   };
 }
 
-export function createPageWriteTool(ctx: ToolContext): ToolDefinition {
+export function createWritePageTool(ctx: ToolContext): ToolDefinition {
   return {
-    description: `Create or update a page/document.
-Writes MDX content to the specified path.`,
+    description: `Create or update a page. Write MDX content with frontmatter.
+
+Example content:
+---
+title: "My Page"
+---
+
+# Hello World
+
+This is my page content.`,
     parameters: z.object({
-      path: z.string().describe("Path to the page (e.g., 'index.mdx', 'about.mdx')"),
-      content: z.string().describe("MDX content to write"),
-      title: z.string().optional().describe("Page title (extracted from frontmatter if not provided)"),
+      pageId: z.string().describe("Page ID (e.g., 'index', 'about', 'customers')"),
+      content: z.string().describe("Full MDX content including frontmatter"),
     }),
     execute: async (args: unknown) => {
-      const { path, content, title } = args as { path: string; content: string; title?: string };
-      if (!ctx.db) {
-        return { error: "Database not available" };
+      const { pageId, content } = args as { pageId: string; content: string };
+      if (!ctx.pages) {
+        return { error: "Pages context not available" };
       }
 
       try {
-        await ctx.db.savePage(path, content, title);
-        return { success: true, path };
+        await ctx.pages.writePage(pageId, content);
+        return { success: true, pageId };
+      } catch (error) {
+        return { error: error instanceof Error ? error.message : String(error) };
+      }
+    },
+  };
+}
+
+export function createDeletePageTool(ctx: ToolContext): ToolDefinition {
+  return {
+    description: `Delete a page from the workbook.`,
+    parameters: z.object({
+      pageId: z.string().describe("Page ID to delete"),
+    }),
+    execute: async (args: unknown) => {
+      const { pageId } = args as { pageId: string };
+      if (!ctx.pages) {
+        return { error: "Pages context not available" };
+      }
+
+      try {
+        await ctx.pages.deletePage(pageId);
+        return { success: true, pageId };
+      } catch (error) {
+        return { error: error instanceof Error ? error.message : String(error) };
+      }
+    },
+  };
+}
+
+export function createTaskTool(ctx: ToolContext): ToolDefinition {
+  // Build dynamic description with available agents
+  const agents = ctx.subagent?.listAgents().filter((a) => a.mode !== "primary") ?? [];
+  const agentList = agents.length > 0
+    ? agents.map((a) => `- ${a.id}: ${a.description ?? "Specialized agent"}`).join("\n")
+    : "No subagents available";
+
+  return {
+    description: `Launch a subagent to handle a complex, multi-step task autonomously.
+
+The Task tool spawns specialized agents that work independently and return results.
+Each agent has specific capabilities. Use this when you need to delegate work.
+
+Available agents:
+${agentList}
+
+Usage:
+- Provide a clear, detailed prompt describing what the agent should do
+- The agent runs in its own session and returns a summary when done
+- You can resume a previous task by providing its session_id`,
+    parameters: z.object({
+      description: z.string().describe("A short (3-5 words) description of the task"),
+      prompt: z.string().describe("The full task for the agent to perform"),
+      subagent_type: z.string().describe("The agent ID to use (e.g., 'coder', 'researcher')"),
+      session_id: z.string().optional().describe("Optional: resume an existing task session"),
+    }),
+    execute: async (args: unknown) => {
+      const { description, prompt, subagent_type, session_id } = args as {
+        description: string;
+        prompt: string;
+        subagent_type: string;
+        session_id?: string;
+      };
+
+      if (!ctx.subagent) {
+        return { error: "Subagent context not available" };
+      }
+
+      if (!ctx.sessionId) {
+        return { error: "No session context - cannot spawn subagent" };
+      }
+
+      // Check if agent exists
+      const agents = ctx.subagent.listAgents();
+      const agent = agents.find((a) => a.id === subagent_type);
+      if (!agent) {
+        return {
+          error: `Unknown agent: ${subagent_type}. Available: ${agents.map((a) => a.id).join(", ")}`,
+        };
+      }
+
+      try {
+        const result = await ctx.subagent.spawn({
+          agentId: subagent_type,
+          prompt,
+          description,
+          parentSessionId: ctx.sessionId,
+        });
+
+        // Format output similar to OpenCode
+        const toolSummary = result.toolCalls
+          .map((t) => `- ${t.tool}: ${t.title ?? t.status}`)
+          .join("\n");
+
+        const output = [
+          result.text,
+          "",
+          "<task_metadata>",
+          `session_id: ${result.sessionId}`,
+          `tools_used: ${result.toolCalls.length}`,
+          "</task_metadata>",
+        ].join("\n");
+
+        return {
+          title: description,
+          metadata: {
+            sessionId: result.sessionId,
+            toolCalls: result.toolCalls,
+          },
+          output,
+        };
+      } catch (error) {
+        return {
+          error: error instanceof Error ? error.message : String(error),
+        };
+      }
+    },
+  };
+}
+
+export function createSearchPagesTool(ctx: ToolContext): ToolDefinition {
+  return {
+    description: `Search for content across all pages in the workbook.
+Returns matching pages with context snippets around each match.
+Use this to find pages containing specific text, code, or patterns.`,
+    parameters: z.object({
+      query: z.string().describe("Search query (case-insensitive substring match)"),
+    }),
+    execute: async (args: unknown) => {
+      const { query } = args as { query: string };
+      if (!ctx.pages) {
+        return { error: "Pages context not available" };
+      }
+
+      try {
+        // Use optimized search if available
+        if (ctx.pages.searchPages) {
+          const results = await ctx.pages.searchPages(query);
+          return { query, results };
+        }
+
+        // Fallback: list all pages and search manually
+        const allPages = await ctx.pages.listPages();
+        const results: Array<{ pageId: string; title: string; matches: string[] }> = [];
+        const lowerQuery = query.toLowerCase();
+
+        for (const page of allPages) {
+          const content = await ctx.pages.readPage(page.pageId);
+          if (!content) continue;
+
+          const lowerContent = content.content.toLowerCase();
+          if (!lowerContent.includes(lowerQuery)) continue;
+
+          // Extract match context (lines containing the query)
+          const lines = content.content.split("\n");
+          const matches: string[] = [];
+          for (let i = 0; i < lines.length && matches.length < 5; i++) {
+            if (lines[i].toLowerCase().includes(lowerQuery)) {
+              matches.push(lines[i].trim());
+            }
+          }
+
+          results.push({
+            pageId: page.pageId,
+            title: content.title,
+            matches,
+          });
+        }
+
+        return { query, results };
       } catch (error) {
         return { error: error instanceof Error ? error.message : String(error) };
       }
@@ -509,17 +738,19 @@ Writes MDX content to the specified path.`,
 // Tool Registry
 // ============================================================================
 
-// Tool IDs aligned with OpenCode SDK naming
+// Tool IDs for browser agent
 export type ToolId =
-  | "sql"           // Query database (read-only)
-  | "sql_execute"   // Execute database mutations
+  | "sql"           // Query and mutate database (unified read/write)
   | "schema"        // Show database schema
   | "webfetch"      // Fetch a URL
   | "websearch"     // Search the web
   | "code"          // Execute JavaScript code
-  | "glob"          // List pages/files
-  | "read"          // Read page content
-  | "write"         // Write page content
+  | "listPages"     // List all pages
+  | "readPage"      // Read page content
+  | "writePage"     // Create/update page
+  | "deletePage"    // Delete a page
+  | "searchPages"   // Search across page content
+  | "task"          // Spawn a subagent
   | "navigate";     // Navigate to page/table
 
 export interface ToolRegistry {
@@ -529,19 +760,20 @@ export interface ToolRegistry {
 
 /**
  * Create a tool registry with all available browser tools.
- * Tool names aligned with OpenCode SDK naming conventions.
  */
 export function createToolRegistry(ctx: ToolContext): ToolRegistry {
   const allTools: Record<ToolId, ToolDefinition> = {
-    sql: createSqlQueryTool(ctx),
-    sql_execute: createSqlExecuteTool(ctx),
+    sql: createSqlTool(ctx),
     schema: createSqlSchemaTool(ctx),
     webfetch: createWebFetchTool(ctx),
     websearch: createWebSearchTool(ctx),
     code: createCodeExecuteTool(ctx),
-    glob: createPageListTool(ctx),
-    read: createPageReadTool(ctx),
-    write: createPageWriteTool(ctx),
+    listPages: createListPagesTool(ctx),
+    readPage: createReadPageTool(ctx),
+    writePage: createWritePageTool(ctx),
+    deletePage: createDeletePageTool(ctx),
+    searchPages: createSearchPagesTool(ctx),
+    task: createTaskTool(ctx),
     navigate: createNavigateTool(ctx),
   };
 
@@ -570,22 +802,46 @@ export const DATA_TOOLS: ToolId[] = ["sql", "schema", "code"];
 /** Tools for web research */
 export const RESEARCH_TOOLS: ToolId[] = ["webfetch", "websearch"];
 
-/** Tools for content editing */
-export const CONTENT_TOOLS: ToolId[] = ["glob", "read", "write"];
+/** Tools for page editing */
+export const PAGE_TOOLS: ToolId[] = ["listPages", "readPage", "writePage", "deletePage", "searchPages"];
 
 /** All available tools */
 export const ALL_TOOLS: ToolId[] = [
   "sql",
-  "sql_execute",
   "schema",
   "webfetch",
   "websearch",
   "code",
-  "glob",
-  "read",
-  "write",
+  "listPages",
+  "readPage",
+  "writePage",
+  "deletePage",
+  "searchPages",
+  "task",
   "navigate",
 ];
+
+/** Tools to disable in subagents (prevent recursion) */
+export const SUBAGENT_DISABLED_TOOLS: ToolId[] = ["task"];
+
+/**
+ * Map legacy VFS-style tool names to new semantic page tool names.
+ * Allows agent configs using old names to work with new tools.
+ */
+export const LEGACY_TOOL_MAP: Record<string, ToolId> = {
+  glob: "listPages",
+  read: "readPage",
+  write: "writePage",
+  grep: "searchPages",
+};
+
+/** Normalize a tool name, mapping legacy names to current ones */
+export function normalizeToolId(id: string): ToolId | null {
+  if (ALL_TOOLS.includes(id as ToolId)) {
+    return id as ToolId;
+  }
+  return LEGACY_TOOL_MAP[id] ?? null;
+}
 
 // ============================================================================
 // Convert to AI SDK ToolSet format

@@ -68,12 +68,8 @@ export function DomainSidebar({ filterQuery }: DomainSidebarProps) {
       utils.workbook.manifest.invalidate();
       // Set newly created ID for auto-rename mode
       setNewlyCreatedId(result.domainId);
-      // Navigate to the new domain
-      navigate({
-        to: "/domains/$domainId",
-        params: { domainId: result.domainId },
-        search: { tab: "page" },
-      } as any);
+      // Navigate to the new table
+      navigate({ to: "/tables/$tableId", params: { tableId: result.domainId } });
     },
   });
 
@@ -110,11 +106,7 @@ export function DomainSidebar({ filterQuery }: DomainSidebarProps) {
 
   const handleDomainClick = useCallback(
     (domainId: string) => {
-      navigate({
-        to: "/domains/$domainId",
-        params: { domainId },
-        search: { tab: "page" },
-      } as any);
+      navigate({ to: "/tables/$tableId", params: { tableId: domainId } });
     },
     [navigate],
   );
@@ -123,13 +115,9 @@ export function DomainSidebar({ filterQuery }: DomainSidebarProps) {
     async (domainId: string, newName: string) => {
       if (!newName.trim()) return;
       await renameMutation.mutateAsync({ domainId, newName: newName.trim() });
-      // Navigate to renamed domain if it was current
+      // Navigate to renamed table if it was current
       if (domainId === currentDomainId) {
-        navigate({
-          to: "/domains/$domainId",
-          params: { domainId: newName.trim() },
-          search: { tab: "page" },
-        } as any);
+        navigate({ to: "/tables/$tableId", params: { tableId: newName.trim() } });
       }
     },
     [renameMutation, currentDomainId, navigate],

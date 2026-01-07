@@ -1,22 +1,22 @@
 /**
  * Workbooks Hook
  *
- * Manages workbook list state with CRUD operations.
- * Single source of truth for workbook data across routes.
+ * Manages workbook list from IndexedDB cache.
+ * Source of truth is SQLite; this hook reads from cache for fast listing.
  */
 
 import { useCallback, useEffect, useState } from "react";
 import { useNavigate } from "@tanstack/react-router";
 import {
-  createWorkbook as createWorkbookStorage,
-  deleteWorkbook as deleteWorkbookStorage,
+  createWorkbookCache,
+  deleteWorkbookCache,
   listWorkbooks,
-  type WorkbookMeta,
+  type WorkbookCache,
 } from "../shared/lib/storage";
 
 export function useWorkbooks() {
   const navigate = useNavigate();
-  const [workbooks, setWorkbooks] = useState<WorkbookMeta[]>([]);
+  const [workbooks, setWorkbooks] = useState<WorkbookCache[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
   // Load workbooks on mount
@@ -33,10 +33,10 @@ export function useWorkbooks() {
     return updated;
   }, []);
 
-  // Create new workbook and navigate to it
+  // Create cache entry for a new workbook (SQLite db is created when opened)
   const createWorkbook = useCallback(
     async (name: string = "New Workbook") => {
-      const workbook = await createWorkbookStorage(name);
+      const workbook = await createWorkbookCache(name);
       setWorkbooks((prev) => [workbook, ...prev]);
       return workbook;
     },
@@ -57,10 +57,10 @@ export function useWorkbooks() {
     [createWorkbook, navigate]
   );
 
-  // Delete workbook
+  // Delete workbook cache entry
   const deleteWorkbook = useCallback(
     async (id: string, currentWorkbookId?: string) => {
-      await deleteWorkbookStorage(id);
+      await deleteWorkbookCache(id);
       const remaining = workbooks.filter((w) => w.id !== id);
       setWorkbooks(remaining);
 

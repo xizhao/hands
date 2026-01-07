@@ -16,6 +16,7 @@ import { type ActionRunsContext, actionRunsRouter } from "./routers/action-runs.
 import { type AIContext, aiRouter } from "./routers/ai.js";
 import { type DeployContext, deployRouter } from "./routers/deploy.js";
 import { type DomainsContext, domainsRouter } from "./routers/domains.js";
+import { type TablesContext, tablesRouter } from "./routers/tables.js";
 import { type ViewerDeployContext, viewerDeployRouter } from "./routers/viewer-deploy.js";
 import { type EditorStateContext, editorStateRouter } from "./routers/editor-state.js";
 import { type PagesContext, pagesRouter } from "./routers/pages.js";
@@ -60,6 +61,7 @@ interface CombinedContext
     ActionRunsContext,
     DeployContext,
     DomainsContext,
+    TablesContext,
     ViewerDeployContext {}
 
 // Create a merged router that includes all routes
@@ -74,8 +76,10 @@ const appRouter = t.router({
   secrets: secretsRouter,
   // Workbook manifest & blocks
   workbook: workbookRouter,
-  // Domain CRUD (tables as first-class entities)
+  // Domain CRUD (tables as first-class entities) - legacy, use tables instead
   domains: domainsRouter,
+  // Tables CRUD
+  tables: tablesRouter,
   // Pages routes
   pages: pagesRouter,
   // Thumbnails routes
@@ -172,6 +176,7 @@ export type { ActionRunsRouter } from "./routers/action-runs.js";
 export type { AIRouter } from "./routers/ai.js";
 export type { DeployRouter } from "./routers/deploy.js";
 export type { DomainsRouter } from "./routers/domains.js";
+export type { TablesRouter } from "./routers/tables.js";
 export type { ViewerDeployRouter } from "./routers/viewer-deploy.js";
 export type { EditorStateRouter } from "./routers/editor-state.js";
 export type { PagesRouter } from "./routers/pages.js";

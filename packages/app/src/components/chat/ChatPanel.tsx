@@ -32,6 +32,16 @@ import { ChatInput, type ChatInputRef } from "./ChatInput";
 import type { SessionStatus } from "./StatusDot";
 import { ThreadList } from "./ThreadList";
 
+/** Editor context for AI awareness */
+export interface EditorContext {
+  /** Type of content being viewed */
+  type: "page" | "table" | "none";
+  /** ID of the page or table (if applicable) */
+  id?: string;
+  /** Human-readable name */
+  name?: string;
+}
+
 export interface ChatPanelProps {
   /** Currently selected session ID */
   sessionId: string | null;
@@ -63,6 +73,8 @@ export interface ChatPanelProps {
   onInputFocus?: () => void;
   /** Input blur handler */
   onInputBlur?: () => void;
+  /** Editor context - what the user is currently viewing */
+  editorContext?: EditorContext;
 }
 
 export function ChatPanel({
@@ -81,6 +93,7 @@ export function ChatPanel({
   sttPreview = "",
   onInputFocus,
   onInputBlur,
+  editorContext,
 }: ChatPanelProps) {
   // Use controlled or uncontrolled input
   const [uncontrolledInputValue, setUncontrolledInputValue] = useState("");
@@ -156,6 +169,14 @@ export function ChatPanel({
     }
   }, [messages.length, lastMessageContent]);
 
+  // Build system context string from editor context
+  const systemContext = useMemo(() => {
+    if (!editorContext || editorContext.type === "none") return undefined;
+    const label = editorContext.type === "page" ? "page" : "table";
+    const name = editorContext.name || editorContext.id || "unknown";
+    return `The user is currently viewing the ${label} "${name}".`;
+  }, [editorContext]);
+
   // Message handlers
   const handleSend = useCallback(() => {
     let content = inputValue.trim();
@@ -176,11 +197,11 @@ export function ChatPanel({
       createSessionMutation.mutate(undefined, {
         onSuccess: (newSession) => {
           onSessionSelect(newSession.id);
-          sendMessageMutation.mutate({ sessionId: newSession.id, content });
+          sendMessageMutation.mutate({ sessionId: newSession.id, content, system: systemContext });
         },
       });
     } else {
-      sendMessageMutation.mutate({ sessionId, content });
+      sendMessageMutation.mutate({ sessionId, content, system: systemContext });
     }
 
     setInputValue("");
@@ -194,6 +215,7 @@ export function ChatPanel({
     onSessionSelect,
     setInputValue,
     setPendingFiles,
+    systemContext,
   ]);
 
   const handleAbort = useCallback(() => {

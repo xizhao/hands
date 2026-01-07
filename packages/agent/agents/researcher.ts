@@ -130,7 +130,7 @@ export const researcherAgent: AgentConfig = {
   description:
     "Deep research specialist - comprehensive web research with multiple searches and source synthesis",
   mode: "subagent",
-  model: "openrouter/google/gemini-2.5-flash",
+  model: "openrouter/arcee-ai/trinity-mini:free",
   prompt: RESEARCHER_PROMPT,
   tools: {
     // Web search and fetch

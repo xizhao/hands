@@ -665,11 +665,7 @@ export function ActionDetailPanel({ actionId }: ActionDetailPanelProps) {
               source={sourceData.source}
               className="h-full"
               onTableClick={(table) =>
-                navigate({
-                  to: "/domains/$domainId",
-                  params: { domainId: table },
-                  search: { tab: "sheet" },
-                } as any)
+                navigate({ to: "/tables/$tableId", params: { tableId: table } })
               }
             />
           ) : (

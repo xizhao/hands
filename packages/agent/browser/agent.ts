@@ -8,7 +8,7 @@
 import { streamText, convertToModelMessages, type ModelMessage, type UIMessage } from "ai";
 import type { AgentConfig as OpenCodeAgentConfig } from "@opencode-ai/sdk";
 import { createProviderFromStorage, getOpenRouterModelId } from "./provider";
-import { createToolRegistry, toAISDKTools, type ToolContext, type ToolId, ALL_TOOLS } from "./tools";
+import { createToolRegistry, toAISDKTools, normalizeToolId, type ToolContext, type ToolId, ALL_TOOLS } from "./tools";
 import type {
   AgentConfig,
   MessageWithParts,
@@ -438,20 +438,25 @@ function combineSignals(...signals: AbortSignal[]): AbortSignal {
  * Get enabled tools from an agent config.
  * OpenCode format: { tools: { sql: true, schema: true, ... } }
  * Browser format: { tools: ['sql', 'schema', ...] }
+ *
+ * Normalizes legacy tool names (glob, read, write) to new names (listPages, readPage, writePage).
  */
 function getEnabledToolsFromAgent(agent: AgentConfigInput): ToolId[] | null {
   if (!agent.tools) return null;
 
   // Browser format - array of tool IDs
   if (Array.isArray(agent.tools)) {
-    return agent.tools as ToolId[];
+    return (agent.tools as string[])
+      .map((id: string) => normalizeToolId(id))
+      .filter((id): id is ToolId => id !== null);
   }
 
   // OpenCode format - object with tool: boolean pairs
   const toolsObj = agent.tools as Record<string, boolean>;
   return Object.entries(toolsObj)
     .filter(([_, enabled]) => enabled)
-    .map(([toolId]) => toolId as ToolId);
+    .map(([toolId]) => normalizeToolId(toolId))
+    .filter((id): id is ToolId => id !== null);
 }
 
 /**

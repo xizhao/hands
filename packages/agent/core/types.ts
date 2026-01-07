@@ -93,13 +93,31 @@ export interface StepFinishPart extends PartBase {
   };
 }
 
+/** Part for delegating work to a subagent */
+export interface SubtaskPart extends PartBase {
+  type: "subtask";
+  /** The full prompt to execute */
+  prompt: string;
+  /** Short description (for UI display) */
+  description: string;
+  /** Agent name to use */
+  agent: string;
+  /** Result from the subagent (when completed) */
+  result?: {
+    sessionId: string;
+    summary?: string;
+    error?: string;
+  };
+}
+
 export type Part =
   | TextPart
   | ReasoningPart
   | FilePart
   | ToolPart
   | StepStartPart
-  | StepFinishPart;
+  | StepFinishPart
+  | SubtaskPart;
 
 // ============================================================================
 // Message Types
@@ -168,14 +186,20 @@ export interface Todo {
 // Agent Configuration
 // ============================================================================
 
+export type AgentMode = "primary" | "subagent" | "all";
+
 export interface AgentConfig {
   id: string;
   name: string;
   description?: string;
+  /** Agent mode: primary (main conversation), subagent (spawned tasks), all (both) */
+  mode?: AgentMode;
   systemPrompt: string;
   model?: string;
   temperature?: number;
   maxTokens?: number;
+  /** Maximum steps/turns before stopping */
+  maxSteps?: number;
   tools?: string[];
 }
 

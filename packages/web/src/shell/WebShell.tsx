@@ -31,6 +31,8 @@ interface WebShellProps {
   sidebar: ReactNode;
   /** Floating sidebar content (slides in on hover, overlays) */
   floatingSidebar?: ReactNode;
+  /** Left-aligned content for topbar (after logo) */
+  topbarLeft?: ReactNode;
   /** Center content for topbar */
   topbarCenter?: ReactNode;
   /** Right side actions for topbar */
@@ -39,15 +41,19 @@ interface WebShellProps {
   children: ReactNode;
   /** Initial docked sidebar width */
   sidebarWidth?: number;
+  /** Whether we're in a workbook (hides logo text) */
+  inWorkbook?: boolean;
 }
 
 export function WebShell({
   sidebar,
   floatingSidebar,
+  topbarLeft,
   topbarCenter,
   topbarActions,
   children,
-  sidebarWidth: initialWidth = 280,
+  sidebarWidth: initialWidth = 340,
+  inWorkbook = false,
 }: WebShellProps) {
   const navigate = useNavigate();
 
@@ -86,17 +92,18 @@ export function WebShell({
   const logo = (
     <button
       onClick={() => navigate({ to: "/" })}
+      onMouseEnter={floatingSidebar ? () => setIsFloatingHovered(true) : undefined}
       className="flex items-center gap-2 text-foreground hover:text-foreground/80 transition-colors"
     >
       <HandsLogo className="w-5 h-5" />
-      <span className="font-semibold text-sm">Hands</span>
+      {!inWorkbook && <span className="font-semibold text-sm">Hands</span>}
     </button>
   );
 
   return (
     <div className="h-screen flex flex-col bg-surface overflow-hidden">
       {/* Global topbar */}
-      <Topbar logo={logo} center={topbarCenter} actions={topbarActions} />
+      <Topbar logo={logo} left={topbarLeft} center={topbarCenter} actions={topbarActions} />
 
       {/* Sidebar(s) + Content */}
       <div className="flex-1 min-h-0 overflow-hidden flex relative">
@@ -113,7 +120,7 @@ export function WebShell({
             <div
               ref={floatingSidebarRef}
               className={cn(
-                "absolute top-2 bottom-2 left-2 z-40 w-[260px]",
+                "absolute top-2 bottom-2 left-2 z-40 w-[300px]",
                 "flex flex-col",
                 "rounded-xl border border-border/60 bg-surface",
                 "shadow-xl shadow-black/10 dark:shadow-black/30",

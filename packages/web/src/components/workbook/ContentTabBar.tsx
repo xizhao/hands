@@ -1,16 +1,15 @@
 /**
- * ContentTabBar - Google Sheets-style bottom tabs
+ * ContentTabBar - Web-specific bottom tabs
+ *
+ * Clean data flow:
+ * - Pages: SQLite _pages table -> pages.list
+ * - Tables: SQLite user tables -> tables.list
  *
  * Layout: [+] [≡] | tabs... | [<] [>]
- * - Plus button for adding new pages/tables
- * - List button to show all pages/tables
- * - Tabs in the middle (non-scrollable, controlled by arrows)
- * - Arrow buttons for carousel navigation when tabs overflow
- * - Fade gradients on edges
  */
 
 import { CaretLeft, CaretRight, List, Plus } from "@phosphor-icons/react";
-import { useParams, useRouter } from "@tanstack/react-router";
+import { useParams, useNavigate } from "@tanstack/react-router";
 import { FileText, Table2, X } from "lucide-react";
 import { useCallback, useEffect, useRef, useState, type KeyboardEvent } from "react";
 import {
@@ -19,65 +18,67 @@ import {
   DropdownMenuItem,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
-import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
-import { useNeedsTrafficLightOffset } from "@/hooks/useFullscreen";
-import { useSidebarMode } from "@/hooks/useNavState";
-import { cn } from "@/lib/utils";
-import { trpc } from "@/lib/trpc";
-import { getPageIdFromPath } from "@/types/routes";
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+  SyncStatusSlot,
+  cn,
+} from "@hands/app";
+import { trpc } from "../../lib/trpc";
+
+// Get page ID from path (e.g., "page-1.mdx" -> "page-1")
+function getPageIdFromPath(path: string): string {
+  return path.replace(/\.mdx$/, "");
+}
 
 export function ContentTabBar() {
-  const router = useRouter();
-  const needsTrafficLightOffset = useNeedsTrafficLightOffset();
-  const { mode: sidebarMode } = useSidebarMode();
-  const isFloating = sidebarMode === "floating";
+  const navigate = useNavigate();
 
   // Get current page/table from router params
   const params = useParams({ strict: false });
   const currentPageId = (params as { pageId?: string }).pageId;
   const currentTableId = (params as { tableId?: string }).tableId;
+  const workbookId = (params as { workbookId?: string }).workbookId;
 
   // Tab scroll state
   const tabsContainerRef = useRef<HTMLDivElement>(null);
   const [canScrollLeft, setCanScrollLeft] = useState(false);
   const [canScrollRight, setCanScrollRight] = useState(false);
 
-  // Fetch pages (poll frequently for local updates)
-  const { data: pagesData, isLoading: pagesLoading } = trpc.pages.list.useQuery(
-    undefined,
-    { refetchInterval: 500 }
-  );
+  // Fetch pages from SQLite _pages table
+  const { data: pagesData } = trpc.pages.list.useQuery();
   const pages = pagesData?.pages ?? [];
 
-  // Fetch tables (poll frequently for local updates)
-  const { data: tablesData, isLoading: tablesLoading } = trpc.tables.list.useQuery(
-    undefined,
-    { refetchInterval: 500 }
-  );
+  // Fetch tables from SQLite
+  const { data: tablesData } = trpc.tables.list.useQuery();
   const tables = tablesData?.tables ?? [];
 
   // tRPC utils for cache invalidation
   const utils = trpc.useUtils();
 
-  // Create mutations
+  // Create page mutation
   const createPage = trpc.pages.create.useMutation({
     onSuccess: (result) => {
       utils.pages.list.invalidate();
-      router.navigate({
-        to: "/pages/$pageId",
-        params: { pageId: result.pageId },
-      });
+      if (workbookId) {
+        navigate({
+          to: "/w/$workbookId/pages/$pageId",
+          params: { workbookId, pageId: result.pageId },
+        });
+      }
     },
   });
 
+  // Create table mutation
   const createTable = trpc.tables.create.useMutation({
     onSuccess: (result) => {
       utils.tables.list.invalidate();
-      router.navigate({
-        to: "/tables/$tableId",
-        params: { tableId: result.tableId },
-      });
+      if (workbookId) {
+        navigate({
+          to: "/w/$workbookId/tables/$tableId",
+          params: { workbookId, tableId: result.tableId },
+        });
+      }
     },
   });
 
@@ -85,9 +86,9 @@ export function ContentTabBar() {
   const renamePage = trpc.pages.rename.useMutation({
     onSuccess: (result) => {
       utils.pages.list.invalidate();
-      if ("newRoute" in result && "oldRoute" in result) {
+      if ("newRoute" in result && workbookId) {
         const newPageId = result.newRoute === "/" ? "index" : result.newRoute.slice(1);
-        router.navigate({ to: "/pages/$pageId", params: { pageId: newPageId } });
+        navigate({ to: "/w/$workbookId/pages/$pageId", params: { workbookId, pageId: newPageId } });
       }
     },
   });
@@ -95,8 +96,8 @@ export function ContentTabBar() {
   const renameTable = trpc.tables.rename.useMutation({
     onSuccess: (result) => {
       utils.tables.list.invalidate();
-      if ("newName" in result) {
-        router.navigate({ to: "/tables/$tableId", params: { tableId: result.newName } });
+      if ("newName" in result && workbookId) {
+        navigate({ to: "/w/$workbookId/tables/$tableId", params: { workbookId, tableId: result.newName } });
       }
     },
   });
@@ -105,20 +106,49 @@ export function ContentTabBar() {
   const deletePage = trpc.pages.delete.useMutation({
     onSuccess: () => {
       utils.pages.list.invalidate();
-      router.navigate({ to: "/" });
+      if (workbookId) {
+        navigate({ to: "/w/$workbookId", params: { workbookId } });
+      }
     },
   });
 
   const deleteTable = trpc.tables.delete.useMutation({
     onSuccess: () => {
       utils.tables.list.invalidate();
-      router.navigate({ to: "/" });
+      if (workbookId) {
+        navigate({ to: "/w/$workbookId", params: { workbookId } });
+      }
     },
   });
 
   // Editing state
   const [editingTab, setEditingTab] = useState<{ type: "page" | "table"; id: string } | null>(null);
   const [editValue, setEditValue] = useState("");
+
+  // Filter state for list dropdown
+  const [filterText, setFilterText] = useState("");
+  const filterInputRef = useRef<HTMLInputElement>(null);
+
+  // Filtered lists based on filter text
+  const filteredPages = filterText
+    ? pages.filter((page) => {
+        const title = page.title || getPageIdFromPath(page.path);
+        return title.toLowerCase().includes(filterText.toLowerCase());
+      })
+    : pages;
+
+  const filteredTables = filterText
+    ? tables.filter((table) => {
+        const displayName = table.name
+          .split("_")
+          .map((w: string) => w.charAt(0).toUpperCase() + w.slice(1))
+          .join(" ");
+        return (
+          table.name.toLowerCase().includes(filterText.toLowerCase()) ||
+          displayName.toLowerCase().includes(filterText.toLowerCase())
+        );
+      })
+    : tables;
 
   // Check scroll state
   const updateScrollState = useCallback(() => {
@@ -159,7 +189,6 @@ export function ContentTabBar() {
 
   // Handle new page creation
   const handleNewPage = () => {
-    // Find next available page number: page, page-1, page-2, etc.
     const existingIds = pages.map((p) => getPageIdFromPath(p.path));
     let pageId = "page";
     if (existingIds.includes("page")) {
@@ -172,7 +201,6 @@ export function ContentTabBar() {
 
   // Handle new table creation
   const handleNewTable = () => {
-    // Find next available table number: table_1, table_2, etc.
     const existingNames = tables.map((t) => t.name);
     let n = 1;
     while (existingNames.includes(`table_${n}`)) n++;
@@ -182,18 +210,22 @@ export function ContentTabBar() {
 
   // Navigate to page
   const handlePageClick = (pageId: string) => {
-    router.navigate({
-      to: "/pages/$pageId",
-      params: { pageId },
-    });
+    if (workbookId) {
+      navigate({
+        to: "/w/$workbookId/pages/$pageId",
+        params: { workbookId, pageId },
+      });
+    }
   };
 
   // Navigate to table
   const handleTableClick = (tableId: string) => {
-    router.navigate({
-      to: "/tables/$tableId",
-      params: { tableId },
-    });
+    if (workbookId) {
+      navigate({
+        to: "/w/$workbookId/tables/$tableId",
+        params: { workbookId, tableId },
+      });
+    }
   };
 
   // Enter edit mode for a tab
@@ -252,26 +284,14 @@ export function ContentTabBar() {
   };
 
   // Get page title
-  const getPageTitle = (page: (typeof pages)[number]) => {
-    if ("title" in page && typeof page.title === "string") {
-      return page.title;
-    }
-    if ("compiled" in page && page.compiled?.meta?.title) {
-      return page.compiled.meta.title;
-    }
-    return getPageIdFromPath(page.path);
+  const getPageTitle = (page: { path: string; title?: string }) => {
+    return page.title || getPageIdFromPath(page.path);
   };
 
   const hasOverflow = canScrollLeft || canScrollRight;
 
-  // Show tabs progressively as they load (no blocking loading state)
   return (
-    <div
-      className={cn(
-        "h-full flex items-end bg-surface",
-        isFloating && needsTrafficLightOffset && "pl-[72px]",
-      )}
-    >
+    <div className="h-full flex items-end bg-surface">
       {/* Left controls: + and list */}
       <div className="flex items-end shrink-0 gap-0.5 pr-1">
         {/* Add button */}
@@ -300,7 +320,14 @@ export function ContentTabBar() {
         </DropdownMenu>
 
         {/* List all button */}
-        <DropdownMenu>
+        <DropdownMenu onOpenChange={(open) => {
+          if (open) {
+            // Focus the filter input after dropdown renders
+            setTimeout(() => filterInputRef.current?.focus(), 0);
+          } else {
+            setFilterText("");
+          }
+        }}>
           <DropdownMenuTrigger asChild>
             <button
               className={cn(
@@ -312,52 +339,70 @@ export function ContentTabBar() {
               <List weight="bold" className="h-3.5 w-3.5" />
             </button>
           </DropdownMenuTrigger>
-          <DropdownMenuContent align="start" className="w-[200px] max-h-[300px] overflow-y-auto">
-            {pages.length > 0 && (
-              <>
-                <div className="px-2 py-1.5 text-xs font-medium text-muted-foreground">Pages</div>
-                {pages.map((page) => {
-                  const pageId = getPageIdFromPath(page.path);
-                  const isActive = currentPageId === pageId;
-                  return (
-                    <DropdownMenuItem
-                      key={page.path}
-                      onClick={() => handlePageClick(pageId)}
-                      className={cn(isActive && "bg-accent")}
-                    >
-                      <FileText className="h-4 w-4 mr-2 text-blue-500" />
-                      <span className="truncate">{getPageTitle(page)}</span>
-                    </DropdownMenuItem>
-                  );
-                })}
-              </>
-            )}
-            {tables.length > 0 && (
-              <>
-                {pages.length > 0 && <DropdownMenuSeparator />}
-                <div className="px-2 py-1.5 text-xs font-medium text-muted-foreground">Tables</div>
-                {tables.map((table) => {
-                  const isActive = currentTableId === table.id;
-                  const displayName = table.name
-                    .split("_")
-                    .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
-                    .join(" ");
-                  return (
-                    <DropdownMenuItem
-                      key={table.id}
-                      onClick={() => handleTableClick(table.id)}
-                      className={cn(isActive && "bg-accent")}
-                    >
-                      <Table2 className="h-4 w-4 mr-2 text-emerald-500" />
-                      <span className="truncate">{displayName}</span>
-                    </DropdownMenuItem>
-                  );
-                })}
-              </>
-            )}
-            {pages.length === 0 && tables.length === 0 && (
-              <div className="px-2 py-3 text-sm text-muted-foreground text-center">
-                No pages or tables yet
+          <DropdownMenuContent align="start" className="w-[200px] flex flex-col relative">
+            {/* Scrollable content area */}
+            <div className={cn("max-h-[250px] overflow-y-auto", (pages.length > 0 || tables.length > 0) && "pb-9")}>
+              {filteredPages.length > 0 && (
+                <>
+                  <div className="px-2 py-1.5 text-xs font-medium text-muted-foreground">Pages</div>
+                  {filteredPages.map((page) => {
+                    const pageId = getPageIdFromPath(page.path);
+                    const isActive = currentPageId === pageId;
+                    return (
+                      <DropdownMenuItem
+                        key={page.path}
+                        onClick={() => handlePageClick(pageId)}
+                        className={cn(isActive && "bg-accent")}
+                      >
+                        <FileText className="h-4 w-4 mr-2 text-blue-500" />
+                        <span className="truncate">{getPageTitle(page)}</span>
+                      </DropdownMenuItem>
+                    );
+                  })}
+                </>
+              )}
+              {filteredTables.length > 0 && (
+                <>
+                  {filteredPages.length > 0 && <DropdownMenuSeparator />}
+                  <div className="px-2 py-1.5 text-xs font-medium text-muted-foreground">Tables</div>
+                  {filteredTables.map((table) => {
+                    const isActive = currentTableId === table.id;
+                    const displayName = table.name
+                      .split("_")
+                      .map((w: string) => w.charAt(0).toUpperCase() + w.slice(1))
+                      .join(" ");
+                    return (
+                      <DropdownMenuItem
+                        key={table.id}
+                        onClick={() => handleTableClick(table.id)}
+                        className={cn(isActive && "bg-accent")}
+                      >
+                        <Table2 className="h-4 w-4 mr-2 text-emerald-500" />
+                        <span className="truncate">{displayName}</span>
+                      </DropdownMenuItem>
+                    );
+                  })}
+                </>
+              )}
+              {filteredPages.length === 0 && filteredTables.length === 0 && (
+                <div className="px-2 py-3 text-sm text-muted-foreground text-center">
+                  {filterText ? "No matches found" : "No pages or tables yet"}
+                </div>
+              )}
+            </div>
+            {/* Fixed filter input at bottom */}
+            {(pages.length > 0 || tables.length > 0) && (
+              <div className="absolute bottom-0 left-0 right-0 p-1.5 bg-popover border-t border-border">
+                <input
+                  ref={filterInputRef}
+                  type="text"
+                  placeholder="Filter..."
+                  value={filterText}
+                  onChange={(e) => setFilterText(e.target.value)}
+                  onClick={(e) => e.stopPropagation()}
+                  onKeyDown={(e) => e.stopPropagation()}
+                  className="w-full px-2 py-1 text-xs bg-muted border border-border rounded outline-none focus:ring-1 focus:ring-ring placeholder:text-muted-foreground/60"
+                />
               </div>
             )}
           </DropdownMenuContent>
@@ -399,6 +444,7 @@ export function ContentTabBar() {
                 onEditBlur={handleSaveRename}
                 onDoubleClick={isActive ? () => handleEnterEditMode("page", pageId) : undefined}
                 onDelete={() => handleDeletePage(pageId)}
+                showSyncStatus={true}
               />
             );
           })}
@@ -408,7 +454,7 @@ export function ContentTabBar() {
             const isActive = currentTableId === table.id;
             const displayName = table.name
               .split("_")
-              .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
+              .map((w: string) => w.charAt(0).toUpperCase() + w.slice(1))
               .join(" ");
             const isEditingThis = editingTab?.type === "table" && editingTab.id === table.id;
 
@@ -439,7 +485,7 @@ export function ContentTabBar() {
       </div>
 
       {/* Right controls: carousel arrows (only when overflow) */}
-      {hasOverflow && (
+      {(canScrollLeft || canScrollRight) && (
         <div className="flex items-stretch shrink-0 border-l border-border/30">
           <button
             onClick={scrollLeft}
@@ -480,7 +526,6 @@ interface TabItemProps {
   isActive: boolean;
   iconColor: string;
   onClick: () => void;
-  // Editing props
   isEditing?: boolean;
   editValue?: string;
   onEditChange?: (value: string) => void;
@@ -488,6 +533,7 @@ interface TabItemProps {
   onEditBlur?: () => void;
   onDoubleClick?: () => void;
   onDelete?: () => void;
+  showSyncStatus?: boolean; // Show sync status slot for active page tabs
 }
 
 function TabItem({
@@ -503,6 +549,7 @@ function TabItem({
   onEditBlur,
   onDoubleClick,
   onDelete,
+  showSyncStatus,
 }: TabItemProps) {
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -527,7 +574,7 @@ function TabItem({
               ? [
                   "bg-background text-foreground",
                   "border-x border-b border-border/40",
-                  "-mt-px", // overlap with content border above
+                  "-mt-px",
                 ]
               : [
                   "text-muted-foreground hover:text-foreground",
@@ -551,7 +598,8 @@ function TabItem({
           ) : (
             <span className="truncate max-w-[100px]">{label}</span>
           )}
-          {/* Delete button - show on hover for active tab */}
+          {/* Sync status slot - PageEditor portals content here */}
+          {showSyncStatus && isActive && <SyncStatusSlot />}
           {isActive && !isEditing && onDelete && (
             <button
               onClick={(e) => {

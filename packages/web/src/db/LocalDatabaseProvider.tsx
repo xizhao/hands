@@ -21,7 +21,6 @@ import {
   useRef,
   type ReactNode,
 } from "react";
-import { LoadingState } from "@hands/app";
 
 // Import worker using Vite's worker syntax
 import SqliteWorker from "./sqlite.worker?worker";
@@ -35,6 +34,13 @@ export interface TableSchema {
   columns: Array<{ name: string; type: string; nullable: boolean }>;
 }
 
+export interface WorkbookMeta {
+  name: string;
+  description: string | null;
+  created_at: number;
+  updated_at: number;
+}
+
 interface LocalDatabaseContextValue {
   /** Is the database ready? */
   isReady: boolean;
@@ -42,6 +48,8 @@ interface LocalDatabaseContextValue {
   isLoading: boolean;
   /** Current workbook ID */
   workbookId: string | null;
+  /** Workbook metadata (from SQLite _workbook table) */
+  workbookMeta: WorkbookMeta | null;
   /** Database schema */
   schema: TableSchema[];
   /** Data version (increments on changes) */
@@ -53,9 +61,11 @@ interface LocalDatabaseContextValue {
   /** Trigger change notification (for reactive queries) */
   notifyChange: () => void;
   /** Open a workbook database */
-  openWorkbook: (workbookId: string) => Promise<void>;
+  openWorkbook: (workbookId: string, name?: string) => Promise<WorkbookMeta | null>;
   /** Close the current database */
   closeWorkbook: () => Promise<void>;
+  /** Update workbook metadata in SQLite */
+  updateWorkbookMeta: (name?: string, description?: string) => Promise<WorkbookMeta | null>;
   /** Is OPFS available? */
   hasOpfs: boolean;
 }
@@ -67,11 +77,13 @@ const LocalDatabaseContext = createContext<LocalDatabaseContextValue | null>(nul
 // ============================================================================
 
 type WorkerRequest =
-  | { id: number; type: "open"; workbookId: string }
+  | { id: number; type: "open"; workbookId: string; name?: string }
   | { id: number; type: "close" }
   | { id: number; type: "query"; sql: string; params?: unknown[] }
   | { id: number; type: "execute"; sql: string; params?: unknown[] }
-  | { id: number; type: "schema" };
+  | { id: number; type: "schema" }
+  | { id: number; type: "getWorkbookMeta" }
+  | { id: number; type: "setWorkbookMeta"; name?: string; description?: string };
 
 interface PendingRequest {
   resolve: (value: unknown) => void;
@@ -92,6 +104,7 @@ export function LocalDatabaseProvider({ children, initialWorkbookId }: LocalData
   const [isReady, setIsReady] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [workbookId, setWorkbookId] = useState<string | null>(null);
+  const [workbookMeta, setWorkbookMeta] = useState<WorkbookMeta | null>(null);
   const [schema, setSchema] = useState<TableSchema[]>([]);
   const [dataVersion, setDataVersion] = useState(0);
   const [hasOpfs, setHasOpfs] = useState(false);
@@ -187,24 +200,31 @@ export function LocalDatabaseProvider({ children, initialWorkbookId }: LocalData
   }, [sendMessage, notifyChange]);
 
   // Open a workbook database
-  const openWorkbook = useCallback(async (id: string) => {
+  const openWorkbook = useCallback(async (id: string, name?: string): Promise<WorkbookMeta | null> => {
     setIsLoading(true);
 
     try {
       await waitForWorker();
-      await sendMessage({ type: "open", workbookId: id });
+      const openResult = await sendMessage<{ isNew: boolean; meta: WorkbookMeta | null }>({
+        type: "open",
+        workbookId: id,
+        name,
+      });
 
       // Load schema
       const schemaResult = await sendMessage<TableSchema[]>({ type: "schema" });
 
       setWorkbookId(id);
+      setWorkbookMeta(openResult.meta);
       setSchema(schemaResult);
       setIsReady(true);
       setDataVersion((v) => v + 1);
 
-      console.log("[LocalDB] Database opened:", id);
+      console.log("[LocalDB] Database opened:", id, openResult.isNew ? "(new)" : "(existing)");
+      return openResult.meta;
     } catch (err) {
       console.error("[LocalDB] Failed to open workbook:", err);
+      return null;
     } finally {
       setIsLoading(false);
     }
@@ -219,9 +239,31 @@ export function LocalDatabaseProvider({ children, initialWorkbookId }: LocalData
     }
 
     setWorkbookId(null);
+    setWorkbookMeta(null);
     setSchema([]);
     setIsReady(false);
   }, [sendMessage]);
+
+  // Update workbook metadata in SQLite
+  const updateWorkbookMeta = useCallback(async (name?: string, description?: string): Promise<WorkbookMeta | null> => {
+    if (!isReady) {
+      console.warn("[LocalDB] updateWorkbookMeta called before database ready");
+      return null;
+    }
+
+    try {
+      const result = await sendMessage<WorkbookMeta>({
+        type: "setWorkbookMeta",
+        name,
+        description,
+      });
+      setWorkbookMeta(result);
+      return result;
+    } catch (err) {
+      console.error("[LocalDB] Failed to update workbook meta:", err);
+      return null;
+    }
+  }, [isReady, sendMessage]);
 
   // Execute a read query
   const query = useCallback(async <T = Record<string, unknown>>(
@@ -277,6 +319,7 @@ export function LocalDatabaseProvider({ children, initialWorkbookId }: LocalData
     isReady,
     isLoading,
     workbookId,
+    workbookMeta,
     schema,
     dataVersion,
     query,
@@ -284,14 +327,12 @@ export function LocalDatabaseProvider({ children, initialWorkbookId }: LocalData
     notifyChange,
     openWorkbook,
     closeWorkbook,
+    updateWorkbookMeta,
     hasOpfs,
-  }), [isReady, isLoading, workbookId, schema, dataVersion, query, execute, notifyChange, openWorkbook, closeWorkbook, hasOpfs]);
+  }), [isReady, isLoading, workbookId, workbookMeta, schema, dataVersion, query, execute, notifyChange, openWorkbook, closeWorkbook, updateWorkbookMeta, hasOpfs]);
 
-  // Block rendering until database is ready (prevents tRPC queries from firing with null workbookId)
-  if (initialWorkbookId && !isReady) {
-    return <LoadingState />;
-  }
-
+  // Don't block rendering - children handle their own loading states
+  // tRPC queries use isReady check internally
   return (
     <LocalDatabaseContext.Provider value={value}>
       {children}
