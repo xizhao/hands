@@ -16,7 +16,7 @@ export { default as App, queryClient } from "./App";
 // Chat components
 export { AttachmentMenu, type AttachmentMenuProps } from "./components/AttachmentMenu";
 export { ChatInput, type ChatInputRef } from "./components/chat/ChatInput";
-export { ChatPanel, type ChatPanelProps, type EditorContext } from "./components/chat/ChatPanel";
+export { ChatPanel, type ChatPanelProps, type EditorContext, type MessageOperations, type ContextStats } from "./components/chat/ChatPanel";
 export { type SessionStatus, StatusDot } from "./components/chat/StatusDot";
 export { ThreadList } from "./components/chat/ThreadList";
 

@@ -20,6 +20,7 @@
   "dependencies": {
     "@hands/core": "workspace:*",
     "@hands/workbook-server": "workspace:*",
+    "@mozilla/readability": "^0.6.0",
     "@opencode-ai/plugin": "^1.0.198",
     "@opencode-ai/sdk": "^1.0.198",
     "@openrouter/ai-sdk-provider": "^1.5.4",
@@ -28,12 +29,14 @@
     "jotai": "^2.16.1",
     "nodejs-polars": "^0.17.0",
     "pyodide": "0.27.0",
+    "turndown": "^7.2.2",
     "zod": "^3.24.1"
   },
   "devDependencies": {
     "@oxc-parser/binding-wasm32-wasi": "0.102.0",
     "@types/bun": "latest",
     "@types/react": "^18",
+    "@types/turndown": "^5.0.6",
     "typescript": "^5",
     "vite": "^6.0.5"
   },

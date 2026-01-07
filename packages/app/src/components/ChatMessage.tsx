@@ -168,6 +168,16 @@ const TOOL_REGISTRY: Record<string, ToolConfig> = {
       return title || page || "";
     },
   },
+  python: {
+    icon: Terminal,
+    label: "Python",
+    getSubtitle: () => "",
+  },
+  code: {
+    icon: Terminal,
+    label: "Code",
+    getSubtitle: () => "",
+  },
 };
 
 const getFilename = (path: string): string => {
@@ -580,7 +590,7 @@ TodoResult.displayName = "TodoResult";
 
 // Collapsible tool thread
 const ToolThread = memo(({ tools, compact = false }: { tools: ToolPart[]; compact?: boolean }) => {
-  const [expanded, setExpanded] = useState(false);
+  const [expanded, setExpanded] = useState(true);
 
   const labelFont = compact ? MSG_FONT.labelCompact : MSG_FONT.label;
 
@@ -595,26 +605,31 @@ const ToolThread = memo(({ tools, compact = false }: { tools: ToolPart[]; compac
     ? `${runningCount} running...`
     : `${completedCount} completed${errorCount > 0 ? `, ${errorCount} failed` : ""}`;
 
+  // Get unique tool names for the header
+  const toolNames = [...new Set(tools.map((t) => getToolConfig(t.tool).label))];
+  const toolNamesPreview = toolNames.slice(0, 3).join(", ") + (toolNames.length > 3 ? "..." : "");
+
   return (
     <div className="my-1">
       <button
         onClick={() => setExpanded(!expanded)}
         className={cn(
-          "flex items-center gap-1.5 px-2 py-1 rounded-lg transition-colors",
-          "text-muted-foreground/60 hover:text-muted-foreground hover:bg-foreground/5",
+          "flex items-center gap-1.5 px-2 py-1.5 rounded-lg transition-colors",
+          "bg-secondary/50 hover:bg-secondary text-secondary-foreground",
           labelFont,
         )}
       >
         {isRunning ? (
-          <Loader2 className="h-3 w-3 animate-spin text-blue-400" />
+          <Loader2 className="h-3.5 w-3.5 animate-spin text-blue-400" />
         ) : errorCount > 0 ? (
-          <AlertCircle className="h-3 w-3 text-red-400" />
+          <AlertCircle className="h-3.5 w-3.5 text-red-400" />
         ) : (
-          <Terminal className="h-3 w-3" />
+          <Terminal className="h-3.5 w-3.5" />
         )}
-        <span>{tools.length} tools</span>
-        <span className="text-muted-foreground/40">· {summary}</span>
-        {expanded ? <ChevronDown className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />}
+        <span className="font-medium">{tools.length} tools</span>
+        <span className="text-muted-foreground">· {toolNamesPreview}</span>
+        <span className="text-muted-foreground/60 ml-1">({summary})</span>
+        {expanded ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronRight className="h-3.5 w-3.5" />}
       </button>
 
       <AnimatePresence>
@@ -1434,6 +1449,7 @@ export const ChatMessage = memo(
         }
       }
       flushTools();
+
       return groups;
     }, [sortedParts]);
 

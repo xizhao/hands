@@ -51,6 +51,26 @@ export interface EditorContext {
   name?: string;
 }
 
+/** Callbacks for message operations - allows host to override API implementation */
+export interface MessageOperations {
+  /** Create a new session - returns session with id */
+  createSession?: (body?: { parentID?: string; title?: string }) => Promise<{ id: string }>;
+  /** Send a message to a session */
+  sendMessage?: (sessionId: string, content: string, system?: string) => Promise<void>;
+  /** Delete a session */
+  deleteSession?: (sessionId: string) => Promise<void>;
+  /** Abort a running session */
+  abortSession?: (sessionId: string) => Promise<void>;
+}
+
+/** Context usage stats for the indicator */
+export interface ContextStats {
+  currentTokens: number;
+  usableTokens: number;
+  utilizationPercent: number;
+  isOverflow: boolean;
+}
+
 export interface ChatPanelProps {
   /** Currently selected session ID */
   sessionId: string | null;
@@ -86,6 +106,12 @@ export interface ChatPanelProps {
   editorContext?: EditorContext;
   /** Todos for the current session (optional - for inline display) */
   todos?: TodoItem[];
+  /** External messages - if provided, bypasses internal useMessages hook */
+  messages?: import("@/lib/api").MessageWithParts[];
+  /** External message operations - if provided, bypasses internal hooks */
+  operations?: MessageOperations;
+  /** Context usage stats (optional - for browser agent) */
+  contextStats?: ContextStats;
 }
 
 export function ChatPanel({
@@ -106,6 +132,9 @@ export function ChatPanel({
   onInputBlur,
   editorContext,
   todos = [],
+  messages: externalMessages,
+  operations,
+  contextStats,
 }: ChatPanelProps) {
   // Use controlled or uncontrolled input
   const [uncontrolledInputValue, setUncontrolledInputValue] = useState("");
@@ -120,7 +149,9 @@ export function ChatPanel({
 
   // Session hooks
   const { data: allSessions = [] } = useSessions();
-  const { data: messages = [] } = useMessages(sessionId);
+  // Use external messages if provided, otherwise fetch via hook
+  const { data: hookMessages = [] } = useMessages(externalMessages ? null : sessionId);
+  const messages = externalMessages ?? hookMessages;
   const { data: sessionStatuses = {} } = useSessionStatuses();
 
   // Mutation hooks
@@ -170,8 +201,8 @@ export function ChatPanel({
     return `The user is currently viewing the ${label} "${name}".`;
   }, [editorContext]);
 
-  // Message handlers
-  const handleSend = useCallback(() => {
+  // Message handlers - use operations callbacks if provided, otherwise use internal hooks
+  const handleSend = useCallback(async () => {
     let content = inputValue.trim();
     if (!content && pendingFiles.length === 0) return;
     if (isBusy) return;
@@ -184,9 +215,22 @@ export function ChatPanel({
     }
 
     if (!content) return;
+    setInputValue("");
 
+    // Use operations callbacks if provided (e.g., browser API)
+    if (operations?.createSession && operations?.sendMessage) {
+      if (!sessionId) {
+        const newSession = await operations.createSession();
+        onSessionSelect(newSession.id);
+        await operations.sendMessage(newSession.id, content, systemContext);
+      } else {
+        await operations.sendMessage(sessionId, content, systemContext);
+      }
+      return;
+    }
+
+    // Fallback to internal mutation hooks (desktop API)
     if (!sessionId) {
-      // Create new session and send
       createSessionMutation.mutate(undefined, {
         onSuccess: (newSession) => {
           onSessionSelect(newSession.id);
@@ -196,8 +240,6 @@ export function ChatPanel({
     } else {
       sendMessageMutation.mutate({ sessionId, content, system: systemContext });
     }
-
-    setInputValue("");
   }, [
     inputValue,
     pendingFiles,
@@ -209,28 +251,43 @@ export function ChatPanel({
     setInputValue,
     setPendingFiles,
     systemContext,
+    operations,
   ]);
 
-  const handleAbort = useCallback(() => {
-    if (sessionId) abortSessionMutation.mutate();
-  }, [sessionId, abortSessionMutation]);
+  const handleAbort = useCallback(async () => {
+    if (!sessionId) return;
+    if (operations?.abortSession) {
+      await operations.abortSession(sessionId);
+    } else {
+      abortSessionMutation.mutate();
+    }
+  }, [sessionId, abortSessionMutation, operations]);
 
-  const handleCreateSession = useCallback(() => {
-    createSessionMutation.mutate(undefined, {
-      onSuccess: (newSession) => {
-        onSessionSelect(newSession.id);
-      },
-    });
-  }, [createSessionMutation, onSessionSelect]);
+  const handleCreateSession = useCallback(async () => {
+    if (operations?.createSession) {
+      const newSession = await operations.createSession();
+      onSessionSelect(newSession.id);
+    } else {
+      createSessionMutation.mutate(undefined, {
+        onSuccess: (newSession) => {
+          onSessionSelect(newSession.id);
+        },
+      });
+    }
+  }, [createSessionMutation, onSessionSelect, operations]);
 
   const handleDeleteSession = useCallback(
-    (id: string) => {
-      deleteSessionMutation.mutate(id);
+    async (id: string) => {
+      if (operations?.deleteSession) {
+        await operations.deleteSession(id);
+      } else {
+        deleteSessionMutation.mutate(id);
+      }
       if (id === sessionId) {
         onSessionSelect(null);
       }
     },
-    [deleteSessionMutation, sessionId, onSessionSelect],
+    [deleteSessionMutation, sessionId, onSessionSelect, operations],
   );
 
   const handleBack = useCallback(() => {
@@ -381,6 +438,48 @@ export function ChatPanel({
                   </span>
                 )}
               </button>
+            )}
+
+            {/* Spacer */}
+            <div className="flex-1" />
+
+            {/* Context usage indicator - far right, subtle */}
+            {contextStats && (
+              <div
+                className="h-3.5 w-3.5 opacity-60 hover:opacity-100 transition-opacity cursor-default"
+                title={`Context: ${contextStats.utilizationPercent}% (${Math.round(contextStats.currentTokens / 1000)}K / ${Math.round(contextStats.usableTokens / 1000)}K tokens)`}
+              >
+                <svg className="h-full w-full -rotate-90" viewBox="0 0 20 20">
+                  <circle
+                    cx="10"
+                    cy="10"
+                    r="8"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2.5"
+                    className="text-muted-foreground/30"
+                  />
+                  <circle
+                    cx="10"
+                    cy="10"
+                    r="8"
+                    fill="none"
+                    strokeWidth="2.5"
+                    strokeLinecap="round"
+                    strokeDasharray={`${(Math.min(contextStats.utilizationPercent, 100) / 100) * 50.27} 50.27`}
+                    className={cn(
+                      "transition-all duration-300",
+                      contextStats.utilizationPercent < 50
+                        ? "stroke-muted-foreground/50"
+                        : contextStats.utilizationPercent < 70
+                          ? "stroke-yellow-500/70"
+                          : contextStats.utilizationPercent < 90
+                            ? "stroke-orange-500/80"
+                            : "stroke-red-500"
+                    )}
+                  />
+                </svg>
+              </div>
             )}
           </motion.div>
         )}

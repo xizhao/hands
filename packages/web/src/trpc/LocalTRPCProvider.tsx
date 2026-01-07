@@ -110,7 +110,7 @@ interface LocalTRPCProviderProps {
 }
 
 export function LocalTRPCProvider({ children, queryClient }: LocalTRPCProviderProps) {
-  const { query, execute, schema, notifyChange, dataVersion, workbookId, isReady } = useLocalDatabase();
+  const { query, execute, schema, notifyChange, dataVersion, workbookId, isReady, exportDatabase } = useLocalDatabase();
   const [pagesContext, setPagesContext] = useState<PagesContext | null>(null);
 
   // Create refs for stable callbacks
@@ -121,6 +121,7 @@ export function LocalTRPCProvider({ children, queryClient }: LocalTRPCProviderPr
   const dataVersionRef = useRef(dataVersion);
   const workbookIdRef = useRef(workbookId);
   const pagesContextRef = useRef(pagesContext);
+  const exportDatabaseRef = useRef(exportDatabase);
 
   // Update refs on value changes
   useEffect(() => {
@@ -131,7 +132,8 @@ export function LocalTRPCProvider({ children, queryClient }: LocalTRPCProviderPr
     dataVersionRef.current = dataVersion;
     workbookIdRef.current = workbookId;
     pagesContextRef.current = pagesContext;
-  }, [query, execute, schema, notifyChange, dataVersion, workbookId, pagesContext]);
+    exportDatabaseRef.current = exportDatabase;
+  }, [query, execute, schema, notifyChange, dataVersion, workbookId, pagesContext, exportDatabase]);
 
   // Create pages storage when database is ready
   useEffect(() => {
@@ -209,6 +211,9 @@ export function LocalTRPCProvider({ children, queryClient }: LocalTRPCProviderPr
         // Notify change to trigger React Query refetch
         notifyChangeRef.current();
       },
+
+      // Export database for deployment
+      exportDatabase: () => exportDatabaseRef.current(),
     };
   }, []);
 

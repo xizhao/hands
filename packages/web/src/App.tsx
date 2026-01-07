@@ -56,7 +56,28 @@ import { queryClient } from "./lib/queryClient";
 initTheme();
 
 // Lazy load workbook shell (contains all heavy deps: agent, SQLite, etc.)
-const WorkbookShell = lazy(() => import("./routes/workbook/WorkbookShell"));
+// Store import function so we can preload it
+const importWorkbookShell = () => import("./routes/workbook/WorkbookShell");
+const WorkbookShell = lazy(importWorkbookShell);
+
+// Preload heavy bundle when browser is idle
+// Called from landing page to make workbook navigation instant
+export function preloadWorkbookBundle() {
+  if (typeof window === "undefined") return;
+
+  const preload = () => {
+    importWorkbookShell().catch(() => {
+      // Ignore preload errors - will retry on actual navigation
+    });
+  };
+
+  // Use requestIdleCallback for low-priority preload, fallback to setTimeout
+  if ("requestIdleCallback" in window) {
+    requestIdleCallback(preload, { timeout: 3000 });
+  } else {
+    setTimeout(preload, 500);
+  }
+}
 
 // Loading fallback for workbook
 function WorkbookLoader() {
@@ -79,6 +100,10 @@ function LandingLayout() {
     adapter.workbook.list().then((workbooks) => {
       setWorkbookCount(workbooks.length);
     });
+
+    // Preload heavy workbook bundle while user is on landing page
+    // This makes navigation to workbook routes instant
+    preloadWorkbookBundle();
   }, []);
 
   const handleWorkbooksChange = useCallback((count: number) => {

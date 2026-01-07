@@ -5,10 +5,14 @@
   "compatibility_date": "2025-12-01",
   "compatibility_flags": ["nodejs_compat", "nodejs_als"],
 
-  // Custom domain - requires hands.app zone in Cloudflare
-  "routes": [
-    { "pattern": "view.hands.app/*", "zone_name": "hands.app" }
-  ],
+  // Enable workers.dev subdomain
+  "workers_dev": true,
+
+  // Custom domain - requires zone permissions in API token
+  // Set up manually: DNS CNAME view -> hands-viewer.kwang1imsa.workers.dev
+  // "routes": [
+  //   { "pattern": "view.hands.app/*", "zone_name": "hands.app" }
+  // ],
 
   // CF credentials for D1 HTTP API
   // Set via: wrangler secret put CF_ACCOUNT_ID / CF_API_TOKEN

@@ -7,16 +7,16 @@
 
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useMatches } from "@tanstack/react-router";
-import { useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Toaster } from "sonner";
 
 // Heavy imports - only loaded when this module is imported
-import { ChatPanel, PlatformProvider, ApiKeyProvider, LoadingState, useAgentReady, TooltipProvider, initTheme, type ApiKeyContextValue, type EditorContext } from "@hands/app";
+import { ChatPanel, PlatformProvider, ApiKeyProvider, LoadingState, useAgentReady, TooltipProvider, initTheme, type ApiKeyContextValue, type EditorContext, type MessageOperations } from "@hands/app";
 
 // Initialize full theme system when workbook loads
 initTheme();
 import { ContentTabBar } from "../../components/workbook/ContentTabBar";
-import { api as browserApi, subscribeToEvents, getStoredConfig, setStoredConfig, type ServerEvent, type MessageWithParts, type Session, type SessionStatus, type Todo } from "@hands/agent/browser";
+import { api as browserApi, subscribeToEvents, getStoredConfig, setStoredConfig, getContextStats, type ServerEvent, type MessageWithParts, type Session, type SessionStatus, type Todo, type Part } from "@hands/agent/browser";
 import { AgentProvider } from "../../agent/AgentProvider";
 import { LocalDatabaseProvider } from "../../db/LocalDatabaseProvider";
 import { createLocalPlatformAdapter } from "../../platform/LocalAdapter";
@@ -56,17 +56,47 @@ import { queryClient } from "../../lib/queryClient";
 // Chat Sidebar
 // ============================================================================
 
-function ChatSidebar() {
+function ChatSidebar({ workbookId }: { workbookId: string }) {
   const matches = useMatches();
   const isAgentReady = useAgentReady();
   const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
   const [inputValue, setInputValue] = useState("");
   const [pendingRetryContent, setPendingRetryContent] = useState<string | undefined>();
   const autoSendHandled = useRef(false);
+  const autoSelectHandled = useRef(false);
   const lastPromptContent = useRef<string>("");
+
+  // Auto-select latest session when workbook loads
+  useEffect(() => {
+    if (!isAgentReady) return;
+    if (autoSelectHandled.current) return;
+    if (activeSessionId) return; // Already have a session selected
+
+    autoSelectHandled.current = true;
+
+    // Fetch sessions and select the most recent one
+    browserApi.sessions.list().then((sessions) => {
+      if (sessions.length > 0) {
+        // Sort by updated time descending, pick the latest
+        const sorted = [...sessions].sort((a, b) => b.time.updated - a.time.updated);
+        setActiveSessionId(sorted[0].id);
+      }
+    });
+  }, [isAgentReady, activeSessionId]);
+
+  // Get combined messages using opencode pattern (messages + parts from separate caches)
+  const messages = useMessagesWithParts(activeSessionId, workbookId);
 
   // Fetch todos for the active session
   const { data: todos = [] } = useTodos(activeSessionId);
+
+  // Compute context stats from messages
+  const contextStats = useMemo(() => {
+    if (!messages.length) return undefined;
+    const config = getStoredConfig();
+    const modelId = config?.modelId || "anthropic/claude-sonnet-4";
+    return getContextStats({ messages, modelId });
+  }, [messages]);
 
   // Detect current page/table from route
   const editorContext = useMemo<EditorContext>(() => {
@@ -115,6 +145,22 @@ function ChatSidebar() {
     setPendingRetryContent,
   }), [hasApiKey, saveApiKey, onApiKeySaved, pendingRetryContent]);
 
+  // Browser API operations - uses browserApi instead of desktop opencode API
+  const messageOperations = useMemo<MessageOperations>(() => ({
+    createSession: async (body) => {
+      return browserApi.sessions.create(body);
+    },
+    sendMessage: async (sessionId, content, system) => {
+      await browserApi.promptAsync(sessionId, content, { agent: "hands", system });
+    },
+    deleteSession: async (sessionId) => {
+      await browserApi.sessions.delete(sessionId);
+    },
+    abortSession: async (sessionId) => {
+      await browserApi.abort(sessionId);
+    },
+  }), []);
+
   // Extract ?q= param and auto-send when agent is ready
   useEffect(() => {
     if (autoSendHandled.current) return;
@@ -157,6 +203,9 @@ function ChatSidebar() {
           onInputChange={setInputValue}
           editorContext={editorContext}
           todos={todos}
+          messages={messages}
+          operations={messageOperations}
+          contextStats={contextStats}
         />
       </div>
     </ApiKeyProvider>
@@ -164,14 +213,42 @@ function ChatSidebar() {
 }
 
 // ============================================================================
-// Browser Event Sync
+// Browser Event Sync - Opencode Pattern
 // ============================================================================
+
+/**
+ * Parts are stored separately from messages (opencode pattern).
+ * This handles the race condition where parts arrive before their parent message.
+ *
+ * Cache structure:
+ * - ["messages", sessionId, workbookId] → Message[] (info only, no parts)
+ * - ["parts", sessionId, workbookId] → Record<messageId, Part[]>
+ *
+ * Components combine at render time via useMessagesWithParts hook.
+ */
+type PartsCache = Record<string, Part[]>;
+type Message = MessageWithParts["info"];
+
+/**
+ * Helper to upsert into a sorted array by id
+ */
+function upsertSorted<T extends { id: string }>(arr: T[], item: T): T[] {
+  // Filter out any items without valid id (handles cache format migration)
+  const validArr = arr.filter((x) => x && typeof x.id === "string");
+
+  const idx = validArr.findIndex((x) => x.id === item.id);
+  if (idx >= 0) {
+    const updated = [...validArr];
+    updated[idx] = item;
+    return updated;
+  }
+  const result = [...validArr, item];
+  result.sort((a, b) => a.id.localeCompare(b.id));
+  return result;
+}
 
 function BrowserEventSync({ workbookId }: { workbookId: string }) {
   const qc = useQueryClient();
-
-  // No manual cache clearing needed - queries include workbookId in their input,
-  // so React Query naturally scopes cache per workbook
 
   useEffect(() => {
     const cleanup = subscribeToEvents((event: ServerEvent) => {
@@ -198,35 +275,23 @@ function BrowserEventSync({ workbookId }: { workbookId: string }) {
           break;
 
         case "message.updated":
-          qc.setQueryData<MessageWithParts[]>(
-            ["messages", event.message.sessionId, workbookId],
-            (old) => {
-              if (!old) return [{ info: event.message, parts: [] }];
-              const exists = old.some((m) => m.info.id === event.message.id);
-              if (exists) {
-                return old.map((m) => m.info.id === event.message.id ? { ...m, info: event.message } : m);
-              }
-              return [...old, { info: event.message, parts: [] }];
-            }
+          // Store message info only (no parts) - opencode pattern
+          // Use "message-info" key to avoid collision with app's "messages" key
+          qc.setQueryData<Message[]>(
+            ["message-info", event.message.sessionId, workbookId],
+            (old) => upsertSorted(old ?? [], event.message)
           );
           break;
 
         case "message.part.updated":
-          qc.setQueryData<MessageWithParts[]>(
-            ["messages", event.sessionId, workbookId],
-            (old) => {
-              if (!old) return [{ info: { id: event.messageId, sessionId: event.sessionId, role: "assistant", time: { created: Date.now() } }, parts: [event.part] }];
-              return old.map((m) => {
-                if (m.info.id !== event.messageId) return m;
-                const idx = m.parts.findIndex((p) => p.id === event.part.id);
-                if (idx >= 0) {
-                  const newParts = [...m.parts];
-                  newParts[idx] = event.part;
-                  return { ...m, parts: newParts };
-                }
-                return { ...m, parts: [...m.parts, event.part] };
-              });
-            }
+          // Store parts separately - opencode pattern
+          // "Don't filter by message existence - parts can arrive before their parent message"
+          qc.setQueryData<PartsCache>(
+            ["message-parts", event.sessionId, workbookId],
+            (old) => ({
+              ...old,
+              [event.messageId]: upsertSorted(old?.[event.messageId] ?? [], event.part),
+            })
           );
           break;
 
@@ -235,7 +300,6 @@ function BrowserEventSync({ workbookId }: { workbookId: string }) {
           break;
 
         case "page.updated":
-          // Agent created/updated/deleted a page - invalidate the pages list
           qc.invalidateQueries({ queryKey: ["pages"] });
           break;
       }
@@ -245,6 +309,86 @@ function BrowserEventSync({ workbookId }: { workbookId: string }) {
   }, [qc, workbookId]);
 
   return null;
+}
+
+// ============================================================================
+// useMessagesWithParts - Combines messages + parts at render time
+// ============================================================================
+
+/**
+ * Hook that combines messages with their parts from separate caches.
+ * Uses useQuery to subscribe to cache updates - opencode pattern.
+ *
+ * Cache keys use "message-info" and "message-parts" to avoid collision
+ * with the app package's "messages" key (which uses MessageWithParts[]).
+ */
+function useMessagesWithParts(sessionId: string | null, workbookId: string): MessageWithParts[] {
+  const qc = useQueryClient();
+  const initialFetchDone = useRef<Set<string>>(new Set());
+
+  // One-time fetch for existing sessions (e.g., page refresh)
+  // Uses setQueryData so it doesn't conflict with SSE updates
+  useEffect(() => {
+    if (!sessionId) return;
+    if (initialFetchDone.current.has(sessionId)) return;
+    initialFetchDone.current.add(sessionId);
+
+    browserApi.messages.list(sessionId).then((fullMessages) => {
+      if (fullMessages.length === 0) return;
+
+      // Only set if cache is empty (SSE may have already populated it)
+      const existing = qc.getQueryData<Message[]>(["message-info", sessionId, workbookId]);
+      if (!existing || existing.length === 0) {
+        qc.setQueryData<Message[]>(
+          ["message-info", sessionId, workbookId],
+          fullMessages.map((m) => m.info)
+        );
+      }
+
+      // Same for parts
+      const existingParts = qc.getQueryData<PartsCache>(["message-parts", sessionId, workbookId]);
+      if (!existingParts || Object.keys(existingParts).length === 0) {
+        const partsCache: PartsCache = {};
+        for (const m of fullMessages) {
+          if (m.parts.length > 0) {
+            partsCache[m.info.id] = m.parts;
+          }
+        }
+        if (Object.keys(partsCache).length > 0) {
+          qc.setQueryData<PartsCache>(["message-parts", sessionId, workbookId], partsCache);
+        }
+      }
+    });
+  }, [sessionId, workbookId, qc]);
+
+  // Subscribe to cache changes - empty queryFn, data comes from setQueryData (SSE)
+  const { data: messages = [] } = useQuery<Message[]>({
+    queryKey: ["message-info", sessionId, workbookId],
+    queryFn: () => [], // Never fetches - SSE populates via setQueryData
+    enabled: !!sessionId,
+    staleTime: Infinity,
+    refetchOnMount: false,
+    refetchOnWindowFocus: false,
+    refetchOnReconnect: false,
+  });
+
+  const { data: partsCache = {} } = useQuery<PartsCache>({
+    queryKey: ["message-parts", sessionId, workbookId],
+    queryFn: () => ({}),
+    enabled: !!sessionId,
+    staleTime: Infinity,
+    refetchOnMount: false,
+    refetchOnWindowFocus: false,
+    refetchOnReconnect: false,
+  });
+
+  // Combine at render time
+  return useMemo(() => {
+    return messages.map((info) => ({
+      info,
+      parts: partsCache[info.id] ?? [],
+    }));
+  }, [messages, partsCache]);
 }
 
 // ============================================================================
@@ -352,7 +496,7 @@ export default function WorkbookShell({ workbookId }: WorkbookShellProps) {
     <WorkbookProviders key={workbookId} workbookId={workbookId}>
       {({ isReady, workbookName, onWorkbookNameChange }) => (
         <WebShell
-          sidebar={<ChatSidebar />}
+          sidebar={<ChatSidebar workbookId={workbookId} />}
           floatingSidebar={<LandingSidebar />}
           topbarLeft={
             <WorkbookTitleEditor

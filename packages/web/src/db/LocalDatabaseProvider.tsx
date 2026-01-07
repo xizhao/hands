@@ -41,6 +41,19 @@ export interface WorkbookMeta {
   updated_at: number;
 }
 
+export interface ExportedTable {
+  name: string;
+  schema: Array<{ name: string; type: string; pk: boolean; notnull: boolean; dflt_value: string | null }>;
+  rows: Record<string, unknown>[];
+}
+
+export interface ExportResult {
+  workbookId: string | null;
+  meta: WorkbookMeta | null;
+  pages: Array<{ path: string; title: string | null; content: string }>;
+  tables: ExportedTable[];
+}
+
 interface LocalDatabaseContextValue {
   /** Is the database ready? */
   isReady: boolean;
@@ -66,6 +79,8 @@ interface LocalDatabaseContextValue {
   closeWorkbook: () => Promise<void>;
   /** Update workbook metadata in SQLite */
   updateWorkbookMeta: (name?: string, description?: string) => Promise<WorkbookMeta | null>;
+  /** Export database for deployment */
+  exportDatabase: () => Promise<ExportResult>;
   /** Is OPFS available? */
   hasOpfs: boolean;
 }
@@ -265,6 +280,20 @@ export function LocalDatabaseProvider({ children, initialWorkbookId }: LocalData
     }
   }, [isReady, sendMessage]);
 
+  // Export database for deployment
+  const exportDatabase = useCallback(async (): Promise<ExportResult> => {
+    if (!isReady) {
+      throw new Error("Database not ready for export");
+    }
+
+    try {
+      return await sendMessage<ExportResult>({ type: "export" });
+    } catch (err) {
+      console.error("[LocalDB] Export failed:", err);
+      throw err;
+    }
+  }, [isReady, sendMessage]);
+
   // Execute a read query
   const query = useCallback(async <T = Record<string, unknown>>(
     sql: string,
@@ -328,8 +357,9 @@ export function LocalDatabaseProvider({ children, initialWorkbookId }: LocalData
     openWorkbook,
     closeWorkbook,
     updateWorkbookMeta,
+    exportDatabase,
     hasOpfs,
-  }), [isReady, isLoading, workbookId, workbookMeta, schema, dataVersion, query, execute, notifyChange, openWorkbook, closeWorkbook, updateWorkbookMeta, hasOpfs]);
+  }), [isReady, isLoading, workbookId, workbookMeta, schema, dataVersion, query, execute, notifyChange, openWorkbook, closeWorkbook, updateWorkbookMeta, exportDatabase, hasOpfs]);
 
   // Don't block rendering - children handle their own loading states
   // tRPC queries use isReady check internally

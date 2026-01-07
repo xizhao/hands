@@ -232,7 +232,16 @@ export const api = {
     const userMsg = createUserMessage(sessionId, content, messages);
     await storage.createMessage(sessionId, userMsg);
 
+    // Emit message info and parts
     eventEmitter.emit({ type: "message.updated", message: userMsg.info });
+    for (const part of userMsg.parts) {
+      eventEmitter.emit({
+        type: "message.part.updated",
+        sessionId,
+        messageId: userMsg.info.id,
+        part,
+      });
+    }
 
     // Run agent and get response
     const assistantMsg = await runPrompt(sessionId, [...messages, userMsg], options);
@@ -260,7 +269,18 @@ export const api = {
       console.error("[api.promptAsync] Failed to persist user message:", err);
     });
 
+    // Emit message info
     eventEmitter.emit({ type: "message.updated", message: userMsg.info });
+
+    // Emit parts (required for UI to render user message content)
+    for (const part of userMsg.parts) {
+      eventEmitter.emit({
+        type: "message.part.updated",
+        sessionId,
+        messageId: userMsg.info.id,
+        part,
+      });
+    }
 
     // Run agent async
     runPrompt(sessionId, [...messages, userMsg], options).catch((err) => {

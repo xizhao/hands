@@ -9,6 +9,19 @@
 // Types
 // ============================================================================
 
+export interface ExportedTable {
+  name: string;
+  schema: Array<{ name: string; type: string; pk: boolean; notnull: boolean; dflt_value: string | null }>;
+  rows: Record<string, unknown>[];
+}
+
+export interface ExportResult {
+  workbookId: string | null;
+  meta: { name: string; description: string | null; created_at: number; updated_at: number } | null;
+  pages: Array<{ path: string; title: string | null; content: string }>;
+  tables: ExportedTable[];
+}
+
 export interface LocalTRPCContext {
   /** Execute a read query */
   query: <T = Record<string, unknown>>(sql: string, params?: unknown[]) => Promise<T[]>;
@@ -34,6 +47,8 @@ export interface LocalTRPCContext {
   savePage: (path: string, content: string, title?: string) => Promise<void>;
   /** Delete a page from SQLite */
   deletePage: (path: string) => Promise<void>;
+  /** Export database for deployment */
+  exportDatabase: () => Promise<ExportResult>;
 }
 
 // ============================================================================
@@ -469,9 +484,83 @@ export const procedures: Record<string, ProcedureDefinition> = {
   "actionRuns.get": { type: "query", handler: () => null },
   "actionRuns.getLogs": { type: "query", handler: () => null },
 
-  // Deploy (stubs)
+  // Deploy
   "deploy.status": { type: "query", handler: () => ({ deployed: false }) },
-  "viewerDeploy.status": { type: "query", handler: () => ({ deployed: false }) },
+  "viewerDeploy.status": { type: "query", handler: (ctx) => {
+    // Check localStorage for deploy info
+    const key = `hands-deploy-${ctx.workbookId}`;
+    const stored = localStorage.getItem(key);
+    if (!stored) {
+      return { deployed: false, url: null, d1DatabaseId: null, deployedAt: null };
+    }
+    try {
+      const info = JSON.parse(stored);
+      return {
+        deployed: true,
+        url: info.url as string,
+        d1DatabaseId: info.d1DatabaseId as string,
+        deployedAt: info.deployedAt as string,
+      };
+    } catch {
+      return { deployed: false, url: null, d1DatabaseId: null, deployedAt: null };
+    }
+  }},
+  "viewerDeploy.publish": { type: "mutation", handler: async (ctx) => {
+    if (!ctx.workbookId) {
+      throw new Error("No workbook open");
+    }
+
+    // Export the database
+    console.log("[viewerDeploy] Exporting database...");
+    const exportData = await ctx.exportDatabase();
+
+    // Deploy URL - using workers.dev until view.hands.app DNS is configured
+    const deployUrl = "https://hands-viewer.kwang1imsa.workers.dev/_deploy";
+
+    // Send to deploy endpoint
+    console.log("[viewerDeploy] Uploading to viewer...");
+    const response = await fetch(deployUrl, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        workbookId: ctx.workbookId,
+        meta: exportData.meta,
+        pages: exportData.pages,
+        tables: exportData.tables,
+      }),
+    });
+
+    if (!response.ok) {
+      const text = await response.text();
+      throw new Error(`Deploy failed: ${text}`);
+    }
+
+    const result = await response.json() as {
+      success: boolean;
+      url: string;
+      d1DatabaseId: string;
+      pagesUploaded: number;
+      tablesUploaded: number;
+    };
+
+    // Store deploy info in localStorage
+    const deployInfo = {
+      workbookId: ctx.workbookId,
+      url: result.url,
+      d1DatabaseId: result.d1DatabaseId,
+      deployedAt: new Date().toISOString(),
+    };
+    localStorage.setItem(`hands-deploy-${ctx.workbookId}`, JSON.stringify(deployInfo));
+
+    console.log("[viewerDeploy] Done!", result.url);
+
+    return {
+      success: true,
+      url: result.url,
+      d1DatabaseId: result.d1DatabaseId,
+      pagesUploaded: result.pagesUploaded,
+    };
+  }},
 };
 
 /** Execute a procedure by path */

@@ -19,6 +19,7 @@ import type {
   Session,
 } from "../core";
 import { generateId } from "../core";
+import { isOverflow, pruneOldToolOutputs, getEffectiveOutput, getContextStats } from "./compaction";
 
 /**
  * Agent configuration - supports both OpenCode format and core format.
@@ -109,6 +110,22 @@ async function* executeAgentLoop(options: AgentOptions): AsyncGenerator<AgentEve
 
   while (turn < maxTurns) {
     turn++;
+
+    // Check for context overflow and prune if needed
+    // Also prune proactively if we're above 70% utilization to leave room for tool outputs
+    const stats = getContextStats({ messages, modelId });
+    console.log(`[agent] Context usage: ${stats.currentTokens}/${stats.usableTokens} tokens (${stats.utilizationPercent}%)`);
+
+    if (stats.isOverflow || stats.utilizationPercent > 70) {
+      const pruneResult = pruneOldToolOutputs({ messages, modelId });
+      if (pruneResult.performed) {
+        console.log(
+          `[agent] Context ${stats.isOverflow ? 'overflow' : 'high utilization'} detected. Pruned ${pruneResult.prunedCount} tool outputs (~${pruneResult.tokensSaved} tokens).`
+        );
+      } else if (stats.isOverflow) {
+        console.warn(`[agent] Context overflow but nothing to prune! May hit API limit.`);
+      }
+    }
 
     // Convert messages to AI SDK format
     const coreMessages = await convertToCoreMessages(messages);
@@ -387,12 +404,14 @@ async function convertToCoreMessages(messages: MessageWithParts[]): Promise<Mode
         if (part.type === "tool") {
           // Use the OpenCode pattern: type: "tool-{toolName}" with state
           if (part.state.status === "completed") {
+            // Use getEffectiveOutput to handle compacted outputs
+            const effectiveOutput = getEffectiveOutput(part);
             assistantMessage.parts.push({
               type: `tool-${part.tool}` as `tool-${string}`,
               state: "output-available",
               toolCallId: part.callId,
               input: part.state.input,
-              output: part.state.output,
+              output: effectiveOutput,
             });
           } else if (part.state.status === "error") {
             assistantMessage.parts.push({

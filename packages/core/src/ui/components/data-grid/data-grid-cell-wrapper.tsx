@@ -8,25 +8,27 @@ import { cn } from "../../lib/utils";
 
 interface DataGridCellWrapperProps<TData>
   extends DataGridCellProps<TData>,
-    React.ComponentProps<"div"> {}
+    Omit<React.ComponentProps<"div">, "ref"> {}
 
-export function DataGridCellWrapper<TData>({
-  tableMeta,
-  rowIndex,
-  columnId,
-  isEditing,
-  isFocused,
-  isSelected,
-  isSearchMatch,
-  isActiveSearchMatch,
-  readOnly,
-  rowHeight,
-  className,
-  onClick: onClickProp,
-  onKeyDown: onKeyDownProp,
-  ref,
-  ...props
-}: DataGridCellWrapperProps<TData>) {
+function DataGridCellWrapperInner<TData>(
+  {
+    tableMeta,
+    rowIndex,
+    columnId,
+    isEditing,
+    isFocused,
+    isSelected,
+    isSearchMatch,
+    isActiveSearchMatch,
+    readOnly,
+    rowHeight,
+    className,
+    onClick: onClickProp,
+    onKeyDown: onKeyDownProp,
+    ...props
+  }: DataGridCellWrapperProps<TData>,
+  ref: React.ForwardedRef<HTMLDivElement>
+) {
   const cellMapRef = tableMeta?.cellMapRef;
 
   const onCellChange = React.useCallback(
@@ -184,3 +186,8 @@ export function DataGridCellWrapper<TData>({
     />
   );
 }
+
+// Use forwardRef for React 18 compatibility
+export const DataGridCellWrapper = React.forwardRef(DataGridCellWrapperInner) as <TData>(
+  props: DataGridCellWrapperProps<TData> & { ref?: React.Ref<HTMLDivElement> }
+) => React.ReactElement;

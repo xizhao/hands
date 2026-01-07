@@ -12,6 +12,7 @@ import { PageStatic } from "@hands/runtime/components/PageStatic";
 import { Document } from "./Document";
 import { D1Client, type D1ClientConfig } from "./lib/d1-client";
 import { createViewerDbAdapter } from "./lib/db-adapter";
+import { handleDeploy, type DeployRequest } from "./lib/deploy";
 import {
   setEnv,
   getEnv,
@@ -102,6 +103,51 @@ function ViewerPage({ page, dbAdapter }: ViewerPageProps) {
 const app = defineApp([
   // Health check
   route("/health", () => new Response("ok")),
+
+  // Deploy endpoint - receives workbook data from web app
+  route("/_deploy", async ({ request }) => {
+    // CORS preflight
+    if (request.method === "OPTIONS") {
+      return new Response(null, {
+        headers: {
+          "Access-Control-Allow-Origin": "*",
+          "Access-Control-Allow-Methods": "POST, OPTIONS",
+          "Access-Control-Allow-Headers": "Content-Type",
+        },
+      });
+    }
+
+    if (request.method !== "POST") {
+      return new Response("Method not allowed", { status: 405 });
+    }
+
+    const env = getEnv();
+
+    try {
+      const body = (await request.json()) as DeployRequest;
+
+      if (!body.workbookId) {
+        return Response.json({ error: "Missing workbookId" }, { status: 400 });
+      }
+
+      const result = await handleDeploy(body, env.CF_ACCOUNT_ID, env.CF_API_TOKEN);
+
+      return Response.json(result, {
+        headers: {
+          "Access-Control-Allow-Origin": "*",
+        },
+      });
+    } catch (error) {
+      console.error("[deploy] Error:", error);
+      return Response.json(
+        { error: error instanceof Error ? error.message : "Deploy failed" },
+        {
+          status: 500,
+          headers: { "Access-Control-Allow-Origin": "*" },
+        }
+      );
+    }
+  }),
 
   // Live action endpoint
   route("/:workbookId/_action", async ({ params, request }) => {

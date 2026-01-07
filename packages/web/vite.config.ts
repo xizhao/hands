@@ -59,7 +59,16 @@ export default defineConfig({
     // that have worker-specific exports without DOM dependencies
     conditions: ["worker", "import", "module", "browser", "default"],
     // Ensure single instances of these packages (prevents context/store issues)
-    dedupe: ["react", "react-dom", "jotai", "jotai-x", "platejs"],
+    dedupe: [
+      "react",
+      "react-dom",
+      "jotai",
+      "jotai-x",
+      "platejs",
+      "@tanstack/react-query",
+      "@trpc/client",
+      "@trpc/react-query",
+    ],
     alias: [
       // Override @/lib/api to use browser API instead of opencode SDK
       { find: "@/lib/api", replacement: path.resolve(__dirname, "src/lib/api.ts") },
@@ -133,6 +142,6 @@ export default defineConfig({
   appType: "spa",
   build: {
     outDir: "dist",
-    sourcemap: true,
+    sourcemap: false, // Disabled for deploy (files exceed Cloudflare's 25MB limit)
   },
 });

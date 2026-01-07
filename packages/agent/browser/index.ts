@@ -187,6 +187,38 @@ export { createPagesStorage } from "./pages-storage";
 export { useAgent, type UseAgentOptions, type UseAgentReturn } from "./hooks/useAgent";
 
 // ============================================================================
+// Context Management
+// ============================================================================
+
+export {
+  isOverflow,
+  getContextStats,
+  pruneOldToolOutputs,
+  getEffectiveOutput,
+  isCompacted,
+  COMPACTED_OUTPUT_PLACEHOLDER,
+  type OverflowCheckInput,
+  type PruneResult,
+  type PruneOptions,
+} from "./compaction";
+
+export {
+  getContextLimit,
+  createContextConfig,
+  MODEL_CONTEXT_LIMITS,
+  DEFAULT_CONTEXT_CONFIG,
+  type ContextConfig,
+} from "./context-config";
+
+export {
+  estimateTokens,
+  estimatePartTokens,
+  estimateMessageTokens,
+  estimateConversationTokens,
+  estimateToolOutputTokens,
+} from "./token";
+
+// ============================================================================
 // Legacy Client (kept for compatibility)
 // ============================================================================
 

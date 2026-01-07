@@ -8,7 +8,7 @@
 
 // Use lightweight input to avoid pulling in heavy @hands/app deps
 import { LandingInput, type LandingInputRef } from "../components/LandingInput";
-import { Envelope, Link, Table, UploadSimple } from "@phosphor-icons/react";
+import { Database, TrendUp } from "@phosphor-icons/react";
 import { useNavigate } from "@tanstack/react-router";
 import { animate, motion, useMotionValue } from "motion/react";
 import { useEffect, useRef, useState } from "react";
@@ -99,11 +99,9 @@ function PromptBar() {
     }
   };
 
-  const handleSourceClick = (source: string) => {
-    if (source === "link") {
-      setValue("Connect to ");
-      inputRef.current?.focus();
-    }
+  const handleExampleClick = (prompt: string) => {
+    setValue(prompt);
+    inputRef.current?.focus();
   };
 
   return (
@@ -118,45 +116,59 @@ function PromptBar() {
           onChange={setValue}
           onSend={handleSend}
           isSending={isNavigating}
-          placeholder="Where should hands get the data?"
+          placeholder="What should Hands build a dashboard for?"
           className="flex-1"
         />
       </div>
 
-      {/* Data source pills */}
-      <div className="flex gap-2 mt-4">
-        <button
-          type="button"
-          onClick={handleSend}
-          className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-secondary hover:bg-secondary/80 text-secondary-foreground text-sm transition-colors"
-        >
-          <UploadSimple className="w-4 h-4" />
-          Upload file
-        </button>
-        <button
-          type="button"
-          onClick={() => handleSourceClick("link")}
-          className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-secondary hover:bg-secondary/80 text-secondary-foreground text-sm transition-colors"
-        >
-          <Link className="w-4 h-4" />
-          Paste link
-        </button>
-        <button
-          type="button"
-          className="inline-flex items-center gap-2 px-4 py-2 rounded-full text-secondary-foreground/50 text-sm cursor-not-allowed"
-          disabled
-        >
-          <Envelope className="w-4 h-4" />
-          Forward email
-        </button>
-        <button
-          type="button"
-          className="inline-flex items-center gap-2 px-4 py-2 rounded-full text-secondary-foreground/50 text-sm cursor-not-allowed"
-          disabled
-        >
-          <Table className="w-4 h-4" />
-          Browse Datasets
-        </button>
+      {/* Example prompts */}
+      <div className="mt-6 space-y-4">
+        {/* Public Data Examples */}
+        <div>
+          <div className="flex items-center gap-2 text-xs font-medium text-muted-foreground mb-2 uppercase tracking-wide">
+            <TrendUp className="w-3.5 h-3.5" />
+            Public Data
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <ExamplePill onClick={() => handleExampleClick("World GDP trends over the last 50 years")}>
+              World GDP trends
+            </ExamplePill>
+            <ExamplePill onClick={() => handleExampleClick("SpaceX launch history and success rates")}>
+              SpaceX launches
+            </ExamplePill>
+            <ExamplePill onClick={() => handleExampleClick("Global CO2 emissions by country")}>
+              CO2 emissions
+            </ExamplePill>
+            <ExamplePill onClick={() => handleExampleClick("Bitcoin price history and volatility")}>
+              Bitcoin prices
+            </ExamplePill>
+            <ExamplePill onClick={() => handleExampleClick("Historical Olympic medal counts by country")}>
+              Olympic medals
+            </ExamplePill>
+          </div>
+        </div>
+
+        {/* My Data Examples */}
+        <div>
+          <div className="flex items-center gap-2 text-xs font-medium text-muted-foreground mb-2 uppercase tracking-wide">
+            <Database className="w-3.5 h-3.5" />
+            My Data
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <ExamplePill onClick={() => handleExampleClick("Track my workout progress this month")}>
+              My workout progress
+            </ExamplePill>
+            <ExamplePill onClick={() => handleExampleClick("Visualize my sales pipeline")}>
+              My sales pipeline
+            </ExamplePill>
+            <ExamplePill onClick={() => handleExampleClick("My GitHub repo activity and contributions")}>
+              My GitHub activity
+            </ExamplePill>
+            <ExamplePill onClick={() => handleExampleClick("My monthly expenses breakdown")}>
+              My expenses
+            </ExamplePill>
+          </div>
+        </div>
       </div>
     </>
   );
@@ -198,7 +210,7 @@ function AnimatedHeroHeadline({
             animate={{ x: phase === "crooked" ? -20 : 0 }}
             transition={{ duration: 0.8, ease: easing }}
           >
-            Instantly explore data
+            Generate dashboards on anything
           </motion.span>
           <motion.div
             className="absolute -left-11 top-1/2 w-8 h-8 text-foreground pointer-events-none"
@@ -242,3 +254,21 @@ function AnimatedHeroHeadline({
   );
 }
 
+// Example prompt pill component
+function ExamplePill({
+  children,
+  onClick,
+}: {
+  children: React.ReactNode;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="inline-flex items-center px-3 py-1.5 rounded-full bg-secondary/50 hover:bg-secondary text-secondary-foreground text-sm transition-colors cursor-pointer"
+    >
+      {children}
+    </button>
+  );
+}

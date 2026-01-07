@@ -7,6 +7,6 @@
  */
 
 export { ChatInput, type ChatInputRef } from "./ChatInput";
-export { ChatPanel, type ChatPanelProps, type EditorContext } from "./ChatPanel";
+export { ChatPanel, type ChatPanelProps, type EditorContext, type MessageOperations } from "./ChatPanel";
 export { type SessionStatus, StatusDot } from "./StatusDot";
 export { ThreadList } from "./ThreadList";

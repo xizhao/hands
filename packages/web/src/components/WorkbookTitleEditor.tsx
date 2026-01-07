@@ -1,24 +1,35 @@
 /**
  * WorkbookTitleEditor
  *
- * Inline editable workbook title with save status dot and share button.
+ * Inline editable workbook title with save status dot and publish/share button.
  * Linear app style - click to edit, blur or Enter to save.
- * Web-specific: no deploy, no history, just auto-save status.
- * Workbooks are public/shareable by default.
+ *
+ * Publish flow:
+ * - Unpublished: Shows "Publish" button to deploy to viewer
+ * - Published: Shows viewer URL (view.hands.app) with click-to-copy
  *
  * Saves to SQLite _workbook table (source of truth) and syncs to IndexedDB cache.
  */
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Check, Copy } from "lucide-react";
+import { Check, Copy, Loader2 } from "lucide-react";
+import { CloudArrowUp } from "@phosphor-icons/react";
 import { updateWorkbookCache } from "../shared/lib/storage";
 import { useLocalDatabase } from "../db/LocalDatabaseProvider";
+import { trpc } from "../lib/trpc";
 import { cn } from "@hands/app/light";
 
 interface WorkbookTitleEditorProps {
   workbookId: string;
   name: string;
   onNameChange?: (newName: string) => void;
+}
+
+interface DeployStatus {
+  deployed: boolean;
+  url: string | null;
+  d1DatabaseId: string | null;
+  deployedAt: string | null;
 }
 
 export function WorkbookTitleEditor({
@@ -37,22 +48,46 @@ export function WorkbookTitleEditor({
   const sharePopoverRef = useRef<HTMLDivElement>(null);
   const shareHoverTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // Build the public URL
-  const publicUrl = `${window.location.origin}/w/${workbookId}`;
+  // Deploy status query
+  const { data: deployStatus, refetch: refetchDeploy } = trpc["viewerDeploy.status"].useQuery(
+    undefined,
+    { enabled: !!workbookId }
+  ) as { data: DeployStatus | undefined; refetch: () => void };
+
+  // Publish mutation
+  const publishMutation = trpc["viewerDeploy.publish"].useMutation({
+    onSuccess: () => {
+      refetchDeploy();
+    },
+  });
+
+  const isPublishing = publishMutation.isPending;
+  const isDeployed = deployStatus?.deployed ?? false;
+  const viewerUrl = deployStatus?.url ?? null;
 
   // Display URL (without protocol)
-  const displayUrl = publicUrl.replace(/^https?:\/\//, "");
+  const displayUrl = viewerUrl?.replace(/^https?:\/\//, "") ?? "";
 
   // Copy URL to clipboard
   const handleCopyUrl = useCallback(async () => {
+    if (!viewerUrl) return;
     try {
-      await navigator.clipboard.writeText(publicUrl);
+      await navigator.clipboard.writeText(viewerUrl);
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
     } catch (err) {
       console.error("[WorkbookTitleEditor] Copy failed:", err);
     }
-  }, [publicUrl]);
+  }, [viewerUrl]);
+
+  // Publish workbook
+  const handlePublish = useCallback(async () => {
+    try {
+      await publishMutation.mutateAsync(undefined);
+    } catch (err) {
+      console.error("[WorkbookTitleEditor] Publish failed:", err);
+    }
+  }, [publishMutation]);
 
   // Share popover hover handlers
   const handleShareMouseEnter = useCallback(() => {
@@ -216,77 +251,123 @@ export function WorkbookTitleEditor({
         )}
       </div>
 
-      {/* Share link - text input style with hover popover */}
-      <div
-        className="relative"
-        onMouseEnter={handleShareMouseEnter}
-        onMouseLeave={handleShareMouseLeave}
-      >
-        <button
-          onClick={handleCopyUrl}
-          className={cn(
-            "flex items-center gap-1.5 h-6 px-2 rounded-md transition-all cursor-pointer",
-            "bg-muted/50 border border-border/50",
-            "text-muted-foreground hover:text-foreground hover:border-border",
-            copied && "border-green-500/50 text-green-600"
-          )}
+      {/* Publish button or Published URL */}
+      {isDeployed && viewerUrl ? (
+        /* Published: Show viewer URL with copy */
+        <div
+          className="relative"
+          onMouseEnter={handleShareMouseEnter}
+          onMouseLeave={handleShareMouseLeave}
         >
-          <span className="text-[11px] truncate max-w-[160px] font-mono">
-            {displayUrl}
-          </span>
-          {copied ? (
-            <Check className="w-3 h-3 shrink-0 text-green-500" />
-          ) : (
-            <Copy className="w-3 h-3 shrink-0 opacity-50" />
-          )}
-        </button>
-
-        {/* Share config popover on hover */}
-        {showSharePopover && (
-          <div
-            ref={sharePopoverRef}
-            className="absolute left-0 top-full mt-2 w-72 bg-popover border border-border rounded-xl shadow-xl z-50"
+          <button
+            onClick={handleCopyUrl}
+            className={cn(
+              "flex items-center gap-1.5 h-6 px-2 rounded-md transition-all cursor-pointer",
+              "bg-green-500/10 border border-green-500/30",
+              "text-green-600 dark:text-green-400 hover:bg-green-500/20",
+              copied && "border-green-500/50"
+            )}
           >
-            {/* Status */}
-            <div className="flex items-center gap-2 px-3 py-2.5 border-b border-border/50">
-              <span className="w-2 h-2 rounded-full bg-green-500 shrink-0" />
-              <span className="text-xs text-foreground font-medium">Public</span>
-              <span className="text-[11px] text-muted-foreground">Anyone with the link can view</span>
-            </div>
+            <span className="text-[11px] truncate max-w-[160px] font-mono">
+              {displayUrl}
+            </span>
+            {copied ? (
+              <Check className="w-3 h-3 shrink-0" />
+            ) : (
+              <Copy className="w-3 h-3 shrink-0 opacity-70" />
+            )}
+          </button>
 
-            {/* Full URL with copy */}
-            <div className="p-2">
-              <div className="flex items-center gap-1.5">
-                <input
-                  type="text"
-                  readOnly
-                  value={publicUrl}
-                  onClick={(e) => e.currentTarget.select()}
-                  className="flex-1 min-w-0 h-7 px-2 text-[11px] font-mono bg-muted/50 border border-border/50 rounded-md outline-none focus:border-border"
-                />
+          {/* Hover popover with republish option */}
+          {showSharePopover && (
+            <div
+              ref={sharePopoverRef}
+              className="absolute left-0 top-full mt-2 w-72 bg-popover border border-border rounded-xl shadow-xl z-50"
+            >
+              {/* Status */}
+              <div className="flex items-center gap-2 px-3 py-2.5 border-b border-border/50">
+                <span className="w-2 h-2 rounded-full bg-green-500 shrink-0" />
+                <span className="text-xs text-foreground font-medium">Published</span>
+                <span className="text-[11px] text-muted-foreground">Anyone with the link can view</span>
+              </div>
+
+              {/* Full URL with copy */}
+              <div className="p-2">
+                <div className="flex items-center gap-1.5">
+                  <input
+                    type="text"
+                    readOnly
+                    value={viewerUrl}
+                    onClick={(e) => e.currentTarget.select()}
+                    className="flex-1 min-w-0 h-7 px-2 text-[11px] font-mono bg-muted/50 border border-border/50 rounded-md outline-none focus:border-border"
+                  />
+                  <button
+                    onClick={handleCopyUrl}
+                    className={cn(
+                      "flex items-center justify-center shrink-0 h-7 px-2.5 rounded-md text-[11px] font-medium transition-colors",
+                      copied
+                        ? "bg-green-500/20 text-green-600"
+                        : "bg-primary text-primary-foreground hover:bg-primary/90"
+                    )}
+                  >
+                    {copied ? (
+                      <>
+                        <Check className="w-3 h-3 mr-1" />
+                        Copied
+                      </>
+                    ) : (
+                      "Copy"
+                    )}
+                  </button>
+                </div>
+
+                {/* Republish button */}
                 <button
-                  onClick={handleCopyUrl}
+                  onClick={handlePublish}
+                  disabled={isPublishing}
                   className={cn(
-                    "flex items-center justify-center shrink-0 h-7 px-2.5 rounded-md text-[11px] font-medium transition-colors",
-                    copied
-                      ? "bg-green-500/20 text-green-600"
-                      : "bg-primary text-primary-foreground hover:bg-primary/90"
+                    "w-full mt-2 h-7 text-[11px] rounded-md transition-colors",
+                    "bg-muted hover:bg-accent text-muted-foreground hover:text-foreground",
+                    "disabled:opacity-50 disabled:cursor-not-allowed"
                   )}
                 >
-                  {copied ? (
-                    <>
-                      <Check className="w-3 h-3 mr-1" />
-                      Copied
-                    </>
+                  {isPublishing ? (
+                    <span className="flex items-center justify-center gap-1.5">
+                      <Loader2 className="w-3 h-3 animate-spin" />
+                      Publishing...
+                    </span>
                   ) : (
-                    "Copy"
+                    "Republish"
                   )}
                 </button>
               </div>
             </div>
-          </div>
-        )}
-      </div>
+          )}
+        </div>
+      ) : (
+        /* Unpublished: Show Publish button */
+        <button
+          onClick={handlePublish}
+          disabled={isPublishing}
+          className={cn(
+            "flex items-center gap-1.5 h-6 px-2.5 rounded-md transition-all cursor-pointer",
+            "bg-primary text-primary-foreground hover:bg-primary/90",
+            "disabled:opacity-50 disabled:cursor-not-allowed"
+          )}
+        >
+          {isPublishing ? (
+            <>
+              <Loader2 className="w-3 h-3 animate-spin" />
+              <span className="text-[11px] font-medium">Publishing...</span>
+            </>
+          ) : (
+            <>
+              <CloudArrowUp weight="bold" className="w-3.5 h-3.5" />
+              <span className="text-[11px] font-medium">Publish</span>
+            </>
+          )}
+        </button>
+      )}
     </div>
   );
 }

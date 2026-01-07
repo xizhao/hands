@@ -18,7 +18,8 @@ type WorkerRequest =
   | { id: number; type: "execute"; sql: string; params?: unknown[] }
   | { id: number; type: "schema" }
   | { id: number; type: "getWorkbookMeta" }
-  | { id: number; type: "setWorkbookMeta"; name?: string; description?: string };
+  | { id: number; type: "setWorkbookMeta"; name?: string; description?: string }
+  | { id: number; type: "export" };
 
 type WorkerResponse =
   | { id: number; type: "success"; result: unknown }
@@ -326,6 +327,81 @@ function getSchema(includeInternal = false): Array<{
   return tables;
 }
 
+/**
+ * Export database for deployment
+ * Returns all user tables + _pages table with schema and data
+ */
+interface ExportedTable {
+  name: string;
+  schema: Array<{ name: string; type: string; pk: boolean; notnull: boolean; dflt_value: string | null }>;
+  rows: Record<string, unknown>[];
+}
+
+interface ExportResult {
+  workbookId: string | null;
+  meta: ReturnType<typeof getWorkbookMeta>;
+  pages: Array<{ path: string; title: string | null; content: string }>;
+  tables: ExportedTable[];
+}
+
+function exportDatabase(): ExportResult {
+  if (!db) throw new Error("Database not open");
+
+  // Get workbook metadata
+  const meta = getWorkbookMeta();
+
+  // Get pages from _pages table
+  const pages = executeQuery<{ path: string; title: string | null; content: string }>(
+    "SELECT path, title, content FROM _pages"
+  );
+
+  // Get user tables (exclude sqlite internals and our _ prefixed tables)
+  const tableNames: string[] = [];
+  db.exec({
+    sql: `SELECT name FROM sqlite_master
+          WHERE type='table'
+          AND name NOT LIKE 'sqlite_%'
+          AND name NOT LIKE '\\_%' ESCAPE '\\'`,
+    callback: (row) => {
+      tableNames.push(row[0] as string);
+    },
+  });
+
+  // Export each table with schema and data
+  const tables: ExportedTable[] = [];
+
+  for (const tableName of tableNames) {
+    // Get column info via PRAGMA
+    const schema: ExportedTable["schema"] = [];
+    db.exec({
+      sql: `PRAGMA table_info("${tableName}")`,
+      callback: (col) => {
+        schema.push({
+          name: col[1] as string,
+          type: (col[2] as string) || "TEXT",
+          pk: col[5] === 1,
+          notnull: col[3] === 1,
+          dflt_value: col[4] as string | null,
+        });
+      },
+    });
+
+    // Get all rows
+    const rows = executeQuery<Record<string, unknown>>(`SELECT * FROM "${tableName}"`);
+
+    tables.push({ name: tableName, schema, rows });
+  }
+
+  console.log(`[SQLiteWorker] Exported ${pages.length} pages, ${tables.length} tables`);
+
+  return {
+    workbookId: currentWorkbookId,
+    meta,
+    pages,
+    tables,
+  };
+}
+
 // ============================================================================
 // Message Handler
 // ============================================================================
@@ -366,6 +442,10 @@ self.onmessage = (e: MessageEvent<WorkerRequest>) => {
       case "setWorkbookMeta":
         setWorkbookMeta(e.data.name, e.data.description);
         result = getWorkbookMeta();
+        break;
+
+      case "export":
+        result = exportDatabase();
         break;
 
       default:

@@ -6,6 +6,40 @@
  */
 
 import { z } from "zod";
+import {
+  storeOutput,
+  readStoredOutput,
+  getOutputMeta,
+  INLINE_LIMIT,
+  type OutputPreview,
+} from "../output-store";
+
+// ============================================================================
+// Output Limits (prevent context overflow)
+// ============================================================================
+
+/** Maximum rows returned from SQL queries before storing externally */
+export const SQL_MAX_ROWS = 100;
+/** Maximum websearch results */
+export const WEBSEARCH_MAX_RESULTS = 20;
+
+/**
+ * Check if output is too large to inline and store externally if needed.
+ * Returns the preview if stored, null if small enough to inline.
+ */
+async function maybeStoreOutput(
+  output: string,
+  ctx: ToolContext,
+  toolName: string,
+  toolCallId: string
+): Promise<OutputPreview | null> {
+  if (!ctx.sessionId) return null;
+  return storeOutput(output, {
+    sessionId: ctx.sessionId,
+    toolCallId,
+    toolName,
+  });
+}
 
 // ============================================================================
 // Database Context Interface (implemented by consumers)
@@ -173,11 +207,48 @@ For destructive operations (DROP, TRUNCATE, DELETE without WHERE), set confirm_d
         const isQuery = upperSql.startsWith("SELECT") || upperSql.startsWith("PRAGMA");
 
         if (isQuery) {
-          const rows = await ctx.db.query(sql, params);
-          return {
+          const allRows = await ctx.db.query(sql, params);
+          const totalRows = Array.isArray(allRows) ? allRows.length : 0;
+
+          // For very large result sets, cap rows and store full output externally
+          let rows = allRows;
+          let rowsTruncated = false;
+          if (Array.isArray(allRows) && allRows.length > SQL_MAX_ROWS) {
+            rows = allRows.slice(0, SQL_MAX_ROWS);
+            rowsTruncated = true;
+          }
+
+          // Check if output should be stored externally
+          const output = JSON.stringify(rows, null, 2);
+          const toolCallId = `sql_${Date.now()}`;
+
+          // Try to store large output externally
+          const stored = await maybeStoreOutput(output, ctx, "sql", toolCallId);
+
+          if (stored) {
+            // Return first few rows as preview with reference to full output
+            const previewRows = Array.isArray(rows) ? rows.slice(0, 5) : rows;
+            return {
+              preview: previewRows,
+              rowCount: Array.isArray(rows) ? rows.length : 0,
+              totalRows,
+              outputId: stored.outputId,
+              message: stored.message,
+            };
+          }
+
+          // Small enough to inline
+          const result: Record<string, unknown> = {
             rows,
             rowCount: Array.isArray(rows) ? rows.length : 0,
+            totalRows,
           };
+
+          if (rowsTruncated) {
+            result.message = `Showing ${rows.length} of ${totalRows} rows. Use LIMIT or more specific WHERE for different results.`;
+          }
+
+          return result;
         } else {
           await ctx.db.execute(sql, params);
           ctx.db.notifyChange();
@@ -223,20 +294,32 @@ Use this to understand the data structure before writing queries.`,
 // Web Tools
 // ============================================================================
 
+import { Readability } from "@mozilla/readability";
+import TurndownService from "turndown";
+
+/** Max chars for extracted article content */
+const WEBFETCH_MAX_CONTENT = 15_000;
+
 export function createWebFetchTool(ctx: ToolContext): ToolDefinition {
+  const turndown = new TurndownService({
+    headingStyle: "atx",
+    codeBlockStyle: "fenced",
+  });
+
   return {
-    description: `Fetch content from a URL. Returns the response body as text.
-Useful for retrieving data from APIs or web pages.
-Uses CORS proxy for cross-origin requests when configured.`,
+    description: `Fetch content from a URL. For web pages, extracts main article content as clean markdown (removes ads, nav, scripts). For APIs, returns JSON/text directly.
+Use this to read articles, documentation, or fetch API data.`,
     parameters: z.object({
       url: z.string().url().describe("The URL to fetch"),
+      raw: z.boolean().optional().describe("If true, return raw HTML without extraction (for non-article pages)"),
       method: z.enum(["GET", "POST", "PUT", "DELETE"]).optional().describe("HTTP method (default: GET)"),
       headers: z.record(z.string()).optional().describe("Request headers"),
       body: z.string().optional().describe("Request body for POST/PUT"),
     }),
     execute: async (args: unknown) => {
-      const { url, method = "GET", headers, body } = args as {
+      const { url, raw = false, method = "GET", headers, body } = args as {
         url: string;
+        raw?: boolean;
         method?: string;
         headers?: Record<string, string>;
         body?: string;
@@ -262,18 +345,106 @@ Uses CORS proxy for cross-origin requests when configured.`,
         }
 
         const contentType = response.headers.get("content-type") || "";
-        let data: unknown;
+        const text = await response.text();
 
+        // Handle JSON APIs directly
         if (contentType.includes("application/json")) {
-          data = await response.json();
-        } else {
-          data = await response.text();
+          try {
+            const data = JSON.parse(text);
+            const jsonStr = JSON.stringify(data, null, 2);
+            if (jsonStr.length > WEBFETCH_MAX_CONTENT) {
+              const toolCallId = `webfetch_${Date.now()}`;
+              const stored = await maybeStoreOutput(jsonStr, ctx, "webfetch", toolCallId);
+              if (stored) {
+                return {
+                  status: response.status,
+                  contentType: "application/json",
+                  preview: stored.preview,
+                  totalChars: stored.totalChars,
+                  outputId: stored.outputId,
+                  message: stored.message,
+                };
+              }
+            }
+            return { status: response.status, contentType: "application/json", data };
+          } catch {
+            // Fall through to text handling
+          }
+        }
+
+        // For HTML pages, extract main content using Readability + Turndown
+        if (contentType.includes("text/html") && !raw) {
+          try {
+            // Parse HTML into DOM
+            const parser = new DOMParser();
+            const doc = parser.parseFromString(text, "text/html");
+
+            // Extract main article content
+            const reader = new Readability(doc);
+            const article = reader.parse();
+
+            if (article?.content) {
+              // Convert to markdown
+              let markdown = turndown.turndown(article.content);
+
+              // Add title if available
+              if (article.title) {
+                markdown = `# ${article.title}\n\n${markdown}`;
+              }
+
+              // Truncate if still too long
+              if (markdown.length > WEBFETCH_MAX_CONTENT) {
+                markdown = markdown.slice(0, WEBFETCH_MAX_CONTENT) + "\n\n... [content truncated]";
+              }
+
+              return {
+                status: response.status,
+                url,
+                title: article.title || undefined,
+                byline: article.byline || undefined,
+                excerpt: article.excerpt || undefined,
+                content: markdown,
+                charCount: markdown.length,
+              };
+            }
+
+            // Readability couldn't parse - fall back to raw
+            return {
+              status: response.status,
+              warning: "Could not extract article content, returning raw HTML preview",
+              preview: text.slice(0, 2000),
+              totalChars: text.length,
+            };
+          } catch (parseError) {
+            return {
+              status: response.status,
+              warning: "Failed to parse HTML",
+              error: parseError instanceof Error ? parseError.message : String(parseError),
+              preview: text.slice(0, 2000),
+            };
+          }
+        }
+
+        // Raw mode or non-HTML content
+        if (text.length > WEBFETCH_MAX_CONTENT) {
+          const toolCallId = `webfetch_${Date.now()}`;
+          const stored = await maybeStoreOutput(text, ctx, "webfetch", toolCallId);
+          if (stored) {
+            return {
+              status: response.status,
+              contentType,
+              preview: stored.preview,
+              totalChars: stored.totalChars,
+              outputId: stored.outputId,
+              message: stored.message,
+            };
+          }
         }
 
         return {
           status: response.status,
           contentType,
-          data,
+          data: text,
         };
       } catch (error) {
         return { error: error instanceof Error ? error.message : String(error) };
@@ -282,16 +453,21 @@ Uses CORS proxy for cross-origin requests when configured.`,
   };
 }
 
+/** Maximum characters per websearch result snippet */
+const WEBSEARCH_MAX_SNIPPET_CHARS = 200;
+
 export function createWebSearchTool(ctx: ToolContext): ToolDefinition {
   return {
     description: `Search the web using DuckDuckGo. Returns search results with titles, URLs, and snippets.
 Use for finding information, documentation, or researching topics.`,
     parameters: z.object({
       query: z.string().describe("The search query"),
-      maxResults: z.number().optional().describe("Maximum results to return (default: 10)"),
+      maxResults: z.number().optional().describe("Maximum results to return (default: 5, max: 10)"),
     }),
     execute: async (args: unknown) => {
-      const { query, maxResults = 10 } = args as { query: string; maxResults?: number };
+      const { query, maxResults: requestedMax = 5 } = args as { query: string; maxResults?: number };
+      // Cap at 10 results max to avoid context bloat (especially with parallel searches)
+      const maxResults = Math.min(requestedMax, 10);
 
       try {
         const encodedQuery = encodeURIComponent(query);
@@ -319,7 +495,16 @@ Use for finding information, documentation, or researching topics.`,
           return { message: `No results found for "${query}"`, results: [] };
         }
 
-        return { query, results };
+        // Truncate snippets to limit output size
+        const trimmedResults = results.map(r => ({
+          title: r.title.slice(0, 100),
+          url: r.url,
+          snippet: r.snippet.length > WEBSEARCH_MAX_SNIPPET_CHARS
+            ? r.snippet.slice(0, WEBSEARCH_MAX_SNIPPET_CHARS) + "..."
+            : r.snippet,
+        }));
+
+        return { query, resultCount: trimmedResults.length, results: trimmedResults };
       } catch (error) {
         return { error: error instanceof Error ? error.message : String(error) };
       }
@@ -401,7 +586,7 @@ function decodeHtmlEntities(text: string): string {
 // Code Execution Tool
 // ============================================================================
 
-export function createCodeExecuteTool(_ctx: ToolContext): ToolDefinition {
+export function createCodeExecuteTool(ctx: ToolContext): ToolDefinition {
   return {
     description: `Execute JavaScript code in a sandboxed environment.
 The code runs in an isolated context with limited capabilities.
@@ -446,9 +631,29 @@ Available globals: console, JSON, Math, Date, Array, Object, String, Number, Boo
         const fn = new Function(...Object.keys(sandbox), wrappedCode);
         const result = fn(...Object.values(sandbox));
 
+        const resultStr = result !== undefined ? JSON.stringify(result, null, 2) : undefined;
+        const logsStr = logs.length > 0 ? logs.join("\n") : undefined;
+
+        // Combine result and logs for storage check
+        const fullOutput = [resultStr, logsStr].filter(Boolean).join("\n\n--- Logs ---\n");
+        const toolCallId = `code_${Date.now()}`;
+
+        // Try to store large output externally
+        const stored = await maybeStoreOutput(fullOutput, ctx, "code", toolCallId);
+
+        if (stored) {
+          return {
+            preview: stored.preview,
+            totalChars: stored.totalChars,
+            outputId: stored.outputId,
+            message: stored.message,
+          };
+        }
+
+        // Small enough to inline
         return {
-          result: result !== undefined ? JSON.stringify(result, null, 2) : undefined,
-          logs: logs.length > 0 ? logs : undefined,
+          result: resultStr,
+          logs: logsStr ? logsStr.split("\n") : undefined,
         };
       } catch (error) {
         return { error: error instanceof Error ? error.message : String(error) };
@@ -603,6 +808,21 @@ _output = _stdout.getvalue()
               return { error };
             }
 
+            // Check if output should be stored externally
+            if (output) {
+              const toolCallId = `python_${Date.now()}`;
+              const stored = await maybeStoreOutput(output, ctx, "python", toolCallId);
+
+              if (stored) {
+                return {
+                  preview: stored.preview,
+                  totalChars: stored.totalChars,
+                  outputId: stored.outputId,
+                  message: stored.message,
+                };
+              }
+            }
+
             return {
               output: output || undefined,
               result: output ? undefined : "Code executed successfully",
@@ -663,6 +883,66 @@ Parameters:
         title: title || id,
         description,
       };
+    },
+  };
+}
+
+// ============================================================================
+// Output Reading Tool (VFS access to stored large outputs)
+// ============================================================================
+
+export function createReadOutputTool(_ctx: ToolContext): ToolDefinition {
+  return {
+    description: `Read content from a stored large output. Use this when a tool returns an outputId
+instead of the full result.
+
+When tools like sql, python, webfetch, or code produce large outputs, they store the full result
+externally and return a preview with an outputId. Use this tool to read the full content.
+
+Supports line-based pagination:
+- offset: Start line (0-indexed, default: 0)
+- limit: Number of lines to read (default: 100)
+
+Example workflow:
+1. sql tool returns { preview: [...], outputId: "out_abc123", totalRows: 5000 }
+2. Call readOutput with id="out_abc123" to read lines 0-99
+3. Call readOutput with id="out_abc123", offset=100 to read lines 100-199`,
+    parameters: z.object({
+      id: z.string().describe("The outputId returned by a tool"),
+      offset: z.number().optional().describe("Start line (0-indexed, default: 0)"),
+      limit: z.number().optional().describe("Number of lines to read (default: 100)"),
+    }),
+    execute: async (args: unknown) => {
+      const { id, offset, limit } = args as {
+        id: string;
+        offset?: number;
+        limit?: number;
+      };
+
+      try {
+        // First get metadata
+        const meta = await getOutputMeta(id);
+        if (!meta) {
+          return { error: `Output not found: ${id}. It may have been cleaned up.` };
+        }
+
+        // Read the content
+        const result = await readStoredOutput(id, { offset, limit });
+        if (!result) {
+          return { error: `Failed to read output: ${id}` };
+        }
+
+        return {
+          content: result.content,
+          startLine: result.startLine,
+          endLine: result.endLine,
+          totalLines: result.totalLines,
+          hasMore: result.hasMore,
+          toolName: meta.toolName,
+        };
+      } catch (error) {
+        return { error: error instanceof Error ? error.message : String(error) };
+      }
     },
   };
 }
@@ -992,6 +1272,7 @@ export type ToolId =
   | "code"          // Execute JavaScript code
   | "python"        // Execute Python code (Pyodide)
   | "todowrite"     // Manage task list
+  | "readOutput"    // Read stored large outputs (VFS)
   | "listPages"     // List all pages
   | "readPage"      // Read page content
   | "writePage"     // Create/update page
@@ -1017,6 +1298,7 @@ export function createToolRegistry(ctx: ToolContext): ToolRegistry {
     code: createCodeExecuteTool(ctx),
     python: createPythonTool(ctx),
     todowrite: createTodoWriteTool(ctx),
+    readOutput: createReadOutputTool(ctx),
     listPages: createListPagesTool(ctx),
     readPage: createReadPageTool(ctx),
     writePage: createWritePageTool(ctx),
@@ -1063,6 +1345,7 @@ export const ALL_TOOLS: ToolId[] = [
   "code",
   "python",
   "todowrite",
+  "readOutput",
   "listPages",
   "readPage",
   "writePage",

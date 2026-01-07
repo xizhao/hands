@@ -55,7 +55,12 @@ export interface ToolStateCompleted {
   output: string;
   title: string;
   metadata: Record<string, unknown>;
-  time: { start: number; end: number };
+  time: {
+    start: number;
+    end: number;
+    /** Timestamp when this output was marked as compacted (pruned from context) */
+    compacted?: number;
+  };
 }
 
 export interface ToolStateError {
