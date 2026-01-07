@@ -11,10 +11,13 @@ import { trpc } from "../../lib/trpc";
 const route = getRouteApi("/w/$workbookId/tables/$tableId");
 
 export default function TableView() {
-  const { tableId } = route.useParams();
+  const { tableId, workbookId } = route.useParams();
 
-  // Fetch table data
-  const { data: tablesData, isLoading } = trpc.tables.list.useQuery();
+  // Fetch table data - workbookId scopes cache per workbook
+  const { data: tablesData, isLoading } = trpc.tables.list.useQuery(
+    { workbookId },
+    { enabled: !!workbookId }
+  );
   const tables = tablesData?.tables ?? [];
   const table = tables.find((t) => t.id === tableId);
 

@@ -9,8 +9,8 @@ import { Gear, Key } from "@phosphor-icons/react";
 import { Check, Sun, Moon, Monitor } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { getStoredConfig, setStoredConfig, hasCustomApiKey, clearStoredConfig } from "@hands/agent/browser";
-import { getTheme, setTheme } from "@hands/app";
-import { cn } from "@hands/app";
+// Use lightweight imports to avoid pulling in heavy @hands/app deps
+import { getTheme, setTheme, cn } from "@hands/app/light";
 
 export function SettingsPopover() {
   const [open, setOpen] = useState(false);

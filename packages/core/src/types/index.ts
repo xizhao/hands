@@ -538,6 +538,16 @@ export interface ChartBaseConfig {
    * Useful for AI-generated complex charts.
    */
   vegaSpec?: VegaLiteSpec;
+  /**
+   * Field to animate over (e.g., "year", "quarter").
+   * Enables cycling through distinct values of this field.
+   */
+  animateBy?: string;
+  /**
+   * Specific frame value to display (disables auto-animation).
+   * Use with animateBy to control which frame is shown externally.
+   */
+  frameValue?: string | number;
 }
 
 /**
@@ -611,6 +621,10 @@ export interface TPieChartElement extends TElement {
    * If provided, overrides the simplified props above.
    */
   vegaSpec?: VegaLiteSpec;
+  /** Field to animate over */
+  animateBy?: string;
+  /** Specific frame value to display */
+  frameValue?: string | number;
   /** Children are unused (void element) */
   children: (TElement | TText)[];
 }
@@ -976,4 +990,4 @@ export type TBlockElement = TPageEmbedElement;
 // Database Adapter
 // ============================================================================
 
-export { type DbAdapter, type QueryResult } from "../db/context";
+export { type DbAdapter, type DbQueryResult } from "../db/context";

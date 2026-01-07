@@ -39,7 +39,7 @@ const CODER_PROMPT = `You are the technical implementation specialist for Hands.
 1. Use \`<LiveValue>\` for displaying data (tables, lists, metrics, formatted text)
 2. Use \`<LiveAction>\` for forms and user interactions (buttons, inputs, selects)
 3. Use \`<LineChart>\`, \`<BarChart>\`, \`<PieChart>\` inside LiveValue for charts
-4. Use MDX blocks in \`pages/blocks/\` for reusable content fragments
+4. Use pageId prefixes like \`blocks/revenue-summary\` for reusable content fragments
 
 **If the request is "show data in a table" → use \`<LiveValue display="table">\`**
 **If the request is "add a form" → use \`<LiveAction>\` with form controls**
@@ -76,7 +76,7 @@ import { Card, CardHeader, CardContent } from "@ui/card";
 
 ## Page Structure
 
-Pages are MDX files in \`pages/\`. They are the **primary output** - complete apps in markdown.
+Pages are stored in the workbook database. Use \`listPages\`, \`readPage\`, \`writePage\`, \`searchPages\` to manage them.
 
 ### Frontmatter Rules (CRITICAL)
 
@@ -94,7 +94,7 @@ description: Overview of key metrics
 - \`description\` - Optional subtitle or summary
 
 **When editing existing pages:**
-1. **READ the file first** to see existing frontmatter
+1. **Use readPage first** to see existing frontmatter
 2. **PRESERVE all existing frontmatter fields** - never remove or overwrite them
 3. Only add/modify content AFTER the closing \`---\`
 4. If adding title/description, put them in frontmatter, NOT as markdown headings
@@ -189,7 +189,7 @@ ${ACTION_ANTI_PATTERNS}
 1. **Check schema** - Use schema tool to see available tables/columns
 2. **Test query** - Use sql tool to verify your SQL works
 3. **Create MDX** - Use \`<LiveValue>\`, \`<LiveAction>\`, and stdlib charts
-4. **Create/update page** - Write MDX file to pages/
+4. **Create/update page** - Use writePage with pageId and content
 5. **Verify TypeScript** - Run check tool to ensure no TypeScript errors
 
 ## Import Path
@@ -216,7 +216,7 @@ Never use deprecated paths like \`@hands/db\`, \`@hands/runtime\`, or \`@livepee
 Run independent operations in parallel to maximize speed.
 
 **Can parallelize:**
-- Multiple page file writes
+- Multiple writePage calls
 - Multiple lib/ utility creations
 - Multiple glob/grep/read operations
 
@@ -240,19 +240,19 @@ Keep improvements proportional to the task - don't spend more time refactoring t
 **Frontmatter mistakes:**
 - ❌ Writing pages without frontmatter → Always include \`---\ntitle: ...\n---\`
 - ❌ Putting title as \`# Heading\` instead of frontmatter → Use \`title:\` in frontmatter
-- ❌ Overwriting existing frontmatter when editing → READ file first, PRESERVE frontmatter
+- ❌ Overwriting existing frontmatter when editing → readPage first, PRESERVE frontmatter
 
 **Other anti-patterns:**
 - Don't reinvent @ui components - search for what's available first
 - Don't hardcode data - always query from database
 - Don't create overly complex pages - split into smaller blocks
-- Don't create files outside pages/, lib/, sources/, and actions/ directories
+- Only create pages using writePage (no filesystem access in browser)
 - Don't use deprecated imports (@hands/db, @hands/runtime, @livepeer/hands)
 
 ## Reporting Back
 
 When you complete a task, report back with:
-- What files were created/modified
+- What pages were created/modified
 - Success/failure of the check tool (TypeScript/MDX validation)
 - Any issues encountered
 
@@ -264,12 +264,11 @@ export const coderAgent: AgentConfig = {
   model: "openrouter/mistralai/devstral-2512:free",
   prompt: CODER_PROMPT,
   tools: {
-    // Files
-    read: true,
-    write: true,
-    edit: true,
-    glob: true,
-    grep: true,
+    // Page tools (SQLite _pages table)
+    listPages: true,
+    readPage: true,
+    writePage: true,
+    searchPages: true,
 
     // Data (to test queries)
     sql: true,

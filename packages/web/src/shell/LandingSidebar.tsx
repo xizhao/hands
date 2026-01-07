@@ -6,8 +6,9 @@
  * SQLite database is opened on navigation to the workbook route.
  */
 
-import { Spinner } from "@hands/app";
-import { NotebookPen, Plus, Trash2 } from "lucide-react";
+// Use lightweight imports to avoid pulling in heavy @hands/app deps
+import { Spinner, DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@hands/app/light";
+import { MoreHorizontal, NotebookPen, Plus, Trash2 } from "lucide-react";
 import { useNavigate } from "@tanstack/react-router";
 import { useCallback, useEffect, useState } from "react";
 import {
@@ -36,9 +37,10 @@ export function LandingSidebar({ onWorkbooksChange }: LandingSidebarProps) {
       .finally(() => setIsLoading(false));
   }, [onWorkbooksChange]);
 
+  // Navigate to workbook root - don't preserve child routes like /tables/x or /pages/y
   const handleSwitchWorkbook = useCallback(
     (id: string) => {
-      navigate({ to: "/w/$workbookId", params: { workbookId: id } });
+      navigate({ to: `/w/${id}` });
     },
     [navigate]
   );
@@ -83,6 +85,11 @@ export function LandingSidebar({ onWorkbooksChange }: LandingSidebarProps) {
 
       {/* Workbook list */}
       <div className="flex-1 overflow-y-auto px-2">
+        {!isLoading && workbooks.length > 0 && (
+          <div className="px-2 py-1.5 text-xs font-medium text-muted-foreground">
+            Recent
+          </div>
+        )}
         {isLoading ? (
           <div className="flex items-center justify-center py-8">
             <Spinner size="sm" />
@@ -104,13 +111,28 @@ export function LandingSidebar({ onWorkbooksChange }: LandingSidebarProps) {
                 <span className="flex-1 min-w-0 text-sm truncate">
                   {wb.name}
                 </span>
-                <button
-                  onClick={(e) => handleDeleteWorkbook(wb.id, e)}
-                  className="p-1 rounded opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-destructive transition-all"
-                  title="Delete workbook"
-                >
-                  <Trash2 className="h-3.5 w-3.5" />
-                </button>
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <button
+                      onClick={(e) => e.stopPropagation()}
+                      className="p-1 rounded opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-foreground hover:bg-accent transition-all"
+                    >
+                      <MoreHorizontal className="h-3.5 w-3.5" />
+                    </button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end" className="w-[140px]">
+                    <DropdownMenuItem
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleDeleteWorkbook(wb.id, e as unknown as React.MouseEvent);
+                      }}
+                      className="text-destructive focus:text-destructive"
+                    >
+                      <Trash2 className="h-4 w-4 mr-2" />
+                      Delete
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
               </div>
             ))}
           </div>

@@ -45,12 +45,18 @@ export function ContentTabBar() {
   const [canScrollLeft, setCanScrollLeft] = useState(false);
   const [canScrollRight, setCanScrollRight] = useState(false);
 
-  // Fetch pages from SQLite _pages table
-  const { data: pagesData } = trpc.pages.list.useQuery();
+  // Fetch pages - workbookId in query input scopes cache per workbook
+  const { data: pagesData } = trpc.pages.list.useQuery(
+    { workbookId },
+    { enabled: !!workbookId }
+  );
   const pages = pagesData?.pages ?? [];
 
-  // Fetch tables from SQLite
-  const { data: tablesData } = trpc.tables.list.useQuery();
+  // Fetch tables - workbookId in query input scopes cache per workbook
+  const { data: tablesData } = trpc.tables.list.useQuery(
+    { workbookId },
+    { enabled: !!workbookId }
+  );
   const tables = tablesData?.tables ?? [];
 
   // tRPC utils for cache invalidation
@@ -102,12 +108,12 @@ export function ContentTabBar() {
     },
   });
 
-  // Delete mutations
+  // Delete mutations - always navigate back to workbook root after delete
   const deletePage = trpc.pages.delete.useMutation({
     onSuccess: () => {
       utils.pages.list.invalidate();
       if (workbookId) {
-        navigate({ to: "/w/$workbookId", params: { workbookId } });
+        navigate({ to: "/w/$workbookId", params: { workbookId }, replace: true });
       }
     },
   });
@@ -116,7 +122,7 @@ export function ContentTabBar() {
     onSuccess: () => {
       utils.tables.list.invalidate();
       if (workbookId) {
-        navigate({ to: "/w/$workbookId", params: { workbookId } });
+        navigate({ to: "/w/$workbookId", params: { workbookId }, replace: true });
       }
     },
   });

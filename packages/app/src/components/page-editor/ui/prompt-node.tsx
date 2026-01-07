@@ -64,8 +64,8 @@ export function PromptElement(props: PlateElementProps) {
     // Subscribe to live updates
     const unsubscribe = subscribeToEvents((event) => {
       if (event.type === "message.part.updated") {
-        const { part } = event.properties;
-        if (part.sessionID === threadId && part.type === "text" && "text" in part) {
+        const { part, sessionId } = event;
+        if (sessionId === threadId && part.type === "text" && "text" in part) {
           setStatusText(part.text.slice(0, 100));
         }
       }

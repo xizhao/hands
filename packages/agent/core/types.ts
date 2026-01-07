@@ -177,9 +177,11 @@ export type SessionStatus =
 // ============================================================================
 
 export interface Todo {
-  id: string;
+  id?: string;
   content: string;
   status: "pending" | "in_progress" | "completed";
+  /** Present continuous form shown during execution (e.g., "Running tests") */
+  activeForm?: string;
 }
 
 // ============================================================================

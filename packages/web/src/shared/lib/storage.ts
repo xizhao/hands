@@ -12,6 +12,7 @@
  */
 
 import { openDB, type IDBPDatabase } from "idb";
+import { nanoid } from "nanoid";
 
 // ============================================================================
 // Types
@@ -112,7 +113,7 @@ export async function hasWorkbooks(): Promise<boolean> {
 /** Create a new workbook entry in cache. SQLite is source of truth. */
 export async function createWorkbookCache(name: string): Promise<WorkbookCache> {
   const idb = await getIdb();
-  const id = `local_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
+  const id = nanoid(10); // Short, URL-safe: "V1StGXR8_Z"
   const now = Date.now();
 
   const workbook: WorkbookCache = {
@@ -172,4 +173,9 @@ export async function deleteWorkbookCache(id: string): Promise<void> {
   // Note: SQLite database (pages, tables) is in OPFS at hands-{id}.sqlite3
   // OPFS cleanup would require navigator.storage.getDirectory() access
   // For now, orphaned OPFS files may remain - they're scoped to the workbook ID
+}
+
+/** Cleanup empty workbooks from previous sessions (no-op for now) */
+export function cleanupEmptyWorkbooks(): void {
+  // No-op: cleanup logic would need to check SQLite for empty workbooks
 }

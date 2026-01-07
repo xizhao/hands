@@ -39,11 +39,11 @@ import { ShimmerText, Skeleton } from "@/components/ui/thinking-indicator";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { useActiveRuntime } from "@/hooks/useWorkbook";
 import type {
-  AgentPart,
   AssistantMessage,
   MessageWithParts,
   Part,
   ReasoningPart,
+  SubtaskPart,
   TextPart,
   ToolPart,
 } from "@/lib/api";
@@ -1317,7 +1317,7 @@ const CostIndicator = memo(
           <div className="space-y-1">
             <div className="flex justify-between gap-4">
               <span className="text-muted-foreground">Model</span>
-              <span>{info.modelID}</span>
+              <span>{info.modelId}</span>
             </div>
             {tokens && (
               <>
@@ -1329,16 +1329,10 @@ const CostIndicator = memo(
                   <span className="text-muted-foreground">Output</span>
                   <span>{formatTokens(tokens.output)}</span>
                 </div>
-                {tokens.reasoning > 0 && (
+                {tokens.reasoning && tokens.reasoning > 0 && (
                   <div className="flex justify-between gap-4">
                     <span className="text-purple-400">Reasoning</span>
                     <span className="text-purple-400">{formatTokens(tokens.reasoning)}</span>
-                  </div>
-                )}
-                {tokens.cache.read > 0 && (
-                  <div className="flex justify-between gap-4">
-                    <span className="text-green-400">Cache</span>
-                    <span className="text-green-400">{formatTokens(tokens.cache.read)}</span>
                   </div>
                 )}
               </>
@@ -1431,7 +1425,7 @@ export const ChatMessage = memo(
         } else if (part.type === "reasoning") {
           flushTools();
           groups.push({ type: "reasoning", items: [part] });
-        } else if (part.type === "agent") {
+        } else if (part.type === "subtask") {
           flushTools();
           groups.push({ type: "agent", items: [part] });
         } else if (part.type !== "step-start" && part.type !== "step-finish") {
@@ -1522,7 +1516,7 @@ export const ChatMessage = memo(
                         <TaskToolSummary
                           key={part.id}
                           part={part}
-                          sessionId={message.info.sessionID}
+                          sessionId={message.info.sessionId}
                           compact={compact}
                         />
                       ))}
@@ -1547,13 +1541,13 @@ export const ChatMessage = memo(
                   );
                 }
                 if (group.type === "agent") {
-                  const agentPart = group.items[0] as AgentPart;
+                  const subtaskPart = group.items[0] as SubtaskPart;
                   return (
                     <SubagentSummary
                       key={idx}
-                      agentName={agentPart.name}
-                      sessionId={message.info.sessionID}
-                      messageId={agentPart.messageID}
+                      agentName={subtaskPart.agent}
+                      sessionId={message.info.sessionId}
+                      messageId={subtaskPart.messageId}
                       compact={compact}
                     />
                   );
@@ -1564,8 +1558,7 @@ export const ChatMessage = memo(
               {/* Error display */}
               {assistantInfo?.error && (
                 // Check if this is a no_api_key error - show inline API key prompt
-                // Check the error.data.type since browser agent stores the error type there
-                (assistantInfo.error.data as { type?: string })?.type === "no_api_key" ? (
+                assistantInfo.error.type === "no_api_key" ? (
                   <ApiKeyPrompt compact={compact} />
                 ) : (
                   <div
@@ -1575,9 +1568,7 @@ export const ChatMessage = memo(
                     )}
                   >
                     <AlertCircle className="h-3 w-3" />
-                    <span>
-                      {(assistantInfo.error.data?.message as string) || assistantInfo.error.name}
-                    </span>
+                    <span>{assistantInfo.error.message}</span>
                   </div>
                 )
               )}

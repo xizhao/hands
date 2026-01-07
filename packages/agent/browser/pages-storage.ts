@@ -6,6 +6,7 @@
  */
 
 import type { DatabaseContext, PagesContext } from "./tools";
+import { emitEvent } from "./api";
 
 // ============================================================================
 // Types
@@ -108,12 +109,14 @@ export function createPagesStorage(db: DatabaseContext): PagesContext {
     );
 
     db.notifyChange();
+    emitEvent({ type: "page.updated", pageId });
   }
 
   async function deletePage(pageId: string): Promise<void> {
     const path = pageIdToPath(pageId);
     await db.execute("DELETE FROM _pages WHERE path = ?", [path]);
     db.notifyChange();
+    emitEvent({ type: "page.updated", pageId });
   }
 
   async function searchPages(query: string): Promise<SearchResult[]> {

@@ -13,8 +13,9 @@
  */
 
 import { AnimatePresence, motion } from "framer-motion";
-import { ChevronLeft, Layers } from "lucide-react";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { CheckCircle2, ChevronLeft, Circle, Layers, Loader2 } from "lucide-react";
+import { useCallback, useMemo, useRef, useState } from "react";
+import { StickToBottom } from "use-stick-to-bottom";
 import { ChatMessage } from "@/components/ChatMessage";
 import { ThinkingIndicator } from "@/components/ui/thinking-indicator";
 import { LinkClickHandler } from "@/hooks/useLinkNavigation";
@@ -28,9 +29,17 @@ import {
   useSessions,
 } from "@/hooks/useSession";
 import type { Session } from "@/lib/api";
+import { cn } from "@/lib/utils";
 import { ChatInput, type ChatInputRef } from "./ChatInput";
 import type { SessionStatus } from "./StatusDot";
 import { ThreadList } from "./ThreadList";
+
+/** Todo item for inline display */
+export interface TodoItem {
+  content: string;
+  status: "pending" | "in_progress" | "completed";
+  activeForm?: string;
+}
 
 /** Editor context for AI awareness */
 export interface EditorContext {
@@ -75,6 +84,8 @@ export interface ChatPanelProps {
   onInputBlur?: () => void;
   /** Editor context - what the user is currently viewing */
   editorContext?: EditorContext;
+  /** Todos for the current session (optional - for inline display) */
+  todos?: TodoItem[];
 }
 
 export function ChatPanel({
@@ -94,6 +105,7 @@ export function ChatPanel({
   onInputFocus,
   onInputBlur,
   editorContext,
+  todos = [],
 }: ChatPanelProps) {
   // Use controlled or uncontrolled input
   const [uncontrolledInputValue, setUncontrolledInputValue] = useState("");
@@ -104,9 +116,7 @@ export function ChatPanel({
   const pendingFiles = controlledPendingFiles ?? uncontrolledPendingFiles;
   const setPendingFiles = controlledOnPendingFilesChange ?? setUncontrolledPendingFiles;
 
-  const scrollRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<ChatInputRef>(null);
-  const isNearBottomRef = useRef(true); // Track if user is near bottom
 
   // Session hooks
   const { data: allSessions = [] } = useSessions();
@@ -119,23 +129,22 @@ export function ChatPanel({
   const abortSessionMutation = useAbortSession(sessionId);
   const deleteSessionMutation = useDeleteSession();
 
-  // Filter and sort sessions
+  // Filter and sort sessions (top-level only, no parentId)
   const sessions = useMemo(() => {
     return allSessions
-      .filter((s) => !s.parentID && s.title)
+      .filter((s) => !s.parentId)
       .sort((a, b) => b.time.updated - a.time.updated);
   }, [allSessions]);
 
   const foregroundSessions = useMemo(() => {
     return sessions.filter((s) => {
-      const sp = s as Session & { parentID?: string };
-      return s.title && !sp.parentID;
+      return !s.parentId;
     });
   }, [sessions]);
 
   const backgroundSessions = useMemo(() => {
-    // Background sessions have parentID - filter from allSessions, not sessions
-    return allSessions.filter((s) => (s as Session & { parentID?: string }).parentID);
+    // Background sessions have parentId - filter from allSessions, not sessions
+    return allSessions.filter((s) => s.parentId);
   }, [allSessions]);
 
   const activeSession = sessions.find((s) => s.id === sessionId);
@@ -152,22 +161,6 @@ export function ChatPanel({
 
   const activeStatus = sessionId ? sessionStatuses[sessionId] : null;
   const isBusy = activeStatus?.type === "busy" || activeStatus?.type === "running";
-
-  // Track scroll position to detect if user is near bottom
-  const handleScroll = useCallback(() => {
-    if (!scrollRef.current) return;
-    const { scrollTop, scrollHeight, clientHeight } = scrollRef.current;
-    const distanceFromBottom = scrollHeight - scrollTop - clientHeight;
-    isNearBottomRef.current = distanceFromBottom < 100;
-  }, []);
-
-  // Auto-scroll to bottom when messages change, but only if user is near bottom
-  const lastMessageContent = messages[messages.length - 1]?.parts?.length ?? 0;
-  useEffect(() => {
-    if (scrollRef.current && isNearBottomRef.current) {
-      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
-    }
-  }, [messages.length, lastMessageContent]);
 
   // Build system context string from editor context
   const systemContext = useMemo(() => {
@@ -254,39 +247,41 @@ export function ChatPanel({
       {/* Content area */}
       <AnimatePresence mode="wait">
         {showMessages ? (
-          /* Messages view */
+          /* Messages view with auto-scroll to bottom during streaming */
           <motion.div
             key="messages"
             initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: 10 }}
-            ref={scrollRef}
-            onScroll={handleScroll}
-            className="flex-1 overflow-y-auto min-h-0 flex flex-col"
+            className="flex-1 min-h-0 relative"
           >
-            <LinkClickHandler className="flex flex-col gap-3 mt-auto p-3">
-              {messages.map((msg) => (
-                <ChatMessage
-                  key={msg.info.id}
-                  message={msg}
-                  compact={compact}
-                  tailDown={tailDown}
-                />
-              ))}
-              <AnimatePresence>
-                {/* Show thinking when: busy OR last message is from user (waiting for response) */}
-                {(isBusy || messages[messages.length - 1]?.info.role === "user") && (
-                  <motion.div
-                    initial={{ opacity: 0, y: 10 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    exit={{ opacity: 0, y: 10 }}
-                    className="rounded-2xl rounded-bl-sm bg-secondary dark:bg-muted shadow-sm px-2.5 py-1.5 w-fit"
-                  >
-                    <ThinkingIndicator />
-                  </motion.div>
-                )}
-              </AnimatePresence>
-            </LinkClickHandler>
+            <StickToBottom className="h-full overflow-y-auto" resize="smooth" initial="smooth">
+              <StickToBottom.Content className="flex flex-col min-h-full">
+                <LinkClickHandler className="flex flex-col gap-3 p-3 mt-auto">
+                  {messages.map((msg) => (
+                    <ChatMessage
+                      key={msg.info.id}
+                      message={msg}
+                      compact={compact}
+                      tailDown={tailDown}
+                    />
+                  ))}
+                  <AnimatePresence>
+                    {/* Show thinking when: busy OR last message is from user (waiting for response) */}
+                    {(isBusy || messages[messages.length - 1]?.info.role === "user") && (
+                      <motion.div
+                        initial={{ opacity: 0, y: 10 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        exit={{ opacity: 0, y: 10 }}
+                        className="rounded-2xl rounded-bl-sm bg-secondary dark:bg-muted shadow-sm px-2.5 py-1.5 w-fit"
+                      >
+                        <ThinkingIndicator />
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+                </LinkClickHandler>
+              </StickToBottom.Content>
+            </StickToBottom>
           </motion.div>
         ) : (
           /* Thread list view */
@@ -307,6 +302,46 @@ export function ChatPanel({
               getSessionStatus={getSessionStatus}
               isCreating={createSessionMutation.isPending}
             />
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Inline todos - when in messages view with active todos */}
+      <AnimatePresence>
+        {showMessages && todos.length > 0 && (
+          <motion.div
+            initial={{ opacity: 0, height: 0 }}
+            animate={{ opacity: 1, height: "auto" }}
+            exit={{ opacity: 0, height: 0 }}
+            className="shrink-0 px-3 py-2 border-t border-border/50"
+          >
+            <div className="flex flex-col gap-1.5">
+              {todos.map((todo, idx) => (
+                <div
+                  key={`${todo.content}-${idx}`}
+                  className={cn(
+                    "flex items-center gap-2 text-xs",
+                    todo.status === "completed" && "text-muted-foreground"
+                  )}
+                >
+                  {todo.status === "completed" ? (
+                    <CheckCircle2 className="h-3.5 w-3.5 text-green-500 shrink-0" />
+                  ) : todo.status === "in_progress" ? (
+                    <Loader2 className="h-3.5 w-3.5 text-blue-500 animate-spin shrink-0" />
+                  ) : (
+                    <Circle className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                  )}
+                  <span className={cn(
+                    "truncate",
+                    todo.status === "in_progress" && "text-foreground font-medium"
+                  )}>
+                    {todo.status === "in_progress" && todo.activeForm
+                      ? todo.activeForm
+                      : todo.content}
+                  </span>
+                </div>
+              ))}
+            </div>
           </motion.div>
         )}
       </AnimatePresence>

@@ -19,6 +19,9 @@ import {
   pieChartToVegaSpec,
 } from "./vega-spec";
 
+// Type helper for accessing VegaLite encoding properties in tests
+type Encoding = Record<string, Record<string, unknown>>;
+
 describe("barChartToVegaSpec", () => {
   it("creates basic bar chart spec", () => {
     const spec = barChartToVegaSpec({
@@ -31,11 +34,12 @@ describe("barChartToVegaSpec", () => {
       cornerRadiusEnd: 4,
       tooltip: true,
     });
-    expect(spec.encoding?.x).toMatchObject({
+    const encoding = spec.encoding as Encoding;
+    expect(encoding.x).toMatchObject({
       field: "category",
       type: "nominal",
     });
-    expect(spec.encoding?.y).toMatchObject({
+    expect(encoding.y).toMatchObject({
       field: "value",
       type: "quantitative",
     });
@@ -53,13 +57,14 @@ describe("barChartToVegaSpec", () => {
     ]);
 
     // Y should use "value" field (output of fold)
-    expect(spec.encoding?.y).toMatchObject({
+    const encoding = spec.encoding as Encoding;
+    expect(encoding.y).toMatchObject({
       field: "value",
       type: "quantitative",
     });
 
     // Should have color encoding
-    const colorEncoding = (spec.encoding as Record<string, unknown>).color;
+    const colorEncoding = encoding.color;
     expect(colorEncoding).toMatchObject({
       field: "series",
       type: "nominal",
@@ -74,14 +79,14 @@ describe("barChartToVegaSpec", () => {
     });
 
     // Y encoding should have stack: "zero"
-    expect(spec.encoding?.y).toMatchObject({
+    const encoding = spec.encoding as Encoding;
+    expect(encoding.y).toMatchObject({
       field: "value",
       type: "quantitative",
       stack: "zero",
     });
 
     // Should NOT have xOffset (that's for grouped bars)
-    const encoding = spec.encoding as Record<string, unknown>;
     expect(encoding.xOffset).toBeUndefined();
   });
 
@@ -93,14 +98,14 @@ describe("barChartToVegaSpec", () => {
     });
 
     // Y encoding should NOT have stack
-    expect(spec.encoding?.y).toMatchObject({
+    const encoding = spec.encoding as Encoding;
+    expect(encoding.y).toMatchObject({
       field: "value",
       type: "quantitative",
     });
-    expect((spec.encoding?.y as Record<string, unknown>).stack).toBeUndefined();
+    expect(encoding.y.stack).toBeUndefined();
 
     // Should have xOffset for grouped bars
-    const encoding = spec.encoding as Record<string, unknown>;
     expect(encoding.xOffset).toMatchObject({
       field: "series",
       type: "nominal",
@@ -114,8 +119,8 @@ describe("barChartToVegaSpec", () => {
       showLegend: true,
     });
 
-    const colorEncoding = (spec.encoding as Record<string, unknown>).color as Record<string, unknown>;
-    expect(colorEncoding.legend).toEqual({});
+    const encoding = spec.encoding as Encoding;
+    expect(encoding.color.legend).toEqual({});
   });
 
   it("hides legend when showLegend=false", () => {
@@ -125,8 +130,8 @@ describe("barChartToVegaSpec", () => {
       showLegend: false,
     });
 
-    const colorEncoding = (spec.encoding as Record<string, unknown>).color as Record<string, unknown>;
-    expect(colorEncoding.legend).toBeNull();
+    const encoding = spec.encoding as Encoding;
+    expect(encoding.color.legend).toBeNull();
   });
 
   it("applies format strings to axes", () => {
@@ -136,7 +141,8 @@ describe("barChartToVegaSpec", () => {
       yFormat: ".2f",
     });
 
-    const yAxis = (spec.encoding?.y as Record<string, unknown>).axis as Record<string, unknown>;
+    const encoding = spec.encoding as Encoding;
+    const yAxis = encoding.y.axis as Record<string, unknown>;
     expect(yAxis.format).toBe(".2f");
   });
 
@@ -148,11 +154,12 @@ describe("barChartToVegaSpec", () => {
     });
 
     // X should be quantitative (values), Y should be nominal (categories)
-    expect(spec.encoding?.x).toMatchObject({
+    const encoding = spec.encoding as Encoding;
+    expect(encoding.x).toMatchObject({
       field: "value",
       type: "quantitative",
     });
-    expect(spec.encoding?.y).toMatchObject({
+    expect(encoding.y).toMatchObject({
       field: "category",
       type: "nominal",
     });
@@ -167,14 +174,14 @@ describe("barChartToVegaSpec", () => {
     });
 
     // X should have stack: "zero"
-    expect(spec.encoding?.x).toMatchObject({
+    const encoding = spec.encoding as Encoding;
+    expect(encoding.x).toMatchObject({
       field: "value",
       type: "quantitative",
       stack: "zero",
     });
 
     // Should NOT have yOffset
-    const encoding = spec.encoding as Record<string, unknown>;
     expect(encoding.yOffset).toBeUndefined();
   });
 
@@ -187,7 +194,7 @@ describe("barChartToVegaSpec", () => {
     });
 
     // Should have yOffset for horizontal grouped bars
-    const encoding = spec.encoding as Record<string, unknown>;
+    const encoding = spec.encoding as Encoding;
     expect(encoding.yOffset).toMatchObject({
       field: "series",
       type: "nominal",
@@ -198,8 +205,10 @@ describe("barChartToVegaSpec", () => {
     const withGrid = barChartToVegaSpec({ xKey: "x", yKey: "y", showGrid: true });
     const withoutGrid = barChartToVegaSpec({ xKey: "x", yKey: "y", showGrid: false });
 
-    const yAxisWith = (withGrid.encoding?.y as Record<string, unknown>).axis as Record<string, unknown>;
-    const yAxisWithout = (withoutGrid.encoding?.y as Record<string, unknown>).axis as Record<string, unknown>;
+    const encodingWith = withGrid.encoding as Encoding;
+    const encodingWithout = withoutGrid.encoding as Encoding;
+    const yAxisWith = encodingWith.y.axis as Record<string, unknown>;
+    const yAxisWithout = encodingWithout.y.axis as Record<string, unknown>;
 
     expect(yAxisWith.grid).toBe(true);
     expect(yAxisWithout.grid).toBe(false);
@@ -257,8 +266,8 @@ describe("lineChartToVegaSpec", () => {
       showLegend: true,
     });
 
-    const colorEncoding = (spec.encoding as Record<string, unknown>).color as Record<string, unknown>;
-    expect(colorEncoding.legend).toEqual({});
+    const encoding = spec.encoding as Encoding;
+    expect(encoding.color.legend).toEqual({});
   });
 });
 
@@ -285,7 +294,8 @@ describe("areaChartToVegaSpec", () => {
       stacked: true,
     });
 
-    expect(spec.encoding?.y).toMatchObject({
+    const encoding = spec.encoding as Encoding;
+    expect(encoding.y).toMatchObject({
       field: "value",
       type: "quantitative",
       stack: "zero",
@@ -320,12 +330,13 @@ describe("pieChartToVegaSpec", () => {
       innerRadius: 0,
       tooltip: true,
     });
-    expect(spec.encoding?.theta).toMatchObject({
+    const encoding = spec.encoding as Encoding;
+    expect(encoding.theta).toMatchObject({
       field: "amount",
       type: "quantitative",
       stack: true,
     });
-    expect((spec.encoding as Record<string, unknown>).color).toMatchObject({
+    expect(encoding.color).toMatchObject({
       field: "category",
       type: "nominal",
     });
@@ -347,8 +358,8 @@ describe("pieChartToVegaSpec", () => {
       nameKey: "name",
     });
 
-    const colorEncoding = (spec.encoding as Record<string, unknown>).color as Record<string, unknown>;
-    expect(colorEncoding.legend).toEqual({});
+    const encoding = spec.encoding as Encoding;
+    expect(encoding.color.legend).toEqual({});
   });
 
   it("hides legend when showLegend=false", () => {
@@ -358,8 +369,8 @@ describe("pieChartToVegaSpec", () => {
       showLegend: false,
     });
 
-    const colorEncoding = (spec.encoding as Record<string, unknown>).color as Record<string, unknown>;
-    expect(colorEncoding.legend).toBeNull();
+    const encoding = spec.encoding as Encoding;
+    expect(encoding.color.legend).toBeNull();
   });
 
   it("adds text labels when showLabels=true", () => {
@@ -370,8 +381,9 @@ describe("pieChartToVegaSpec", () => {
     });
 
     // Should be a layered spec with arc and text
-    expect(spec.layer).toBeDefined();
-    expect(spec.layer).toHaveLength(2);
-    expect((spec.layer![1].mark as Record<string, unknown>).type).toBe("text");
+    const layer = spec.layer as Array<Record<string, unknown>>;
+    expect(layer).toBeDefined();
+    expect(layer).toHaveLength(2);
+    expect((layer[1].mark as Record<string, unknown>).type).toBe("text");
   });
 });

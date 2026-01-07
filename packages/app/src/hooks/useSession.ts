@@ -9,6 +9,7 @@
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useActiveWorkbookDirectory } from "@/hooks/useRuntimeState";
+import { useAgentReady } from "@/context/AgentReadyContext";
 import { api, type MessageWithParts, type PermissionResponse, type Session } from "@/lib/api";
 
 const DEBUG = typeof localStorage !== "undefined" && localStorage.getItem("DEBUG_HOOKS") === "true";
@@ -21,10 +22,12 @@ const log = DEBUG ? console.log.bind(console) : () => {};
  */
 export function useSessions() {
   const directory = useActiveWorkbookDirectory();
+  const isAgentReady = useAgentReady();
 
   return useQuery({
     queryKey: ["sessions", directory],
     queryFn: () => api.sessions.list(directory),
+    enabled: isAgentReady, // Wait for storage to be initialized
     staleTime: 0, // Always treat as stale
     refetchOnMount: true,
     refetchOnWindowFocus: true,
@@ -98,6 +101,7 @@ export function useDeleteSession() {
  */
 export function useMessages(sessionId: string | null) {
   const directory = useActiveWorkbookDirectory();
+  const isAgentReady = useAgentReady();
   const { data: statuses } = useSessionStatuses();
   const status = sessionId ? statuses?.[sessionId] : null;
   const isBusy = status?.type === "busy" || status?.type === "running";
@@ -126,7 +130,7 @@ export function useMessages(sessionId: string | null) {
         throw err;
       }
     },
-    enabled: !!sessionId,
+    enabled: !!sessionId && isAgentReady,
     // Keep data fresh for 5s to avoid unnecessary refetches on re-mount
     staleTime: 5000,
     refetchOnMount: true,

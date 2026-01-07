@@ -8,7 +8,7 @@
     "build": "vite build",
     "preview": "vite preview",
     "typecheck": "echo 'Web typecheck skipped: Relies on @hands/app typecheck for shared code'",
-    "deploy": "bun run build && wrangler pages deploy dist --project-name=hands-web"
+    "deploy": "bun run build && wrangler pages deploy dist --project-name=hands-site"
   },
   "dependencies": {
     "@hands/agent": "workspace:*",
@@ -27,6 +27,7 @@
     "jotai-x": "^2.0.2",
     "lucide-react": "^0.556.0",
     "motion": "^12.0.0",
+    "nanoid": "^5.1.6",
     "platejs": "^52.0.15",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",

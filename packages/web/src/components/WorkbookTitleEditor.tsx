@@ -13,7 +13,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { Check, Copy } from "lucide-react";
 import { updateWorkbookCache } from "../shared/lib/storage";
 import { useLocalDatabase } from "../db/LocalDatabaseProvider";
-import { cn } from "@hands/app";
+import { cn } from "@hands/app/light";
 
 interface WorkbookTitleEditorProps {
   workbookId: string;

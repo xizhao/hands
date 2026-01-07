@@ -1,12 +1,10 @@
 import { createOpencodeClient, type OpencodeClient } from "@opencode-ai/sdk/client";
 import { PORTS } from "./ports";
 
-// Re-export types from SDK client (avoids importing server-only code)
+// Re-export SDK types that are only used for SDK-specific operations
 export type {
-  AgentPart,
   ApiError,
-  AssistantMessage,
-  // Event types - use SDK's typed discriminated union for type-safe event handling
+  // Event types - SDK event types kept for reference but we use browser agent's ServerEvent
   Event as SdkEvent,
   EventMessagePartRemoved,
   EventMessagePartUpdated,
@@ -17,56 +15,21 @@ export type {
   EventSessionStatus,
   EventSessionUpdated,
   EventTodoUpdated,
-  FilePart,
   GlobalEvent,
-  Message,
-  Part,
-  ReasoningPart,
   RetryPart,
   Session as SdkSession,
   SessionStatus as SdkSessionStatus,
-  StepFinishPart,
-  StepStartPart,
-  TextPart,
-  Todo as SdkTodo,
-  ToolPart,
-  ToolState,
-  ToolStateCompleted,
-  ToolStateError,
-  ToolStatePending,
-  ToolStateRunning,
-  UserMessage,
 } from "@opencode-ai/sdk/client";
 
 // Import types we need locally
-import type {
-  Event as SdkEventType,
-  GlobalEvent as SdkGlobalEvent,
-  Message as SdkMessage,
-  Part as SdkPart,
-  Session as SdkSession,
-} from "@opencode-ai/sdk/client";
-
-// Alias SDK types
-export type Session = SdkSession;
+import type { GlobalEvent as SdkGlobalEvent } from "@opencode-ai/sdk/client";
 
 // Custom types for our app
-export interface MessageWithParts {
-  info: SdkMessage;
-  parts: SdkPart[];
-}
-
 export interface TokenUsage {
   input: number;
   output: number;
   reasoning: number;
   cache: { read: number; write: number };
-}
-
-export interface Todo {
-  id: string;
-  content: string;
-  status: "pending" | "in_progress" | "completed";
 }
 
 export interface Permission {
@@ -90,9 +53,60 @@ export type SessionStatus =
   | { type: "waiting"; permission?: Permission }
   | { type: "retry"; error: string };
 
-// ServerEvent is now the SDK's typed Event union for proper type safety
-// This enables TypeScript to catch type errors in event handlers
-export type ServerEvent = SdkEventType;
+// Import types from browser agent - has correct property names (sessionId, messageId)
+// The SDK types use sessionID/messageID which doesn't match what browser agent emits
+import type {
+  // Part types
+  TextPart as BrowserTextPart,
+  ReasoningPart as BrowserReasoningPart,
+  FilePart as BrowserFilePart,
+  ToolPart as BrowserToolPart,
+  ToolState as BrowserToolState,
+  ToolStatePending as BrowserToolStatePending,
+  ToolStateRunning as BrowserToolStateRunning,
+  ToolStateCompleted as BrowserToolStateCompleted,
+  ToolStateError as BrowserToolStateError,
+  StepStartPart as BrowserStepStartPart,
+  StepFinishPart as BrowserStepFinishPart,
+  Part as BrowserPart,
+  // Message types
+  UserMessage as BrowserUserMessage,
+  AssistantMessage as BrowserAssistantMessage,
+  Message as BrowserMessage,
+  MessageWithParts as BrowserMessageWithParts,
+  // Session types
+  Session as BrowserSession,
+  SessionStatus as BrowserSessionStatus,
+  // Other types
+  Todo as BrowserTodo,
+  ServerEvent as BrowserServerEvent,
+} from "@hands/agent/browser";
+import type { SubtaskPart as BrowserSubtaskPart } from "@hands/agent/core";
+
+// Re-export browser agent types with shorter names
+export type TextPart = BrowserTextPart;
+export type ReasoningPart = BrowserReasoningPart;
+export type FilePart = BrowserFilePart;
+export type ToolPart = BrowserToolPart;
+export type ToolState = BrowserToolState;
+export type ToolStatePending = BrowserToolStatePending;
+export type ToolStateRunning = BrowserToolStateRunning;
+export type ToolStateCompleted = BrowserToolStateCompleted;
+export type ToolStateError = BrowserToolStateError;
+export type StepStartPart = BrowserStepStartPart;
+export type StepFinishPart = BrowserStepFinishPart;
+export type SubtaskPart = BrowserSubtaskPart;
+export type Part = BrowserPart;
+// AgentPart is an alias for SubtaskPart (SDK naming convention)
+export type AgentPart = BrowserSubtaskPart;
+export type UserMessage = BrowserUserMessage;
+export type AssistantMessage = BrowserAssistantMessage;
+export type Message = BrowserMessage;
+export type MessageWithParts = BrowserMessageWithParts;
+export type Session = BrowserSession;
+export type AgentSessionStatus = BrowserSessionStatus;
+export type Todo = BrowserTodo;
+export type ServerEvent = BrowserServerEvent;
 
 export interface PromptRequest {
   parts: Array<
@@ -202,7 +216,7 @@ export const api = {
     list: async (sessionId: string, directory?: string | null): Promise<MessageWithParts[]> => {
       const client = getClient(directory);
       const result = await client.session.messages({ path: { id: sessionId } });
-      return result.data as MessageWithParts[];
+      return result.data as unknown as MessageWithParts[];
     },
     get: async (
       sessionId: string,
@@ -213,7 +227,7 @@ export const api = {
       const result = await client.session.message({
         path: { id: sessionId, messageID: messageId },
       });
-      return result.data as MessageWithParts;
+      return result.data as unknown as MessageWithParts;
     },
   },
 
@@ -253,7 +267,7 @@ export const api = {
         agent: options?.agent,
       },
     });
-    return result.data as MessageWithParts;
+    return result.data as unknown as MessageWithParts;
   },
 
   promptAsync: async (
@@ -429,7 +443,8 @@ export function subscribeToEvents(
             directory,
             "properties" in typedEvent ? typedEvent.properties : typedEvent,
           );
-          onEvent(typedEvent, directory);
+          // Cast SDK Event to our ServerEvent type (property names differ slightly)
+          onEvent(typedEvent as unknown as ServerEvent, directory);
         }
       } catch (err) {
         if (!abortController.signal.aborted) {

@@ -27,15 +27,18 @@ export interface ModelConfig {
 }
 
 // ============================================================================
-// Default API Key (free-tier only, $0 budget limit)
+// Default API Key (injected at build time)
 // ============================================================================
 
 /**
  * Default OpenRouter API key for free models only.
- * This key has a $0 credit limit and can only access free models.
+ * Injected via VITE_OPENROUTER_KEY env var at build time.
  * Users can override by setting their own key in localStorage.
  */
-export const DEFAULT_OPENROUTER_KEY = "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";
+export const DEFAULT_OPENROUTER_KEY: string | undefined =
+  typeof import.meta !== "undefined" && import.meta.env?.VITE_OPENROUTER_KEY
+    ? import.meta.env.VITE_OPENROUTER_KEY
+    : undefined;
 
 // ============================================================================
 // Model Presets
@@ -149,8 +152,13 @@ export function getStoredConfig(): ProviderConfig {
     return { type: "openai", apiKey: openaiKey };
   }
 
-  // Default to free-tier OpenRouter key
-  return { type: "openrouter", apiKey: DEFAULT_OPENROUTER_KEY };
+  // Default to free-tier OpenRouter key (if available)
+  if (DEFAULT_OPENROUTER_KEY) {
+    return { type: "openrouter", apiKey: DEFAULT_OPENROUTER_KEY };
+  }
+
+  // No key available - return empty config (will prompt user)
+  return { type: "openrouter", apiKey: "" };
 }
 
 /**

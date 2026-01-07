@@ -40,6 +40,7 @@ import {
   X,
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { StickToBottom } from "use-stick-to-bottom";
 import { ChatMessage } from "@/components/ChatMessage";
 import { ChatSettings } from "@/components/ChatSettings";
 import { ThinkingIndicator } from "@/components/ui/thinking-indicator";
@@ -88,10 +89,8 @@ export function FloatingChat() {
   const [sttPreview, setSttPreview] = useState(""); // Real-time STT preview
   const [sttDownloading, setSttDownloading] = useState(false);
   const [sttDownloadProgress, setSttDownloadProgress] = useState(0); // 0-1
-  const scrollRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const hasHandledDrop = useRef(false);
-  const isNearBottomRef = useRef(true); // Track if user is near bottom
   const queryClient = useQueryClient();
   const lastIgnoreState = useRef<boolean | null>(null);
 
@@ -530,7 +529,7 @@ export function FloatingChat() {
 
   const sessions = useMemo(() => {
     return allSessions
-      .filter((s) => !s.parentID && s.title)
+      .filter((s) => !s.parentId && s.title)
       .sort((a, b) => b.time.updated - a.time.updated);
   }, [allSessions]);
 
@@ -759,32 +758,11 @@ export function FloatingChat() {
     if (activeSessionId) abortSessionMutation.mutate();
   }, [activeSessionId, abortSessionMutation]);
 
-  // Track scroll position to detect if user is near bottom
-  const handleScroll = useCallback(() => {
-    if (!scrollRef.current) return;
-    const { scrollTop, scrollHeight, clientHeight } = scrollRef.current;
-    const distanceFromBottom = scrollHeight - scrollTop - clientHeight;
-    isNearBottomRef.current = distanceFromBottom < 100;
-  }, []);
-
-  // Auto-scroll to bottom when messages change, but only if user is near bottom
-  const lastMessageContent = messages[messages.length - 1]?.parts?.length ?? 0;
-  useEffect(() => {
-    if (scrollRef.current && isNearBottomRef.current) {
-      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
-    }
-  }, [messages.length, lastMessageContent]);
-
   const activeSession = sessions.find((s) => s.id === activeSessionId);
 
   // Separate foreground and background sessions
-  const foregroundSessions = sessions.filter((s) => {
-    const sp = s as Session & { parentID?: string };
-    return s.title && !sp.parentID;
-  });
-  const backgroundSessions = sessions.filter(
-    (s) => (s as Session & { parentID?: string }).parentID,
-  );
+  const foregroundSessions = sessions.filter((s) => s.title && !s.parentId);
+  const backgroundSessions = allSessions.filter((s) => s.parentId);
 
   // Check if any session is busy (for collapsed indicator)
   const hasActiveSessions = sessions.some((s) => getSessionStatus(s.id) === "busy");
@@ -820,34 +798,36 @@ export function FloatingChat() {
       {/* Content area - changes based on whether we're in a thread */}
       <AnimatePresence mode="wait">
         {isExpanded && activeSessionId && messages.length > 0 ? (
-          /* IN A THREAD: Show messages */
+          /* IN A THREAD: Show messages with auto-scroll */
           <motion.div
             key="messages"
             data-interactive
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: 20 }}
-            ref={scrollRef}
-            onScroll={handleScroll}
-            className="flex-1 overflow-y-auto min-h-0 flex flex-col"
+            className="flex-1 min-h-0 relative"
           >
-            <LinkClickHandler className="flex flex-col gap-3 mt-auto">
-              {messages.map((msg) => (
-                <ChatMessage key={msg.info.id} message={msg} compact tailDown />
-              ))}
-              <AnimatePresence>
-                {isBusy && messages[messages.length - 1]?.info.role === "user" && (
-                  <motion.div
-                    initial={{ opacity: 0, y: 10 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    exit={{ opacity: 0, y: 10 }}
-                    className="rounded-2xl rounded-bl-sm bg-zinc-800 shadow-sm px-2.5 py-1.5 w-fit"
-                  >
-                    <ThinkingIndicator />
-                  </motion.div>
-                )}
-              </AnimatePresence>
-            </LinkClickHandler>
+            <StickToBottom className="h-full overflow-y-auto" resize="smooth" initial="smooth">
+              <StickToBottom.Content className="flex flex-col min-h-full">
+                <LinkClickHandler className="flex flex-col gap-3 mt-auto">
+                  {messages.map((msg) => (
+                    <ChatMessage key={msg.info.id} message={msg} compact tailDown />
+                  ))}
+                  <AnimatePresence>
+                    {isBusy && messages[messages.length - 1]?.info.role === "user" && (
+                      <motion.div
+                        initial={{ opacity: 0, y: 10 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        exit={{ opacity: 0, y: 10 }}
+                        className="rounded-2xl rounded-bl-sm bg-zinc-800 shadow-sm px-2.5 py-1.5 w-fit"
+                      >
+                        <ThinkingIndicator />
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+                </LinkClickHandler>
+              </StickToBottom.Content>
+            </StickToBottom>
           </motion.div>
         ) : isExpanded ? (
           /* NOT IN A THREAD: Show thread chips + dropdown */

@@ -140,6 +140,7 @@ function AppContent() {
   const platform = usePlatform();
   const { data: runtime } = useActiveRuntime();
   const runtimePort = runtime?.runtime_port ?? null;
+  const workbookId = runtime?.workbook_id ?? null;
 
   // Web platform: tRPC is already provided by LocalTRPCProvider in main.tsx
   // Just render the app shell with router
@@ -152,9 +153,10 @@ function AppContent() {
   }
 
   // Desktop platform: wrap with HTTP-based TRPCProvider when runtime is connected
+  // Key on workbookId to force remount when switching workbooks - this clears all tRPC queries
   if (runtimePort && runtimePort > 1) {
     return (
-      <TRPCProvider queryClient={queryClient} runtimePort={runtimePort}>
+      <TRPCProvider key={workbookId ?? "default"} queryClient={queryClient} runtimePort={runtimePort}>
         <AppShell>
           <RouterProvider router={router} />
         </AppShell>

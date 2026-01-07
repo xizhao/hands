@@ -130,6 +130,8 @@ export {
   createWebFetchTool,
   createWebSearchTool,
   createCodeExecuteTool,
+  createPythonTool,
+  createTodoWriteTool,
   createListPagesTool,
   createReadPageTool,
   createWritePageTool,
@@ -153,6 +155,8 @@ export {
   type PagesContext,
   type SubagentContext,
   type SubagentResult,
+  type TodoContext,
+  type TodoItem,
 } from "./tools";
 
 // ============================================================================
@@ -205,6 +209,7 @@ export {
 export {
   api,
   subscribeToEvents,
+  emitEvent,
   setToolContext,
   getToolContext,
   // Types (api-specific only, core types re-exported above)

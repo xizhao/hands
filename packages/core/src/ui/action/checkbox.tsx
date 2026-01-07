@@ -108,7 +108,7 @@ function CheckboxElement(props: PlateElementProps) {
   const { name, defaultChecked, required } = element;
 
   // Get initial value from LocalState if available
-  const initialChecked = (name && localState?.values[name] as boolean) ?? defaultChecked ?? false;
+  const initialChecked = (name ? (localState?.values[name] as boolean) : undefined) ?? defaultChecked ?? false;
   const [checked, setChecked] = useState(initialChecked);
   const checkedRef = useRef(checked);
   checkedRef.current = checked;

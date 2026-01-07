@@ -161,6 +161,16 @@ function initInternalTables(): void {
       data TEXT NOT NULL
     );
 
+    -- Todos (per-session task list)
+    CREATE TABLE IF NOT EXISTS _todos (
+      session_id TEXT NOT NULL REFERENCES _sessions(id) ON DELETE CASCADE,
+      idx INTEGER NOT NULL,
+      content TEXT NOT NULL,
+      status TEXT NOT NULL CHECK (status IN ('pending', 'in_progress', 'completed')),
+      active_form TEXT NOT NULL,
+      PRIMARY KEY (session_id, idx)
+    );
+
     -- Indexes for efficient queries
     CREATE INDEX IF NOT EXISTS _sessions_parent ON _sessions(parent_id);
     CREATE INDEX IF NOT EXISTS _sessions_updated ON _sessions(updated_at DESC);

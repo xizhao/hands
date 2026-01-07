@@ -136,6 +136,7 @@ const app = defineApp([
 
   // Serve workbook pages with SSR + hydration - need both routes since * requires at least one char
   render(Document, [
+    // @ts-expect-error - rwsdk route types are overly strict for our multi-tenant pattern
     route("/:workbookId", async ({ params, request }) => {
       const workbookId = params.workbookId;
       const pagePath = "/";
@@ -181,6 +182,7 @@ const app = defineApp([
       const dbAdapter = createViewerDbAdapter(db);
       return <ViewerPage page={page} dbAdapter={dbAdapter} />;
     }),
+    // @ts-expect-error - rwsdk route types are overly strict for our multi-tenant pattern
     route("/:workbookId/*", async ({ params, request }) => {
       const workbookId = params.workbookId;
       const url = new URL(request.url);
@@ -288,7 +290,8 @@ export default {
     await prefetchNavData(request, env);
 
     try {
-      return await app.fetch(request, env, ctx);
+      // Cast env - viewer uses D1 HTTP API instead of bound DB
+      return await app.fetch(request, env as unknown as Parameters<typeof app.fetch>[1], ctx);
     } finally {
       clearContext();
     }

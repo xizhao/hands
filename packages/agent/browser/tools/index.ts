@@ -70,6 +70,23 @@ export interface SubagentContext {
 }
 
 // ============================================================================
+// Todo Context Interface (for task tracking)
+// ============================================================================
+
+export interface TodoItem {
+  content: string;
+  status: "pending" | "in_progress" | "completed";
+  activeForm: string;
+}
+
+export interface TodoContext {
+  /** Get current todos for a session */
+  getTodos: (sessionId: string) => TodoItem[];
+  /** Update todos for a session */
+  setTodos: (sessionId: string, todos: TodoItem[]) => void;
+}
+
+// ============================================================================
 // Tool Context (injected at runtime)
 // ============================================================================
 
@@ -80,6 +97,8 @@ export interface ToolContext {
   pages?: PagesContext;
   /** Subagent context for spawning child agents */
   subagent?: SubagentContext;
+  /** Todo context for task tracking */
+  todo?: TodoContext;
   /** Abort signal for cancellation */
   abortSignal?: AbortSignal;
   /** CORS proxy URL prefix (e.g., "https://corsproxy.io/?") */
@@ -439,6 +458,169 @@ Available globals: console, JSON, Math, Date, Array, Object, String, Number, Boo
 }
 
 // ============================================================================
+// Python Execution Tool (Pyodide)
+// ============================================================================
+
+// Lazy-loaded Pyodide instance
+let pyodidePromise: Promise<unknown> | null = null;
+let pyodideInstance: unknown | null = null;
+
+async function getPyodide(): Promise<unknown> {
+  if (pyodideInstance) return pyodideInstance;
+
+  if (!pyodidePromise) {
+    pyodidePromise = (async () => {
+      try {
+        // Dynamic import to avoid bundling issues
+        const { loadPyodide } = await import("pyodide");
+        console.log("[Python] Loading Pyodide...");
+
+        // Use CDN for WASM and Python packages (large files, good caching)
+        const pyodide = await loadPyodide({
+          indexURL: "https://cdn.jsdelivr.net/pyodide/v0.27.0/full/",
+        });
+        console.log("[Python] Pyodide loaded, installing packages...");
+
+        // Pre-load common data analysis packages
+        await pyodide.loadPackage(["pandas", "numpy", "micropip"]);
+        console.log("[Python] Core packages loaded");
+
+        // Install additional packages via micropip if needed
+        try {
+          const micropip = pyodide.pyimport("micropip");
+          await micropip.install(["scipy"]);
+          console.log("[Python] Additional packages installed");
+        } catch (e) {
+          console.warn("[Python] Failed to install optional packages:", e);
+        }
+
+        pyodideInstance = pyodide;
+        return pyodide;
+      } catch (err) {
+        console.error("[Python] Failed to initialize Pyodide:", err);
+        pyodidePromise = null; // Allow retry
+        throw err;
+      }
+    })();
+  }
+
+  return pyodidePromise;
+}
+
+export function createPythonTool(ctx: ToolContext): ToolDefinition {
+  return {
+    description: `Execute Python code for data analysis using Pyodide.
+Available packages: pandas, numpy, scipy.
+
+Use print() for output. The last expression value is also captured.
+
+DATABASE ACCESS:
+You can query the workbook's SQLite database directly:
+  from js import query_db, execute_db, get_db_schema
+
+  # Get schema
+  schema = get_db_schema().to_py()  # [{table_name, columns: [{name, type}]}]
+
+  # Read data (returns list of dicts)
+  rows = await query_db("SELECT * FROM users WHERE age > ?", [18])
+  df = pd.DataFrame(rows.to_py())
+
+  # Write data
+  await execute_db("INSERT INTO users (name, age) VALUES (?, ?)", ["Alice", 30])
+
+Common patterns:
+- import pandas as pd; df = pd.DataFrame(data)
+- df.groupby('col').agg({'value': 'sum'})
+- df.describe(), df.corr()
+- df[df['amount'] > 100]`,
+    parameters: z.object({
+      code: z.string().describe("Python code to execute"),
+    }),
+    execute: async (args: unknown) => {
+      const { code } = args as { code: string };
+
+      try {
+        const pyodide = await getPyodide() as {
+          runPythonAsync: (code: string) => Promise<unknown>;
+          globals: { get: (key: string) => unknown; set: (key: string, value: unknown) => void };
+          toPy: (obj: unknown) => unknown;
+          registerJsModule: (name: string, module: object) => void;
+        };
+
+        // Inject database bridge into JS globals for Python access
+        if (ctx.db) {
+          // Query function - returns rows as JS array
+          (globalThis as Record<string, unknown>).query_db = async (sql: string, params?: unknown[]) => {
+            const rows = await ctx.db!.query(sql, params);
+            return rows;
+          };
+
+          // Execute function - for mutations
+          (globalThis as Record<string, unknown>).execute_db = async (sql: string, params?: unknown[]) => {
+            await ctx.db!.execute(sql, params);
+            ctx.db!.notifyChange();
+          };
+
+          // Schema function - returns table definitions
+          (globalThis as Record<string, unknown>).get_db_schema = () => {
+            return ctx.db!.getSchema();
+          };
+        }
+
+        // Wrap code to capture output and result
+        const wrappedCode = `
+import sys
+from io import StringIO
+
+_stdout = StringIO()
+_old_stdout = sys.stdout
+sys.stdout = _stdout
+_result = None
+_error = None
+
+try:
+${code.split('\n').map(line => '    ' + line).join('\n')}
+except Exception as e:
+    _error = str(e)
+finally:
+    sys.stdout = _old_stdout
+
+_output = _stdout.getvalue()
+{"output": _output, "error": _error}
+`;
+
+        const result = await pyodide.runPythonAsync(wrappedCode);
+
+        // Extract output from Python dict
+        if (result && typeof result === 'object') {
+          const pyResult = result as { toJs?: () => Map<string, unknown> };
+          if (pyResult.toJs) {
+            const jsResult = pyResult.toJs();
+            const output = jsResult.get('output') as string | undefined;
+            const error = jsResult.get('error') as string | undefined;
+
+            if (error) {
+              return { error };
+            }
+
+            return {
+              output: output || undefined,
+              result: output ? undefined : "Code executed successfully",
+            };
+          }
+        }
+
+        return { result: String(result) };
+      } catch (error) {
+        const errMsg = error instanceof Error ? error.message : String(error);
+        console.error("[Python] Execution error:", errMsg);
+        return { error: `Python error: ${errMsg}` };
+      }
+    },
+  };
+}
+
+// ============================================================================
 // Navigation Tool
 // ============================================================================
 
@@ -735,6 +917,69 @@ Use this to find pages containing specific text, code, or patterns.`,
 }
 
 // ============================================================================
+// Todo Tool
+// ============================================================================
+
+const TODO_DESCRIPTION = `Use this tool to create and manage a structured task list for your current session.
+This helps you track progress, organize complex tasks, and show the user what you're working on.
+
+## When to Use This Tool
+- Complex multi-step tasks (3+ distinct steps)
+- User provides multiple tasks in a list
+- After receiving new instructions - capture requirements as todos
+- When starting a task - mark it as in_progress
+- After completing a task - mark it as completed
+
+## When NOT to Use
+- Single, trivial tasks that can be done immediately
+- Purely conversational or informational requests
+
+## Task States
+- pending: Not yet started
+- in_progress: Currently working on (limit to ONE at a time)
+- completed: Finished successfully
+
+## Required Fields
+Each todo must have:
+- content: What needs to be done (imperative form, e.g., "Run tests")
+- status: pending, in_progress, or completed
+- activeForm: Present continuous form shown during execution (e.g., "Running tests")
+
+Always mark tasks complete IMMEDIATELY after finishing. Only have ONE task in_progress at a time.`;
+
+export function createTodoWriteTool(ctx: ToolContext): ToolDefinition {
+  return {
+    description: TODO_DESCRIPTION,
+    parameters: z.object({
+      todos: z.array(z.object({
+        content: z.string().min(1).describe("Brief description of the task"),
+        status: z.enum(["pending", "in_progress", "completed"]).describe("Current status"),
+        activeForm: z.string().min(1).describe("Present continuous form (e.g., 'Running tests')"),
+      })).describe("The updated todo list"),
+    }),
+    execute: async (args: unknown) => {
+      const { todos } = args as { todos: Array<{ content: string; status: string; activeForm: string }> };
+
+      if (!ctx.todo || !ctx.sessionId) {
+        return { error: "Todo context not available" };
+      }
+
+      ctx.todo.setTodos(ctx.sessionId, todos as TodoItem[]);
+
+      const pending = todos.filter((t) => t.status === "pending").length;
+      const inProgress = todos.filter((t) => t.status === "in_progress").length;
+      const completed = todos.filter((t) => t.status === "completed").length;
+
+      return {
+        success: true,
+        summary: `${pending} pending, ${inProgress} in progress, ${completed} completed`,
+        todos,
+      };
+    },
+  };
+}
+
+// ============================================================================
 // Tool Registry
 // ============================================================================
 
@@ -745,6 +990,8 @@ export type ToolId =
   | "webfetch"      // Fetch a URL
   | "websearch"     // Search the web
   | "code"          // Execute JavaScript code
+  | "python"        // Execute Python code (Pyodide)
+  | "todowrite"     // Manage task list
   | "listPages"     // List all pages
   | "readPage"      // Read page content
   | "writePage"     // Create/update page
@@ -768,6 +1015,8 @@ export function createToolRegistry(ctx: ToolContext): ToolRegistry {
     webfetch: createWebFetchTool(ctx),
     websearch: createWebSearchTool(ctx),
     code: createCodeExecuteTool(ctx),
+    python: createPythonTool(ctx),
+    todowrite: createTodoWriteTool(ctx),
     listPages: createListPagesTool(ctx),
     readPage: createReadPageTool(ctx),
     writePage: createWritePageTool(ctx),
@@ -797,7 +1046,7 @@ export function createToolRegistry(ctx: ToolContext): ToolRegistry {
 // ============================================================================
 
 /** Tools for data analysis tasks */
-export const DATA_TOOLS: ToolId[] = ["sql", "schema", "code"];
+export const DATA_TOOLS: ToolId[] = ["sql", "schema", "code", "python"];
 
 /** Tools for web research */
 export const RESEARCH_TOOLS: ToolId[] = ["webfetch", "websearch"];
@@ -812,6 +1061,8 @@ export const ALL_TOOLS: ToolId[] = [
   "webfetch",
   "websearch",
   "code",
+  "python",
+  "todowrite",
   "listPages",
   "readPage",
   "writePage",
@@ -832,6 +1083,7 @@ export const LEGACY_TOOL_MAP: Record<string, ToolId> = {
   glob: "listPages",
   read: "readPage",
   write: "writePage",
+  edit: "writePage",  // edit also maps to writePage (upsert behavior)
   grep: "searchPages",
 };
 

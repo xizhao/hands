@@ -6,7 +6,8 @@
  * Shell is rendered by root layout in App.tsx.
  */
 
-import { ChatInput, type ChatInputRef } from "@hands/app";
+// Use lightweight input to avoid pulling in heavy @hands/app deps
+import { LandingInput, type LandingInputRef } from "../components/LandingInput";
 import { Envelope, Link, Table, UploadSimple } from "@phosphor-icons/react";
 import { useNavigate } from "@tanstack/react-router";
 import { animate, motion, useMotionValue } from "motion/react";
@@ -65,18 +66,17 @@ export function LandingContent() {
 // Keep old export for backwards compat
 export { LandingContent as LandingPage };
 
-// Prompt bar - uses shared ChatInput, API key in global settings
+// Prompt bar - lightweight input for landing page
 function PromptBar() {
   const navigate = useNavigate();
   const [value, setValue] = useState("");
   const [isNavigating, setIsNavigating] = useState(false);
-  const [pendingFiles, setPendingFiles] = useState<string[]>([]);
-  const chatInputRef = useRef<ChatInputRef>(null);
+  const inputRef = useRef<LandingInputRef>(null);
 
   // Focus after prompt bar animation completes
   useEffect(() => {
     const timer = setTimeout(() => {
-      chatInputRef.current?.focus();
+      inputRef.current?.focus();
     }, 1000);
     return () => clearTimeout(timer);
   }, []);
@@ -86,13 +86,7 @@ function PromptBar() {
     setIsNavigating(true);
 
     try {
-      // Build prompt with file references
-      let prompt = value.trim();
-      if (pendingFiles.length > 0) {
-        const fileRefs = pendingFiles.map((f) => `@import ${f}`).join("\n");
-        prompt = prompt ? `${prompt}\n\n${fileRefs}` : fileRefs;
-      }
-
+      const prompt = value.trim();
       const workbook = await createWorkbookCache("New Workbook");
       navigate({
         to: "/w/$workbookId",
@@ -108,7 +102,7 @@ function PromptBar() {
   const handleSourceClick = (source: string) => {
     if (source === "link") {
       setValue("Connect to ");
-      chatInputRef.current?.focus();
+      inputRef.current?.focus();
     }
   };
 
@@ -118,14 +112,12 @@ function PromptBar() {
       <div className="flex items-center gap-3 bg-card rounded-2xl pl-4 pr-2 py-2 border border-border shadow-xl">
         <HandsLogo className="w-7 h-7 shrink-0 text-foreground" />
 
-        <ChatInput
-          ref={chatInputRef}
+        <LandingInput
+          ref={inputRef}
           value={value}
           onChange={setValue}
           onSend={handleSend}
           isSending={isNavigating}
-          pendingFiles={pendingFiles}
-          onPendingFilesChange={setPendingFiles}
           placeholder="Where should hands get the data?"
           className="flex-1"
         />

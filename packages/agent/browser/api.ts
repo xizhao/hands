@@ -2,9 +2,11 @@
  * Browser-compatible API
  *
  * Drop-in replacement for @opencode-ai/sdk client.
- * Stores sessions/messages in memory and uses browser agent for prompts.
+ * Uses SQLite as single source of truth for sessions/messages.
+ * Only runtime state (status, abort controllers, streaming messages) kept in memory.
  */
 
+import { generateText } from "ai";
 import { runAgent, type AgentConfigInput } from "./agent";
 import { defaultAgent, agents } from "../agents";
 import {
@@ -19,6 +21,8 @@ import {
   type AgentConfig,
 } from "../core";
 import type { ToolContext } from "./tools";
+import { createSessionStorage, type SessionStorage } from "./storage";
+import { createProviderFromStorage } from "./provider";
 
 // ============================================================================
 // Additional Types (not in core, specific to API layer)
@@ -37,7 +41,6 @@ export interface Agent {
 // Event System
 // ============================================================================
 
-// Simplified event types using core types with sessionId (lowercase)
 export type ServerEvent =
   | { type: "session.created"; session: Session }
   | { type: "session.updated"; session: Session }
@@ -46,7 +49,8 @@ export type ServerEvent =
   | { type: "message.updated"; message: Message }
   | { type: "message.removed"; messageId: string }
   | { type: "message.part.updated"; part: Part; sessionId: string; messageId: string }
-  | { type: "todo.updated"; sessionId: string; todos: Todo[] };
+  | { type: "todo.updated"; sessionId: string; todos: Todo[] }
+  | { type: "page.updated"; pageId: string };
 
 export type EventType = ServerEvent["type"];
 
@@ -74,25 +78,26 @@ class EventEmitter {
 const eventEmitter = new EventEmitter();
 
 // ============================================================================
-// In-Memory Store
+// Runtime State (not persisted - ephemeral per session)
 // ============================================================================
 
-const store = {
-  sessions: new Map<string, Session>(),
-  messages: new Map<string, MessageWithParts[]>(),
-  todos: new Map<string, Todo[]>(),
+const runtime = {
   status: new Map<string, SessionStatus>(),
   abortControllers: new Map<string, AbortController>(),
+  // Currently streaming message (not yet persisted)
+  streamingMessages: new Map<string, MessageWithParts>(),
 };
 
 // ============================================================================
-// Tool Context (must be set by the app)
+// Tool Context & Storage
 // ============================================================================
 
 let globalToolContext: ToolContext | null = null;
+let storage: SessionStorage | null = null;
 
-export function setToolContext(ctx: ToolContext) {
+export function setToolContext(ctx: ToolContext | null) {
   globalToolContext = ctx;
+  storage = ctx?.db ? createSessionStorage(ctx.db) : null;
 }
 
 export function getToolContext(): ToolContext | null {
@@ -105,18 +110,19 @@ export function getToolContext(): ToolContext | null {
 
 export const api = {
   health: async () => {
-    return { status: "ok", sessions: store.sessions.size };
+    const sessions = storage ? await storage.listSessions() : [];
+    return { status: "ok", sessions: sessions.length };
   },
 
   sessions: {
     list: async (_directory?: string | null): Promise<Session[]> => {
-      return Array.from(store.sessions.values()).sort(
-        (a, b) => b.time.updated - a.time.updated
-      );
+      if (!storage) return [];
+      return storage.listSessions();
     },
 
     get: async (id: string, _directory?: string | null): Promise<Session> => {
-      const session = store.sessions.get(id);
+      if (!storage) throw new Error("Storage not initialized");
+      const session = await storage.getSession(id);
       if (!session) throw new Error(`Session not found: ${id}`);
       return session;
     },
@@ -125,29 +131,27 @@ export const api = {
       body?: { parentId?: string; title?: string },
       _directory?: string | null
     ): Promise<Session> => {
-      const now = Date.now();
-      const session: Session = {
-        id: generateId("session"),
-        parentId: body?.parentId,
+      if (!storage) throw new Error("Storage not initialized");
+
+      const session = await storage.createSession({
         title: body?.title,
-        time: { created: now, updated: now },
-      };
+        parentId: body?.parentId,
+      });
 
-      store.sessions.set(session.id, session);
-      store.messages.set(session.id, []);
-      store.todos.set(session.id, []);
-      store.status.set(session.id, { type: "idle" });
-
+      runtime.status.set(session.id, { type: "idle" });
       eventEmitter.emit({ type: "session.created", session });
 
       return session;
     },
 
     delete: async (id: string, _directory?: string | null): Promise<boolean> => {
-      store.sessions.delete(id);
-      store.messages.delete(id);
-      store.todos.delete(id);
-      store.status.delete(id);
+      if (!storage) throw new Error("Storage not initialized");
+
+      await storage.deleteSession(id);
+
+      runtime.status.delete(id);
+      runtime.abortControllers.delete(id);
+      runtime.streamingMessages.delete(id);
 
       eventEmitter.emit({ type: "session.deleted", sessionId: id });
 
@@ -160,7 +164,17 @@ export const api = {
       sessionId: string,
       _directory?: string | null
     ): Promise<MessageWithParts[]> => {
-      return store.messages.get(sessionId) ?? [];
+      if (!storage) return [];
+
+      const persisted = await storage.listMessages(sessionId);
+
+      // Include any currently streaming message
+      const streaming = runtime.streamingMessages.get(sessionId);
+      if (streaming) {
+        return [...persisted, streaming];
+      }
+
+      return persisted;
     },
 
     get: async (
@@ -168,8 +182,15 @@ export const api = {
       messageId: string,
       _directory?: string | null
     ): Promise<MessageWithParts> => {
-      const messages = store.messages.get(sessionId) ?? [];
-      const msg = messages.find((m) => m.info.id === messageId);
+      if (!storage) throw new Error("Storage not initialized");
+
+      // Check streaming message first
+      const streaming = runtime.streamingMessages.get(sessionId);
+      if (streaming?.info.id === messageId) {
+        return streaming;
+      }
+
+      const msg = await storage.getMessage(sessionId, messageId);
       if (!msg) throw new Error(`Message not found: ${messageId}`);
       return msg;
     },
@@ -177,14 +198,15 @@ export const api = {
 
   todos: {
     list: async (sessionId: string, _directory?: string | null): Promise<Todo[]> => {
-      return store.todos.get(sessionId) ?? [];
+      if (!storage) return [];
+      return storage.listTodos(sessionId);
     },
   },
 
   status: {
     all: async (_directory?: string | null): Promise<Record<string, SessionStatus>> => {
       const result: Record<string, SessionStatus> = {};
-      for (const [id, status] of store.status) {
+      for (const [id, status] of runtime.status) {
         result[id] = status;
       }
       return result;
@@ -201,14 +223,19 @@ export const api = {
       directory?: string | null;
     }
   ): Promise<MessageWithParts> => {
-    const messages = store.messages.get(sessionId) ?? [];
+    if (!storage) throw new Error("Storage not initialized");
+
+    // Get existing messages from storage
+    const messages = await storage.listMessages(sessionId);
+
+    // Create and persist user message
     const userMsg = createUserMessage(sessionId, content, messages);
-    messages.push(userMsg);
-    store.messages.set(sessionId, messages);
+    await storage.createMessage(sessionId, userMsg);
 
     eventEmitter.emit({ type: "message.updated", message: userMsg.info });
 
-    const assistantMsg = await runPrompt(sessionId, messages, options);
+    // Run agent and get response
+    const assistantMsg = await runPrompt(sessionId, [...messages, userMsg], options);
     return assistantMsg;
   },
 
@@ -222,14 +249,21 @@ export const api = {
       directory?: string | null;
     }
   ) => {
-    const messages = store.messages.get(sessionId) ?? [];
+    if (!storage) throw new Error("Storage not initialized");
+
+    // Get existing messages from storage
+    const messages = await storage.listMessages(sessionId);
+
+    // Create and persist user message
     const userMsg = createUserMessage(sessionId, content, messages);
-    messages.push(userMsg);
-    store.messages.set(sessionId, messages);
+    storage.createMessage(sessionId, userMsg).catch((err) => {
+      console.error("[api.promptAsync] Failed to persist user message:", err);
+    });
 
     eventEmitter.emit({ type: "message.updated", message: userMsg.info });
 
-    runPrompt(sessionId, messages, options).catch((err) => {
+    // Run agent async
+    runPrompt(sessionId, [...messages, userMsg], options).catch((err) => {
       console.error("[api.promptAsync] Error:", err);
     });
 
@@ -237,13 +271,13 @@ export const api = {
   },
 
   abort: async (sessionId: string, _directory?: string | null): Promise<boolean> => {
-    const controller = store.abortControllers.get(sessionId);
+    const controller = runtime.abortControllers.get(sessionId);
     if (controller) {
       controller.abort();
-      store.abortControllers.delete(sessionId);
+      runtime.abortControllers.delete(sessionId);
     }
 
-    store.status.set(sessionId, { type: "idle" });
+    runtime.status.set(sessionId, { type: "idle" });
     eventEmitter.emit({
       type: "session.status",
       sessionId,
@@ -331,7 +365,13 @@ async function runPrompt(
   const agentConfig: AgentConfigInput =
     agents[agentName as keyof typeof agents] ?? defaultAgent;
 
-  store.status.set(sessionId, { type: "running" });
+  // Get session from storage
+  const session = await storage!.getSession(sessionId);
+  if (!session) {
+    throw new Error(`Session not found: ${sessionId}`);
+  }
+
+  runtime.status.set(sessionId, { type: "running" });
   eventEmitter.emit({
     type: "session.status",
     sessionId,
@@ -339,9 +379,8 @@ async function runPrompt(
   });
 
   const abortController = new AbortController();
-  store.abortControllers.set(sessionId, abortController);
+  runtime.abortControllers.set(sessionId, abortController);
 
-  const session = store.sessions.get(sessionId)!;
   let assistantMsg: MessageWithParts | null = null;
   let agentError: { type: string; message: string } | null = null;
 
@@ -373,9 +412,8 @@ async function runPrompt(
             },
             parts: [],
           };
-          const allMessages = store.messages.get(sessionId) ?? [];
-          allMessages.push(assistantMsg);
-          store.messages.set(sessionId, allMessages);
+          // Track streaming message for real-time queries
+          runtime.streamingMessages.set(sessionId, assistantMsg);
 
           eventEmitter.emit({ type: "message.updated", message: assistantMsg.info });
           break;
@@ -410,8 +448,23 @@ async function runPrompt(
       }
     }
   } finally {
-    store.abortControllers.delete(sessionId);
-    store.status.set(sessionId, { type: "idle" });
+    runtime.abortControllers.delete(sessionId);
+
+    // IMPORTANT: Persist message BEFORE deleting from streaming map
+    // This prevents a race condition where a refetch could find neither
+    // the streaming message nor the persisted message
+    if (assistantMsg && storage) {
+      try {
+        await storage.createMessage(sessionId, assistantMsg);
+        await storage.updateSession(sessionId, { updated: Date.now() });
+      } catch (err) {
+        console.error("[runPrompt] Failed to persist assistant message:", err);
+      }
+    }
+
+    // Now safe to remove streaming message - it's in SQLite
+    runtime.streamingMessages.delete(sessionId);
+    runtime.status.set(sessionId, { type: "idle" });
 
     eventEmitter.emit({
       type: "session.status",
@@ -419,18 +472,21 @@ async function runPrompt(
       status: { type: "idle" },
     });
 
-    if (session) {
-      session.time.updated = Date.now();
-      eventEmitter.emit({ type: "session.updated", session });
+    // Emit session update
+    const updatedSession = await storage?.getSession(sessionId);
+    if (updatedSession) {
+      eventEmitter.emit({ type: "session.updated", session: updatedSession });
     }
+
+    // Auto-generate title in background (don't await)
+    maybeAutoTitle(sessionId);
   }
 
-  // If there's an error but no assistant message was created, create one with the error
+  // Handle error case - create error message
   if (!assistantMsg && agentError) {
     const messageId = generateId("msg");
     const now = Date.now();
 
-    // Create assistant message with error info (no text part - let UI handle display)
     assistantMsg = {
       info: {
         id: messageId,
@@ -438,7 +494,6 @@ async function runPrompt(
         role: "assistant",
         parentId: messages[messages.length - 1]?.info.id ?? "",
         time: { created: now },
-        // Store error info for special handling
         error: {
           name: agentError.type,
           data: { message: agentError.message, type: agentError.type },
@@ -447,9 +502,14 @@ async function runPrompt(
       parts: [],
     };
 
-    const allMessages = store.messages.get(sessionId) ?? [];
-    allMessages.push(assistantMsg);
-    store.messages.set(sessionId, allMessages);
+    // Persist error message
+    if (storage) {
+      try {
+        await storage.createMessage(sessionId, assistantMsg);
+      } catch (err) {
+        console.error("[runPrompt] Failed to persist error message:", err);
+      }
+    }
 
     eventEmitter.emit({ type: "message.updated", message: assistantMsg.info });
   }
@@ -472,6 +532,95 @@ export function subscribeToEvents(
   return eventEmitter.subscribe((event) => {
     onEvent(event, undefined);
   });
+}
+
+/**
+ * Emit an event to all subscribers.
+ * Used by tool context implementations to notify UI of state changes.
+ */
+export function emitEvent(event: ServerEvent) {
+  eventEmitter.emit(event);
+}
+
+// ============================================================================
+// Title Generation
+// ============================================================================
+
+/** Free model for title generation */
+const TITLE_MODEL = "meta-llama/llama-3.2-3b-instruct:free";
+
+/**
+ * Generate a short title for a session based on messages.
+ * Uses a free model to minimize cost.
+ */
+async function generateSessionTitle(messages: MessageWithParts[]): Promise<string | null> {
+  try {
+    // Extract text from messages (first user message + first assistant response)
+    const textContent = messages
+      .slice(0, 4)
+      .map((m) => {
+        const textParts = m.parts.filter((p) => p.type === "text") as TextPart[];
+        return textParts.map((p) => p.text).join(" ");
+      })
+      .filter(Boolean)
+      .join("\n");
+
+    if (!textContent.trim()) return null;
+
+    const provider = createProviderFromStorage();
+
+    const { text } = await generateText({
+      model: provider(TITLE_MODEL),
+      maxOutputTokens: 20,
+      temperature: 0.3,
+      prompt: `Generate a very short title (3-6 words max) for this conversation. Reply with ONLY the title, no quotes or punctuation:
+
+${textContent.slice(0, 500)}`,
+    });
+
+    // Clean up the title
+    const title = text
+      .trim()
+      .replace(/^["']|["']$/g, "") // Remove quotes
+      .replace(/[.!?]$/, "") // Remove trailing punctuation
+      .slice(0, 50); // Max length
+
+    return title || null;
+  } catch (err) {
+    console.error("[generateSessionTitle] Failed:", err);
+    return null;
+  }
+}
+
+/**
+ * Auto-title a session if it doesn't have one.
+ * Called after first assistant response.
+ */
+async function maybeAutoTitle(sessionId: string): Promise<void> {
+  if (!storage) return;
+
+  try {
+    const session = await storage.getSession(sessionId);
+    if (!session || session.title) return; // Already has title
+
+    const messages = await storage.listMessages(sessionId);
+    if (messages.length < 2) return; // Need at least user + assistant
+
+    const title = await generateSessionTitle(messages);
+    if (!title) return;
+
+    await storage.updateSession(sessionId, { title });
+
+    // Emit update event for UI
+    const updated = await storage.getSession(sessionId);
+    if (updated) {
+      eventEmitter.emit({ type: "session.updated", session: updated });
+    }
+
+    console.log(`[api] Auto-titled session: "${title}"`);
+  } catch (err) {
+    console.error("[maybeAutoTitle] Failed:", err);
+  }
 }
 
 // ============================================================================

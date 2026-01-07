@@ -7,7 +7,7 @@
 
 import { createContext, useContext, type ReactNode } from "react";
 
-export interface QueryResult {
+export interface DbQueryResult {
   rows: Record<string, unknown>[];
 }
 
@@ -19,7 +19,7 @@ export interface DbAdapter {
   /**
    * Execute a raw SQL query
    */
-  executeQuery: (sql: string, params?: unknown[]) => Promise<QueryResult>;
+  executeQuery: (sql: string, params?: unknown[]) => Promise<DbQueryResult>;
 }
 
 const DbAdapterContext = createContext<DbAdapter | null>(null);

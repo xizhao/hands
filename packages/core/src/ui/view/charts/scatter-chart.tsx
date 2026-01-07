@@ -33,6 +33,8 @@ export interface ScatterChartProps {
   showTooltip?: boolean;
   /** Point opacity (0-1) */
   opacity?: number;
+  /** Custom color palette */
+  colors?: string[];
   /** Additional CSS classes */
   className?: string;
 }
@@ -41,7 +43,7 @@ export interface ScatterChartProps {
  * Build Vega-Lite spec for scatter chart
  */
 function buildScatterSpec(props: ScatterChartProps): VegaLiteSpec {
-  const { xKey = "x", yKey = "y", colorKey, sizeKey, opacity = 0.7 } = props;
+  const { xKey = "x", yKey = "y", colorKey, sizeKey, opacity = 0.7, colors } = props;
 
   const encoding: Record<string, unknown> = {
     x: { field: xKey, type: "quantitative" },
@@ -50,7 +52,11 @@ function buildScatterSpec(props: ScatterChartProps): VegaLiteSpec {
   };
 
   if (colorKey) {
-    encoding.color = { field: colorKey, type: "nominal" };
+    encoding.color = {
+      field: colorKey,
+      type: "nominal",
+      ...(colors?.length ? { scale: { range: colors } } : {}),
+    };
   }
 
   if (sizeKey) {

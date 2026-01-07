@@ -21,14 +21,15 @@
  * └─────────┴──────────┴────────────────────────┘
  */
 
-import { Topbar, cn, useResizable } from "@hands/app";
+// Use lightweight imports to avoid pulling in heavy @hands/app deps
+import { Topbar, cn, useResizable } from "@hands/app/light";
 import { type ReactNode, useEffect, useRef, useState } from "react";
 import { HandsLogo } from "../components/icons";
 import { useNavigate } from "@tanstack/react-router";
 
 interface WebShellProps {
   /** Docked sidebar content (always visible, resizable) */
-  sidebar: ReactNode;
+  sidebar?: ReactNode;
   /** Floating sidebar content (slides in on hover, overlays) */
   floatingSidebar?: ReactNode;
   /** Left-aligned content for topbar (after logo) */
@@ -37,6 +38,12 @@ interface WebShellProps {
   topbarCenter?: ReactNode;
   /** Right side actions for topbar */
   topbarActions?: ReactNode;
+  /**
+   * Header content shown above main content area (e.g., tabs).
+   * This is separate from the global topbar - it appears below topbar,
+   * inside the content area.
+   */
+  contentHeader?: ReactNode;
   /** Main content */
   children: ReactNode;
   /** Initial docked sidebar width */
@@ -51,8 +58,9 @@ export function WebShell({
   topbarLeft,
   topbarCenter,
   topbarActions,
+  contentHeader,
   children,
-  sidebarWidth: initialWidth = 340,
+  sidebarWidth: initialWidth = 200,  // Start at min width
   inWorkbook = false,
 }: WebShellProps) {
   const navigate = useNavigate();
@@ -120,7 +128,7 @@ export function WebShell({
             <div
               ref={floatingSidebarRef}
               className={cn(
-                "absolute top-2 bottom-2 left-2 z-40 w-[300px]",
+                "absolute top-2 bottom-2 left-2 z-40 w-[240px]",
                 "flex flex-col",
                 "rounded-xl border border-border/60 bg-surface",
                 "shadow-xl shadow-black/10 dark:shadow-black/30",
@@ -155,9 +163,24 @@ export function WebShell({
           </div>
         )}
 
-        {/* Main content */}
-        <div className="flex-1 min-w-0 h-full overflow-hidden">
-          {children}
+        {/* Main content area */}
+        <div className="flex-1 min-w-0 h-full overflow-hidden flex flex-col">
+          {contentHeader ? (
+            <>
+              {/* Workbook layout: styled content area + bottom tabs */}
+              <div className="flex-1 min-h-0 overflow-hidden pr-2 pl-1 pt-1">
+                <div className="h-full border border-border/40 border-b-0 bg-background overflow-hidden shadow-sm rounded-t-lg">
+                  {children}
+                </div>
+              </div>
+              <div className="shrink-0 pr-2 pl-1 pb-1">
+                {contentHeader}
+              </div>
+            </>
+          ) : (
+            /* Landing layout: pass-through content (no extra styling) */
+            children
+          )}
         </div>
       </div>
     </div>

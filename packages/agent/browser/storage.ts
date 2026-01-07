@@ -309,14 +309,35 @@ export function createSessionStorage(db: DatabaseContext): SessionStorage {
   // ---------------------------------------------------------------------------
 
   async function listTodos(sessionId: string): Promise<Todo[]> {
-    // Todos are stored as a JSON array in session metadata
-    // For simplicity, we'll add a _todos column or table later
-    // For now, return empty
-    return [];
+    const rows = await db.query<{
+      content: string;
+      status: "pending" | "in_progress" | "completed";
+      active_form: string;
+    }>(
+      "SELECT content, status, active_form FROM _todos WHERE session_id = ? ORDER BY idx ASC",
+      [sessionId]
+    );
+
+    return (rows as typeof rows).map((row) => ({
+      id: row.content, // Use content as ID for simplicity
+      content: row.content,
+      status: row.status,
+      activeForm: row.active_form,
+    }));
   }
 
   async function saveTodos(sessionId: string, todos: Todo[]): Promise<void> {
-    // TODO: implement todo persistence
+    // Delete existing todos for this session
+    await db.execute("DELETE FROM _todos WHERE session_id = ?", [sessionId]);
+
+    // Insert new todos with index
+    for (let i = 0; i < todos.length; i++) {
+      const todo = todos[i];
+      await db.execute(
+        "INSERT INTO _todos (session_id, idx, content, status, active_form) VALUES (?, ?, ?, ?, ?)",
+        [sessionId, i, todo.content, todo.status, todo.activeForm ?? todo.content]
+      );
+    }
   }
 
   // ---------------------------------------------------------------------------

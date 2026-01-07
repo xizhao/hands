@@ -122,7 +122,8 @@ export async function dbDropTable(ctx: LocalTRPCContext, input: { tableName: str
 }
 
 /** tables.list - List all tables */
-export async function tablesList(ctx: LocalTRPCContext) {
+export async function tablesList(ctx: LocalTRPCContext, _input?: { workbookId?: string }) {
+  // workbookId is passed for cache key scoping, actual db is from context
   const schema = ctx.getSchema();
   const pages = await ctx.getPages();
 
@@ -223,7 +224,8 @@ export function statusGet() {
 }
 
 /** pages.list - List all pages */
-export async function pagesList(ctx: LocalTRPCContext) {
+export async function pagesList(ctx: LocalTRPCContext, _input?: { workbookId?: string }) {
+  // workbookId is passed for cache key scoping, actual db is from context
   const pages = await ctx.getPages();
   return {
     pages: pages.map((p) => ({

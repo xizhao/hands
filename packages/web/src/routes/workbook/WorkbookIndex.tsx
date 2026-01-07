@@ -16,17 +16,17 @@ export default function WorkbookIndex() {
   const { workbookId } = useParams({ from: "/w/$workbookId" });
   const hasRedirected = useRef(false);
 
-  // Fetch pages (poll frequently for local updates)
+  // Fetch pages - workbookId in query input scopes cache per workbook
   const { data: pagesData, isLoading: pagesLoading, error: pagesError } = trpc.pages.list.useQuery(
-    undefined,
-    { refetchInterval: 500 }
+    { workbookId },
+    { enabled: !!workbookId, refetchInterval: 500 }
   );
   const pages = pagesData?.pages ?? [];
 
-  // Fetch tables (poll frequently for local updates)
+  // Fetch tables - workbookId in query input scopes cache per workbook
   const { data: tablesData, isLoading: tablesLoading, error: tablesError } = trpc.tables.list.useQuery(
-    undefined,
-    { refetchInterval: 500 }
+    { workbookId },
+    { enabled: !!workbookId, refetchInterval: 500 }
   );
   const tables = tablesData?.tables ?? [];
 
