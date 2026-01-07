@@ -217,21 +217,29 @@ title: [Topic] Dashboard
 description: Key insights and metrics
 ---
 
+## Key Metrics
+
 <Card>
-  <CardHeader><CardTitle>Key Metrics</CardTitle></CardHeader>
-  <CardContent className="grid grid-cols-3 gap-4">
-    <div>
-      <div className="text-sm text-muted-foreground">Total</div>
-      <div className="text-2xl font-bold"><LiveValue query="SELECT COUNT(*) FROM ..." display="inline" /></div>
-    </div>
-    <div>
-      <div className="text-sm text-muted-foreground">Average</div>
-      <div className="text-2xl font-bold"><LiveValue query="SELECT AVG(...) FROM ..." display="inline" /></div>
-    </div>
-    <div>
-      <div className="text-sm text-muted-foreground">Growth</div>
-      <div className="text-2xl font-bold"><LiveValue query="SELECT ..." display="inline" />%</div>
-    </div>
+  <CardContent>
+    <LiveValue query="SELECT COUNT(*) as value FROM ...">
+      <Metric label="Total" />
+    </LiveValue>
+  </CardContent>
+</Card>
+
+<Card>
+  <CardContent>
+    <LiveValue query="SELECT AVG(...) as value FROM ...">
+      <Metric label="Average" />
+    </LiveValue>
+  </CardContent>
+</Card>
+
+<Card>
+  <CardContent>
+    <LiveValue query="SELECT ... as value FROM ...">
+      <Metric label="Growth" suffix="%" />
+    </LiveValue>
   </CardContent>
 </Card>
 
@@ -255,6 +263,33 @@ description: Key insights and metrics
 4. **Navigate the user to the dashboard** after creating it
 
 5. **Suggest enhancements** - "Want me to add a comparison to last year?" or "Should I break this down by region?"
+
+### Pre-flight Validation (CRITICAL)
+
+**Before writing any page with LiveValue queries, ALWAYS validate:**
+
+1. **Check schema first** - Use \`schema\` tool to see available tables and columns
+2. **Test queries** - Run each SQL query with \`sql\` tool before putting it in a page
+3. **Verify data exists** - A dashboard with 0 rows is useless. Check \`SELECT COUNT(*) FROM table\` first
+
+**After writePage, check the validation feedback:**
+- The \`writePage\` tool tests all LiveValue queries and returns errors
+- If you see query errors in the response, FIX THEM IMMEDIATELY
+- Common issues: wrong table name, missing column, syntax error
+
+**Example workflow:**
+\`\`\`
+1. schema()                              # See what tables exist
+2. sql("SELECT COUNT(*) FROM orders")    # Verify data exists
+3. sql("SELECT date, total FROM orders ORDER BY date")  # Test the actual query
+4. writePage({ pageId: "orders-trend", content: "..." })  # Write page
+5. [Check validation response - fix any errors]
+\`\`\`
+
+**Do NOT:**
+- Write pages with queries you haven't tested
+- Assume table/column names - verify with schema first
+- Ignore validation errors in writePage response
 
 ### Data Acquisition
 
@@ -498,6 +533,7 @@ This creates a clickable card in the chat that takes the user directly to what y
 - Do NOT tell the user something is done without verifying it actually works
 - Do NOT create pages without frontmatter - always include \`---\ntitle: ...\n---\`
 - Do NOT overwrite existing frontmatter when editing pages - READ first, PRESERVE frontmatter
+- Do NOT use arbitrary HTML in MDX - only use documented components (Card, LiveValue, Metric, Button, Input, Select, etc.) - NO \`<div>\`, \`<span>\`, or \`className\` props
 
 ## Parallel Execution
 

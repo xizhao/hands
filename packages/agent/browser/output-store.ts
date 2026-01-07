@@ -44,11 +44,11 @@ const DB_VERSION = 1;
 const STORE_NAME = "outputs";
 
 /** Maximum chars to inline in tool result (before storing externally) */
-export const INLINE_LIMIT = 10_000;
+export const INLINE_LIMIT = 5_000;
 /** Maximum lines to show in preview */
-export const PREVIEW_LINES = 20;
+export const PREVIEW_LINES = 15;
 /** Maximum chars to show in preview */
-export const PREVIEW_CHARS = 3_000;
+export const PREVIEW_CHARS = 2_000;
 
 // ============================================================================
 // IndexedDB Helpers

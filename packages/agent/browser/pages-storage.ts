@@ -5,8 +5,9 @@
  * Uses internal _pages table to separate from user data.
  */
 
-import type { DatabaseContext, PagesContext } from "./tools";
+import type { DatabaseContext, PagesContext, PageValidationResult, PageValidationError } from "./tools";
 import { emitEvent } from "./api";
+import { extractMdxComponents, validateMdxContent, type ValidationContext } from "@hands/core/validation";
 
 // ============================================================================
 // Types
@@ -157,11 +158,82 @@ export function createPagesStorage(db: DatabaseContext): PagesContext {
     return results;
   }
 
+  async function validatePage(content: string): Promise<PageValidationResult> {
+    const errors: PageValidationError[] = [];
+    const queryTests: PageValidationResult["queryTests"] = [];
+
+    // Get schema for validation context
+    const schema = db.getSchema();
+    const pages = await listPages();
+
+    // Build validation context for static validation
+    const ctx: ValidationContext = {
+      pageRefs: pages.map(p => p.pageId),
+      schema: schema.map(t => ({
+        name: t.table_name,
+        columns: t.columns.map(c => c.name),
+      })),
+    };
+
+    // Static validation (MDX structure, component props)
+    // Skip SQL schema validation here - we'll do runtime validation instead
+    const staticErrors = validateMdxContent(content, ctx);
+    for (const err of staticErrors) {
+      // Skip static SQL errors - runtime validation is more accurate
+      if (err.prop === "query" && err.message.startsWith("Unknown table")) {
+        continue;
+      }
+      errors.push({
+        line: err.line,
+        component: err.component || undefined,
+        message: err.message,
+        severity: err.severity,
+      });
+    }
+
+    // Runtime validation: Actually execute each LiveValue query
+    // This catches real errors like missing tables, bad syntax, etc.
+    const components = extractMdxComponents(content);
+    for (const comp of components) {
+      if (comp.name === "LiveValue" && comp.props.query) {
+        const query = comp.props.query;
+        try {
+          const rows = await db.query(query);
+          queryTests.push({
+            query,
+            success: true,
+            rowCount: Array.isArray(rows) ? rows.length : 0,
+          });
+        } catch (err) {
+          const errorMessage = err instanceof Error ? err.message : String(err);
+          queryTests.push({
+            query,
+            success: false,
+            error: errorMessage,
+          });
+          errors.push({
+            line: comp.line,
+            component: "LiveValue",
+            message: `Query failed: ${errorMessage}`,
+            severity: "error",
+          });
+        }
+      }
+    }
+
+    return {
+      valid: errors.filter(e => e.severity === "error").length === 0,
+      errors,
+      queryTests,
+    };
+  }
+
   return {
     listPages,
     readPage,
     writePage,
     deletePage,
     searchPages,
+    validatePage,
   };
 }

@@ -50,7 +50,8 @@ export type ServerEvent =
   | { type: "message.removed"; messageId: string }
   | { type: "message.part.updated"; part: Part; sessionId: string; messageId: string }
   | { type: "todo.updated"; sessionId: string; todos: Todo[] }
-  | { type: "page.updated"; pageId: string };
+  | { type: "page.updated"; pageId: string }
+  | { type: "workbook.suggest-name"; name: string };
 
 export type EventType = ServerEvent["type"];
 
@@ -612,8 +613,20 @@ ${textContent.slice(0, 500)}`,
   }
 }
 
+/** Track if we've already suggested a workbook name this session */
+let workbookNameSuggested = false;
+
+/**
+ * Reset workbook name suggestion flag.
+ * Call this when switching workbooks.
+ */
+export function resetWorkbookNameSuggestion() {
+  workbookNameSuggested = false;
+}
+
 /**
  * Auto-title a session if it doesn't have one.
+ * Also suggests a workbook name if this is the first session.
  * Called after first assistant response.
  */
 async function maybeAutoTitle(sessionId: string): Promise<void> {
@@ -638,6 +651,13 @@ async function maybeAutoTitle(sessionId: string): Promise<void> {
     }
 
     console.log(`[api] Auto-titled session: "${title}"`);
+
+    // Also suggest workbook name (once per workbook load)
+    if (!workbookNameSuggested) {
+      workbookNameSuggested = true;
+      eventEmitter.emit({ type: "workbook.suggest-name", name: title });
+      console.log(`[api] Suggested workbook name: "${title}"`);
+    }
   } catch (err) {
     console.error("[maybeAutoTitle] Failed:", err);
   }

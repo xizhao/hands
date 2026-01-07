@@ -42,6 +42,7 @@ const createMockPages = (): PagesContext => ({
   readPage: mock(async () => ({ content: "# Hello", title: "Test" })),
   writePage: mock(async () => {}),
   deletePage: mock(async () => {}),
+  validatePage: mock(async () => ({ valid: true, errors: [] })),
 });
 
 // Mock subagent context
@@ -96,6 +97,7 @@ describe("tools", () => {
       expect(result).toEqual({
         rows: [{ id: 1, name: "test" }],
         rowCount: 1,
+        totalRows: 1,
       });
     });
 
@@ -264,6 +266,53 @@ describe("tools", () => {
         "---\ntitle: New\n---\n# New Page"
       );
       expect(result).toEqual({ success: true, pageId: "new-page" });
+    });
+
+    test("writePage returns validation errors to agent", async () => {
+      const mockPages = createMockPages();
+      mockPages.validatePage = mock(async () => ({
+        valid: false,
+        errors: [
+          { line: 10, component: "LiveValue", message: "Query failed: no such table: orders", severity: "error" as const },
+          { line: 15, component: "LiveValue", message: "Unknown column 'foo'", severity: "warning" as const },
+        ],
+        queryTests: [
+          { query: "SELECT * FROM orders", success: false, error: "no such table: orders" },
+        ],
+      }));
+      const ctx: ToolContext = { pages: mockPages };
+      const tool = createWritePageTool(ctx);
+
+      const result = await tool.execute({
+        pageId: "dashboard",
+        content: "---\ntitle: Dashboard\n---\n<LiveValue query=\"SELECT * FROM orders\" />",
+      }) as Record<string, unknown>;
+
+      // Page is still saved
+      expect(result.success).toBe(true);
+      expect(result.pageId).toBe("dashboard");
+
+      // But validation feedback is returned to the agent
+      expect(result.validation).toBeDefined();
+      const validation = result.validation as Record<string, unknown>;
+      expect(validation.valid).toBe(false);
+      expect(validation.errorCount).toBe(1);
+      expect(validation.warningCount).toBe(1);
+      expect(result.message).toContain("error(s) that need fixing");
+    });
+
+    test("writePage without validatePage skips validation", async () => {
+      const mockPages = createMockPages();
+      delete (mockPages as Partial<PagesContext>).validatePage;
+      const ctx: ToolContext = { pages: mockPages };
+      const tool = createWritePageTool(ctx);
+
+      const result = await tool.execute({
+        pageId: "simple",
+        content: "# Hello",
+      });
+
+      expect(result).toEqual({ success: true, pageId: "simple" });
     });
 
     test("deletePage removes page", async () => {

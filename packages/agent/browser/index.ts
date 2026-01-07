@@ -153,6 +153,8 @@ export {
   type ToolDefinition,
   type DatabaseContext,
   type PagesContext,
+  type PageValidationError,
+  type PageValidationResult,
   type SubagentContext,
   type SubagentResult,
   type TodoContext,
@@ -244,6 +246,7 @@ export {
   emitEvent,
   setToolContext,
   getToolContext,
+  resetWorkbookNameSuggestion,
   // Types (api-specific only, core types re-exported above)
   type Agent as ApiAgent,
   type ServerEvent,

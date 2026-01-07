@@ -12,3 +12,5 @@ export {
   useLocalSchema,
   type TableSchema,
 } from "./LocalDatabaseProvider";
+
+export { WebEditorProvider } from "./WebEditorProvider";

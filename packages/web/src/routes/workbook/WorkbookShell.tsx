@@ -16,9 +16,10 @@ import { ChatPanel, PlatformProvider, ApiKeyProvider, LoadingState, useAgentRead
 // Initialize full theme system when workbook loads
 initTheme();
 import { ContentTabBar } from "../../components/workbook/ContentTabBar";
-import { api as browserApi, subscribeToEvents, getStoredConfig, setStoredConfig, getContextStats, type ServerEvent, type MessageWithParts, type Session, type SessionStatus, type Todo, type Part } from "@hands/agent/browser";
+import { api as browserApi, subscribeToEvents, getStoredConfig, setStoredConfig, getContextStats, resetWorkbookNameSuggestion, getPresetModels, type ServerEvent, type MessageWithParts, type Session, type SessionStatus, type Todo, type Part } from "@hands/agent/browser";
+import { updateWorkbookCache } from "../../shared/lib/storage";
 import { AgentProvider } from "../../agent/AgentProvider";
-import { LocalDatabaseProvider } from "../../db/LocalDatabaseProvider";
+import { LocalDatabaseProvider, useLocalDatabase } from "../../db/LocalDatabaseProvider";
 import { createLocalPlatformAdapter } from "../../platform/LocalAdapter";
 import { LocalTRPCProvider } from "../../trpc/LocalTRPCProvider";
 import { SettingsPopover } from "../../components/SettingsPopover";
@@ -93,8 +94,7 @@ function ChatSidebar({ workbookId }: { workbookId: string }) {
   // Compute context stats from messages
   const contextStats = useMemo(() => {
     if (!messages.length) return undefined;
-    const config = getStoredConfig();
-    const modelId = config?.modelId || "anthropic/claude-sonnet-4";
+    const modelId = getPresetModels().primary;
     return getContextStats({ messages, modelId });
   }, [messages]);
 
@@ -247,7 +247,12 @@ function upsertSorted<T extends { id: string }>(arr: T[], item: T): T[] {
   return result;
 }
 
-function BrowserEventSync({ workbookId }: { workbookId: string }) {
+interface BrowserEventSyncProps {
+  workbookId: string;
+  onWorkbookNameSuggested?: (name: string) => void;
+}
+
+function BrowserEventSync({ workbookId, onWorkbookNameSuggested }: BrowserEventSyncProps) {
   const qc = useQueryClient();
 
   useEffect(() => {
@@ -302,11 +307,15 @@ function BrowserEventSync({ workbookId }: { workbookId: string }) {
         case "page.updated":
           qc.invalidateQueries({ queryKey: ["pages"] });
           break;
+
+        case "workbook.suggest-name":
+          onWorkbookNameSuggested?.(event.name);
+          break;
       }
     });
 
     return cleanup;
-  }, [qc, workbookId]);
+  }, [qc, workbookId, onWorkbookNameSuggested]);
 
   return null;
 }
@@ -402,6 +411,58 @@ type WorkbookRenderProps = {
   onWorkbookNameChange?: (name: string) => void;
 };
 
+/** Inner component that handles workbook auto-naming with database access */
+function WorkbookAutoNamer({
+  workbookId,
+  workbookName,
+  onWorkbookNameChange,
+  children,
+}: {
+  workbookId: string;
+  workbookName: string | undefined;
+  onWorkbookNameChange: (name: string) => void;
+  children: ReactNode;
+}) {
+  const { updateWorkbookMeta } = useLocalDatabase();
+  const workbookNameRef = useRef(workbookName);
+
+  // Keep ref in sync
+  useEffect(() => {
+    workbookNameRef.current = workbookName;
+  }, [workbookName]);
+
+  // Auto-name workbook if it's "Untitled"
+  const handleWorkbookNameSuggested = useCallback(async (suggestedName: string) => {
+    const currentName = workbookNameRef.current;
+    // Only auto-name if currently "Untitled" or starts with "Untitled"
+    if (!currentName || currentName.startsWith("Untitled")) {
+      console.log(`[WorkbookAutoNamer] Auto-naming workbook: "${suggestedName}"`);
+      try {
+        // Update SQLite (source of truth)
+        const updated = await updateWorkbookMeta(suggestedName);
+        if (updated) {
+          // Sync to IndexedDB cache
+          await updateWorkbookCache(workbookId, suggestedName);
+          // Update local state
+          onWorkbookNameChange(suggestedName);
+        }
+      } catch (err) {
+        console.error("[WorkbookAutoNamer] Failed to auto-name:", err);
+      }
+    }
+  }, [workbookId, onWorkbookNameChange, updateWorkbookMeta]);
+
+  return (
+    <>
+      <BrowserEventSync
+        workbookId={workbookId}
+        onWorkbookNameSuggested={handleWorkbookNameSuggested}
+      />
+      {children}
+    </>
+  );
+}
+
 function WorkbookProviders({
   workbookId,
   children
@@ -417,6 +478,9 @@ function WorkbookProviders({
   useEffect(() => {
     async function init() {
       try {
+        // Reset the workbook name suggestion flag for this workbook
+        resetWorkbookNameSuggestion();
+
         console.log("[WorkbookProviders] Loading workbooks for:", workbookId);
         const workbooks = await adapter.workbook.list();
         const found = workbooks.find((w) => w.id === workbookId);
@@ -455,13 +519,18 @@ function WorkbookProviders({
         <LocalDatabaseProvider initialWorkbookId={workbookId}>
           <LocalTRPCProvider queryClient={queryClient}>
             <AgentProvider>
-              <BrowserEventSync workbookId={workbookId} />
-              {children({
-                isReady,
-                workbookId,
-                workbookName,
-                onWorkbookNameChange: handleWorkbookNameChange,
-              })}
+              <WorkbookAutoNamer
+                workbookId={workbookId}
+                workbookName={workbookName}
+                onWorkbookNameChange={handleWorkbookNameChange}
+              >
+                {children({
+                  isReady,
+                  workbookId,
+                  workbookName,
+                  onWorkbookNameChange: handleWorkbookNameChange,
+                })}
+              </WorkbookAutoNamer>
             </AgentProvider>
           </LocalTRPCProvider>
         </LocalDatabaseProvider>

@@ -49,6 +49,7 @@ import { getLastOpenedWorkbookId } from "./shared/lib/storage";
 import { WebShell } from "./shell/WebShell";
 import { LandingSidebar } from "./shell/LandingSidebar";
 import { LandingContent } from "./routes/LandingPage";
+import { SettingsPopover } from "./components/SettingsPopover";
 import { createLocalPlatformAdapter } from "./platform/LocalAdapter";
 import { queryClient } from "./lib/queryClient";
 
@@ -116,7 +117,7 @@ function LandingLayout() {
     : undefined;
 
   return (
-    <WebShell sidebar={sidebar} sidebarWidth={220}>
+    <WebShell sidebar={sidebar} sidebarWidth={220} topbarActions={<SettingsPopover />}>
       <div className="h-full px-2 pb-2 pt-0.5">
         <div className="h-full border border-border/40 bg-background overflow-hidden shadow-sm rounded-lg flex items-center justify-center px-6">
           <LandingContent />

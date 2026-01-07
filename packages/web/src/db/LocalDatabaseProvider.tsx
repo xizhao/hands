@@ -136,8 +136,23 @@ export function LocalDatabaseProvider({ children, initialWorkbookId }: LocalData
     setDataVersion((v) => v + 1);
   }, []);
 
+  // Wait for worker to be ready
+  const waitForWorker = useCallback((): Promise<void> => {
+    if (workerReadyRef.current) return Promise.resolve();
+    if (workerReadyPromiseRef.current) return workerReadyPromiseRef.current;
+
+    workerReadyPromiseRef.current = new Promise((resolve) => {
+      workerReadyResolveRef.current = resolve;
+    });
+
+    return workerReadyPromiseRef.current;
+  }, []);
+
   // Send message to worker and wait for response
-  const sendMessage = useCallback(<T,>(message: Omit<WorkerRequest, "id">): Promise<T> => {
+  const sendMessage = useCallback(async <T,>(message: Omit<WorkerRequest, "id">): Promise<T> => {
+    // Wait for worker to be ready before sending
+    await waitForWorker();
+
     return new Promise((resolve, reject) => {
       if (!workerRef.current) {
         reject(new Error("Worker not initialized"));
@@ -152,19 +167,7 @@ export function LocalDatabaseProvider({ children, initialWorkbookId }: LocalData
 
       workerRef.current.postMessage({ ...message, id });
     });
-  }, []);
-
-  // Wait for worker to be ready
-  const waitForWorker = useCallback((): Promise<void> => {
-    if (workerReadyRef.current) return Promise.resolve();
-    if (workerReadyPromiseRef.current) return workerReadyPromiseRef.current;
-
-    workerReadyPromiseRef.current = new Promise((resolve) => {
-      workerReadyResolveRef.current = resolve;
-    });
-
-    return workerReadyPromiseRef.current;
-  }, []);
+  }, [waitForWorker]);
 
   // Initialize worker
   useEffect(() => {
@@ -219,7 +222,7 @@ export function LocalDatabaseProvider({ children, initialWorkbookId }: LocalData
     setIsLoading(true);
 
     try {
-      await waitForWorker();
+      // sendMessage already waits for worker to be ready
       const openResult = await sendMessage<{ isNew: boolean; meta: WorkbookMeta | null }>({
         type: "open",
         workbookId: id,

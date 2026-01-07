@@ -63,6 +63,27 @@ export interface DatabaseContext {
 // Pages Context Interface (for page operations)
 // ============================================================================
 
+/** Validation error from page content */
+export interface PageValidationError {
+  line?: number;
+  component?: string;
+  message: string;
+  severity: "error" | "warning";
+}
+
+/** Result of page validation */
+export interface PageValidationResult {
+  valid: boolean;
+  errors: PageValidationError[];
+  /** SQL queries that were tested and their results */
+  queryTests?: Array<{
+    query: string;
+    success: boolean;
+    error?: string;
+    rowCount?: number;
+  }>;
+}
+
 export interface PagesContext {
   /** List all pages in the workbook */
   listPages: () => Promise<Array<{ pageId: string; title: string }>>;
@@ -74,6 +95,8 @@ export interface PagesContext {
   deletePage: (pageId: string) => Promise<void>;
   /** Search pages by content (optional - falls back to listPages + readPage) */
   searchPages?: (query: string) => Promise<Array<{ pageId: string; title: string; matches: string[] }>>;
+  /** Validate page content - parse MDX and test queries (optional) */
+  validatePage?: (content: string) => Promise<PageValidationResult>;
 }
 
 // ============================================================================
@@ -297,8 +320,8 @@ Use this to understand the data structure before writing queries.`,
 import { Readability } from "@mozilla/readability";
 import TurndownService from "turndown";
 
-/** Max chars for extracted article content */
-const WEBFETCH_MAX_CONTENT = 15_000;
+/** Max chars for extracted article content before storing externally */
+const WEBFETCH_MAX_CONTENT = 5_000;
 
 export function createWebFetchTool(ctx: ToolContext): ToolDefinition {
   const turndown = new TurndownService({
@@ -392,9 +415,23 @@ Use this to read articles, documentation, or fetch API data.`,
                 markdown = `# ${article.title}\n\n${markdown}`;
               }
 
-              // Truncate if still too long
+              // Store large content externally (like JSON/raw)
               if (markdown.length > WEBFETCH_MAX_CONTENT) {
-                markdown = markdown.slice(0, WEBFETCH_MAX_CONTENT) + "\n\n... [content truncated]";
+                const toolCallId = `webfetch_${Date.now()}`;
+                const stored = await maybeStoreOutput(markdown, ctx, "webfetch", toolCallId);
+                if (stored) {
+                  return {
+                    status: response.status,
+                    url,
+                    title: article.title || undefined,
+                    byline: article.byline || undefined,
+                    excerpt: article.excerpt || undefined,
+                    preview: stored.preview,
+                    totalChars: stored.totalChars,
+                    outputId: stored.outputId,
+                    message: stored.message,
+                  };
+                }
               }
 
               return {
@@ -999,6 +1036,10 @@ export function createWritePageTool(ctx: ToolContext): ToolDefinition {
   return {
     description: `Create or update a page. Write MDX content with frontmatter.
 
+The page will be validated after writing. Any SQL queries in LiveValue components
+will be tested against the database. Errors and warnings will be returned so you
+can fix them.
+
 Example content:
 ---
 title: "My Page"
@@ -1018,7 +1059,46 @@ This is my page content.`,
       }
 
       try {
+        // Write the page first
         await ctx.pages.writePage(pageId, content);
+
+        // Validate if validation is available
+        if (ctx.pages.validatePage) {
+          const validation = await ctx.pages.validatePage(content);
+
+          if (!validation.valid || validation.errors.length > 0) {
+            // Return success but with validation feedback
+            const errors = validation.errors.filter(e => e.severity === "error");
+            const warnings = validation.errors.filter(e => e.severity === "warning");
+
+            return {
+              success: true,
+              pageId,
+              validation: {
+                valid: validation.valid,
+                errorCount: errors.length,
+                warningCount: warnings.length,
+                errors: errors.map(e => ({
+                  line: e.line,
+                  component: e.component,
+                  message: e.message,
+                })),
+                warnings: warnings.map(e => ({
+                  line: e.line,
+                  component: e.component,
+                  message: e.message,
+                })),
+                queryTests: validation.queryTests?.filter(t => !t.success),
+              },
+              message: errors.length > 0
+                ? `Page saved but has ${errors.length} error(s) that need fixing`
+                : warnings.length > 0
+                ? `Page saved with ${warnings.length} warning(s)`
+                : undefined,
+            };
+          }
+        }
+
         return { success: true, pageId };
       } catch (error) {
         return { error: error instanceof Error ? error.message : String(error) };

@@ -127,7 +127,7 @@ export const DEFAULT_CONTEXT_CONFIG: ContextConfig = {
   outputBudget: 50_000,     // Reserve 50K for output + overhead
   pruneProtect: 30_000,     // Protect less to prune more aggressively
   pruneMinimum: 15_000,     // Lower threshold to trigger pruning sooner
-  inlineOutputLimit: 8_000, // Store outputs > 8K in IndexedDB
+  inlineOutputLimit: 5_000, // Store outputs > 5K in IndexedDB
 };
 
 /**
