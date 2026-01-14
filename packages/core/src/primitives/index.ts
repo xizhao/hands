@@ -24,3 +24,5 @@ export * from "./sql-validation";
 export * from "./domain";
 // Sheet primitives (smart SQLite table abstraction)
 export * from "./sheet";
+// Claims primitives (CKG - claims knowledge graph)
+export * from "./claims";

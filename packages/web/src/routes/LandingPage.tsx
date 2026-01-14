@@ -8,12 +8,12 @@
 
 // Use lightweight input to avoid pulling in heavy @hands/app deps
 import { LandingInput, type LandingInputRef } from "../components/LandingInput";
-import { Database, TrendUp } from "@phosphor-icons/react";
 import { useNavigate } from "@tanstack/react-router";
 import { animate, motion, useMotionValue } from "motion/react";
 import { useEffect, useRef, useState } from "react";
 import { createWorkbookCache } from "../shared/lib/storage";
 import { HandsLogo, OkHandIcon, PushHandIcon } from "../components/icons";
+import polymarketEvents from "../data/polymarket-events.json";
 
 // Content only - shell is rendered by App.tsx root layout
 export function LandingContent() {
@@ -44,7 +44,7 @@ export function LandingContent() {
   const easing = [0.22, 1, 0.36, 1] as const;
 
   return (
-    <div className="max-w-2xl w-full">
+    <div className="max-w-2xl w-full text-center">
       <AnimatedHeroHeadline
         scrollProgress={introProgressValue}
         isVisible={headlineVisible}
@@ -116,60 +116,24 @@ function PromptBar() {
           onChange={setValue}
           onSend={handleSend}
           isSending={isNavigating}
-          placeholder="What should Hands build a dashboard for?"
+          placeholder="State a claim or thesis to analyze..."
           className="flex-1"
         />
       </div>
 
-      {/* Example prompts */}
-      <div className="mt-6 space-y-4">
-        {/* Public Data Examples */}
-        <div>
-          <div className="flex items-center gap-2 text-xs font-medium text-muted-foreground mb-2 uppercase tracking-wide">
-            <TrendUp className="w-3.5 h-3.5" />
-            Public Data
-          </div>
-          <div className="flex flex-wrap gap-2">
-            <ExamplePill onClick={() => handleExampleClick("World GDP trends over the last 50 years")}>
-              World GDP trends
+      {/* Polymarket trending */}
+      {polymarketEvents.length > 0 && (
+        <div className="mt-6 flex flex-wrap items-center justify-center gap-2">
+          {polymarketEvents.map((event) => (
+            <ExamplePill
+              key={event.id}
+              onClick={() => handleExampleClick(event.title)}
+            >
+              {event.title.length > 35 ? `${event.title.slice(0, 35)}...` : event.title}
             </ExamplePill>
-            <ExamplePill onClick={() => handleExampleClick("SpaceX launch history and success rates")}>
-              SpaceX launches
-            </ExamplePill>
-            <ExamplePill onClick={() => handleExampleClick("Global CO2 emissions by country")}>
-              CO2 emissions
-            </ExamplePill>
-            <ExamplePill onClick={() => handleExampleClick("Bitcoin price history and volatility")}>
-              Bitcoin prices
-            </ExamplePill>
-            <ExamplePill onClick={() => handleExampleClick("Historical Olympic medal counts by country")}>
-              Olympic medals
-            </ExamplePill>
-          </div>
+          ))}
         </div>
-
-        {/* My Data Examples */}
-        <div>
-          <div className="flex items-center gap-2 text-xs font-medium text-muted-foreground mb-2 uppercase tracking-wide">
-            <Database className="w-3.5 h-3.5" />
-            My Data
-          </div>
-          <div className="flex flex-wrap gap-2">
-            <ExamplePill onClick={() => handleExampleClick("Track my workout progress this month")}>
-              My workout progress
-            </ExamplePill>
-            <ExamplePill onClick={() => handleExampleClick("Visualize my sales pipeline")}>
-              My sales pipeline
-            </ExamplePill>
-            <ExamplePill onClick={() => handleExampleClick("My GitHub repo activity and contributions")}>
-              My GitHub activity
-            </ExamplePill>
-            <ExamplePill onClick={() => handleExampleClick("My monthly expenses breakdown")}>
-              My expenses
-            </ExamplePill>
-          </div>
-        </div>
-      </div>
+      )}
     </>
   );
 }
@@ -210,7 +174,7 @@ function AnimatedHeroHeadline({
             animate={{ x: phase === "crooked" ? -20 : 0 }}
             transition={{ duration: 0.8, ease: easing }}
           >
-            Generate dashboards on anything
+            Helper for thought
           </motion.span>
           <motion.div
             className="absolute -left-11 top-1/2 w-8 h-8 text-foreground pointer-events-none"

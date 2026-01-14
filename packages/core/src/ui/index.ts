@@ -56,6 +56,8 @@ import {
   BlockPlugin,
   BoxPlotChartPlugin,
   ChartPlugin,
+  ClaimPlugin,
+  EvidencePlugin,
   HeatmapChartPlugin,
   HistogramChartPlugin,
   InteractiveMapPlugin,
@@ -103,6 +105,8 @@ export const ViewKit = [
   BlockPlugin,
   TabsPlugin,
   TabPlugin,
+  ClaimPlugin,
+  EvidencePlugin,
   ...ChartKit,
 ] as const;
 

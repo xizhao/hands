@@ -119,10 +119,13 @@ function detectDropTarget(
   return null;
 }
 
-const UNDRAGGABLE_KEYS = [KEYS.column, KEYS.tr, KEYS.td];
+const UNDRAGGABLE_KEYS = [KEYS.column, KEYS.tr, KEYS.td, "claim"];
 
 // Elements whose children (at any depth) should not be draggable
-const NON_DRAGGABLE_ANCESTOR_TYPES = ["live_value"];
+const NON_DRAGGABLE_ANCESTOR_TYPES = ["live_value", "claim"];
+
+// Elements whose nested children should not show drag handles (but can still be dragged via other means)
+const SUPPRESS_NESTED_GUTTER_TYPES = ["claim"];
 
 /**
  * Check if any ancestor of the given path is a non-draggable type.
@@ -140,6 +143,53 @@ function hasNonDraggableAncestor(editor: PlateEditor, path: Path): boolean {
   return false;
 }
 
+/**
+ * Check if element should hide its drag gutter.
+ * Claims don't show gutters (they have their own chevron toggle).
+ * Elements nested inside Claims also don't show gutters.
+ */
+function shouldSuppressGutter(editor: PlateEditor, element: TElement, path: Path): boolean {
+  // Claims themselves don't show gutters (they have chevron toggle)
+  if (SUPPRESS_NESTED_GUTTER_TYPES.includes(element.type as string)) {
+    return true;
+  }
+
+  // Elements nested inside Claims also don't show gutters
+  if (path.length <= 1) return false;
+
+  let currentPath = path.slice(0, -1); // Start with parent
+  while (currentPath.length > 0) {
+    const ancestorEntry = editor.api.node(currentPath);
+    if (ancestorEntry && SUPPRESS_NESTED_GUTTER_TYPES.includes(ancestorEntry[0].type as string)) {
+      return true;
+    }
+    currentPath = currentPath.slice(0, -1);
+  }
+  return false;
+}
+
+/**
+ * Check if all ancestors up to root are container elements.
+ * This enables dragging in deeply nested container structures (like nested Claims).
+ */
+function isInContainerChain(editor: PlateEditor, path: Path): boolean {
+  if (path.length <= 1) return false;
+
+  let currentPath = path.slice(0, -1); // Start with parent
+  while (currentPath.length > 0) {
+    const ancestorEntry = editor.api.node(currentPath);
+    if (!ancestorEntry) return false;
+
+    const plugin = getPluginByType(editor, ancestorEntry[0].type as string);
+    if (!plugin?.node?.isContainer) {
+      // If we hit root level (depth 1), allow dragging
+      return currentPath.length === 1;
+    }
+    currentPath = currentPath.slice(0, -1);
+  }
+  return true;
+}
+
 export const BlockDraggable: RenderNodeWrapper = (props) => {
   const { editor, element, path } = props;
 
@@ -153,42 +203,47 @@ export const BlockDraggable: RenderNodeWrapper = (props) => {
       return false;
     }
 
-    if (path.length === 1 && !isType(editor, element, UNDRAGGABLE_KEYS)) {
+    if (isType(editor, element, UNDRAGGABLE_KEYS)) {
+      return false;
+    }
+
+    // Root level blocks are always draggable
+    if (path.length === 1) {
       return true;
     }
+
+    // Enable dragging for elements nested in container chains (e.g., nested Claims)
+    if (isInContainerChain(editor, path)) {
+      return true;
+    }
+
     // Enable dragging for children inside container elements (e.g., LiveAction)
-    if (path.length === 2 && !isType(editor, element, UNDRAGGABLE_KEYS)) {
+    if (path.length === 2) {
       const parentEntry = editor.api.parent(path);
       if (parentEntry) {
         const parentPlugin = getPluginByType(editor, parentEntry[0].type as string);
-        if (parentPlugin?.node.isContainer) {
+        if (parentPlugin?.node?.isContainer) {
           return true;
         }
       }
     }
-    if (path.length === 3 && !isType(editor, element, UNDRAGGABLE_KEYS)) {
+
+    // Inside columns
+    if (path.length === 3) {
       const block = editor.api.some({
         at: path,
-        match: {
-          type: editor.getType(KEYS.column),
-        },
+        match: { type: editor.getType(KEYS.column) },
       });
-
-      if (block) {
-        return true;
-      }
+      if (block) return true;
     }
-    if (path.length === 4 && !isType(editor, element, UNDRAGGABLE_KEYS)) {
+
+    // Inside tables
+    if (path.length === 4) {
       const block = editor.api.some({
         at: path,
-        match: {
-          type: editor.getType(KEYS.table),
-        },
+        match: { type: editor.getType(KEYS.table) },
       });
-
-      if (block) {
-        return true;
-      }
+      if (block) return true;
     }
 
     return false;
@@ -436,6 +491,7 @@ function Draggable(props: PlateElementProps) {
 
   const isInColumn = path.length === 3;
   const isInTable = path.length === 4;
+  const hideGutter = shouldSuppressGutter(editor, element, path);
 
   const [previewTop, setPreviewTop] = React.useState(0);
 
@@ -473,7 +529,7 @@ function Draggable(props: PlateElementProps) {
       onDragOver={handleDragOver}
       onDragLeave={handleDragLeave}
     >
-      {!isInTable && (
+      {!isInTable && !hideGutter && (
         <Gutter>
           <div
             className={cn(

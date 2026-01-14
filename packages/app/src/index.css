@@ -214,3 +214,12 @@ svg [opacity="0.2"] {
 ::selection {
   background: hsl(var(--primary) / 0.15);
 }
+
+/* ============================================
+ * Claim Component - Collapse/Expand
+ * ============================================ */
+
+/* Hide all nested claim elements when parent is collapsed */
+.claim-collapsed .claim-element {
+  display: none !important;
+}

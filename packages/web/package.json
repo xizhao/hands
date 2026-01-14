@@ -5,10 +5,11 @@
   "private": true,
   "scripts": {
     "dev": "vite",
-    "build": "vite build",
+    "build": "bun run fetch:polymarket && vite build",
     "preview": "vite preview",
     "typecheck": "echo 'Web typecheck skipped: Relies on @hands/app typecheck for shared code'",
-    "deploy": "bun run build && wrangler pages deploy dist --project-name=hands-site"
+    "deploy": "bun run build && wrangler pages deploy dist --project-name=hands-site",
+    "fetch:polymarket": "bun scripts/fetch-polymarket.ts"
   },
   "dependencies": {
     "@hands/agent": "workspace:*",

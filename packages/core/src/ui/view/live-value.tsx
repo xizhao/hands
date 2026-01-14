@@ -45,7 +45,7 @@ import {
 import { DataGrid } from "../data/data-grid";
 import { useViewportVisibility } from "../lib/virtualization";
 import { extractTableName, LiveControlsMenu, LiveQueryEditor } from "../livecontrol";
-import { useLiveQuery, useNavigateToTable } from "../query-provider";
+import { useLiveQuery, useNavigateToTable, useSourceFetch } from "../query-provider";
 import { LiveValueProvider } from "./charts/context";
 
 // ============================================================================
@@ -337,17 +337,25 @@ function LiveValueElement(props: PlateElementProps) {
   });
 
   // Extract element properties (needed for hooks below)
-  const { query, data: staticData, display, columns, params } = element;
+  const { query, source, data: staticData, display, columns, params } = element;
   const tableName = query ? extractTableName(query, "query") : null;
 
   // IMPORTANT: All hooks must be called before any early return to satisfy Rules of Hooks.
   // Query is only executed when visible (via empty query when not visible).
-  const shouldQuery = isVisible && !staticData && !!query;
+  const shouldQuery = isVisible && !staticData && !source && !!query;
   const {
     data: queryData,
     isLoading: queryLoading,
     error: queryError,
   } = useLiveQuery(shouldQuery ? query : "", shouldQuery ? params : undefined);
+
+  // Source fetch - for URL data sources
+  const shouldFetchSource = isVisible && !staticData && !query && !!source;
+  const {
+    data: sourceData,
+    isLoading: sourceLoading,
+    error: sourceError,
+  } = useSourceFetch(shouldFetchSource ? source : undefined);
 
   // Callback for applying query changes (must be called before early return)
   const handleApplyQuery = useCallback(
@@ -376,10 +384,10 @@ function LiveValueElement(props: PlateElementProps) {
     );
   }
 
-  // Resolve data source: static data takes priority over query
-  const data: Record<string, unknown>[] = staticData ?? queryData ?? [];
-  const isLoading = shouldQuery ? queryLoading : false;
-  const error = shouldQuery ? queryError : null;
+  // Resolve data source: static data > query > source
+  const data: Record<string, unknown>[] = staticData ?? queryData ?? sourceData ?? [];
+  const isLoading = shouldQuery ? queryLoading : shouldFetchSource ? sourceLoading : false;
+  const error = shouldQuery ? queryError : shouldFetchSource ? sourceError : null;
 
   // Mode: provider (children handle display) vs auto-display (we handle display)
   const displayType = resolveDisplayMode(display, data);

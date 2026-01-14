@@ -12,6 +12,20 @@ export {
   createAlertElement,
 } from "./alert";
 export {
+  CLAIM_KEY,
+  Claim,
+  ClaimActionContextProvider,
+  ClaimPlugin,
+  type ClaimProps,
+  createClaimElement,
+  createEvidenceElement,
+  Evidence,
+  EVIDENCE_KEY,
+  EvidencePlugin,
+  type EvidenceProps,
+  useClaimActionContext,
+} from "./claim";
+export {
   BADGE_KEY,
   Badge,
   BadgePlugin,

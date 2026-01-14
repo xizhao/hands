@@ -30,7 +30,7 @@
  * ```
  */
 
-import { createContext, type ReactNode, useContext } from "react";
+import { createContext, type ReactNode, useContext, useState, useEffect } from "react";
 
 // ============================================================================
 // Types
@@ -237,4 +237,213 @@ export function useNavigateToTable(): ((tableName: string) => void) | undefined 
 export function useSchema(): TableSchema[] {
   const ctx = useContext(LiveQueryContext);
   return ctx?.schema ?? [];
+}
+
+// ============================================================================
+// Source Fetch (URL data loading)
+// ============================================================================
+
+/**
+ * Parsed content from a URL source.
+ */
+export interface SourceContent {
+  /** Page/article title */
+  title?: string;
+  /** Extracted main content (markdown for HTML, raw for JSON) */
+  content: string;
+  /** Short excerpt/summary */
+  excerpt?: string;
+  /** Author/byline */
+  byline?: string;
+  /** Original URL */
+  url: string;
+  /** Content type */
+  contentType: "html" | "json" | "text";
+  /** For JSON: the parsed data */
+  jsonData?: unknown;
+}
+
+/**
+ * Configuration for source fetching.
+ */
+export interface SourceFetchConfig {
+  /** CORS proxy URL prefix (e.g., "https://corsproxy.io/?") */
+  corsProxy?: string;
+  /** Custom fetch function (for SSR or testing) */
+  fetcher?: typeof fetch;
+}
+
+const SourceFetchContext = createContext<SourceFetchConfig>({});
+
+/**
+ * Provider for source fetch configuration.
+ */
+export function SourceFetchProvider({
+  corsProxy,
+  fetcher,
+  children,
+}: SourceFetchConfig & { children: ReactNode }) {
+  return (
+    <SourceFetchContext.Provider value={{ corsProxy, fetcher }}>
+      {children}
+    </SourceFetchContext.Provider>
+  );
+}
+
+/**
+ * Hook to fetch and parse content from a URL.
+ *
+ * For HTML pages, extracts main article content using Readability.
+ * For JSON APIs, returns the parsed JSON data.
+ *
+ * Returns data as array for compatibility with LiveValue:
+ * [{ title, content, excerpt, byline, url, ... }]
+ *
+ * @example
+ * ```tsx
+ * const { data, isLoading, error } = useSourceFetch("https://example.com/article");
+ * // data = [{ title: "Article Title", content: "...", url: "..." }]
+ * ```
+ */
+export function useSourceFetch(url: string | undefined): QueryResult<Record<string, unknown>[]> {
+  const config = useContext(SourceFetchContext);
+  const [state, setState] = useState<{
+    data: Record<string, unknown>[] | undefined;
+    isLoading: boolean;
+    error: Error | null;
+  }>({
+    data: undefined,
+    isLoading: !!url,
+    error: null,
+  });
+
+  useEffect(() => {
+    if (!url) {
+      setState({ data: undefined, isLoading: false, error: null });
+      return;
+    }
+
+    let cancelled = false;
+    setState((s) => ({ ...s, isLoading: true, error: null }));
+
+    fetchAndParse(url, config)
+      .then((result) => {
+        if (!cancelled) {
+          // Convert to array format for LiveValue compatibility
+          // Cast through unknown to satisfy TypeScript
+          setState({
+            data: [result as unknown as Record<string, unknown>],
+            isLoading: false,
+            error: null,
+          });
+        }
+      })
+      .catch((err) => {
+        if (!cancelled) {
+          setState({
+            data: undefined,
+            isLoading: false,
+            error: err instanceof Error ? err : new Error(String(err)),
+          });
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [url, config.corsProxy]);
+
+  return state;
+}
+
+/**
+ * Fetch and parse content from a URL.
+ */
+async function fetchAndParse(url: string, config: SourceFetchConfig): Promise<SourceContent> {
+  const fetcher = config.fetcher ?? fetch;
+
+  // Apply CORS proxy if configured
+  const targetUrl = config.corsProxy
+    ? `${config.corsProxy}${encodeURIComponent(url)}`
+    : url;
+
+  const response = await fetcher(targetUrl);
+
+  if (!response.ok) {
+    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+  }
+
+  const contentType = response.headers.get("content-type") || "";
+  const text = await response.text();
+
+  // Handle JSON
+  if (contentType.includes("application/json")) {
+    try {
+      const jsonData = JSON.parse(text);
+      return {
+        url,
+        contentType: "json",
+        content: JSON.stringify(jsonData, null, 2),
+        jsonData,
+      };
+    } catch {
+      // Fall through to text handling
+    }
+  }
+
+  // Handle HTML - extract main content
+  if (contentType.includes("text/html")) {
+    return parseHtmlContent(text, url);
+  }
+
+  // Plain text
+  return {
+    url,
+    contentType: "text",
+    content: text,
+  };
+}
+
+/**
+ * Parse HTML content and extract main article.
+ * Uses Readability for extraction and converts to markdown.
+ */
+async function parseHtmlContent(html: string, url: string): Promise<SourceContent> {
+  // Dynamic import to avoid bundling issues in SSR
+  const [{ Readability }, TurndownService] = await Promise.all([
+    import("@mozilla/readability"),
+    import("turndown").then((m) => m.default),
+  ]);
+
+  const parser = new DOMParser();
+  const doc = parser.parseFromString(html, "text/html");
+
+  const reader = new Readability(doc);
+  const article = reader.parse();
+
+  if (!article?.content) {
+    // Fallback: return raw HTML truncated
+    return {
+      url,
+      contentType: "html",
+      content: html.slice(0, 5000),
+      title: doc.title || undefined,
+    };
+  }
+
+  // Convert to markdown
+  const turndown = new TurndownService({
+    headingStyle: "atx",
+    codeBlockStyle: "fenced",
+  });
+  const markdown = turndown.turndown(article.content);
+
+  return {
+    url,
+    contentType: "html",
+    title: article.title || undefined,
+    content: markdown,
+    excerpt: article.excerpt || undefined,
+    byline: article.byline || undefined,
+  };
 }

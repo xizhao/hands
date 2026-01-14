@@ -175,9 +175,9 @@ export function EmptyWorkbookState({
           chatExpanded && "opacity-20 pointer-events-none",
         )}
       >
-        <h2 className="text-xl font-semibold text-foreground tracking-tight mb-2">Get started</h2>
+        <h2 className="text-xl font-semibold text-foreground tracking-tight mb-2">Start exploring</h2>
         <p className="text-sm text-muted-foreground text-center mb-10">
-          Bring in some data to start exploring and building
+          State a claim or ask a question to think through
         </p>
 
         {/* Two CTAs in a row */}
@@ -199,8 +199,8 @@ export function EmptyWorkbookState({
               className="h-8 w-8 text-primary/70 group-hover:text-primary transition-colors"
             />
             <div className="text-center">
-              <div className="text-sm font-medium text-foreground">Drop files</div>
-              <div className="text-xs text-muted-foreground mt-1">CSV, JSON, Parquet</div>
+              <div className="text-sm font-medium text-foreground">Add sources</div>
+              <div className="text-xs text-muted-foreground mt-1">PDFs, articles, data</div>
             </div>
           </button>
 
@@ -216,7 +216,7 @@ export function EmptyWorkbookState({
             <ChatCircle weight="duotone" className="h-8 w-8 text-foreground/50" />
             <div className="text-center">
               <div className="text-sm font-medium text-foreground">Ask Hands</div>
-              <div className="text-xs text-muted-foreground mt-1">"Get me some sample data"</div>
+              <div className="text-xs text-muted-foreground mt-1">"Is X really true?"</div>
             </div>
           </div>
         </div>

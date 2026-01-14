@@ -5,114 +5,8 @@
  * Import this in your editor to auto-register all components.
  */
 
-import { blockRules } from "./rules/block";
-import { cardRules } from "./rules/card";
-import { chartRules } from "./rules/charts";
-import { columnRules } from "./rules/column";
-import { dataGridRules } from "./rules/data-grid";
-import { kanbanRules } from "./rules/kanban";
-import { liveActionRules } from "./rules/live-action";
-// Import all rule modules
-import { liveQueryRule, liveValueInlineRule, liveValueRule } from "./rules/live-value";
-import { tabsRules } from "./rules/tabs";
-import { viewRules } from "./rules/view";
-import type { MdxSerializationRule } from "./types";
-
-// ============================================================================
-// All Rules Registry
-// ============================================================================
-
-/**
- * All stdlib serialization rules.
- * This array contains rules for all stdlib components.
- */
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export const serializationRules: MdxSerializationRule<any>[] = [
-  // Live data components
-  liveValueRule,
-  liveValueInlineRule, // Inline variant (serializes to same MDX)
-  liveQueryRule, // Legacy alias
-
-  // Form controls and actions
-  ...liveActionRules,
-
-  // Charts
-  ...chartRules,
-
-  // Kanban
-  ...kanbanRules,
-
-  // DataGrid
-  ...dataGridRules,
-
-  // View display components
-  ...viewRules,
-
-  // Card components
-  ...cardRules,
-
-  // Column layout
-  ...columnRules,
-
-  // Block embedding
-  ...blockRules,
-
-  // Tabs navigation
-  ...tabsRules,
-];
-
-// ============================================================================
-// Plate MarkdownPlugin Integration
-// ============================================================================
-
-/**
- * Convert serialization rules to Plate MarkdownPlugin format.
- *
- * This creates a rules object that can be spread into MarkdownPlugin.configure():
- * - Keys by tagName for deserialization (MDX → Plate)
- * - Keys by element key for serialization (Plate → MDX)
- *
- * @example
- * ```ts
- * import { serializationRules, toMarkdownPluginRules } from '@hands/core/primitives/serialization';
- *
- * const MarkdownKit = [
- *   MarkdownPlugin.configure({
- *     options: {
- *       rules: {
- *         ...toMarkdownPluginRules(serializationRules),
- *         // Add any desktop-specific rules here
- *       },
- *     },
- *   }),
- * ];
- * ```
- */
-export function toMarkdownPluginRules(rules: MdxSerializationRule[]): Record<string, unknown> {
-  const result: Record<string, unknown> = {};
-
-  for (const rule of rules) {
-    // Deserialize rule: MDX tag → Plate element
-    // e.g., "LiveValue" → { deserialize: fn }
-    result[rule.tagName] = {
-      deserialize: rule.deserialize,
-    };
-
-    // Serialize rule: Plate element → MDX
-    // e.g., "live_value" → { serialize: fn }
-    // Only add if key differs from tagName (avoids overwrite)
-    if (rule.key !== rule.tagName) {
-      result[rule.key] = {
-        serialize: rule.serialize,
-      };
-    } else {
-      // Same key - merge into existing entry
-      (result[rule.tagName] as Record<string, unknown>).serialize = rule.serialize;
-    }
-  }
-
-  return result;
-}
+// Re-export the centralized rules registry
+export { serializationRules, toMarkdownPluginRules } from "./rules-registry";
 
 // ============================================================================
 // Re-exports
@@ -152,6 +46,7 @@ export {
   cardRules,
   cardTitleRule,
 } from "./rules/card";
+export { claimRule, claimRules, evidenceRule } from "./rules/claim";
 export {
   areaChartRule,
   barChartRule,

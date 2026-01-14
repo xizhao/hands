@@ -154,8 +154,22 @@ export function LocalTRPCProvider({ children, queryClient }: LocalTRPCProviderPr
     const pages = createPagesStorage(dbContext);
     setPagesContext(pages);
 
+    // Invalidate pages/tables queries now that context is ready
+    // This ensures ContentTabBar refetches after database is open
+    // Use predicate to match any query key starting with pages or tables
+    queryClient.invalidateQueries({
+      predicate: (query) => {
+        const key = query.queryKey;
+        if (Array.isArray(key) && Array.isArray(key[0])) {
+          const path = key[0] as string[];
+          return path[0] === "pages" || path[0] === "tables";
+        }
+        return false;
+      },
+    });
+
     console.log("[LocalTRPCProvider] Pages context created with SQLite storage");
-  }, [isReady]);
+  }, [isReady, queryClient]);
 
   // Create context getter (uses refs for stability)
   const getContext = useCallback((): LocalTRPCContext => {

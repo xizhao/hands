@@ -16,48 +16,7 @@ import remarkGfm from "remark-gfm";
 import remarkMdx from "remark-mdx";
 import remarkParse from "remark-parse";
 import { unified } from "unified";
-import { blockRules } from "./rules/block";
-import { cardRules } from "./rules/card";
-import { chartRules } from "./rules/charts";
-import { columnRules } from "./rules/column";
-import { dataGridRules } from "./rules/data-grid";
-import { kanbanRules } from "./rules/kanban";
-import { liveActionRules } from "./rules/live-action";
-import { liveQueryRule, liveValueInlineRule, liveValueRule } from "./rules/live-value";
-import { tabsRules } from "./rules/tabs";
-import { viewRules } from "./rules/view";
-// Import rules directly to avoid circular dependency with index.ts
-import type { MdxSerializationRule } from "./types";
-
-// Inline the rules array to avoid circular import
-const serializationRules: MdxSerializationRule<any>[] = [
-  liveValueRule,
-  liveValueInlineRule,
-  liveQueryRule,
-  ...liveActionRules,
-  ...chartRules,
-  ...kanbanRules,
-  ...dataGridRules,
-  ...viewRules,
-  ...cardRules,
-  ...columnRules,
-  ...blockRules,
-  ...tabsRules,
-];
-
-// Inline toMarkdownPluginRules to avoid circular import
-function toMarkdownPluginRules(rules: MdxSerializationRule<any>[]): Record<string, unknown> {
-  const result: Record<string, unknown> = {};
-  for (const rule of rules) {
-    result[rule.tagName] = { deserialize: rule.deserialize };
-    if (rule.key !== rule.tagName) {
-      result[rule.key] = { serialize: rule.serialize };
-    } else {
-      (result[rule.tagName] as Record<string, unknown>).serialize = rule.serialize;
-    }
-  }
-  return result;
-}
+import { serializationRules, toMarkdownPluginRules } from "./rules-registry";
 
 // =============================================================================
 // Editor Shim for @platejs/markdown

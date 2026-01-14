@@ -25,10 +25,21 @@ import type { DeserializeOptions, MdxSerializationRule } from "../types";
  *
  * MDX Examples:
  * ```mdx
+ * // SQL query
  * <LiveValue query="SELECT COUNT(*) FROM users" />
  * <LiveValue query="SELECT name FROM users" display="list" />
  * <LiveValue query="SELECT * FROM tasks" display="table" columns="auto" />
+ *
+ * // Static data
  * <LiveValue data={[{name: "Alice"}, {name: "Bob"}]} display="list" />
+ *
+ * // URL source (JSON API or HTML page)
+ * <LiveValue source="https://api.example.com/data.json" />
+ * <LiveValue source="https://example.com/article">
+ *   <Claim expect="content.includes('positive')">Article is positive</Claim>
+ * </LiveValue>
+ *
+ * // Template mode
  * <LiveValue query="SELECT name, value FROM metrics">
  *   ## {{value}}
  *   {{name}}
@@ -44,6 +55,7 @@ function serializeLiveValue(element: TLiveValueElement, options: any) {
   const attrs = serializeAttributes(
     {
       query: element.query,
+      source: element.source,
       data: element.data,
       display: element.display,
       params: element.params,
@@ -51,7 +63,7 @@ function serializeLiveValue(element: TLiveValueElement, options: any) {
       className: element.className,
     },
     {
-      include: ["query", "data", "display", "params", "columns", "className"],
+      include: ["query", "source", "data", "display", "params", "columns", "className"],
       defaults: { display: "auto" },
     },
   );
@@ -99,6 +111,7 @@ function deserializeLiveValue(
   return {
     type: elementType,
     query: props.query as string | undefined,
+    source: props.source as string | undefined,
     data: props.data as Record<string, unknown>[] | undefined,
     display,
     params: props.params as Record<string, unknown> | undefined,

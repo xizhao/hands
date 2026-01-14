@@ -52,6 +52,8 @@ export const PAGE_EMBED_KEY = "page_embed";
 export const BLOCK_KEY = PAGE_EMBED_KEY;
 export const TABS_KEY = "tabs";
 export const TAB_KEY = "tab";
+export const CLAIM_KEY = "claim";
+export const EVIDENCE_KEY = "evidence";
 
 // ============================================================================
 // Validation Constants (for MDX validation)
@@ -97,6 +99,8 @@ export const STDLIB_COMPONENT_NAMES = [
   "Column",
   "Tabs",
   "Tab",
+  "Claim",
+  "Evidence",
 ] as const;
 
 // ============================================================================
@@ -145,9 +149,17 @@ export interface ColumnConfig {
  */
 export interface TLiveValueElement extends TElement {
   type: typeof LIVE_VALUE_KEY;
-  /** SQL query string - optional if data is provided */
+  /** SQL query string - optional if data or source is provided */
   query?: string;
-  /** Static data to display directly (skips query execution) */
+  /**
+   * URL to fetch data from. Supports:
+   * - JSON APIs: Returns parsed JSON as data array
+   * - HTML pages: Extracts article content via Readability
+   *
+   * Returns data as: [{ title, content, excerpt, byline, url }]
+   */
+  source?: string;
+  /** Static data to display directly (skips query/fetch) */
   data?: Record<string, unknown>[];
   /** Display mode - auto-selects based on data shape if not specified */
   display?: DisplayMode;
@@ -985,6 +997,183 @@ export interface TPageEmbedElement extends TElement {
 
 /** @deprecated Use TPageEmbedElement instead */
 export type TBlockElement = TPageEmbedElement;
+
+// ============================================================================
+// Claim/Evidence Element Types (CKG - Claims Knowledge Graph)
+// ============================================================================
+
+/**
+ * Verdict for a piece of evidence.
+ */
+export type EvidenceVerdict = "supports" | "refutes";
+
+/**
+ * Evidence that supports or refutes a claim.
+ * Evidence is the source of truth - status is derived from evidence.
+ */
+export type ClaimEvidence =
+  | {
+      type: "source";
+      /** URL of the source */
+      url: string;
+      /** Optional quote from the source */
+      quote?: string;
+      /** Whether this evidence supports or refutes the claim */
+      verdict: EvidenceVerdict;
+      /** When the source was accessed */
+      accessedAt?: string;
+    }
+  | {
+      type: "action";
+      /** ID of the action that produced this evidence */
+      actionId: string;
+      /** Output from the action */
+      output?: unknown;
+      /** Whether this evidence supports or refutes the claim */
+      verdict: EvidenceVerdict;
+      /** When the action was run */
+      ranAt?: string;
+    }
+  | {
+      type: "llm";
+      /** LLM's reasoning for the verdict */
+      reasoning: string;
+      /** Confidence score 0-1 */
+      confidence: number;
+      /** Whether this evidence supports or refutes the claim */
+      verdict: EvidenceVerdict;
+      /** Model that produced this judgment */
+      model?: string;
+    };
+
+/**
+ * Derived status for a claim (computed from evidence + children).
+ * Not stored - computed at render time.
+ */
+export type ClaimStatus =
+  | "verified" // All evidence supports, all children verified
+  | "refuted" // Any evidence refutes
+  | "partial" // Some children verified, some not
+  | "pending" // Action running
+  | "unverified"; // No evidence yet
+
+/**
+ * Evidence element - nested inside Claim to provide evidence.
+ *
+ * @example Source evidence
+ * ```tsx
+ * <Evidence type="source" url="https://fred..." verdict="supports" />
+ * ```
+ *
+ * @example Action evidence
+ * ```tsx
+ * <Evidence type="action" actionId="check-data" verdict="supports" />
+ * ```
+ */
+export interface TEvidenceElement extends TElement {
+  type: typeof EVIDENCE_KEY;
+  /** Type of evidence */
+  evidenceType: "source" | "action" | "llm";
+  /** URL for source evidence */
+  url?: string;
+  /** Quote from source */
+  quote?: string;
+  /** Action ID for action evidence */
+  actionId?: string;
+  /** Action output */
+  output?: unknown;
+  /** LLM reasoning */
+  reasoning?: string;
+  /** LLM confidence 0-1 */
+  confidence?: number;
+  /** Model name for LLM evidence */
+  model?: string;
+  /** Whether this evidence supports or refutes */
+  verdict: EvidenceVerdict;
+  /** When evidence was collected */
+  timestamp?: string;
+  /** Children are unused (void element) */
+  children: (TElement | TText)[];
+}
+
+/**
+ * Claim element - an assertion that can be verified with evidence.
+ * Claims can nest to form assumption trees (CKG).
+ *
+ * Status is derived from evidence and children - never stored explicitly.
+ *
+ * @example Simple claim with source
+ * ```tsx
+ * <Claim source="https://fred.stlouisfed.org/series/PCEPILFE">
+ *   Core PCE fell to 2.4% in December 2024
+ * </Claim>
+ * ```
+ *
+ * @example Claim with nested sub-claims
+ * ```tsx
+ * <Claim>
+ *   Fed will cut rates 4+ times in 2025
+ *   <Claim source="https://fred...">Inflation below target</Claim>
+ *   <Claim action="check-labor-data">Labor market softens</Claim>
+ * </Claim>
+ * ```
+ *
+ * @example Complex claim with Evidence components
+ * ```tsx
+ * <Claim>
+ *   Market expects rate cuts
+ *   <Evidence type="source" url="https://cme..." verdict="supports" quote="4.2 cuts priced" />
+ *   <Evidence type="llm" verdict="supports" confidence={0.7} reasoning="Historical pattern..." />
+ * </Claim>
+ * ```
+ */
+export interface TClaimElement extends TElement {
+  type: typeof CLAIM_KEY;
+
+  // ── Shorthand evidence props (for simple cases) ──
+
+  /** Source URL (shorthand for single supporting source) */
+  source?: string;
+  /** Multiple source URLs */
+  sources?: string[];
+  /** Source that refutes this claim */
+  refutes?: string;
+  /** Action ID to run for verification */
+  action?: string;
+
+  // ── Data-driven evidence (when nested in LiveValue) ──
+
+  /**
+   * Condition to evaluate against parent LiveValue data.
+   * Examples: "value < 2.5", "count > 0", "status == 'active'"
+   * When inside a LiveValue, this is evaluated against the query result.
+   */
+  expect?: string;
+
+  // ── Derivation logic ──
+
+  /**
+   * How to combine child statuses.
+   * - "and" (default): ALL children must be verified for parent to be verified
+   * - "or": ANY child verified means parent is verified
+   */
+  derivation?: "and" | "or";
+
+  // ── UI State ──
+
+  /** Whether the claim's children are collapsed (hidden) */
+  collapsed?: boolean;
+
+  // ── Children ──
+
+  /**
+   * Children can include:
+   * - Text content (the claim assertion)
+   * - Nested Claim elements (sub-assumptions)
+   * - Evidence elements (explicit evidence)
+   */
+  children: (TElement | TText)[];
+}
 
 // ============================================================================
 // Database Adapter

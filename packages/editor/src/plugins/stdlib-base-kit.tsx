@@ -6,6 +6,7 @@
  * they require JavaScript for Vega-Lite canvas rendering.
  */
 
+import type { ClaimStatus, TClaimElement, TEvidenceElement } from "@hands/core/types";
 import type { TElement } from "platejs";
 import { createSlatePlugin, type SlatePlugin } from "platejs";
 import { SlateElement, type SlateElementProps } from "platejs/static";
@@ -41,6 +42,8 @@ const KANBAN_KEY = "Kanban";
 const TABS_KEY = "Tabs";
 const TAB_KEY = "Tab";
 const PAGE_EMBED_KEY = "Block";
+const CLAIM_KEY = "Claim";  // PascalCase to match MDX tag
+const EVIDENCE_KEY = "Evidence";  // PascalCase to match MDX tag
 
 type DisplayMode = "auto" | "inline" | "list" | "table";
 
@@ -446,6 +449,92 @@ function KanbanElementStatic(props: SlateElementProps) {
 }
 
 // ============================================================================
+// Claim/Evidence Components (CKG - Claims Knowledge Graph)
+// ============================================================================
+
+function deriveClaimStatusStatic(element: TClaimElement): ClaimStatus {
+  // Simple static derivation - no action context available in SSR
+  if (element.refutes) return "refuted";
+  if (element.source || (element.sources && element.sources.length > 0)) return "verified";
+  return "unverified";
+}
+
+function ClaimElementStatic(props: SlateElementProps) {
+  const element = props.element as TClaimElement;
+  const status = deriveClaimStatusStatic(element);
+
+  // Status dot colors
+  const dotColor = {
+    verified: "bg-green-500",
+    refuted: "bg-red-500",
+    partial: "bg-yellow-500",
+    pending: "bg-blue-500",
+    unverified: "bg-muted-foreground/40",
+  }[status];
+
+  return (
+    <SlateElement {...props} as="div" className="relative py-0.5 pl-5">
+      {/* Status dot */}
+      <span
+        className={`absolute left-1 top-1.5 inline-block size-2 rounded-full ${dotColor}`}
+        title={status}
+      />
+      {/* Content */}
+      <div className="text-sm">{props.children}</div>
+    </SlateElement>
+  );
+}
+
+function EvidenceElementStatic(props: SlateElementProps) {
+  const element = props.element as TEvidenceElement;
+  const verdictColor =
+    element.verdict === "refutes" ? "text-red-600" : "text-green-600";
+  const icon =
+    element.evidenceType === "source"
+      ? "📎"
+      : element.evidenceType === "action"
+        ? "⚙️"
+        : "🤖";
+
+  let label = "";
+  if (element.evidenceType === "source" && element.url) {
+    try {
+      label = new URL(element.url).hostname.replace("www.", "");
+    } catch {
+      label = element.url.slice(0, 30);
+    }
+  } else if (element.evidenceType === "action" && element.actionId) {
+    label = element.actionId;
+  } else if (element.evidenceType === "llm" && element.confidence) {
+    label = `${Math.round(element.confidence * 100)}%`;
+  }
+
+  return (
+    <SlateElement
+      {...props}
+      as="span"
+      className={`inline-flex items-center gap-1 text-xs rounded px-1.5 py-0.5 mx-0.5 ${
+        element.verdict === "refutes" ? "bg-red-500/10" : "bg-green-500/10"
+      } ${verdictColor}`}
+    >
+      <span>{icon}</span>
+      {element.url ? (
+        <a
+          href={element.url}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="hover:underline"
+        >
+          {label}
+        </a>
+      ) : (
+        <span>{label}</span>
+      )}
+    </SlateElement>
+  );
+}
+
+// ============================================================================
 // Layout Components
 // ============================================================================
 
@@ -563,6 +652,10 @@ const BaseTabsPlugin = createBasePlugin(TABS_KEY, {});
 const BaseTabPlugin = createBasePlugin(TAB_KEY, {});
 const BasePageEmbedPlugin = createBasePlugin(PAGE_EMBED_KEY, { isVoid: true });
 
+// Claim/Evidence plugins (CKG)
+const BaseClaimPlugin = createBasePlugin(CLAIM_KEY, {});
+const BaseEvidencePlugin = createBasePlugin(EVIDENCE_KEY, { isVoid: true });
+
 // ============================================================================
 // Exports
 // ============================================================================
@@ -608,4 +701,7 @@ export const BaseStdlibKit = [
   BaseTabsPlugin.withComponent(TabsElementStatic),
   BaseTabPlugin.withComponent(TabElementStatic),
   BasePageEmbedPlugin.withComponent(PageEmbedElementStatic),
+  // Claims (CKG)
+  BaseClaimPlugin.withComponent(ClaimElementStatic),
+  BaseEvidencePlugin.withComponent(EvidenceElementStatic),
 ];

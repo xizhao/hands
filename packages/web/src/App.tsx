@@ -117,7 +117,7 @@ function LandingLayout() {
     : undefined;
 
   return (
-    <WebShell sidebar={sidebar} sidebarWidth={220} topbarActions={<SettingsPopover />}>
+    <WebShell sidebar={sidebar} sidebarWidth={220} topbarActions={<SettingsPopover />} sidebarCollapsible={!!sidebar}>
       <div className="h-full px-2 pb-2 pt-0.5">
         <div className="h-full border border-border/40 bg-background overflow-hidden shadow-sm rounded-lg flex items-center justify-center px-6">
           <LandingContent />
